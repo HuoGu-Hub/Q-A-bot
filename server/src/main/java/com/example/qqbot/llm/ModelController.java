@@ -1,6 +1,5 @@
 package com.example.qqbot.llm;
 
-import com.example.qqbot.config.LlmProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -38,11 +37,11 @@ public class ModelController {
 
     private static final Logger log = LoggerFactory.getLogger(ModelController.class);
 
-    private final LlmProperties props;
+    private final LlmPolicy props;
     private final LlmRouter router;
     private final com.example.qqbot.settings.OverridesFile overrides;
 
-    public ModelController(LlmProperties props, LlmRouter router,
+    public ModelController(LlmPolicy props, LlmRouter router,
                            com.example.qqbot.settings.OverridesFile overrides) {
         this.props = props;
         this.router = router;
@@ -54,9 +53,9 @@ public class ModelController {
     @GetMapping("")
     public Map<String, Object> list() {
         List<Map<String, Object>> providers = new ArrayList<>();
-        for (Map.Entry<String, LlmProperties.Provider> e : props.getProviders().entrySet()) {
+        for (Map.Entry<String, Provider> e : props.getProviders().entrySet()) {
             String name = e.getKey();
-            LlmProperties.Provider cfg = e.getValue();
+            Provider cfg = e.getValue();
             boolean configured = cfg.getApiKey() != null && !cfg.getApiKey().isBlank();
             boolean ready = router.readyProviders().contains(name);
 
@@ -166,7 +165,7 @@ public class ModelController {
      */
     @GetMapping("/available")
     public Map<String, Object> available(@RequestParam String provider) {
-        LlmProperties.Provider cfg = props.getProviders().get(provider);
+        Provider cfg = props.getProviders().get(provider);
         if (cfg == null) {
             return Map.of("ok", false, "error", "没有这个厂商", "models", List.of());
         }

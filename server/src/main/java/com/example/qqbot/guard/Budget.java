@@ -8,7 +8,7 @@ package com.example.qqbot.guard;
  * <b>额度</b>（按天归零），而不是只有频率。
  *
  * <p>所有额度都是 <b>0 = 不限</b>，所以默认配置完全不改变现有行为。
- * *
+ *
  * <h2>为什么不在 {@code config} 包里（2026-10-02 挪过来）</h2>
  * 它是<b>安全中间层的领域词汇</b>，只是碰巧从 {@code app.guard.*} 绑定过来。
  * 留在 {@code GuardProperties} 的嵌套类里，会让 {@code guard} 包看起来"依赖配置的形状" ——

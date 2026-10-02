@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * 文件访问守卫 —— 哪些扩展名/路径片段不许出现、哪些根目录允许访问。
- * *
+ *
  * <h2>为什么不在 {@code config} 包里（2026-10-02 挪过来）</h2>
  * 它是<b>安全中间层的领域词汇</b>，只是碰巧从 {@code app.guard.*} 绑定过来。
  * 留在 {@code GuardProperties} 的嵌套类里，会让 {@code guard} 包看起来"依赖配置的形状" ——

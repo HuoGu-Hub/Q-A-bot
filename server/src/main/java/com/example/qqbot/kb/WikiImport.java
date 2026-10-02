@@ -15,7 +15,7 @@ import java.util.List;
  * 实测任务页约 2 KB、机制页约 11 KB，所以按 {@link #maxBodyChars} 截断。
  *
  * <p>正文进库前一律过 {@code WikitextCleaner} —— 不清洗等于把 `{{` 和 `[[` 当内容喂给模型。
- * *
+ *
  * <h2>为什么不在 {@code config} 包里（2026-10-02 挪过来）</h2>
  * 它是<b>知识库自己的领域词汇</b>，只是碰巧从 {@code app.kb.*} 绑定过来。
  * 留在 {@code KbProperties} 的嵌套类里，会让 {@code kb} 包看起来"依赖配置的形状"。

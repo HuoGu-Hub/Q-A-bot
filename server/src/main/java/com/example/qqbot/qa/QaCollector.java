@@ -1,6 +1,7 @@
 package com.example.qqbot.qa;
 
-import com.example.qqbot.config.LlmProperties;
+import com.example.qqbot.llm.LlmPolicy;
+import com.example.qqbot.llm.Provider;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -32,10 +33,10 @@ public class QaCollector {
 
     private final QaProperties props;
     private final QaRecorder recorder;
-    private final LlmProperties llmProps;
+    private final LlmPolicy llmProps;
     private final ObjectMapper mapper;
 
-    public QaCollector(QaProperties props, QaRecorder recorder,                       LlmProperties llmProps, ObjectMapper mapper) {
+    public QaCollector(QaProperties props, QaRecorder recorder,                       LlmPolicy llmProps, ObjectMapper mapper) {
         this.props = props;
         this.recorder = recorder;
         this.llmProps = llmProps;
@@ -160,7 +161,7 @@ public class QaCollector {
 
     private String currentModel() {
         String name = llmProps.getDefaultProvider();
-        LlmProperties.Provider p = name == null ? null : llmProps.getProviders().get(name);
+        Provider p = name == null ? null : llmProps.getProviders().get(name);
         return p == null ? "" : p.getModelName();
     }
 }

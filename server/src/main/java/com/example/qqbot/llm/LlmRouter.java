@@ -1,6 +1,5 @@
 package com.example.qqbot.llm;
 
-import com.example.qqbot.config.LlmProperties;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
@@ -53,7 +52,7 @@ public class LlmRouter {
      * 替换时正在进行的请求持有的旧引用仍然有效，天然无缝。
      */
     private final Map<String, ChatModel> models = new java.util.concurrent.ConcurrentHashMap<>();
-    private final Map<String, LlmProperties.Provider> configs = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Provider> configs = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile List<String> chain = new ArrayList<>();
     private final String systemPrompt;
 
@@ -61,13 +60,13 @@ public class LlmRouter {
      * 留着整个 properties 引用，是为了让「回复风格」能<b>热生效</b>：
      * 系统提示词本身读一次就够了，但风格要每轮现取。
      */
-    private final LlmProperties props;
+    private final LlmPolicy props;
 
     /** 记 token 用量给成本预算（D6）。token 只有这一层看得到 */
     private final BudgetGuard budgetGuard;
 
     /** 构建模型客户端 —— 启动时和热替换时共用同一套参数 */
-    private static ChatModel buildClient(LlmProperties.Provider cfg) {
+    private static ChatModel buildClient(Provider cfg) {
         OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
                 .baseUrl(cfg.getBaseUrl())
                 .apiKey(cfg.getApiKey())
@@ -90,14 +89,14 @@ public class LlmRouter {
         return builder.build();
     }
 
-    public LlmRouter(LlmProperties props, ResourceLoader resourceLoader, BudgetGuard budgetGuard) {
+    public LlmRouter(LlmPolicy props, ResourceLoader resourceLoader, BudgetGuard budgetGuard) {
         this.props = props;
         this.budgetGuard = budgetGuard;
         this.systemPrompt = loadSystemPrompt(props, resourceLoader);
 
-        for (Map.Entry<String, LlmProperties.Provider> entry : props.getProviders().entrySet()) {
+        for (Map.Entry<String, Provider> entry : props.getProviders().entrySet()) {
             String name = entry.getKey();
-            LlmProperties.Provider cfg = entry.getValue();
+            Provider cfg = entry.getValue();
 
             if (!StringUtils.hasText(cfg.getApiKey())) {
                 log.info("[LLM] 跳过 {}：未配置 api-key", name);
@@ -129,7 +128,7 @@ public class LlmRouter {
     }
 
     /** 组装调用顺序：默认 provider → 配置的降级链 → 其余可用的（兜底） */
-    private void buildFallbackChain(LlmProperties props) {
+    private void buildFallbackChain(LlmPolicy props) {
         List<String> newChain = new ArrayList<>();
         if (StringUtils.hasText(props.getDefaultProvider())) {
             newChain.add(props.getDefaultProvider());
@@ -161,7 +160,7 @@ public class LlmRouter {
      * @return 旧的模型 ID（可用于回滚）
      */
     public String swapModelName(String provider, String newModelName) {
-        LlmProperties.Provider cfg = configs.get(provider);
+        Provider cfg = configs.get(provider);
         if (cfg == null) {
             throw new IllegalArgumentException("没有这个厂商：" + provider);
         }
@@ -189,7 +188,7 @@ public class LlmRouter {
 
     /** 某个 provider 当前的模型 ID */
     public String currentModelName(String provider) {
-        LlmProperties.Provider cfg = configs.get(provider);
+        Provider cfg = configs.get(provider);
         return cfg == null ? null : cfg.getModelName();
     }
 
@@ -207,12 +206,12 @@ public class LlmRouter {
      * @return {ok, reply/excerpt, elapsedMs}
      */
     public java.util.Map<String, Object> probe(String provider, String modelName, String prompt) {
-        LlmProperties.Provider base = configs.get(provider);
+        Provider base = configs.get(provider);
         if (base == null) {
             return java.util.Map.of("ok", false, "error", "没有这个厂商：" + provider);
         }
         // 复制一份配置，只换模型名 —— 不动原对象
-        LlmProperties.Provider probeCfg = base.copy();
+        Provider probeCfg = base.copy();
         probeCfg.setModelName(modelName);
         probeCfg.setMaxRetries(0);
         probeCfg.setTimeoutSeconds(Math.min(base.getTimeoutSeconds(), 30));
@@ -267,7 +266,7 @@ public class LlmRouter {
      * <p><b>为什么用 {@code AGENTS.md}</b>：它是 Agent 生态的通行约定，
      * 迁移到正式 Agent 框架时可以直接复用，不用再翻译一遍。
      */
-    private String loadSystemPrompt(LlmProperties props, ResourceLoader loader) {
+    private String loadSystemPrompt(LlmPolicy props, ResourceLoader loader) {
         String name = props.getSystemPromptFile();
         String content = null;
         String source = null;
@@ -387,7 +386,7 @@ public class LlmRouter {
      *
      * @return 一项都没配、或总开关关着时返回空串（调用方就按原来的行为走）
      */
-    static String describeReplyStyle(LlmProperties.ReplyStyle s) {
+    static String describeReplyStyle(ReplyStyle s) {
         if (s == null || !s.isEnabled()) {
             return "";
         }
