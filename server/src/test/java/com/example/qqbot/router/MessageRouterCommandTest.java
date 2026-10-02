@@ -9,7 +9,9 @@ import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.config.AsyncProperties;
 import com.example.qqbot.config.CommandProperties;
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.Access;
+import com.example.qqbot.guard.Outbound;
+import com.example.qqbot.guard.RateLimit;
 import com.example.qqbot.guard.BlockNotifier;
 import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.guard.GuardPipeline;
@@ -124,9 +126,9 @@ class MessageRouterCommandTest {
 
         // 真的 OutboundSender（而不是 mock）：这个测试要断言"到底发出去了什么"，
         // 发送逻辑被 mock 掉就没得断了。它内部只用到下面这几个 mock。
-        outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new GuardProperties().getOutbound(), outboundFilter);
+        outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new Outbound(), outboundFilter);
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
-                outboundSender, budgetGuard, new AsyncProperties(), new GuardProperties().getRateLimit(), new GuardProperties().getAccess(),
+                outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), new Access(),
                 mock(BlockNotifier.class), qaCollector, new CommandProperties(), commandMatcher,
                 commandRateLimiter, commandStore, variableRenderer, mock(FallbackService.class));
     }

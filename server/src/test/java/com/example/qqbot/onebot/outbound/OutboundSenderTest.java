@@ -1,6 +1,6 @@
 package com.example.qqbot.onebot.outbound;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.BotIdentity;
@@ -42,8 +42,7 @@ class OutboundSenderTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private OneBotApiClient api;
-    private GuardProperties props;
-    private GuardProperties.Outbound config;
+    private Outbound config;
     private BotIdentity identity;
     private OutboundFilter filter;
     private OutboundSender sender;
@@ -51,8 +50,7 @@ class OutboundSenderTest {
     @BeforeEach
     void setUp() {
         api = mock(OneBotApiClient.class);
-        props = new GuardProperties();
-        config = props.getOutbound();
+        config = new Outbound();
         config.setGroupMinIntervalMillis(0);   // 测试里不睡觉
         config.setGroupJitterMillis(0);
         config.setMaxCharsPerMessage(10);      // 10 字一段，方便切出多段

@@ -1,6 +1,6 @@
 package com.example.qqbot.agent;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.ContentGate;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.kb.KbRetriever;
@@ -50,7 +50,7 @@ class ChatServiceImageLimitTest {
         when(imageFetcher.fetch(any(ImageRef.class)))
                 .thenReturn(Optional.of(new ImageFetcher.FetchedImage("QUJD", "image/jpeg", 3)));
 
-        chatService = new ChatService(llmRouter, imageFetcher, new GuardProperties().getContentGate(), mediaProperties,
+        chatService = new ChatService(llmRouter, imageFetcher, new ContentGate(), mediaProperties,
                 mock(KbRetriever.class), new KbProperties());
     }
 

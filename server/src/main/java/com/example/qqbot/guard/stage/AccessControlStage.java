@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties.Access;
+import com.example.qqbot.guard.Access;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.GuardStage;

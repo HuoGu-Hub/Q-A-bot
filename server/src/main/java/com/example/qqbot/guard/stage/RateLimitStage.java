@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties.RateLimit;
+import com.example.qqbot.guard.RateLimit;
 import com.example.qqbot.guard.BlockNotifier;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;

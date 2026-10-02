@@ -1,6 +1,6 @@
 package com.example.qqbot.media;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.FileAccess;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.PathGuard;
 import org.junit.jupiter.api.DisplayName;
@@ -65,10 +65,10 @@ class MediaStorageGuardTest {
     @DisplayName("临时目录不在 PathGuard 允许范围内 → 拒绝启动（避免清理静默失效）")
     void refusesWhenPathGuardDeniesTmp() {
         MediaProperties props = propsWith(base.resolve("t3"), base.resolve("k3"));
-        GuardProperties guardProps = new GuardProperties();
-        guardProps.getFileAccess().setAllowedRoots(List.of(base.resolve("somewhere-else").toString()));
+        FileAccess fileAccess = new FileAccess();
+        fileAccess.setAllowedRoots(List.of(base.resolve("somewhere-else").toString()));
 
-        assertThatThrownBy(() -> new MediaStorageGuard(props, new PathGuard(guardProps.getFileAccess())).init())
+        assertThatThrownBy(() -> new MediaStorageGuard(props, new PathGuard(fileAccess)).init())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("PathGuard");
     }
@@ -128,9 +128,9 @@ class MediaStorageGuardTest {
     }
 
     private static PathGuard allowAllUnderBase() {
-        GuardProperties guardProps = new GuardProperties();
-        guardProps.getFileAccess().setAllowedRoots(List.of(base.toString()));
-        return new PathGuard(guardProps.getFileAccess());
+        FileAccess fileAccess = new FileAccess();
+        fileAccess.setAllowedRoots(List.of(base.toString()));
+        return new PathGuard(fileAccess);
     }
 
     @Configuration(proxyBeanMethods = false)

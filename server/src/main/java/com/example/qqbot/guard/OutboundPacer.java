@@ -1,6 +1,5 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties.Outbound;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

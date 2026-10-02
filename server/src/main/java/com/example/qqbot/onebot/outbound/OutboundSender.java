@@ -1,6 +1,6 @@
 package com.example.qqbot.onebot.outbound;
 
-import com.example.qqbot.config.GuardProperties.Outbound;
+import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.BotIdentity;

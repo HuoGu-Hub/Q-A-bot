@@ -1,6 +1,5 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties.FileAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

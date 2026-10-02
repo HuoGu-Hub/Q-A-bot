@@ -1,6 +1,5 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties;
 import com.example.qqbot.guard.stage.AccessControlStage;
 import com.example.qqbot.guard.stage.ContentGateStage;
 import com.example.qqbot.guard.stage.InboundWordStage;
@@ -34,54 +33,69 @@ public class GuardPipeline {
 
     private static final Logger log = LoggerFactory.getLogger(GuardPipeline.class);
 
-    private final GuardProperties properties;
+    /**
+     * 根上的两条开关（{@code enabled} / {@code kill-switch}）。
+     *
+     * <p>2026-10-02：本类原先注入整个 {@code GuardProperties}（661 行的巨型配置对象），
+     * 只为了读它根上的两个布尔和三个嵌套组 —— 而<b>那三个组本来就是独立的 bean</b>
+     * （见 {@code config.GuardConfig}），13 个消费者早就在直接注入它们了。
+     * 现在本类也只拿自己真正需要的那几样。
+     */
+    private final GuardSwitch guardSwitch;
+    private final Access access;
+    private final RateLimit rateLimit;
+    private final ContentGate contentGate;
     private final List<GuardStage> stages;
     private final GuardMetrics metrics;
 
-    public GuardPipeline(GuardProperties properties,
+    public GuardPipeline(GuardSwitch guardSwitch,
+                         Access access,
+                         RateLimit rateLimit,
+                         ContentGate contentGate,
                          GuardMetrics metrics,
                          AccessControlStage accessControl,
                          MentionRequiredStage mentionRequired,
-                         RateLimitStage rateLimit,
-                         ContentGateStage contentGate,
+                         RateLimitStage rateLimitStage,
+                         ContentGateStage contentGateStage,
                          InboundWordStage inboundWords) {
-        this.properties = properties;
+        this.guardSwitch = guardSwitch;
+        this.access = access;
+        this.rateLimit = rateLimit;
+        this.contentGate = contentGate;
         this.metrics = metrics;
         // 顺序就是执行顺序，改这里就能调整优先级
         this.stages = List.of(
                 accessControl,
                 mentionRequired,
-                rateLimit,
-                contentGate,
+                rateLimitStage,
+                contentGateStage,
                 inboundWords);
     }
 
     /** 启动时把生效的规则打出来，方便一眼确认配置对不对 */
     @PostConstruct
     void logEffectiveRules() {
-        if (!properties.isEnabled()) {
+        if (!guardSwitch.isEnabled()) {
             log.warn("[GUARD] 安全中间层已【关闭】（app.guard.enabled=false），所有限制都不生效！");
             return;
         }
-        GuardProperties.Access access = properties.getAccess();
-        GuardProperties.RateLimit rate = properties.getRateLimit();
         log.info("[GUARD] 安全中间层已启用");
         log.info("[GUARD]   顺序        ：access -> mention -> rate-limit -> content-gate -> inbound-words");
         log.info("[GUARD]   群聊必须 @  ：{}", access.isRequireMentionInGroup());
         log.info("[GUARD]   私聊策略    ：{}", access.getPrivateChatPolicy());
         log.info("[GUARD]   限流        ：每群 {} 条/分钟，每人在群内 {} 次/{} 秒，超限处理={}",
-                rate.getPerGroupPerMinute(), rate.getPerUserPerMinute(),
-                rate.getPerUserWindowSeconds(), rate.getOnLimit());
+                rateLimit.getPerGroupPerMinute(), rateLimit.getPerUserPerMinute(),
+                rateLimit.getPerUserWindowSeconds(), rateLimit.getOnLimit());
         log.info("[GUARD]   限流提示    ：每用户冷却 {} 秒，每群每分钟最多 {} 条提示",
-                rate.getNotifyCooldownSeconds(), rate.getNotifyGroupPerMinute());
-        if (rate.getNotifyCooldownSeconds() > rate.getPerUserWindowSeconds()) {
+                rateLimit.getNotifyCooldownSeconds(), rateLimit.getNotifyGroupPerMinute());
+        if (rateLimit.getNotifyCooldownSeconds() > rateLimit.getPerUserWindowSeconds()) {
             log.warn("[GUARD]   ⚠️ 提示冷却({}秒) 比 限流窗口({}秒) 还长：被限流的人可能【一次提示都收不到】。"
                             + "建议把 notify-cooldown-seconds 调到 ≤ {}",
-                    rate.getNotifyCooldownSeconds(), rate.getPerUserWindowSeconds(),
-                    rate.getPerUserWindowSeconds());
+                    rateLimit.getNotifyCooldownSeconds(), rateLimit.getPerUserWindowSeconds(),
+                    rateLimit.getPerUserWindowSeconds());
         }
-        log.info("[GUARD]   无文字消息  ：回兜底话术「{}」", properties.getContentGate().getNoTextReply());
-        log.info("[GUARD]   应急开关    ：{}", properties.isKillSwitch() ? "【已打开，机器人不回复】" : "正常");
+        log.info("[GUARD]   无文字消息  ：回兜底话术「{}」", contentGate.getNoTextReply());
+        log.info("[GUARD]   应急开关    ：{}", guardSwitch.isKillSwitch() ? "【已打开，机器人不回复】" : "正常");
     }
 
     /**
@@ -92,12 +106,12 @@ public class GuardPipeline {
     public GuardResult check(GuardContext ctx) {
         metrics.inbound();
         // 应急开关优先级最高
-        if (properties.isKillSwitch()) {
+        if (guardSwitch.isKillSwitch()) {
             log.warn("[GUARD] 全局应急开关已打开，丢弃所有消息");
             metrics.blocked("kill-switch", GuardResult.drop("kill-switch", "全局应急开关已打开"), ctx);
             return GuardResult.drop("kill-switch", "全局应急开关已打开");
         }
-        if (!properties.isEnabled()) {
+        if (!guardSwitch.isEnabled()) {
             metrics.passed();
             return GuardResult.pass();
         }

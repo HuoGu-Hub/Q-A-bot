@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 配置中心的服务：读取当前值 → 校验 → 热应用 → 持久化。
  *
  * <p>热生效的原理：这几个 @ConfigurationProperties 对象是被各个 Bean
- * 长期持有引用的（private final GuardProperties props），调用时每次都实时读字段。
+ * 长期持有引用的（如 {@code private final RateLimit config}），调用时每次都实时读字段。
  * 所以改掉对象里的字段值，下一次调用就生效 ——
  * 不需要 Actuator、不需要 @RefreshScope、不需要重建 Bean。
  *

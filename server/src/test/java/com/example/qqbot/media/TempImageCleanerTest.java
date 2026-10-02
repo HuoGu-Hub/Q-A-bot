@@ -3,7 +3,7 @@ package com.example.qqbot.media;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.FileAccess;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.PathGuard;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,9 +47,9 @@ class TempImageCleanerTest {
         props.getTempImages().setDir(tmp.toString());
         props.getKbImages().setDir(kb.toString());
 
-        GuardProperties guard = new GuardProperties();
-        guard.getFileAccess().setAllowedRoots(List.of(base.toString()));
-        pathGuard = new PathGuard(guard.getFileAccess());
+        FileAccess fileAccess = new FileAccess();
+        fileAccess.setAllowedRoots(List.of(base.toString()));
+        pathGuard = new PathGuard(fileAccess);
 
         storage = new MediaStorageGuard(props, pathGuard);
         storage.init();

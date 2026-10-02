@@ -1,6 +1,6 @@
 package com.example.qqbot.media;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.FileAccess;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.PathGuard;
 import com.example.qqbot.onebot.model.ImageRef;
@@ -44,9 +44,9 @@ class ImageCacheTest {
         props.getTempImages().setDir(base.resolve("data/tmp-images").toString());
         props.getKbImages().setDir(base.resolve("data/kb-images").toString());
 
-        GuardProperties guardProps = new GuardProperties();
-        guardProps.getFileAccess().setAllowedRoots(List.of(base.toString()));
-        pathGuard = new PathGuard(guardProps.getFileAccess());
+        FileAccess fileAccess = new FileAccess();
+        fileAccess.setAllowedRoots(List.of(base.toString()));
+        pathGuard = new PathGuard(fileAccess);
 
         storage = new MediaStorageGuard(props, pathGuard);
         storage.init();

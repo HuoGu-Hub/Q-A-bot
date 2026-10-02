@@ -1,19 +1,28 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.guard.Access;
+import com.example.qqbot.guard.Budget;
+import com.example.qqbot.guard.ContentGate;
+import com.example.qqbot.guard.FileAccess;
+import com.example.qqbot.guard.Outbound;
+import com.example.qqbot.guard.RateLimit;
+import com.example.qqbot.guard.Words;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 把 {@link GuardProperties} 的**嵌套配置对象**分别暴露成 bean。
+ * 把 {@link GuardProperties} 持有的**各个分组对象**分别暴露成 bean。
  *
- * <h2>解决什么问题</h2>
- * {@code GuardProperties} 是一个 **661 行**的巨型配置类，被 **17 个类**注入
- * （`GuardProperties` 是 fan-in 排行榜第一）。但逐类核对后发现：
- * 其中 **12 个只用到一个嵌套对象** —— `RateLimitStage` 只要 `RateLimit`、
- * `PathGuard` 只要 `FileAccess`、`ChatService` 只要 `ContentGate`…
- * 它们却都得把整个 661 行的对象拖进构造函数。
+ * <h2>解决什么问题（2026-10-02 收尾）</h2>
+ * 这里原本是债务⑥ 的第一步：`GuardProperties` 那时是个 **661 行**的巨型配置类、
+ * 被 **17 个类**注入（fan-in 第一），而其中 12 个只用到一个嵌套对象 ——
+ * 于是把嵌套对象单独暴露成 bean，让它们不必拖整个对象进来。**fan-in 从 17 降到 3。**
  *
- * <p>后果：改配置结构 = 改一片类；而且看构造签名完全看不出这个类到底关心哪几项配置。
+ * <p>但那只是第一步：那些 bean 的**类型**仍然是 `config.GuardProperties.RateLimit`，
+ * 所以护栏（业务包不得依赖 config）照样不通过。**第二步是把 7 个分组整体搬去
+ * `guard` 包** —— 它们是安全中间层的领域词汇，只是碰巧从 yml 绑定。
+ * 现在 `GuardProperties` 只剩 129 行（就是那 7 个字段 + 2 个根开关 + getter/setter），
+ * 而本类把 `guard` 包里的它们暴露成 bean。
  *
  * <h2>做法：只加 bean，不改绑定</h2>
  * `GuardProperties` 仍然是唯一的 `@ConfigurationProperties("app.guard")` 绑定者，
@@ -28,37 +37,37 @@ import org.springframework.context.annotation.Configuration;
 public class GuardConfig {
 
     @Bean
-    public GuardProperties.Access guardAccess(GuardProperties props) {
+    public Access guardAccess(GuardProperties props) {
         return props.getAccess();
     }
 
     @Bean
-    public GuardProperties.RateLimit guardRateLimit(GuardProperties props) {
+    public RateLimit guardRateLimit(GuardProperties props) {
         return props.getRateLimit();
     }
 
     @Bean
-    public GuardProperties.Budget guardBudget(GuardProperties props) {
+    public Budget guardBudget(GuardProperties props) {
         return props.getBudget();
     }
 
     @Bean
-    public GuardProperties.Outbound guardOutbound(GuardProperties props) {
+    public Outbound guardOutbound(GuardProperties props) {
         return props.getOutbound();
     }
 
     @Bean
-    public GuardProperties.ContentGate guardContentGate(GuardProperties props) {
+    public ContentGate guardContentGate(GuardProperties props) {
         return props.getContentGate();
     }
 
     @Bean
-    public GuardProperties.Words guardWords(GuardProperties props) {
+    public Words guardWords(GuardProperties props) {
         return props.getWords();
     }
 
     @Bean
-    public GuardProperties.FileAccess guardFileAccess(GuardProperties props) {
+    public FileAccess guardFileAccess(GuardProperties props) {
         return props.getFileAccess();
     }
 }

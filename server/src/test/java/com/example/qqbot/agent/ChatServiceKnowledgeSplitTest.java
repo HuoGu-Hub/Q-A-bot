@@ -1,6 +1,6 @@
 package com.example.qqbot.agent;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.ContentGate;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.kb.KbCorpus;
@@ -50,7 +50,7 @@ class ChatServiceKnowledgeSplitTest {
         when(llmRouter.isAvailable()).thenReturn(true);
         when(llmRouter.chat(anyString())).thenReturn("好的");
 
-        chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new GuardProperties().getContentGate(),
+        chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new ContentGate(),
                 new MediaProperties(), kbRetriever, new KbProperties());
     }
 
