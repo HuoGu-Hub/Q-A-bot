@@ -1,6 +1,6 @@
 package com.example.qqbot.kb.category;
 
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,15 +35,15 @@ public class CategoryStore {
 
     private static final Logger log = LoggerFactory.getLogger(CategoryStore.class);
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private volatile boolean available;
 
-    public CategoryStore(QaStore qaStore) {
-        this.qaStore = qaStore;
+    public CategoryStore(SqliteConnectionProvider db) {
+        this.db = db;
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     public boolean isAvailable() {
@@ -53,7 +53,7 @@ public class CategoryStore {
     @PostConstruct
     void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[KB-CAT] 问答库不可用，分类配置功能关闭");
                 return;
             }

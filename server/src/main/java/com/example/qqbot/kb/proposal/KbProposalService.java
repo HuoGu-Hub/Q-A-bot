@@ -1,7 +1,7 @@
 package com.example.qqbot.kb.proposal;
 
 import com.example.qqbot.llm.LlmRouter;
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -62,7 +62,7 @@ public class KbProposalService {
     public record AnalyzeResult(int goodTotal, int analyzed, int proposals, String message) {
     }
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     /** 当前语料 —— 见 {@link com.example.qqbot.kb.KbCorpus}（现在只有块表一个实现） */
     private final com.example.qqbot.kb.KbCorpus corpus;
     /** 提案落地要按块 id 写（会自动重算那一块的向量） */
@@ -78,11 +78,11 @@ public class KbProposalService {
 
     private volatile boolean available;
 
-    public KbProposalService(QaStore qaStore, com.example.qqbot.kb.KbCorpus corpus,
+    public KbProposalService(SqliteConnectionProvider db, com.example.qqbot.kb.KbCorpus corpus,
                              LlmRouter router,
                              ObjectMapper mapper,
                              com.example.qqbot.kb.block.KbBlockAdminService blockAdmin) {
-        this.qaStore = qaStore;
+        this.db = db;
         this.corpus = corpus;
         this.blockAdmin = blockAdmin;
         this.router = router;
@@ -90,13 +90,13 @@ public class KbProposalService {
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     @PostConstruct
     void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[PROPOSAL] 问答库不可用，提案功能关闭");
                 return;
             }

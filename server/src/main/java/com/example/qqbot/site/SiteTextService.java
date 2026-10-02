@@ -1,6 +1,6 @@
 package com.example.qqbot.site;
 
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,21 +133,21 @@ public class SiteTextService {
         }
     }
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private volatile boolean available;
 
-    public SiteTextService(QaStore qaStore) {
-        this.qaStore = qaStore;
+    public SiteTextService(SqliteConnectionProvider db) {
+        this.db = db;
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     @PostConstruct
     void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[SITE] 问答库不可用，页面文案将全部走默认值");
                 return;
             }

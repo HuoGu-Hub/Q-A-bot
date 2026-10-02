@@ -1,6 +1,6 @@
 package com.example.qqbot.command;
 
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -25,7 +25,7 @@ import java.util.Map;
  * 指令的存储。
  *
  * <p><b>和问答记录共用同一个 SQLite 文件</b>（§app.qa.db§）—— 都是本地小数据，
- * 没必要为它单独开一个库。表由本类自建，和 QaStore 互不干扰。
+ * 没必要为它单独开一个库。表由本类自建，和其他 Store 互不干扰。
  *
  * <p>本类**不缓存**：指令条目是个位数~几十条，每次查一下 SQLite 只要零点几毫秒，
  * 比维护缓存一致性的复杂度划算得多。**而且天然就是"改完立刻生效"** ——
@@ -37,13 +37,13 @@ public class CommandStore {
 
     private static final Logger log = LoggerFactory.getLogger(CommandStore.class);
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private final ObjectMapper mapper;
 
     private volatile boolean available;
 
     /**
-     * ⚠️ 复用 QaStore 的连接，而不是自己开一个。
+     * ⚠️ 复用**共用**的 SQLite 连接（{@link com.example.qqbot.persistence.SqliteConnectionProvider}），而不是自己开一个。
      *
      * <p><b>为什么</b>：两个连接同时操作同一个 SQLite 文件时，
      * WAL 的共享内存段（-shm）会冲突，实测直接报
@@ -53,19 +53,19 @@ public class CommandStore {
      * <p>SQLite 本来就是单写者模型，共用连接既避免冲突，
      * 也省一个文件句柄。
      */
-    public CommandStore(QaStore qaStore, ObjectMapper mapper) {
-        this.qaStore = qaStore;
+    public CommandStore(SqliteConnectionProvider db, ObjectMapper mapper) {
+        this.db = db;
         this.mapper = mapper;
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     @PostConstruct
     void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[CMD] 问答库不可用，指令功能一并关闭");
                 available = false;
                 return;

@@ -1,7 +1,7 @@
 package com.example.qqbot.plaza;
 
 import com.example.qqbot.config.PlazaProperties;
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -32,12 +32,12 @@ public class AnswerAggregator {
 
     private static final Logger log = LoggerFactory.getLogger(AnswerAggregator.class);
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private final PlazaStore plazaStore;
     private final PlazaProperties props;
 
-    public AnswerAggregator(QaStore qaStore, PlazaStore plazaStore, PlazaProperties props) {
-        this.qaStore = qaStore;
+    public AnswerAggregator(SqliteConnectionProvider db, PlazaStore plazaStore, PlazaProperties props) {
+        this.db = db;
         this.plazaStore = plazaStore;
         this.props = props;
     }
@@ -157,8 +157,8 @@ public class AnswerAggregator {
                 //    实测「装备」16 次（真实 6 次）、「欢迎」4 次（真实 0 次）。
                 + " WHERE s.guard_action = 'pass'"
                 + " GROUP BY k.keyword, k.term_en ORDER BY c DESC LIMIT ?";
-        synchronized (qaStore) {
-            try (PreparedStatement ps = qaStore.connection().prepareStatement(sql)) {
+        synchronized (db) {
+            try (PreparedStatement ps = db.connection().prepareStatement(sql)) {
                 ps.setInt(1, limit);
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
@@ -200,8 +200,8 @@ public class AnswerAggregator {
                 // 混进来会把它算成"这个关键词被问过几次"
                 + " AND s.guard_action = 'pass'"
                 + " ORDER BY s.id DESC LIMIT 200";
-        synchronized (qaStore) {
-            try (PreparedStatement ps = qaStore.connection().prepareStatement(sql)) {
+        synchronized (db) {
+            try (PreparedStatement ps = db.connection().prepareStatement(sql)) {
                 ps.setString(1, keyword);
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
@@ -225,8 +225,8 @@ public class AnswerAggregator {
                 // 只有提问才可能出现在广场上；不过滤的话，闲聊行的关键词
                 // 一旦被投票也会被算进来（drop 行占了 qa_keyword 的多数）
                 + " WHERE k.keyword = ? AND v.vote = 'up' AND s.guard_action = 'pass'";
-        synchronized (qaStore) {
-            try (PreparedStatement ps = qaStore.connection().prepareStatement(sql)) {
+        synchronized (db) {
+            try (PreparedStatement ps = db.connection().prepareStatement(sql)) {
                 ps.setString(1, keyword);
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getLong(1) : 0;

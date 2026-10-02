@@ -1,7 +1,7 @@
 package com.example.qqbot.plaza;
 
 import com.example.qqbot.config.PlazaProperties;
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +25,13 @@ import java.util.Map;
 /**
  * 问答广场的数据层：投票 + 求助记录。
  *
- * <p>复用 QaStore 的连接（和 CommandStore 一样）——
+ * <p>复用**共用**的 SQLite 连接（和 CommandStore 一样）——
  * 多个连接同时开同一个 SQLite 文件会触发 WAL 共享内存冲突。
  */
 /**
  * 问答广场的数据层：投票 + 求助记录。
  *
- * <p>复用 QaStore 的连接（和 CommandStore 一样）—— 多个连接同时开同一个
+ * <p>复用**共用**的 SQLite 连接（和 CommandStore 一样）—— 多个连接同时开同一个
  * SQLite 文件会触发 WAL 共享内存冲突。
  *
  * <p>⚠️ {@code @DependsOn("qaStore")} 是**必须**的：@PostConstruct 的执行顺序
@@ -44,18 +44,18 @@ public class PlazaStore {
 
     private static final Logger log = LoggerFactory.getLogger(PlazaStore.class);
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private final PlazaProperties plazaProps;
 
     private volatile boolean available;
 
-    public PlazaStore(QaStore qaStore, PlazaProperties plazaProps) {
-        this.qaStore = qaStore;
+    public PlazaStore(SqliteConnectionProvider db, PlazaProperties plazaProps) {
+        this.db = db;
         this.plazaProps = plazaProps;
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     public boolean isAvailable() {
@@ -65,7 +65,7 @@ public class PlazaStore {
     @PostConstruct
     void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[PLAZA] 问答库不可用，广场功能一并关闭");
                 return;
             }

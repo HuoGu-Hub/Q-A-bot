@@ -1,6 +1,6 @@
 package com.example.qqbot.site;
 
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,15 +38,15 @@ public class CarouselStore {
                        String link, String caption, int sort, boolean enabled, String createdAt) {
     }
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private volatile boolean available;
 
-    public CarouselStore(QaStore qaStore) {
-        this.qaStore = qaStore;
+    public CarouselStore(SqliteConnectionProvider db) {
+        this.db = db;
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     public boolean isAvailable() {
@@ -56,7 +56,7 @@ public class CarouselStore {
     @PostConstruct
     void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[SITE] 问答库不可用，首页轮播功能关闭");
                 return;
             }

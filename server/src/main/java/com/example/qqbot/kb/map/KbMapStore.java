@@ -1,6 +1,6 @@
 package com.example.qqbot.kb.map;
 
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,11 +46,11 @@ public class KbMapStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbMapStore.class);
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private volatile boolean available;
 
-    public KbMapStore(QaStore qaStore) {
-        this.qaStore = qaStore;
+    public KbMapStore(SqliteConnectionProvider db) {
+        this.db = db;
     }
 
     /** 某一页上一次同步到的版本 */
@@ -65,7 +65,7 @@ public class KbMapStore {
 
     @PostConstruct
     public void init() {
-        if (!qaStore.isAvailable()) {
+        if (!db.isAvailable()) {
             log.warn("[KB-MAP] 问答库不可用，地图存储一并关闭");
             available = false;
             return;
@@ -391,7 +391,7 @@ public class KbMapStore {
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     /** 同步时刻的 ISO 时间戳 */

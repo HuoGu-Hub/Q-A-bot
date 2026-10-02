@@ -1,6 +1,7 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -38,7 +39,7 @@ import java.util.List;
  * 之后所有写入变成空操作，只记一条警告。
  */
 @Component
-public class QaStore implements AutoCloseable {
+public class QaStore implements SqliteConnectionProvider, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(QaStore.class);
 
@@ -206,6 +207,7 @@ public class QaStore implements AutoCloseable {
         }
     }
 
+    @Override
     public boolean isAvailable() {
         return available;
     }
@@ -433,6 +435,7 @@ public class QaStore implements AutoCloseable {
     }
 
     /** 仅供后续阶段（S2 报表 / S3 后台）使用 */
+    @Override
     public Connection connection() {
         return conn;
     }

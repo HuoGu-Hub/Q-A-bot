@@ -2,7 +2,7 @@ package com.example.qqbot.kb.block;
 
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.doc.ChunkMarkup;
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +38,7 @@ import java.util.Map;
  * 合成一张的话，管理端"列出所有块"会顺手把 17 MB 也拖出来。
  *
  * <h2>连接</h2>
- * ⚠️ 复用 {@link QaStore#connection()}，不自己开连接 —— 两个连接操作同一个
+ * ⚠️ 复用 {@link com.example.qqbot.persistence.SqliteConnectionProvider#connection()}，不自己开连接 —— 两个连接操作同一个
  * SQLite 文件会让 WAL 的共享内存段冲突（实测报 {@code SQLITE_IOERR_SHMOPEN}）。
  */
 @Component
@@ -47,22 +47,22 @@ public class KbBlockStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbBlockStore.class);
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
 
     private volatile boolean available;
 
-    public KbBlockStore(QaStore qaStore) {
-        this.qaStore = qaStore;
+    public KbBlockStore(SqliteConnectionProvider db) {
+        this.db = db;
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     @PostConstruct
     public void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[KB-BLOCK] 问答库不可用，块存储一并关闭（知识库检索不可用）");
                 available = false;
                 return;

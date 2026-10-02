@@ -92,9 +92,13 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1（S1）。实测违反：kb 侧 KbBlockStore / CategoryStore / KbProposalService / KbTermStore 依赖 qa.QaStore，qa 侧 QaCollector 又依赖 kb.Glossary / KbRetriever / KbTrace —— 两个包双向循环")
-    @DisplayName("【目标】kb 不得依赖 qa（当前存在 kb <-> qa 双向循环）")
+    @DisplayName("★ S1 第一步：kb 不得依赖 qa（原先有 4 个 Store 直接依赖 qa.QaStore）")
     void knowledgeDoesNotDependOnQa() {
+        // 2026-10-02 转正：kb 侧原先 KbBlockStore / CategoryStore / KbProposalService / KbTermStore
+        // 直接依赖 qa.QaStore —— 而它们要的只是"一个 SQLite 连接"，不是"问答记录"。
+        // 换成 persistence.SqliteConnectionProvider 之后这条就成立了。
+        // ⚠️ 反向（qa -> kb）仍在：QaCollector 要用 kb.Glossary / KbRetriever / KbTrace。
+        //    那是另一个方向的问题（记录检索指标），需要把 KbTrace 挪成中性 DTO 才能解，见文档。
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..kb..")
                 .should().dependOnClassesThat().resideInAPackage("..qa..");

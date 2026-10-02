@@ -6,7 +6,6 @@ import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.config.GuardProperties;
 import com.example.qqbot.config.LogProperties;
-import com.example.qqbot.qa.QaStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;

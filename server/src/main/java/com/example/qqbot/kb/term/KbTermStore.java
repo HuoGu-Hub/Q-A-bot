@@ -1,7 +1,7 @@
 package com.example.qqbot.kb.term;
 
 import com.example.qqbot.config.KbProperties;
-import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.persistence.SqliteConnectionProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 「有没有正文」由语料现算，不落库；孤儿词条只由 {@code deleteOrphans} 显式清理。
  *
  * <h2>和 {@link com.example.qqbot.kb.category.CategoryStore} 一样</h2>
- * 共用问答库那个 SQLite 连接（{@code qaStore.connection()}），
+ * 共用问答库那个 SQLite 连接（{@code db.connection()}），
  * 库不可用时整体降级为「没有术语表」（B 路退化成只认英文词），**绝不让机器人挂掉**。
  */
 @Component
@@ -64,7 +64,7 @@ public class KbTermStore {
     /** 合法状态。认不出来的一律归 draft —— 和旧 GlossaryStore 同一口径 */
     public static final List<String> STATUSES = List.of("draft", "verified", "rejected");
 
-    private final QaStore qaStore;
+    private final SqliteConnectionProvider db;
     private final KbProperties props;
     private final ObjectMapper mapper;
     private final com.example.qqbot.kb.KbCorpus corpus;
@@ -80,9 +80,9 @@ public class KbTermStore {
      */
     private final AtomicLong version = new AtomicLong();
 
-    public KbTermStore(QaStore qaStore, KbProperties props, ObjectMapper mapper,
+    public KbTermStore(SqliteConnectionProvider db, KbProperties props, ObjectMapper mapper,
                        com.example.qqbot.kb.KbCorpus corpus) {
-        this.qaStore = qaStore;
+        this.db = db;
         this.props = props;
         this.mapper = mapper;
         this.corpus = corpus;
@@ -109,16 +109,16 @@ public class KbTermStore {
     }
 
     private Connection conn() {
-        return qaStore.connection();
+        return db.connection();
     }
 
     // ==================== 建表 + 补齐 ====================
 
-    /** 初始化（public 以便测试显式调用，和 QaStore 一致） */
+    /** 初始化（public 以便测试显式调用，和 QaStore 一致（它也是连接持有者）） */
     @PostConstruct
     public void init() {
         try {
-            if (!qaStore.isAvailable()) {
+            if (!db.isAvailable()) {
                 log.warn("[KB-TERM] 问答库不可用，词条功能关闭（B 路退化为只认英文词）");
                 return;
             }
@@ -320,7 +320,7 @@ public class KbTermStore {
     /**
      * 全部词条（含 rejected —— 后台要展示它们）。
      *
-     * <p>读也加锁：所有方法共用 {@code qaStore.connection()} 这一条 JDBC 连接，
+     * <p>读也加锁：所有方法共用 {@code db.connection()} 这一条 JDBC 连接，
      * 而批量写会把它切成手动提交。读出到半个事务里是"看起来偶发"的那类 bug，
      * 花一次锁把它按住更省事。
      */
