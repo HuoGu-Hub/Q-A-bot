@@ -1,4 +1,4 @@
-package com.example.qqbot.kb.map;
+package com.example.qqbot.kb.wiki;
 
 import com.example.qqbot.config.KbProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,7 +20,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * MediaWiki API 客户端 —— 只做地图同步需要的那两件事。
+ * MediaWiki API 客户端 —— 通用的一层，地图同步与文章导入都用它。
+ *
+ * <p>⚠️ 连接设置（api-base / user-agent / 批大小 / 退避）目前借用 {@code app.kb.map-sync.*}，
+ * 因为那是最早需要它的功能。两个功能共用同一套连接参数是合理的，
+ * 但**配置名不该叫 map-sync** —— 抽出 {@code app.kb.wiki.*} 是后续的一小步。
  *
  * <h2>为什么走 API 而不是抓页面 HTML</h2>
  * {@code Map} 命名空间里的页面**本身就是 JSON**，API 直接给原文。
@@ -39,15 +43,15 @@ import java.util.Map;
  * 所以绝不能"一次把所有页内容拉回来"。
  */
 @Component
-public class WikiMapClient {
+public class WikiApiClient {
 
-    private static final Logger log = LoggerFactory.getLogger(WikiMapClient.class);
+    private static final Logger log = LoggerFactory.getLogger(WikiApiClient.class);
 
     private final KbProperties props;
     private final ObjectMapper mapper;
     private final HttpClient http;
 
-    public WikiMapClient(KbProperties props, ObjectMapper mapper) {
+    public WikiApiClient(KbProperties props, ObjectMapper mapper) {
         this.props = props;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -75,8 +79,8 @@ public class WikiMapClient {
         return props.isEnabled() && props.getMapSync().isEnabled();
     }
 
-    /** 命名空间里全部页面名 */
-    public List<String> listPages() {
+    /** 指定命名空间里的全部页面名 */
+    public List<String> listNamespacePages() {
         KbProperties.MapSync cfg = props.getMapSync();
         String url = cfg.getApiBase() + "?action=query&list=allpages&aplimit=" + Math.max(1, cfg.getMaxPages())
                 + "&apnamespace=" + cfg.getNamespace() + "&format=json&formatversion=2";
@@ -89,6 +93,40 @@ public class WikiMapClient {
             }
         }
         log.info("[KB-MAP] 命名空间 {} 共 {} 页", cfg.getNamespace(), out.size());
+        return out;
+    }
+
+    /** 某个分类下的全部页面名 */
+    public List<String> listCategoryMembers(String category, int limit) {
+        String url = props.getMapSync().getApiBase()
+                + "?action=query&list=categorymembers&cmlimit=" + Math.max(1, limit)
+                + "&cmtitle=" + URLEncoder.encode("Category:" + category, StandardCharsets.UTF_8)
+                + "&format=json&formatversion=2";
+        JsonNode root = get(url);
+        List<String> out = new ArrayList<>();
+        for (JsonNode m : root.path("query").path("categorymembers")) {
+            String title = m.path("title").asText("");
+            if (!title.isBlank()) {
+                out.add(title);
+            }
+        }
+        return out;
+    }
+
+    /** 某个前缀下的全部页面名（如 {@code Quests/}） */
+    public List<String> listByPrefix(String prefix, int limit) {
+        String url = props.getMapSync().getApiBase()
+                + "?action=query&list=allpages&aplimit=" + Math.max(1, limit)
+                + "&apprefix=" + URLEncoder.encode(prefix, StandardCharsets.UTF_8)
+                + "&format=json&formatversion=2";
+        JsonNode root = get(url);
+        List<String> out = new ArrayList<>();
+        for (JsonNode p : root.path("query").path("allpages")) {
+            String title = p.path("title").asText("");
+            if (!title.isBlank()) {
+                out.add(title);
+            }
+        }
         return out;
     }
 

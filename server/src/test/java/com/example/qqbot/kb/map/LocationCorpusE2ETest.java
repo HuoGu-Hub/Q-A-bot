@@ -1,5 +1,6 @@
 package com.example.qqbot.kb.map;
 
+import com.example.qqbot.kb.wiki.WikiApiClient;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.ProjectFiles;
 import com.example.qqbot.config.QaProperties;
@@ -95,7 +96,7 @@ class LocationCorpusE2ETest {
         // ① 同步地图数据
         KbMapStore mapStore = new KbMapStore(qaStore);
         mapStore.init();
-        WikiMapClient client = new WikiMapClient(kb, mapper);
+        WikiApiClient client = new WikiApiClient(kb, mapper);
         KbMapSyncService sync = new KbMapSyncService(client, mapStore);
         KbMapSyncService.SyncReport sr = sync.sync(false);
         System.out.printf("地图同步：%d 页 / %d 个 marker / 失败 %d%n", sr.parsed(), sr.markers(), sr.failed());

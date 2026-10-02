@@ -486,6 +486,28 @@ app:
       # 启动时自动同步一次。**默认关** —— 这是运维动作，不该每次重启都跑
       sync-on-start: false
 
+    # wiki 文章导入（任务 / 机制）—— 地图里没有这两类内容
+    # 实测：地图的 Quests 分组**只有 1 个 marker**，而 Category:Quests 有 **149 篇**文章；
+    # 机制（Combat Mechanics / Crafting / Survival）地图里完全没有。
+    # 正文进库前一律过 WikitextCleaner（不清洗等于把 {{ 和 [[ 当内容喂给向量模型）。
+    wiki-import:
+      enabled: true
+      # 任务页都在 Quests/ 前缀下（实测 155 篇）
+      prefixes:
+        - Quests/
+      # 机制类（实测：Gameplay 11 篇、Bosses 11 篇、Craftspeople 10 篇）
+      categories:
+        - Gameplay
+        - Bosses
+        - Craftspeople
+      max-pages-per-source: 300
+      # 派生块归属 wiki·<来源>，purge 按它清
+      doc-id-prefix: wiki
+      # 单块正文上限。任务页约 2KB、机制页约 11KB —— 太长会把 prompt 撑爆、也稀释语义
+      max-body-chars: 1500
+      # 启动时自动导入一次。**默认关** —— 运维动作
+      import-on-start: false
+
   # ============================ 大模型 ============================
   llm:
     default-provider: opencode-go

@@ -1,5 +1,6 @@
 package com.example.qqbot.kb.map;
 
+import com.example.qqbot.kb.wiki.WikiApiClient;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.qa.QaStore;
@@ -58,7 +59,7 @@ class KbMapSyncTest {
         assertThat(store.isAvailable()).isTrue();
 
         KbProperties kb = new KbProperties();
-        WikiMapClient client = new WikiMapClient(kb, mapper);
+        WikiApiClient client = new WikiApiClient(kb, mapper);
         KbMapSyncService service = new KbMapSyncService(client, store);
 
         // 先 dryRun：只比版本，不取正文

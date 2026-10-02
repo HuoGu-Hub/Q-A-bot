@@ -1,5 +1,7 @@
 package com.example.qqbot.kb.map;
 
+import com.example.qqbot.kb.wiki.WikiApiClient;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,10 +36,10 @@ public class KbMapSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(KbMapSyncService.class);
 
-    private final WikiMapClient client;
+    private final WikiApiClient client;
     private final KbMapStore store;
 
-    public KbMapSyncService(WikiMapClient client, KbMapStore store) {
+    public KbMapSyncService(WikiApiClient client, KbMapStore store) {
         this.client = client;
         this.store = store;
     }
@@ -66,18 +68,18 @@ public class KbMapSyncService {
             return new SyncReport(0, 0, 0, 0, 0, List.of("地图存储不可用（问答库没起来）"), dryRun, 0, Map.of());
         }
 
-        List<String> pages = client.listPages();
+        List<String> pages = client.listNamespacePages();
         if (pages.isEmpty()) {
             return new SyncReport(0, 0, 0, 0, 0, List.of("命名空间里没有页面"), dryRun,
                     System.currentTimeMillis() - t0, Map.of());
         }
 
         // ① 只取版本号（很轻），比出哪几页变了
-        Map<String, WikiMapClient.Meta> remote = client.fetchMeta(pages);
+        Map<String, WikiApiClient.Meta> remote = client.fetchMeta(pages);
         Map<String, Long> known = store.knownRevisions();
         List<String> changed = new ArrayList<>();
         for (String page : pages) {
-            WikiMapClient.Meta m = remote.get(page);
+            WikiApiClient.Meta m = remote.get(page);
             if (m == null) {
                 continue;
             }
@@ -99,9 +101,9 @@ public class KbMapSyncService {
         int failed = 0;
         List<String> errors = new ArrayList<>();
         if (!changed.isEmpty()) {
-            Map<String, WikiMapClient.Revision> content = client.fetchContent(changed);
+            Map<String, WikiApiClient.Revision> content = client.fetchContent(changed);
             for (String page : changed) {
-                WikiMapClient.Revision rev = content.get(page);
+                WikiApiClient.Revision rev = content.get(page);
                 if (rev == null) {
                     failed++;
                     errors.add(page + "：API 没返回内容");
