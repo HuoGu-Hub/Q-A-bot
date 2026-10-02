@@ -4,7 +4,6 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,15 +19,20 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * 但过去只写在 README 里，**没有任何机制强制** —— 新人（和新 AI）改代码时
  * 无从知道边界在哪，只能是"读文档记得住就守，记不住就算了"。
  *
- * <h2>两类规则，别混为一谈</h2>
- * <ul>
- *   <li><b>已生效</b>：当前代码**本来就满足**，加进来是为了防退化。
- *       它们现在就应该是绿的；变红说明你刚引入了一个越界依赖。</li>
- *   <li><b>{@link Disabled}（目标）</b>：当前代码**确实违反**，是后续重构阶段
- *       （见 docs/md/重构总纲-目标架构与迁移路线.md）要还的债。
- *       每条都标了**实测的违反清单**，带 {@code @Disabled} 是为了不把
- *       已经红着的构建堵死；对应阶段做完后把注解摘掉即可。</li>
- * </ul>
+ * <h2>所有规则都已生效（2026-10-02）</h2>
+ * 原先分两类：<b>已生效</b>（当前代码本来就满足，加进来防退化），
+ * 和 <b>{@code @Disabled}（目标）</b>——后者是"当前代码确实违反、属于后续要还的债"，
+ * 挂注解是为了不把已经红着的构建堵死。
+ *
+ * <p><b>现在 {@code @Disabled} 已经全部摘掉了</b>：四条铁律 + 8 条结构规则，
+ * 共 <b>12 条</b>全部转正（债务 ①~⑦ 全还完，见
+ * {@code docs/md/交付说明-渐进式重构与知识库改造.md} 第 7 节）。
+ * 也就是说：<b>本类里任何一条变红，都说明你刚引入了一个越界依赖</b> ——
+ * 没有"待还的债"这种解释了。
+ *
+ * <p>⚠️ 以后要加"目标规则"时，照旧挂 {@code @Disabled} 并写清**实测的违反清单**
+ * （别用 grep import 估 —— 既漏全限定名用法、又把死 import 算进去，
+ * 而 ArchUnit 看的是字节码依赖；要数字就摘掉注解真跑一次），还完再摘掉注解。
  *
  * <p>本测试只分析**主代码**（{@link ImportOption.Predefined#DO_NOT_INCLUDE_TESTS}），
  * 测试类不受这些约束 —— 它们本来就要能随手构造内部组件。
