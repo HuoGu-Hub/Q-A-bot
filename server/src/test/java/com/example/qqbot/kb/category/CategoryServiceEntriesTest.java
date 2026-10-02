@@ -1,6 +1,5 @@
 package com.example.qqbot.kb.category;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.KbCorpus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -37,7 +36,7 @@ class CategoryServiceEntriesTest {
     private static CategoryService service(KbCorpus corpus) {
         CategoryStore store = mock(CategoryStore.class);
         when(store.loadAll()).thenReturn(Map.of());
-        return new CategoryService(mock(KbProperties.class), store, new ObjectMapper(), corpus);
+        return new CategoryService(store, new ObjectMapper(), corpus);
     }
 
     private static KbCorpus corpusOf(List<KbCorpus.Entry> list) {

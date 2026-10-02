@@ -1,6 +1,5 @@
 package com.example.qqbot.kb;
 
-import com.example.qqbot.config.KbProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -35,11 +34,11 @@ public class EmbeddingClient {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingClient.class);
 
-    private final KbProperties props;
+    private final KbPolicy props;
     private final ObjectMapper mapper;
     private final HttpClient http;
 
-    public EmbeddingClient(KbProperties props, ObjectMapper mapper) {
+    public EmbeddingClient(KbPolicy props, ObjectMapper mapper) {
         this.props = props;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -60,7 +59,7 @@ public class EmbeddingClient {
         if (texts == null || texts.isEmpty()) {
             return out;
         }
-        KbProperties.Embedding cfg = props.getEmbedding();
+        Embedding cfg = props.getEmbedding();
 
         ObjectNode body = mapper.createObjectNode();
         body.put("model", cfg.getModel());

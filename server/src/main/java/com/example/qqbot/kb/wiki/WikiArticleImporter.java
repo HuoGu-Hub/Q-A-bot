@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.wiki;
 
-import com.example.qqbot.config.KbProperties;
+import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.WikiImport;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockIndex;
@@ -45,7 +46,7 @@ public class WikiArticleImporter {
     /** 块来源标记：来自 wiki 文章（与 doc / manual / map 并列） */
     public static final String SRC_WIKI = "wiki";
 
-    private final KbProperties props;
+    private final KbPolicy props;
     private final WikiApiClient client;
     private final KbWikiPageStore store;
     private final KbBlockStore blockStore;
@@ -53,7 +54,7 @@ public class WikiArticleImporter {
     private final EmbeddingClient embedding;
     private final KbTermStore termStore;
 
-    public WikiArticleImporter(KbProperties props, WikiApiClient client, KbWikiPageStore store,
+    public WikiArticleImporter(KbPolicy props, WikiApiClient client, KbWikiPageStore store,
                                KbBlockStore blockStore, KbBlockIndex index, EmbeddingClient embedding,
                                KbTermStore termStore) {
         this.props = props;
@@ -93,7 +94,7 @@ public class WikiArticleImporter {
     }
 
     public ImportReport importAll(boolean dryRun) {
-        KbProperties.WikiImport cfg = props.getWikiImport();
+        WikiImport cfg = props.getWikiImport();
         if (!cfg.isEnabled()) {
             return new ImportReport(0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
         }
@@ -226,7 +227,7 @@ public class WikiArticleImporter {
 
     /** 清掉全部 wiki 文章块 —— 回滚用 */
     public int purge() {
-        KbProperties.WikiImport cfg = props.getWikiImport();
+        WikiImport cfg = props.getWikiImport();
         int n = 0;
         for (KbWikiPageRepository.Page p : store.pages()) {
             String id = p.blockId();

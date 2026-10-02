@@ -1,6 +1,5 @@
 package com.example.qqbot.publicapi;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.category.CategoryService;
 import com.example.qqbot.kb.KbRetriever;
@@ -58,13 +57,12 @@ public class PublicController {
     private final KbRetriever kbRetriever;
     private final PublicSearchService publicSearch;
     private final Glossary glossary;
-    private final KbProperties kbProperties;
     private final QaAnalytics analytics;
     private final PublicRateLimiter limiter;
 
     public PublicController(com.example.qqbot.kb.KbCorpus kbCorpus, KbRetriever kbRetriever,
                             PublicSearchService publicSearch, Glossary glossary,
-                            KbProperties kbProperties, QaAnalytics analytics,
+                            QaAnalytics analytics,
                             PublicRateLimiter limiter,
                             com.example.qqbot.config.SiteProperties site,
                             com.example.qqbot.config.BotProperties botProps,
@@ -74,7 +72,6 @@ public class PublicController {
         this.kbRetriever = kbRetriever;
         this.publicSearch = publicSearch;
         this.glossary = glossary;
-        this.kbProperties = kbProperties;
         this.analytics = analytics;
         this.limiter = limiter;
         this.site = site;

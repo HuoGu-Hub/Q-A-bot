@@ -46,16 +46,13 @@ public class KbTermController {
 
     private final KbTermService service;
     private final KbTermStore store;
-    private final com.example.qqbot.config.KbProperties kbProps;
     /** 清理孤儿词条时要拿"现在有哪些块"来比 */
     private final com.example.qqbot.kb.block.KbBlockStore blockStore;
 
     public KbTermController(KbTermService service, KbTermStore store,
-                            com.example.qqbot.config.KbProperties kbProps,
                             com.example.qqbot.kb.block.KbBlockStore blockStore) {
         this.service = service;
         this.store = store;
-        this.kbProps = kbProps;
         this.blockStore = blockStore;
     }
 

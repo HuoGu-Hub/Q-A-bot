@@ -1,6 +1,7 @@
 package com.example.qqbot.publicapi;
 
-import com.example.qqbot.config.KbProperties;
+import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.PublicSearch;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.kb.KbRetriever;
@@ -47,7 +48,7 @@ public class PublicSearchService {
     private final KbRetriever retriever;
     private final KbCorpus corpus;
     private final EmbeddingClient embedding;
-    private final KbProperties props;
+    private final KbPolicy props;
 
     /** LRU 结果缓存。用 LinkedHashMap(accessOrder) 手搓一个就够，没必要引 Caffeine */
     private final Map<String, Cached> cache;
@@ -57,7 +58,7 @@ public class PublicSearchService {
     private volatile boolean quotaWarned;
 
     public PublicSearchService(KbRetriever retriever, KbCorpus corpus,
-                               EmbeddingClient embedding, KbProperties props) {
+                               EmbeddingClient embedding, KbPolicy props) {
         this.retriever = retriever;
         this.corpus = corpus;
         this.embedding = embedding;
@@ -88,7 +89,7 @@ public class PublicSearchService {
         if (query == null || query.isBlank()) {
             return new Outcome(List.of(), MODE_KEYWORD);
         }
-        KbProperties.PublicSearch cfg = props.getPublicSearch();
+        PublicSearch cfg = props.getPublicSearch();
         String key = query.toLowerCase(Locale.ROOT).trim();
 
         Cached hit = get(key);
@@ -131,7 +132,7 @@ public class PublicSearchService {
 
     /** 今日用量与剩余（管理端展示，让"花了多少"看得见） */
     public Map<String, Object> stats() {
-        KbProperties.PublicSearch cfg = props.getPublicSearch();
+        PublicSearch cfg = props.getPublicSearch();
         resetIfNewDay();
         int used = usedToday.get();
         Map<String, Object> out = new LinkedHashMap<>();

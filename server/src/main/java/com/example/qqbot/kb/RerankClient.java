@@ -1,6 +1,5 @@
 package com.example.qqbot.kb;
 
-import com.example.qqbot.config.KbProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -42,11 +41,11 @@ public class RerankClient {
 
     private static final Logger log = LoggerFactory.getLogger(RerankClient.class);
 
-    private final KbProperties props;
+    private final KbPolicy props;
     private final ObjectMapper mapper;
     private final HttpClient http;
 
-    public RerankClient(KbProperties props, ObjectMapper mapper) {
+    public RerankClient(KbPolicy props, ObjectMapper mapper) {
         this.props = props;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -54,7 +53,7 @@ public class RerankClient {
 
     /** 开了开关并且配了 key 才能用 */
     public boolean isAvailable() {
-        KbProperties.Rerank cfg = props.getRerank();
+        Rerank cfg = props.getRerank();
         return props.isEnabled() && cfg.isEnabled() && StringUtils.hasText(cfg.getApiKey());
     }
 
@@ -69,7 +68,7 @@ public class RerankClient {
         if (documents == null || documents.isEmpty()) {
             return new double[0];
         }
-        KbProperties.Rerank cfg = props.getRerank();
+        Rerank cfg = props.getRerank();
 
         ObjectNode body = mapper.createObjectNode();
         body.put("model", cfg.getModel());
@@ -153,7 +152,7 @@ public class RerankClient {
 
     /** 供启动日志/排查 */
     public String describe() {
-        KbProperties.Rerank cfg = props.getRerank();
+        Rerank cfg = props.getRerank();
         List<String> parts = new ArrayList<>();
         parts.add("enabled=" + cfg.isEnabled());
         parts.add("model=" + cfg.getModel());

@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.wiki;
 
-import com.example.qqbot.config.KbProperties;
+import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.MapSync;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -47,11 +48,11 @@ public class WikiApiClient {
 
     private static final Logger log = LoggerFactory.getLogger(WikiApiClient.class);
 
-    private final KbProperties props;
+    private final KbPolicy props;
     private final ObjectMapper mapper;
     private final HttpClient http;
 
-    public WikiApiClient(KbProperties props, ObjectMapper mapper) {
+    public WikiApiClient(KbPolicy props, ObjectMapper mapper) {
         this.props = props;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -81,7 +82,7 @@ public class WikiApiClient {
 
     /** 指定命名空间里的全部页面名 */
     public List<String> listNamespacePages() {
-        KbProperties.MapSync cfg = props.getMapSync();
+        MapSync cfg = props.getMapSync();
         String url = cfg.getApiBase() + "?action=query&list=allpages&aplimit=" + Math.max(1, cfg.getMaxPages())
                 + "&apnamespace=" + cfg.getNamespace() + "&format=json&formatversion=2";
         JsonNode root = get(url);
@@ -212,7 +213,7 @@ public class WikiApiClient {
      * 4xx 里那些"你请求写错了"的错误立刻抛，重试没有意义。
      */
     private JsonNode get(String url) {
-        KbProperties.MapSync cfg = props.getMapSync();
+        MapSync cfg = props.getMapSync();
         int maxRetries = Math.max(1, cfg.getMaxRetries());
         WikiException last = null;
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -262,7 +263,7 @@ public class WikiApiClient {
         throw last != null ? last : new WikiException("wiki API 请求失败：" + url);
     }
 
-    private static void sleepBackoff(KbProperties.MapSync cfg, int attempt) {
+    private static void sleepBackoff(MapSync cfg, int attempt) {
         long wait = Math.max(0, cfg.getBackoffMillis()) * (1L << Math.min(attempt - 1, 6));
         if (wait <= 0) {
             return;

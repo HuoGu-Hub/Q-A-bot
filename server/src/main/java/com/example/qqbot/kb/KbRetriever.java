@@ -1,6 +1,5 @@
 package com.example.qqbot.kb;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.map.LocationCorpusBuilder;
 import com.example.qqbot.trace.KbTrace;
 import org.slf4j.Logger;
@@ -91,13 +90,13 @@ public class KbRetriever {
      */
     private static final double GATE_FUSED_SCORE = 1.0 / (RRF_K + 1);
 
-    private final KbProperties props;
+    private final KbPolicy props;
     private final KbCorpus corpus;
     private final Glossary glossary;
     private final EmbeddingClient embedding;
     private final RerankClient rerankClient;
 
-    public KbRetriever(KbProperties props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding,
+    public KbRetriever(KbPolicy props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding,
                        RerankClient rerankClient) {
         this.props = props;
         this.corpus = corpus;
@@ -111,7 +110,7 @@ public class KbRetriever {
      *
      * <p>留着它主要是给**测试**用 —— 单测里不该为了验三路融合去构一个会发网络请求的客户端。
      */
-    public KbRetriever(KbProperties props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding) {
+    public KbRetriever(KbPolicy props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding) {
         this(props, corpus, glossary, embedding, null);
     }
 
@@ -216,7 +215,7 @@ public class KbRetriever {
      * <p><b>为什么需要这个重载</b>：群内问答和公开站搜索的目标完全不同 ——
      * 群内是"给模型当依据"，宁缺毋滥（阈值 0.45、只要 5 条）；
      * 公开站是"按相关度排给人看"，要拿得多一点、阈值松一点（见
-     * {@link com.example.qqbot.config.KbProperties.PublicSearch}）。
+     * {@link PublicSearch}）。
      * 用同一套参数会两头不讨好。
      *
      * @param topK     融合后取前几条
@@ -430,7 +429,7 @@ public class KbRetriever {
         if (fused.isEmpty()) {
             return fused;
         }
-        KbProperties.Rerank cfg = props.getRerank();
+        Rerank cfg = props.getRerank();
         int limit = Math.min(fused.size(), Math.max(1, cfg.getCandidateLimit()));
         List<Hit> candidates = fused.subList(0, limit);
         List<String> docs = new ArrayList<>(candidates.size());

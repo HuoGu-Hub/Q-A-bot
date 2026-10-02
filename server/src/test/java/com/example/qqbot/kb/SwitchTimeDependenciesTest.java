@@ -73,7 +73,7 @@ class SwitchTimeDependenciesTest {
                 entry("a-1", "a", List.of("基础")),
                 entry("b-0", "b", List.of("制作")));
 
-        CategoryService svc = new CategoryService(props, mock(CategoryStore.class),
+        CategoryService svc = new CategoryService(mock(CategoryStore.class),
                 new ObjectMapper(), corpus);
 
         assertThat(svc.rawCounts())
@@ -85,7 +85,7 @@ class SwitchTimeDependenciesTest {
     @Test
     @DisplayName("词料为空时分类也空（不报错）")
     void categoryCountsEmptyWhenNoCorpus() {
-        CategoryService svc = new CategoryService(props, mock(CategoryStore.class),
+        CategoryService svc = new CategoryService(mock(CategoryStore.class),
                 new ObjectMapper(), corpusOf());
         assertThat(svc.rawCounts()).isEmpty();
     }

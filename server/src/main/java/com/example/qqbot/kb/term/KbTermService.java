@@ -1,6 +1,5 @@
 package com.example.qqbot.kb.term;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.category.CategoryService;
 import com.example.qqbot.kb.category.KbGroups;
@@ -68,7 +67,6 @@ public class KbTermService {
     private final KbTermStore termStore;
     private final CategoryService categoryService;
     private final EmbeddingClient embedding;
-    private final KbProperties props;
     private final ObjectMapper mapper;
     /**
      * 发布"知识库变了"的事件。
@@ -80,13 +78,12 @@ public class KbTermService {
 
     public KbTermService(com.example.qqbot.kb.block.KbBlockStore blockStore, KbTermStore termStore,
                          CategoryService categoryService, EmbeddingClient embedding,
-                         KbProperties props, ObjectMapper mapper,
+                         ObjectMapper mapper,
                          ApplicationEventPublisher events) {
         this.blockStore = blockStore;
         this.termStore = termStore;
         this.categoryService = categoryService;
         this.embedding = embedding;
-        this.props = props;
         this.mapper = mapper;
         this.events = events;
     }

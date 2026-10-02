@@ -1,6 +1,5 @@
 package com.example.qqbot.kb.category;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.KbCorpus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +39,6 @@ public class CategoryService {
      */
     private static final long CACHE_TTL_MS = 30_000;
 
-    private final KbProperties props;
     private final CategoryStore store;
     private final ObjectMapper mapper;
     private final KbCorpus corpus;
@@ -59,9 +57,8 @@ public class CategoryService {
     private final AtomicReference<Map<String, String>> labelCache = new AtomicReference<>();
     private volatile long labelCachedAt;
 
-    public CategoryService(KbProperties props, CategoryStore store, ObjectMapper mapper,
+    public CategoryService(CategoryStore store, ObjectMapper mapper,
                            KbCorpus corpus) {
-        this.props = props;
         this.store = store;
         this.mapper = mapper;
         this.corpus = corpus;
