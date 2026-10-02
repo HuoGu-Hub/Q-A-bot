@@ -15,6 +15,7 @@ import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbMapRepository;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -46,11 +47,12 @@ class LocationCorpusE2ETest {
     Path tmp;
 
     private QaStore qaStore;
+    private SqliteDatabase sqlite;
 
     @AfterEach
     void tearDown() {
         if (qaStore != null) {
-            qaStore.close();
+            sqlite.close();
         }
     }
 
@@ -78,10 +80,12 @@ class LocationCorpusE2ETest {
         ObjectMapper mapper = new ObjectMapper();
         QaProperties qa = new QaProperties();
         qa.setDb(db.toString());
-        qaStore = new QaStore(qa, mapper);
+        sqlite = new SqliteDatabase(qa);
+        sqlite.init();
+        qaStore = new QaStore(sqlite, qa, mapper);
         qaStore.init();
 
-        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
+        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(sqlite)));
         blocks.init();
         KbBlockIndex index = new KbBlockIndex(blocks);
         index.reload();
@@ -98,7 +102,7 @@ class LocationCorpusE2ETest {
         Assumptions.assumeTrue(embedding.isAvailable(), "需要 SILICONFLOW_API_KEY 才能向量化派生块");
 
         // ① 同步地图数据
-        KbMapStore mapStore = new KbMapStore(new KbMapRepository(new Jdbc(qaStore)));
+        KbMapStore mapStore = new KbMapStore(new KbMapRepository(new Jdbc(sqlite)));
         mapStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
         KbMapSyncService sync = new KbMapSyncService(client, mapStore);
@@ -108,7 +112,7 @@ class LocationCorpusE2ETest {
 
         // ② 派生地点语料
         // 词条表要在派生之前就绪：派生器写完块会调 reconcile，让新块**立刻**对 B 路可见
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), index);
+        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
         terms.init();
         LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, index, embedding, terms);
         LocationCorpusBuilder.BuildReport plan = builder.planOnly();

@@ -4,6 +4,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +47,7 @@ class KbTermStoreTest {
     Path base;
 
     private QaStore qaStore;
+    private SqliteDatabase db;
     private KbTermStore store;
     private Glossary glossary;
 
@@ -53,17 +55,19 @@ class KbTermStoreTest {
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        qaStore = new QaStore(qa, new ObjectMapper());
+        db = new SqliteDatabase(qa);
+        db.init();
+        qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
-        store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), kCorpus());
+        store = new KbTermStore(new KbTermRepository(new Jdbc(db)), kCorpus());
         store.init();
         glossary = new Glossary(store);
     }
 
     @AfterEach
     void closeStores() {
-        qaStore.close();
+        db.close();
     }
 
     @Test

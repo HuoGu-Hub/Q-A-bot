@@ -1,6 +1,7 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,10 +30,26 @@ class QaRecorderTest {
                 List.of());
     }
 
-    private QaStore store(QaProperties props) {
-        QaStore s = new QaStore(props, new ObjectMapper());
+    /**
+     * 一个「库 + Store」的组合。
+     *
+     * <p>返回 record 而不是只返回 Store：**谁开的谁关** —— 连接现在归
+     * {@link SqliteDatabase} 持有，只交出 Store 就会没人关连接，
+     * 而 Windows 上那个临时目录随即删不掉（实测过）。
+     */
+    private record Fixture(SqliteDatabase db, QaStore store) implements AutoCloseable {
+        @Override
+        public void close() {
+            db.close();
+        }
+    }
+
+    private Fixture fixture(QaProperties props) {
+        SqliteDatabase db = new SqliteDatabase(props);
+        db.init();
+        QaStore s = new QaStore(db, props, new ObjectMapper());
         s.init();
-        return s;
+        return new Fixture(db, s);
     }
 
     private void awaitCount(QaStore s, long expected, long timeoutMs) throws InterruptedException {
@@ -47,7 +64,8 @@ class QaRecorderTest {
     void recordsAsynchronously() throws Exception {
         QaProperties props = new QaProperties();
         props.setDb(base.resolve("a.sqlite").toString());
-        QaStore s = store(props);
+        Fixture f = fixture(props);
+        QaStore s = f.store();
         QaRecorder recorder = new QaRecorder(props, s);
         recorder.start();
 
@@ -59,7 +77,7 @@ class QaRecorderTest {
         assertThat(recorder.recordedCount()).isEqualTo(2);
         assertThat(recorder.droppedCount()).isZero();
         recorder.stop();
-        s.close();
+        f.close();
     }
 
     @Test
@@ -67,9 +85,11 @@ class QaRecorderTest {
     void survivesBrokenStore() {
         QaProperties props = new QaProperties();
         props.setDb(base.resolve("b.sqlite").toString());
-        QaStore broken = new QaStore(props, new ObjectMapper());
+        SqliteDatabase brokenDb = new SqliteDatabase(props);
+        brokenDb.init();
+        QaStore broken = new QaStore(brokenDb, props, new ObjectMapper());
         broken.init();
-        broken.close();   // 故意把连接关掉，模拟存储故障
+        brokenDb.close();   // 故意把连接关掉，模拟存储故障
 
         QaRecorder recorder = new QaRecorder(props, broken);
         recorder.start();
@@ -90,7 +110,9 @@ class QaRecorderTest {
         props.setQueueCapacity(1);
 
         // 造一个"卡住的存储"：worker 一进去就出不来，队列必然堆满
-        QaStore stuck = new QaStore(props, new ObjectMapper()) {
+        SqliteDatabase stuckDb = new SqliteDatabase(props);
+        stuckDb.init();
+        QaStore stuck = new QaStore(stuckDb, props, new ObjectMapper()) {
             @Override
             public void insertBatch(List<QaRecord> records) {
                 try {
@@ -113,6 +135,7 @@ class QaRecorderTest {
         assertThat(cost).as("50 次投递必须瞬间完成，不能等存储").isLessThan(500);
         assertThat(recorder.droppedCount()).as("队列只有 1 格，剩下的必须被丢弃").isGreaterThan(0);
         recorder.stop();
+        stuckDb.close();
     }
 
     @Test
@@ -120,7 +143,8 @@ class QaRecorderTest {
     void disabledRecordsNothing() {
         QaProperties props = new QaProperties();
         props.setEnabled(false);
-        QaStore s = store(props);
+        Fixture f = fixture(props);
+        QaStore s = f.store();
         QaRecorder recorder = new QaRecorder(props, s);
         recorder.start();
 

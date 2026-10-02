@@ -7,6 +7,7 @@ import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +39,7 @@ class KbDocImporterTermTest {
     Path base;
 
     private QaStore qaStore;
+    private SqliteDatabase db;
 
     private KbTermStore termStore;
     private KbDocImporter importer;
@@ -46,10 +48,12 @@ class KbDocImporterTermTest {
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        qaStore = new QaStore(qa, new ObjectMapper());
+        db = new SqliteDatabase(qa);
+        db.init();
+        qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
-        KbBlockStore store = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
+        KbBlockStore store = new KbBlockStore(new KbBlockRepository(new Jdbc(db)));
         store.init();
         KbBlockIndex index = new KbBlockIndex(store);
 
@@ -57,7 +61,7 @@ class KbDocImporterTermTest {
         when(embedding.isAvailable()).thenReturn(true);
         when(embedding.embedOne(anyString())).thenAnswer(inv -> new float[]{1f, 0f, 0f});
 
-        termStore = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), mock(KbCorpus.class));
+        termStore = new KbTermStore(new KbTermRepository(new Jdbc(db)), mock(KbCorpus.class));
         termStore.init();
 
         importer = new KbDocImporter(store, index, embedding, termStore);
@@ -80,7 +84,7 @@ class KbDocImporterTermTest {
 
     @AfterEach
     void closeStores() {
-        qaStore.close();
+        db.close();
     }
 
     @Test

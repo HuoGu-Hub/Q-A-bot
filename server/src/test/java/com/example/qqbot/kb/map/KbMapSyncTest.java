@@ -5,6 +5,7 @@ import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbMapRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -36,11 +37,12 @@ class KbMapSyncTest {
     Path tmp;
 
     private QaStore qaStore;
+    private SqliteDatabase sqlite;
 
     @AfterEach
     void tearDown() {
         if (qaStore != null) {
-            qaStore.close();
+            sqlite.close();
         }
     }
 
@@ -53,10 +55,12 @@ class KbMapSyncTest {
         ObjectMapper mapper = new ObjectMapper();
         QaProperties qa = new QaProperties();
         qa.setDb(tmp.resolve("map.sqlite").toString());
-        qaStore = new QaStore(qa, mapper);
+        sqlite = new SqliteDatabase(qa);
+        sqlite.init();
+        qaStore = new QaStore(sqlite, qa, mapper);
         qaStore.init();
 
-        KbMapStore store = new KbMapStore(new KbMapRepository(new Jdbc(qaStore)));
+        KbMapStore store = new KbMapStore(new KbMapRepository(new Jdbc(sqlite)));
         store.init();
         assertThat(store.isAvailable()).isTrue();
 

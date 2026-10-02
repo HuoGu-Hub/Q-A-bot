@@ -8,6 +8,7 @@ import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -57,6 +58,7 @@ class RetrievalGoldenTest {
     Path tmp;
 
     private QaStore qaStore;
+    private SqliteDatabase sqlite;
 
     /** 逐条明细（类别 / 最高余弦 / 命中数 / Top-1 / 问题），跑完写到 target/ 供分析 */
     private final List<String> detail = new ArrayList<>();
@@ -74,7 +76,7 @@ class RetrievalGoldenTest {
     @AfterEach
     void tearDown() {
         if (qaStore != null) {
-            qaStore.close();
+            sqlite.close();
         }
     }
 
@@ -101,10 +103,12 @@ class RetrievalGoldenTest {
         ObjectMapper mapper = new ObjectMapper();
         QaProperties qa = new QaProperties();
         qa.setDb(db.toString());
-        qaStore = new QaStore(qa, mapper);
+        sqlite = new SqliteDatabase(qa);
+        sqlite.init();
+        qaStore = new QaStore(sqlite, qa, mapper);
         qaStore.init();
 
-        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
+        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(sqlite)));
         blocks.init();
         KbBlockIndex corpus = new KbBlockIndex(blocks);
         corpus.reload();
@@ -124,7 +128,7 @@ class RetrievalGoldenTest {
             kb.getRerank().setEnabled(false);
         }
         RerankClient rerankClient = new RerankClient(kb, mapper);
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
+        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), corpus);
         terms.init();
         Glossary glossary = new Glossary(terms);
         KbRetriever retriever = new KbRetriever(kb, corpus, glossary, embedding, rerankClient);

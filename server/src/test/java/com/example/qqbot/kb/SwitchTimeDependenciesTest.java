@@ -7,6 +7,7 @@ import com.example.qqbot.kb.category.CategoryStore;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,7 +96,9 @@ class SwitchTimeDependenciesTest {
     void termReconcileSeedsFromCorpus() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        SqliteDatabase db = new SqliteDatabase(qa);
+        db.init();
+        QaStore qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
         KbCorpus corpus = corpusOf(
@@ -103,11 +106,11 @@ class SwitchTimeDependenciesTest {
                 entry("kiln-0", "kiln", List.of()));
 
         // 先放一条人工成果，reconcile 不能把它冲掉（这条是术语表最容易出事的地方）
-        KbTermStore seed = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
+        KbTermStore seed = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpus);
         seed.init();
         seed.upsert("flame-altar", "灵火祭坛", "verified");
 
-        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpus);
         store.init();
         assertThat(store.get("flame-altar").zh()).as("★ 人工成果不能被语料重建冲掉").isEqualTo("灵火祭坛");
         assertThat(store.get("flame-altar").status()).isEqualTo("verified");
@@ -117,7 +120,7 @@ class SwitchTimeDependenciesTest {
         assertThat(store.get("flame-altar")).as("人工成果还在").isNotNull();
         assertThat(store.get("flame-altar").zh()).isEqualTo("灵火祭坛");
         assertThat(store.get("kiln-0").zh()).as("★ 补齐的名字 = 块标题").isEqualTo("标题kiln-0");
-        qaStore.close();
+        db.close();
     }
 
     @Test
@@ -125,7 +128,9 @@ class SwitchTimeDependenciesTest {
     void reconcileSeedsPerBlock() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa2.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        SqliteDatabase db = new SqliteDatabase(qa);
+        db.init();
+        QaStore qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
         KbCorpus corpus = corpusOf(
@@ -134,7 +139,7 @@ class SwitchTimeDependenciesTest {
                 entry("acid-bite", "物品图鉴·法杖",
                         "酸蚀之咬（Acid Bite）", List.of()));
 
-        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpus);
         store.init();
 
         assertThat(store.count()).as("★ 同一份文档的两个块 → 两条词条").isEqualTo(2);
@@ -143,7 +148,7 @@ class SwitchTimeDependenciesTest {
         assertThat(store.get("abyssal-wing-axe").zh())
                 .as("★ 补齐时也拆括号：短中文名才匹配得上")
                 .isEqualTo("深渊之翼斧、Abyssal Wing Axe");
-        qaStore.close();
+        db.close();
     }
 
     @Test
@@ -151,10 +156,12 @@ class SwitchTimeDependenciesTest {
     void deleteOrphanTerms() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa-orphan.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        SqliteDatabase db = new SqliteDatabase(qa);
+        db.init();
+        QaStore qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
-        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpusOf());
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpusOf());
         store.init();
         store.upsert("has-block", "有正文的", "draft");
         store.upsert("no-block", "早期版本留下的文档名", "draft");
@@ -165,7 +172,7 @@ class SwitchTimeDependenciesTest {
         assertThat(store.get("has-block")).as("有块的不动").isNotNull();
         assertThat(store.get("no-block")).as("孤儿的删掉").isNull();
         assertThat(store.count()).isEqualTo(1);
-        qaStore.close();
+        db.close();
     }
 
     /* ==================== ③ 按行的旧块接口：切换后必须明确报错 ==================== */

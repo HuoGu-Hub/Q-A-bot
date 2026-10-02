@@ -4,6 +4,7 @@ import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.CommandRepository;
 import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +31,7 @@ class CommandMatcherTest {
 
     private CommandProperties props;
     private QaStore qaStore;
+    private SqliteDatabase db;
     private CommandStore store;
     private CommandMatcher matcher;
 
@@ -37,9 +39,11 @@ class CommandMatcherTest {
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        qaStore = new QaStore(qa, new ObjectMapper());
+        db = new SqliteDatabase(qa);
+        db.init();
+        qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
-        store = new CommandStore(new CommandRepository(new Jdbc(qaStore)), new ObjectMapper());
+        store = new CommandStore(new CommandRepository(new Jdbc(db)), new ObjectMapper());
         store.init();
 
         props = new CommandProperties();
@@ -50,7 +54,7 @@ class CommandMatcherTest {
 
     @AfterEach
     void closeStores() {
-        qaStore.close();
+        db.close();
     }
 
     @Test
@@ -289,7 +293,7 @@ class CommandMatcherTest {
 
         // 模拟重启：再建一次（会再跑 seedBuiltins）
         // 复用同一个 QaStore 的连接，避免 WAL 共享内存冲突
-        CommandStore reopened = new CommandStore(new CommandRepository(new Jdbc(qaStore)), new ObjectMapper());
+        CommandStore reopened = new CommandStore(new CommandRepository(new Jdbc(db)), new ObjectMapper());
         reopened.init();
 
         BotCommand after = reopened.findByTrigger("help");

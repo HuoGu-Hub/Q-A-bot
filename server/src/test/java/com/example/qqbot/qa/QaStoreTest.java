@@ -1,6 +1,7 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,13 +26,16 @@ class QaStoreTest {
     Path base;
 
     private QaProperties props;
+    private SqliteDatabase db;
     private QaStore store;
 
     @BeforeEach
     void setUp() {
         props = new QaProperties();
         props.setDb(base.resolve("qa.sqlite").toString());
-        store = new QaStore(props, new ObjectMapper());
+        db = new SqliteDatabase(props);
+        db.init();
+        store = new QaStore(db, props, new ObjectMapper());
         store.init();
     }
 
@@ -46,7 +50,7 @@ class QaStoreTest {
 
     @AfterEach
     void closeStores() {
-        store.close();
+        db.close();
     }
 
     @Test
@@ -160,7 +164,9 @@ class QaStoreTest {
         QaProperties off = new QaProperties();
         off.setEnabled(false);
         off.setDb(base.resolve("never.sqlite").toString());
-        QaStore offStore = new QaStore(off, new ObjectMapper());
+        SqliteDatabase offDb = new SqliteDatabase(off);
+        offDb.init();
+        QaStore offStore = new QaStore(offDb, off, new ObjectMapper());
         offStore.init();
 
         assertThat(offStore.isAvailable()).isFalse();

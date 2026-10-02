@@ -13,6 +13,7 @@ import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.persistence.KbWikiPageRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -45,11 +46,12 @@ class WikiArticleImporterE2ETest {
     Path tmp;
 
     private QaStore qaStore;
+    private SqliteDatabase sqlite;
 
     @AfterEach
     void tearDown() {
         if (qaStore != null) {
-            qaStore.close();
+            sqlite.close();
         }
     }
 
@@ -76,10 +78,12 @@ class WikiArticleImporterE2ETest {
         ObjectMapper mapper = new ObjectMapper();
         QaProperties qa = new QaProperties();
         qa.setDb(db.toString());
-        qaStore = new QaStore(qa, mapper);
+        sqlite = new SqliteDatabase(qa);
+        sqlite.init();
+        qaStore = new QaStore(sqlite, qa, mapper);
         qaStore.init();
 
-        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
+        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(sqlite)));
         blocks.init();
         KbBlockIndex index = new KbBlockIndex(blocks);
         index.reload();
@@ -99,11 +103,11 @@ class WikiArticleImporterE2ETest {
         kb.getWikiImport().setCategories(List.of("Gameplay", "Bosses"));
         kb.getWikiImport().setMaxPagesPerSource(30);
 
-        KbWikiPageStore pageStore = new KbWikiPageStore(new KbWikiPageRepository(new Jdbc(qaStore)));
+        KbWikiPageStore pageStore = new KbWikiPageStore(new KbWikiPageRepository(new Jdbc(sqlite)));
         pageStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
         // 词条表要在导入之前就绪：导入器写完块会调 reconcile，让新块**立刻**对 B 路可见
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), index);
+        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
         terms.init();
         WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, index, embedding, terms);
 

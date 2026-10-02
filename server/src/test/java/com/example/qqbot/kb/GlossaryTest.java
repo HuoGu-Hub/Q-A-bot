@@ -4,6 +4,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -37,17 +38,19 @@ class GlossaryTest {
     Path base;
 
     /** glossaryWith() 每调一次就开一个库，全部留着在 @AfterEach 里关掉 */
-    private final java.util.List<QaStore> createdStores = new java.util.ArrayList<>();
+    private final java.util.List<SqliteDatabase> createdDbs = new java.util.ArrayList<>();
 
     /** 用若干「英文名 → 中文名 / 状态」建一个真的词条库，再包成 Glossary */
     private Glossary glossaryWith(String... enZhStatus) {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa-" + System.nanoTime() + ".sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
-        createdStores.add(qaStore);
+        SqliteDatabase db = new SqliteDatabase(qa);
+        db.init();
+        createdDbs.add(db);
+        QaStore qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
-        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), kCorpus());
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), kCorpus());
         store.init();
         for (int i = 0; i + 2 < enZhStatus.length; i += 3) {
             store.upsert(enZhStatus[i], enZhStatus[i + 1], enZhStatus[i + 2]);
@@ -57,8 +60,8 @@ class GlossaryTest {
 
     @AfterEach
     void closeStores() {
-        for (QaStore s : createdStores) {
-            s.close();
+        for (SqliteDatabase d : createdDbs) {
+            d.close();
         }
     }
 

@@ -3,6 +3,7 @@ package com.example.qqbot.kb.block;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -29,16 +30,19 @@ class KbBlockStoreTest {
     Path base;
 
     private QaStore qaStore;
+    private SqliteDatabase db;
     private KbBlockStore store;
 
     @BeforeEach
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        qaStore = new QaStore(qa, new ObjectMapper());
+        db = new SqliteDatabase(qa);
+        db.init();
+        qaStore = new QaStore(db, qa, new ObjectMapper());
         qaStore.init();
 
-        store = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
+        store = new KbBlockStore(new KbBlockRepository(new Jdbc(db)));
         store.init();
         assertThat(store.isAvailable()).isTrue();
     }
@@ -56,7 +60,7 @@ class KbBlockStoreTest {
 
     @AfterEach
     void closeStores() {
-        qaStore.close();
+        db.close();
     }
 
     @Test
@@ -214,7 +218,7 @@ class KbBlockStoreTest {
     void survivesReopen() {
         store.upsert(block("a", "d", "标题", "正文"), vec(1, 2, 3));
 
-        KbBlockStore reopened = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
+        KbBlockStore reopened = new KbBlockStore(new KbBlockRepository(new Jdbc(db)));
         reopened.init();
 
         assertThat(reopened.count()).isEqualTo(1);
