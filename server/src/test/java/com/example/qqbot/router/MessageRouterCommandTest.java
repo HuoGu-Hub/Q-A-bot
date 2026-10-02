@@ -124,9 +124,9 @@ class MessageRouterCommandTest {
 
         // 真的 OutboundSender（而不是 mock）：这个测试要断言"到底发出去了什么"，
         // 发送逻辑被 mock 掉就没得断了。它内部只用到下面这几个 mock。
-        outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new GuardProperties());
+        outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new GuardProperties().getOutbound());
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
-                outboundFilter, outboundSender, budgetGuard, new AsyncProperties(), new GuardProperties(),
+                outboundFilter, outboundSender, budgetGuard, new AsyncProperties(), new GuardProperties().getRateLimit(), new GuardProperties().getAccess(),
                 mock(BlockNotifier.class), qaCollector, new CommandProperties(), commandMatcher,
                 commandRateLimiter, commandStore, variableRenderer, mock(FallbackService.class));
     }

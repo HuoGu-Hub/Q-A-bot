@@ -3,7 +3,8 @@ package com.example.qqbot.router;
 import com.example.qqbot.agent.ChatService;
 import com.example.qqbot.agent.ReplyMode;
 import com.example.qqbot.config.AsyncProperties;
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Access;
+import com.example.qqbot.config.GuardProperties.RateLimit;
 import com.example.qqbot.guard.BlockNotifier;
 import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.guard.GuardContext;
@@ -63,7 +64,8 @@ public class MessageRouter {
     private final OutboundSender outboundSender;
     private final BudgetGuard budgetGuard;
     private final AsyncProperties asyncProperties;
-    private final GuardProperties guardProperties;
+    private final RateLimit guardRateLimit;
+    private final Access guardAccess;
     private final BlockNotifier blockNotifier;
     private final QaCollector qaCollector;
     private final CommandProperties commandProperties;
@@ -82,7 +84,8 @@ public class MessageRouter {
                          OutboundSender outboundSender,
                          BudgetGuard budgetGuard,
                          AsyncProperties asyncProperties,
-                         GuardProperties guardProperties,
+                         RateLimit guardRateLimit,
+                         Access guardAccess,
                          BlockNotifier blockNotifier,
                          QaCollector qaCollector,
                          CommandProperties commandProperties,
@@ -100,7 +103,8 @@ public class MessageRouter {
         this.outboundSender = outboundSender;
         this.budgetGuard = budgetGuard;
         this.asyncProperties = asyncProperties;
-        this.guardProperties = guardProperties;
+        this.guardRateLimit = guardRateLimit;
+        this.guardAccess = guardAccess;
         this.blockNotifier = blockNotifier;
         this.qaCollector = qaCollector;
         this.commandProperties = commandProperties;
@@ -152,7 +156,7 @@ public class MessageRouter {
         if (!blockNotifier.allow(event.getUserId(), event.getGroupId())) {
             return;
         }
-        outboundSender.send(event, guardProperties.getRateLimit().getQueueTimeoutText());
+        outboundSender.send(event, guardRateLimit.getQueueTimeoutText());
     }
 
     /**
@@ -162,7 +166,7 @@ public class MessageRouter {
      * 被拉黑的人不该能触发指令。
      */
     private boolean accessAllowed(OneBotEvent event) {
-        GuardProperties.Access access = guardProperties.getAccess();
+        Access access = guardAccess;
         if (event.isGroupMessage()) {
             long gid = event.getGroupId() == null ? 0 : event.getGroupId();
             if (access.getGroupBlacklist() != null && access.getGroupBlacklist().contains(gid)) {

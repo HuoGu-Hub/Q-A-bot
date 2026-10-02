@@ -68,7 +68,7 @@ class MediaStorageGuardTest {
         GuardProperties guardProps = new GuardProperties();
         guardProps.getFileAccess().setAllowedRoots(List.of(base.resolve("somewhere-else").toString()));
 
-        assertThatThrownBy(() -> new MediaStorageGuard(props, new PathGuard(guardProps)).init())
+        assertThatThrownBy(() -> new MediaStorageGuard(props, new PathGuard(guardProps.getFileAccess())).init())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("PathGuard");
     }
@@ -130,7 +130,7 @@ class MediaStorageGuardTest {
     private static PathGuard allowAllUnderBase() {
         GuardProperties guardProps = new GuardProperties();
         guardProps.getFileAccess().setAllowedRoots(List.of(base.toString()));
-        return new PathGuard(guardProps);
+        return new PathGuard(guardProps.getFileAccess());
     }
 
     @Configuration(proxyBeanMethods = false)

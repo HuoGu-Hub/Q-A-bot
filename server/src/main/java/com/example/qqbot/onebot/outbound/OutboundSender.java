@@ -1,6 +1,6 @@
 package com.example.qqbot.onebot.outbound;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Outbound;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
@@ -53,18 +53,18 @@ public class OutboundSender {
     private final MessageCodec codec;
     private final OutboundPacer pacer;
     private final BotIdentity identity;
-    private final GuardProperties.Outbound config;
+    private final Outbound config;
 
     public OutboundSender(OneBotApiClient apiClient,
                           MessageCodec codec,
                           OutboundPacer pacer,
                           BotIdentity identity,
-                          GuardProperties guardProperties) {
+                          Outbound outbound) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.pacer = pacer;
         this.identity = identity;
-        this.config = guardProperties.getOutbound();
+        this.config = outbound;
     }
 
     /** 把一条回复发出去（分片 + 节奏 + 合并转发都在这里） */

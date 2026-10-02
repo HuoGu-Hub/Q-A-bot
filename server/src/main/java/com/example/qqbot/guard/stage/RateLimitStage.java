@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.RateLimit;
 import com.example.qqbot.guard.BlockNotifier;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;
@@ -32,12 +32,12 @@ public class RateLimitStage implements GuardStage {
     /** 群维度的窗口固定 60 秒（语义就是「每群每分钟 N 条」） */
     private static final long GROUP_WINDOW_MILLIS = 60_000L;
 
-    private final GuardProperties.RateLimit config;
+    private final RateLimit config;
     private final RateLimiter limiter;
     private final BlockNotifier notifier;
 
-    public RateLimitStage(GuardProperties properties, RateLimiter limiter, BlockNotifier notifier) {
-        this.config = properties.getRateLimit();
+    public RateLimitStage(RateLimit rateLimit, RateLimiter limiter, BlockNotifier notifier) {
+        this.config = rateLimit;
         this.limiter = limiter;
         this.notifier = notifier;
     }

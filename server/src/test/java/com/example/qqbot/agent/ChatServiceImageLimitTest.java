@@ -50,7 +50,7 @@ class ChatServiceImageLimitTest {
         when(imageFetcher.fetch(any(ImageRef.class)))
                 .thenReturn(Optional.of(new ImageFetcher.FetchedImage("QUJD", "image/jpeg", 3)));
 
-        chatService = new ChatService(llmRouter, imageFetcher, new GuardProperties(), mediaProperties,
+        chatService = new ChatService(llmRouter, imageFetcher, new GuardProperties().getContentGate(), mediaProperties,
                 mock(KbRetriever.class), new KbProperties());
     }
 

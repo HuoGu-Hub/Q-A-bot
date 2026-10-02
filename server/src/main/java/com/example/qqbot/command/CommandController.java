@@ -4,7 +4,6 @@ import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.config.QaProperties;
-import com.example.qqbot.config.GuardProperties;
 import com.example.qqbot.config.LogProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

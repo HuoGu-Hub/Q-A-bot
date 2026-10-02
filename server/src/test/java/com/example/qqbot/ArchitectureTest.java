@@ -79,6 +79,28 @@ class ArchitectureTest {
         rule.check(CLASSES);
     }
 
+    @Test
+    @DisplayName("★ S2 第一步：业务包不得再注入 GuardProperties 这个 661 行的巨型配置对象")
+    void noGodConfigObjectInBusinessCode() {
+        // 2026-10-02 转正：原先 GuardProperties 被 17 个类注入（fan-in 第一），
+        // 但其中 12 个只用到一个嵌套对象。现在它们注入 GuardProperties.RateLimit 这类小对象。
+        // 这条规则防的是"图省事又把整个 GuardProperties 拖回来"。
+        // 允许的例外：config（定义者）、settings（配置中心要按反射读写全部配置）、
+        // 以及组合根 QqbotServerApplication（它显式 @EnableConfigurationProperties）。
+        // 例外说明：
+        //   config       —— 定义者
+        //   settings     —— 配置中心要按反射读写全部配置
+        //   QqbotServerApplication —— 组合根，显式 @EnableConfigurationProperties
+        //   GuardPipeline —— guard 子系统自己的编排者，它要的是根上的 enabled / kill-switch
+        //                    （子系统的总开关，不属于任何一个嵌套分组），这是合理依赖
+        ArchRule rule = noClasses()
+                .that().resideOutsideOfPackages("..config..", "..settings..")
+                .and().doNotHaveSimpleName("QqbotServerApplication")
+                .and().doNotHaveSimpleName("GuardPipeline")
+                .should().dependOnClassesThat().haveSimpleName("GuardProperties");
+        rule.check(CLASSES);
+    }
+
     /* ==================== 目标：还债清单 ==================== */
 
     @Test

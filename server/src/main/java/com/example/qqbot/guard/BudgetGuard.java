@@ -1,7 +1,7 @@
 package com.example.qqbot.guard;
 
 import com.example.qqbot.config.AppTime;
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Budget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -56,7 +56,7 @@ public class BudgetGuard {
                            int globalPerDay, long globalTokensPerDay) {
     }
 
-    private final GuardProperties.Budget config;
+    private final Budget config;
 
     /**
      * 当天计数。跨天时整体清空。
@@ -74,8 +74,8 @@ public class BudgetGuard {
     /** 熔断告警每天只喊一次，否则日志会被刷爆 */
     private final AtomicBoolean circuitAlerted = new AtomicBoolean();
 
-    public BudgetGuard(GuardProperties properties) {
-        this.config = properties.getBudget();
+    public BudgetGuard(Budget budget) {
+        this.config = budget;
     }
 
     /**

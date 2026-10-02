@@ -1,6 +1,6 @@
 package com.example.qqbot.agent;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.ContentGate;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.kb.KbRetriever;
@@ -32,16 +32,16 @@ public class ChatService {
 
     private final LlmRouter llmRouter;
     private final ImageFetcher imageFetcher;
-    private final GuardProperties guardProperties;
+    private final ContentGate contentGate;
     private final MediaProperties mediaProperties;
     private final KbRetriever kbRetriever;
     private final KbProperties kbProperties;
 
-    public ChatService(LlmRouter llmRouter, ImageFetcher imageFetcher, GuardProperties guardProperties,
+    public ChatService(LlmRouter llmRouter, ImageFetcher imageFetcher, ContentGate contentGate,
                        MediaProperties mediaProperties, KbRetriever kbRetriever, KbProperties kbProperties) {
         this.llmRouter = llmRouter;
         this.imageFetcher = imageFetcher;
-        this.guardProperties = guardProperties;
+        this.contentGate = contentGate;
         this.mediaProperties = mediaProperties;
         this.kbRetriever = kbRetriever;
         this.kbProperties = kbProperties;
@@ -98,7 +98,7 @@ public class ChatService {
         boolean noQuote = !StringUtils.hasText(quoteText);
         boolean noImage = imageRefs == null || imageRefs.isEmpty();
         if (noText && noQuote && noImage) {
-            return done(guardProperties.getContentGate().getNoTextReply(), t0, KbTrace.disabled());
+            return done(contentGate.getNoTextReply(), t0, KbTrace.disabled());
         }
 
         // 检索知识库（失败/未建索引时 knowledge 为 null，不影响正常回答）
@@ -111,7 +111,7 @@ public class ChatService {
         // ---------- 有图片：走视觉模型 ----------
         if (imageRefs != null && !imageRefs.isEmpty()) {
             if (!llmRouter.hasVision()) {
-                return done(guardProperties.getContentGate().getNoVisionReply(), t0, retrieved.trace());
+                return done(contentGate.getNoVisionReply(), t0, retrieved.trace());
             }
             List<ImageContent> images = downloadImages(limitImages(event, imageRefs));
             if (images.isEmpty()) {

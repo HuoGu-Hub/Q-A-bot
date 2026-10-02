@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.ContentGate;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.GuardStage;
@@ -25,10 +25,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ContentGateStage implements GuardStage {
 
-    private final GuardProperties.ContentGate config;
+    private final ContentGate config;
 
-    public ContentGateStage(GuardProperties properties) {
-        this.config = properties.getContentGate();
+    public ContentGateStage(ContentGate contentGate) {
+        this.config = contentGate;
     }
 
     @Override

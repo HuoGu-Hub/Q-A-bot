@@ -1,6 +1,6 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Outbound;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -31,10 +31,10 @@ public class OutboundPacer {
     /** 群 → 下一条消息允许发出的最早时刻（毫秒时间戳） */
     private final Map<Long, Long> nextSlotAt = new ConcurrentHashMap<>();
 
-    private final GuardProperties.Outbound config;
+    private final Outbound config;
 
-    public OutboundPacer(GuardProperties properties) {
-        this.config = properties.getOutbound();
+    public OutboundPacer(Outbound outbound) {
+        this.config = outbound;
     }
 
     /**

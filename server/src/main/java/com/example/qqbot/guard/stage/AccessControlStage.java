@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Access;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.GuardStage;
@@ -34,10 +34,10 @@ public class AccessControlStage implements GuardStage {
     /** 明确表示关闭的值。注意 "false" 是必须的：YAML 里写 off 会被解析成布尔 false */
     private static final Set<String> PRIVATE_OFF = Set.of("off", "false", "no", "none", "disabled", "close", "");
 
-    private final GuardProperties.Access config;
+    private final Access config;
 
-    public AccessControlStage(GuardProperties properties) {
-        this.config = properties.getAccess();
+    public AccessControlStage(Access access) {
+        this.config = access;
         String policy = normalize(config.getPrivateChatPolicy());
         if (!PRIVATE_ALLOW_ALL.contains(policy)
                 && !PRIVATE_WHITELIST.contains(policy)

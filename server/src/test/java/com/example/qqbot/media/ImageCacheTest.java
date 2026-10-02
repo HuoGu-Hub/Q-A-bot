@@ -46,7 +46,7 @@ class ImageCacheTest {
 
         GuardProperties guardProps = new GuardProperties();
         guardProps.getFileAccess().setAllowedRoots(List.of(base.toString()));
-        pathGuard = new PathGuard(guardProps);
+        pathGuard = new PathGuard(guardProps.getFileAccess());
 
         storage = new MediaStorageGuard(props, pathGuard);
         storage.init();

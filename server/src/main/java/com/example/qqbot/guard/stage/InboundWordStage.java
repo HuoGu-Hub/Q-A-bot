@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Words;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.GuardStage;
@@ -26,12 +26,12 @@ public class InboundWordStage implements GuardStage {
 
     private static final Logger log = LoggerFactory.getLogger(InboundWordStage.class);
 
-    private final GuardProperties properties;
+    private final Words words;
     private final WordList wordList;
 
-    public InboundWordStage(GuardProperties properties, ResourceLoader resourceLoader) {
-        this.properties = properties;
-        this.wordList = WordList.load(resourceLoader, properties.getWords().getInboundFile());
+    public InboundWordStage(Words words, ResourceLoader resourceLoader) {
+        this.words = words;
+        this.wordList = WordList.load(resourceLoader, words.getInboundFile());
     }
 
     @Override
@@ -41,7 +41,7 @@ public class InboundWordStage implements GuardStage {
 
     @Override
     public GuardResult check(GuardContext ctx) {
-        if (!properties.isEnabled() || !properties.getWords().isEnabled()) {
+        if (!words.isEnabled() || !words.isEnabled()) {
             return GuardResult.pass();
         }
         return wordList.firstMatch(ctx.text())
@@ -50,8 +50,8 @@ public class InboundWordStage implements GuardStage {
                     // 日志里给出词表位置，方便定位误判
                     log.warn("[GUARD] 入站命中词表「{}」→ 已拒绝（未调用大模型）。"
                                     + "如果是误判，去 {} 里删掉这一行",
-                            hit, properties.getWords().getInboundFile());
-                    String reply = render(properties.getWords().getInboundRefusalText(), hit);
+                            hit, words.getInboundFile());
+                    String reply = render(words.getInboundRefusalText(), hit);
                     return GuardResult.reply(name(), "命中入站词表：" + hit, reply);
                 })
                 .orElseGet(GuardResult::pass);

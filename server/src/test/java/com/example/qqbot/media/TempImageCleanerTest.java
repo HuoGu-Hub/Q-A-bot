@@ -49,7 +49,7 @@ class TempImageCleanerTest {
 
         GuardProperties guard = new GuardProperties();
         guard.getFileAccess().setAllowedRoots(List.of(base.toString()));
-        pathGuard = new PathGuard(guard);
+        pathGuard = new PathGuard(guard.getFileAccess());
 
         storage = new MediaStorageGuard(props, pathGuard);
         storage.init();

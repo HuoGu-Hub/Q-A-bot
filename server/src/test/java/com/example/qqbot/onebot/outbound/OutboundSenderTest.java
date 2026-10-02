@@ -61,7 +61,7 @@ class OutboundSenderTest {
         identity.setSelfId(999L);
         identity.setSelfName("飘雪喵");
 
-        sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(props), identity, props);
+        sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(config), identity, config);
     }
 
     private OneBotEvent groupEvent() {
@@ -240,7 +240,7 @@ class OutboundSenderTest {
     @Test
     @DisplayName("切分规则没变：中文句号处切、英文句点不切（网址不会被切两半）")
     void splitRulesUnchanged() {
-        OutboundPacer pacer = new OutboundPacer(props);
+        OutboundPacer pacer = new OutboundPacer(config);
         config.setMaxCharsPerMessage(300);
 
         assertThat(pacer.split("第一句。第二句。")).hasSize(1);   // 没超限 → 不切

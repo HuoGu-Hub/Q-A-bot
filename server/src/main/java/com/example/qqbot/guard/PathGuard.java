@@ -1,6 +1,6 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.FileAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -29,10 +29,10 @@ public class PathGuard {
 
     private static final Logger log = LoggerFactory.getLogger(PathGuard.class);
 
-    private final GuardProperties.FileAccess config;
+    private final FileAccess config;
 
-    public PathGuard(GuardProperties properties) {
-        this.config = properties.getFileAccess();
+    public PathGuard(FileAccess fileAccess) {
+        this.config = fileAccess;
     }
 
     public record Decision(boolean allowed, String reason) {

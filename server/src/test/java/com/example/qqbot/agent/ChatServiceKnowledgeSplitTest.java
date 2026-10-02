@@ -50,7 +50,7 @@ class ChatServiceKnowledgeSplitTest {
         when(llmRouter.isAvailable()).thenReturn(true);
         when(llmRouter.chat(anyString())).thenReturn("好的");
 
-        chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new GuardProperties(),
+        chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new GuardProperties().getContentGate(),
                 new MediaProperties(), kbRetriever, new KbProperties());
     }
 

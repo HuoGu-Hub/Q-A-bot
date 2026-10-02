@@ -1,6 +1,6 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.RateLimit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,14 +30,14 @@ public class BlockNotifier {
 
     private static final long ONE_MINUTE = 60_000L;
 
-    private final GuardProperties.RateLimit config;
+    private final RateLimit config;
     private final RateLimiter limiter;
 
     /** 用户 → 上次提示时间 */
     private final Map<Long, Long> lastNotifyAt = new ConcurrentHashMap<>();
 
-    public BlockNotifier(GuardProperties properties, RateLimiter limiter) {
-        this.config = properties.getRateLimit();
+    public BlockNotifier(RateLimit rateLimit, RateLimiter limiter) {
+        this.config = rateLimit;
         this.limiter = limiter;
     }
 

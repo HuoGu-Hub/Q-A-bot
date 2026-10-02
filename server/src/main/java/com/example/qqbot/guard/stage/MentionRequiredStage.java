@@ -1,6 +1,6 @@
 package com.example.qqbot.guard.stage;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Access;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.GuardStage;
@@ -20,12 +20,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class MentionRequiredStage implements GuardStage {
 
-    private final GuardProperties.Access config;
+    private final Access config;
     private final BotIdentity identity;
     private final MessageCodec codec;
 
-    public MentionRequiredStage(GuardProperties properties, BotIdentity identity, MessageCodec codec) {
-        this.config = properties.getAccess();
+    public MentionRequiredStage(Access access, BotIdentity identity, MessageCodec codec) {
+        this.config = access;
         this.identity = identity;
         this.codec = codec;
     }

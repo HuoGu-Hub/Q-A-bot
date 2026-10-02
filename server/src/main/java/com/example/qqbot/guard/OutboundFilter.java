@@ -1,6 +1,6 @@
 package com.example.qqbot.guard;
 
-import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.GuardProperties.Words;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ResourceLoader;
@@ -20,12 +20,12 @@ public class OutboundFilter {
 
     private static final Logger log = LoggerFactory.getLogger(OutboundFilter.class);
 
-    private final GuardProperties properties;
+    private final Words words;
     private final WordList wordList;
 
-    public OutboundFilter(GuardProperties properties, ResourceLoader resourceLoader) {
-        this.properties = properties;
-        this.wordList = WordList.load(resourceLoader, properties.getWords().getOutboundFile());
+    public OutboundFilter(Words words, ResourceLoader resourceLoader) {
+        this.words = words;
+        this.wordList = WordList.load(resourceLoader, words.getOutboundFile());
     }
 
     /**
@@ -37,7 +37,7 @@ public class OutboundFilter {
         if (text == null || text.isEmpty()) {
             return "";
         }
-        if (!properties.isEnabled() || !properties.getWords().isEnabled()) {
+        if (!words.isEnabled() || !words.isEnabled()) {
             return text;
         }
         return wordList.firstMatch(text)
@@ -45,8 +45,8 @@ public class OutboundFilter {
                     // 只记录命中的词，不记录模型原文（避免把敏感内容写进日志）
                     log.warn("[GUARD] 出站命中词表「{}」→ 整条回复已替换。"
                                     + "如果是误判，去 {} 里删掉这一行",
-                            hit, properties.getWords().getOutboundFile());
-                    String template = properties.getWords().getOutboundFallbackText();
+                            hit, words.getOutboundFile());
+                    String template = words.getOutboundFallbackText();
                     return template == null ? "" : template.replace("{word}", hit);
                 })
                 .orElse(text);
