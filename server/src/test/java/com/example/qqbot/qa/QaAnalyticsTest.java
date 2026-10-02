@@ -1,5 +1,8 @@
 package com.example.qqbot.qa;
 
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.SqliteDatabase;
+
 import com.example.qqbot.config.QaProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +27,7 @@ class QaAnalyticsTest {
     Path base;
 
     private QaProperties props;
+    private SqliteDatabase db;
     private QaStore store;
     private QaAnalytics analytics;
 
@@ -31,9 +35,13 @@ class QaAnalyticsTest {
     void setUp() {
         props = new QaProperties();
         props.setDb(base.resolve("qa.sqlite").toString());
-        store = new QaStore(props, new ObjectMapper());
+        // ⚠️ 一个测试只开**一个**库，store 与 analytics 共用 ——
+        //    否则测试自己就制造了"两个连接开同一个文件"（正是这次要消掉的问题）
+        db = new SqliteDatabase(props);
+        db.init();
+        store = new QaStore(db, props, new ObjectMapper());
         store.init();
-        analytics = new QaAnalytics(props);
+        analytics = new QaAnalytics(props, db, new Jdbc(db));
     }
 
     private QaRecord rec(String question, int hitCount, double cosine, String source,
@@ -72,6 +80,9 @@ class QaAnalyticsTest {
 
     @AfterEach
     void closeStores() {
+        if (db != null) {
+            db.close();
+        }
         store.close();
     }
 
@@ -217,7 +228,9 @@ class QaAnalyticsTest {
     void missingDatabaseIsFine() {
         QaProperties other = new QaProperties();
         other.setDb(base.resolve("nope/never.sqlite").toString());
-        QaAnalytics empty = new QaAnalytics(other);
+        // 不 init：SqliteDatabase.isAvailable() 为 false，等价于"库不存在"
+        SqliteDatabase missing = new SqliteDatabase(other);
+        QaAnalytics empty = new QaAnalytics(other, missing, new Jdbc(missing));
 
         assertThat(empty.overview(30).total()).isZero();
         assertThat(empty.keywords(30, 10)).isEmpty();

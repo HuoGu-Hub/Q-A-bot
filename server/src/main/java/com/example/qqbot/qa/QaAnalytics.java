@@ -2,15 +2,13 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.config.AppTime;
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.SqliteDatabase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -36,9 +34,15 @@ public class QaAnalytics {
     private static final Logger log = LoggerFactory.getLogger(QaAnalytics.class);
 
     private final QaProperties props;
+    /** 共用连接 —— 不再每次查询新开一个（见 query() 的注释） */
+    private final SqliteDatabase database;
+    /** 用它拿全局锁：本类虽然还没搬 SQL，但也不能绕开并发保护 */
+    private final Jdbc jdbc;
 
-    public QaAnalytics(QaProperties props) {
+    public QaAnalytics(QaProperties props, SqliteDatabase database, Jdbc jdbc) {
         this.props = props;
+        this.database = database;
+        this.jdbc = jdbc;
     }
 
     // ==================== 结果类型 ====================
@@ -138,25 +142,26 @@ public class QaAnalytics {
         return days <= 0 ? null : Instant.now().minus(days, ChronoUnit.DAYS).toString();
     }
 
-    private Connection open() throws SQLException {
-        Path file = Paths.get(props.getDb()).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(file)) {
-            return null;
-        }
-        return DriverManager.getConnection("jdbc:sqlite:" + file);
-    }
-
-    /** 打开连接跑一段查询；库不存在或出错都返回空结果，绝不抛给调用方 */
+    /**
+     * 跑一段统计查询；库不可用或出错都返回空结果，**绝不抛给调用方**。
+     *
+     * <h2>2026-10-02：不再自己开连接</h2>
+     * 原先这里每次查询都 {@code DriverManager.getConnection(...)} 新开一个连接、用完就关 ——
+     * 那**直接违反了项目自己写下的规则**：
+     * {@code SqliteConnectionProvider} 的注释里写着"全项目必须共用同一个连接，
+     * 两个连接开同一个文件会在 WAL 共享内存上冲突（实测 {@code SQLITE_IOERR_SHMOPEN}）"。
+     * 也就是说这个坑项目踩过、规则写下来了，而本类是那个例外。
+     *
+     * <p>现在走 {@link Jdbc#inLock}：**同一个共用连接 + 同一把全局锁**。
+     * 锁很重要 —— 本类的 SQL 还没搬走，但绝不能因此绕开并发保护
+     * （共用连接不是线程安全的，而这里跑的是多段 SELECT）。
+     */
     private <T> T query(int days, T empty, SqlFunction<T> fn) {
-        Path file = Paths.get(props.getDb()).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(file)) {
+        if (!database.isAvailable()) {
             return empty;
         }
-        try (Connection conn = open()) {
-            if (conn == null) {
-                return empty;
-            }
-            return fn.apply(conn, cutoff(days));
+        try {
+            return jdbc.inLock(() -> fn.apply(database.connection(), cutoff(days)));
         } catch (Exception e) {
             log.warn("[QA] 统计查询失败：{}", e.getMessage());
             return empty;
