@@ -279,6 +279,25 @@ public class KbMapStore {
                 article, Math.max(1, limit));
     }
 
+    /** 全部 marker —— 派生语料时用 */
+    public List<Marker> all() {
+        List<Marker> out = new ArrayList<>();
+        if (!available) {
+            return out;
+        }
+        try (Statement st = conn().createStatement();
+             ResultSet rs = st.executeQuery("SELECT * FROM kb_map_marker ORDER BY map, page, marker_id")) {
+            while (rs.next()) {
+                out.add(new Marker(rs.getString("map"), rs.getString("page"), rs.getString("grp"),
+                        rs.getString("marker_id"), rs.getString("name"), rs.getString("description"),
+                        rs.getString("article"), rs.getDouble("x"), rs.getDouble("y"), rs.getString("image")));
+            }
+        } catch (SQLException e) {
+            log.warn("[KB-MAP] 读全部 marker 失败：{}", e.getMessage());
+        }
+        return out;
+    }
+
     /** 按名字模糊找 marker（玩家常只记得大概的名字） */
     public List<Marker> byNameLike(String keyword, int limit) {
         if (!available || keyword == null || keyword.isBlank()) {
