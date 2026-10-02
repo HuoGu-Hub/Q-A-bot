@@ -100,6 +100,10 @@ public class WikiArticleImporter {
             return new ImportReport(0, 0, 0, 0, 0, 0, List.of("没有配置任何来源（categories / prefixes）"), dryRun, Map.of());
         }
 
+        // 建中英对照索引：让英文文章块能被中文提问检索到（见 NameZhIndex 类注释里的实测缺口）
+        NameZhIndex nameIndex = NameZhIndex.fromBlocks(blockStore.allActive());
+        log.info("[KB-WIKI] 中英对照索引：{} 条", nameIndex.size());
+
         int totalPages = 0;
         int totalChanged = 0;
         int imported = 0;
@@ -177,9 +181,17 @@ public class WikiArticleImporter {
                     }
                     String id = blockIdOf(title);
                     String name = titleOf(title);
+                    // ★ 有核对来的中文名就写成「中文（English）」——中英都能命中。
+                    //   查不到就保持英文，**不编**（见 NameZhIndex 类注释）。
+                    String zh = nameIndex.resolve(name);
+                    String display = zh != null ? zh + "（" + name + "）" : name;
+                    // 中文名也塞进正文开头：多一处中文 token，向量与字面两条路都受益
+                    if (zh != null) {
+                        body = zh + "。" + body;
+                    }
                     String docId = cfg.getDocIdPrefix() + "·" + src.label();
                     String url = "https://enshrouded.wiki.gg/wiki/" + title.replace(' ', '_');
-                    KbBlock block = new KbBlock(id, docId, name, body, url,
+                    KbBlock block = new KbBlock(id, docId, display, body, url,
                             List.of("wiki", src.kind(), src.label()), SRC_WIKI, false, Instant.now().toString());
                     if (blockStore.upsert(block, embedding.embedOne(name + "\n" + body))) {
                         blockStore.upsertTitleVector(id, name, embedding.embedOne(name));
