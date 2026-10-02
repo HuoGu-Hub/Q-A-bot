@@ -12,6 +12,7 @@ import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbMapRepository;
 import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,7 +97,7 @@ class LocationCorpusE2ETest {
         Assumptions.assumeTrue(embedding.isAvailable(), "需要 SILICONFLOW_API_KEY 才能向量化派生块");
 
         // ① 同步地图数据
-        KbMapStore mapStore = new KbMapStore(qaStore);
+        KbMapStore mapStore = new KbMapStore(new KbMapRepository(new Jdbc(qaStore)));
         mapStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
         KbMapSyncService sync = new KbMapSyncService(client, mapStore);

@@ -3,6 +3,8 @@ package com.example.qqbot.kb.map;
 import com.example.qqbot.kb.wiki.WikiApiClient;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbMapRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -54,7 +56,7 @@ class KbMapSyncTest {
         qaStore = new QaStore(qa, mapper);
         qaStore.init();
 
-        KbMapStore store = new KbMapStore(qaStore);
+        KbMapStore store = new KbMapStore(new KbMapRepository(new Jdbc(qaStore)));
         store.init();
         assertThat(store.isAvailable()).isTrue();
 
