@@ -8,7 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
+import com.example.qqbot.kb.KnowledgeChangedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -69,28 +70,35 @@ public class KbTermService {
     private final EmbeddingClient embedding;
     private final KbProperties props;
     private final ObjectMapper mapper;
-    /** 知识库写入后要清公开站检索缓存，否则会返回改动前的旧结果 */
-    private final ObjectProvider<com.example.qqbot.publicapi.PublicSearchService> publicSearch;
+    /**
+     * 发布"知识库变了"的事件。
+     *
+     * <p>**不直接调公开站** —— 那是层次倒置（知识库不该知道公开站有检索缓存）。
+     * 谁关心谁自己订阅，见 {@link KnowledgeChangedEvent}。
+     */
+    private final ApplicationEventPublisher events;
 
     public KbTermService(com.example.qqbot.kb.block.KbBlockStore blockStore, KbTermStore termStore,
                          CategoryService categoryService, EmbeddingClient embedding,
                          KbProperties props, ObjectMapper mapper,
-                         ObjectProvider<com.example.qqbot.publicapi.PublicSearchService> publicSearch) {
+                         ApplicationEventPublisher events) {
         this.blockStore = blockStore;
         this.termStore = termStore;
         this.categoryService = categoryService;
         this.embedding = embedding;
         this.props = props;
         this.mapper = mapper;
-        this.publicSearch = publicSearch;
+        this.events = events;
     }
 
-    /** 每次成功写入后调一次 —— 见 PublicSearchService.invalidate() 的说明 */
+    /**
+     * 每次成功写入后调一次 —— 宣布"知识库变了"。
+     *
+     * <p>以前这里直接调 {@code PublicSearchService.invalidate()}（还得用 ObjectProvider
+     * 绕循环依赖）。现在只发事件，公开站自己订阅。
+     */
     private void clearSearchCache() {
-        var ps = publicSearch.getIfAvailable();
-        if (ps != null) {
-            ps.invalidate();
-        }
+        events.publishEvent(new KnowledgeChangedEvent("词条变更"));
     }
 
     // ==================== 视图模型 ====================

@@ -192,6 +192,18 @@ public class PublicSearchService {
      *
      * <p>由所有会改动知识库的写入路径调用。
      */
+    /**
+     * 知识库内容变了 → 清掉检索缓存，否则会返回改动前的旧结果。
+     *
+     * <p>订阅而不是被知识库直接调用：**公开站知道自己有缓存，知识库不需要知道**。
+     * 原先那根反向依赖（kb -> publicapi）已按此拆掉。
+     */
+    @org.springframework.context.event.EventListener
+    public void onKnowledgeChanged(com.example.qqbot.kb.KnowledgeChangedEvent event) {
+        log.info("[PUBLIC] 知识库变更（{}），清空检索缓存", event.reason());
+        invalidate();
+    }
+
     public synchronized void invalidate() {
         cache.clear();
     }

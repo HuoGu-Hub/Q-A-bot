@@ -128,8 +128,11 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1。实测违反（由 ArchUnit 发现，import 扫描看不到）：kb.term.KbTermService 持有 ObjectProvider<publicapi.PublicSearchService>，并在 clearSearchCache() 里调 PublicSearchService.invalidate() —— 知识库反过来知道公开站的缓存，属于层次倒置；正确做法是知识库发出变更通知、公开站自己订阅")
-    @DisplayName("【目标】kb 不得依赖 publicapi")
+    @DisplayName("★ kb 不得依赖 publicapi（层次倒置已拆）")
+    // 2026-10-02 转正：KbTermService 原先持有 ObjectProvider<publicapi.PublicSearchService>
+    // 并直接调 invalidate() —— 知识库反过来知道"公开站有检索缓存"，且那个
+    // ObjectProvider 本身就是为绕循环依赖打的补丁。
+    // 修法：知识库只发 KnowledgeChangedEvent，公开站自己 @EventListener 订阅。
     void knowledgeDoesNotDependOnPublicApi() {
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..kb..")
