@@ -2,9 +2,7 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.config.QaProperties;
-import com.example.qqbot.kb.Glossary;
-import com.example.qqbot.kb.KbTrace;
-import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -34,15 +32,12 @@ public class QaCollector {
 
     private final QaProperties props;
     private final QaRecorder recorder;
-    private final Glossary glossary;
     private final LlmProperties llmProps;
     private final ObjectMapper mapper;
 
-    public QaCollector(QaProperties props, QaRecorder recorder, Glossary glossary,
-                       LlmProperties llmProps, ObjectMapper mapper) {
+    public QaCollector(QaProperties props, QaRecorder recorder,                       LlmProperties llmProps, ObjectMapper mapper) {
         this.props = props;
         this.recorder = recorder;
-        this.glossary = glossary;
         this.llmProps = llmProps;
         this.mapper = mapper;
     }
@@ -137,10 +132,10 @@ public class QaCollector {
      */
     private String serializeHits(KbTrace trace) {
         ArrayNode arr = mapper.createArrayNode();
-        for (KbRetriever.Hit h : trace.hits()) {
+        for (KbTrace.Hit h : trace.hits()) {
             ObjectNode node = arr.addObject();
-            node.put("id", h.entry().id());
-            node.put("title", h.entry().title());
+            node.put("id", h.id());
+            node.put("title", h.title());
             node.put("score", Math.round(h.score() * 1000) / 1000.0);
             node.put("src", h.source());
         }
@@ -155,13 +150,10 @@ public class QaCollector {
      */
     private List<QaRecord.Keyword> keywords(String question, KbTrace trace) {
         List<QaRecord.Keyword> out = new ArrayList<>();
-        String haystack = trace.hits().stream()
-                .map(h -> (h.entry().title() + " " + h.entry().text()).toLowerCase(Locale.ROOT))
-                .reduce("", (a, b) -> a + " " + b);
-        for (Glossary.Term term : glossary.matchChinese(question)) {
-            boolean inKb = !haystack.isBlank()
-                    && haystack.contains(term.en().toLowerCase(Locale.ROOT));
-            out.add(new QaRecord.Keyword(term.zh(), term.en(), inKb));
+        // 术语匹配、以及"这个词有没有真的落在检索结果里"，现在由**检索层**算好放进 trace。
+        // 记录系统原先拿着 Glossary 和整个 Retrieval 自己再算一遍 —— 数据在哪，算法就该在哪。
+        for (KbTrace.MatchedTerm term : trace.matchedTerms()) {
+            out.add(new QaRecord.Keyword(term.zh(), term.en(), term.inRetrieved()));
         }
         return out;
     }

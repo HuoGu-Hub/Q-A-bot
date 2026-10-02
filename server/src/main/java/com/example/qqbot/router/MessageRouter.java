@@ -21,7 +21,7 @@ import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.plaza.FallbackService;
 import com.example.qqbot.config.CommandProperties;
-import com.example.qqbot.kb.KbTrace;
+import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.qa.QaCollector;

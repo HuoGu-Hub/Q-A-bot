@@ -59,7 +59,7 @@ class PublicSearchServiceTest {
 
     private void answer(List<KbRetriever.Hit> hits) {
         when(retriever.retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean()))
-                .thenReturn(new KbRetriever.Retrieval(hits, 0.6, 0.6, hits.size(), 0));
+                .thenReturn(new KbRetriever.Retrieval(hits, 0.6, 0.6, hits.size(), 0, List.of()));
         // 注意 5 个参数：最后一个是 allowRerank。公开站**明确传 false** ——
         // 它有自己的按天配额与 LRU 缓存，"要不要给资料"的重排判断在这里没有意义，
         // 多一次外部调用只是白花钱。下面几处 verify 都用 eq(false) 把这条锁住。

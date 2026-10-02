@@ -101,6 +101,23 @@ class ArchitectureTest {
         rule.check(CLASSES);
     }
 
+    @Test
+    @DisplayName("★ qa 不得依赖 kb —— 记录系统不该认识检索实现（新增）")
+    void qaDoesNotDependOnKb() {
+        // 2026-10-02 新增：QaCollector 原先 import kb.Glossary / kb.KbRetriever / kb.KbTrace，
+        // 根因是 **KbTrace 内嵌了 KbRetriever.Retrieval 与 KbRetriever.Hit** ——
+        // 记录系统为了读一份统计，被迫依赖整个检索实现。
+        // 修法：
+        //   1) KbTrace 扁平化成零依赖的纯数据，搬到中性 trace 包
+        //   2) 术语匹配与"是否落在检索结果里"由检索层算好放进 trace
+        //      （数据在哪，算法就该在哪）
+        //   3) 从 Retrieval 造 trace 的那一步留在 kb（KbRetriever.traceOf）
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..qa..")
+                .should().dependOnClassesThat().resideInAPackage("..kb..");
+        rule.check(CLASSES);
+    }
+
     /* ==================== 目标：还债清单 ==================== */
 
     @Test

@@ -2,6 +2,7 @@ package com.example.qqbot.kb;
 
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.map.LocationCorpusBuilder;
+import com.example.qqbot.trace.KbTrace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -135,11 +136,53 @@ public class KbRetriever {
      * @param keywordCandidates 关键词路候选数
      */
     public record Retrieval(List<Hit> hits, double bestCosine, double bestCosineRaw,
-                            int vectorCandidates, int keywordCandidates) {
+                            int vectorCandidates, int keywordCandidates,
+                            List<KbTrace.MatchedTerm> matchedTerms) {
 
         public static Retrieval empty() {
-            return new Retrieval(List.of(), 0.0, 0.0, 0, 0);
+            return new Retrieval(List.of(), 0.0, 0.0, 0, 0, List.of());
         }
+    }
+
+    /**
+     * 把检索结果转成中性的 {@link KbTrace}。
+     *
+     * <p>**这个转换刻意留在 kb 里**：{@code trace} 包因此可以是零依赖的纯数据，
+     * 而"从 Retrieval 怎么映射"的知识只有 kb 自己需要。
+     * 记录系统只读结果，不需要认识 {@code Retrieval}。
+     */
+    public static KbTrace traceOf(Retrieval r, long retrieveMs) {
+        if (r == null) {
+            return KbTrace.disabled();
+        }
+        List<KbTrace.Hit> hits = r.hits().stream()
+                .map(h -> new KbTrace.Hit(h.entry().id(), h.entry().title(), h.entry().docId(),
+                        h.score(), h.source()))
+                .toList();
+        return new KbTrace(true, hits, r.bestCosine(), r.bestCosineRaw(),
+                r.vectorCandidates(), r.keywordCandidates(), r.matchedTerms(), retrieveMs);
+    }
+
+    /**
+     * 这次提问命中了哪些术语，以及它们有没有真的出现在检索结果里。
+     *
+     * <p>原先这个计算在 {@code qa.QaCollector} 里做，于是记录系统得拿着 Glossary 和
+     * 整个 Retrieval 自己算 —— 数据在哪、算法就该在哪。
+     */
+    private List<KbTrace.MatchedTerm> matchedTermsOf(String query, List<Hit> hits) {
+        List<Glossary.Term> matched = safe(() -> glossary.matchChinese(query), List.of(), "术语匹配");
+        if (matched.isEmpty()) {
+            return List.of();
+        }
+        String haystack = hits.stream()
+                .map(h -> (h.entry().title() + " " + h.entry().text()).toLowerCase(Locale.ROOT))
+                .reduce("", (a, b) -> a + " " + b);
+        List<KbTrace.MatchedTerm> out = new ArrayList<>();
+        for (Glossary.Term term : matched) {
+            boolean inKb = !haystack.isBlank() && haystack.contains(term.en().toLowerCase(Locale.ROOT));
+            out.add(new KbTrace.MatchedTerm(term.zh(), term.en(), inKb));
+        }
+        return out;
     }
 
     /**
@@ -227,7 +270,7 @@ public class KbRetriever {
             log.debug("[KB] 三路都没有命中（A 路最高相似度 {}，阈值 {}；标题路最高 {}，闸门 {}）",
                     String.format("%.3f", bestCosineRaw), String.format("%.3f", minScore),
                     String.format("%.3f", gate.cosine()), String.format("%.3f", props.getTitleGate()));
-            return new Retrieval(List.of(), bestCosine, bestCosineRaw, 0, 0);
+            return new Retrieval(List.of(), bestCosine, bestCosineRaw, 0, 0, List.of());
         }
         // 要重排就必须融合出**多于 top-k** 的候选，否则重排没有翻盘空间（实测"藏红花幼苗 > 藏红花"
         // 这类错序，只有把本体留在候选池里才可能被抬上来）
@@ -254,7 +297,8 @@ public class KbRetriever {
         if (fused.size() > k) {
             fused = fused.subList(0, k);
         }
-        return new Retrieval(fused, bestCosine, bestCosineRaw, byVec.size(), byKey.size());
+        return new Retrieval(fused, bestCosine, bestCosineRaw, byVec.size(), byKey.size(),
+                matchedTermsOf(query, fused));
     }
 
     /**

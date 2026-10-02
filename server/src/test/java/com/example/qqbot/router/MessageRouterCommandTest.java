@@ -17,7 +17,7 @@ import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.outbound.OutboundSender;
-import com.example.qqbot.kb.KbTrace;
+import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;

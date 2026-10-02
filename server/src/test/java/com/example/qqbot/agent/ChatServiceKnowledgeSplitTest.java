@@ -5,7 +5,7 @@ import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.kb.KbRetriever;
-import com.example.qqbot.kb.KbTrace;
+import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -77,7 +77,7 @@ class ChatServiceKnowledgeSplitTest {
         when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
                 List.of(new KbRetriever.Hit(curated, 1.0, "vector"),
                         new KbRetriever.Hit(wiki, 0.9, "vector")),
-                0.9, 0.9, 2, 0));
+                0.9, 0.9, 2, 0, List.of()));
 
         chatService.reply(privateEvent(), "废料杯怎么做", null, List.of());
 
@@ -103,7 +103,7 @@ class ChatServiceKnowledgeSplitTest {
         KbCorpus.Entry wiki = new KbCorpus.Entry("absorb-0", "Absorb", "Absorb is a skill.",
                 "https://w/Absorb", List.of(), false, "2026-09-21T10:00:00Z", V);
         when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
-                List.of(new KbRetriever.Hit(wiki, 0.9, "vector")), 0.9, 0.9, 1, 0));
+                List.of(new KbRetriever.Hit(wiki, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
         chatService.reply(privateEvent(), "Absorb 是什么", null, List.of());
 
@@ -121,7 +121,7 @@ class ChatServiceKnowledgeSplitTest {
                 List.of(), false, "2026-09-21T10:00:00Z", V);
         when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
                 List.of(new KbRetriever.Hit(a, 1.0, "vector"), new KbRetriever.Hit(b, 0.9, "vector")),
-                0.9, 0.9, 2, 0));
+                0.9, 0.9, 2, 0, List.of()));
 
         chatService.reply(privateEvent(), "问题", null, List.of());
 
@@ -134,7 +134,7 @@ class ChatServiceKnowledgeSplitTest {
         KbCorpus.Entry old = new KbCorpus.Entry("legacy-0", "Legacy", "legacy text", "https://w/L",
                 List.of(), false, "", V);
         when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
-                List.of(new KbRetriever.Hit(old, 0.9, "vector")), 0.9, 0.9, 1, 0));
+                List.of(new KbRetriever.Hit(old, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
         chatService.reply(privateEvent(), "问题", null, List.of());
 

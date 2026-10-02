@@ -1,5 +1,7 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.trace.KbTrace;
+
 import com.example.qqbot.config.KbProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -204,7 +206,7 @@ class KbRetrieverTitleGateTest {
                 new float[]{0f, 1f}, new float[]{1f, 0f}));
 
         KbRetriever.Retrieval r = retriever.retrieve("什么是酸蚀之咬");
-        KbTrace trace = new KbTrace(true, r, 12);
+        KbTrace trace = KbRetriever.traceOf(r, 12);
 
         assertThat(trace.sources()).isEqualTo("title");
     }

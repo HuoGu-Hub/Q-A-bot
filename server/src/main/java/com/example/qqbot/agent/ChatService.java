@@ -4,7 +4,7 @@ import com.example.qqbot.config.GuardProperties.ContentGate;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.kb.KbRetriever;
-import com.example.qqbot.kb.KbTrace;
+import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.ImageRef;
@@ -186,12 +186,12 @@ public class ChatService {
         }
         String query = ((text == null ? "" : text) + " " + (quoteText == null ? "" : quoteText)).trim();
         if (query.isEmpty()) {
-            return new Retrieved(null, new KbTrace(true, KbRetriever.Retrieval.empty(), 0));
+            return new Retrieved(null, KbTrace.empty(0));
         }
         long t0 = System.currentTimeMillis();
         try {
             KbRetriever.Retrieval retrieval = kbRetriever.retrieve(query);
-            KbTrace trace = new KbTrace(true, retrieval, System.currentTimeMillis() - t0);
+            KbTrace trace = KbRetriever.traceOf(retrieval, System.currentTimeMillis() - t0);
             List<KbRetriever.Hit> hits = retrieval.hits();
             if (hits.isEmpty()) {
                 return new Retrieved(null, trace);
@@ -225,8 +225,7 @@ public class ChatService {
             return new Retrieved(sb.toString().strip(), trace);
         } catch (Exception e) {
             log.warn("[KB] 检索异常，本次不带资料回答：{}", e.getMessage());
-            return new Retrieved(null, new KbTrace(true, KbRetriever.Retrieval.empty(),
-                    System.currentTimeMillis() - t0));
+            return new Retrieved(null, KbTrace.empty(System.currentTimeMillis() - t0));
         }
     }
 
