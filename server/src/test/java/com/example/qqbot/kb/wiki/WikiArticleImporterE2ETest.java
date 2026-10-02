@@ -98,7 +98,10 @@ class WikiArticleImporterE2ETest {
         KbWikiPageStore pageStore = new KbWikiPageStore(qaStore);
         pageStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, index, embedding);
+        // 词条表要在导入之前就绪：导入器写完块会调 reconcile，让新块**立刻**对 B 路可见
+        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, index);
+        terms.init();
+        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, index, embedding, terms);
 
         // ① dryRun：只列页、比版本
         WikiArticleImporter.ImportReport dry = importer.importAll(true);
@@ -107,12 +110,19 @@ class WikiArticleImporterE2ETest {
         assertThat(dry.pages()).isGreaterThan(20);
 
         // ② 真导入
+        long termsBefore = terms.count();
         WikiArticleImporter.ImportReport r = importer.importAll(false);
         System.out.printf("导入：写入 %d 块 / 正文 %d 字 / 失败 %d%n", r.imported(), r.chars(), r.failed());
         r.errors().stream().limit(8).forEach(e -> System.out.println("   ! " + e));
         assertThat(r.failed()).as("失败：" + r.errors()).isZero();
         assertThat(r.imported()).isGreaterThan(20);
         assertThat(blocks.count()).isEqualTo(before + r.imported());
+        // ★ 本轮修的东西：新块必须**立刻**对 B 路（关键词）可见，不必等重启。
+        //   词条表只在 KbTermStore.init() 时 reconcile 一次；导入器写完块要再补一次，
+        //   否则运行期导入的块在下次重启前进不了词表 —— 中文提问走关键词路就永远找不到它。
+        assertThat(terms.count())
+                .as("导入后词条应当同步长出来（否则新块对 B 路不可见）")
+                .isEqualTo(termsBefore + r.imported());
 
         // ③ 增量：立刻再跑一次，revid 没变 → 应当一个块都不写
         WikiArticleImporter.ImportReport again = importer.importAll(false);
@@ -120,8 +130,6 @@ class WikiArticleImporterE2ETest {
         assertThat(again.imported()).isZero();
 
         // ④ 真检索：任务与机制类问题能不能拿到资料
-        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, index);
-        terms.init();
         KbRetriever retriever = new KbRetriever(kb, index, new Glossary(terms), embedding,
                 new RerankClient(kb, mapper));
 

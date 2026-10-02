@@ -4,6 +4,7 @@ import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
+import com.example.qqbot.kb.term.KbTermStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -121,13 +122,15 @@ public class LocationCorpusBuilder {
     private final KbBlockStore blockStore;
     private final KbBlockIndex index;
     private final EmbeddingClient embedding;
+    private final KbTermStore termStore;
 
     public LocationCorpusBuilder(KbMapStore mapStore, KbBlockStore blockStore, KbBlockIndex index,
-                                 EmbeddingClient embedding) {
+                                 EmbeddingClient embedding, KbTermStore termStore) {
         this.mapStore = mapStore;
         this.blockStore = blockStore;
         this.index = index;
         this.embedding = embedding;
+        this.termStore = termStore;
     }
 
     /** 一个待写入的派生块 */
@@ -183,6 +186,9 @@ public class LocationCorpusBuilder {
             }
         }
         index.reload();
+        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
+        // 不补这一下，运行期导入的块要等下次重启才进词表。
+        termStore.reconcile();
         log.info("[KB-MAP] 地点语料派生完成：{} 条（区域 {} / POI {} / 具名 {} / NPC {}），跳过 Lore {} 条",
                 written, countKind(entries, "region"), countKind(entries, "poi"),
                 countKind(entries, "place"), countKind(entries, "npc"), skippedLore);
@@ -199,6 +205,9 @@ public class LocationCorpusBuilder {
             }
         }
         index.reload();
+        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
+        // 不补这一下，运行期导入的块要等下次重启才进词表。
+        termStore.reconcile();
         log.info("[KB-MAP] 已清除派生地点语料 {} 条", n);
         return n;
     }

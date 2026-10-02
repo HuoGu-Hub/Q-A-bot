@@ -103,7 +103,10 @@ class LocationCorpusE2ETest {
         assertThat(sr.failed()).isZero();
 
         // ② 派生地点语料
-        LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, index, embedding);
+        // 词条表要在派生之前就绪：派生器写完块会调 reconcile，让新块**立刻**对 B 路可见
+        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, index);
+        terms.init();
+        LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, index, embedding, terms);
         LocationCorpusBuilder.BuildReport plan = builder.planOnly();
         System.out.printf("派生计划：%d 条（区域 %d / POI %d / 具名地点 %d / NPC %d），排除 Lore %d 条%n",
                 plan.entries(), plan.regions(), plan.pois(), plan.places(), plan.npcs(), plan.skippedLore());
@@ -117,8 +120,6 @@ class LocationCorpusE2ETest {
         assertThat(blocks.count()).isGreaterThan(before);
 
         // ③ 真检索：地点类问题现在能不能拿到资料
-        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, index);
-        terms.init();
         KbRetriever retriever = new KbRetriever(kb, index, new Glossary(terms), embedding, rerank);
 
         for (String q : List.of("春之原野在哪", "灵火祭坛在哪", "铁匠在哪", "空洞大厅有什么")) {

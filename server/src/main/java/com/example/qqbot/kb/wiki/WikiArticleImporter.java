@@ -5,6 +5,7 @@ import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
+import com.example.qqbot.kb.term.KbTermStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -49,15 +50,18 @@ public class WikiArticleImporter {
     private final KbBlockStore blockStore;
     private final KbBlockIndex index;
     private final EmbeddingClient embedding;
+    private final KbTermStore termStore;
 
     public WikiArticleImporter(KbProperties props, WikiApiClient client, KbWikiPageStore store,
-                               KbBlockStore blockStore, KbBlockIndex index, EmbeddingClient embedding) {
+                               KbBlockStore blockStore, KbBlockIndex index, EmbeddingClient embedding,
+                               KbTermStore termStore) {
         this.props = props;
         this.client = client;
         this.store = store;
         this.blockStore = blockStore;
         this.index = index;
         this.embedding = embedding;
+        this.termStore = termStore;
     }
 
     /** 一个导入来源：前缀（如 `Quests/`）或分类（如 `Gameplay`） */
@@ -209,6 +213,9 @@ public class WikiArticleImporter {
 
         if (!dryRun && imported > 0) {
             index.reload();
+        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
+        // 不补这一下，运行期导入的块要等下次重启才进词表。
+        termStore.reconcile();
         }
         log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字",
                 sources.size(), totalPages, totalChanged, imported, failed, chars);
@@ -232,6 +239,9 @@ public class WikiArticleImporter {
         }
         if (n > 0) {
             index.reload();
+        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
+        // 不补这一下，运行期导入的块要等下次重启才进词表。
+        termStore.reconcile();
         }
         log.info("[KB-WIKI] 已清除 wiki 文章块 {} 个（前缀 {}）", n, cfg.getDocIdPrefix());
         return n;
