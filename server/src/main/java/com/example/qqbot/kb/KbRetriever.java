@@ -1,6 +1,7 @@
 package com.example.qqbot.kb;
 
 import com.example.qqbot.config.KbProperties;
+import com.example.qqbot.kb.map.LocationCorpusBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -236,13 +237,23 @@ public class KbRetriever {
         List<Hit> fused = fuse(byVec, byKey, fuseLimit, terms);
         fused = pinGate(fused, gate, fuseLimit);
         if (doRerank) {
-            fused = rerank(query, fused, k, gate.hit());
-        } else if (fused.size() > k) {
-            fused = fused.subList(0, k);
+            // 重排要保留**完整候选池**（fuseLimit 条），不能直接截到 k ——
+            // 聚合意图提权要用到 k 之外的地点块。实测「空洞大厅有什么」的地点块在候选里排第 7，
+            // 若在这里就截到 5，它已经没了，后面的提权自然无从谈起
+            // （这正是"只在 topK=20 下测通过、topK=5 下无效"的那个坑）。
+            fused = rerank(query, fused, fuseLimit, gate.hit());
         }
         log.debug("[KB] 融合后取 {} 块：{}（向量候选 {}，关键词候选 {}，最高余弦 {}）",
                 fused.size(), fused.stream().map(h -> h.entry().title()).toList(),
                 byVec.size(), byKey.size(), String.format("%.3f", bestCosine));
+        // 聚合型提问（"X有什么"）的意图修正：把已在候选里的地点块提到最前。
+        // 实测地点块排第 7（0.9558）被 6 条同名物品挤出前五，而第 1 名只高 0.014 ——
+        // 阈值分不开，这是意图问题。只改顺序、不造分（见 PlaceIntent）。
+        // 顺序要紧：**先提权、后截断**，否则地点块早就被截掉了。
+        fused = applyPlaceIntent(fused, query);
+        if (fused.size() > k) {
+            fused = fused.subList(0, k);
+        }
         return new Retrieval(fused, bestCosine, bestCosineRaw, byVec.size(), byKey.size());
     }
 
@@ -681,4 +692,34 @@ public class KbRetriever {
         }
         return dot / (Math.sqrt(na) * Math.sqrt(nb));
     }
+
+    /**
+     * 聚合型提问（"X有什么"）的意图修正：把**已经在候选里**的地点块提到最前。
+     *
+     * <p>实测动机见 {@link PlaceIntent}：问「空洞大厅有什么」时地点块排第 7（0.9558），
+     * 被 6 条名字带"空洞大厅"的物品挤出前五，而第 1 名 0.9701 只高 0.014 ——
+     * 阈值分不开，这是意图问题。这里**只改顺序、不造分**。
+     *
+     * <p>只在聚合意图下生效，且找不到地点块时原样返回 —— 对其它问法零影响。
+     */
+    static List<Hit> applyPlaceIntent(List<Hit> hits, String query) {
+        if (hits == null || hits.size() < 2 || !PlaceIntent.isAggregate(query)) {
+            return hits;
+        }
+        String place = PlaceIntent.placeTerm(query);
+        List<String> docIds = new ArrayList<>();
+        List<String> titles = new ArrayList<>();
+        for (Hit h : hits) {
+            docIds.add(h.entry().docId());
+            titles.add(h.entry().title());
+        }
+        int at = PlaceIntent.findPlaceBlock(docIds, titles, place, LocationCorpusBuilder.DOC_ID);
+        if (at < 0) {
+            return hits;
+        }
+        List<Hit> out = new ArrayList<>(hits);
+        out.add(0, out.remove(at));
+        return out;
+    }
+
 }

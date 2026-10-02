@@ -129,6 +129,25 @@ class LocationCorpusE2ETest {
             assertThat(hits).as("地点问题「" + q + "」应当能拿到资料").isNotEmpty();
         }
 
+        // ③b 诊断：聚合型提问的完整排名 —— 地点块到底排第几、与第一名差多少分。
+        //     这决定了 D8 该从语料侧修（让地点块自己赢）还是从排序侧修（显式提权）。
+        List<KbRetriever.Hit> deep = retriever.retrieve("空洞大厅有什么", true, 20, 0f, true).hits();
+        System.out.println("  ---- 「空洞大厅有什么」top20 诊断 ----");
+        for (int i = 0; i < deep.size(); i++) {
+            KbRetriever.Hit h = deep.get(i);
+            boolean loc = h.entry().docId() != null && h.entry().docId().startsWith("地图·地点");
+            System.out.printf("    %2d. %.4f %s %s%n", i + 1, h.score(), loc ? "★地点" : "     ", h.entry().title());
+        }
+
+        // ③c ★ 聚合提问必须让**地点块**排第一 —— 用**默认参数**（top-k=5）断言。
+        //     上一版只在 topK=20 下测通过，而生产用的是 top-k=5：
+        //     重排在提权之前就截到 5 条，地点块（候选里第 7）已经没了 —— 假通过。
+        List<KbRetriever.Hit> agg = retriever.retrieve("空洞大厅有什么").hits();
+        System.out.printf("  聚合提问（默认 top-k）-> %s%n", agg.stream().map(h -> h.entry().title()).toList());
+        assertThat(agg).isNotEmpty();
+        assertThat(agg.get(0).entry().docId()).as("聚合提问第一条应当是地点块").startsWith("地图·地点");
+        assertThat(agg.get(0).entry().title()).contains("空洞大厅");
+
         // ④ 可回滚：purge 之后块数回到原值
         int purged = builder.purge();
         System.out.printf("回滚：清除 %d 条，块总数回到 %d%n", purged, blocks.count());
