@@ -1,15 +1,11 @@
 package com.example.qqbot.site;
 
-import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.SiteTextRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -133,32 +129,21 @@ public class SiteTextService {
         }
     }
 
-    private final SqliteConnectionProvider db;
+    private final SiteTextRepository repo;
     private volatile boolean available;
 
-    public SiteTextService(SqliteConnectionProvider db) {
-        this.db = db;
-    }
-
-    private Connection conn() {
-        return db.connection();
+    public SiteTextService(SiteTextRepository repo) {
+        this.repo = repo;
     }
 
     @PostConstruct
     void init() {
         try {
-            if (!db.isAvailable()) {
+            if (!repo.isAvailable()) {
                 log.warn("[SITE] 问答库不可用，页面文案将全部走默认值");
                 return;
             }
-            try (Statement st = conn().createStatement()) {
-                st.execute("CREATE TABLE IF NOT EXISTS site_text ("
-                        + " page_key   TEXT NOT NULL,"
-                        + " block_key  TEXT NOT NULL,"
-                        + " text       TEXT NOT NULL,"
-                        + " updated_at TEXT NOT NULL,"
-                        + " PRIMARY KEY (page_key, block_key))");
-            }
+            repo.initSchema();
             available = true;
             log.info("[SITE] 页面文案就绪：注册 {} 块，已覆盖 {} 块", REGISTRY.size(), overrides().size());
         } catch (Exception e) {
@@ -224,12 +209,9 @@ public class SiteTextService {
         if (!available) {
             return out;
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT page_key, block_key, text FROM site_text")) {
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    out.put(rs.getString(1) + "." + rs.getString(2), rs.getString(3));
-                }
+        try {
+            for (SiteTextRepository.Override o : repo.all()) {
+                out.put(o.page() + "." + o.key(), o.text());
             }
         } catch (Exception e) {
             log.warn("[SITE] 读取覆盖文案失败：{}", e.getMessage());
@@ -251,16 +233,7 @@ public class SiteTextService {
         if (text == null || text.trim().isEmpty()) {
             return reset(page, key);
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "INSERT INTO site_text (page_key, block_key, text, updated_at) VALUES (?,?,?,?)"
-                        + " ON CONFLICT(page_key, block_key) DO UPDATE SET text=excluded.text,"
-                        + " updated_at=excluded.updated_at")) {
-            ps.setString(1, page);
-            ps.setString(2, key);
-            ps.setString(3, text);
-            ps.setString(4, Instant.now().toString());
-            ps.executeUpdate();
-        }
+        repo.save(page, key, text, Instant.now().toString());
         return true;
     }
 
@@ -269,12 +242,7 @@ public class SiteTextService {
         if (!BY_KEY.containsKey(page + "." + key)) {
             return false;
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "DELETE FROM site_text WHERE page_key = ? AND block_key = ?")) {
-            ps.setString(1, page);
-            ps.setString(2, key);
-            ps.executeUpdate();
-        }
+        repo.delete(page, key);
         return true;
     }
 }
