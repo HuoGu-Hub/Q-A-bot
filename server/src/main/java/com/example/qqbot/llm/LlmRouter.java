@@ -417,13 +417,17 @@ public class LlmRouter {
      *
      * @param images base64 编码的图片
      */
-    public String chatWithImages(String userMessage, List<ImageContent> images) {
+    public String chatWithImages(String userMessage, List<VisionImage> images) {
         // ⚠️ 坑：UserMessage(String, Content...) 的第一个参数是 name 不是文本！
         // 传错会得到 "name is not supported by this endpoint" 这种莫名其妙的报错。
         // 正确做法是用 from(List<Content>) 自己组装。
         List<Content> contents = new ArrayList<>();
         contents.add(TextContent.from(userMessage));
-        contents.addAll(images);
+        for (VisionImage image : images) {
+            // 中性类型 -> langchain4j 的转换**只在这一层**发生。
+            // 让业务包 import ImageContent 就等于把"怎么调模型"的细节漏了出去。
+            contents.add(ImageContent.from(image.base64(), image.mimeType()));
+        }
         ChatMessage message = UserMessage.from(contents);
         return callWithFallback(List.of(SystemMessage.from(systemPromptWithStyle()), message), CAP_VISION);
     }

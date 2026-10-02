@@ -138,8 +138,10 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1。实测违反：agent/ChatService 依赖 dev.langchain4j.data.message.ImageContent —— 视觉消息的构造细节漏出了 llm")
-    @DisplayName("【目标】llm 之外不得出现任何 dev.langchain4j 类型")
+    @DisplayName("★ 铁律③（加强）：llm 之外不得出现任何 dev.langchain4j 类型")
+    // 2026-10-02 转正：agent/ChatService 原先为了组装图片列表 import 了
+    // dev.langchain4j.data.message.ImageContent。
+    // 修法：新增中性的 llm.VisionImage(base64, mimeType)，转换只发生在 LlmRouter 内部。
     void noLangchain4jOutsideLlm() {
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("..llm..")

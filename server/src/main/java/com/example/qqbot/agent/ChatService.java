@@ -10,7 +10,7 @@ import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.langchain4j.data.message.ImageContent;
+import com.example.qqbot.llm.VisionImage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -113,7 +113,7 @@ public class ChatService {
             if (!llmRouter.hasVision()) {
                 return done(contentGate.getNoVisionReply(), t0, retrieved.trace());
             }
-            List<ImageContent> images = downloadImages(limitImages(event, imageRefs));
+            List<VisionImage> images = downloadImages(limitImages(event, imageRefs));
             if (images.isEmpty()) {
                 return done("图片我这边下载不下来，你重新发一次试试？", t0, retrieved.trace());
             }
@@ -156,11 +156,11 @@ public class ChatService {
         return refs.subList(0, limit);
     }
 
-    private List<ImageContent> downloadImages(List<ImageRef> refs) {
-        List<ImageContent> images = new ArrayList<>();
+    private List<VisionImage> downloadImages(List<ImageRef> refs) {
+        List<VisionImage> images = new ArrayList<>();
         for (ImageRef ref : refs) {
             imageFetcher.fetch(ref).ifPresent(f ->
-                    images.add(ImageContent.from(f.base64(), f.mimeType())));
+                    images.add(new VisionImage(f.base64(), f.mimeType())));
         }
         return images;
     }
