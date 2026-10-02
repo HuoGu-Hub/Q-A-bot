@@ -2,6 +2,8 @@ package com.example.qqbot.command;
 
 import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.CommandRepository;
+import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -37,7 +39,7 @@ class CommandMatcherTest {
         qa.setDb(base.resolve("qa.sqlite").toString());
         qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
-        store = new CommandStore(qaStore, new ObjectMapper());
+        store = new CommandStore(new CommandRepository(new Jdbc(qaStore)), new ObjectMapper());
         store.init();
 
         props = new CommandProperties();
@@ -287,7 +289,7 @@ class CommandMatcherTest {
 
         // 模拟重启：再建一次（会再跑 seedBuiltins）
         // 复用同一个 QaStore 的连接，避免 WAL 共享内存冲突
-        CommandStore reopened = new CommandStore(qaStore, new ObjectMapper());
+        CommandStore reopened = new CommandStore(new CommandRepository(new Jdbc(qaStore)), new ObjectMapper());
         reopened.init();
 
         BotCommand after = reopened.findByTrigger("help");

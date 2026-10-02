@@ -1,6 +1,6 @@
 package com.example.qqbot.command;
 
-import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.CommandRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -8,11 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,46 +24,39 @@ import java.util.Map;
  * <p>本类**不缓存**：指令条目是个位数~几十条，每次查一下 SQLite 只要零点几毫秒，
  * 比维护缓存一致性的复杂度划算得多。**而且天然就是"改完立刻生效"** ——
  * 这正是配置界面想要的。
+ *
+ * <h2>本类只剩「语义」</h2>
+ * SQL 与 {@code java.sql} 全部搬进了 {@link CommandRepository}。这里管的是：
+ * 内置指令的内容、{@code group_ids} 的 JSON 编解码（列的编码方式留给持久层不合适，
+ * 它只该知道"这一列是文本"）、以及把 {@code IOException} 作为对外错误类型。
  */
 @Component
 public class CommandStore {
 
     private static final Logger log = LoggerFactory.getLogger(CommandStore.class);
 
-    private final SqliteConnectionProvider db;
+    /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
+    private final CommandRepository repo;
+
+    /** 只用来编解码 {@code group_ids} 这一列的 JSON */
     private final ObjectMapper mapper;
 
     private volatile boolean available;
 
-    /**
-     * ⚠️ 复用**共用**的 SQLite 连接（{@link com.example.qqbot.persistence.SqliteConnectionProvider}），而不是自己开一个。
-     *
-     * <p><b>为什么</b>：两个连接同时操作同一个 SQLite 文件时，
-     * WAL 的共享内存段（-shm）会冲突，实测直接报
-     * <code>SQLITE_IOERR_SHMOPEN / disk I/O error</code>。
-     * 在 9p/drvfs（WSL 挂载 Windows 盘）上尤其容易触发。
-     *
-     * <p>SQLite 本来就是单写者模型，共用连接既避免冲突，
-     * 也省一个文件句柄。
-     */
-    public CommandStore(SqliteConnectionProvider db, ObjectMapper mapper) {
-        this.db = db;
+    public CommandStore(CommandRepository repo, ObjectMapper mapper) {
+        this.repo = repo;
         this.mapper = mapper;
-    }
-
-    private Connection conn() {
-        return db.connection();
     }
 
     @PostConstruct
     void init() {
         try {
-            if (!db.isAvailable()) {
+            if (!repo.isAvailable()) {
                 log.warn("[CMD] 问答库不可用，指令功能一并关闭");
                 available = false;
                 return;
             }
-            createTables();
+            repo.initSchema();
             seedBuiltins();
             available = true;
             log.info("[CMD] 指令库就绪：{} 条指令", count());
@@ -78,107 +66,24 @@ public class CommandStore {
         }
     }
 
-    private void createTables() throws SQLException {
-        try (Statement st = conn().createStatement()) {
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS bot_command (
-                      id          INTEGER PRIMARY KEY,
-                      trigger     TEXT NOT NULL UNIQUE,
-                      reply       TEXT NOT NULL,
-                      description TEXT DEFAULT '',
-                      scope       TEXT NOT NULL DEFAULT 'all',
-                      group_ids   TEXT DEFAULT '[]',
-                      min_role    TEXT NOT NULL DEFAULT 'member',
-                      enabled     INTEGER NOT NULL DEFAULT 1,
-                      sort_order  INTEGER NOT NULL DEFAULT 0,
-                      builtin     INTEGER NOT NULL DEFAULT 0,
-                      created_at  TEXT NOT NULL,
-                      updated_at  TEXT NOT NULL
-                    )""");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_cmd_enabled ON bot_command(enabled)");
-
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS bot_command_log (
-                      id         INTEGER PRIMARY KEY,
-                      ts         TEXT NOT NULL,
-                      trigger    TEXT,
-                      group_id   INTEGER,
-                      user_id    INTEGER,
-                      matched    INTEGER
-                    )""");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_cmdlog_ts ON bot_command_log(ts)");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_cmdlog_trigger ON bot_command_log(trigger)");
-        }
-        // 升级**已经存在**的表：CREATE TABLE IF NOT EXISTS 对老表什么都不做，
-        // 不加这两列的话，之前建过库的机器升级后会一直报 "no such column: kind"。
-        addColumnIfMissing("kind", "TEXT NOT NULL DEFAULT 'template'");
-        addColumnIfMissing("mode", "TEXT NOT NULL DEFAULT 'kb'");
-    }
-
-    /**
-     * 给已存在的表补列。
-     *
-     * <p>SQLite 没有 {@code ADD COLUMN IF NOT EXISTS}，直接加会抛
-     * "duplicate column name"，所以先用 {@code PRAGMA table_info} 查一遍。
-     */
-    private void addColumnIfMissing(String column, String ddl) throws SQLException {
-        synchronized (this) {
-            boolean exists = false;
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery("PRAGMA table_info(bot_command)")) {
-                while (rs.next()) {
-                    if (column.equalsIgnoreCase(rs.getString("name"))) {
-                        exists = true;
-                        break;
-                    }
-                }
-            }
-            if (exists) {
-                return;
-            }
-            try (Statement st = conn().createStatement()) {
-                st.execute("ALTER TABLE bot_command ADD COLUMN " + column + " " + ddl);
-                log.info("[CMD] bot_command 补列：{} {}", column, ddl);
-            }
-        }
-    }
-
     /**
      * 写入内置指令（幂等）。
      *
      * <p>用 §INSERT OR IGNORE§：已经存在就什么都不做 ——
      * 所以你**改过内置指令的回复后，重启不会被覆盖回去**。
      */
-    private void seedBuiltins() throws SQLException {
-        record Builtin(String trigger, String reply, String desc, int order) {
-        }
-        List<Builtin> builtins = List.of(
-                new Builtin("help", "{cmd.list}", "查看所有指令", 1),
-                new Builtin("list", "{cmd.list}", "列出所有指令", 2),
-                new Builtin("ping", "在的喵～（已运行 {uptime}）", "看看我在不在", 3),
-                new Builtin("stats", """
+    private void seedBuiltins() {
+        List<CommandRepository.Seed> builtins = List.of(
+                new CommandRepository.Seed("help", "{cmd.list}", "查看所有指令", 1),
+                new CommandRepository.Seed("list", "{cmd.list}", "列出所有指令", 2),
+                new CommandRepository.Seed("ping", "在的喵～（已运行 {uptime}）", "看看我在不在", 3),
+                new CommandRepository.Seed("stats", """
                         知识库：{kb.count} 条资料
                         术语表：{kb.terms} 条
                         累计问答：{qa.total} 次（命中率 {qa.hitrate}）
                         今天已回答：{qa.today} 次""", "查看知识库统计", 4));
 
-        String now = Instant.now().toString();
-        try (PreparedStatement ps = conn().prepareStatement("""
-                INSERT OR IGNORE INTO bot_command
-                  (trigger, reply, description, scope, min_role, enabled, sort_order, builtin,
-                   created_at, updated_at)
-                VALUES (?,?,?,'all','member',1,?,1,?,?)""")) {
-            for (Builtin b : builtins) {
-                ps.setString(1, b.trigger());
-                ps.setString(2, b.reply());
-                ps.setString(3, b.desc());
-                ps.setInt(4, b.order());
-                ps.setString(5, now);
-                ps.setString(6, now);
-                ps.addBatch();
-            }
-            ps.executeBatch();
-        }
+        repo.seedBuiltins(builtins, Instant.now().toString());
     }
 
     // ==================== 查询 ====================
@@ -189,12 +94,24 @@ public class CommandStore {
 
     /** 全部指令（含停用的），按 sort_order 排 */
     public List<BotCommand> listAll() {
-        return query("SELECT * FROM bot_command ORDER BY sort_order, id", null);
+        return list(repo::all);
     }
 
     /** 启用的指令 */
     public List<BotCommand> listEnabled() {
-        return query("SELECT * FROM bot_command WHERE enabled = 1 ORDER BY sort_order, id", null);
+        return list(repo::enabled);
+    }
+
+    private List<BotCommand> list(java.util.function.Supplier<List<CommandRepository.Row>> source) {
+        if (!available) {
+            return List.of();
+        }
+        try {
+            return toCommands(source.get());
+        } catch (Exception e) {
+            log.warn("[CMD] 查询指令失败：{}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**
@@ -204,75 +121,56 @@ public class CommandStore {
      * 不然群友会困惑"为什么大写就不行"。
      */
     public BotCommand findByTrigger(String trigger) {
-        if (trigger == null || trigger.isBlank()) {
+        if (!available || trigger == null || trigger.isBlank()) {
             return null;
         }
-        List<BotCommand> found = query(
-                "SELECT * FROM bot_command WHERE LOWER(trigger) = LOWER(?)", trigger.trim());
-        return found.isEmpty() ? null : found.get(0);
+        try {
+            CommandRepository.Row r = repo.findByTrigger(trigger.trim());
+            return r == null ? null : toCommand(r);
+        } catch (Exception e) {
+            log.warn("[CMD] 查询指令失败：{}", e.getMessage());
+            return null;
+        }
     }
 
-    private List<BotCommand> query(String sql, String param) {
-        List<BotCommand> out = new ArrayList<>();
-        if (!available) {
-            return out;
-        }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(sql)) {
-                if (param != null) {
-                    ps.setString(1, param);
-                }
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        out.add(map(rs));
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[CMD] 查询指令失败：{}", e.getMessage());
-            }
+    private List<BotCommand> toCommands(List<CommandRepository.Row> rows) {
+        List<BotCommand> out = new ArrayList<>(rows.size());
+        for (CommandRepository.Row r : rows) {
+            out.add(toCommand(r));
         }
         return out;
     }
 
-    private BotCommand map(ResultSet rs) throws SQLException {
+    private BotCommand toCommand(CommandRepository.Row r) {
+        return new BotCommand(r.id(), r.trigger(), r.reply(), r.description(), r.scope(),
+                parseGroupIds(r.groupIdsJson()), r.minRole(), r.enabled(), r.sortOrder(),
+                r.builtin(), r.kind(), r.mode());
+    }
+
+    /** {@code group_ids} 列里是 JSON 数组；坏数据当空处理（旧实现就是这么容错的） */
+    private List<Long> parseGroupIds(String raw) {
         List<Long> groups = new ArrayList<>();
-        String raw = rs.getString("group_ids");
-        if (raw != null && !raw.isBlank()) {
-            try {
-                for (var node : mapper.readTree(raw)) {
-                    groups.add(node.asLong());
-                }
-            } catch (Exception ignored) {
-                // 坏数据当空处理
-            }
+        if (raw == null || raw.isBlank()) {
+            return groups;
         }
-        return new BotCommand(
-                rs.getLong("id"),
-                rs.getString("trigger"),
-                rs.getString("reply"),
-                rs.getString("description"),
-                rs.getString("scope"),
-                groups,
-                rs.getString("min_role"),
-                rs.getInt("enabled") == 1,
-                rs.getInt("sort_order"),
-                rs.getInt("builtin") == 1,
-                rs.getString("kind"),
-                rs.getString("mode"));
+        try {
+            for (var node : mapper.readTree(raw)) {
+                groups.add(node.asLong());
+            }
+        } catch (Exception ignored) {
+            // 坏数据当空处理
+        }
+        return groups;
     }
 
     public int count() {
         if (!available) {
             return 0;
         }
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM bot_command")) {
-                rs.next();
-                return rs.getInt(1);
-            } catch (SQLException e) {
-                return 0;
-            }
+        try {
+            return (int) repo.count();
+        } catch (Exception e) {
+            return 0;
         }
     }
 
@@ -284,82 +182,43 @@ public class CommandStore {
             throw new IOException("指令库不可用");
         }
         String now = Instant.now().toString();
-        String groupsJson = mapper.writeValueAsString(cmd.groupIds() == null ? List.of() : cmd.groupIds());
-
-        synchronized (this) {
-            try {
-                BotCommand existing = findByTrigger(cmd.trigger());
-                if (existing != null) {
-                    try (PreparedStatement ps = conn().prepareStatement("""
-                            UPDATE bot_command SET reply=?, description=?, scope=?, group_ids=?,
-                              min_role=?, enabled=?, sort_order=?, kind=?, mode=?, updated_at=?
-                            WHERE id=?""")) {
-                        ps.setString(1, cmd.reply());
-                        ps.setString(2, cmd.description());
-                        ps.setString(3, cmd.scope());
-                        ps.setString(4, groupsJson);
-                        ps.setString(5, cmd.minRole());
-                        ps.setInt(6, cmd.enabled() ? 1 : 0);
-                        ps.setInt(7, cmd.sortOrder());
-                        ps.setString(8, cmd.kindName());
-                        ps.setString(9, cmd.modeName());
-                        ps.setString(10, now);
-                        ps.setLong(11, existing.id());
-                        ps.executeUpdate();
-                    }
-                    return existing.id();
-                }
-                try (PreparedStatement ps = conn().prepareStatement("""
-                        INSERT INTO bot_command
-                          (trigger, reply, description, scope, group_ids, min_role,
-                           enabled, sort_order, builtin, kind, mode, created_at, updated_at)
-                        VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?)""", Statement.RETURN_GENERATED_KEYS)) {
-                    ps.setString(1, cmd.trigger());
-                    ps.setString(2, cmd.reply());
-                    ps.setString(3, cmd.description());
-                    ps.setString(4, cmd.scope());
-                    ps.setString(5, groupsJson);
-                    ps.setString(6, cmd.minRole());
-                    ps.setInt(7, cmd.enabled() ? 1 : 0);
-                    ps.setInt(8, cmd.sortOrder());
-                    ps.setString(9, cmd.kindName());
-                    ps.setString(10, cmd.modeName());
-                    ps.setString(11, now);
-                    ps.setString(12, now);
-                    ps.executeUpdate();
-                    try (ResultSet keys = ps.getGeneratedKeys()) {
-                        keys.next();
-                        return keys.getLong(1);
-                    }
-                }
-            } catch (SQLException e) {
-                throw new IOException("写入指令失败：" + e.getMessage(), e);
-            }
+        String groupsJson;
+        try {
+            groupsJson = mapper.writeValueAsString(cmd.groupIds() == null ? List.of() : cmd.groupIds());
+        } catch (Exception e) {
+            throw new IOException("群列表序列化失败：" + e.getMessage(), e);
+        }
+        try {
+            return repo.upsert(new CommandRepository.Row(0, cmd.trigger(), cmd.reply(),
+                    cmd.description(), cmd.scope(), groupsJson, cmd.minRole(), cmd.enabled(),
+                    cmd.sortOrder(), false, cmd.kindName(), cmd.modeName()), now);
+        } catch (Exception e) {
+            throw new IOException("写入指令失败：" + e.getMessage(), e);
         }
     }
 
-    /** 删除（内置命令不允许删） */
+    /**
+     * 删除。
+     *
+     * <p><b>内置命令不允许删</b>：它们是 {@code {cmd.list}} 之类变量的数据源，
+     * 删掉之后那些变量会静默变空，而管理员只是想"关掉它"（用
+     * {@link #setEnabled} 就行）。这条判断是业务规则，所以在这一层。
+     */
     public boolean delete(String trigger) throws IOException {
         if (!available) {
             throw new IOException("指令库不可用");
         }
-        synchronized (this) {
-            try {
-                BotCommand existing = findByTrigger(trigger);
-                if (existing == null) {
-                    return false;
-                }
-                if (existing.builtin()) {
-                    throw new IOException("内置指令不能删除（可以改回复内容）");
-                }
-                try (PreparedStatement ps = conn().prepareStatement(
-                        "DELETE FROM bot_command WHERE id = ?")) {
-                    ps.setLong(1, existing.id());
-                    return ps.executeUpdate() > 0;
-                }
-            } catch (SQLException e) {
-                throw new IOException("删除失败：" + e.getMessage(), e);
-            }
+        BotCommand existing = findByTrigger(trigger);
+        if (existing == null) {
+            return false;
+        }
+        if (existing.builtin()) {
+            throw new IOException("内置指令不能删除（可以改回复内容）");
+        }
+        try {
+            return repo.deleteById(existing.id());
+        } catch (Exception e) {
+            throw new IOException("删除失败：" + e.getMessage(), e);
         }
     }
 
@@ -367,16 +226,10 @@ public class CommandStore {
         if (!available) {
             throw new IOException("指令库不可用");
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE bot_command SET enabled=?, updated_at=? WHERE LOWER(trigger)=LOWER(?)")) {
-                ps.setInt(1, enabled ? 1 : 0);
-                ps.setString(2, Instant.now().toString());
-                ps.setString(3, trigger);
-                return ps.executeUpdate() > 0;
-            } catch (SQLException e) {
-                throw new IOException(e.getMessage(), e);
-            }
+        try {
+            return repo.setEnabled(trigger, enabled, Instant.now().toString());
+        } catch (Exception e) {
+            throw new IOException(e.getMessage(), e);
         }
     }
 
@@ -394,60 +247,46 @@ public class CommandStore {
         if (!available) {
             return;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "INSERT INTO bot_command_log (ts, trigger, group_id, user_id, matched)"
-                            + " VALUES (?,?,?,?,?)")) {
-                ps.setString(1, Instant.now().toString());
-                ps.setString(2, trigger == null ? "" : trigger.toLowerCase(Locale.ROOT));
-                ps.setLong(3, groupId);
-                ps.setLong(4, userId);
-                ps.setInt(5, matched ? 1 : 0);
-                ps.executeUpdate();
-            } catch (Exception e) {
-                log.debug("[CMD] 记录使用失败（不影响回复）：{}", e.getMessage());
-            }
+        try {
+            repo.logUsage(trigger == null ? "" : trigger.toLowerCase(Locale.ROOT),
+                    groupId, userId, matched, Instant.now().toString());
+        } catch (Exception e) {
+            log.debug("[CMD] 记录使用失败（不影响回复）：{}", e.getMessage());
         }
     }
 
     /** 使用排行：命中次数 */
     public List<Map<String, Object>> topUsed(int days, int limit) {
-        return statQuery("SELECT trigger, COUNT(*) c FROM bot_command_log"
-                + " WHERE matched=1" + daysClause(days) + " GROUP BY trigger ORDER BY c DESC LIMIT ?",
-                days, limit);
+        return stats(() -> repo.topUsed(days, limit));
     }
 
     /** ★ 未配置的命令排行：群友发了但没配 —— 直接告诉你该加什么 */
     public List<Map<String, Object>> unmatched(int days, int limit) {
-        return statQuery("SELECT trigger, COUNT(*) c FROM bot_command_log"
-                + " WHERE matched=0" + daysClause(days) + " GROUP BY trigger ORDER BY c DESC LIMIT ?",
-                days, limit);
+        return stats(() -> repo.unmatched(days, limit));
     }
 
-    private String daysClause(int days) {
-        return days > 0 ? " AND ts >= datetime('now', '-" + days + " days')" : "";
-    }
-
-    private List<Map<String, Object>> statQuery(String sql, int days, int limit) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    /**
+     * 统计结果的对外形状就是 JSON（前端直接吃 {@code [{trigger, count}]}），
+     * 所以这里保留 {@code Map} 而不是换个记录 —— 换掉只会让三个调用点跟着改一遍。
+     */
+    private List<Map<String, Object>> stats(
+            java.util.function.Supplier<List<CommandRepository.UsageStat>> source) {
         if (!available) {
-            return out;
+            return List.of();
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(sql)) {
-                ps.setInt(1, limit);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("trigger", rs.getString(1));
-                        m.put("count", rs.getLong(2));
-                        out.add(m);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[CMD] 统计失败：{}", e.getMessage());
+        try {
+            List<CommandRepository.UsageStat> rows = source.get();
+            List<Map<String, Object>> out = new ArrayList<>(rows.size());
+            for (CommandRepository.UsageStat s : rows) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("trigger", s.trigger());
+                m.put("count", s.count());
+                out.add(m);
             }
+            return out;
+        } catch (Exception e) {
+            log.warn("[CMD] 统计失败：{}", e.getMessage());
+            return List.of();
         }
-        return out;
     }
 }
