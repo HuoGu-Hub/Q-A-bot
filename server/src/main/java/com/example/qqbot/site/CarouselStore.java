@@ -1,15 +1,11 @@
 package com.example.qqbot.site;
 
-import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.SiteCarouselRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -31,75 +27,49 @@ public class CarouselStore {
 
     private static final Logger log = LoggerFactory.getLogger(CarouselStore.class);
 
-    /** 一条轮播图 */
+    /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
+    private final SiteCarouselRepository repo;
+    private volatile boolean available;
+
+    public CarouselStore(SiteCarouselRepository repo) {
+        this.repo = repo;
+    }
+
+    /** 一张轮播图 */
     public record Item(long id, String file, String mime, int width, int height,
                        String link, String caption, int sort, boolean enabled, String createdAt) {
     }
 
-    private final SqliteConnectionProvider db;
-    private volatile boolean available;
-
-    public CarouselStore(SqliteConnectionProvider db) {
-        this.db = db;
-    }
-
-    private Connection conn() {
-        return db.connection();
-    }
-
-    public boolean isAvailable() {
-        return available;
-    }
-
     @PostConstruct
-    void init() {
+    public void init() {
+        if (!repo.isAvailable()) {
+            log.warn("[SITE] 问答库不可用，轮播图功能关闭");
+            return;
+        }
         try {
-            if (!db.isAvailable()) {
-                log.warn("[SITE] 问答库不可用，首页轮播功能关闭");
-                return;
-            }
-            try (Statement st = conn().createStatement()) {
-                st.execute("CREATE TABLE IF NOT EXISTS site_carousel ("
-                        + " id         INTEGER PRIMARY KEY,"
-                        + " file       TEXT NOT NULL,"
-                        + " mime       TEXT NOT NULL,"
-                        + " width      INTEGER NOT NULL DEFAULT 0,"
-                        + " height     INTEGER NOT NULL DEFAULT 0,"
-                        + " link       TEXT NOT NULL DEFAULT '',"
-                        + " caption    TEXT NOT NULL DEFAULT '',"
-                        + " sort       INTEGER NOT NULL DEFAULT 0,"
-                        + " enabled    INTEGER NOT NULL DEFAULT 1,"
-                        + " created_at TEXT NOT NULL)");
-            }
+            repo.initSchema();
             available = true;
-            log.info("[SITE] 首页轮播就绪：{} 张（启用 {} 张）", count(), listEnabled().size());
+            log.info("[SITE] 轮播图就绪：{} 张", repo.count());
         } catch (Exception e) {
-            log.warn("[SITE] 轮播清单初始化失败（不影响公开站）：{}", e.getMessage());
+            log.warn("[SITE] 初始化失败：{}", e.getMessage());
             available = false;
         }
     }
 
-    // ==================== 读 ====================
+    public boolean isAvailable() {
+        return available && repo.isAvailable();
+    }
 
-    /** 全部（后台用），按展示顺序 */
     public List<Item> list() {
         if (!available) {
             return List.of();
         }
-        List<Item> out = new ArrayList<>();
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery(
-                         "SELECT id, file, mime, width, height, link, caption, sort, enabled, created_at"
-                                 + " FROM site_carousel ORDER BY sort, id")) {
-                while (rs.next()) {
-                    out.add(read(rs));
-                }
-            } catch (Exception e) {
-                log.warn("[SITE] 读取轮播清单失败：{}", e.getMessage());
-            }
+        try {
+            return repo.all().stream().map(CarouselStore::toItem).toList();
+        } catch (Exception e) {
+            log.warn("[SITE] 读取轮播清单失败：{}", e.getMessage());
+            return List.of();
         }
-        return out;
     }
 
     /** 只取启用的（公开站用） */
@@ -117,79 +87,30 @@ public class CarouselStore {
         if (!available) {
             return null;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "SELECT id, file, mime, width, height, link, caption, sort, enabled, created_at"
-                            + " FROM site_carousel WHERE id = ?")) {
-                ps.setLong(1, id);
-                try (ResultSet rs = ps.executeQuery()) {
-                    return rs.next() ? read(rs) : null;
-                }
-            } catch (Exception e) {
-                log.warn("[SITE] 查询轮播图失败：{}", e.getMessage());
-                return null;
-            }
+        try {
+            SiteCarouselRepository.Row r = repo.byId(id);
+            return r == null ? null : toItem(r);
+        } catch (Exception e) {
+            log.warn("[SITE] 查询轮播图失败：{}", e.getMessage());
+            return null;
         }
     }
 
     public int count() {
-        if (!available) {
-            return 0;
-        }
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM site_carousel")) {
-                return rs.next() ? rs.getInt(1) : 0;
-            } catch (Exception e) {
-                return 0;
-            }
-        }
+        return available ? repo.count() : 0;
     }
-
-    private static Item read(ResultSet rs) throws Exception {
-        return new Item(rs.getLong(1), rs.getString(2), rs.getString(3),
-                rs.getInt(4), rs.getInt(5), rs.getString(6), rs.getString(7),
-                rs.getInt(8), rs.getInt(9) != 0, rs.getString(10));
-    }
-
-    // ==================== 写 ====================
 
     /** 追加一张（排在最后）。返回新 id，失败返回 -1 */
     public long add(String file, String mime, int width, int height, String link, String caption) {
         if (!available) {
             return -1L;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "INSERT INTO site_carousel (file, mime, width, height, link, caption, sort, enabled, created_at)"
-                            + " VALUES (?,?,?,?,?,?,?,1,?)",
-                    Statement.RETURN_GENERATED_KEYS)) {
-                ps.setString(1, file);
-                ps.setString(2, mime);
-                ps.setInt(3, width);
-                ps.setInt(4, height);
-                ps.setString(5, link == null ? "" : link);
-                ps.setString(6, caption == null ? "" : caption);
-                // 排在现有最大 sort 之后。没有行时 max 为 null → 0
-                ps.setInt(7, nextSort());
-                ps.setString(8, Instant.now().toString());
-                ps.executeUpdate();
-                try (ResultSet keys = ps.getGeneratedKeys()) {
-                    return keys.next() ? keys.getLong(1) : -1L;
-                }
-            } catch (Exception e) {
-                log.warn("[SITE] 新增轮播图失败：{}", e.getMessage());
-                return -1L;
-            }
-        }
-    }
-
-    private int nextSort() {
-        try (Statement st = conn().createStatement();
-             ResultSet rs = st.executeQuery("SELECT COALESCE(MAX(sort), -1) + 1 FROM site_carousel")) {
-            return rs.next() ? rs.getInt(1) : 0;
+        try {
+            return repo.insert(file, mime, width, height, link == null ? "" : link,
+                    caption == null ? "" : caption, repo.nextSort(), Instant.now().toString());
         } catch (Exception e) {
-            return 0;
+            log.warn("[SITE] 新增轮播图失败：{}", e.getMessage());
+            return -1L;
         }
     }
 
@@ -203,18 +124,14 @@ public class CarouselStore {
         if (old == null) {
             return null;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE site_carousel SET link = ?, caption = ?, enabled = ? WHERE id = ?")) {
-                ps.setString(1, link == null ? old.link() : link);
-                ps.setString(2, caption == null ? old.caption() : caption);
-                ps.setInt(3, (enabled == null ? old.enabled() : enabled) ? 1 : 0);
-                ps.setLong(4, id);
-                ps.executeUpdate();
-            } catch (Exception e) {
-                log.warn("[SITE] 更新轮播图失败：{}", e.getMessage());
-                return null;
-            }
+        try {
+            repo.update(id,
+                    link == null ? old.link() : link,
+                    caption == null ? old.caption() : caption,
+                    enabled == null ? old.enabled() : enabled);
+        } catch (Exception e) {
+            log.warn("[SITE] 更新轮播图失败：{}", e.getMessage());
+            return null;
         }
         return get(id);
     }
@@ -225,15 +142,11 @@ public class CarouselStore {
         if (old == null) {
             return null;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "DELETE FROM site_carousel WHERE id = ?")) {
-                ps.setLong(1, id);
-                ps.executeUpdate();
-            } catch (Exception e) {
-                log.warn("[SITE] 删除轮播图失败：{}", e.getMessage());
-                return null;
-            }
+        try {
+            repo.delete(id);
+        } catch (Exception e) {
+            log.warn("[SITE] 删除轮播图失败：{}", e.getMessage());
+            return null;
         }
         resequence();
         return old;
@@ -266,38 +179,25 @@ public class CarouselStore {
         List<Item> reordered = new ArrayList<>(items);
         reordered.set(from, items.get(to));
         reordered.set(to, items.get(from));
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE site_carousel SET sort = ? WHERE id = ?")) {
-                for (int i = 0; i < reordered.size(); i++) {
-                    ps.setInt(1, i);
-                    ps.setLong(2, reordered.get(i).id());
-                    ps.addBatch();
-                }
-                ps.executeBatch();
-            } catch (Exception e) {
-                log.warn("[SITE] 调整轮播顺序失败：{}", e.getMessage());
-                return false;
-            }
-        }
-        return true;
+        return writeOrder(reordered, "调整轮播顺序失败");
     }
 
     /** 把 sort 重写成 0..n-1（删掉中间某张之后不留空档） */
     private void resequence() {
-        List<Item> items = list();
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE site_carousel SET sort = ? WHERE id = ?")) {
-                for (int i = 0; i < items.size(); i++) {
-                    ps.setInt(1, i);
-                    ps.setLong(2, items.get(i).id());
-                    ps.addBatch();
-                }
-                ps.executeBatch();
-            } catch (Exception e) {
-                log.warn("[SITE] 重排轮播顺序失败：{}", e.getMessage());
-            }
+        writeOrder(list(), "重排轮播顺序失败");
+    }
+
+    private boolean writeOrder(List<Item> ordered, String what) {
+        List<long[]> pairs = new ArrayList<>();
+        for (int i = 0; i < ordered.size(); i++) {
+            pairs.add(new long[]{ordered.get(i).id(), i});
+        }
+        try {
+            repo.updateSorts(pairs);
+            return true;
+        } catch (Exception e) {
+            log.warn("[SITE] {}：{}", what, e.getMessage());
+            return false;
         }
     }
 
@@ -307,5 +207,10 @@ public class CarouselStore {
         out.put("total", count());
         out.put("enabled", listEnabled().size());
         return out;
+    }
+
+    private static Item toItem(SiteCarouselRepository.Row r) {
+        return new Item(r.id(), r.file(), r.mime(), r.width(), r.height(),
+                r.link(), r.caption(), r.sort(), r.enabled(), r.createdAt());
     }
 }

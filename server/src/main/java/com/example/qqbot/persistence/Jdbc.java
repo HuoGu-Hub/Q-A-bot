@@ -78,6 +78,26 @@ public class Jdbc {
         }
     }
 
+    /**
+     * 插入并返回自增主键；取不到返回 -1。
+     *
+     * <p>和 {@link #update} 分开是因为 {@code RETURN_GENERATED_KEYS} 得在
+     * prepareStatement 时就声明，事后没法补。
+     */
+    public long insert(String sql, Object... args) {
+        synchronized (monitor) {
+            try (PreparedStatement ps = conn().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                bind(ps, args);
+                ps.executeUpdate();
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    return rs.next() ? rs.getLong(1) : -1L;
+                }
+            } catch (SQLException e) {
+                throw new PersistenceException("插入失败：" + sql, e);
+            }
+        }
+    }
+
     /** 查多行 */
     public <T> List<T> query(String sql, RowMapper<T> mapper, Object... args) {
         synchronized (monitor) {

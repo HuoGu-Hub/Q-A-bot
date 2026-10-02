@@ -1,5 +1,8 @@
 package com.example.qqbot.site;
 
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.SiteCarouselRepository;
+
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,7 +38,7 @@ class CarouselStoreTest {
         qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
-        store = new CarouselStore(qaStore);
+        store = new CarouselStore(new SiteCarouselRepository(new Jdbc(qaStore)));
         store.init();
     }
 
