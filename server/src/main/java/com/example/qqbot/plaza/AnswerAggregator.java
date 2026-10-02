@@ -1,13 +1,11 @@
 package com.example.qqbot.plaza;
 
 import com.example.qqbot.config.PlazaProperties;
-import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.PlazaQueryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -32,12 +30,12 @@ public class AnswerAggregator {
 
     private static final Logger log = LoggerFactory.getLogger(AnswerAggregator.class);
 
-    private final SqliteConnectionProvider db;
+    private final PlazaQueryRepository queries;
     private final PlazaStore plazaStore;
     private final PlazaProperties props;
 
-    public AnswerAggregator(SqliteConnectionProvider db, PlazaStore plazaStore, PlazaProperties props) {
-        this.db = db;
+    public AnswerAggregator(PlazaQueryRepository queries, PlazaStore plazaStore, PlazaProperties props) {
+        this.queries = queries;
         this.plazaStore = plazaStore;
         this.props = props;
     }
@@ -149,36 +147,22 @@ public class AnswerAggregator {
         if (!props.isEnabled() || !plazaStore.isAvailable()) {
             return out;
         }
-        String sql = "SELECT k.keyword, k.term_en, COUNT(*) c,"
-                + " MAX(s.hit_count) hit"
-                + " FROM qa_keyword k JOIN qa_stat s ON s.id = k.stat_id"
-                // ⚠️ 必须过滤提问：qa_keyword 对【所有】消息都抽了关键词（含群里没 @
-                //    机器人的闲聊），不加这个条件，热词榜会被闲聊灌满 ——
-                //    实测「装备」16 次（真实 6 次）、「欢迎」4 次（真实 0 次）。
-                + " WHERE s.guard_action = 'pass'"
-                + " GROUP BY k.keyword, k.term_en ORDER BY c DESC LIMIT ?";
-        synchronized (db) {
-            try (PreparedStatement ps = db.connection().prepareStatement(sql)) {
-                ps.setInt(1, limit);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        String kw = rs.getString(1);
-                        // 过滤泛词 —— 「武器」这种点进去等于没点
-                        if (com.example.qqbot.qa.KeywordFilter.isTooGeneric(kw)) {
-                            continue;
-                        }
-                        m.put("keyword", kw);
-                        m.put("termEn", rs.getString(2));
-                        m.put("count", rs.getLong(3));
-                        // 有多少条被点赞过（决定公开站会不会有内容）
-                        m.put("votedCount", countVoted(kw));
-                        out.add(m);
-                    }
+        try {
+            for (PlazaQueryRepository.HotKeyword k : queries.hotKeywords(limit)) {
+                // 过滤泛词 —— 「武器」这种点进去等于没点（业务规则，留在这一层）
+                if (com.example.qqbot.qa.KeywordFilter.isTooGeneric(k.keyword())) {
+                    continue;
                 }
-            } catch (Exception e) {
-                log.warn("[PLAZA] 取热门关键词失败：{}", e.getMessage());
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("keyword", k.keyword());
+                m.put("termEn", k.termEn());
+                m.put("count", k.count());
+                // 有多少条被点赞过（决定公开站会不会有内容）
+                m.put("votedCount", countVoted(k.keyword()));
+                out.add(m);
             }
+        } catch (Exception e) {
+            log.warn("[PLAZA] 取热门关键词失败：{}", e.getMessage());
         }
         return out;
     }
@@ -190,50 +174,22 @@ public class AnswerAggregator {
 
     /** 按关键词拉原始问答（只取有原文的） */
     private List<RawAnswer> loadRaw(String keyword) {
-        List<RawAnswer> out = new ArrayList<>();
-        String sql = "SELECT s.id, r.question, r.answer, k.term_en"
-                + " FROM qa_keyword k"
-                + " JOIN qa_stat s ON s.id = k.stat_id"
-                + " LEFT JOIN qa_raw r ON r.id = s.id"
-                + " WHERE k.keyword = ? AND r.answer IS NOT NULL AND r.answer != ''"
-                // 同上：只算真正的提问。fixed_reply 行的 answer 是限流/敏感词话术，
-                // 混进来会把它算成"这个关键词被问过几次"
-                + " AND s.guard_action = 'pass'"
-                + " ORDER BY s.id DESC LIMIT 200";
-        synchronized (db) {
-            try (PreparedStatement ps = db.connection().prepareStatement(sql)) {
-                ps.setString(1, keyword);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        out.add(new RawAnswer(rs.getLong(1), rs.getString(2),
-                                rs.getString(3), rs.getString(4)));
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[PLAZA] 取关键词问答失败：{}", e.getMessage());
-            }
+        try {
+            return queries.rawAnswers(keyword).stream()
+                    .map(r -> new RawAnswer(r.statId(), r.question(), r.answer(), r.termEn()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("[PLAZA] 取关键词问答失败：{}", e.getMessage());
+            return List.of();
         }
-        return out;
     }
 
     /** 某关键词有多少条被点赞过 */
     private long countVoted(String keyword) {
-        String sql = "SELECT COUNT(DISTINCT k.stat_id)"
-                + " FROM qa_keyword k"
-                + " JOIN answer_vote v ON v.stat_id = k.stat_id"
-                + " JOIN qa_stat s ON s.id = k.stat_id"
-                // 只有提问才可能出现在广场上；不过滤的话，闲聊行的关键词
-                // 一旦被投票也会被算进来（drop 行占了 qa_keyword 的多数）
-                + " WHERE k.keyword = ? AND v.vote = 'up' AND s.guard_action = 'pass'";
-        synchronized (db) {
-            try (PreparedStatement ps = db.connection().prepareStatement(sql)) {
-                ps.setString(1, keyword);
-                try (ResultSet rs = ps.executeQuery()) {
-                    return rs.next() ? rs.getLong(1) : 0;
-                }
-            } catch (Exception e) {
-                return 0;
-            }
+        try {
+            return queries.countVoted(keyword);
+        } catch (Exception e) {
+            return 0;
         }
     }
 
