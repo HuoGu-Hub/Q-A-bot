@@ -2,6 +2,7 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -10,11 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -39,7 +36,7 @@ import java.util.List;
  * 之后所有写入变成空操作，只记一条警告。
  */
 @Component
-public class QaStore implements SqliteConnectionProvider, AutoCloseable {
+public class QaStore implements SqliteConnectionProvider {
 
     private static final Logger log = LoggerFactory.getLogger(QaStore.class);
 
@@ -49,52 +46,92 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
     /** 所有数据库访问都串行化 —— SQLite 单写者，而且写操作本来就走同一个队列 */
     private final Object lock = new Object();
 
-    private Connection conn;
+    /** 连接所有权已移交给 persistence.SqliteDatabase —— 它不再是"连接提供者" */
+    private final SqliteDatabase database;
+
+    /**
+     * 只有**本对象自己开的库**（测试路径）才非 null —— 谁开的谁关。
+     *
+     * <p>生产环境的 {@code SqliteDatabase} 是 Spring bean，由它的 {@code @PreDestroy} 关；
+     * 这里再关一次就会把别的模块正在用的共用连接一起关掉。
+     * （之前就是因为忘了区分，测试里连接不关、Windows 上临时目录删不掉，156 个测试报错。）
+     */
+    private final SqliteDatabase ownedDatabase;
     private volatile boolean available;
 
-    public QaStore(QaProperties props, ObjectMapper mapper) {
+    public QaStore(SqliteDatabase database, QaProperties props, ObjectMapper mapper) {
+        this.database = database;
+        this.ownedDatabase = null;
         this.props = props;
         this.mapper = mapper;
+    }
+
+    /**
+     * **仅供测试**：自己开一个库。
+     *
+     * <p>生产环境一律用上面那个构造器注入的 {@code SqliteDatabase} ——
+     * 连接是全局唯一资源，不能谁想开就开（两个连接开同一个文件会在 WAL 共享内存上冲突，
+     * 实测 {@code SQLITE_IOERR_SHMOPEN}）。
+     *
+     * <p>这个方法存在只是为了不让 13 个测试文件为了"连接所有权移交"这件事一起改。
+     * 等最后一个 Store 迁到 {@code Jdbc} 之后，它会和本类的转发实现一起删掉。
+     */
+    public QaStore(QaProperties props, ObjectMapper mapper) {
+        // ⚠️ **不在构造器里打开** —— 与旧行为一致：连接在 init() 时才开。
+        // 之前这里顺手调了 own.init()，结果有个测试（匿名子类、从不调 init）凭空建出
+        // c.sqlite 又没人关，Windows 上临时目录删不掉。
+        SqliteDatabase own = new SqliteDatabase(props);
+        this.database = own;
+        this.ownedDatabase = own;
+        this.props = props;
+        this.mapper = mapper;
+    }
+
+    /**
+     * ⚠️ 纯转发，只为兼容测试。生产环境请直接注入 {@code SqliteDatabase}。
+     */
+    @Override
+    public java.sql.Connection connection() {
+        return database.connection();
+    }
+
+    /** 只反映"问答表能不能用"；连接本身的开关在 SqliteDatabase */
+    @Override
+    public boolean isAvailable() {
+        return available && database.isAvailable();
     }
 
     /** 初始化（public 以便测试显式调用） */
     @PostConstruct
     public void init() {
-        if (!props.isEnabled()) {
-            log.info("[QA] 问答记录已关闭（app.qa.enabled=false）");
+        if (ownedDatabase != null) {
+            // 自己开的库（测试路径）：到这一刻才真正打开，和旧行为一致
+            ownedDatabase.init();
+        }
+        if (!database.isAvailable()) {
+            log.warn("[QA] 数据库不可用，本次运行将不记录问答（不影响正常回答）");
             return;
         }
         try {
-            Path file = Paths.get(props.getDb()).toAbsolutePath().normalize();
-            Files.createDirectories(file.getParent());
-            conn = DriverManager.getConnection("jdbc:sqlite:" + file);
-            try (Statement st = conn.createStatement()) {
-                st.execute("PRAGMA journal_mode=WAL");
-                st.execute("PRAGMA busy_timeout=5000");
-                st.execute("PRAGMA synchronous=NORMAL");
-            }
             migrate();
             available = true;
-            log.info("[QA] 记录库就绪：{}（原文保留 {} 天，0=永不删）",
-                    file, props.getRetentionDays());
+            log.info("[QA] 问答记录就绪（原文保留 {} 天，0=永不删）", props.getRetentionDays());
         } catch (Exception e) {
-            log.warn("[QA] 初始化记录库失败，本次运行将不记录问答（不影响正常回答）：{}", e.getMessage());
+            log.warn("[QA] 初始化记录表失败，本次运行将不记录问答（不影响正常回答）：{}", e.getMessage());
             available = false;
         }
     }
 
-    @PreDestroy
-
-    @Override
+    /**
+     * ⚠️ **不再关连接** —— 连接归 {@code SqliteDatabase} 所有，由它的 {@code @PreDestroy} 统一关。
+     * 这里要是还关一次，会把别的模块正在用的共用连接一起关掉。
+     *
+     * <p>留着这个方法只为兼容测试里的显式调用。
+     */
     public void close() {
-        synchronized (lock) {
-            try {
-                if (conn != null && !conn.isClosed()) {
-                    conn.close();
-                }
-            } catch (SQLException ignored) {
-                // 关不掉就算了
-            }
+        available = false;
+        if (ownedDatabase != null) {
+            ownedDatabase.close();
         }
     }
 
@@ -116,7 +153,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
         // PlazaAdminController 早就在读写它，但建表语句里一直没有这一列 ——
         // 也就是说**全新库**上广场「生成新答案」必然报 no such column。这里补上。
         addColumnIfMissing("qa_stat", "source", "TEXT DEFAULT 'chat'");
-        try (Statement st = conn.createStatement()) {
+        try (Statement st = database.connection().createStatement()) {
             st.execute("PRAGMA user_version = 1");
         }
     }
@@ -124,7 +161,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
     /** 缺列才补 —— SQLite 的 ALTER TABLE ADD COLUMN 没有 IF NOT EXISTS */
     private void addColumnIfMissing(String table, String column, String type) throws SQLException {
         boolean exists = false;
-        try (Statement st = conn.createStatement();
+        try (Statement st = database.connection().createStatement();
              ResultSet rs = st.executeQuery("PRAGMA table_info(" + table + ")")) {
             while (rs.next()) {
                 if (column.equalsIgnoreCase(rs.getString("name"))) {
@@ -136,14 +173,14 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
         if (exists) {
             return;
         }
-        try (Statement st = conn.createStatement()) {
+        try (Statement st = database.connection().createStatement()) {
             st.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
             log.info("[QA] 数据库迁移：{} 表补上 {} 列", table, column);
         }
     }
 
     private void createTables() throws SQLException {
-        try (Statement st = conn.createStatement()) {
+        try (Statement st = database.connection().createStatement()) {
             st.execute("""
                     CREATE TABLE IF NOT EXISTS qa_stat (
                       id           INTEGER PRIMARY KEY,
@@ -207,11 +244,6 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
         }
     }
 
-    @Override
-    public boolean isAvailable() {
-        return available;
-    }
-
     /** 批量落盘，一个事务。调用方是单线程的 QaRecorder */
     public void insertBatch(List<QaRecord> records) {
         if (!available || records == null || records.isEmpty()) {
@@ -219,8 +251,8 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
         }
         synchronized (lock) {
             try {
-                conn.setAutoCommit(false);
-                try (PreparedStatement stat = conn.prepareStatement("""
+                database.connection().setAutoCommit(false);
+                try (PreparedStatement stat = database.connection().prepareStatement("""
                              INSERT INTO qa_stat (ts, group_id, user_id, message_id, image_count,
                                kb_enabled, hit_count, top_score, best_cosine, best_cosine_raw,
                                sources, retrieved,
@@ -228,9 +260,9 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
                                retrieve_ms, llm_ms, total_ms, model)
                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         Statement.RETURN_GENERATED_KEYS);
-                     PreparedStatement raw = conn.prepareStatement(
+                     PreparedStatement raw = database.connection().prepareStatement(
                              "INSERT INTO qa_raw (id, question, quote_text, answer) VALUES (?,?,?,?)");
-                     PreparedStatement kw = conn.prepareStatement(
+                     PreparedStatement kw = database.connection().prepareStatement(
                              "INSERT INTO qa_keyword (stat_id, keyword, term_en, in_kb) VALUES (?,?,?,?)")) {
 
                     for (QaRecord r : records) {
@@ -277,12 +309,12 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
                         }
                     }
                     kw.executeBatch();
-                    conn.commit();
+                    database.connection().commit();
                 } catch (SQLException e) {
-                    conn.rollback();
+                    database.connection().rollback();
                     throw e;
                 } finally {
-                    conn.setAutoCommit(true);
+                    database.connection().setAutoCommit(true);
                 }
             } catch (Exception e) {
                 log.warn("[QA] 写入记录失败（丢弃本批 {} 条，不影响回答）：{}", records.size(), e.getMessage());
@@ -305,7 +337,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
         synchronized (lock) {
             try {
                 int count;
-                try (PreparedStatement ps = conn.prepareStatement(
+                try (PreparedStatement ps = database.connection().prepareStatement(
                         "SELECT COUNT(*) FROM qa_raw WHERE id IN (SELECT id FROM qa_stat WHERE ts < ?)")) {
                     ps.setString(1, cutoff);
                     try (ResultSet rs = ps.executeQuery()) {
@@ -316,7 +348,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
                 if (dryRun || count == 0) {
                     return count;
                 }
-                try (PreparedStatement ps = conn.prepareStatement(
+                try (PreparedStatement ps = database.connection().prepareStatement(
                         "DELETE FROM qa_raw WHERE id IN (SELECT id FROM qa_stat WHERE ts < ?)")) {
                     ps.setString(1, cutoff);
                     int deleted = ps.executeUpdate();
@@ -343,7 +375,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
             return false;
         }
         synchronized (lock) {
-            try (PreparedStatement ps = conn.prepareStatement(
+            try (PreparedStatement ps = database.connection().prepareStatement(
                     "UPDATE qa_stat SET verdict = ?, verdict_note = ?, verdict_by = ?, verdict_at = ?"
                             + " WHERE id = ?")) {
                 ps.setString(1, verdict);
@@ -370,7 +402,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
             return false;
         }
         synchronized (lock) {
-            try (PreparedStatement ps = conn.prepareStatement(
+            try (PreparedStatement ps = database.connection().prepareStatement(
                     "UPDATE qa_stat SET verdict = 'follow_up', verdict_by = 'auto', verdict_at = ?"
                             + " WHERE id = ? AND (verdict IS NULL OR verdict = 'unknown')")) {
                 ps.setString(1, Instant.now().toString());
@@ -388,7 +420,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
             return;
         }
         synchronized (lock) {
-            try (PreparedStatement ps = conn.prepareStatement(
+            try (PreparedStatement ps = database.connection().prepareStatement(
                     "INSERT INTO admin_visit (ts, path, ip_hash, ua, action) VALUES (?,?,?,?,?)")) {
                 ps.setString(1, Instant.now().toString());
                 ps.setString(2, path);
@@ -408,7 +440,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
             return 0;
         }
         synchronized (lock) {
-            try (Statement st = conn.createStatement();
+            try (Statement st = database.connection().createStatement();
                  ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM qa_stat")) {
                 rs.next();
                 return rs.getLong(1);
@@ -424,7 +456,7 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
             return 0;
         }
         synchronized (lock) {
-            try (Statement st = conn.createStatement();
+            try (Statement st = database.connection().createStatement();
                  ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM qa_raw")) {
                 rs.next();
                 return rs.getLong(1);
@@ -432,12 +464,6 @@ public class QaStore implements SqliteConnectionProvider, AutoCloseable {
                 return 0;
             }
         }
-    }
-
-    /** 仅供后续阶段（S2 报表 / S3 后台）使用 */
-    @Override
-    public Connection connection() {
-        return conn;
     }
 
     public ObjectMapper mapper() {

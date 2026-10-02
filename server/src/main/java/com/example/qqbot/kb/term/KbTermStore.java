@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -56,7 +55,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * 库不可用时整体降级为「没有术语表」（B 路退化成只认英文词），**绝不让机器人挂掉**。
  */
 @Component
-@DependsOn("qaStore")
 public class KbTermStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbTermStore.class);

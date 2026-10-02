@@ -6,7 +6,6 @@ import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import java.nio.ByteBuffer;
@@ -42,7 +41,6 @@ import java.util.Map;
  * SQLite 文件会让 WAL 的共享内存段冲突（实测报 {@code SQLITE_IOERR_SHMOPEN}）。
  */
 @Component
-@DependsOn("qaStore")
 public class KbBlockStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbBlockStore.class);

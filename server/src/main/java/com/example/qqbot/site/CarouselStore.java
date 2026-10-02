@@ -4,7 +4,6 @@ import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -28,7 +27,6 @@ import java.util.Map;
  * **绝不让公开站因为这块挂掉**。
  */
 @Component
-@DependsOn("qaStore")
 public class CarouselStore {
 
     private static final Logger log = LoggerFactory.getLogger(CarouselStore.class);

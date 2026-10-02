@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -32,7 +31,6 @@ import java.util.Map;
  * 这正是配置界面想要的。
  */
 @Component
-@DependsOn("qaStore")
 public class CommandStore {
 
     private static final Logger log = LoggerFactory.getLogger(CommandStore.class);

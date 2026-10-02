@@ -5,7 +5,6 @@ import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -34,12 +33,12 @@ import java.util.Map;
  * <p>复用**共用**的 SQLite 连接（和 CommandStore 一样）—— 多个连接同时开同一个
  * SQLite 文件会触发 WAL 共享内存冲突。
  *
- * <p>⚠️ {@code @DependsOn("qaStore")} 是**必须**的：@PostConstruct 的执行顺序
- * 在 Spring 里不保证，曾出现过 PlazaStore 先于 QaStore 初始化、
- * 导致「问答库不可用」而整个广场功能被关闭的情况。
+ * <p>⚠️ 这里原先有 {@code @DependsOn("qaStore")} 来保证"连上库"先于建表。
+ * 连接所有权移交到 {@code persistence.SqliteDatabase} 之后**它不再需要了** ——
+ * 构造器注入本身就保证了依赖先初始化完（含 {@code @PostConstruct}）。
+ * 留着它才是风险：字符串形式的运行期耦合，改个类名就静默失效。
  */
 @Component
-@DependsOn("qaStore")
 public class PlazaStore {
 
     private static final Logger log = LoggerFactory.getLogger(PlazaStore.class);

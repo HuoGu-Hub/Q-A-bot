@@ -4,7 +4,6 @@ import com.example.qqbot.persistence.SqliteConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -30,7 +29,6 @@ import java.util.Map;
  * 页面在 wiki 上被删掉时也能把对应块一起清掉。
  */
 @Component
-@DependsOn("qaStore")
 public class KbWikiPageStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbWikiPageStore.class);
