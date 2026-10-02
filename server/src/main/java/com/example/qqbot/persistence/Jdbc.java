@@ -117,6 +117,50 @@ public class Jdbc {
     }
 
     /**
+     * 批量执行同一条 SQL（**一个事务**）。
+     *
+     * <p>为什么要有它：批量 upsert 必须整体成功或整体回滚 ——
+     * 一半写进去的映射表比没写更糟（谁也说不清哪些生效了）。
+     *
+     * @param rows 每行的参数，顺序与 SQL 里的 {@code ?} 对应
+     * @return 提交的行数；任何一行失败则整体回滚并抛 {@link PersistenceException}
+     */
+    public int batch(String sql, List<Object[]> rows) {
+        synchronized (monitor) {
+            Connection c = conn();
+            boolean oldAutoCommit;
+            try {
+                oldAutoCommit = c.getAutoCommit();
+                c.setAutoCommit(false);
+                int n = 0;
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    for (Object[] args : rows) {
+                        bind(ps, args);
+                        ps.addBatch();
+                        n++;
+                    }
+                    ps.executeBatch();
+                }
+                c.commit();
+                return n;
+            } catch (SQLException e) {
+                try {
+                    c.rollback();
+                } catch (SQLException ignored) {
+                    // 回滚也失败就只能记着原异常
+                }
+                throw new PersistenceException("批量执行失败：" + sql, e);
+            } finally {
+                try {
+                    c.setAutoCommit(true);
+                } catch (SQLException ignored) {
+                    // 恢复自动提交失败不影响已提交的结果
+                }
+            }
+        }
+    }
+
+    /**
      * 需要"读-改-写"原子性时把整段包起来。
      *
      * <p>块内再调用 {@link #update}/{@link #query} 不会死锁（同一把可重入锁）。
