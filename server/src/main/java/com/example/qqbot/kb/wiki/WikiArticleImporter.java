@@ -6,6 +6,7 @@ import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.persistence.KbWikiPageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -227,7 +228,7 @@ public class WikiArticleImporter {
     public int purge() {
         KbProperties.WikiImport cfg = props.getWikiImport();
         int n = 0;
-        for (KbWikiPageStore.PageState p : store.pages()) {
+        for (KbWikiPageRepository.Page p : store.pages()) {
             String id = p.blockId();
             if (id == null || id.isBlank()) {
                 continue;

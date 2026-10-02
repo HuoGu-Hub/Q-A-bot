@@ -9,6 +9,8 @@ import com.example.qqbot.kb.RerankClient;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbWikiPageRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -95,7 +97,7 @@ class WikiArticleImporterE2ETest {
         kb.getWikiImport().setCategories(List.of("Gameplay", "Bosses"));
         kb.getWikiImport().setMaxPagesPerSource(30);
 
-        KbWikiPageStore pageStore = new KbWikiPageStore(qaStore);
+        KbWikiPageStore pageStore = new KbWikiPageStore(new KbWikiPageRepository(new Jdbc(qaStore)));
         pageStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
         // 词条表要在导入之前就绪：导入器写完块会调 reconcile，让新块**立刻**对 B 路可见
