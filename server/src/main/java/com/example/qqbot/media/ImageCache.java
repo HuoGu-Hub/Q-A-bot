@@ -1,6 +1,5 @@
 package com.example.qqbot.media;
 
-import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.PathGuard;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -54,7 +53,7 @@ public class ImageCache {
     private static final String PART_SUFFIX = ".part";
 
     private final MediaStorageGuard storage;
-    private final MediaProperties props;
+    private final MediaPolicy props;
     private final PathGuard pathGuard;
 
     /** 缓存目录当前总字节数的近似值：启动时扫描一次，之后增量维护 */
@@ -64,7 +63,7 @@ public class ImageCache {
     public record Cached(Path path, String mimeType, long size) {
     }
 
-    public ImageCache(MediaStorageGuard storage, MediaProperties props, PathGuard pathGuard) {
+    public ImageCache(MediaStorageGuard storage, MediaPolicy props, PathGuard pathGuard) {
         this.storage = storage;
         this.props = props;
         this.pathGuard = pathGuard;

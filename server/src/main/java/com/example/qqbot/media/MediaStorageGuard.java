@@ -1,6 +1,5 @@
 package com.example.qqbot.media;
 
-import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.PathGuard;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -40,13 +39,13 @@ public class MediaStorageGuard {
     /** 缓存目录名：用户发来的图片（inbound）。生成/转发产物以后放 outbound */
     public static final String INBOUND_DIR_NAME = "inbound";
 
-    private final MediaProperties props;
+    private final MediaPolicy props;
     private final PathGuard pathGuard;
 
     private Path tmpDir;
     private Path kbDir;
 
-    public MediaStorageGuard(MediaProperties props, PathGuard pathGuard) {
+    public MediaStorageGuard(MediaPolicy props, PathGuard pathGuard) {
         this.props = props;
         this.pathGuard = pathGuard;
     }

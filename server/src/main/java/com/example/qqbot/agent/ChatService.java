@@ -1,8 +1,8 @@
 package com.example.qqbot.agent;
 
+import com.example.qqbot.media.MediaPolicy;
 import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.guard.ContentGate;
-import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.llm.LlmRouter;
@@ -33,12 +33,12 @@ public class ChatService {
     private final LlmRouter llmRouter;
     private final ImageFetcher imageFetcher;
     private final ContentGate contentGate;
-    private final MediaProperties mediaProperties;
+    private final MediaPolicy mediaProperties;
     private final KbRetriever kbRetriever;
     private final KbPolicy kbProperties;
 
     public ChatService(LlmRouter llmRouter, ImageFetcher imageFetcher, ContentGate contentGate,
-                       MediaProperties mediaProperties, KbRetriever kbRetriever, KbPolicy kbProperties) {
+                       MediaPolicy mediaProperties, KbRetriever kbRetriever, KbPolicy kbProperties) {
         this.llmRouter = llmRouter;
         this.imageFetcher = imageFetcher;
         this.contentGate = contentGate;

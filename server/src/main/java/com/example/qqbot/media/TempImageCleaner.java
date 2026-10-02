@@ -1,6 +1,5 @@
 package com.example.qqbot.media;
 
-import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.PathGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,12 +40,12 @@ public class TempImageCleaner {
 
     private static final Logger log = LoggerFactory.getLogger(TempImageCleaner.class);
 
-    private final MediaProperties props;
+    private final MediaPolicy props;
     private final MediaStorageGuard storage;
     private final PathGuard pathGuard;
     private final ImageCache imageCache;
 
-    public TempImageCleaner(MediaProperties props, MediaStorageGuard storage, PathGuard pathGuard,
+    public TempImageCleaner(MediaPolicy props, MediaStorageGuard storage, PathGuard pathGuard,
                             ImageCache imageCache) {
         this.props = props;
         this.storage = storage;
@@ -86,7 +85,7 @@ public class TempImageCleaner {
 
     /** 执行一轮清理。返回本轮统计，供日志/测试/将来的指标使用。 */
     public CleanupReport cleanup() {
-        MediaProperties.TempImages cfg = props.getTempImages();
+        TempImages cfg = props.getTempImages();
         if (!cfg.isEnabled()) {
             log.debug("[MEDIA] 临时图片清理已关闭，跳过");
             return CleanupReport.empty();
