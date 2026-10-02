@@ -1,0 +1,307 @@
+{
+	"$schema": "https://enshrouded.wiki.gg/extensions/DataMaps/schemas/v17.3.json",
+	"$fragment": true,
+	"groups": {
+		"Ancient_Spire": {
+			"name": "Ancient Spire",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Ancient Spire.png",
+			"isCollectible": true
+		},
+		"Ancient_Vault": {
+			"name": "Ancient Vault",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Ancient Vault.png",
+			"isCollectible": true
+		},
+		"Ancient_Obelisk": {
+			"name": "Ancient Obelisk",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Ancient Obelisk.png",
+			"isCollectible": true
+		},
+		"Elixir_Well": {
+			"name": "Elixir Well",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Elixir Well.png",
+			"isCollectible": true
+		},
+		"Shroud_Root": {
+			"name": "Shroud Root",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Shroud Root.png",
+			"isCollectible": true
+		},
+		"Flame_Shrine": {
+			"name": "Flame Shrine",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Flame Shrine.png",
+			"isCollectible": true
+		},
+		"Night_Sanctum": {
+			"name": "Night Sanctum",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Night Sanctum.png",
+			"isCollectible": true
+		},
+		"Sun_Temple": {
+			"name": "Sun Temple",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Sun Temple.png",
+			"isCollectible": true
+		},
+		"Balefire": {
+			"name": "Balefire",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Balefire.png",
+			"isCollectible": true
+		},
+		"Hollow_Halls": {
+			"name": "Hollow Halls",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Hollow Halls.png",
+			"isCollectible": true
+		},
+		"Gem_Forge": {
+			"name": "Gem Forge",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Gem_Forge.png",
+			"isCollectible": false
+		},
+		"Village": {
+			"name": "Village",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Village.png",
+			"isCollectible": false
+		},
+		"Camp": {
+			"name": "Camp",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Camp.png",
+			"isCollectible": false
+		},
+		"Farm": {
+			"name": "Farm",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Farm.png",
+			"isCollectible": false
+		},
+		"Mine": {
+			"name": "Mine",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Mine.png",
+			"isCollectible": false
+		},
+		"Enemy_Camp": {
+			"name": "Enemy Camp",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Enemy Camp.png",
+			"isCollectible": false
+		},
+		"Hidden_Temple": {
+			"name": "Misc. Dungeon",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Sun Temple.png",
+			"isCollectible": false
+		},
+		"Tomb": {
+			"name": "Hidden Tomb",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Tomb.png",
+			"isCollectible": false
+		},
+		"Shroud_Lair": {
+			"name": "Shroud Lair",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Shroud Lair.png",
+			"isCollectible": false
+		},
+		"Cave_Passage": {
+			"name": "Cave Passage",
+			"size": [ 48, 48 ],
+			"static": true,
+			"icon": "Cave Passage.png",
+			"isCollectible": false
+		},
+		"LoreGeneral": {
+			"name": "Lore: General",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreAncientsandtheFlame": {
+			"name": "Lore: Ancients and the Flame",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreTheShroudElixirandElixirWell": {
+			"name": "Lore: The Shroud, Elixir, and Elixir Well",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreScavengers": {
+			"name": "Lore: Scavengers",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreVukahandWildlife": {
+			"name": "Lore: Vukah and Wildlife",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreNoblesandHistory": {
+			"name": "Lore: Nobles and History",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreRevelwood": {
+			"name": "Lore: Revelwood",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreNomadHighlands": {
+			"name": "Lore: Nomad Highlands",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreKindlewastes": {
+			"name": "Lore: Kindlewastes",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreHollow": {
+			"name": "Lore: Hollow",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreAlbaneveSummits": {
+			"name": "Lore: Albaneve Summits",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreVeilwaterBasin": {
+			"name": "Lore: Veilwater Basin",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"LoreDrak": {
+			"name": "Lore: Drak",
+			"size": [ 25, 25 ],
+			"icon": "lore.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"QuestLocation": {
+			"name": "Quest Location",
+			"size": [ 25, 25 ],
+			"icon": "Quest marker.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"Fossil": {
+			"name": "Fossil",
+			"size": [ 25, 25 ],
+			"icon": "Big Ammonite.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"Music_Sheet": {
+			"name": "Music Sheet",
+			"size": [ 25, 25 ],
+			"icon": "Music Sheet.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"QueenPikemeadStatuePiece": {
+			"name": "Queen Pikemead Statue Piece",
+			"size": [ 25, 25 ],
+			"icon": "Queen Pikemead Statue Piece (Base).png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"AlchemistWallHanging": {
+			"name": "Alchemist's Wall Hanging",
+			"size": [ 25, 25 ],
+			"icon": "Ripped Alchemist's Wall Hanging (Left).png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"CyclopsSkeleton": {
+			"name": "Cyclops Skeleton",
+			"size": [ 25, 25 ],
+			"icon": "Cyclops Torso.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"WallTapestry": {
+			"name": "Wall Tapestry",
+			"size": [ 25, 25 ],
+			"icon": "Wall Tapestry (Left).png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"FlameMosaic": {
+			"name": "Flame Mosaic",
+			"size": [ 25, 25 ],
+			"icon": "Flame Mosaic Piece I.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"DragonsMapPiece": {
+			"name": "Dragon's Map Piece",
+			"size": [ 25, 25 ],
+			"icon": "Ony's Map Piece.png",
+			"isDefault": false,
+			"isCollectible": true
+		},
+		"DrakRelief": {
+			"name": "Drak Relief",
+			"size": [ 25, 25 ],
+			"icon": "Drak Relief I.png",
+			"isDefault": false,
+			"isCollectible": true
+		}
+	}
+}

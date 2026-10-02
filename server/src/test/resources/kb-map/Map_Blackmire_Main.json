@@ -1,0 +1,194 @@
+{
+	"$schema": "https://enshrouded.wiki.gg/extensions/DataMaps/schemas/v17.1.json",
+	"crs": {
+		"order": "xy",
+		"topLeft": [ 0, 0 ],
+		"bottomRight": [ 1485, 1267 ]
+	},
+	"settings": {
+		"backdropColor": "#2e2e2c",
+		"enableSearch": "tabberWide",
+		"interactionModel": "sleep",
+		"zoom": {
+			"min": 2.5,
+			"max": 6.5
+		}
+	},
+	"background": "Map-Blackmire.jpg",
+	"groups": {
+		"Ancient_Spire": {
+			"name": "Ancient Spire",
+			"size": [ 55, 55 ],
+			"icon": "Ancient Spire.png",
+			"isCollectible": true
+		},
+		"Ancient_Vault": {
+			"name": "Ancient Vault",
+			"size": [ 55, 55 ],
+			"icon": "Ancient Vault.png"
+		},
+		"Fossil": {
+			"name": "Fossil",
+			"size": [ 55, 55 ],
+			"icon": "Big Ammonite.png",
+			"isCollectible": true
+		},
+		"Hollow_Halls": {
+			"name": "Hollow Halls",
+			"size": [ 55, 55 ],
+			"icon": "Hollow Halls.png"
+		},
+		"Sun_Temple": {
+			"name": "Sun Temple",
+			"size": [ 55, 55 ],
+			"icon": "Sun Temple.png",
+			"isCollectible": true
+		},
+		"Elixir_Well": {
+			"name": "Elixir Well",
+			"size": [ 55, 55 ],
+			"icon": "Elixir Well.png",
+			"isCollectible": true
+		},
+		"Cave_Passage": {
+			"name": "Cave Passage",
+			"size": [ 55, 55 ],
+			"icon": "Cave Passage.png"
+		},
+		"Flame_Shrine": {
+			"name": "Flame Shrine",
+			"size": [ 55, 55 ],
+			"icon": "Flame Shrine.png",
+			"isCollectible": true
+		},
+		"Ancient_Obelisk": {
+			"name": "Ancient Obelisk",
+			"size": [ 55, 55 ],
+			"icon": "Ancient Obelisk.png",
+			"isCollectible": true
+		},
+		"Shroud_Root": {
+			"name": "Shroud Root",
+			"size": [ 55, 55 ],
+			"icon": "Shroud Root.png",
+			"isCollectible": true
+		},
+		"Village": {
+			"name": "Village",
+			"size": [ 55, 55 ],
+			"icon": "Village.png"
+		},
+		"Farm": {
+			"name": "Farm",
+			"size": [ 55, 55 ],
+			"icon": "Farm.png"
+		},
+		"Mine": {
+			"name": "Mine",
+			"size": [ 55, 55 ],
+			"icon": "Mine.png"
+		},
+		"Camp": {
+			"name": "Camp",
+			"size": [ 55, 55 ],
+			"icon": "Camp.png"
+		},
+		"Enemy_Camp": {
+			"name": "Enemy Camp",
+			"size": [ 55, 55 ],
+			"icon": "Enemy Camp.png"
+		},
+		"Catacomb": {
+			"name": "Catacomb",
+			"size": [ 55, 55 ],
+			"icon": "Sun Temple.png"
+		},
+		"Tomb": {
+			"name": "Tomb",
+			"size": [ 55, 55 ],
+			"icon": "Tomb.png"
+		}
+	},
+	"markers": {
+		"Ancient_Spire": [
+			{
+				"x": 932, "y": 665, "id": "AncientSpire-Blackmire",
+				"name": "Ancient Spire - Blackmire",
+				"description": "The Ancient Spire in the Blackmire.",
+				"article": "Ancient Spire"
+			}
+		],
+		"Ancient_Vault": [
+			{
+				"x": 986, "y": 400, "id": "SunkenAncientCity",
+				"name": "Sunken Ancient City",
+				"description": "The Ancient Sunken City where the Bard is located.",
+				"article": "Ancient Vault"
+			}
+		],
+		"Ancient_Obelisk": [
+			{
+				"x": 738, "y": 713, "id": "ObeliskBlackmire",
+				"name": "Snapjaw Tar Pits",
+				"description": "Ancient Obelisk",
+				"article": "Ancient Obelisk"
+			}
+		],
+		"Shroud_Root": [
+			{
+				"x": 1117, "y": 906, "id": "ShroudRootBlackmire1",
+				"name": "Shroud Root",
+				"description": "A Shroud Root. Guarded by a [[Fell Thunderbrute]].",
+				"article": "Shroud Root"
+			},
+			{
+				"x": 631, "y": 1036, "id": "ShroudRootBlackmire2",
+				"name": "Shroud Root",
+				"description": "A Shroud Root",
+				"article": "Shroud Root"
+			},
+			{
+				"x": 406, "y": 497, "id": "ShroudRootBlackmire3",
+				"name": "Shroud Root",
+				"description": "A Shroud Root",
+				"article": "Shroud Root"
+			}
+		],
+		"Village": [
+			{
+				"x": 1172, "y": 530, "id": "HermitCamp",
+				"name": "Hermit Camp",
+				"description": "Abandoned Camp.",
+				"article": "Revelwood"
+			}
+		],
+		"Enemy_Camp": [
+			{
+				"x": 325, "y": 523, "id": "TreetopVukahSettlement",
+				"name": "Treetop Vukah Settlement",
+				"description": "Settlement inhabited by [[:c:Vukah|Vukah]]",
+				"article": ":c:Vukah"
+			}
+		],
+		"Sun_Temple": [
+			{
+				"x": 528, "y": 442, "id": "HiddenTemple1",
+				"name": "Hidden Temple",
+				"description": "Hidden Temple",
+				"article": "Revelwood"
+			},
+			{
+				"x": 857, "y": 821, "id": "HiddenTemple2",
+				"name": "Hidden Temple",
+				"description": "Hidden Temple",
+				"article": "Revelwood"
+			},
+			{
+				"x": 352, "y": 720, "id": "HiddenTemple3",
+				"name": "Hidden Temple",
+				"description": "Hidden Temple",
+				"article": "Revelwood"
+			}
+		]
+	}
+}

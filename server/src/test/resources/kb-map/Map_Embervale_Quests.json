@@ -1,0 +1,31 @@
+{
+	"$schema": "https://enshrouded.wiki.gg/extensions/DataMaps/schemas/v17.3.json",
+	"crs": {
+		"order": "xy",
+		"topLeft": [ 0, 10240 ],
+		"bottomRight": [ 10240, 0 ]
+	},
+	"settings": {
+		"backdropColor": "#2e2e2c",
+		"enableSearch": "tabberWide",
+		"interactionModel": "sleep",
+		"zoom": {
+			"min": 5,
+			"max": 8
+		}
+	},
+	"markers": {
+		"QuestLocation": [
+			{
+				"x": 3724, "y": 1415, "id": "ClaimASpotForYourBase",
+				"name": "Claim A Spot For Your Base",
+				"description": "Quest location for the Flame's quest, Claim A Spot For Your Base",
+				"article": "Quests/Claim A Spot For Your Base"
+			}
+		]
+	},
+	"include": [
+		"Map:Embervale/Background",
+		"Map:Embervale/Groups"
+	]
+}

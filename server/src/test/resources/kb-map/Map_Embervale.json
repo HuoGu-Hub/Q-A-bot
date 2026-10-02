@@ -1,0 +1,25 @@
+{
+	"$schema": "https://enshrouded.wiki.gg/extensions/DataMaps/schemas/v17.3.json",
+	"crs": {
+		"order": "xy",
+		"topLeft": [ 0, 10240 ],
+		"bottomRight": [ 10240, 0 ]
+	},
+	"settings": {
+		"backdropColor": "#2e2e2c",
+		"enableSearch": true,
+		"interactionModel": "sleep",
+		"zoom": {
+			"min": 5,
+			"max": 8
+		}
+	},
+	"include": [
+		"Map:Embervale/Background",
+		"Map:Embervale/Groups",
+		"Map:Embervale/Main",
+		"Map:Embervale/Lore",
+		"Map:Embervale/Quests",
+		"Map:Embervale/Collectibles2"
+	]
+}

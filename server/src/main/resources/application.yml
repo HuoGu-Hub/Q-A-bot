@@ -469,6 +469,23 @@ app:
       min-score: 0.02
       timeout-seconds: 20
 
+    # wiki 地图数据同步（Interactive Data Maps）—— 未来地图查看器的地基，
+    # 同时也是**语料扩维的来源**（地点/区域/NPC 就藏在这些 marker 里）。
+    # 数据在 MediaWiki 的 Map 命名空间（id 2900），实测 32 页；
+    # Embervale 一张图约 1,064 个 marker，每个都带 name/description/article/x/y（100% 覆盖）。
+    map-sync:
+      enabled: true
+      api-base: https://enshrouded.wiki.gg/api.php
+      namespace: 2900
+      # 一次请求取几页。MediaWiki titles 上限 50，但单页可达 100KB（Embervale/Main 实测 100,630 字符），
+      # 取 8 是"少往返"与"单次响应别太大"的折中
+      batch-size: 8
+      user-agent: "qqbot-personal/0.1 (Enshrouded map data sync; contact via group)"
+      timeout-seconds: 30
+      max-pages: 500
+      # 启动时自动同步一次。**默认关** —— 这是运维动作，不该每次重启都跑
+      sync-on-start: false
+
   # ============================ 大模型 ============================
   llm:
     default-provider: opencode-go
