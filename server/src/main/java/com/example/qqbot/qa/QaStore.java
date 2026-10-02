@@ -1,23 +1,16 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
-import com.example.qqbot.persistence.SqliteConnectionProvider;
-import com.example.qqbot.persistence.SqliteDatabase;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -34,86 +27,52 @@ import java.util.List;
  *
  * <p><b>本类绝不让机器人挂掉</b>：初始化失败就置为不可用，
  * 之后所有写入变成空操作，只记一条警告。
+ *
+ * <h2>本类只剩「语义」</h2>
+ * SQL 与 {@code java.sql} 全部搬进了 {@link QaStoreRepository}。这里管的是：
+ * {@link QaRecord} 怎么摊成三层行形状、保留天数的判定、UA 截断、以及降级策略。
+ *
+ * <p>⚠️ 它**不再是连接提供者**。原先它 {@code implements SqliteConnectionProvider}
+ * 只是一个过渡：连接所有权移交给 {@code persistence.SqliteDatabase} 之后，
+ * 那个转发实现和"自己开库"的测试构造器都已经删掉 —— 后者是生产代码里的测试后门，
+ * 而且 {@code connection()} 的返回类型就是 {@code java.sql.Connection}，
+ * 留着它「持久化层之外不得出现 java.sql」这条护栏就永远转不了正。
  */
 @Component
-public class QaStore implements SqliteConnectionProvider {
+public class QaStore {
 
     private static final Logger log = LoggerFactory.getLogger(QaStore.class);
 
+    /** UA 入库前截断到多少字（防一条超长 UA 撑爆表） */
+    private static final int MAX_UA_LEN = 200;
+
+    /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
+    private final QaStoreRepository repo;
     private final QaProperties props;
     private final ObjectMapper mapper;
 
-    /** 所有数据库访问都串行化 —— SQLite 单写者，而且写操作本来就走同一个队列 */
-    private final Object lock = new Object();
-
-    /** 连接所有权已移交给 persistence.SqliteDatabase —— 它不再是"连接提供者" */
-    private final SqliteDatabase database;
-
-    /**
-     * 只有**本对象自己开的库**（测试路径）才非 null —— 谁开的谁关。
-     *
-     * <p>生产环境的 {@code SqliteDatabase} 是 Spring bean，由它的 {@code @PreDestroy} 关；
-     * 这里再关一次就会把别的模块正在用的共用连接一起关掉。
-     * （之前就是因为忘了区分，测试里连接不关、Windows 上临时目录删不掉，156 个测试报错。）
-     */
-    private final SqliteDatabase ownedDatabase;
     private volatile boolean available;
 
-    public QaStore(SqliteDatabase database, QaProperties props, ObjectMapper mapper) {
-        this.database = database;
-        this.ownedDatabase = null;
+    public QaStore(QaStoreRepository repo, QaProperties props, ObjectMapper mapper) {
+        this.repo = repo;
         this.props = props;
         this.mapper = mapper;
     }
 
-    /**
-     * **仅供测试**：自己开一个库。
-     *
-     * <p>生产环境一律用上面那个构造器注入的 {@code SqliteDatabase} ——
-     * 连接是全局唯一资源，不能谁想开就开（两个连接开同一个文件会在 WAL 共享内存上冲突，
-     * 实测 {@code SQLITE_IOERR_SHMOPEN}）。
-     *
-     * <p>这个方法存在只是为了不让 13 个测试文件为了"连接所有权移交"这件事一起改。
-     * 等最后一个 Store 迁到 {@code Jdbc} 之后，它会和本类的转发实现一起删掉。
-     */
-    public QaStore(QaProperties props, ObjectMapper mapper) {
-        // ⚠️ **不在构造器里打开** —— 与旧行为一致：连接在 init() 时才开。
-        // 之前这里顺手调了 own.init()，结果有个测试（匿名子类、从不调 init）凭空建出
-        // c.sqlite 又没人关，Windows 上临时目录删不掉。
-        SqliteDatabase own = new SqliteDatabase(props);
-        this.database = own;
-        this.ownedDatabase = own;
-        this.props = props;
-        this.mapper = mapper;
-    }
-
-    /**
-     * ⚠️ 纯转发，只为兼容测试。生产环境请直接注入 {@code SqliteDatabase}。
-     */
-    @Override
-    public java.sql.Connection connection() {
-        return database.connection();
-    }
-
-    /** 只反映"问答表能不能用"；连接本身的开关在 SqliteDatabase */
-    @Override
+    /** 只反映"问答表能不能用"；连接本身的开关在 {@code SqliteDatabase} */
     public boolean isAvailable() {
-        return available && database.isAvailable();
+        return available && repo.isAvailable();
     }
 
     /** 初始化（public 以便测试显式调用） */
     @PostConstruct
     public void init() {
-        if (ownedDatabase != null) {
-            // 自己开的库（测试路径）：到这一刻才真正打开，和旧行为一致
-            ownedDatabase.init();
-        }
-        if (!database.isAvailable()) {
+        if (!repo.isAvailable()) {
             log.warn("[QA] 数据库不可用，本次运行将不记录问答（不影响正常回答）");
             return;
         }
         try {
-            migrate();
+            repo.initSchema();
             available = true;
             log.info("[QA] 问答记录就绪（原文保留 {} 天，0=永不删）", props.getRetentionDays());
         } catch (Exception e) {
@@ -123,203 +82,51 @@ public class QaStore implements SqliteConnectionProvider {
     }
 
     /**
-     * ⚠️ **不再关连接** —— 连接归 {@code SqliteDatabase} 所有，由它的 {@code @PreDestroy} 统一关。
-     * 这里要是还关一次，会把别的模块正在用的共用连接一起关掉。
-     *
-     * <p>留着这个方法只为兼容测试里的显式调用。
+     * 只关"记录功能"，**不关连接** —— 连接归 {@code SqliteDatabase} 所有，
+     * 由它的 {@code @PreDestroy} 统一关。这里要是还关一次，
+     * 会把别的模块正在用的共用连接一起关掉。
      */
     public void close() {
         available = false;
-        if (ownedDatabase != null) {
-            ownedDatabase.close();
-        }
     }
 
-    /**
-     * 建表 + **幂等补列**。
-     *
-     * <p>为什么需要它：{@code CREATE TABLE IF NOT EXISTS} 对已存在的表**什么都不做**，
-     * 所以给表加一列时老库不会自动跟上 —— 而这张库是要长期保留统计数据的，不能靠"删库重建"。
-     *
-     * <p>做法：建表（全新库直接建最新结构）之后，逐列检查 {@code PRAGMA table_info}，
-     * 缺哪列补哪列。幂等，重复执行无副作用。
-     */
-    private void migrate() throws SQLException {
-        createTables();
-        addColumnIfMissing("qa_stat", "best_cosine", "REAL");
-        // 2026-09-26：卡阈值【之前】的最高余弦。老库靠这一行自动补列，不用删库重建
-        addColumnIfMissing("qa_stat", "best_cosine_raw", "REAL");
-        // 2026-09-28：行来源（'chat' 群聊 / 'plaza' 广场生成）。PlazaStore 与
-        // PlazaAdminController 早就在读写它，但建表语句里一直没有这一列 ——
-        // 也就是说**全新库**上广场「生成新答案」必然报 no such column。这里补上。
-        addColumnIfMissing("qa_stat", "source", "TEXT DEFAULT 'chat'");
-        try (Statement st = database.connection().createStatement()) {
-            st.execute("PRAGMA user_version = 1");
-        }
-    }
-
-    /** 缺列才补 —— SQLite 的 ALTER TABLE ADD COLUMN 没有 IF NOT EXISTS */
-    private void addColumnIfMissing(String table, String column, String type) throws SQLException {
-        boolean exists = false;
-        try (Statement st = database.connection().createStatement();
-             ResultSet rs = st.executeQuery("PRAGMA table_info(" + table + ")")) {
-            while (rs.next()) {
-                if (column.equalsIgnoreCase(rs.getString("name"))) {
-                    exists = true;
-                    break;
-                }
-            }
-        }
-        if (exists) {
-            return;
-        }
-        try (Statement st = database.connection().createStatement()) {
-            st.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
-            log.info("[QA] 数据库迁移：{} 表补上 {} 列", table, column);
-        }
-    }
-
-    private void createTables() throws SQLException {
-        try (Statement st = database.connection().createStatement()) {
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS qa_stat (
-                      id           INTEGER PRIMARY KEY,
-                      ts           TEXT NOT NULL,
-                      group_id     INTEGER,
-                      user_id      INTEGER,
-                      message_id   INTEGER,
-                      image_count  INTEGER DEFAULT 0,
-                      kb_enabled   INTEGER,
-                      hit_count    INTEGER,
-                      top_score    REAL,
-                      best_cosine  REAL,
-                      best_cosine_raw REAL,
-                      sources      TEXT,
-                      retrieved    TEXT,
-                      answer_len   INTEGER,
-                      answer_empty INTEGER,
-                      guard_action TEXT,
-                      retrieve_ms  INTEGER,
-                      llm_ms       INTEGER,
-                      total_ms     INTEGER,
-                      model        TEXT,
-                      verdict      TEXT DEFAULT 'unknown',
-                      verdict_note TEXT,
-                      verdict_by   TEXT,
-                      verdict_at   TEXT
-                    )""");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_st_ts      ON qa_stat(ts)");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_st_group   ON qa_stat(group_id, ts)");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_st_verdict ON qa_stat(verdict)");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_st_hit     ON qa_stat(hit_count)");
-
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS qa_raw (
-                      id         INTEGER PRIMARY KEY REFERENCES qa_stat(id),
-                      question   TEXT NOT NULL,
-                      quote_text TEXT,
-                      answer     TEXT
-                    )""");
-
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS qa_keyword (
-                      id       INTEGER PRIMARY KEY,
-                      stat_id  INTEGER NOT NULL REFERENCES qa_stat(id),
-                      keyword  TEXT NOT NULL,
-                      term_en  TEXT,
-                      in_kb    INTEGER
-                    )""");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_kw_keyword ON qa_keyword(keyword)");
-            st.execute("CREATE INDEX IF NOT EXISTS idx_kw_stat    ON qa_keyword(stat_id)");
-
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS admin_visit (
-                      id       INTEGER PRIMARY KEY,
-                      ts       TEXT NOT NULL,
-                      path     TEXT,
-                      ip_hash  TEXT,
-                      ua       TEXT,
-                      action   TEXT
-                    )""");
-        }
-    }
-
-    /** 批量落盘，一个事务。调用方是单线程的 QaRecorder */
+    /** 批量落盘，一个事务。调用方是单线程的 {@link QaRecorder} */
     public void insertBatch(List<QaRecord> records) {
         if (!available || records == null || records.isEmpty()) {
             return;
         }
-        synchronized (lock) {
-            try {
-                database.connection().setAutoCommit(false);
-                try (PreparedStatement stat = database.connection().prepareStatement("""
-                             INSERT INTO qa_stat (ts, group_id, user_id, message_id, image_count,
-                               kb_enabled, hit_count, top_score, best_cosine, best_cosine_raw,
-                               sources, retrieved,
-                               answer_len, answer_empty, guard_action,
-                               retrieve_ms, llm_ms, total_ms, model)
-                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                        Statement.RETURN_GENERATED_KEYS);
-                     PreparedStatement raw = database.connection().prepareStatement(
-                             "INSERT INTO qa_raw (id, question, quote_text, answer) VALUES (?,?,?,?)");
-                     PreparedStatement kw = database.connection().prepareStatement(
-                             "INSERT INTO qa_keyword (stat_id, keyword, term_en, in_kb) VALUES (?,?,?,?)")) {
-
-                    for (QaRecord r : records) {
-                        int i = 1;
-                        stat.setString(i++, r.ts());
-                        stat.setLong(i++, r.groupId());
-                        stat.setLong(i++, r.userId());
-                        stat.setLong(i++, r.messageId());
-                        stat.setInt(i++, r.imageCount());
-                        stat.setInt(i++, r.kbEnabled() ? 1 : 0);
-                        stat.setInt(i++, r.hitCount());
-                        stat.setDouble(i++, r.topScore());
-                        stat.setDouble(i++, r.bestCosine());
-                        stat.setDouble(i++, r.bestCosineRaw());
-                        stat.setString(i++, r.sources());
-                        stat.setString(i++, r.retrievedJson());
-                        stat.setInt(i++, r.answer() == null ? 0 : r.answer().length());
-                        stat.setInt(i++, r.answer() == null || r.answer().isBlank() ? 1 : 0);
-                        stat.setString(i++, r.guardAction());
-                        stat.setLong(i++, r.retrieveMs());
-                        stat.setLong(i++, r.llmMs());
-                        stat.setLong(i++, r.totalMs());
-                        stat.setString(i, r.model());
-                        stat.executeUpdate();
-
-                        long id;
-                        try (ResultSet keys = stat.getGeneratedKeys()) {
-                            keys.next();
-                            id = keys.getLong(1);
-                        }
-
-                        raw.setLong(1, id);
-                        raw.setString(2, r.question());
-                        raw.setString(3, r.quoteText());
-                        raw.setString(4, r.answer());
-                        raw.executeUpdate();
-
-                        for (QaRecord.Keyword k : r.keywords()) {
-                            kw.setLong(1, id);
-                            kw.setString(2, k.zh());
-                            kw.setString(3, k.en());
-                            kw.setInt(4, k.inKb() ? 1 : 0);
-                            kw.addBatch();
-                        }
-                    }
-                    kw.executeBatch();
-                    database.connection().commit();
-                } catch (SQLException e) {
-                    database.connection().rollback();
-                    throw e;
-                } finally {
-                    database.connection().setAutoCommit(true);
-                }
-            } catch (Exception e) {
-                log.warn("[QA] 写入记录失败（丢弃本批 {} 条，不影响回答）：{}", records.size(), e.getMessage());
+        try {
+            List<QaStoreRepository.NewRecord> rows = new ArrayList<>(records.size());
+            for (QaRecord r : records) {
+                rows.add(toNewRecord(r));
             }
+            repo.insertBatch(rows);
+        } catch (Exception e) {
+            log.warn("[QA] 写入记录失败（丢弃本批 {} 条，不影响回答）：{}", records.size(), e.getMessage());
         }
+    }
+
+    /**
+     * 把一条问答摊成三层行形状。
+     *
+     * <p>{@code answer_len} / {@code answer_empty} 在这里算，而不是在 SQL 里 ——
+     * 它们是"答案长什么样"的业务口径，持久层只该收到两个已经定好的值。
+     */
+    private static QaStoreRepository.NewRecord toNewRecord(QaRecord r) {
+        QaStoreRepository.StatRow stat = new QaStoreRepository.StatRow(
+                r.ts(), r.groupId(), r.userId(), r.messageId(), r.imageCount(),
+                r.kbEnabled(), r.hitCount(), r.topScore(), r.bestCosine(), r.bestCosineRaw(),
+                r.sources(), r.retrievedJson(),
+                r.answer() == null ? 0 : r.answer().length(),
+                r.answer() == null || r.answer().isBlank(),
+                r.guardAction(), r.retrieveMs(), r.llmMs(), r.totalMs(), r.model());
+        QaStoreRepository.RawRow raw = new QaStoreRepository.RawRow(
+                r.question(), r.quoteText(), r.answer());
+        List<QaStoreRepository.KeywordRow> keywords = new ArrayList<>();
+        for (QaRecord.Keyword k : r.keywords()) {
+            keywords.add(new QaStoreRepository.KeywordRow(k.zh(), k.en(), k.inKb()));
+        }
+        return new QaStoreRepository.NewRecord(stat, raw, keywords);
     }
 
     /**
@@ -334,32 +141,18 @@ public class QaStore implements SqliteConnectionProvider {
             return 0;
         }
         String cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS).toString();
-        synchronized (lock) {
-            try {
-                int count;
-                try (PreparedStatement ps = database.connection().prepareStatement(
-                        "SELECT COUNT(*) FROM qa_raw WHERE id IN (SELECT id FROM qa_stat WHERE ts < ?)")) {
-                    ps.setString(1, cutoff);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        rs.next();
-                        count = rs.getInt(1);
-                    }
-                }
-                if (dryRun || count == 0) {
-                    return count;
-                }
-                try (PreparedStatement ps = database.connection().prepareStatement(
-                        "DELETE FROM qa_raw WHERE id IN (SELECT id FROM qa_stat WHERE ts < ?)")) {
-                    ps.setString(1, cutoff);
-                    int deleted = ps.executeUpdate();
-                    log.info("[QA] 已清理 {} 条过期原文（截止 {}，保留 {} 天）；统计表未受影响",
-                            deleted, cutoff, retentionDays);
-                    return deleted;
-                }
-            } catch (Exception e) {
-                log.warn("[QA] 清理过期原文失败：{}", e.getMessage());
-                return 0;
+        try {
+            long count = repo.countRawOlderThan(cutoff);
+            if (dryRun || count == 0) {
+                return (int) count;
             }
+            int deleted = repo.deleteRawOlderThan(cutoff);
+            log.info("[QA] 已清理 {} 条过期原文（截止 {}，保留 {} 天）；统计表未受影响",
+                    deleted, cutoff, retentionDays);
+            return deleted;
+        } catch (Exception e) {
+            log.warn("[QA] 清理过期原文失败：{}", e.getMessage());
+            return 0;
         }
     }
 
@@ -374,20 +167,11 @@ public class QaStore implements SqliteConnectionProvider {
         if (!available) {
             return false;
         }
-        synchronized (lock) {
-            try (PreparedStatement ps = database.connection().prepareStatement(
-                    "UPDATE qa_stat SET verdict = ?, verdict_note = ?, verdict_by = ?, verdict_at = ?"
-                            + " WHERE id = ?")) {
-                ps.setString(1, verdict);
-                ps.setString(2, note);
-                ps.setString(3, by);
-                ps.setString(4, Instant.now().toString());
-                ps.setLong(5, id);
-                return ps.executeUpdate() > 0;
-            } catch (Exception e) {
-                log.warn("[QA] 标注失败：{}", e.getMessage());
-                return false;
-            }
+        try {
+            return repo.annotate(id, verdict, note, by, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[QA] 标注失败：{}", e.getMessage());
+            return false;
         }
     }
 
@@ -396,21 +180,19 @@ public class QaStore implements SqliteConnectionProvider {
      *
      * <p>追问是**零成本的准确率信号**：上一条要是答好了，通常不会马上再问一次。
      * 由记录时自动判定，不需要人工介入。
+     *
+     * <p>只作用于还没被人工标过的行（SQL 里的 {@code verdict IS NULL OR verdict = 'unknown'}）——
+     * 自动标记**绝不能覆盖人工结论**。
      */
     public boolean markFollowUp(long id) {
         if (!available) {
             return false;
         }
-        synchronized (lock) {
-            try (PreparedStatement ps = database.connection().prepareStatement(
-                    "UPDATE qa_stat SET verdict = 'follow_up', verdict_by = 'auto', verdict_at = ?"
-                            + " WHERE id = ? AND (verdict IS NULL OR verdict = 'unknown')")) {
-                ps.setString(1, Instant.now().toString());
-                ps.setLong(2, id);
-                return ps.executeUpdate() > 0;
-            } catch (Exception e) {
-                return false;
-            }
+        try {
+            return repo.markFollowUp(id, Instant.now().toString());
+        } catch (Exception e) {
+            log.debug("[QA] 标记追问失败：{}", e.getMessage());
+            return false;
         }
     }
 
@@ -419,18 +201,14 @@ public class QaStore implements SqliteConnectionProvider {
         if (!available) {
             return;
         }
-        synchronized (lock) {
-            try (PreparedStatement ps = database.connection().prepareStatement(
-                    "INSERT INTO admin_visit (ts, path, ip_hash, ua, action) VALUES (?,?,?,?,?)")) {
-                ps.setString(1, Instant.now().toString());
-                ps.setString(2, path);
-                ps.setString(3, ipHash);
-                ps.setString(4, userAgent == null ? "" : userAgent.substring(0, Math.min(200, userAgent.length())));
-                ps.setString(5, action);
-                ps.executeUpdate();
-            } catch (Exception e) {
-                log.debug("[QA] 记录后台访问失败：{}", e.getMessage());
-            }
+        String ua = userAgent == null ? "" : userAgent;
+        if (ua.length() > MAX_UA_LEN) {
+            ua = ua.substring(0, MAX_UA_LEN);
+        }
+        try {
+            repo.recordVisit(Instant.now().toString(), path, ipHash, ua, action);
+        } catch (Exception e) {
+            log.debug("[QA] 记录后台访问失败：{}", e.getMessage());
         }
     }
 
@@ -439,14 +217,10 @@ public class QaStore implements SqliteConnectionProvider {
         if (!available) {
             return 0;
         }
-        synchronized (lock) {
-            try (Statement st = database.connection().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM qa_stat")) {
-                rs.next();
-                return rs.getLong(1);
-            } catch (SQLException e) {
-                return 0;
-            }
+        try {
+            return repo.countStat();
+        } catch (Exception e) {
+            return 0;
         }
     }
 
@@ -455,14 +229,10 @@ public class QaStore implements SqliteConnectionProvider {
         if (!available) {
             return 0;
         }
-        synchronized (lock) {
-            try (Statement st = database.connection().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM qa_raw")) {
-                rs.next();
-                return rs.getLong(1);
-            } catch (SQLException e) {
-                return 0;
-            }
+        try {
+            return repo.countRaw();
+        } catch (Exception e) {
+            return 0;
         }
     }
 

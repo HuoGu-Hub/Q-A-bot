@@ -1,6 +1,8 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -35,7 +37,7 @@ class QaStoreTest {
         props.setDb(base.resolve("qa.sqlite").toString());
         db = new SqliteDatabase(props);
         db.init();
-        store = new QaStore(db, props, new ObjectMapper());
+        store = new QaStore(new QaStoreRepository(new Jdbc(db)), props, new ObjectMapper());
         store.init();
     }
 
@@ -80,7 +82,7 @@ class QaStoreTest {
         assertThat(store.countStat()).as("★ 统计表必须一行不少").isEqualTo(2);
 
         // 关键词也还在（永久层）
-        try (var st = store.connection().createStatement();
+        try (var st = db.connection().createStatement();
              var rs = st.executeQuery("SELECT COUNT(*) FROM qa_keyword")) {
             rs.next();
             assertThat(rs.getInt(1)).as("关键词表也必须一行不少").isEqualTo(2);
@@ -128,7 +130,7 @@ class QaStoreTest {
 
         assertThat(store.annotate(1, "bad", "答非所问", "human")).isTrue();
 
-        try (var st = store.connection().createStatement();
+        try (var st = db.connection().createStatement();
              var rs = st.executeQuery("SELECT verdict, verdict_note, verdict_by FROM qa_stat WHERE id=1")) {
             rs.next();
             assertThat(rs.getString(1)).isEqualTo("bad");
@@ -166,7 +168,7 @@ class QaStoreTest {
         off.setDb(base.resolve("never.sqlite").toString());
         SqliteDatabase offDb = new SqliteDatabase(off);
         offDb.init();
-        QaStore offStore = new QaStore(offDb, off, new ObjectMapper());
+        QaStore offStore = new QaStore(new QaStoreRepository(new Jdbc(offDb)), off, new ObjectMapper());
         offStore.init();
 
         assertThat(offStore.isAvailable()).isFalse();

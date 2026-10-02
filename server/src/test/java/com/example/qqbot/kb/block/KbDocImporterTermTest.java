@@ -7,6 +7,7 @@ import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,7 +51,7 @@ class KbDocImporterTermTest {
         qa.setDb(base.resolve("qa.sqlite").toString());
         db = new SqliteDatabase(qa);
         db.init();
-        qaStore = new QaStore(db, qa, new ObjectMapper());
+        qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();
 
         KbBlockStore store = new KbBlockStore(new KbBlockRepository(new Jdbc(db)));

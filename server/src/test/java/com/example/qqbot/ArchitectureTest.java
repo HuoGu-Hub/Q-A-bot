@@ -121,10 +121,10 @@ class ArchitectureTest {
     /* ==================== 目标：还债清单 ==================== */
 
     @Test
-    @Disabled("目标 Phase 1（S1 持久化去单点）。2026-10-02 实测（grep import java.sql）："
-            + "业务侧只剩 1 个类直接持有 java.sql —— qa.QaStore（它还挂着临时的连接"
-            + "提供者转发实现与测试专用构造器）。迁完就摘掉这个 @Disabled")
-    @DisplayName("【目标】持久化层之外不得出现 java.sql")
+    // 2026-10-02 转正：原先这里挂着 @Disabled，理由是"8 个包共 12 个类直接持有 java.sql"。
+    // 逐个搬进 persistence/XxxRepository 之后，业务侧一个都不剩 ——
+    // 这条规则从此是「会失败的测试」，而不是「目标」。
+    @DisplayName("★ 持久化层之外不得出现 java.sql（2026-10-02 转正）")
     void noJdbcOutsidePersistence() {
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("..persistence..")

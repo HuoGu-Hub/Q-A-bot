@@ -3,6 +3,7 @@ package com.example.qqbot.kb.block;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +40,7 @@ class KbBlockStoreTest {
         qa.setDb(base.resolve("qa.sqlite").toString());
         db = new SqliteDatabase(qa);
         db.init();
-        qaStore = new QaStore(db, qa, new ObjectMapper());
+        qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();
 
         store = new KbBlockStore(new KbBlockRepository(new Jdbc(db)));

@@ -5,6 +5,7 @@ import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbMapRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,7 +58,7 @@ class KbMapSyncTest {
         qa.setDb(tmp.resolve("map.sqlite").toString());
         sqlite = new SqliteDatabase(qa);
         sqlite.init();
-        qaStore = new QaStore(sqlite, qa, mapper);
+        qaStore = new QaStore(new QaStoreRepository(new Jdbc(sqlite)), qa, mapper);
         qaStore.init();
 
         KbMapStore store = new KbMapStore(new KbMapRepository(new Jdbc(sqlite)));

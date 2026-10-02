@@ -2,6 +2,7 @@ package com.example.qqbot.site;
 
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.SiteCarouselRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 
 import com.example.qqbot.config.QaProperties;
@@ -50,7 +51,7 @@ class CarouselServiceTest {
         qa.setDb(base.resolve("qa.sqlite").toString());
         db = new SqliteDatabase(qa);
         db.init();
-        qaStore = new QaStore(db, qa, new ObjectMapper());
+        qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();
 
         store = new CarouselStore(new SiteCarouselRepository(new Jdbc(db)));

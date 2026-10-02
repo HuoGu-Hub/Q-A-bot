@@ -2,6 +2,7 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.QaAnalyticsRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 
 import com.example.qqbot.config.QaProperties;
@@ -40,7 +41,7 @@ class QaAnalyticsTest {
         //    否则测试自己就制造了"两个连接开同一个文件"（正是这次要消掉的问题）
         db = new SqliteDatabase(props);
         db.init();
-        store = new QaStore(db, props, new ObjectMapper());
+        store = new QaStore(new QaStoreRepository(new Jdbc(db)), props, new ObjectMapper());
         store.init();
         analytics = new QaAnalytics(new QaAnalyticsRepository(new Jdbc(db)));
     }

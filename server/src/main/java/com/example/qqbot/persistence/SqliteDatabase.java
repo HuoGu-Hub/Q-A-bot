@@ -5,7 +5,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Files;
@@ -28,17 +27,14 @@ import java.sql.Statement;
  * Spring 保证依赖先初始化完（含 {@code @PostConstruct}），
  * **8 处 {@code @DependsOn("qaStore")} 可以直接删掉**，不再需要字符串约定。
  *
- * <p><b>为什么标 {@code @Primary}</b>：{@code QaStore} 为了兼容测试还临时实现了
- * {@link SqliteConnectionProvider}（纯转发），于是按类型注入会有两个候选。
- * 标了 {@code @Primary} 之后生产环境一律拿到本类。
- * 等最后一个 Store 迁到 {@code Jdbc} 之后，那个转发实现会一并删掉。
+ * <p><b>2026-10-02：那个转发实现已经删掉了</b>，本类现在是
+ * {@link SqliteConnectionProvider} 的**唯一**实现，所以不再需要 {@code @Primary}。
  *
  * <p>⚠️ 配置仍借用 {@code app.qa.db} / {@code app.qa.enabled}（那是历史上第一个
  * 需要库的功能）。键名确实该叫 {@code app.persistence.*}，但改名会动到现网配置，
  * 单独一步做。
  */
 @Component
-@Primary
 public class SqliteDatabase implements SqliteConnectionProvider, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SqliteDatabase.class);

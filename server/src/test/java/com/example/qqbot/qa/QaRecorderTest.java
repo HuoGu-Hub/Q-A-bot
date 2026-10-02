@@ -1,6 +1,8 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -47,7 +49,7 @@ class QaRecorderTest {
     private Fixture fixture(QaProperties props) {
         SqliteDatabase db = new SqliteDatabase(props);
         db.init();
-        QaStore s = new QaStore(db, props, new ObjectMapper());
+        QaStore s = new QaStore(new QaStoreRepository(new Jdbc(db)), props, new ObjectMapper());
         s.init();
         return new Fixture(db, s);
     }
@@ -87,7 +89,7 @@ class QaRecorderTest {
         props.setDb(base.resolve("b.sqlite").toString());
         SqliteDatabase brokenDb = new SqliteDatabase(props);
         brokenDb.init();
-        QaStore broken = new QaStore(brokenDb, props, new ObjectMapper());
+        QaStore broken = new QaStore(new QaStoreRepository(new Jdbc(brokenDb)), props, new ObjectMapper());
         broken.init();
         brokenDb.close();   // 故意把连接关掉，模拟存储故障
 
@@ -112,7 +114,7 @@ class QaRecorderTest {
         // 造一个"卡住的存储"：worker 一进去就出不来，队列必然堆满
         SqliteDatabase stuckDb = new SqliteDatabase(props);
         stuckDb.init();
-        QaStore stuck = new QaStore(stuckDb, props, new ObjectMapper()) {
+        QaStore stuck = new QaStore(new QaStoreRepository(new Jdbc(stuckDb)), props, new ObjectMapper()) {
             @Override
             public void insertBatch(List<QaRecord> records) {
                 try {

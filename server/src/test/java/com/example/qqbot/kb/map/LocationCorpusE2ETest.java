@@ -15,6 +15,7 @@ import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbMapRepository;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,7 +83,7 @@ class LocationCorpusE2ETest {
         qa.setDb(db.toString());
         sqlite = new SqliteDatabase(qa);
         sqlite.init();
-        qaStore = new QaStore(sqlite, qa, mapper);
+        qaStore = new QaStore(new QaStoreRepository(new Jdbc(sqlite)), qa, mapper);
         qaStore.init();
 
         KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(sqlite)));

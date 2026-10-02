@@ -4,6 +4,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,7 +58,7 @@ class KbTermStoreTest {
         qa.setDb(base.resolve("qa.sqlite").toString());
         db = new SqliteDatabase(qa);
         db.init();
-        qaStore = new QaStore(db, qa, new ObjectMapper());
+        qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();
 
         store = new KbTermStore(new KbTermRepository(new Jdbc(db)), kCorpus());
