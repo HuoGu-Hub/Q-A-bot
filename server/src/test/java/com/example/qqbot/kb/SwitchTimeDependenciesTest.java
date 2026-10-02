@@ -115,6 +115,7 @@ class SwitchTimeDependenciesTest {
         assertThat(store.get("flame-altar")).as("人工成果还在").isNotNull();
         assertThat(store.get("flame-altar").zh()).isEqualTo("灵火祭坛");
         assertThat(store.get("kiln-0").zh()).as("★ 补齐的名字 = 块标题").isEqualTo("标题kiln-0");
+        qaStore.close();
     }
 
     @Test
@@ -140,6 +141,7 @@ class SwitchTimeDependenciesTest {
         assertThat(store.get("abyssal-wing-axe").zh())
                 .as("★ 补齐时也拆括号：短中文名才匹配得上")
                 .isEqualTo("深渊之翼斧、Abyssal Wing Axe");
+        qaStore.close();
     }
 
     @Test
@@ -161,6 +163,7 @@ class SwitchTimeDependenciesTest {
         assertThat(store.get("has-block")).as("有块的不动").isNotNull();
         assertThat(store.get("no-block")).as("孤儿的删掉").isNull();
         assertThat(store.count()).isEqualTo(1);
+        qaStore.close();
     }
 
     /* ==================== ③ 按行的旧块接口：切换后必须明确报错 ==================== */

@@ -4,6 +4,7 @@ import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,11 @@ class CommandMatcherTest {
     }
 
     /* ==================== 该触发的 ==================== */
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
+    }
 
     @Test
     @DisplayName("群里 @ + /help → 触发")

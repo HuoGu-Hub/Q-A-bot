@@ -7,6 +7,7 @@ import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,8 @@ class KbDocImporterTermTest {
     @TempDir
     Path base;
 
+    private QaStore qaStore;
+
     private KbTermStore termStore;
     private KbDocImporter importer;
 
@@ -41,7 +44,7 @@ class KbDocImporterTermTest {
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
         KbBlockStore store = new KbBlockStore(qaStore);
@@ -73,6 +76,11 @@ class KbDocImporterTermTest {
                     .append("正文。").append('\n').append('\n');
         }
         return sb.toString();
+    }
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
     }
 
     @Test

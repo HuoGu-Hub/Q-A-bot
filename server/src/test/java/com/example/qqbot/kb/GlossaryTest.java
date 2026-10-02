@@ -5,6 +5,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -34,11 +35,15 @@ class GlossaryTest {
     @TempDir
     Path base;
 
+    /** glossaryWith() 每调一次就开一个库，全部留着在 @AfterEach 里关掉 */
+    private final java.util.List<QaStore> createdStores = new java.util.ArrayList<>();
+
     /** 用若干「英文名 → 中文名 / 状态」建一个真的词条库，再包成 Glossary */
     private Glossary glossaryWith(String... enZhStatus) {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa-" + System.nanoTime() + ".sqlite").toString());
         QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        createdStores.add(qaStore);
         qaStore.init();
 
         KbProperties props = new KbProperties();
@@ -50,6 +55,13 @@ class GlossaryTest {
             store.upsert(enZhStatus[i], enZhStatus[i + 1], enZhStatus[i + 2]);
         }
         return new Glossary(store);
+    }
+
+    @AfterEach
+    void closeStores() {
+        for (QaStore s : createdStores) {
+            s.close();
+        }
     }
 
     @Test

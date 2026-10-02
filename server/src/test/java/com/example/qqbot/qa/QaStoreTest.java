@@ -2,6 +2,7 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,11 @@ class QaStoreTest {
                 "[{\"i\":12,\"title\":\"Scrap Cup\",\"score\":0.53,\"src\":\"both\"}]",
                 "pass", 120, 3400, 3600, "deepseek-v4.1-flash",
                 List.of(new QaRecord.Keyword("废料杯", "Scrap Cup", true)));
+    }
+
+    @AfterEach
+    void closeStores() {
+        store.close();
     }
 
     @Test

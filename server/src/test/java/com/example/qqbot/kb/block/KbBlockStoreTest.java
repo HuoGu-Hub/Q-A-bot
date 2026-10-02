@@ -3,6 +3,7 @@ package com.example.qqbot.kb.block;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,11 @@ class KbBlockStoreTest {
     }
 
     /* ==================== 基本读写 ==================== */
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
+    }
 
     @Test
     @DisplayName("写入后原样读回：id / 文档 / 标题 / 正文 / url / 标签 / 来源")

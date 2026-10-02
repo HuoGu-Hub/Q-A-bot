@@ -38,7 +38,7 @@ import java.util.List;
  * 之后所有写入变成空操作，只记一条警告。
  */
 @Component
-public class QaStore {
+public class QaStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(QaStore.class);
 
@@ -83,7 +83,9 @@ public class QaStore {
     }
 
     @PreDestroy
-    void close() {
+
+    @Override
+    public void close() {
         synchronized (lock) {
             try {
                 if (conn != null && !conn.isClosed()) {

@@ -5,6 +5,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,19 +32,26 @@ class KbTermStoreCsvImportTest {
     @TempDir
     Path base;
 
+    private QaStore qaStore;
+
     private KbTermStore store;
 
     @BeforeEach
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
         KbProperties props = new KbProperties();
         props.setDir(base.resolve("kb").toString());
         store = new KbTermStore(qaStore, props, new ObjectMapper(), mock(KbCorpus.class));
         store.init();
+    }
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
     }
 
     @Test

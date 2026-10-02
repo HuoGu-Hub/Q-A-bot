@@ -4,6 +4,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.config.SiteProperties;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,8 @@ class CarouselServiceTest {
     @TempDir
     Path base;
 
+    private QaStore qaStore;
+
     private CarouselStore store;
     private CarouselService service;
     private SiteProperties props;
@@ -40,7 +43,7 @@ class CarouselServiceTest {
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
         store = new CarouselStore(qaStore);
@@ -81,6 +84,11 @@ class CarouselServiceTest {
 
     private static MockMultipartFile file(String name, byte[] bytes) {
         return new MockMultipartFile("file", name, "application/octet-stream", bytes);
+    }
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
     }
 
     @Test

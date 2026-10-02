@@ -4,6 +4,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -78,6 +79,11 @@ class KbBlockAdminServiceTest {
     }
 
     /* ==================== 新增 ==================== */
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
+    }
 
     @Test
     @DisplayName("显式给 id 新增：块进库，向量按正文算好")

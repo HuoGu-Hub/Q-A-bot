@@ -4,6 +4,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,8 @@ class KbBlockControllerTest {
     @TempDir
     Path base;
 
+    private QaStore qaStore;
+
     private KbBlockStore store;
     private KbBlockIndex index;
     private KbBlockAdminService service;
@@ -43,7 +46,7 @@ class KbBlockControllerTest {
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
         store = new KbBlockStore(qaStore);
@@ -82,6 +85,11 @@ class KbBlockControllerTest {
     }
 
     // ==================== 读 ====================
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
+    }
 
     @Test
     @DisplayName("stats / docs / blocks 三个读接口的形状")

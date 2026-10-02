@@ -5,6 +5,7 @@ import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.doc.ChunkImportPlan;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,11 @@ class KbDocImporterTest {
     }
 
     /* ==================== 首次导入 ==================== */
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
+    }
 
     @Test
     @DisplayName("首次导入：块进库、带上文档头里的 url 与 tags、索引随之可用")

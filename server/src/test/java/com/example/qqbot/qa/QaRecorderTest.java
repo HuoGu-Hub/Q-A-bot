@@ -59,6 +59,7 @@ class QaRecorderTest {
         assertThat(recorder.recordedCount()).isEqualTo(2);
         assertThat(recorder.droppedCount()).isZero();
         recorder.stop();
+        s.close();
     }
 
     @Test

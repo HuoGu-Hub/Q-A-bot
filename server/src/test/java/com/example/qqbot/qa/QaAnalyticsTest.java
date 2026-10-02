@@ -2,6 +2,7 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.config.QaProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,6 +68,11 @@ class QaAnalyticsTest {
                 "边界用例", null, "答案",
                 0, true, hitCount, 0.0, 0.0, 0.0, "none", "[]",
                 guardAction, 100, 100, 200, "m", List.of());
+    }
+
+    @AfterEach
+    void closeStores() {
+        store.close();
     }
 
     @Test

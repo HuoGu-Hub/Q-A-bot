@@ -3,6 +3,7 @@ package com.example.qqbot.site;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,13 +24,15 @@ class CarouselStoreTest {
     @TempDir
     Path base;
 
+    private QaStore qaStore;
+
     private CarouselStore store;
 
     @BeforeEach
     void setUp() {
         QaProperties qa = new QaProperties();
         qa.setDb(base.resolve("qa.sqlite").toString());
-        QaStore qaStore = new QaStore(qa, new ObjectMapper());
+        qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
         store = new CarouselStore(qaStore);
@@ -38,6 +41,11 @@ class CarouselStoreTest {
 
     private long add(String name) {
         return store.add(name + ".png", "image/png", 10, 20, "", name);
+    }
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
     }
 
     @Test

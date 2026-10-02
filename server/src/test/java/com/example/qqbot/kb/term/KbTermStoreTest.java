@@ -5,6 +5,7 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,11 @@ class KbTermStoreTest {
         store = new KbTermStore(qaStore, props, new ObjectMapper(), kCorpus());
         store.init();
         glossary = new Glossary(store);
+    }
+
+    @AfterEach
+    void closeStores() {
+        qaStore.close();
     }
 
     @Test
