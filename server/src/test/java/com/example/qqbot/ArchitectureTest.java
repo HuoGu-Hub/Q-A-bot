@@ -148,8 +148,13 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1。实测违反：plaza/FallbackService 直接用 OneBotApiClient 发消息，绕过 OutboundFilter（出站敏感词过滤）与 OutboundPacer（节流/分片）—— 这是一条真实的出站治理缺口，不只是分层洁癖")
-    @DisplayName("【目标】只有 onebot.outbound 与 router 能碰到 OneBotApiClient")
+    @DisplayName("★ 铁律②：只有 onebot.outbound 与 router 能碰到 OneBotApiClient")
+    // 2026-10-02 转正：plaza/FallbackService 原先把消息**直接**发给协议客户端，
+    // 绕过了出站敏感词过滤与节流 —— 真实的治理缺口。
+    // 修法不是"在 FallbackService 里补一次过滤"，而是**让发送器成为唯一出口**：
+    //   - 出站过滤从 MessageRouter 挪进 OutboundSender（放在调用方就得靠每个人记得调）
+    //   - 新增 OutboundSender.sendToGroup(群号, 文本) 给没有入站事件的场景
+    // 于是任何发送路径都绕不过过滤与节流。
     void onlyOutboundPathSendsMessages() {
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackages("..onebot.outbound..", "..router..")

@@ -4,8 +4,7 @@ import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.llm.LlmException;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.kb.KbRetriever;
-import com.example.qqbot.onebot.client.OneBotApiClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.qqbot.onebot.outbound.OutboundSender;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,22 +35,19 @@ public class FallbackService {
     private final PlazaStore store;
     private final KbRetriever retriever;
     private final LlmRouter llm;
-    private final OneBotApiClient apiClient;
-    private final ObjectMapper mapper;
+    private final OutboundSender outboundSender;
 
     private volatile String today = "";
     private final AtomicInteger askTodayTotal = new AtomicInteger();
     private final Map<String, AtomicInteger> askPerKeyword = new java.util.concurrent.ConcurrentHashMap<>();
 
     public FallbackService(PlazaProperties props, PlazaStore store,
-                           KbRetriever retriever, LlmRouter llm, OneBotApiClient apiClient,
-                           ObjectMapper mapper) {
+                           KbRetriever retriever, LlmRouter llm, OutboundSender outboundSender) {
         this.props = props;
         this.store = store;
         this.retriever = retriever;
         this.llm = llm;
-        this.apiClient = apiClient;
-        this.mapper = mapper;
+        this.outboundSender = outboundSender;
     }
 
     // ==================== 第 2 级：问问新答案 ====================
@@ -242,12 +238,9 @@ sb.append("【").append(entry.title()).append("】\n");
         }
 
         try {
-            ObjectNode msg = mapper.createObjectNode();
-            msg.put("type", "text");
-            ObjectNode data = mapper.createObjectNode();
-            data.put("text", sb.toString());
-            msg.set("data", data);
-            apiClient.sendGroupMsg(groupId, msg);
+            // 走 OutboundSender 而不是直接调协议客户端：
+            // 直接调会**跳过出站敏感词过滤与节流**（实测漏洞）。
+            outboundSender.sendToGroup(groupId, sb.toString());
             store.logHelp(groupId, userId, kw, question);
             log.info("[PLAZA] 求助已发到群 {}：{}", groupId, shorten(question));
 
@@ -305,15 +298,10 @@ sb.append("【").append(entry.title()).append("】\n");
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("有个问题我答不好，有懂的朋友吗？' + String.fromCharCode(92) + 'n' + String.fromCharCode(92) + 'n'");
+        sb.append("有个问题我答不好，有懂的朋友吗？\n\n");
         sb.append("问：").append(shorten(q));
         try {
-            ObjectNode msg = mapper.createObjectNode();
-            msg.put("type", "text");
-            ObjectNode data = mapper.createObjectNode();
-            data.put("text", sb.toString());
-            msg.set("data", data);
-            apiClient.sendGroupMsg(groupId, msg);
+            outboundSender.sendToGroup(groupId, sb.toString());
             store.logHelp(groupId, userId, null, q);
             out.put("ok", true);
             return out;

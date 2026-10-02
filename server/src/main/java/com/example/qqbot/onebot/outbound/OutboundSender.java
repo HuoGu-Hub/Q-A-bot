@@ -1,6 +1,7 @@
 package com.example.qqbot.onebot.outbound;
 
 import com.example.qqbot.config.GuardProperties.Outbound;
+import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
@@ -54,31 +55,79 @@ public class OutboundSender {
     private final OutboundPacer pacer;
     private final BotIdentity identity;
     private final Outbound config;
+    private final OutboundFilter filter;
 
     public OutboundSender(OneBotApiClient apiClient,
                           MessageCodec codec,
                           OutboundPacer pacer,
                           BotIdentity identity,
-                          Outbound outbound) {
+                          Outbound outbound,
+                          OutboundFilter filter) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.pacer = pacer;
         this.identity = identity;
         this.config = outbound;
+        this.filter = filter;
     }
 
-    /** 把一条回复发出去（分片 + 节奏 + 合并转发都在这里） */
-    public void send(OneBotEvent event, String text) {
+    /**
+     * 发送目标。把"发给谁、要不要 @"从 {@link OneBotEvent} 里摘出来，
+     * 这样**没有入站事件**的场景（广场的群内求助）也能走同一条出站路径。
+     *
+     * @param group    群消息还是私聊
+     * @param id       群号或用户号
+     * @param atUserId 第一段要 @ 的人；0 = 不 @
+     */
+    private record Target(boolean group, long id, long atUserId) {
+
+        static Target of(OneBotEvent event) {
+            return event.isGroupMessage()
+                    ? new Target(true, event.getGroupId(), event.getUserId())
+                    : new Target(false, event.getUserId(), 0);
+        }
+    }
+
+    /**
+     * 把一条回复发出去（出站过滤 + 分片 + 节奏 + 合并转发都在这里）。
+     *
+     * @return **实际发出的文本**（已过滤）。调用方要记录"机器人到底说了什么"时用它，
+     *         而不是自己再过滤一遍 —— 那会出现两处过滤、两份可能不一致的文本。
+     */
+    public String send(OneBotEvent event, String text) {
+        return dispatch(Target.of(event), text);
+    }
+
+    /**
+     * 按群号直接发 —— 给**没有入站事件**的调用方（广场的群内求助）。
+     *
+     * <p>这个方法存在的意义就是**不让任何人绕过出站路径**：
+     * 过去那条路是直接调 {@code OneBotApiClient.sendGroupMsg}，
+     * 于是出站敏感词过滤与节流**都被跳过了**（实测漏洞，不只是分层洁癖）。
+     */
+    public String sendToGroup(long groupId, String text) {
+        return dispatch(new Target(true, groupId, 0), text);
+    }
+
+    /** **唯一的出站实现** —— 所有发送都必须经过这里 */
+    private String dispatch(Target target, String text) {
         if (!StringUtils.hasText(text)) {
             log.warn("[OUT] 回复内容为空，跳过发送（避免发出空白消息）");
-            return;
+            return "";
         }
-        List<String> parts = pacer.split(text);
-
-        if (shouldMerge(parts, text) && sendMerged(event, parts)) {
-            return;
+        // 出站敏感词过滤放在**发送器内部**，而不是各个调用方 ——
+        // 放在调用方就得靠每个人记得调，实测广场那条路就漏了。
+        String safe = filter.filter(text);
+        if (!StringUtils.hasText(safe)) {
+            log.warn("[OUT] 出站过滤后内容为空，跳过发送");
+            return "";
         }
-        sendParts(event, parts, true);
+        List<String> parts = pacer.split(safe);
+        if (shouldMerge(parts, safe) && sendMerged(target, parts)) {
+            return safe;
+        }
+        sendParts(target, parts, true);
+        return safe;
     }
 
     /**
@@ -111,40 +160,38 @@ public class OutboundSender {
      * @return true = 这件事已经处理完了（合并成功，或者失败后已经在这里退回逐条发过）；
      *         false = 没发任何东西，调用方按老路逐条发
      */
-    private boolean sendMerged(OneBotEvent event, List<String> parts) {
+    private boolean sendMerged(Target target, List<String> parts) {
         long uin = identity.getSelfId();
         if (uin <= 0) {
             // 启动时没连上协议层，连自己是谁都不知道 —— 节点没法署名，老实走逐条
             log.debug("[OUT] 还不知道机器人自己的 QQ 号，本次不做合并转发");
             return false;
         }
-        if (!event.isGroupMessage() && !event.isPrivateMessage()) {
-            return false;
-        }
 
         JsonNode nodes = codec.forwardNodes(parts, uin, nodeName());
         boolean introSent = false;
         try {
-            if (event.isGroupMessage()) {
-                sleepQuietly(pacer.reserveGroupSlot(event.getGroupId()));
-                apiClient.sendGroupMsg(event.getGroupId(),
-                        codec.atPlusText(event.getUserId(), intro(parts.size())));
+            if (target.group()) {
+                sleepQuietly(pacer.reserveGroupSlot(target.id()));
+                apiClient.sendGroupMsg(target.id(), target.atUserId() > 0
+                        ? codec.atPlusText(target.atUserId(), intro(parts.size()))
+                        : codec.textMessage(intro(parts.size())));
                 introSent = true;
 
-                sleepQuietly(pacer.reserveGroupSlot(event.getGroupId()));
-                long id = apiClient.sendGroupForwardMsg(event.getGroupId(), nodes);
+                sleepQuietly(pacer.reserveGroupSlot(target.id()));
+                long id = apiClient.sendGroupForwardMsg(target.id(), nodes);
                 log.info("[OUT] 已合并转发到群 {}，message_id={}（{} 段打包成 1 条）",
-                        event.getGroupId(), id, parts.size());
+                        target.id(), id, parts.size());
             } else {
-                long id = apiClient.sendPrivateForwardMsg(event.getUserId(), nodes);
+                long id = apiClient.sendPrivateForwardMsg(target.id(), nodes);
                 log.info("[OUT] 已合并转发给 {}，message_id={}（{} 段打包成 1 条）",
-                        event.getUserId(), id, parts.size());
+                        target.id(), id, parts.size());
             }
             return true;
         } catch (Exception e) {
             log.warn("[OUT] 合并转发失败（{}），退回逐条发送 {} 段：{}",
                     e.getClass().getSimpleName(), parts.size(), e.getMessage());
-            sendParts(event, parts, !introSent);
+            sendParts(target, parts, !introSent);
             return true;
         }
     }
@@ -154,22 +201,22 @@ public class OutboundSender {
      *
      * @param atFirst 第一段是否带 @ 提问者 —— 提示语已经发过时传 false，免得 @ 两次
      */
-    private void sendParts(OneBotEvent event, List<String> parts, boolean atFirst) {
+    private void sendParts(Target target, List<String> parts, boolean atFirst) {
         for (int i = 0; i < parts.size(); i++) {
             String part = parts.get(i);
             boolean first = i == 0;
-            if (event.isGroupMessage()) {
-                JsonNode message = first && atFirst
-                        ? codec.atPlusText(event.getUserId(), part)
+            if (target.group()) {
+                JsonNode message = first && atFirst && target.atUserId() > 0
+                        ? codec.atPlusText(target.atUserId(), part)
                         : codec.textMessage(part);
-                sleepQuietly(pacer.reserveGroupSlot(event.getGroupId()));
-                long messageId = apiClient.sendGroupMsg(event.getGroupId(), message);
+                sleepQuietly(pacer.reserveGroupSlot(target.id()));
+                long messageId = apiClient.sendGroupMsg(target.id(), message);
                 log.info("[OUT] 已回复到群 {}，message_id={}（第 {}/{} 段）",
-                        event.getGroupId(), messageId, i + 1, parts.size());
-            } else if (event.isPrivateMessage()) {
-                long messageId = apiClient.sendPrivateMsg(event.getUserId(), codec.textMessage(part));
+                        target.id(), messageId, i + 1, parts.size());
+            } else {
+                long messageId = apiClient.sendPrivateMsg(target.id(), codec.textMessage(part));
                 log.info("[OUT] 已回复给 {}，message_id={}（第 {}/{} 段）",
-                        event.getUserId(), messageId, i + 1, parts.size());
+                        target.id(), messageId, i + 1, parts.size());
             }
         }
     }

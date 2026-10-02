@@ -10,7 +10,6 @@ import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardPipeline;
 import com.example.qqbot.guard.GuardResult;
-import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.onebot.outbound.OutboundSender;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
@@ -60,7 +59,6 @@ public class MessageRouter {
     private final BotIdentity identity;
     private final ChatService chatService;
     private final GuardPipeline guardPipeline;
-    private final OutboundFilter outboundFilter;
     private final OutboundSender outboundSender;
     private final BudgetGuard budgetGuard;
     private final AsyncProperties asyncProperties;
@@ -80,7 +78,6 @@ public class MessageRouter {
                          BotIdentity identity,
                          ChatService chatService,
                          GuardPipeline guardPipeline,
-                         OutboundFilter outboundFilter,
                          OutboundSender outboundSender,
                          BudgetGuard budgetGuard,
                          AsyncProperties asyncProperties,
@@ -99,7 +96,6 @@ public class MessageRouter {
         this.identity = identity;
         this.chatService = chatService;
         this.guardPipeline = guardPipeline;
-        this.outboundFilter = outboundFilter;
         this.outboundSender = outboundSender;
         this.budgetGuard = budgetGuard;
         this.asyncProperties = asyncProperties;
@@ -416,8 +412,10 @@ public class MessageRouter {
         allImages.addAll(quote.imageRefs());
 
         ChatService.ReplyResult result2 = chatService.reply(event, question, quote.text(), allImages, replyMode);
-        String safe = outboundFilter.filter(result2.text());
-        outboundSender.send(event, safe);
+        // 出站敏感词过滤现在在 OutboundSender 内部 —— 单一出口，任何发送路径都绕不过。
+        // 放在这里的话，广场那条直接发送的路就漏掉了（实测漏洞）。
+        // 用返回值而不是自己再过滤一遍：记录的就是**实际发出去的那段文本**。
+        String safe = outboundSender.send(event, result2.text());
 
         // 异步记一笔：不阻塞、不抛异常（记录系统挂了也要照常回答）
         // ⚠️ 记的是 question 不是 text：agent 指令的原始文本是 "/联网 …"，

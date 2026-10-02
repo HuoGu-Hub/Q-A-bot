@@ -1,6 +1,7 @@
 package com.example.qqbot.onebot.outbound;
 
 import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
@@ -44,6 +45,7 @@ class OutboundSenderTest {
     private GuardProperties props;
     private GuardProperties.Outbound config;
     private BotIdentity identity;
+    private OutboundFilter filter;
     private OutboundSender sender;
 
     @BeforeEach
@@ -61,7 +63,12 @@ class OutboundSenderTest {
         identity.setSelfId(999L);
         identity.setSelfName("飘雪喵");
 
-        sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(config), identity, config);
+        // 出站过滤现在在发送器内部（单一出口），测试里让它**原样透传** ——
+        // 这样这个测试仍然只验分片/节奏/合并转发，过滤本身由 MessageRouterCommandTest 那条覆盖
+        filter = mock(OutboundFilter.class);
+        when(filter.filter(anyString())).thenAnswer(inv -> inv.getArgument(0));
+
+        sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(config), identity, config, filter);
     }
 
     private OneBotEvent groupEvent() {
@@ -246,5 +253,39 @@ class OutboundSenderTest {
         assertThat(pacer.split("第一句。第二句。")).hasSize(1);   // 没超限 → 不切
         String url = "https://enshrouded.wiki.gg/wiki/Scrap_Cup";
         assertThat(pacer.split(url)).containsExactly(url);          // 英文句点不切
+    }
+
+    @Test
+    @DisplayName("★ sendToGroup 也走出站过滤 —— 广场那条路不允许绕过（实测漏洞的回归测试）")
+    void sendToGroupIsFiltered() {
+        // 过滤命中 → 整条替换成兜底话术
+        when(filter.filter(anyString())).thenReturn("这条不能发");
+
+        String sent = sender.sendToGroup(GROUP, "原始敏感文本");
+
+        assertThat(sent).isEqualTo("这条不能发");
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendGroupMsg(eq(GROUP), msg.capture());
+        assertThat(msg.getValue().toString()).contains("这条不能发").doesNotContain("原始敏感文本");
+    }
+
+    @Test
+    @DisplayName("★ 返回的是**实际发出的文本**（调用方据此记录，不必自己再过滤一遍）")
+    void returnsActuallySentText() {
+        String sent = sender.sendToGroup(GROUP, "你好呀");
+
+        assertThat(sent).isEqualTo("你好呀");
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendGroupMsg(eq(GROUP), msg.capture());
+        assertThat(msg.getValue().toString()).contains("你好呀");
+    }
+
+    @Test
+    @DisplayName("过滤后为空就不发（兜底话术配成空串时，不该发出空白消息）")
+    void emptyAfterFilterIsNotSent() {
+        when(filter.filter(anyString())).thenReturn("");
+
+        assertThat(sender.sendToGroup(GROUP, "随便什么")).isEmpty();
+        verify(api, never()).sendGroupMsg(anyLong(), any());
     }
 }
