@@ -6,20 +6,19 @@ import java.util.List;
  * 检索语料 —— **检索算法只认这个接口，不关心块是从哪来的**。
  *
  * <h2>为什么要有这层</h2>
- * 我们正在把知识库从「chunks.jsonl + index.bin（行号即身份）」换成
- * 「SQLite 块表（id 即身份）」。这两套存储的形状完全不同，但**检索算法是同一套**：
- * 向量余弦 + 术语表关键词 + RRF 融合 + 标题加成。那套算法是实测调出来的
- * （见 {@link KbRetriever} 里的各种注释），**绝不能复制成两份** —— 两份必然漂移。
+ * 知识库曾经从「chunks.jsonl + index.bin（行号即身份）」迁到
+ * 「SQLite 块表（id 即身份）」。**迁移已经完成**：旧实现连同旧语料一起删除，
+ * 归档在 {@code server/data/.legacy-archive/kb-legacy-20260929.tar.gz}。
  *
- * <p>所以把"语料"抽成接口：
- * <ul>
- *   <li>{@link KbIndex}（旧：行号即身份）实现它 —— 过渡期用；</li>
- *   <li>{@code KbBlockIndex}（新：id 即身份）实现它 —— 目标形态。</li>
- * </ul>
+ * <p>留下这层接口不是为了照顾旧实现，而是因为**检索算法必须只有一份**：
+ * 向量余弦 + 术语表关键词 + RRF 融合 + 标题加成。那套算法是实测调出来的
+ * （见 {@link KbRetriever} 里的各种注释），复制成两份必然漂移。
+ *
+ * <p>当前唯一实现是 {@link com.example.qqbot.kb.block.KbBlockIndex}（id 即身份）。
  * 检索器面向本接口，于是**换存储 = 换一个 Bean**，算法一行不用动。
  *
  * <p>{@link #entries()} 直接带上向量，而不是"先列条目、再按 id 查向量"：
- * 两个实现本来就都是"块 + 向量"成对持有的，拆成两次查反而多一层映射
+ * 实现本来就是"块 + 向量"成对持有的，拆成两次查反而多一层映射
  * （旧实现里那个映射就是"行号"）。
  */
 public interface KbCorpus {
@@ -74,7 +73,7 @@ public interface KbCorpus {
          * 便利构造：{@code docId} 默认取标题、没有标题向量。
          *
          * <p>旧存储里「一个页面」就是一批同标题的块，所以标题即页面；
-         * 留着这个构造，旧路径（{@link KbIndex}）和既有测试就不用改。
+         * 留着这个构造，既有测试和不需要标题向量的调用方就不用改。
          */
         public Entry(String id, String title, String text, String url,
                      List<String> tags, boolean curated, String contentAt, float[] vector) {

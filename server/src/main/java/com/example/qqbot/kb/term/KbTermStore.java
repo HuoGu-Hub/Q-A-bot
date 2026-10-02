@@ -47,9 +47,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * page / category 原样带回来，否则整条 upsert 会把它们抹掉。
  *
  * <h2>key 空间是「Wiki 页面」，不是「有正文的页面」</h2>
- * 表里的行来自 {@code pages.jsonl}（3,908 个页面），比 chunk 标题集合（3,630）大 ——
- * 多出来的正是 {@code Equipment}、{@code Sets/*} 这类**没有正文但需要翻译**的伞形词。
- * 「有没有正文」由 {@code KbIndex} 现算，不落库。
+ * 表里的行按语料的 {@code docId} 补齐（{@code reconcile}），
+ * 于是 {@code Equipment}、{@code Sets/*} 这类**没有正文但需要翻译**的伞形词也在表里。
+ * 「有没有正文」由语料现算，不落库；孤儿词条只由 {@code deleteOrphans} 显式清理。
  *
  * <h2>和 {@link com.example.qqbot.kb.category.CategoryStore} 一样</h2>
  * 共用问答库那个 SQLite 连接（{@code qaStore.connection()}），

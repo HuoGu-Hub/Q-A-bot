@@ -35,22 +35,24 @@ import java.util.Map;
  *       <b>并上</b> {@link KbTermStore} 里那些没有正文的页面 ——
  *       {@code Equipment}、{@code Sets/*} 这类伞形词对 B 路检索有用
  *       （实测 Equipment 命中 44 块正文、Lore 命中 404 块），
- *       但它们没有正文，只从 chunks 出发根本看不见。</li>
+ *       但它们没有正文，只从"有正文的块"出发根本看不见。</li>
  *   <li><b>中文名 / 核对状态</b> = {@link KbTermStore}，唯一真源。</li>
  *   <li><b>分类</b> = 每个块自带的 {@code cats[]} 经 {@link KbGroups#autoGroup} 映射到 9 个板块。</li>
- *   <li><b>文本块</b> = 块本身；<b>向量</b> = {@code index.bin} 里与块同序的那一行。</li>
+ *   <li><b>文本块</b> = 块本身；<b>向量</b> = 块表里与块同 id 的那一条。</li>
  * </ul>
  *
- * <h2>这个类负责两种完全不同的写</h2>
- * <ol>
- *   <li><b>改名字</b>（中文名 / 状态）→ 委托 {@link KbTermStore}，单行 UPDATE，
- *       不碰语料、不需要 embedding、零成本。</li>
- *   <li><b>改内容</b>（文本块的增删改下架）→ 本类自己处理，必须维护
- *       {@code chunks.jsonl} 行数 == {@code index.bin} 的 N 这条铁律。</li>
- * </ol>
- * 分开的原因：{@code KbIndex.load()} 在两者不一致时抛异常，而调用方把异常吞成空列表 ——
- * 后果<b>不是报错</b>，而是机器人从此静默地不带资料回答。所以改内容走最严的路径，
- * 改名字根本不进那条路径。
+ * <h2>这个类现在只负责「改名字」</h2>
+ * 中文名 / 核对状态 → 委托 {@link KbTermStore}，单行 UPDATE，
+ * 不碰语料、不需要 embedding、零成本。
+ *
+ * <p><b>改内容</b>（文本块的增删改下架）已经搬到
+ * {@link com.example.qqbot.kb.block.KbBlockAdminService}。本类仍持有
+ * {@link com.example.qqbot.kb.block.KbBlockStore} 与 {@link EmbeddingClient}，
+ * 但只用于只读展示（这一页有没有正文、有没有向量）。
+ *
+ * <p>当年把两者分开的理由仍然成立：内容与向量必须成对更新 ——
+ * 只改一边不会报错，只会让机器人**静默地带着错资料回答**。
+ * 所以改内容走最严的路径，改名字根本不进那条路径。
  */
 @Service
 public class KbTermService {

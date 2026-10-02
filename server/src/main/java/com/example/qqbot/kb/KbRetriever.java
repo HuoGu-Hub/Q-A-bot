@@ -40,9 +40,8 @@ import java.util.regex.Pattern;
  * 同时 C 路必须带闸门：真实口语提问里标题路和正文路的 top1 只有 9.2% 重合，
  * 无条件融合会把一半口语提问的答案换掉（实测 50.8%）。
  *
- * <p><b>语料从哪来不归它管</b>：本类只认 {@link KbCorpus}。
- * 旧的 {@link KbIndex}（行号即身份）和新的
- * {@code KbBlockIndex}（id 即身份）都实现了那个接口 ——
+ * <p><b>语料从哪来不归它管</b>：本类只认 {@link KbCorpus}，
+ * 当前由 {@code KbBlockIndex}（id 即身份）实现 ——
  * 换存储 = 换一个 Bean，**算法这一份不用动**。
  * 这是有意的：下面那些权重和加成都是实测调出来的，复制成两份必然漂移。
  *
