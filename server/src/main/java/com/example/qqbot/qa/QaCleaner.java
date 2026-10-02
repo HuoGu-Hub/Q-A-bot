@@ -1,6 +1,5 @@
 package com.example.qqbot.qa;
 
-import com.example.qqbot.config.QaProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,10 +18,10 @@ public class QaCleaner {
 
     private static final Logger log = LoggerFactory.getLogger(QaCleaner.class);
 
-    private final QaProperties props;
+    private final QaPolicy props;
     private final QaStore store;
 
-    public QaCleaner(QaProperties props, QaStore store) {
+    public QaCleaner(QaPolicy props, QaStore store) {
         this.props = props;
         this.store = store;
     }

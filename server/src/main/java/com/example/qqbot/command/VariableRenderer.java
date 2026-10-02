@@ -1,5 +1,6 @@
 package com.example.qqbot.command;
 
+import com.example.qqbot.site.BotPolicy;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.qa.QaAnalytics;
@@ -55,13 +56,13 @@ public class VariableRenderer {
     private final KbBlockStore blockStore;
     private final Glossary glossary;
     private final QaAnalytics analytics;
-    private final com.example.qqbot.config.BotProperties botProps;
+    private final BotPolicy botProps;
 
     private final Instant startedAt = Instant.now();
 
     public VariableRenderer(CommandPolicy props, CommandStore store,
                             KbBlockStore blockStore, Glossary glossary, QaAnalytics analytics,
-                            com.example.qqbot.config.BotProperties botProps) {
+                            BotPolicy botProps) {
         this.props = props;
         this.store = store;
         this.blockStore = blockStore;

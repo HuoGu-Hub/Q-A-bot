@@ -1,6 +1,5 @@
 package com.example.qqbot.qa;
 
-import com.example.qqbot.config.QaProperties;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -37,7 +36,7 @@ public class QaRecorder {
 
     private static final Logger log = LoggerFactory.getLogger(QaRecorder.class);
 
-    private final QaProperties props;
+    private final QaPolicy props;
     private final QaStore store;
 
     /** 追问标记的来源。用 setter 注入，避免 QaCollector ↔ QaRecorder 构造循环依赖 */
@@ -54,7 +53,7 @@ public class QaRecorder {
     private final AtomicLong recorded = new AtomicLong();
     private final AtomicLong dropped = new AtomicLong();
 
-    public QaRecorder(QaProperties props, QaStore store) {
+    public QaRecorder(QaPolicy props, QaStore store) {
         this.props = props;
         this.store = store;
     }

@@ -188,15 +188,20 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1（S2 配置去中心化）。2026-10-02 **摘掉 @Disabled 真跑了一次**："
-            + "32 处违反 / 7 个类。剩下的：QaRecorder 7、QaReportRunner 7、QaCleaner 6、"
-            + "MediaStorageGuard 29、GuardPipeline 23、EmbeddingClient 17、RerankClient 16。"
-            + "⚠️「违反处数」与「类数」是两件事 —— LlmRouter 一个类就占 12%（它把整个 "
-            + "LlmProperties 拖进构造器、然后到处读字段）。"
-            + "⚠️ 别用 grep import 估这个数字：既漏全限定名用法、又把死 import 算进去，"
-            + "而 ArchUnit 看的是字节码依赖")
-    @DisplayName("【目标】业务包不得直接依赖 config（配置只应在装配层注入）")
+    @DisplayName("★ 业务包不得直接依赖 config（配置只应在装配层注入）—— 2026-10-02 转正")
     void businessPackagesDoNotDependOnConfig() {
+        // 2026-10-02 转正：原先 496 处违反 / 48 个类，分 7 轮还完（见交付说明债务⑥）：
+        //   logs · plaza · onebot.client · settings · guard · guard.stage · onebot.outbound
+        //   kb · kb.wiki · kb.category · kb.term · llm · media · site · router
+        //
+        // 两条判据（写在交付说明里，别混用）：
+        //   ① 配置类是扁的、字段是零散开关 → 声明只读接口（业务侧声明、config 侧 implements）
+        //   ② 配置类有嵌套类、而那些嵌套类是完整领域词汇 → 整个类搬进领域包
+        //   搬不动（yml 键在根上）就只给那几个字段声明只读接口。
+        //
+        // ⚠️ 加新包时记得回来更新下面这份名单，否则新包不会被这条规则保护。
+        // ⚠️ persistence 不在名单里：SqliteDatabase 借用了 app.qa.db / app.qa.enabled，
+        //    它们该叫 app.persistence.*，但改名会动到现网配置，单独一步做。
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
                         "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..", "..llm..",

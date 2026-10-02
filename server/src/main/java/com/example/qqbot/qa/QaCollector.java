@@ -2,7 +2,6 @@ package com.example.qqbot.qa;
 
 import com.example.qqbot.llm.LlmPolicy;
 import com.example.qqbot.llm.Provider;
-import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,12 +30,12 @@ public class QaCollector {
 
     private static final Logger log = LoggerFactory.getLogger(QaCollector.class);
 
-    private final QaProperties props;
+    private final QaPolicy props;
     private final QaRecorder recorder;
     private final LlmPolicy llmProps;
     private final ObjectMapper mapper;
 
-    public QaCollector(QaProperties props, QaRecorder recorder,                       LlmPolicy llmProps, ObjectMapper mapper) {
+    public QaCollector(QaPolicy props, QaRecorder recorder,                       LlmPolicy llmProps, ObjectMapper mapper) {
         this.props = props;
         this.recorder = recorder;
         this.llmProps = llmProps;

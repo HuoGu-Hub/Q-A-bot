@@ -1,9 +1,11 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.qa.QaPolicy;
+import com.example.qqbot.qa.Report;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 问答记录与统计的配置，对应 application.yml 里的 app.qa.*
+ * 问答记录与统计的配置绑定 —— 对应 application.yml 里的 {@code app.qa.*}
  *
  * <p><b>核心策略（已定）：</b>
  * <ul>
@@ -12,9 +14,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </ul>
  * 所以"删原文"和"留统计"不冲突：统计需要的字段本来就在另一张表里，
  * 不需要先跑一遍归档聚合。
+ *
+ * <h2>2026-10-02：{@code Report} 搬去了 {@code qa} 包</h2>
+ * 它是<b>问答统计自己的领域词汇</b>，只是碰巧从 yml 绑定过来。
+ * 搬迁是**纯搬运**：yml 的键一个都没变，绑定关系也没变。
+ *
+ * <p>业务侧只读视图见 {@link QaPolicy} —— 业务包只依赖它，不依赖本类。
+ *
+ * <h2>⚠️ {@code db} / {@code enabled} 是「借来的」键</h2>
+ * 键名是 {@code app.qa.*}，但真正的使用者是 {@code persistence.SqliteDatabase}。
+ * 它们该叫 {@code app.persistence.*} —— 改名会动到现网配置，单独一步做。
  */
 @ConfigurationProperties(prefix = "app.qa")
-public class QaProperties {
+public class QaProperties implements QaPolicy {
 
     /** 记录总开关。关掉后完全不写库（回答流程也完全不受影响） */
     private boolean enabled = true;
@@ -41,59 +53,7 @@ public class QaProperties {
 
     private Report report = new Report();
 
-    /**
-     * 报表配置（S2）。和语料构建一样**默认关闭**，只有显式打开才跑：
-     *
-     * <pre>
-     * mvn spring-boot:run -Dspring-boot.run.arguments="--app.qa.report.enabled=true --spring.main.web-application-type=none"
-     * </pre>
-     */
-    public static class Report {
-
-        private boolean enabled = false;
-
-        /** 统计最近多少天。0 = 全部 */
-        private int days = 30;
-
-        /** 看哪一段：all / overview / keywords / misses / cosine / sources */
-        private String section = "all";
-
-        /** 排行榜取前几名 */
-        private int topN = 20;
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public int getDays() {
-            return days;
-        }
-
-        public void setDays(int days) {
-            this.days = days;
-        }
-
-        public String getSection() {
-            return section;
-        }
-
-        public void setSection(String section) {
-            this.section = section;
-        }
-
-        public int getTopN() {
-            return topN;
-        }
-
-        public void setTopN(int topN) {
-            this.topN = topN;
-        }
-    }
-
+    @Override
     public boolean isEnabled() {
         return enabled;
     }
@@ -102,6 +62,7 @@ public class QaProperties {
         this.enabled = enabled;
     }
 
+    @Override
     public String getDb() {
         return db;
     }
@@ -110,6 +71,7 @@ public class QaProperties {
         this.db = db;
     }
 
+    @Override
     public int getRetentionDays() {
         return retentionDays;
     }
@@ -118,6 +80,7 @@ public class QaProperties {
         this.retentionDays = retentionDays;
     }
 
+    @Override
     public int getQueueCapacity() {
         return queueCapacity;
     }
@@ -126,6 +89,7 @@ public class QaProperties {
         this.queueCapacity = queueCapacity;
     }
 
+    @Override
     public int getFlushBatchSize() {
         return flushBatchSize;
     }
@@ -134,6 +98,7 @@ public class QaProperties {
         this.flushBatchSize = flushBatchSize;
     }
 
+    @Override
     public String getCleanupCron() {
         return cleanupCron;
     }
@@ -142,6 +107,7 @@ public class QaProperties {
         this.cleanupCron = cleanupCron;
     }
 
+    @Override
     public Report getReport() {
         return report;
     }

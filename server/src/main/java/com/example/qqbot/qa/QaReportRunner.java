@@ -1,6 +1,5 @@
 package com.example.qqbot.qa;
 
-import com.example.qqbot.config.QaProperties;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
@@ -31,11 +30,11 @@ public class QaReportRunner implements ApplicationRunner {
 
     private static final int BAR_MAX = 40;
 
-    private final QaProperties props;
+    private final QaPolicy props;
     private final QaAnalytics analytics;
     private final ConfigurableApplicationContext context;
 
-    public QaReportRunner(QaProperties props, QaAnalytics analytics,
+    public QaReportRunner(QaPolicy props, QaAnalytics analytics,
                           ConfigurableApplicationContext context) {
         this.props = props;
         this.analytics = analytics;
@@ -53,7 +52,7 @@ public class QaReportRunner implements ApplicationRunner {
     }
 
     private void print() {
-        QaProperties.Report cfg = props.getReport();
+        Report cfg = props.getReport();
         int days = cfg.getDays();
         int topN = cfg.getTopN();
         String section = cfg.getSection() == null ? "all" : cfg.getSection().toLowerCase(Locale.ROOT);

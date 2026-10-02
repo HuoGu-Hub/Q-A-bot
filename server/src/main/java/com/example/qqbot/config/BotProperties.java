@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.site.BotPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -11,9 +12,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>⚠️ 注意：{@code AGENTS.md} 里的名字是**写死在提示词里的** ——
  * 那是模型人格的一部分，不适合运行时替换（而且提示词是纯文本文件）。
  * 改提示词里的名字需要手动改 AGENTS.md。
+ *
+ * <p>业务侧只读视图见 {@link BotPolicy} —— 业务包只依赖它，不依赖本类。
  */
 @ConfigurationProperties(prefix = "app.bot")
-public class BotProperties {
+public class BotProperties implements BotPolicy {
 
     /** 机器人昵称 —— 用于 {bot} 变量、限流话术等 */
     private String name = "飘雪喵";
@@ -24,6 +27,7 @@ public class BotProperties {
     /** 技术支持署名 */
     private String author = "示例作者";
 
+    @Override
     public String getName() {
         return name;
     }
@@ -32,6 +36,7 @@ public class BotProperties {
         this.name = name;
     }
 
+    @Override
     public String getOrg() {
         return org;
     }
@@ -40,6 +45,7 @@ public class BotProperties {
         this.org = org;
     }
 
+    @Override
     public String getAuthor() {
         return author;
     }

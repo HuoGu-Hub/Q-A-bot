@@ -1,6 +1,5 @@
 package com.example.qqbot.qa;
 
-import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.QaStoreRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -48,12 +47,12 @@ public class QaStore {
 
     /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
     private final QaStoreRepository repo;
-    private final QaProperties props;
+    private final QaPolicy props;
     private final ObjectMapper mapper;
 
     private volatile boolean available;
 
-    public QaStore(QaStoreRepository repo, QaProperties props, ObjectMapper mapper) {
+    public QaStore(QaStoreRepository repo, QaPolicy props, ObjectMapper mapper) {
         this.repo = repo;
         this.props = props;
         this.mapper = mapper;
