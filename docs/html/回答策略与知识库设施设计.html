@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>回答策略 与 知识库设施设计（v2）</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一关于温度它不是知识库依赖度的旋钮">一、关于温度：它不是&quot;知识库依赖度&quot;的旋钮</a></li>
+<li class="lvl-3"><a href="#11-温度实际控制什么">1.1 温度实际控制什么</a></li>
+<li class="lvl-3"><a href="#12-你的直觉不是空穴来风但它指向的结论是错的">1.2 你的直觉不是空穴来风，但它指向的结论是错的</a></li>
+<li class="lvl-3"><a href="#13-但严谨度档作为功能是成立的">1.3 但&quot;严谨度档&quot;作为功能是成立的</a></li>
+<li class="lvl-2"><a href="#二关于忠于自有知识库这改变了诊断">二、关于&quot;忠于自有知识库&quot;：这改变了诊断</a></li>
+<li class="lvl-3"><a href="#21-真正的机制不是权重过大是没有区分度">2.1 真正的机制不是&quot;权重过大&quot;，是&quot;没有区分度&quot;</a></li>
+<li class="lvl-3"><a href="#22-由此推出的正确方向">2.2 由此推出的正确方向</a></li>
+<li class="lvl-2"><a href="#三关于新增-bot-命令强制走联网方向对但现在的指令系统接不住">三、关于&quot;新增 bot 命令强制走联网&quot;：方向对，但现在的指令系统接不住</a></li>
+<li class="lvl-3"><a href="#31-但是现有指令系统有三个硬约束">3.1 但是：现有指令系统有三个硬约束</a></li>
+<li class="lvl-3"><a href="#32-两个集成点我推荐第二个">3.2 两个集成点，我推荐第二个</a></li>
+<li class="lvl-2"><a href="#四地基知识库要补的那一维">四、地基：知识库要补的那一维</a></li>
+<li class="lvl-3"><a href="#41-现有资产盘点别重复造">4.1 现有资产盘点（别重复造）</a></li>
+<li class="lvl-3"><a href="#42-要补的东西chunk-级三维元数据">4.2 要补的东西：chunk 级三维元数据</a></li>
+<li class="lvl-3"><a href="#43-顺带把-v1-的-b1-修掉这是-bug不是功能">4.3 顺带把 v1 的 B1 修掉（这是 bug，不是功能）</a></li>
+<li class="lvl-2"><a href="#五合并后的路线图">五、合并后的路线图</a></li>
+<li class="lvl-2"><a href="#六待你决断">六、待你决断</a></li>
+<li class="lvl-2"><a href="#七实现进度滚动更新">七、实现进度（滚动更新）</a></li>
+<li class="lvl-3"><a href="#已完成指令系统升级2026-09-28">✅ 已完成：指令系统升级（2026-09-28）</a></li>
+<li class="lvl-3"><a href="#已完成第-0-步-知识库元数据地基2026-09-28">✅ 已完成：第 0 步 —— 知识库元数据地基（2026-09-28）</a></li>
+<li class="lvl-3"><a href="#两件需要你知道的事">⚠️ 两件需要你知道的事</a></li>
+<li class="lvl-3"><a href="#下一步原计划里的-1-2-3-步">⏳ 下一步（原计划里的 1 / 2 / 3 步）</a></li>
+<li class="lvl-2"><a href="#附本文关键论断的核查方式">附：本文关键论断的核查方式</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一关于温度它不是知识库依赖度的旋钮">一、关于温度：它不是&quot;知识库依赖度&quot;的旋钮</a></li>
+<li class="lvl-3"><a href="#11-温度实际控制什么">1.1 温度实际控制什么</a></li>
+<li class="lvl-3"><a href="#12-你的直觉不是空穴来风但它指向的结论是错的">1.2 你的直觉不是空穴来风，但它指向的结论是错的</a></li>
+<li class="lvl-3"><a href="#13-但严谨度档作为功能是成立的">1.3 但&quot;严谨度档&quot;作为功能是成立的</a></li>
+<li class="lvl-2"><a href="#二关于忠于自有知识库这改变了诊断">二、关于&quot;忠于自有知识库&quot;：这改变了诊断</a></li>
+<li class="lvl-3"><a href="#21-真正的机制不是权重过大是没有区分度">2.1 真正的机制不是&quot;权重过大&quot;，是&quot;没有区分度&quot;</a></li>
+<li class="lvl-3"><a href="#22-由此推出的正确方向">2.2 由此推出的正确方向</a></li>
+<li class="lvl-2"><a href="#三关于新增-bot-命令强制走联网方向对但现在的指令系统接不住">三、关于&quot;新增 bot 命令强制走联网&quot;：方向对，但现在的指令系统接不住</a></li>
+<li class="lvl-3"><a href="#31-但是现有指令系统有三个硬约束">3.1 但是：现有指令系统有三个硬约束</a></li>
+<li class="lvl-3"><a href="#32-两个集成点我推荐第二个">3.2 两个集成点，我推荐第二个</a></li>
+<li class="lvl-2"><a href="#四地基知识库要补的那一维">四、地基：知识库要补的那一维</a></li>
+<li class="lvl-3"><a href="#41-现有资产盘点别重复造">4.1 现有资产盘点（别重复造）</a></li>
+<li class="lvl-3"><a href="#42-要补的东西chunk-级三维元数据">4.2 要补的东西：chunk 级三维元数据</a></li>
+<li class="lvl-3"><a href="#43-顺带把-v1-的-b1-修掉这是-bug不是功能">4.3 顺带把 v1 的 B1 修掉（这是 bug，不是功能）</a></li>
+<li class="lvl-2"><a href="#五合并后的路线图">五、合并后的路线图</a></li>
+<li class="lvl-2"><a href="#六待你决断">六、待你决断</a></li>
+<li class="lvl-2"><a href="#七实现进度滚动更新">七、实现进度（滚动更新）</a></li>
+<li class="lvl-3"><a href="#已完成指令系统升级2026-09-28">✅ 已完成：指令系统升级（2026-09-28）</a></li>
+<li class="lvl-3"><a href="#已完成第-0-步-知识库元数据地基2026-09-28">✅ 已完成：第 0 步 —— 知识库元数据地基（2026-09-28）</a></li>
+<li class="lvl-3"><a href="#两件需要你知道的事">⚠️ 两件需要你知道的事</a></li>
+<li class="lvl-3"><a href="#下一步原计划里的-1-2-3-步">⏳ 下一步（原计划里的 1 / 2 / 3 步）</a></li>
+<li class="lvl-2"><a href="#附本文关键论断的核查方式">附：本文关键论断的核查方式</a></li></ol></details>
+</nav>
+<main>
+<h1 id="回答策略-与-知识库设施设计v2">回答策略 与 知识库设施设计（v2）</h1>
+<blockquote>
+<p>本文是 <code>知识库时效性与回答策略方案.md</code>（下称 v1）的<strong>设计升级</strong>。v1 的<strong>现状诊断全部有效</strong>（回答链路、语料冻结、build.json 误导、Game Updates 结构缺失）；本文<strong>取代 v1 的方案与路线图部分</strong>，因为你的三条补充改变了设计的形状。</p>
+<p><strong>一句话结论</strong>：你的第 1 点（时效）我 v1 已量化；第 2 点（温度）<strong>需要纠正</strong>——温度不控制&quot;依赖哪份资料&quot;，它控制采样的发散度；第 3 点（忠于<strong>自有</strong>知识库）<strong>是最重要的一击</strong>，它把诊断从&quot;知识库权重过大&quot;改成了更准确的**&quot;知识库缺少区分度&quot;**——系统现在无法区分「wiki 原文（未核对、可能过期）」和「你人工订正过的权威内容」，把两者一起升格成了&quot;以资料为准&quot;。<strong>所以真正的第一优先级，是给知识库补上元数据骨架。</strong></p>
+</blockquote>
+<hr>
+<h2 id="一关于温度它不是知识库依赖度的旋钮"><a class="anchor" href="#一关于温度它不是知识库依赖度的旋钮">一、关于温度：它不是&quot;知识库依赖度&quot;的旋钮</a></h2>
+<h3 id="11-温度实际控制什么"><a class="anchor" href="#11-温度实际控制什么">1.1 温度实际控制什么</a></h3>
+<p>温度是 <strong>softmax 采样的温度</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>温度</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>→ 0</td>
+<td>近乎贪心解码：每步都选概率最高的续写。<strong>同一份上下文，输出高度稳定</strong></td>
+</tr>
+<tr>
+<td>0.7（你现在两个 provider 的默认值）</td>
+<td>正常发散</td>
+</tr>
+<tr>
+<td>1.0+</td>
+<td>分布被压平，低概率词也有机会被选中</td>
+</tr>
+</tbody></table></div>
+<p>它改变的是**&quot;在给定上下文下，怎么挑下一个词&quot;<strong>，不改变</strong>&quot;上下文里有什么&quot;<strong>，也不改变</strong>&quot;模型知道什么&quot;**（知识截止时间不会因为调温度而移动）。</p>
+<h3 id="12-你的直觉不是空穴来风但它指向的结论是错的"><a class="anchor" href="#12-你的直觉不是空穴来风但它指向的结论是错的">1.2 你的直觉不是空穴来风，但它指向的结论是错的</a></h3>
+<p>确实存在一个<strong>间接</strong>关联：温度调低时，模型更容易<strong>复述</strong>上下文里的原话（包括过期的那句）；温度调高时，它更愿意<strong>偏离</strong>上下文。</p>
+<p>但关键在于——<strong>偏离的方向不是&quot;更新的事实&quot;，而是&quot;更流畅、更可能的文本&quot;</strong>。对事实性问题来说，这就是<strong>编造率上升</strong>。也就是说：</p>
+<ul>
+<li>调高温度：过时答案<strong>少了一点</strong>，但编造答案<strong>多了很多</strong>；</li>
+<li>你<strong>没有</strong>因此拿到&quot;网上最新的知识&quot;，只是把&quot;照抄旧资料&quot;换成了&quot;自由发挥&quot;。</li>
+</ul>
+<p><strong>结论：温度不能用来选择知识来源。</strong> 想控制&quot;用哪份资料&quot;，真正的旋钮是这四个：</p>
+<ol>
+<li><strong>上下文里放了什么</strong>（检索策略、资料块组装）——决定 90%</li>
+<li><strong>系统提示词怎么要求</strong>（<code>AGENTS.md</code> 第九章的&quot;以资料为准&quot;）</li>
+<li><strong>允许不允许模型说&quot;我不确定/我的资料可能过期&quot;</strong></li>
+<li>（可选）要求它标注每条事实的来源</li>
+</ol>
+<h3 id="13-但严谨度档作为功能是成立的"><a class="anchor" href="#13-但严谨度档作为功能是成立的">1.3 但&quot;严谨度档&quot;作为功能是成立的</a></h3>
+<p>你要的&quot;配置大模型的严谨度&quot;<strong>值得做</strong>，只是它属于<strong>风格层</strong>，不是<strong>知识来源层</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>档位</th>
+<th>温度</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>严谨</td>
+<td>0.1</td>
+<td>事实问答：稳、少编、可复现</td>
+</tr>
+<tr>
+<td>默认</td>
+<td>0.7</td>
+<td>现在的行为</td>
+</tr>
+<tr>
+<td>发散</td>
+<td>1.0</td>
+<td>闲聊、起名、玩梗</td>
+</tr>
+</tbody></table></div>
+<p><strong>实现要点（这是关键约束）</strong>：温度现在是<strong>构建模型客户端时</strong>写死的参数，不是每次请求能传的：</p>
+<pre><code class="language-java">// llm/LlmRouter.java:70-91
+private static ChatModel buildClient(LlmProperties.Provider cfg) {
+    OpenAiChatModel.builder()
+        .temperature(cfg.getTemperature())      // ← 第 75 行，构建期设定
+        ...
+}
+// config/LlmProperties.java:194     private Double temperature = 0.7;
+// resources/application.yml:526/546 两个 provider 都是 0.7
+</code></pre>
+<p>所以&quot;每请求切换温度&quot;要<strong>为每个 provider 建多套客户端实例</strong>（严谨/默认/发散），按模式选实例。工作量不大，但不是改个数字。</p>
+<p><strong>而且这个功能有现成的家</strong>：<code>LlmProperties.ReplyStyle</code>（<code>config/LlmProperties.java:116</code>）就是为了这类需求建的——它的注释写得很明白：</p>
+<blockquote>
+<p>表现层约束，和 AGENTS.md 那份「安全底座」刻意分开。
+① AGENTS.md 改它风险大、且每次都进系统提示词越长越贵；② 这里要能<strong>热生效</strong>（后台改完下一句就变）。</p>
+</blockquote>
+<p><strong>严谨度档应该挂在 <code>ReplyStyle</code> 这套机制上</strong>（后台可配、热生效、与安全底座隔离），而不是去动 <code>AGENTS.md</code>。</p>
+<hr>
+<h2 id="二关于忠于自有知识库这改变了诊断"><a class="anchor" href="#二关于忠于自有知识库这改变了诊断">二、关于&quot;忠于自有知识库&quot;：这改变了诊断</a></h2>
+<p>你这句话把问题定位得更准了。我 v1 说&quot;别降低知识库权重&quot;，但理由还不够锋利。现在重新表述：</p>
+<h3 id="21-真正的机制不是权重过大是没有区分度"><a class="anchor" href="#21-真正的机制不是权重过大是没有区分度">2.1 真正的机制不是&quot;权重过大&quot;，是&quot;没有区分度&quot;</a></h3>
+<p>知识库里其实躺着<strong>两类性质完全不同的东西</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>来源</th>
+<th>可信度</th>
+<th>会过期吗</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>A 类</strong></td>
+<td>你人工订正过的（提案采纳、直接改块、词条核对）</td>
+<td><strong>高</strong> —— 这是自有资产，应该权威</td>
+<td>低（人负责）</td>
+</tr>
+<tr>
+<td><strong>B 类</strong></td>
+<td>wiki 原文，原样抓下来、没人看过</td>
+<td><strong>中</strong> —— 只是原料</td>
+<td><strong>高</strong>（游戏一更新就废）</td>
+</tr>
+</tbody></table></div>
+<p>而现在系统<strong>把 A 和 B 一视同仁</strong>：</p>
+<ul>
+<li><code>ChatService.java:221-224</code> 把它们混成<strong>一个</strong> <code>&lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;</code> 块；</li>
+<li><code>AGENTS.md</code> 第九章说&quot;<strong>以资料为准（它更新、更具体）</strong>&quot;——把 B 类和 A 类一起升格成权威；</li>
+<li><code>KbChunk</code> 的字段是 <code>(i, title, cats, text, url)</code>（<code>kb/KbChunk.java:14</code>）——<strong>没有任何字段能区分 A 和 B，也没有日期</strong>。</li>
+</ul>
+<p><strong>所以你感受到的&quot;过度忠于 wiki&quot;，准确说法是：系统没有能力区分&quot;我们核对过的知识&quot;和&quot;wiki 的原料&quot;，于是把原料也当成了结论。</strong></p>
+<h3 id="22-由此推出的正确方向"><a class="anchor" href="#22-由此推出的正确方向">2.2 由此推出的正确方向</a></h3>
+<p>不是&quot;降低知识库权重&quot;（那会把 A 类一起削弱），而是：</p>
+<blockquote>
+<p><strong>给知识库补上&quot;可信度&quot;这一维</strong> —— 每条资料带着它的<strong>来源、是否人工订正、内容时间</strong>进入上下文，让模型（和检索）能够区别对待：</p>
+<ul>
+<li>A 类（已订正）→ <strong>权威</strong>，就是&quot;以资料为准&quot;</li>
+<li>B 类（wiki 原文，截至 X）→ <strong>参考</strong>，允许模型说&quot;我的资料可能过期&quot;</li>
+</ul>
+</blockquote>
+<p>这一步做完，v1 的 A/B/C/D、你的命令模式、严谨度档，<strong>全都能挂上来</strong>——因为它们都需要同一个东西：<strong>chunk 级的元数据</strong>。这正是你说的&quot;先建好知识库设施&quot;。</p>
+<hr>
+<h2 id="三关于新增-bot-命令强制走联网方向对但现在的指令系统接不住"><a class="anchor" href="#三关于新增-bot-命令强制走联网方向对但现在的指令系统接不住">三、关于&quot;新增 bot 命令强制走联网&quot;：方向对，但现在的指令系统接不住</a></h2>
+<p>你的设计①是对的方向（<strong>用户显式声明意图</strong>来切换知识来源），而且比我 v1 的&quot;方案 C1 自动触发&quot;更好——<strong>没有分类器误判风险，也不影响正常问答的延迟</strong>。这点我采纳。</p>
+<h3 id="31-但是现有指令系统有三个硬约束"><a class="anchor" href="#31-但是现有指令系统有三个硬约束">3.1 但是：现有指令系统有三个硬约束</a></h3>
+<p>我读了代码，<code>/命令 问题文本</code> 这个语法<strong>现在跑不起来</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>约束</th>
+<th>证据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>指令不支持任何参数</strong>。匹配正则是 <code>^/(\S+)\s*$</code>，且触发词要<strong>完全相等</strong>——&quot;<code>/联网 今天什么版本</code>&quot;里有个空格，<strong>连&quot;看起来像指令&quot;都不会被记录</strong></td>
+<td><code>command/CommandMatcher.java</code> 的 <code>SLASH_COMMAND</code> + 完全相等匹配</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>指令是纯模板话术，永远不调模型</strong>。<code>BotCommand</code> 的字段是 <code>trigger/reply/description/scope/minRole/...</code>，处理流程是&quot;渲染模板 → 发出去&quot;</td>
+<td><code>command/BotCommand.java</code>、<code>router/MessageRouter.java:180-229</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>指令跑在 Guard 之前</strong>，故意绕过限流/敏感词/<strong>成本预算</strong>（为了 <code>/help</code> 秒回）</td>
+<td><code>MessageRouter.java:305</code>（指令）vs <code>317</code>（Guard）vs <code>336</code>（预算）</td>
+</tr>
+</tbody></table></div>
+<p>第 3 条特别重要：<strong>一条能调模型的&quot;指令&quot;，如果沿用现在的路径，等于开了一个不限量、不过预算的模型调用入口</strong>——成本会被打穿。</p>
+<h3 id="32-两个集成点我推荐第二个"><a class="anchor" href="#32-两个集成点我推荐第二个">3.2 两个集成点，我推荐第二个</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>方案 A：扩展指令系统</th>
+<th>方案 B：前缀约定（推荐）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>做法</td>
+<td>改 <code>CommandMatcher</code> 支持参数；给 <code>BotCommand</code> 加 <code>kind=template|agent</code>；把 agent 类指令<strong>重新导回</strong> Guard/预算链路</td>
+<td>在问答链路里捕获一个<strong>模式前缀</strong>，像现有的 <code>求助：</code> 一样</td>
+</tr>
+<tr>
+<td>语法</td>
+<td><code>/联网 今天什么版本</code></td>
+<td><code>/联网 今天什么版本</code>（UX 完全一样）</td>
+</tr>
+<tr>
+<td>后台管理</td>
+<td>✅ 能进&quot;指令&quot;页列表里配置</td>
+<td>❌ 不进列表（但可以进&quot;设置&quot;页）</td>
+</tr>
+<tr>
+<td>代价</td>
+<td>要动匹配器 + 指令模型 + 路由顺序，还要小心<strong>别让 agent 指令绕过预算</strong></td>
+<td>改动集中在 <code>MessageRouter</code> 一处</td>
+</tr>
+<tr>
+<td>现成先例</td>
+<td>无</td>
+<td>✅ <strong>已有</strong>：<code>MessageRouter.tryHelpRequest()</code>（<code>MessageRouter.java:242</code>）就是&quot;捕获 <code>求助：</code> 前缀 → 转给另一个服务&quot;</td>
+</tr>
+</tbody></table></div>
+<p><strong>方案 B 的落地形态</strong>：</p>
+<pre><code>MessageRouter.handle()
+  ①  黑名单
+  ②  指令匹配（不变）
+  ②.5 求助：前缀（已有）
+  ②.6 回答模式前缀（新增）              ← 在这里插入
+        /联网  xxx   → mode = web      （只用实时来源）
+        /知识库 xxx   → mode = kb       （强制只用知识库，即使默认不是）
+        /对照  xxx    → mode = hybrid  （两边都要，冲突时标注分歧）
+        （无前缀）     → mode = default
+  ③  Guard 五层
+  ③.5 成本预算                            ← 模式在这里**必须**参与计费
+  ④  ChatService.reply(event, text, quote, images, mode)   ← 多一个参数
+</code></pre>
+<p><strong>三个模式的行为差异</strong>（注意：三个都是&quot;检索 → 注入 → 调模型&quot;，只是检索源和提示词不同，<strong>不需要 tool calling</strong>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模式</th>
+<th>检索什么</th>
+<th>资料块</th>
+<th>提示词口径</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>kb</code>（默认）</td>
+<td>只知识库</td>
+<td><code>&lt;&lt;&lt;KNOWLEDGE as-of=... reviewed=true|false&gt;&gt;&gt;</code></td>
+<td>现有规则，但按 A/B 类分档</td>
+</tr>
+<tr>
+<td><code>web</code></td>
+<td>只实时（wiki API 渲染结果 / 网页）</td>
+<td><code>&lt;&lt;&lt;LIVE fetched-at=...&gt;&gt;&gt;</code></td>
+<td><strong>明确告知&quot;这是刚取的实时资料&quot;</strong>，不受知识库规则约束</td>
+</tr>
+<tr>
+<td><code>hybrid</code></td>
+<td>两边都取</td>
+<td>两个块都给</td>
+<td><strong>要求它指出分歧</strong>，而不是二选一</td>
+</tr>
+</tbody></table></div>
+<p>三条设计要点：</p>
+<ol>
+<li><strong>预算必须按模式计费</strong>（<code>web</code> 模式更贵：多一次外网往返），否则就是 3.1 第 3 条的坑；</li>
+<li><strong>落库要带模式标记</strong>（<code>qa_stat</code> 落库已有 <code>guard_action</code>/<code>sources</code> 的概念），这样你才能量化&quot;哪种模式答得准&quot;——<strong>没有这个，所有方案都是凭感觉</strong>；</li>
+<li><code>web</code> 模式<strong>必须有降级</strong>：外网挂了/超时 → 退回 <code>kb</code> 模式并说明，绝不能让群友等到超时还没回答。</li>
+</ol>
+<hr>
+<h2 id="四地基知识库要补的那一维"><a class="anchor" href="#四地基知识库要补的那一维">四、地基：知识库要补的那一维</a></h2>
+<p>这是你说的&quot;先建好知识库设施&quot;。具体到代码，就是给每一块资料补上<strong>元数据</strong>。</p>
+<h3 id="41-现有资产盘点别重复造"><a class="anchor" href="#41-现有资产盘点别重复造">4.1 现有资产盘点（别重复造）</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>已有</th>
+<th>位置</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>页面级人工成果表</td>
+<td><code>kb_term(en, zh, status, updated_at)</code></td>
+<td><code>status</code> = <code>draft/verified/rejected</code>（待核对/已核对/弃用）</td>
+</tr>
+<tr>
+<td><strong>&quot;人工成果不被冲掉&quot;的保护</strong></td>
+<td><code>KbTermStore.reconcile</code> 用 <code>INSERT OR IGNORE</code></td>
+<td>注释原话：&quot;中文名和核对状态是人工成果，<strong>绝不能被语料重建冲掉</strong>&quot;</td>
+</tr>
+<tr>
+<td>订正链路</td>
+<td><code>KbProposalService</code>（提案：新增/覆盖，人工确认后才落库）、<code>KbTermService.chunk</code>（直接改块）、<code>KbContributionStore</code>（投递）</td>
+<td>完整的&quot;人改知识库&quot;通道</td>
+</tr>
+<tr>
+<td>增量索引</td>
+<td><code>KbIndexIncrementalService</code></td>
+<td>改完只重算这一块的向量，已实现</td>
+</tr>
+<tr>
+<td>可配项机制</td>
+<td><code>SettingsWhitelist.Item(key,label,group,type,default)</code></td>
+<td>后台设置页的现成框架</td>
+</tr>
+</tbody></table></div>
+<p><strong>所以缺的不是&quot;订正流程&quot;，而是&quot;订正状态的粒度&quot;和&quot;它进入检索/提示词的通道&quot;。</strong></p>
+<h3 id="42-要补的东西chunk-级三维元数据"><a class="anchor" href="#42-要补的东西chunk-级三维元数据">4.2 要补的东西：chunk 级三维元数据</a></h3>
+<pre><code class="language-java">// kb/KbChunk.java —— 现在只有 (i, title, cats, text, url)
+public record KbChunk(
+    int i, String title, List&lt;String&gt; cats, String text, String url,
+    Source source,        // WIKI（原样抓的）| CURATED（人工订正过）| BUILTIN（内置）
+    boolean reviewed,     // 是否经过人工核对（来自 kb_term.status=verified 或 block 级标记）
+    String contentAt,     // 内容时间：wiki revision 时间戳，或人工订正的日期
+    String gameVersion    // 可选：该内容对应的游戏版本（从 wiki 页里解析）
+) {}
+</code></pre>
+<p>三处使用：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>用在哪</th>
+<th>怎么用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>检索融合</strong></td>
+<td><code>KbRetriever.fuse()</code> 现在只有&quot;向量权重 1.0 / 关键词 2.0 / 标题加成&quot;——加第 4 维：<code>CURATED</code> 加分、<code>WIKI</code> 且 <code>contentAt</code> 很旧则减分</td>
+</tr>
+<tr>
+<td><strong>资料块组装</strong></td>
+<td><code>ChatService</code> 把资料<strong>分两段</strong>注入：<code>&lt;&lt;&lt;CURATED&gt;&gt;&gt;</code>（已核对，权威）与 <code>&lt;&lt;&lt;WIKI_SNAPSHOT as-of=...&gt;&gt;&gt;</code>（原文，可能过期）</td>
+</tr>
+<tr>
+<td><strong>提示词口径</strong></td>
+<td><code>AGENTS.md</code> 第九章改成：<strong>已核对资料以它为准；wiki 原文与你的知识冲突时，说明分歧并在必要时指出&quot;我的资料截至 X&quot;</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="43-顺带把-v1-的-b1-修掉这是-bug不是功能"><a class="anchor" href="#43-顺带把-v1-的-b1-修掉这是-bug不是功能">4.3 顺带把 v1 的 B1 修掉（这是 bug，不是功能）</a></h3>
+<p><code>kb/build/KbCorpusBuilder.java:144</code> 那条&quot;已有缓存就永远复用&quot;的逻辑必须改：向 wiki 要 <code>rvprop=timestamp</code>（或用 <code>list=recentchanges</code>），<strong>只重抓时间戳变过的页</strong>。这一步同时给 4.2 的 <code>contentAt</code> 提供了数据来源——<strong>所以 B1 和元数据设施是同一件事的两面，应该一起做。</strong></p>
+<hr>
+<h2 id="五合并后的路线图"><a class="anchor" href="#五合并后的路线图">五、合并后的路线图</a></h2>
+<pre><code>第 0 步【地基，必须先做】
+   0.1  KbChunk 加元数据（source / reviewed / contentAt）
+   0.2  B1：按 revision timestamp 只重抓变过的页        ← 同时产出 contentAt
+   0.3  资料块按 CURATED / WIKI_SNAPSHOT 分段注入
+        └─ 做完这步：过期资料不再和人工成果混为一谈，且&quot;过期&quot;第一次可见
+
+第 1 步【你的设计①：回答模式】
+   1.1  MessageRouter 加模式前缀（照 求助： 的样子）
+   1.2  ChatService.reply 加 mode 参数；web 模式接实时来源
+   1.3  模式参与预算 + 落库带模式标记
+        └─ 做完这步：用户能显式要求&quot;别用知识库，给我最新的&quot;
+
+第 2 步【你的设计②：严谨度档】
+   2.1  按 ReplyStyle 那套做&quot;严谨 / 默认 / 发散&quot;三档
+   2.2  每个 provider 建多套客户端（温度是构建期参数）
+        └─ 注意口径：这是**风格**开关，不是知识来源开关
+
+第 3 步【让知识库自己保持新鲜】
+   3.1  定时增量同步（每天凌晨）
+   3.2  看板加「语料新鲜度」卡片：内容截止日、距今天数、待更新页数
+   3.3  D：Game Updates 这类动态页改用 action=parse 渲染结果
+</code></pre>
+<p><strong>依赖关系</strong>：第 1、2 步都<strong>依赖第 0 步</strong>——没有 chunk 元数据，<code>web</code>/<code>kb</code> 模式的差异就落不了地，严谨度档也只是个心理安慰。而第 0.2 步（B1）本身就是 v1 里最该修的 bug。<strong>所以&quot;先建好知识库设施&quot;这个判断是对的，而且它同时是止血。</strong></p>
+<hr>
+<h2 id="六待你决断"><a class="anchor" href="#六待你决断">六、待你决断</a></h2>
+<ol>
+<li><strong>模式前缀的语法</strong>：<code>/联网 xxx</code>、<code>#联网 xxx</code>、还是 <code>!web xxx</code>？
+（<code>/</code> 会和指令系统视觉混淆——虽然技术上不冲突，但用户分不清&quot;能调模型的和不能调模型的&quot;。我倾向 <code>#</code> 或 <code>!</code>。）</li>
+<li><strong><code>web</code> 模式的实时来源取哪个</strong>：wiki 的渲染结果（<code>action=parse</code>）、还是直接吃 Steam 官方新闻/更新日志？
+（我建议<strong>先只做 wiki 渲染结果</strong>，范围小；Steam RSS 留作&quot;版本更新&quot;专项。）</li>
+<li><strong><code>hybrid</code>（对照）模式要不要</strong>？它最有诊断价值（能直接看出知识库和实时源的分歧），但回答最长、最贵。</li>
+<li><strong>双重确认</strong>：<code>AGENTS.md</code> 第九章的口径按 4.2 改（已核对资料优先，wiki 原文允许分歧）——这是动你机器人人格规则的地方，需要你点头。</li>
+</ol>
+<hr>
+<h2 id="七实现进度滚动更新"><a class="anchor" href="#七实现进度滚动更新">七、实现进度（滚动更新）</a></h2>
+<h3 id="已完成指令系统升级2026-09-28"><a class="anchor" href="#已完成指令系统升级2026-09-28">✅ 已完成：指令系统升级（2026-09-28）</a></h3>
+<p>按你的决定做的：命令支持参数（小活动要用）、统一走 <code>/</code> 前缀、<strong>智能问答类必须走预算</strong>。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>落点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>指令支持参数 <code>/触发词 参数…</code></td>
+<td><code>command/CommandMatcher.java</code>（首词精确 + 余下全算参数）</td>
+</tr>
+<tr>
+<td>模板变量 <code>{args}</code> / <code>{args.1}</code></td>
+<td><code>command/VariableRenderer.java</code></td>
+</tr>
+<tr>
+<td>指令分两类 <code>kind</code> = template / agent</td>
+<td><code>command/BotCommand.java</code> + <code>bot_command</code> 表补列（老库自动 ALTER）</td>
+</tr>
+<tr>
+<td><strong>agent 类走 Guard 与成本预算</strong></td>
+<td><code>router/MessageRouter.java</code>（不再走&quot;Guard 之前&quot;的快路径）</td>
+</tr>
+<tr>
+<td>agent 回答模式 <code>mode</code> = kb / none</td>
+<td><code>agent/ReplyMode.java</code> + <code>agent/ChatService.java</code></td>
+</tr>
+<tr>
+<td>后台可配</td>
+<td><code>command/CommandController.java</code> + <code>views/bot/CommandsPanel.vue</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>两类指令的走法（这是本次最关键的设计）</strong>：</p>
+<pre><code>指令命中
+  ├─ template（话术）→ 渲染 {变量}{args} → 直接发 → **不碰 Guard / 预算 / 模型**
+  │                     （保留原来的秒回：/help 不该等模型 3 秒）
+  └─ agent（智能问答）→ 不带参数：回一句用法提示，到此为止
+                        带参数：**继续往下走** Guard → 成本预算 → ChatService(mode, 参数当问题)
+</code></pre>
+<p><strong>已验证</strong>：</p>
+<ul>
+<li>后端 <strong>168 个测试全过</strong>，其中新增 15 个：
+<code>MessageRouterCommandTest</code>（7 个，安全契约）+ <code>VariableRendererArgsTest</code>（8 个）+ <code>CommandMatcherTest</code> 扩到 26 个。</li>
+<li>管理端 <strong>9 项 UI 验收全过</strong>（<code>tests/verify-command-args.js</code>，真机浏览器 + 截图）。</li>
+</ul>
+<p>安全契约的具体断言（<code>MessageRouterCommandTest</code>）：</p>
+<ul>
+<li>话术指令：<code>guardPipeline.check()</code> 与 <code>budgetGuard.check()</code> <strong>一次都没调</strong>，<code>chatService.reply()</code> 也没调 ✅</li>
+<li>智能问答指令：两者<strong>各调一次</strong>，且传给模型的是参数（问题）+ 命令配的模式 ✅</li>
+<li><strong>预算用尽时模型一次都没调</strong>，只回了额度提示 ✅</li>
+<li>Guard 拦下时模型一次都没调、也不发消息 ✅</li>
+</ul>
+<blockquote>
+<p>⚠️ 一个<strong>行为变更</strong>要知会：原指令是&quot;去掉 / 之后必须完全相等&quot;，所以 <code>/help 一下</code> 不触发。
+现在改成&quot;首词精确 + 余下是参数&quot;，<code>/help 一下</code> 会触发 <code>/help</code>（参数被忽略）。
+贴路径类消息（<code>/api/getUser foo</code>）<strong>依旧不会误触发</strong> —— 它们的首词不在指令表里。
+对应的老测试 <code>extraContentDoesNotTrigger</code> 已按新语义拆成两个测试。</p>
+</blockquote>
+<h3 id="已完成第-0-步-知识库元数据地基2026-09-28"><a class="anchor" href="#已完成第-0-步-知识库元数据地基2026-09-28">✅ 已完成：第 0 步 —— 知识库元数据地基（2026-09-28）</a></h3>
+<p><strong>动手前先挖到一个比&quot;过期&quot;更严重的问题</strong>：</p>
+<blockquote>
+<p><code>kb/build/KbCorpusBuilder.java</code> 的 <code>writeChunks</code> 用的是
+<code>Files.newBufferedWriter(file)</code>（默认 <strong>TRUNCATE_EXISTING</strong>）——<strong>整体重写</strong>。
+而 <code>chunks.jsonl</code> 里不只装 Wiki 内容，还装着三类<strong>人工成果</strong>：
+① 人工订正/追加的块（投递审核、直接改块、新建词条）
+② 下架墓碑（{@code RETIRED_PREFIX}）
+③ 行号本身（<code>qa_stat.retrieved</code> 的历史引用按行号指块）</p>
+<p>也就是说：<strong>&quot;把 Wiki 更新进来&quot;和&quot;别弄丢自己的知识&quot;在原来那套代码里是互斥的</strong> ——
+每次刷新语料，人工成果全部归零。<code>KbTermStore</code> 的 INSERT OR IGNORE 只保住了词条表
+（中文名/核对状态），<strong>正文订正没有这个保护</strong>。</p>
+</blockquote>
+<p>这一步把上面这条一并修了。落点：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>落点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>块级元数据 <code>src</code>（wiki/curated）+ <code>at</code>（内容时间）</td>
+<td><code>kb/KbChunk.java</code> + <code>kb/KbIndex.java</code>（缺列时按 wiki + 时间未知，<strong>不冒充权威</strong>）</td>
+</tr>
+<tr>
+<td><strong>只重抓真的变过的页</strong></td>
+<td><code>kb/build/WikiClient.java</code>（取 <code>rvprop=timestamp</code>）+ <code>KbCorpusBuilder</code>（比对 <code>pages.jsonl.revAt</code>）</td>
+</tr>
+<tr>
+<td><strong>合并式写入，人工成果原地保留</strong></td>
+<td><code>KbCorpusBuilder.writeChunks</code> + <code>mergeChunkLines</code></td>
+</tr>
+<tr>
+<td><code>builtAt</code> 与 <code>contentAsOf</code> 分开记</td>
+<td><code>KbCorpusBuilder.writeBuildInfo</code>（原来混在一起，会让人误判语料新旧）</td>
+</tr>
+<tr>
+<td>人工写入打 <code>curated</code> 标记</td>
+<td><code>KbTermService</code>（追加/编辑）+ <code>KbIndexIncrementalService</code>（投递审核）</td>
+</tr>
+<tr>
+<td><strong>资料分两段注入</strong>（已核对 / Wiki 快照带日期）</td>
+<td><code>agent/ChatService.java</code></td>
+</tr>
+<tr>
+<td>提示词口径</td>
+<td><code>AGENTS.md</code> 第九章（已改，见下）</td>
+</tr>
+</tbody></table></div>
+<p><strong>合并规则</strong>（<code>mergeChunkLines</code>，抽成 static 专为可单测）：</p>
+<pre><code>人工块 / 下架墓碑 → 原样留在原行号
+其余槽位          → 依次填入本次新抓的 Wiki 块
+新块多于槽位      → 追加到尾部
+新块少于槽位      → 多出的旧行打成墓碑（不删行，保住「行号 == 块号」）
+写之前统一重排 i  → 保证 chunks.jsonl 第 k 行的 i == k
+</code></pre>
+<p>想要&quot;彻底从零重建&quot;用 <code>--app.kb.build.reset=true</code>（<strong>会丢弃全部人工成果</strong>，默认关）。</p>
+<p><strong>⚠️ 一处被用户纠正的设计过度推断（2026-09-28 晚）</strong></p>
+<p>第一版把 <code>src=curated</code> 写成了<strong>权威等级</strong>：<code>AGENTS.md</code> 里写&quot;已人工核对…<strong>最可信，以它为准</strong>&quot;。
+用户澄清：</p>
+<blockquote>
+<p>不是有了人工订正就一定认定这个数据对的，只要保证<strong>能够对知识库进行修改，
+保存修改后重建索引知识能生效</strong>即可。</p>
+</blockquote>
+<p>也就是说，要的是<strong>能力</strong>（能改、能存住、能生效），不是<strong>权威</strong>（改过 = 对）。
+所以已改为<strong>出处标注</strong>，并把&quot;生效&quot;做成端到端可验证的：</p>
+<p><strong><code>AGENTS.md</code> 第九章现在的措辞</strong>（只标出处，不做权威排序）：</p>
+<blockquote>
+<ol start="2">
+<li>资料块可能分两部分，区别只是<strong>出处</strong>，不代表哪一部分一定更准：<ul>
+<li><strong>【我们维护的内容】</strong>：我们自己写过或改过的，反映了我们的判断（<strong>不代表一定对</strong>）。</li>
+<li><strong>【Wiki 快照】</strong>：从公开 Wiki 抓取的原始资料，带着资料时间，<strong>可能已经过期</strong>。
+两部分与你自己的认知冲突时：涉及版本、数值、当前状态这类会随更新变化的内容，
+要<strong>明确说出分歧</strong>，不要只挑一边说，也不要把它当成当前版本。</li>
+</ul>
+</li>
+<li>没有 <code>&lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;</code> 块时（比如管理员用指令指定了&quot;不用知识库&quot;），按你自身的知识回答，不要声称&quot;资料里查到了&quot;。</li>
+</ol>
+</blockquote>
+<p>测试里专门加了一条断言：<strong>提示词里不得出现&quot;以它为准&quot;&quot;最可信&quot;这类权威宣称</strong>。</p>
+<p><strong>&quot;改完能生效&quot;的端到端验证</strong>（<code>KbEditThenRebuildTest</code>，3 项全过）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>验的保证</th>
+<th>怎么验的</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>保存即生效</strong></td>
+<td>改第 1 块正文 → 断言 chunks.jsonl 正文已变、标了 <code>curated</code>、<strong>且 index.bin 里那一行的向量按新正文重算</strong>；隔壁两行的正文与向量都没被写坏（向量是按字节偏移改的，算错会伤邻居）</td>
+</tr>
+<tr>
+<td><strong>重建索引后仍生效</strong></td>
+<td>调<strong>真正的</strong> <code>KbIndexBuilder.build()</code>（读 chunks.jsonl → 向量化 → 写 index.bin）→ 新正文仍在，且索引与文件行数一致（对不上会静默关掉知识库）</td>
+</tr>
+<tr>
+<td><strong>中间夹一次语料重建也不丢</strong></td>
+<td>Wiki 三页全更新 → <code>mergeChunkLines</code> 合并 → 重建索引 → 我们改的那段<strong>还在且只有一份</strong>，Wiki 三个新正文也一个不少</td>
+</tr>
+</tbody></table></div>
+<p>用的是假 embedding（按文本哈希出确定性向量）+ 临时目录迷你语料：<strong>不联网、不花钱</strong>，
+但走的是生产代码本身（<code>KbTermService.updateChunkText</code> / <code>mergeChunkLines</code> /
+<code>KbIndexBuilder.build()</code> / <code>KbIndex</code>）。为此把 <code>KbIndexBuilder.build()</code> 从 <code>private</code> 放宽到包级可见，
+并写了注释说明原因 —— 逻辑没有被测试专用代码污染。</p>
+<p><strong>已验证</strong>：后端 <strong>183 个测试全过</strong>（本轮新增 15 个）：</p>
+<ul>
+<li><code>KbCorpusBuilderTest</code>：合并保留人工块 / 保留墓碑 / 语料变少时墓碑不删行 / 变多时追加 /
+认不出的行保守保留 / 行号重排；以及&quot;只重抓变过的页&quot;的判据（远端更新才重抓、时间未知一律重抓）</li>
+<li><code>ChatServiceKnowledgeSplitTest</code>：两段分开且人工段在前、Wiki 段带日期、时间跨度、
+旧语料显示&quot;时间未知&quot;（不编日期）、「不用知识库」模式一次检索都不做</li>
+<li>另与<strong>真实 wiki API</strong> 核对过响应形状（{@code query.pages[].revisions[0].timestamp}）</li>
+</ul>
+<h3 id="两件需要你知道的事"><a class="anchor" href="#两件需要你知道的事">⚠️ 两件需要你知道的事</a></h3>
+<ol>
+<li><strong>历史人工改动无法追溯</strong>。<code>chunks.jsonl</code> 里原来<strong>没有</strong>任何&quot;这块被人工改过&quot;的记录，
+所以现存 4,131 块<strong>全部</strong>会被当作 Wiki 快照（带&quot;时间未知&quot;）—— 这是保守且诚实的处理，
+但意味着&quot;忠于自有知识库&quot;这条<strong>从今天起的改动才生效</strong>。
+可以部分回填：投递审核表（<code>kb_contribution</code>）记着每个已索引贡献的块号，
+按它把那些块标回 <code>curated</code> 是可行的（约 10 分钟的事，要的话我做）。</li>
+<li><strong>语料构建后必须再跑一次索引构建</strong>。行数变了而 <code>index.bin</code> 还是旧的，
+<code>KbIndex.load()</code> 会因行数不一致<strong>静默关掉知识库</strong>（不报错，只是不再检索）。
+已在构建日志末尾打了醒目 WARN 提醒。</li>
+</ol>
+<h3 id="下一步原计划里的-1-2-3-步"><a class="anchor" href="#下一步原计划里的-1-2-3-步">⏳ 下一步（原计划里的 1 / 2 / 3 步）</a></h3>
+<p><strong>为什么 AGENTS.md 现在还没改</strong>：第九章第 5 点要改成&quot;区分已核对资料与 wiki 原文&quot;，
+前提是<strong>资料块里能标出这两类</strong>，而那需要 chunk 级的 <code>source / reviewed / contentAt</code>。
+现在就改，等于把<strong>你人工订正过的那部分</strong>也一并降权 —— 正是你明确反对的方向。</p>
+<p>拟改的措辞（等元数据就位后落地，你可以先审）：</p>
+<blockquote>
+<ol start="5">
+<li><code>&lt;&lt;&lt;CURATED&gt;&gt;&gt;</code> 里的资料是我们<strong>人工核对过</strong>的，与你的认知冲突时以它为准。
+<code>&lt;&lt;&lt;WIKI_SNAPSHOT as-of=…&gt;&gt;&gt;</code> 是原始 Wiki 快照、<strong>可能已过期</strong>：与你的认知冲突时要说清分歧，
+并指出&quot;我的资料截至 X&quot;，不要只挑一边说。</li>
+<li>没有资料块时（例如管理员用指令指定了&quot;不用知识库&quot;），按你自身的知识回答，<strong>不要声称查过资料</strong>。</li>
+</ol>
+</blockquote>
+<p>（第九条<strong>第 6 点</strong>本来就写了&quot;没有 <code>&lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;</code> 块时，就按你平时的知识回答&quot;，
+所以「不用知识库」模式<strong>现在就能正常工作</strong>，不需要等这次改动 —— 这也是我先做指令系统、后动提示词的原因。）</p>
+<hr>
+<h2 id="附本文关键论断的核查方式"><a class="anchor" href="#附本文关键论断的核查方式">附：本文关键论断的核查方式</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>论断</th>
+<th>怎么核</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>温度是构建期参数，不是每请求</td>
+<td><code>LlmRouter.java:75</code> 在 <code>buildClient(Provider cfg)</code> 里；<code>LlmRouter.java:111</code> 启动时建实例</td>
+</tr>
+<tr>
+<td>指令不支持参数</td>
+<td><code>CommandMatcher.SLASH_COMMAND = ^/(\S+)\s*$</code> + &quot;去掉 / 后与触发词完全相等&quot;</td>
+</tr>
+<tr>
+<td>指令不调模型、绕过预算</td>
+<td><code>MessageRouter.java:214</code> 只做模板渲染；<code>:305</code> 在 Guard 之前，<code>:336</code> 预算之后才用模型</td>
+</tr>
+<tr>
+<td>已有&quot;前缀转别的服务&quot;先例</td>
+<td><code>MessageRouter.java:242</code> <code>tryHelpRequest()</code>（<code>求助：</code>）</td>
+</tr>
+<tr>
+<td>温度不是知识来源开关</td>
+<td>采样机理；且模型知识截止不随温度改变</td>
+</tr>
+<tr>
+<td>知识库缺区分度</td>
+<td><code>KbChunk.java:14</code> 无 source/reviewed/时间字段；<code>ChatService.java:221</code> 两类混成一个块</td>
+</tr>
+<tr>
+<td><code>kb_term</code> 已是人工成果载体</td>
+<td><code>KbTermStore.reconcile</code> 的 <code>INSERT OR IGNORE</code> + 注释&quot;绝不能被语料重建冲掉&quot;</td>
+</tr>
+<tr>
+<td>&quot;已有页面永不重抓&quot;是 bug</td>
+<td><code>KbCorpusBuilder.java:144</code> 的 <code>Files.isRegularFile(f)</code> 分支</td>
+</tr>
+</tbody></table></div>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>回答策略与知识库设施设计.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

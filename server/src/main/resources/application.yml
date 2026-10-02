@@ -1,0 +1,529 @@
+server:
+  port: 8080
+  # 必须是 0.0.0.0（监听所有网卡），不能改成 127.0.0.1！
+  # 因为 NapCat 在容器里，它发过来的连接源地址是 Docker 网桥网关，不是本机回环。
+  address: 0.0.0.0
+  shutdown: graceful
+
+  # ---------- 上公网必须的资源限制 ----------
+  # 请求头上限
+  max-http-request-header-size: 16KB
+  tomcat:
+    # 表单/JSON body 上限。管理接口的 body 都很小（标注、术语），
+    # 不限制的话一个超大 body 就能吃掉内存
+    max-http-form-post-size: 64KB
+    # 请求被拒后最多再读多少字节，防止客户端继续灌数据。
+    # ⚠️ 这一项和「上传失败时能不能看到原因」直接相关：请求被拒（比如超过 multipart 上限）时，
+    #    Tomcat 只吞掉这么多字节，剩下的**还没发完的 body** 会让它直接断开连接 ——
+    #    浏览器那边就只剩一句 "Failed to fetch"，连状态码都拿不到。
+    #    所以它要和 spring.servlet.multipart.max-request-size 对齐。
+    max-swallow-size: 16MB
+    threads:
+      # 线程数上限：慢连接攻击会耗尽线程池
+      max: 100
+    accept-count: 100
+    # 连接超时（毫秒）
+    connection-timeout: 20s
+
+spring:
+  # ---------- 前端静态资源 ----------
+  # ⚠️ 顺序很重要：**先找 web-dist（前端构建产物），再找 classpath:/static/**
+  #
+  # 为什么必须写在这里而不是靠命令行参数：前端页面（/public.html、/admin.html）
+  # 和 assets 都在 web-dist 下。如果只留默认的 classpath:/static/，
+  # 页面会 404 —— 而"忘了加参数"这种问题很难一眼看出来。
+  #
+  # web-dist 由 ./scripts/build-web.sh 生成；不存在时也不会报错，
+  # 只是前端页面不可用（后端接口照常）。
+  web:
+    resources:
+      # ⚠️ 同时列多个候选路径 —— 因为「相对路径」取决于【从哪启动】：
+      #    从仓库根启动 → web-dist 在 server/web-dist
+      #    从 server/ 启动 → web-dist 在 ./web-dist
+      # 只写一个就会在另一种启动方式下 404，而且报错很隐蔽（只是页面打不开）。
+      # 列表里不存在的路径会被静默跳过，不会报错。
+      static-locations:
+        - file:./web-dist/
+        - file:./server/web-dist/
+        - file:../web-dist/
+        - classpath:/static/
+
+  # ---------- 文件上传（目前只有「管理端传轮播图」用）----------
+  # 默认单文件上限只有 1MB，比轮播自己的上限（app.site.carousel.max-size-kb，默认 2048KB）还小，
+  # 不写这段的话 2MB 的图会被 Spring 先挡掉、报一个和"图片太大"完全无关的错。
+  #
+  # ⚠️ 这两个是**兜底**，必须比业务上限宽得多：2~12MB 的图要能被**完整收下来**，
+  #    再由应用层回一句「图片太大（5.2 MB），上限 2048 KB」；
+  #    被容器直接掐断的话，前端只会显示 "Failed to fetch"，什么原因都看不到。
+  servlet:
+    multipart:
+      max-file-size: 12MB
+      max-request-size: 16MB
+
+  application:
+    name: qqbot-server
+  jackson:
+    default-property-inclusion: non_null
+  config:
+    # 从 .env 文件读配置，省得在 IDEA 里维护一长串环境变量。
+    #
+    # ⚠️ 这些是【相对进程工作目录】的路径，试不到就静默放弃（optional: 不报错）——
+    #    踩过的坑：工作目录既不是仓库根也不是 server/ 时（例如从 target/ 里起 jar、
+    #    IDEA 自定义 working directory），.env 读不到 → ADMIN_PASSWORD 变空 →
+    #    后台整个 503「请在 .env 里设置 ADMIN_PASSWORD」，而用户明明设置过。
+    #    所以：既把常见层级都列上，又加了一道硬保险 ——
+    #    DotenvEnvironmentPostProcessor 会从工作目录向上找工程根（AGENTS.md / server/pom.xml），
+    #    找到就直接从【工程根】读 .env，与工作目录无关。
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
+      - optional:file:../../../.env[.properties]
+      # 配置中心写入的覆盖层（优先级高于本文件）。删掉它即回到默认值。
+      - optional:file:./config/overrides.yml
+      - optional:file:./server/config/overrides.yml
+      - optional:file:../server/config/overrides.yml
+
+app:
+  # ============================ 机器人身份 ============================
+  # 名字只在这里改 —— 其他地方都读这个配置。
+  # ⚠️ AGENTS.md 里的名字是提示词的一部分，需单独改（那是模型人格，不运行时替换）
+  bot:
+    name: 飘雪喵
+    org: 碧潭飘雪
+    author: 示例作者
+
+  # ============================ 站点信息 ============================
+  # 公开站「关于」页展示的群信息。可在管理端「设置 → 站点信息」修改（热生效）。
+  site:
+    group-name: 示例玩家群
+    group-number: "100000004"
+    group-desc: 一个《雾锁王国》玩家交流群 —— 分享建造、探索心得，机器人也在群里。
+    join-hint: QQ 群搜索群号即可加入。
+
+  # ============================ 问答广场 ============================
+  # 公开站：按关键词展示「被点赞认可」的历史回答 + 三级降级求助。
+  # 这些都是【热生效】的 —— 改完立即起作用。
+  plaza:
+    enabled: true
+    # ★ 只展示「被点赞过」的问答 —— 隐私保护的核心。
+    #   有人点赞 = 主动认可公开，相当于社区审核。
+    #   关掉的话所有问答都会公开（风险自负）。
+    only-voted: true
+    # 触发「全被踩」的最小踩数（避免一个人点踩就触发降级）
+    downvote-threshold: 2
+    # 每个关键词最多展示几条回答
+    max-answers-per-keyword: 3
+    # 相似度高于这个值就合并（同一个问题问多次，回答往往雷同）
+    dedup-threshold: 0.9
+    # 「问问新答案」限额（会调用大模型，必须防刷）
+    ask-limit-per-keyword-per-day: 3
+    ask-limit-global-per-day: 100
+    # 「求助大佬」限额（会发到群里，必须更严）
+    help-limit-per-question-per-day: 1
+    help-limit-per-user-per-day: 3
+    help-limit-per-group-per-hour: 1
+    # 投票者哈希的盐。留空用默认值（开发环境够用）
+    vote-salt: ${PLAZA_VOTE_SALT:}
+
+  # ============================ 指令系统 ============================
+  # 「@机器人 + /命令」模拟官方 Bot 命令。
+  # ⚠️ 这些配置都是【热生效】的 —— 后台改完立即起作用，不用重启。
+  commands:
+    enabled: true
+    # 群里触发指令是否必须 @ 机器人。
+    # 建议保持 true：群里 "/" 开头的消息不罕见（贴路径、贴代码），不 @ 会误触发。
+    require-mention: true
+    # 是否必须 "/" 前缀。关掉后 "@机器人 帮助" 也会触发，但那和正常提问无法区分。
+    require-slash: true
+    # 指令的独立限流（每人每分钟几次）。
+    # 刻意和问答限流分开：问答是"每分钟一次"，指令也受它管的话 /help 就没法用了。
+    rate-limit-per-minute: 10
+    # 是否允许 {user.id} / {group.id} 这类高级变量。
+    # 默认 false：回复会发到群里，主动打出 QQ 号是另一回事。
+    allow-user-ids: false
+    # 回复最大长度（防止配超长文本刷屏）
+    max-reply-length: 1500
+
+  # ============================ 日志界面 ============================
+  # 两个数据源【刻意分开】，用于定位故障在哪一层：
+  #   NapCat 里没有这条消息    → 协议层问题（掉线/风控）
+  #   NapCat 有、业务层没有    → 上报失败（如 ECONNREFUSED）
+  #   两层都有但没回复         → Guard 拦了 / 模型挂了
+  #   都正常但答得不对         → 检索或 prompt 问题
+  logs:
+    enabled: true
+    # 内存里保留多少条（供"实时日志"页）。文件里的才是完整历史
+    buffer-size: 2000
+    # SSE 连接最长存活（分钟），防止连接泄漏
+    stream-timeout-minutes: 30
+    # 同时最多几个日志流连接
+    max-streams: 10
+    # 脱敏：token/密钥/QQ号/带签名的 URL 都会被替换
+    # 日志页可能被截图外发，默认开
+    mask-sensitive: true
+
+  # ============================ 事件线程池 ============================
+  # 并发能力直接决定「50 个人同时 @ 时多久能收到回复」。
+  async:
+    # ⚠️ core 和 max 必须相同！
+    # Java 线程池的规则是「core 满了先入队，队列满了才扩容到 max」，
+    # 队列一大，max 就永远不生效（之前 core=2/max=4/queue=200 时，实际并发永远是 2）。
+    core-pool-size: 8
+    max-pool-size: 8
+    queue-capacity: 100
+    # 空闲线程回收：没人用的时候线程自己退出，闲置成本归零
+    keep-alive-seconds: 60
+    allow-core-thread-time-out: true
+    # 任务在队列里等待超过这个秒数就直接丢弃。
+    # 宁可说一句「刚才太挤了」，也不要让人等 30 秒才收到一句没意义的「你好」。
+    max-queue-wait-seconds: 20
+
+  # ============================ 协议层（NapCat）============================
+  onebot:
+    api-base: ${ONEBOT_API_BASE:http://127.0.0.1:3000}
+    # 必须和 NapCat「网络配置 → HTTP服务器 → Token」完全一致
+    access-token: ${ONEBOT_TOKEN:}
+    request-timeout-ms: 10000
+
+  # ============================ 安全中间层 ============================
+  # 判定顺序：access -> mention -> rate-limit -> content-gate -> inbound-words -> 大模型
+  # 前五层全部零成本，跑完才轮到花钱的模型。
+  guard:
+    # 总开关：关掉后所有限制失效（仅调试用）
+    enabled: true
+    # 应急开关：设成 true 机器人立刻完全不回复，连兜底词都不回
+    kill-switch: false
+
+    # ---------- 准入控制：谁有资格触发 ----------
+    access:
+      # 群里必须 @ 机器人才响应（防炸群的关键）
+      require-mention-in-group: true
+      # 私聊策略：all / whitelist / off
+      # ⚠️ 必须加引号！YAML 会把不加引号的 off 解析成布尔 false，而不是字符串 "off"
+      private-chat-policy: "off"
+      # 私聊白名单（private-chat-policy: whitelist 时生效）
+      private-whitelist: []
+      # 群黑名单：名单里的群永不响应
+      group-blacklist: []
+      # 用户黑名单：这些人永不响应
+      user-blacklist: []
+
+    # ---------- 频率限制：多久能回一次 ----------
+    rate-limit:
+      enabled: true
+      # 同一个群每分钟最多被回复几条
+      per-group-per-minute: 10
+      # 同一个人【在同一个群里】多长时间内最多被回复几次（秒）
+      # 注意：是群内统计，同一个人在别的群里不受影响
+      per-user-per-minute: 1
+      # 用户维度的窗口长度（秒）—— 和上面一项是乘数关系：「每 N 秒最多 M 次」
+      # 60 = 每分钟 1 次（旧行为）；20 = 每 20 秒就能回一次（当前节奏）
+      # 群维度固定 60 秒，不受这项影响
+      per-user-window-seconds: 20
+      # 超限处理：silent（不出声）/ notify-once（每人每冷却周期提示一次，默认）
+      on-limit: notify-once
+      # 用户级限流（同一个人在同一个群里刷太快）时回的话
+      notify-user-text: "为了防止${app.bot.name}被玩坏，{seconds} 秒只能回答你一次，请稍后再试噢~"
+      # 群级限流（整个群被回复太频繁）时回的话
+      notify-group-text: "这个群我有点忙不过来啦，一分钟内已经回了不少，请稍后再试噢～"
+      # 每个用户被提示的冷却时间（秒）——防止「提示」本身变成刷屏
+      # ⚠️ 必须 ≤ per-user-window-seconds，否则会出现「被限流但一次提示都收不到」：
+      #    用户 20 秒窗口内被拦 → 想提示却还在冷却里 → 静默丢弃，用户以为机器人死了。
+      #    启动时 GuardPipeline 会检查这个关系，不满足会打 WARN。
+      notify-cooldown-seconds: 20
+      # 排队太久被丢弃时回的话（和上面两句区分开，让用户知道不是限制他）
+      queue-timeout-text: "刚才排队太久啦喵，你再说一遍吧～"
+      # 每个群每分钟最多回几条提示。这一项很关键：
+      # 2000 人的群里 50 个人同时被拦，如果每人都回一句提示，就等于用「提示」把群刷爆了
+      notify-group-per-minute: 3
+
+    # ---------- 出站节奏（D7）：管"发得多快" ----------
+    # 和上面的 rate-limit（管"回不回"）是两回事：放行之后还得控制发送节奏，
+    # 否则长回复被切成多条时挨着发出去，观感上还是刷屏。
+    outbound:
+      enabled: true
+      # 同一个群两条消息之间的最小间隔（毫秒）
+      group-min-interval-millis: 800
+      # 间隔上的随机抖动（毫秒，±这个值）—— 固定间隔一眼就能看出是机器人
+      group-jitter-millis: 400
+      # 单条消息软上限（字），超过就按句子切成多条。0 = 不切
+      max-chars-per-message: 300
+
+    # ---------- 成本预算（D6）：管"今天总共能用多少" ----------
+    # 和 rate-limit（管"多快"）互补：限流挡不住细水长流 —— 每人每分钟 1 次，
+    # 一天也能问 1440 次。额度按天归零，只放内存（重启丢计数，落库留给 M7）。
+    # 全部 0 = 不限，所以默认这几行不改变任何行为；要限就填数字。
+    budget:
+      enabled: true
+      # 每个用户每天最多被回复几次（超了回一句提示）
+      per-user-per-day: 0
+      # 每个群每天最多被回复几次（超了该群静默）
+      per-group-per-day: 0
+      # 全局每天最多回复几次（超了熔断：谁都不回 + ERROR 告警）
+      global-per-day: 0
+      # 全局每天最多消耗多少 token（输入+输出合计）
+      global-tokens-per-day: 0
+      # 单用户触顶时回的话。{limit} = 该用户当日额度
+      user-limit-text: "今天你已经问过我 {limit} 次啦，明天再来找我玩吧～"
+
+    # ---------- 内容门控：纯表情 / 图片 ----------
+    content-gate:
+      enabled: true
+      # 消息里既没有文字也没有图片（纯表情/语音）时，不调模型，直接回这句
+      no-text-reply: "喵喵喵？请问有什么问题呢喵？打字跟我说吧～"
+      # 有图片、但当前配置里没有能看图的模型时回这句
+      no-vision-reply: "图片我这边暂时看不了喵，你用文字形容一下？"
+
+    # ---------- 关键词表：用独立文件管理 ----------
+    words:
+      enabled: true
+      # 支持 classpath:（打包进 jar）和 file:（外部文件，改完重启即可）
+      inbound-file: classpath:words/inbound.txt
+      outbound-file: classpath:words/outbound.txt
+      # 入站命中：直接回这句，不调用大模型。
+      # 模板里的 {word} 会被替换成【实际命中的词】——专门用来排查误判。
+      # 不想要回显就把 {word} 删掉，恢复成不带词的回复。
+      # ⚠️ 回显意味着命中的词会被发到群里。调试期开着，词表稳定后建议关掉。
+      inbound-refusal-text: "喵喵喵？「{word}」这个词我不能聊呢喵~"
+      # 出站命中：把整条回复换成这句（同样支持 {word} 回显）
+      outbound-fallback-text: "主人不让我说「{word}」，我们换个话题吧～"
+
+    # ---------- 文件访问守卫 ----------
+    # 注意：这是一个【策略组件】，它自己不会拦住任何东西。
+    # 将来任何要读文件的代码（文件工具 / 知识库加载 / 上传文件解析），
+    # 都必须先调用 PathGuard.check() 并确认 allowed 才能继续读。
+    file-access:
+      enabled: true
+      blocked-extensions: [".env", ".key", ".pem", ".p12", ".jks", ".keystore", ".sqlite", ".db", ".log", ".pfx", ".crt"]
+      blocked-path-parts: [".git/", "node_modules/", ".toolchain/", "deploy/data/", ".ssh/"]
+      # 允许访问的根目录。留空 = 只允许程序的工作目录
+      allowed-roots: []
+
+  # ============================ 媒体文件 ============================
+  # 图片有两种完全相反的生命周期，必须物理隔离：
+  #   临时图片（tmp-images）—— 随时可删，定时任务按最后修改时间清理
+  #   知识库图片（kb-images）—— 长期资产，清理逻辑绝不碰
+  # ⚠️ 两者配成同一个路径 / 知识库配到临时目录里面 → 启动时直接报错退出。
+  #    这不是"小心一点"能防住的，所以做成硬校验（见 MediaStorageGuard）。
+  media:
+    # 单条消息最多处理几张图。
+    # 图片是【同时】读进内存再转 Base64 的，单张峰值约占文件大小的 2.33 倍，
+    # 再乘上 app.async 的并发数（默认 8）—— 没有上限时，一条带十几张图的群消息
+    # 就足以把 2G 内存的机器顶到危险区。超出的只记日志、不回话。
+    # 0 = 不限制（不建议）
+    max-images-per-message: 3
+
+    temp-images:
+      enabled: true
+      # 相对路径以「程序的工作目录」为准；启动日志会打印解析后的绝对路径
+      dir: ./data/tmp-images
+      # 保留多久（小时）：最后修改时间早于「现在 - 这个值」才会被删
+      retention-hours: 24
+      # 清理频率（分钟）。进程启动后会立刻先清一轮
+      cleanup-interval-minutes: 60
+      # 单轮删除上限，防止一次性打满磁盘 IO
+      max-delete-per-run: 500
+      # 图片缓存总量上限（MB）。超过后按【最后使用时间】从旧到新淘汰（LRU）。
+      # 光有 TTL 不够：热门群可能一小时内就塞进几百兆，保留时长还没到磁盘就先满了。
+      # 0 = 不限制（不建议）
+      max-total-size-mb: 200
+    kb-images:
+      # 永久保留。任何清理脚本都不允许碰这里
+      dir: ./data/kb-images
+
+  # ============================ 前端静态资源 ============================
+  # 前端构建产物（web/dist）由后端直接托管。
+  # 路径是相对「运行目录」（server/）的，也可以用 file: 指向别处。
+  web:
+    # web/dist 拷到哪里由构建脚本决定，这里只声明查找位置
+    dist: ${WEB_DIST:./web-dist}
+
+  # ============================ 管理后台 ============================
+  # ⚠️ 安全默认：ADMIN_PASSWORD 留空 = 整个 /admin 返回 503，绝不裸奔。
+  # 后台能看到群里的提问原文，所以必须有密码。
+  admin:
+    enabled: true
+    password: ${ADMIN_PASSWORD:}
+    # 登录会话有效期（小时）
+    session-hours: 24
+    # 记录后台访问（"访问次数"统计的数据来源）
+    record-visits: true
+    # 登录失败保护：同一来源在 window 秒内失败这么多次 → 锁定 lock 秒（0 = 关闭）
+    # 触发后连正确密码也会被拒（否则限流形同虚设），到点自动解锁，登录成功会清零计数。
+    # ⚠️ 走 Vite dev server 代理时，后端看到的来源恒为代理自己（127.0.0.1）——
+    #    在这个部署下它等价于「全局」限制；个人后台只有一个管理员，正合适。
+    # ⚠️ 副作用：别人也能靠狂输错密码把你锁在门外（最多 lock 秒），重启后端即清空。
+    login-max-failures: 5
+    login-failure-window-seconds: 600
+    login-lock-seconds: 600
+
+  # ============================ 问答记录与统计 ============================
+  # 两层策略：原文（问题/引用/回答）定期删；系统加工出的结构化数据（检索指标、
+  # 关键词、标注结论）永久保留。删原文不需要先做聚合 —— 统计字段本来就在另一张表里。
+  qa:
+    enabled: true
+    # SQLite 文件（相对路径以程序工作目录为基准）
+    db: ./data/qa/qqbot.sqlite
+    # 原文保留天数。0 = 永不删除（统计表永远不删，这个只管原文）
+    retention-days: 180
+    # 异步队列容量：满了就丢弃并计数，绝不让回答线程等
+    queue-capacity: 2000
+    # 单次批量落盘条数
+    flush-batch-size: 50
+    # 清理任务（默认每天凌晨 4:30）
+    cleanup-cron: "0 30 4 * * *"
+
+    # 统计报表（S2）。默认关闭，要看时显式打开：
+    #   mvn spring-boot:run -Dspring-boot.run.arguments="--app.qa.report.enabled=true --spring.main.web-application-type=none"
+    report:
+      enabled: false
+      # 统计最近多少天。0 = 全部
+      days: 30
+      # all / overview / keywords / misses / cosine / sources
+      section: all
+      top-n: 20
+
+  # ============================ 知识库检索（RAG）============================
+  # 离线构建：抓 enshrouded.wiki.gg → 清洗模板 → 分块 → embedding → 本地索引
+  # 在线检索：问题 → embedding → 本地余弦 top-k → 拼进 prompt
+  # ⚠️ 建索引和查询【必须用同一个 embedding 模型】—— 向量模型定义了坐标系，
+  #    换了模型（哪怕只是 Pro/ 前缀的版本）向量就不可比，必须整库重建。
+  kb:
+    # 运行时检索总开关。关掉后退化成「没有知识库」的普通回答
+    enabled: true
+    # 知识库改进提案：管理员在「问答记录」里打「有帮助」，累计到阈值后
+    # 才允许手动触发一次 agent 分析（会和知识库现有文本比对，产出"新增/覆盖"提案）。
+    # 提案一律**人工确认后**才写进知识库，不自动落库 —— 模型幻觉不该静默污染知识库。
+    proposal:
+      threshold: 10
+    # 全部产物都在这里（相对路径以程序工作目录为基准，构建日志会打印绝对路径）
+    dir: ./data/kb
+    # 取前几条资料拼进 prompt
+    top-k: 5
+    # 相似度下限（余弦 0~1）。低于它的资料宁可不要 —— 给一段不相关的资料比不给更糟。
+    # 0.45 是实测值：正确命中在 0.50~0.58，而无关问题（"今天天气怎么样"）最高只有 0.43
+    min-score: 0.45
+
+    # C 路（标题向量）的闸门阈值：余弦 ≥ 它才认为"这次提问就是在问某个名字"，把那条置顶。
+    # 为什么需要它：语料 94% 的块标题是「中文名（English）」，而正文几乎不重复这个名字 ——
+    # 用名字提问时正文向量必然把同族词排前面（「酸蚀之咬」本体第 7）。标题向量治这个。
+    # 为什么是 0.70：实测 200 条名字查询 100% 触发、120 条真实口语提问只 2.5% 误触发
+    # （0.65 → 10%、0.50 → 82.5%）。它是回滚开关：设成 0 就等于关掉 C 路。
+    title-gate: 0.70
+    # 标题向量的一次性补建（CLI，见 KbTitleVectorRunner）；平时用管理端的「补标题向量」按钮即可
+    title-index:
+      enabled: false
+
+    # 公开站（公网可达）的检索策略 —— 每一项都是"公网刹车"
+    public-search:
+      # 是否允许走向量路。语料是英文的，中文口语提问（"木头"、"等级上限"）
+      # 只有多语言的 bge-m3 才搜得到；关掉就只剩术语表关键词路（零成本，但只认标准名词）
+      vector-enabled: true
+      # 每天最多多少次"走向量"的检索，超出后当天静默降级为纯关键词（不报错）
+      # 按 800 次/天算，embedding 成本约每天几分钱；真被刷也不会失控
+      vector-daily-limit: 800
+      # 结果缓存条数（LRU）：同一句话重复搜不再调 API
+      cache-size: 512
+      # 相似度下限。比群内(0.45)低 —— 群内是"喂给模型当依据"宁缺毋滥，
+      # 公开站是"按相关度排序给人看"，阈值太高会变成一片空白
+      min-score: 0.32
+      # 去重前先取多少候选（一个 wiki 页面会被切成好几块）
+      candidate-pool: 40
+      # 单次搜索最多返回几条（同页去重之后）
+      max-results: 20
+
+    embedding:
+      # 默认硅基流动。换阿里云百炼只需改这三行（也是 OpenAI 兼容），但要重建索引：
+      #   base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      #   model:    qwen3.7-text-embedding
+      base-url: https://api.siliconflow.cn/v1
+      api-key: ${SILICONFLOW_API_KEY:}
+      model: BAAI/bge-m3
+      dimensions: 1024
+      batch-size: 10
+      timeout-seconds: 30
+
+  # ============================ 大模型 ============================
+  llm:
+    default-provider: opencode-go
+    fallback-providers: [deepseek]
+    # 系统提示词文件。采用 AGENTS.md 这个【Agent 生态约定名】，
+    # 而不是自创的 prompts/system.md —— 将来迁移到正式 Agent 框架可直接复用。
+    #
+    # 加载优先级（第一个读到的生效）：
+    #   ① 外部文件：./AGENTS.md → ../AGENTS.md → ../../AGENTS.md  ← 改完重启即生效，不用重新打包
+    #   ② classpath 内置副本（构建时从仓库根目录复制进 jar）
+    system-prompt-file: AGENTS.md
+
+    # ---------- 回复风格（表现层约束）----------
+    # 为什么不写进 AGENTS.md：那是安全底座，改它风险大；而且这里要能热生效。
+    # 风格段是每轮现拼到【系统消息】里的（AGENTS.md 之后追加），用户改不到，
+    # 也不可能覆盖上面任何安全规则。
+    # 默认值全是"不约束"，所以开着也不改变现有行为；想调节奏再动下面几项。
+    reply-style:
+      # 总开关。关掉 = 完全不加风格段
+      enabled: true
+      # 正文长度上限（字）。0 = 不限。是给模型的要求，不是硬截断
+      max-chars: 0
+      # default=不管 / plain=禁 Markdown 列表标题（更像群友说话）/ list=鼓励短列表
+      format: default
+      # 用了检索资料时，结尾是否附 Wiki 来源链接
+      include-sources: false
+      # 语气（自由文本）。例：轻松、简洁，像群友聊天。空 = 不指定
+      tone: ""
+    providers:
+      opencode-go:
+        base-url: https://opencode.ai/zen/go/v1
+        api-key: ${OPENCODE_GO_API_KEY:}
+        model-name: ${OPENCODE_GO_MODEL:deepseek-v4.1-flash}
+        # vision = 能看图。
+        # 2026-09-26 实测（四象限色块图 + 点阵数字图，答案已知）：
+        #   deepseek-v4.1-flash、mimo-v2.6-flash、glm-5.3-flash 都能正确识图。
+        # ⚠️ 但 provider 的 /models 只返回 id/owner，【没有】模态信息，
+        #    所以换模型时这一项必须自己测一遍 —— 声明错了不会报错，
+        #    只会被当成"有视觉能力"去调用，然后拿到空回复或瞎猜。
+        capabilities: [chat, vision]
+        temperature: 0.7
+        timeout-seconds: 60
+        max-retries: 1
+        # 单次回复的 token 上限（含推理模型的「思考」token）。
+        # 注意：这是【上限】不是目标，调高本身不花钱，只有真的生成那么多才计费。
+        # deepseek-v4.1-flash / mimo-v2.6-flash 都是推理模型（响应里带 reasoning 字段），
+        # 给太小会出现「思考完没预算写答案」→ 空回复。
+        max-tokens: 8192
+        # 推理强度：low / medium / high（留空 = 不传）
+        # 实测这个参数被接受，但模型端执行不严格（复杂题思考 token 约降 20%）
+        reasoning-effort: low
+        headers:
+          # OpenCode Go 官方文档的防滥用要求：用自己的 User-Agent 标识客户端
+          User-Agent: qqbot-personal/0.1
+          x-opencode-session: qqbot-personal
+      deepseek:
+        base-url: https://api.deepseek.com/v1
+        api-key: ${DEEPSEEK_API_KEY:}
+        model-name: deepseek-flash
+        capabilities: [chat]
+        temperature: 0.7
+        timeout-seconds: 60
+
+# ============================ 日志 ============================
+# 同时输出三处：
+#   ① 控制台（systemd 收进 journal）
+#   ② 滚动文件（★ 进程崩了之后唯一留存的地方）
+#   ③ 内存环形缓冲（管理后台"实时日志"页的数据源）
+logging:
+  level:
+    com.example.qqbot: DEBUG
+    dev.langchain4j: WARN
+  file:
+    # 落盘。没有这个，进程一崩就什么都看不到 —— 网页和进程是一体的。
+    name: ${LOG_FILE:./data/logs/qqbot.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 7
+      # ★ 总量上限，防止日志写爆磁盘
+      total-size-cap: 200MB
+      clean-history-on-start: false
+

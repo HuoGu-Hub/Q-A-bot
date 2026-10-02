@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  日志配置。
+
+  三个输出目标，各有各的用途：
+    ① CONSOLE  —— systemd 收进 journal（journalctl -u qqbot）
+    ② FILE     —— ★ 滚动文件。进程崩了之后【唯一】留存的地方
+    ③ MEMORY   —— 内存环形缓冲，管理后台"实时日志"页的数据源
+
+  为什么文件是必须的：网页和进程是一体的 —— 进程一崩，网页也跟着没了。
+  想看崩溃瞬间发生了什么，只能靠落盘的文件。
+-->
+<configuration>
+
+    <springProperty scope="context" name="LOG_FILE" source="logging.file.name"
+                    defaultValue="./data/logs/qqbot.log"/>
+    <springProperty scope="context" name="LOG_LEVEL" source="logging.level.com.example.qqbot"
+                    defaultValue="INFO"/>
+
+    <!-- ① 控制台 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ② 滚动文件 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{40} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ③ 内存环形缓冲（供管理后台实时日志页） -->
+    <appender name="MEMORY" class="com.example.qqbot.logs.MemoryLogAppender"/>
+
+    <!--
+      默认级别。
+      注意 com.example.qqbot 是 DEBUG —— 但 MemoryLogAppender 内部会
+      主动丢掉 DEBUG/TRACE，所以实时日志页不会被刷屏。
+    -->
+    <logger name="com.example.qqbot" level="${LOG_LEVEL}"/>
+    <logger name="dev.langchain4j" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="MEMORY"/>
+    </root>
+
+</configuration>

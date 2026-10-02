@@ -1,0 +1,86 @@
+# ============================================================
+#  QQ Bot 协议层 —— 只跑 NapCat 这一个容器
+#
+#  它只负责：登录 QQ、收发消息、把 QQ 私有协议翻译成标准 JSON（OneBot 11）
+#  业务代码不在这里，也永远不要写进来。
+#
+#  用法：
+#    docker compose pull     # 下载镜像
+#    docker compose up -d    # 启动
+#    docker compose logs -f  # 看日志（里面有 WebUI 登录地址）
+# ============================================================
+
+services:
+  napcat:
+    # ⚠️ 版本选择很关键（社区实测）：
+    #   最新版 NapCat + 最新版 QQ 会被风控频繁踢下线（GitHub Issue #1728）
+    #   回退到 v4.15.19 有用户实测连续在线 63+ 小时不掉
+    # 如果掉登录频繁，把下面这行换成固定版本再拉一次：
+    #    image: mlikiowa/napcat-docker:v4.15.19
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: unless-stopped
+
+    # ============================================================
+    #  ⚠️ 固定 MAC 地址 —— 解决「重启/重建容器就掉登录」
+    #
+    #  腾讯的设备指纹：GUID = MD5(/etc/machine-id + MAC)
+    #  容器重建时 Docker 会分配新的随机 MAC → GUID 变 → 腾讯认为是新设备 → 票据作废。
+    #
+    #  启用步骤：
+    #    1) 查出当前正在用的 MAC（必须用当前值！随便填会立刻掉登录）
+    #         docker exec napcat cat /sys/class/net/eth0/address
+    #    2) 填到 .env 里的 NAPCAT_MAC（冒号分隔，如 9a:c2:cc:a8:3c:33）
+    #    3) 取消下面这行的注释
+    # ============================================================
+    mac_address: "${NAPCAT_MAC:-02:42:ac:11:00:02}"
+
+    environment:
+      # 让容器以宿主机用户的身份读写挂载目录，避免挂载出来的文件属主变成 root
+      # Linux / WSL 上建议先在 .env 里设置成 id -u / id -g 的结果；Windows 用默认 0 即可
+      NAPCAT_UID: "${NAPCAT_UID:-0}"
+      NAPCAT_GID: "${NAPCAT_GID:-0}"
+      # 机器人 QQ 号：让 NapCat 重启后能【自动快速登录】，不用重新扫码。
+      # ⚠️ 变量名是 NAPCAT_QUICK_ACCOUNT（NapCat 源码 base.ts:543 用的就是它），
+      #    不是 NAPCAT_QQ —— 后者在源码里根本不存在。
+      #
+      # 但其实【更推荐】不改这里，而是去 WebUI 设置：
+      #   配置 → 登录配置 → 快速登录 QQ
+      # 好处：不用重建容器（重建会改变设备指纹，可能触发风控）。
+      NAPCAT_QUICK_ACCOUNT: "${NAPCAT_QUICK_ACCOUNT:-}"
+      # 可选：快速登录失败时的密码回退（二选一，MD5 更安全）
+      # NAPCAT_QUICK_PASSWORD: "${NAPCAT_QUICK_PASSWORD:-}"
+      # NAPCAT_QUICK_PASSWORD_MD5: "${NAPCAT_QUICK_PASSWORD_MD5:-}"
+    # 给 NTQQ 留出优雅退出的时间。默认 10 秒可能不够，
+    # 被强杀会导致 SQLite（login.db 等）来不及 checkpoint，增加下次启动的异常概率。
+    stop_grace_period: 30s
+
+    ports:
+      # OneBot 11 的 HTTP 接口：业务程序通过它调用「发消息」等动作
+      - "127.0.0.1:3000:3000"
+      # OneBot 11 的正向 WebSocket：业务程序可以连它收发
+      - "127.0.0.1:3001:3001"
+      #   ssh -L 6099:127.0.0.1:6099 user@服务器地址
+      - "127.0.0.1:6099:6099"
+    volumes:
+      # QQ 登录态：不挂载的话，每次重建容器都要重新扫码登录
+      - ./data/qq:/app/.config/QQ
+
+      # 固定 machine-id（设备指纹的另一个输入）。
+      # 先执行 docker exec napcat cat /etc/machine-id > ./data/machine-id 生成文件，
+      # 确认重建容器后这个值确实会变，再取消下面的注释。
+      # ⚠️ 挂载前必须先创建好文件，否则 Docker 会把它当目录创建，容器起不来。
+      - ./data/machine-id:/etc/machine-id:ro
+      # NapCat 自己的配置（OneBot 的网络配置就存在这里）
+      - ./data/napcat/config:/app/napcat/config
+      # NapCat 运行日志。容器内路径是 /app/napcat/logs（源码 logsPath = workdir/logs）。
+      # 不挂载的话，即使开了「文件日志」，日志也只活在容器里，重建容器就没了。
+      - ./data/napcat/logs:/app/napcat/logs
+      - ./data/napcat/plugins:/app/napcat/plugins
+    networks:
+      - qqbot
+
+networks:
+  qqbot:
+    name: qqbot
+    driver: bridge

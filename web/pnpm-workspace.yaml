@@ -1,0 +1,4 @@
+# pnpm 11 的配置（package.json 里的 pnpm 字段已不再读取）
+# esbuild 需要执行安装脚本才能装好原生二进制
+allowBuilds:
+  esbuild: true

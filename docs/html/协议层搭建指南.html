@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>协议层搭建指南：用 Docker Compose 跑起 NapCat</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#0-这一层到底在搭什么">0. 这一层到底在搭什么</a></li>
+<li class="lvl-2"><a href="#1-前置宿主机要有-docker">1. 前置：宿主机要有 Docker</a></li>
+<li class="lvl-2"><a href="#2-三步把镜像拉下来并启动">2. 三步把镜像拉下来并启动</a></li>
+<li class="lvl-2"><a href="#3-登录-qq扫码">3. 登录 QQ（扫码）</a></li>
+<li class="lvl-2"><a href="#4-开启-onebot-的接口关键一步很多人卡在这">4. 开启 OneBot 的接口（关键一步，很多人卡在这）</a></li>
+<li class="lvl-3"><a href="#41-先分清两个方向">4.1 先分清两个方向</a></li>
+<li class="lvl-3"><a href="#42-建-http服务器">4.2 建 HTTP服务器</a></li>
+<li class="lvl-3"><a href="#43-建-http客户端要接收消息才需要">4.3 建 HTTP客户端（要接收消息才需要）</a></li>
+<li class="lvl-2"><a href="#5-验证协议层真的通了">5. 验证：协议层真的通了</a></li>
+<li class="lvl-2"><a href="#6-安全清单照着检查一遍">6. 安全清单（照着检查一遍）</a></li>
+<li class="lvl-2"><a href="#7-常见问题排查">7. 常见问题排查</a></li>
+<li class="lvl-2"><a href="#8-这一层搭好之后你手上就有了什么">8. 这一层搭好之后，你手上就有了什么</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#0-这一层到底在搭什么">0. 这一层到底在搭什么</a></li>
+<li class="lvl-2"><a href="#1-前置宿主机要有-docker">1. 前置：宿主机要有 Docker</a></li>
+<li class="lvl-2"><a href="#2-三步把镜像拉下来并启动">2. 三步把镜像拉下来并启动</a></li>
+<li class="lvl-2"><a href="#3-登录-qq扫码">3. 登录 QQ（扫码）</a></li>
+<li class="lvl-2"><a href="#4-开启-onebot-的接口关键一步很多人卡在这">4. 开启 OneBot 的接口（关键一步，很多人卡在这）</a></li>
+<li class="lvl-3"><a href="#41-先分清两个方向">4.1 先分清两个方向</a></li>
+<li class="lvl-3"><a href="#42-建-http服务器">4.2 建 HTTP服务器</a></li>
+<li class="lvl-3"><a href="#43-建-http客户端要接收消息才需要">4.3 建 HTTP客户端（要接收消息才需要）</a></li>
+<li class="lvl-2"><a href="#5-验证协议层真的通了">5. 验证：协议层真的通了</a></li>
+<li class="lvl-2"><a href="#6-安全清单照着检查一遍">6. 安全清单（照着检查一遍）</a></li>
+<li class="lvl-2"><a href="#7-常见问题排查">7. 常见问题排查</a></li>
+<li class="lvl-2"><a href="#8-这一层搭好之后你手上就有了什么">8. 这一层搭好之后，你手上就有了什么</a></li></ol></details>
+</nav>
+<main>
+<h1 id="协议层搭建指南用-docker-compose-跑起-napcat">协议层搭建指南：用 Docker Compose 跑起 NapCat</h1>
+<blockquote>
+<p>这一层只有一个容器。跑通它 = 你的机器上有一台&quot;能收发 QQ 消息的翻译机&quot;。
+业务层（Java 工程）之后再说，<strong>这一层没通之前不要碰业务代码</strong>。</p>
+</blockquote>
+<hr>
+<h2 id="0-这一层到底在搭什么"><a class="anchor" href="#0-这一层到底在搭什么">0. 这一层到底在搭什么</a></h2>
+<pre><code>   ┌─────────────────────────────────────────────┐
+   │  协议层（本文要搭的，就一个容器）              │
+   │                                             │
+   │   NapCat                                    │
+   │   · 登录你的 QQ 号                           │
+   │   · 把 QQ 私有协议翻译成标准 JSON（OneBot 11） │
+   │   · 对外开两个口：                            │
+   │       3000 → HTTP 接口（让别人调它发消息）     │
+   │       3001 → WebSocket（双向实时收发）        │
+   │       6099 → WebUI 管理后台（只给你自己用）    │
+   └─────────────────────────────────────────────┘
+              ↑ 之后你的 Java 工程就接在这两个口上
+   ┌─────────────────────────────────────────────┐
+   │  业务层（下一阶段，现在不碰）                  │
+   └─────────────────────────────────────────────┘
+</code></pre>
+<hr>
+<h2 id="1-前置宿主机要有-docker"><a class="anchor" href="#1-前置宿主机要有-docker">1. 前置：宿主机要有 Docker</a></h2>
+<p>先确认装好了：</p>
+<pre><code class="language-bash">docker --version
+docker compose version
+</code></pre>
+<p>两条命令都能输出版本号就 OK。</p>
+<ul>
+<li><strong>Windows</strong>：装 Docker Desktop（安装时会自动带上 compose）</li>
+<li><strong>Linux</strong>：<code>apt install docker.io docker-compose-plugin</code> 或按官方文档装 Docker CE</li>
+<li><strong>群晖/威联通</strong>：套件中心装 Container Manager，自带 compose</li>
+</ul>
+<blockquote>
+<p>⚠️ 注意：<strong>Docker 要装在宿主机上</strong>。你现在做开发的那台机器。</p>
+</blockquote>
+<hr>
+<h2 id="2-三步把镜像拉下来并启动"><a class="anchor" href="#2-三步把镜像拉下来并启动">2. 三步把镜像拉下来并启动</a></h2>
+<p>我已经把编排文件写好了，在 <code>deploy/docker-compose.yml</code>。进去执行：</p>
+<pre><code class="language-bash">cd deploy
+
+# 第 1 步：下载镜像（就是你要的&quot;用 compose 下载&quot;）
+docker compose pull
+
+# 第 2 步：后台启动
+docker compose up -d
+
+# 第 3 步：看日志，等它启动完
+docker compose logs -f
+</code></pre>
+<p><strong>看到日志里出现 WebUI 的地址和 Token 就说明起来了。</strong> 类似这样：</p>
+<pre><code>[WebUI] WebUI Token: a1b2c3d4e5f6
+[WebUI] WebUI URL: http://127.0.0.1:6099/webui?token=a1b2c3d4e5f6
+</code></pre>
+<p><strong>把这个 Token 记下来</strong>，登录管理后台要用。Token 是随机的，每次重建容器可能会变。
+如果日志滚过去了没看清，用 <code>docker compose logs napcat | grep -i token</code> 再捞一次。</p>
+<blockquote>
+<p>想看它在不在跑：<code>docker compose ps</code>，STATUS 显示 <code>Up</code> 就对了。</p>
+</blockquote>
+<hr>
+<h2 id="3-登录-qq扫码"><a class="anchor" href="#3-登录-qq扫码">3. 登录 QQ（扫码）</a></h2>
+<ol>
+<li>浏览器打开日志里那个地址：<code>http://127.0.0.1:6099/webui?token=你的Token</code></li>
+<li>用<strong>专门注册的机器人小号</strong>扫码登录</li>
+</ol>
+<blockquote>
+<p>🔴 <strong>重要</strong>：这个 QQ 号<strong>不能同时</strong>在手机 QQ / 电脑 QQ 上登录，会互相踢下线。
+一定要用一个单独的号，别用你日常在用的号。</p>
+</blockquote>
+<p>登录成功后，WebUI 首页会显示这个号的昵称和 QQ 号——<strong>这就意味着协议层已经&quot;活着&quot;了</strong>。</p>
+<hr>
+<h2 id="4-开启-onebot-的接口关键一步很多人卡在这"><a class="anchor" href="#4-开启-onebot-的接口关键一步很多人卡在这">4. 开启 OneBot 的接口（关键一步，很多人卡在这）</a></h2>
+<p>刚装好的 NapCat <strong>默认什么接口都不开</strong>——五个网络适配器全是空数组。
+症状：端口「能连上但没有任何响应」（Empty reply from server）。</p>
+<h3 id="41-先分清两个方向"><a class="anchor" href="#41-先分清两个方向">4.1 先分清两个方向</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方向</th>
+<th>建什么</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>业务层 → NapCat</td>
+<td><strong>HTTP服务器</strong></td>
+<td>你的程序调它<strong>发</strong>消息</td>
+</tr>
+<tr>
+<td>NapCat → 业务层</td>
+<td><strong>HTTP客户端</strong>（HTTP上报）</td>
+<td>它把 QQ 消息<strong>推</strong>给你的程序</td>
+</tr>
+</tbody></table></div>
+<p>只做定时播报 → 只建第一个。要收消息再回复 → 两个都要。</p>
+<h3 id="42-建-http服务器"><a class="anchor" href="#42-建-http服务器">4.2 建 HTTP服务器</a></h3>
+<p>WebUI → <strong>网络配置</strong> → 点左上角 <strong>＋</strong> → 选 <strong>HTTP服务器</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>填什么</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>启用</td>
+<td>打开</td>
+<td>「保存后启用此配置」</td>
+</tr>
+<tr>
+<td>名称</td>
+<td>随便，如 <code>http-server</code></td>
+<td>保存后不可修改</td>
+</tr>
+<tr>
+<td><strong>Host</strong></td>
+<td><strong><code>0.0.0.0</code></strong></td>
+<td>⚠️ 重点，<strong>不要</strong>用默认的 <code>127.0.0.1</code></td>
+</tr>
+<tr>
+<td>Port</td>
+<td><code>3000</code></td>
+<td>要和 docker-compose 里映射的端口一致</td>
+</tr>
+<tr>
+<td>启用CORS</td>
+<td>保持打开</td>
+<td></td>
+</tr>
+<tr>
+<td>启用Websocket</td>
+<td>建议打开</td>
+<td>打开后可用同一端口连 WebSocket</td>
+</tr>
+<tr>
+<td>消息格式</td>
+<td><code>Array</code></td>
+<td>比 String 好处理</td>
+</tr>
+<tr>
+<td>Token</td>
+<td><strong>默认已自动生成 16 位随机串，不要删</strong></td>
+<td>复制下来，业务层要用</td>
+</tr>
+<tr>
+<td>开启Debug</td>
+<td>先不开</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<h3 id="为什么-host-必须是-0000"><a class="anchor" href="#为什么-host-必须是-0000">⚠️ 为什么 Host 必须是 <code>0.0.0.0</code></a></h3>
+<p>Docker 的端口映射把连接转发到<strong>容器的网卡 IP</strong>，而不是容器的 <code>127.0.0.1</code>。</p>
+<ul>
+<li>监听 <code>127.0.0.1</code> → 只接受容器内部的访问 → 从宿主机转发进来被拒</li>
+<li>监听 <code>0.0.0.0</code> → 接受所有网卡 → 转发正常</li>
+</ul>
+<p>另外 NapCat 有个安全机制：<strong>Token 留空且 Host 不是 <code>127.0.0.1</code> 时，保存会弹窗并强制把 Host 改回 <code>127.0.0.1</code></strong>。所以 Token 千万别删。</p>
+</blockquote>
+<h3 id="43-建-http客户端要接收消息才需要"><a class="anchor" href="#43-建-http客户端要接收消息才需要">4.3 建 HTTP客户端（要接收消息才需要）</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>填什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>启用</td>
+<td>打开</td>
+</tr>
+<tr>
+<td>名称</td>
+<td>随便</td>
+</tr>
+<tr>
+<td>URL</td>
+<td><strong><code>http://host.docker.internal:8080/onebot/event</code></strong></td>
+</tr>
+<tr>
+<td>消息格式</td>
+<td><code>Array</code></td>
+</tr>
+<tr>
+<td>reportSelfMessage</td>
+<td><strong>保持关闭</strong></td>
+</tr>
+<tr>
+<td>Token</td>
+<td>和业务层约定的一致</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<h3 id="容器里不能用-127001-访问宿主机"><a class="anchor" href="#容器里不能用-127001-访问宿主机">⚠️ 容器里不能用 <code>127.0.0.1</code> 访问宿主机</a></h3>
+<p><code>127.0.0.1</code> / <code>localhost</code> 在容器内指的是<strong>容器自己</strong>，不是宿主机。
+Docker Desktop（Windows/Mac）用 <code>host.docker.internal</code> 代替；Linux 上需要给容器加
+<code>extra_hosts: [&quot;host.docker.internal:host-gateway&quot;]</code>。
+别忘了<strong>带上路径</strong> <code>/onebot/event</code>。</p>
+</blockquote>
+<blockquote>
+<h3 id="业务层也必须监听-0000"><a class="anchor" href="#业务层也必须监听-0000">⚠️ 业务层也必须监听 <code>0.0.0.0</code></a></h3>
+<p>从容器发来的连接源地址是 Docker 网桥网关，不是 127.0.0.1。
+Spring Boot 默认就监听所有网卡——<strong>别去配 <code>server.address: 127.0.0.1</code></strong>，否则照样连不上。</p>
+</blockquote>
+<blockquote>
+<h3 id="更省心的替代方案"><a class="anchor" href="#更省心的替代方案">💡 更省心的替代方案</a></h3>
+<p>把方向反过来：<strong>让业务层主动连 NapCat</strong>。
+HTTP服务器勾上「启用Websocket」后，业务层直接连 <code>ws://127.0.0.1:3000</code> 收事件、
+用 HTTP 调同一个端口发消息。这样<strong>完全不需要 NapCat 反连业务层</strong>，也就没有
+<code>host.docker.internal</code> 的麻烦——代价是业务层要写 WebSocket 客户端。</p>
+</blockquote>
+<blockquote>
+<p>补充：网络配置<strong>保存后即时生效</strong>（源码里 <code>reload()</code> 会自动重启适配器），不用重启容器。</p>
+</blockquote>
+<hr>
+<h2 id="5-验证协议层真的通了"><a class="anchor" href="#5-验证协议层真的通了">5. 验证：协议层真的通了</a></h2>
+<p>这是整篇最重要的一步——<strong>不要靠&quot;感觉&quot;判断，直接调一次接口</strong>：</p>
+<pre><code class="language-bash"># 把 TOKEN 换成你上面设的 Access Token
+TOKEN=你的AccessToken
+
+curl -s http://127.0.0.1:3000/get_login_info \
+  -H &quot;Authorization: Bearer $TOKEN&quot;
+</code></pre>
+<p>预期返回：</p>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;retcode&quot;: 0,
+  &quot;data&quot;: {
+    &quot;user_id&quot;: 123456789,
+    &quot;nickname&quot;: &quot;你的机器人昵称&quot;
+  }
+}
+</code></pre>
+<p><strong>看到 <code>status: ok</code> 并且 <code>user_id</code> 是你的机器人 QQ 号 —— 协议层就算搭好了。</strong></p>
+<p>如果返回 403 / 401，说明 Token 不对；如果连不上，说明 HTTP 服务端没开或端口没映射。</p>
+<hr>
+<h2 id="6-安全清单照着检查一遍"><a class="anchor" href="#6-安全清单照着检查一遍">6. 安全清单（照着检查一遍）</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"> WebUI 的 6099 端口<strong>只监听 127.0.0.1</strong>（compose 里已经这么配了），不要暴露到公网</li>
+<li><input disabled="" type="checkbox"> OneBot 的 Access Token 是<strong>随机长串</strong>，不是 <code>123456</code></li>
+<li><input disabled="" type="checkbox"> <code>reportSelfMessage</code> 关闭</li>
+<li><input disabled="" type="checkbox"> 用的是<strong>专用小号</strong>，不是日常号</li>
+<li><input disabled="" type="checkbox"> 如果是云服务器，安全组里<strong>不要</strong>对公网开放 3000 / 3001 / 6099</li>
+</ul>
+<blockquote>
+<p>如果 Docker 跑在远程服务器上，WebUI 用 SSH 隧道访问，别直接开端口：
+<code>ssh -L 6099:127.0.0.1:6099 user@服务器IP</code>，然后浏览器访问本机的 6099。</p>
+</blockquote>
+<hr>
+<h2 id="7-常见问题排查"><a class="anchor" href="#7-常见问题排查">7. 常见问题排查</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>解决</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>docker compose pull</code> 卡住 / 超时</td>
+<td>国内拉 Docker Hub 慢</td>
+<td>给 Docker 配镜像加速器，或用代理</td>
+</tr>
+<tr>
+<td>WebUI 打不开</td>
+<td>端口没映射 / 容器没起来</td>
+<td><code>docker compose ps</code> 看状态；<code>docker compose logs</code> 看报错</td>
+</tr>
+<tr>
+<td>登录后很快掉线</td>
+<td>同一个号在别处登录了</td>
+<td>退出手机/电脑 QQ 上的这个号</td>
+</tr>
+<tr>
+<td>扫完码没反应</td>
+<td>网络受限或风控</td>
+<td>换个网络环境重试；确认是全新小号</td>
+</tr>
+<tr>
+<td><code>./data</code> 目录文件全是 root</td>
+<td>UID/GID 没设</td>
+<td>在 <code>deploy/.env</code> 里填 <code>id -u</code> / <code>id -g</code> 的结果后重启</td>
+</tr>
+<tr>
+<td>重启容器又要重新扫码</td>
+<td>没挂载 <code>./data/qq</code></td>
+<td>compose 里已经挂好了，确认目录存在且可写</td>
+</tr>
+<tr>
+<td>curl 调接口 401/403</td>
+<td>Token 不匹配</td>
+<td>WebUI 里的 Access Token 和 curl 里填的要一致</td>
+</tr>
+<tr>
+<td>curl 连不上 3000</td>
+<td>HTTP 服务端没开</td>
+<td>回到第 4 步，确认已保存并生效</td>
+</tr>
+</tbody></table></div>
+<p><strong>更新 NapCat 到最新版</strong>：</p>
+<pre><code class="language-bash">docker compose pull &amp;&amp; docker compose up -d
+</code></pre>
+<hr>
+<h2 id="8-这一层搭好之后你手上就有了什么"><a class="anchor" href="#8-这一层搭好之后你手上就有了什么">8. 这一层搭好之后，你手上就有了什么</a></h2>
+<ul>
+<li>一个正在跑的 NapCat 容器</li>
+<li>一个 HTTP 接口：<code>http://127.0.0.1:3000/&lt;动作名&gt;</code>，带上 Token 就能调</li>
+<li>一个 WebSocket 入口：<code>ws://127.0.0.1:3001</code></li>
+<li>一个挂载在 <code>deploy/data/</code> 下的持久化目录（登录态和配置都在这）</li>
+</ul>
+<p><strong>接下来（下一阶段）才轮到业务层</strong>：</p>
+<ol>
+<li>建 Spring Boot 工程</li>
+<li>在 NapCat 的&quot;HTTP 上报&quot;里填上你程序的地址，让它把消息推过来</li>
+<li>收到消息 → 回一句固定文本（先跑通管道）</li>
+<li>管道通了，再把大模型接进去</li>
+</ol>
+<blockquote>
+<p>顺序别乱：<strong>先把管道接通，再考虑管道里流什么。</strong></p>
+</blockquote>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>协议层搭建指南.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

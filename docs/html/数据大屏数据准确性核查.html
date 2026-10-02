@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数据大屏数据准确性核查</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一结论速览">一、结论速览</a></li>
+<li class="lvl-2"><a href="#二f1你看到的8-个群是怎么来的">二、F1：你看到的「8 个群」是怎么来的</a></li>
+<li class="lvl-2"><a href="#三f2每日图表差了一整天">三、F2：每日图表差了一整天</a></li>
+<li class="lvl-2"><a href="#四f3-f4哪些行不该算进群消息">四、F3 / F4：哪些行不该算进「群消息」</a></li>
+<li class="lvl-2"><a href="#五f5广场生成新答案其实一直失败">五、F5：广场「生成新答案」其实一直失败</a></li>
+<li class="lvl-2"><a href="#六f6同一张卡片两个地方数字不同">六、F6：同一张卡片，两个地方数字不同</a></li>
+<li class="lvl-2"><a href="#七f7预算的今日在北京时间早-8-点重置">七、F7：预算的「今日」在北京时间早 8 点重置</a></li>
+<li class="lvl-2"><a href="#八验证">八、验证</a></li>
+<li class="lvl-2"><a href="#九需要你做的只有一件">九、需要你做的（只有一件）</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一结论速览">一、结论速览</a></li>
+<li class="lvl-2"><a href="#二f1你看到的8-个群是怎么来的">二、F1：你看到的「8 个群」是怎么来的</a></li>
+<li class="lvl-2"><a href="#三f2每日图表差了一整天">三、F2：每日图表差了一整天</a></li>
+<li class="lvl-2"><a href="#四f3-f4哪些行不该算进群消息">四、F3 / F4：哪些行不该算进「群消息」</a></li>
+<li class="lvl-2"><a href="#五f5广场生成新答案其实一直失败">五、F5：广场「生成新答案」其实一直失败</a></li>
+<li class="lvl-2"><a href="#六f6同一张卡片两个地方数字不同">六、F6：同一张卡片，两个地方数字不同</a></li>
+<li class="lvl-2"><a href="#七f7预算的今日在北京时间早-8-点重置">七、F7：预算的「今日」在北京时间早 8 点重置</a></li>
+<li class="lvl-2"><a href="#八验证">八、验证</a></li>
+<li class="lvl-2"><a href="#九需要你做的只有一件">九、需要你做的（只有一件）</a></li></ol></details>
+</nav>
+<main>
+<h1 id="数据大屏数据准确性核查">数据大屏数据准确性核查</h1>
+<blockquote>
+<p>2026-09-28 ｜ 起因：「提问用户 / 群」显示 8 个群，但 bot 明显没进那么多群</p>
+</blockquote>
+<hr>
+<h2 id="一结论速览"><a class="anchor" href="#一结论速览">一、结论速览</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>发现</th>
+<th>性质</th>
+<th>影响</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>F1</strong></td>
+<td>生产库里有 <strong>5 个假群号</strong>（700000~700004）的测试数据</td>
+<td>数据污染</td>
+<td><strong>就是「群 = 8」的直接原因</strong>；关键词榜也混进假热词</td>
+<td>清理 SQL 已备好，<strong>需你在宿主机执行</strong>（容器写不了这个库）</td>
+</tr>
+<tr>
+<td><strong>F2</strong></td>
+<td>每日图表按 <strong>UTC</strong> 日期分桶</td>
+<td>代码 bug</td>
+<td>本地时间早上 8 点前的提问被算到前一天（实测 09-25 差 11 条）</td>
+<td><strong>已修</strong>（<code>AppTime</code>，东八区）</td>
+</tr>
+<tr>
+<td><strong>F3</strong></td>
+<td><code>COUNT(DISTINCT group_id)</code> 会把 <strong>0 当成一个群</strong></td>
+<td>代码疏漏</td>
+<td>广场生成的答案（<code>group_id = 0</code>）一旦带上 <code>pass</code> 就凭空多一个群</td>
+<td><strong>已修</strong>（加 <code>group_id &gt; 0</code>）</td>
+</tr>
+<tr>
+<td><strong>F4</strong></td>
+<td>「群消息总数」= <code>qa_stat</code> 全部行，含广场生成的答案</td>
+<td>口径疏漏</td>
+<td>总数会大于各 action 之和</td>
+<td><strong>已修</strong>（同一处过滤）</td>
+</tr>
+<tr>
+<td><strong>F5</strong></td>
+<td><code>PlazaStore</code> 往不存在的列 <code>has_quote</code> / <code>text_len</code> 写数据</td>
+<td><strong>真 bug</strong></td>
+<td>广场「生成新答案」100% 抛 SQLException</td>
+<td><strong>已修</strong>（并在迁移里补上一直缺失的 <code>source</code> 列）</td>
+</tr>
+<tr>
+<td><strong>F6</strong></td>
+<td>大屏固定近 7 天、看板窗口可切换，但卡片上没写</td>
+<td>表述疏漏</td>
+<td>同一张卡片两处数字不同 → 第一反应是&quot;数据不对&quot;</td>
+<td><strong>已修</strong>（卡片加窗口提示）</td>
+</tr>
+<tr>
+<td><strong>F7</strong></td>
+<td>预算的「今日」用 <code>LocalDate.now()</code>（UTC）</td>
+<td>代码疏漏</td>
+<td>日额度在北京时间早 8 点重置，而不是零点</td>
+<td><strong>已修</strong>（与 F2 共用同一个时区常量）</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="二f1你看到的8-个群是怎么来的"><a class="anchor" href="#二f1你看到的8-个群是怎么来的">二、F1：你看到的「8 个群」是怎么来的</a></h2>
+<p>在真实库上实测（<code>server/data/qa/qqbot.sqlite</code>）：</p>
+<pre><code class="language-text">group_id 分布（全部 3949 行）
+  866095282    2824 行   ← 真实群
+  100000004    1114 行   ← 真实群
+  700000          2 行   ← 假的
+  700001          2 行   ← 假的
+  700002          2 行   ← 假的
+  700003          2 行   ← 假的
+  700004          2 行   ← 假的
+  100000002      1 行   ← 真实（你自己那个群，见 server/README.md 的日志示例）
+</code></pre>
+<p>那 5 个假群的来源是 <code>tests/manual/probe-kb-e2e.mjs</code>：它把假事件 POST 到<strong>真实运行的服务</strong>上，
+而且为了绕开「每人每分钟 1 次 / 每群每分钟 10 条」的限流，<strong>刻意每条用不同用户 + 不同群</strong> ——
+于是凭空多出 5 个群。它们的 <code>group_id</code> 是连号 <code>700000 + i</code>，<code>user_id</code> 是 <code>2000 + i</code>，
+时间集中在 2026-09-22，正好是最早的 id 1~10。</p>
+<p><strong>实测影响</strong>（清理前 → 清理后）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>清理前</th>
+<th>清理后</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>提问用户 / <strong>群</strong></td>
+<td>27 / <strong>8</strong></td>
+<td>22 / <strong>3</strong></td>
+</tr>
+<tr>
+<td>群消息总数</td>
+<td>3949</td>
+<td>3939</td>
+</tr>
+</tbody></table></div>
+<p>清理脚本早就存在（<code>tests/cleanup-sql/cleanup-probe-test-data.sql</code>），只是没执行过。
+我已在<strong>副本</strong>上完整跑通并核对（残留 0 行、无孤儿 raw/keyword）。数字也更新成了当前实测值。</p>
+<blockquote>
+<p><strong>这一步需要你来做</strong>：工作区是 9p 挂载，<strong>容器里写这个库会直接报 <code>disk I/O error</code></strong>
+（WAL 需要共享内存段；我实测过，不是权限问题）。在宿主机上跑即可，不用停服务：</p>
+<pre><code class="language-bash">cp server/data/qa/qqbot.sqlite server/data/qa/qqbot-before-cleanup.sqlite
+sqlite3 server/data/qa/qqbot.sqlite &lt; tests/cleanup-sql/cleanup-probe-test-data.sql
+</code></pre>
+<p>另外我把探针脚本结尾的提醒改成<strong>无条件打印</strong>（原来只在&quot;用了默认目标&quot;时才提醒，
+但显式设 <code>APP_URL</code> 同样可能正指着生产），并写明了&quot;别在容器里跑&quot;。</p>
+</blockquote>
+<hr>
+<h2 id="三f2每日图表差了一整天"><a class="anchor" href="#三f2每日图表差了一整天">三、F2：每日图表差了一整天</a></h2>
+<p><code>QaAnalytics</code> 里两处按天分桶写的是 <code>substr(ts,1,10)</code> —— 那是 <strong>UTC 日期</strong>。
+容器里没设 TZ，所以北京时间早上 8 点之前的提问会被算到<strong>前一天</strong>。</p>
+<p>真实数据上对比（提问量）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>本地日期</th>
+<th>旧（UTC 分桶）</th>
+<th>新（东八区）</th>
+<th>差</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2026-09-25</td>
+<td>32</td>
+<td>21</td>
+<td><strong>−11</strong></td>
+</tr>
+<tr>
+<td>2026-09-26</td>
+<td>34</td>
+<td>45</td>
+<td><strong>+11</strong></td>
+</tr>
+<tr>
+<td>2026-09-27</td>
+<td>5</td>
+<td>5</td>
+<td>0</td>
+</tr>
+</tbody></table></div>
+<p>也就是说「09-26 突然涨了」里有 11 条其实是 09-25 的。</p>
+<p><strong>修法</strong>：新增 <code>config/AppTime</code> 作为唯一时间口径，SQL 改用
+<code>strftime(&#39;%Y-%m-%d&#39;, ts, &#39;+08:00&#39;)</code>。这一条同时被 F7（预算的「今日」）复用 ——
+两处各写一遍时区，迟早会出现&quot;图上算今天、预算算昨天&quot;的自相矛盾。</p>
+<blockquote>
+<p>实测确认 SQLite 能直接解析 <code>Instant.toString()</code> 产出的纳秒精度串
+（<code>2026-09-27T15:02:22.836835400Z</code>），不需要先截断。</p>
+</blockquote>
+<hr>
+<h2 id="四f3-f4哪些行不该算进群消息"><a class="anchor" href="#四f3-f4哪些行不该算进群消息">四、F3 / F4：哪些行不该算进「群消息」</a></h2>
+<p><code>PlazaStore.saveGeneratedAnswer</code>（广场生成新答案）写的是 <code>group_id = 0, user_id = 0</code>，
+注释里写得很清楚：<em>&quot;这条不是群聊产生的，不该伪造归属&quot;</em>。但统计侧没有把 0 排除：</p>
+<ul>
+<li><code>COUNT(DISTINCT group_id)</code> → 会把 <code>0</code> 数成<strong>第 N 个群</strong>；</li>
+<li><code>COUNT(*)</code> 当「群消息总数」→ 会把广场答案算成群消息，导致<strong>总数 &gt; 各 action 之和</strong>。</li>
+</ul>
+<p><strong>修法</strong>：overview 的整段聚合统一加 <code>group_id &gt; 0</code>（KPI、action 分布、每日提问量都走同一个
+<code>where</code>），并在类注释里写清为什么。目前库里还没有广场行，所以这次不会改变现有数字 ——
+它挡的是<strong>下一次</strong>。</p>
+<hr>
+<h2 id="五f5广场生成新答案其实一直失败"><a class="anchor" href="#五f5广场生成新答案其实一直失败">五、F5：广场「生成新答案」其实一直失败</a></h2>
+<p><code>PlazaStore</code> 的 INSERT 里有 <code>has_quote</code> 和 <code>text_len</code> 两列，而 <code>qa_stat</code> 里根本没有它们
+（<code>CREATE TABLE</code> 和 <code>addColumnIfMissing</code> 都没加过）。同一个问题还有 <code>source</code> 列 ——
+代码在读写它，建表语句里却没有。</p>
+<p>实测（在副本上跑修好前后的两条语句）：</p>
+<pre><code class="language-text">旧语句 → ❌ table qa_stat has no column named has_quote
+新语句 → ✅ 插入成功，读回 (group_id=0, user_id=0, answer_len=52, source=&#39;plaza&#39;)
+</code></pre>
+<p>而 <code>PlazaStore.saveGeneratedAnswer</code> 是被 try/catch 包着的，失败只会记一条日志 ——
+所以表现是<strong>广场安安静静地没有新答案</strong>，不报错。</p>
+<p><strong>修法</strong>：</p>
+<ol>
+<li>从 INSERT 里去掉 <code>has_quote</code> / <code>text_len</code>（<strong>没有任何地方读它们</strong>，补两列没人用的东西没意义）；</li>
+<li><code>QaStore.migrate()</code> 补上 <code>source TEXT DEFAULT &#39;chat&#39;</code> —— 全新库从此也能正常工作
+（启动日志实测：<code>[QA] 数据库迁移：qa_stat 表补上 source 列</code>）。</li>
+</ol>
+<hr>
+<h2 id="六f6同一张卡片两个地方数字不同"><a class="anchor" href="#六f6同一张卡片两个地方数字不同">六、F6：同一张卡片，两个地方数字不同</a></h2>
+<ul>
+<li><strong>数据大屏</strong>（<code>/admin/screen</code>）固定 <code>days=7</code>；</li>
+<li><strong>数据看板</strong>（<code>/admin/dashboard</code>）窗口可在 7/30/90/全部之间切。</li>
+</ul>
+<p>两处的卡片都叫「提问用户 / 群」，且<strong>都没写窗口</strong>。切来切去就会觉得数字在乱跳。
+已给两张卡片都加上 <code>近 7 天 · 提过问的（去重）</code> / <code>近 N 天 · 提过问的（去重）</code> 的提示。</p>
+<hr>
+<h2 id="七f7预算的今日在北京时间早-8-点重置"><a class="anchor" href="#七f7预算的今日在北京时间早-8-点重置">七、F7：预算的「今日」在北京时间早 8 点重置</a></h2>
+<p><code>BudgetGuard</code> 用 <code>LocalDate.now()</code>，容器默认 UTC → 日额度在北京时间 08:00 清零。
+个人项目里这不算致命，但它和「每日提问量」的日期口径必须一致，所以一起改成 <code>AppTime.ZONE</code>。</p>
+<hr>
+<h2 id="八验证"><a class="anchor" href="#八验证">八、验证</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>新增边界测试 <code>QaAnalyticsTest.dailyBucketsUseLocalZone</code></td>
+<td>UTC 20:30 → 次日，UTC 15:59 → 当日（<strong>通过</strong>）</td>
+</tr>
+<tr>
+<td>新增边界测试 <code>QaAnalyticsTest.nonGroupRowsAreExcluded</code></td>
+<td><code>group_id = 0</code> 的行不进总数、不冒充群（<strong>通过</strong>）</td>
+</tr>
+<tr>
+<td><code>QaAnalyticsTest</code></td>
+<td>11 项全绿</td>
+</tr>
+<tr>
+<td>全量</td>
+<td><code>./scripts/preflight.sh</code> → <strong>全部通过，可以部署</strong>（后端全部测试 + 打包 + 前端类型检查与构建）</td>
+</tr>
+<tr>
+<td>清理 SQL</td>
+<td>在真实库副本上完整执行：8 群 → 3 群，残留 0 行，无孤儿 raw/keyword</td>
+</tr>
+<tr>
+<td>广场 INSERT</td>
+<td>修前报 <code>no such column: has_quote</code>，修后插入成功并读回</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="九需要你做的只有一件"><a class="anchor" href="#九需要你做的只有一件">九、需要你做的（只有一件）</a></h2>
+<p>在<strong>宿主机</strong>上执行一次测试数据清理（见第二节的命令）。执行完，数据大屏的
+「提问用户 / 群」就会显示成 <strong>3</strong>（其中 <code>100000002</code> 是你自己那个群，只有 1 条记录）。</p>
+<p>如果你的宿主机上没有 <code>sqlite3</code>，告诉我，我可以加一个一次性的维护入口
+（照 <code>--app.qa.report.enabled=true</code> 那套 <code>ApplicationRunner</code> 写，跑完自动退出）。</p>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>数据大屏数据准确性核查.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

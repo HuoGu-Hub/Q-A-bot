@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.16</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.example</groupId>
+  <artifactId>qqbot-server</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>qqbot-server</name>
+  <description>QQ Bot 业务层（协议端：NapCat / OneBot 11）</description>
+
+  <properties>
+    <java.version>17</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <langchain4j.version>1.20.0</langchain4j.version>
+    <!--
+      覆盖 Spring Boot 管理的 Tomcat 版本。
+      10.1.55 有 3 条 CVE（DIGEST 重放 / 安全约束绕过 / FORM 认证绕过）。
+      实测【都不影响本项目】—— 我们没用容器级认证（认证在自己的 Filter 里），
+      但仍升级到修复版本以消除扫描噪音。详见 docs/依赖漏洞扫描报告.md
+    -->
+    <tomcat.version>10.1.60</tomcat.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <!--
+      LangChain4j 的 OpenAI 兼容模块。
+      虽然名字叫 open-ai，但它对所有「OpenAI 协议兼容」的厂商都能用 ——
+      DeepSeek、OpenCode Zen、通义、智谱、Ollama…… 只要改 baseUrl + modelName。
+      多厂商路由就是靠它建多个实例实现的（见 llm/LlmRouter.java）。
+    -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+
+    <!--
+      SQLite：问答记录的本地存储。
+      选它而不是 JSONL —— 统计要用 SQL 聚合，JSONL 每次统计都得全表扫。
+      选它而不是独立数据库服务 —— 2G 内存的机器上多一个常驻服务不划算。
+    -->
+    <dependency>
+      <groupId>org.xerial</groupId>
+      <artifactId>sqlite-jdbc</artifactId>
+      <version>3.53.4.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <!--
+        打包时把仓库根目录的 AGENTS.md 复制进 classpath。
+
+        为什么：AGENTS.md 的**唯一权威副本在仓库根目录**（Agent 生态约定位置），
+        但 jar 要自包含 —— 换台机器部署时不该依赖外部文件是否存在。
+        于是构建时复制一份进 jar 作为【回退】：
+
+          运行时优先读外部 AGENTS.md（改完重启即生效）
+          读不到才用 jar 里的这份（保证能跑）
+
+        注意：不复制到 prompts/ 子目录，就直接放 classpath 根，
+        因为约定名就是 AGENTS.md。
+      -->
+      <resource>
+        <directory>${project.basedir}/..</directory>
+        <includes>
+          <include>AGENTS.md</include>
+        </includes>
+        <targetPath>.</targetPath>
+      </resource>
+      <!-- 其余标准资源目录照常 -->
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <!-- 机器人要输出中文日志，固定 UTF-8，避免 Windows 控制台乱码 -->
+          <jvmArguments>-Dfile.encoding=UTF-8</jvmArguments>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- 测试 JVM 同样固定 UTF-8，否则中文日志在测试输出里会变成 ??? -->
+          <argLine>-Dfile.encoding=UTF-8</argLine>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>知识库文档格式规范</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一整体结构">一、整体结构</a></li>
+<li class="lvl-2"><a href="#二文档头可选但强烈建议">二、文档头（可选，但强烈建议）</a></li>
+<li class="lvl-3"><a href="#导入之后自动发生的事一个块-一个词条">导入之后自动发生的事：一个块 = 一个词条</a></li>
+<li class="lvl-2"><a href="#三分块分隔符">三、分块分隔符</a></li>
+<li class="lvl-3"><a href="#31-等号个数宽容但左右必须一样多">3.1 等号个数宽容，但左右必须一样多</a></li>
+<li class="lvl-3"><a href="#32-标题">3.2 标题</a></li>
+<li class="lvl-3"><a href="#33-id">3.3 id</a></li>
+<li class="lvl-3"><a href="#34-转义">3.4 转义</a></li>
+<li class="lvl-3"><a href="#35-唯一性规则重要">3.5 ★ 唯一性规则（重要）</a></li>
+<li class="lvl-2"><a href="#四内容要求清洗规范">四、内容要求（清洗规范）</a></li>
+<li class="lvl-3"><a href="#41-必须做">4.1 必须做</a></li>
+<li class="lvl-3"><a href="#42-绝不能做">4.2 绝不能做</a></li>
+<li class="lvl-3"><a href="#43-反面教材真实例子">4.3 反面教材（真实例子）</a></li>
+<li class="lvl-3"><a href="#44-关于长度">4.4 关于长度</a></li>
+<li class="lvl-3"><a href="#45-语言正文用中文">4.5 语言：正文用中文</a></li>
+<li class="lvl-2"><a href="#五怎么自查校验器">五、怎么自查（校验器）</a></li>
+<li class="lvl-2"><a href="#六常见错误对照表">六、常见错误对照表</a></li>
+<li class="lvl-2"><a href="#七完整的合规样例">七、完整的合规样例</a></li>
+<li class="lvl-2"><a href="#附可直接粘贴给外部-ai-的指令">附：可直接粘贴给外部 AI 的指令</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一整体结构">一、整体结构</a></li>
+<li class="lvl-2"><a href="#二文档头可选但强烈建议">二、文档头（可选，但强烈建议）</a></li>
+<li class="lvl-3"><a href="#导入之后自动发生的事一个块-一个词条">导入之后自动发生的事：一个块 = 一个词条</a></li>
+<li class="lvl-2"><a href="#三分块分隔符">三、分块分隔符</a></li>
+<li class="lvl-3"><a href="#31-等号个数宽容但左右必须一样多">3.1 等号个数宽容，但左右必须一样多</a></li>
+<li class="lvl-3"><a href="#32-标题">3.2 标题</a></li>
+<li class="lvl-3"><a href="#33-id">3.3 id</a></li>
+<li class="lvl-3"><a href="#34-转义">3.4 转义</a></li>
+<li class="lvl-3"><a href="#35-唯一性规则重要">3.5 ★ 唯一性规则（重要）</a></li>
+<li class="lvl-2"><a href="#四内容要求清洗规范">四、内容要求（清洗规范）</a></li>
+<li class="lvl-3"><a href="#41-必须做">4.1 必须做</a></li>
+<li class="lvl-3"><a href="#42-绝不能做">4.2 绝不能做</a></li>
+<li class="lvl-3"><a href="#43-反面教材真实例子">4.3 反面教材（真实例子）</a></li>
+<li class="lvl-3"><a href="#44-关于长度">4.4 关于长度</a></li>
+<li class="lvl-3"><a href="#45-语言正文用中文">4.5 语言：正文用中文</a></li>
+<li class="lvl-2"><a href="#五怎么自查校验器">五、怎么自查（校验器）</a></li>
+<li class="lvl-2"><a href="#六常见错误对照表">六、常见错误对照表</a></li>
+<li class="lvl-2"><a href="#七完整的合规样例">七、完整的合规样例</a></li>
+<li class="lvl-2"><a href="#附可直接粘贴给外部-ai-的指令">附：可直接粘贴给外部 AI 的指令</a></li></ol></details>
+</nav>
+<main>
+<h1 id="知识库文档格式规范">知识库文档格式规范</h1>
+<blockquote>
+<p><strong>这份文档给谁看</strong>：<strong>系统外部</strong>负责产出资料的人或 AI。
+系统内部只做「符合本规范的文档 → 知识库」，<strong>不负责</strong>抓取网页、也不负责清洗。
+所以：网页怎么变成下面这种文档，是外面的活；本文定义的是<strong>交付标准</strong>。</p>
+<p>不合规的材料可以用校验器当场检查：<code>./scripts/validate-kb-doc.sh 你的文件.md</code></p>
+</blockquote>
+<hr>
+<h2 id="一整体结构"><a class="anchor" href="#一整体结构">一、整体结构</a></h2>
+<p>一份文档 = <strong>可选的文档头</strong> + <strong>一个或多个块</strong>。</p>
+<pre><code>&lt;!-- doc
+name: Flame Altar
+source: wiki
+url: https://enshrouded.wiki.gg/wiki/Flame_Altar
+tags: Essentials, Stations
+--&gt;
+
+=== Flame Altar === &lt;!-- id: flame-altar-0 --&gt;
+Flame Altars are respawn points. You can upgrade them…
+
+=== 升级材料 === &lt;!-- id: flame-altar-1 --&gt;
+Upgrading requires 5 Shroud Wood and 3 Resin…
+</code></pre>
+<ul>
+<li><strong>一份文档</strong>对应一个独立的资料单位（通常是一个网页 / 一个章节 / 一份手册）</li>
+<li><strong>块</strong>是最小的检索单位。检索命中、送进模型的都是块</li>
+</ul>
+<hr>
+<h2 id="二文档头可选但强烈建议"><a class="anchor" href="#二文档头可选但强烈建议">二、文档头（可选，但强烈建议）</a></h2>
+<p>放在文件<strong>最前面</strong>，格式固定：</p>
+<pre><code>&lt;!-- doc
+key: value
+key: value
+--&gt;
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>必填</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td><strong>必填</strong></td>
+<td>文档身份。用于把块归到同一份文档（「文档」面板按它分组、整份下架/清空）</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td><strong>强烈建议</strong></td>
+<td>原文地址。<strong>机器人回答时会把它作为出处给群友</strong>，你也要靠它核对</td>
+</tr>
+<tr>
+<td><code>tags</code></td>
+<td>建议</td>
+<td>分类标签，逗号分隔。用于板块归类与公开站筛选</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>可选</td>
+<td>来源标记（如 <code>wiki</code> / <code>manual</code> / <code>forum</code>）</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>可选</td>
+<td>自定义字段原样保留，不会被丢</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>文档头里<strong>不需要</strong>写标题或别名 —— 命名看的是<strong>块标题</strong>（见下一节）。</p>
+</blockquote>
+<h3 id="导入之后自动发生的事一个块-一个词条"><a class="anchor" href="#导入之后自动发生的事一个块-一个词条">导入之后自动发生的事：<strong>一个块 = 一个词条</strong></a></h3>
+<p>导入时，<strong>每个块</strong>都会在词条表里占一行（所以不用再单独导术语表）：</p>
+<pre><code>词条的「块 id」  = 块的 id（没写 id 就用标题顶替）
+词条的「中文名」 = 块标题
+</code></pre>
+<p>于是「知识库 → 词条」就是<strong>分块的目录</strong>：一份文档有多少块，就多出多少条词条 ——
+导一份 147 块的图鉴，就有 147 个词条，每一条对应一个分块。</p>
+<p><strong>标题里结尾的 <code>（English）</code> 会被拆成别名。</strong> 比如：</p>
+<pre><code>=== 深渊之翼斧（Abyssal Wing Axe） === &lt;!-- id: abyssal-wing-axe --&gt;
+→  词条：深渊之翼斧、Abyssal Wing Axe
+</code></pre>
+<p>这不是装饰：检索的关键词路判定&quot;命中&quot;靠的是<strong>这个词条名出现在群友的问句里</strong>，
+而群友只会说「深渊之翼斧」这四个字，不会把整条带英文的长标题说出来。</p>
+<p>导入时<strong>已存在的词条不会被覆盖</strong>（只在中文名为空时补齐）—— 人工核对过的名字要改请去「词条」面板。</p>
+<p><strong>硬性要求</strong>：</p>
+<ul>
+<li>首行必须<strong>恰好</strong>是 <code>&lt;!-- doc</code>（前后空格无所谓，大小写不敏感）</li>
+<li>必须有闭合的 <code>--&gt;</code></li>
+</ul>
+<blockquote>
+<p>⚠️ <strong>最常见的翻车</strong>：忘了写 <code>--&gt;</code>。这会让文档头一路往下吃，把后面的正文也当成元数据吞掉
+—— 表现为&quot;导入后少了好几块&quot;。校验器会专门报这个。</p>
+</blockquote>
+<hr>
+<h2 id="三分块分隔符"><a class="anchor" href="#三分块分隔符">三、分块分隔符</a></h2>
+<pre><code>n*= 标题 n*= &lt;!-- id: xxx --&gt;
+</code></pre>
+<h3 id="31-等号个数宽容但左右必须一样多"><a class="anchor" href="#31-等号个数宽容但左右必须一样多">3.1 等号个数宽容，但<strong>左右必须一样多</strong></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>写法</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>= 标题 =</code> ~ <code>======== 标题 ========</code></td>
+<td>✅ 都是分隔符</td>
+</tr>
+<tr>
+<td><code>=== 标题 ==</code></td>
+<td>✅ <strong>不是</strong>分隔符 → 当普通正文</td>
+</tr>
+<tr>
+<td><code>== 标题 ====</code></td>
+<td>✅ 同上，不是分隔符</td>
+</tr>
+</tbody></table></div>
+<h3 id="32-标题"><a class="anchor" href="#32-标题">3.2 标题</a></h3>
+<ul>
+<li><strong>自动去掉前后空格</strong></li>
+<li>标题里想出现 <code>=</code>，用反斜杠转义：<code>=== a \= b ===</code> → 标题是 <code>a = b</code></li>
+<li>标题可以为空，但那样<strong>必须</strong>有 id</li>
+</ul>
+<h3 id="33-id"><a class="anchor" href="#33-id">3.3 id</a></h3>
+<pre><code>=== 标题 === &lt;!-- id: flame-altar-0 --&gt;
+</code></pre>
+<ul>
+<li><strong>只允许</strong>：英文字母、数字、<code>-</code>（正则 <code>[A-Za-z0-9-]+</code>）</li>
+<li>不允许中文、空格、下划线、点、斜杠</li>
+<li><strong>可选，但强烈建议写</strong>。理由见下面 3.5</li>
+</ul>
+<h3 id="34-转义"><a class="anchor" href="#34-转义">3.4 转义</a></h3>
+<p>正文里<strong>本来就有</strong>一行长得像分隔符时，在行首加一个反斜杠：</p>
+<pre><code>\=== 这其实是我的正文 ===
+</code></pre>
+<p>导入后这一行的内容会变成 <code>=== 这其实是我的正文 ===</code>（反斜杠被吃掉，fmt 正确）。</p>
+<p>行首的反斜杠<strong>只在&quot;去掉它之后确实是分隔符&quot;时才被吃掉</strong>，所以正文里的
+Windows 路径（<code>\server\share</code>）之类不受影响。</p>
+<h3 id="35-唯一性规则重要"><a class="anchor" href="#35-唯一性规则重要">3.5 ★ 唯一性规则（重要）</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>规则</th>
+<th>违反的后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>key 在同一份文档内必须唯一</strong></td>
+<td><strong>致命错误，整份不能导入</strong></td>
+</tr>
+<tr>
+<td>标题重复</td>
+<td>只提醒，不阻断</td>
+</tr>
+</tbody></table></div>
+<p><code>key</code> 的定义：<strong>有 id 用 id，没有 id 就用标题</strong>。</p>
+<p>所以：</p>
+<ul>
+<li>每个块都写了 id → 标题重复完全没关系（<strong>推荐这种</strong>）</li>
+<li>两个块都没写 id 且标题相同 → <strong>key 撞车，致命错误</strong></li>
+</ul>
+<blockquote>
+<p>一个页面被拆成多块时，<strong>请给每块不同的 id</strong>（如 <code>xxx-0</code>、<code>xxx-1</code>），
+标题保持页面名即可。这是最常见也最推荐的写法。</p>
+</blockquote>
+<hr>
+<h2 id="四内容要求清洗规范"><a class="anchor" href="#四内容要求清洗规范">四、内容要求（清洗规范）</a></h2>
+<p>这是<strong>知识质量的决定性环节</strong>。系统不负责清洗，所以这一步做得好不好，直接决定机器人答得准不准。</p>
+<h3 id="41-必须做"><a class="anchor" href="#41-必须做">4.1 必须做</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>做</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>去掉导航、页脚、侧栏、广告、评论区、&quot;相关链接&quot;</strong></td>
+<td>这些不是知识，收进来只会抢检索结果</td>
+</tr>
+<tr>
+<td><strong>去掉模板/机器痕迹</strong></td>
+<td>见下面的反面教材</td>
+</tr>
+<tr>
+<td><strong>保留全部事实</strong>：数值、配方、材料、位置、掉落、解锁条件</td>
+<td>这些是群友真正要问的</td>
+</tr>
+<tr>
+<td><strong>一块讲一件事</strong></td>
+<td>块是检索单位。一块里混 5 个主题，检索命中后会答非所问</td>
+</tr>
+</tbody></table></div>
+<h3 id="42-绝不能做"><a class="anchor" href="#42-绝不能做">4.2 绝不能做</a></h3>
+<ul>
+<li><strong>不要编造</strong>。原文没写的，宁可不要这一块，也不要&quot;补全&quot;</li>
+<li>不要把多个页面的内容<strong>混进一个块</strong></li>
+</ul>
+<h3 id="43-反面教材真实例子"><a class="anchor" href="#43-反面教材真实例子">4.3 反面教材（真实例子）</a></h3>
+<p>现有语料里有一块长这样（<strong>没清干净</strong>）：</p>
+<pre><code>Absorb：Infobox/Skill: title: Absorb; ID: ABSORB; description: When you suffer
+magical damage, you have a 10% chance to generate 1 mana…
+</code></pre>
+<p><code>Infobox/Skill: title: … ; ID: …</code> 是<strong>模板参数</strong>，不是人话。
+正确的输出应该是：</p>
+<pre><code>Absorb is a Warrior skill. When you suffer magical damage, you have a 10%
+chance to generate 1 mana for each health point lost. Unlock cost: 3.
+</code></pre>
+<h3 id="44-关于长度"><a class="anchor" href="#44-关于长度">4.4 关于长度</a></h3>
+<ul>
+<li>单个块建议 <strong>40 ~ 1600 字</strong>（低于 40 字的块信息量太少，超 1600 字的块检索会变粗）</li>
+<li>校验器会提示&quot;有 N 块超过 1600 字&quot;</li>
+</ul>
+<h3 id="45-语言正文用中文"><a class="anchor" href="#45-语言正文用中文">4.5 语言：<strong>正文用中文</strong></a></h3>
+<p>已定：外部 AI 负责把内容<strong>翻译成中文</strong>再产出。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>位置</th>
+<th>用什么语言</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>块<strong>正文</strong></td>
+<td><strong>中文</strong></td>
+<td>群友直接看到的就是它</td>
+</tr>
+<tr>
+<td>块<strong>标题</strong></td>
+<td><strong>中文</strong></td>
+<td>一个块只讲一件事，标题简明</td>
+</tr>
+<tr>
+<td>块 <strong>id</strong></td>
+<td><strong>英文</strong></td>
+<td>稳定标识，<strong>不要跟着标题改</strong>。约定「英文页面名-序号」，如 <code>flame-altar-0</code></td>
+</tr>
+<tr>
+<td>文档头 <code>url</code></td>
+<td>原文地址</td>
+<td>保持原样，不要翻译 URL</td>
+</tr>
+<tr>
+<td>文档头 <code>tags</code></td>
+<td>中文</td>
+<td>板块/分类标签</td>
+</tr>
+</tbody></table></div>
+<p><strong>id 用英文的理由</strong>：它是数据库里的主键。中文标题以后只要改一个字，id 就跟着变的话，
+块的身份、以及和术语表的对应关系就全断了。</p>
+<hr>
+<h2 id="五怎么自查校验器"><a class="anchor" href="#五怎么自查校验器">五、怎么自查（校验器）</a></h2>
+<pre><code class="language-bash">./scripts/validate-kb-doc.sh 你的文档.md
+</code></pre>
+<p>输出示例（一份有问题的文档）：</p>
+<pre><code>[有问题] kb-doc-bad.md
+  文档头 : name=错误示例  url=https://example.com/page  tags=[测试]
+  分块   : 3 块，正文共 45 字（平均 15 字/块）
+  ✗ 致命问题 1 条：
+      第 12 行：id 只能由英文字母、数字和 - 组成，实际是「熔炉」
+  ! 提醒 2 条：
+      文档头里有不是「key: value」格式的内容：「=== 左右等号不等 ==…」。
+      最常见的原因是文档头忘了写 --&gt;，导致它把后面的正文也吃进去了
+</code></pre>
+<p><strong>退出码 0 = 可以导入；1 = 有致命问题</strong>，可以直接接进你的自动化流程。</p>
+<hr>
+<h2 id="六常见错误对照表"><a class="anchor" href="#六常见错误对照表">六、常见错误对照表</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>错误</th>
+<th>校验器怎么说</th>
+<th>怎么改</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>左右等号不一样 <code>=== 标题 ==</code></td>
+<td>不报错（当正文）→ 表现为&quot;少了一块&quot;</td>
+<td>数一遍两边的 <code>=</code></td>
+</tr>
+<tr>
+<td>id 里有中文</td>
+<td><code>id 只能由英文字母、数字和 - 组成，实际是「熔炉」</code></td>
+<td>换成 <code>kiln</code> 这种</td>
+</tr>
+<tr>
+<td>两个块没 id 且同名</td>
+<td><code>key「X」重复了…这个块没写 id，是用标题当的身份</code></td>
+<td>给每块补上不同 id</td>
+</tr>
+<tr>
+<td>两块 id 相同</td>
+<td><code>key「X」重复了（第 N 行已用过）</code></td>
+<td>改掉其中一个</td>
+</tr>
+<tr>
+<td>忘了写 <code>--&gt;</code></td>
+<td><code>文档头里有不是「key: value」格式的内容…</code></td>
+<td>补上闭合</td>
+</tr>
+<tr>
+<td>整份没有分隔符</td>
+<td><code>整份文档里没有找到任何分块分隔符</code></td>
+<td>检查分隔符写法</td>
+</tr>
+<tr>
+<td>块的正文是空的</td>
+<td><code>第 N 行：「X」这一块正文是空的</code></td>
+<td>删掉空块或补内容</td>
+</tr>
+<tr>
+<td>开头有不属于任何块的文字</td>
+<td><code>第一个分隔符之前有 N 行内容</code></td>
+<td>要么删掉，要么放进一个块里</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="七完整的合规样例"><a class="anchor" href="#七完整的合规样例">七、完整的合规样例</a></h2>
+<p>见仓库里这两份：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>docs/samples/kb-doc-ok.md</code></td>
+<td><strong>合规样例</strong>（格式示范；内容是旧英文语料，<strong>实际产出的语言以中文为准</strong>）</td>
+</tr>
+<tr>
+<td><code>docs/samples/kb-doc-bad.md</code></td>
+<td><strong>违规样例</strong>（故意犯错，用来看校验器报什么）</td>
+</tr>
+</tbody></table></div>
+<p>一份中文文档该长这样：</p>
+<pre><code>&lt;!-- doc
+name: 灵火祭坛
+url: https://enshrouded.wiki.gg/wiki/Flame_Altar
+tags: 基础, 据点
+--&gt;
+
+=== 灵火祭坛 === &lt;!-- id: flame-altar-0 --&gt;
+灵火祭坛是复活点。死亡后会在最近的祭坛复活。
+
+=== 升级材料 === &lt;!-- id: flame-altar-1 --&gt;
+升级需要 5 个瘴气木和 3 个树脂。
+</code></pre>
+<p>注意：<strong>标题中文、id 英文</strong>。</p>
+<hr>
+<h2 id="附可直接粘贴给外部-ai-的指令"><a class="anchor" href="#附可直接粘贴给外部-ai-的指令">附：可直接粘贴给外部 AI 的指令</a></h2>
+<blockquote>
+<p>你要把网页内容整理成知识库文档，格式要求如下：</p>
+<ol>
+<li>文件开头写文档头（若有原文地址<strong>必须</strong>给 url）：<pre><code>&lt;!-- doc
+name: &lt;页面名&gt;
+source: wiki
+url: &lt;原文地址&gt;
+tags: &lt;标签1, 标签2&gt;
+--&gt;
+</code></pre>
+注意 <strong>必须有闭合的 <code>--&gt;</code></strong>。</li>
+<li>正文按块写，每块以分隔符开头，<strong>每块给一个唯一的 id</strong>：<pre><code>=== 页面名 === &lt;!-- id: 页面名英文-序号 --&gt;
+</code></pre>
+id 只能用英文字母、数字和 <code>-</code>。分隔符两边的 <code>=</code> 数量要一样多。</li>
+<li><strong>一个块只讲一件事</strong>，每块 40~1600 字。</li>
+<li>内容要求：<ul>
+<li>去掉导航、页脚、广告、评论区、相关链接</li>
+<li>去掉模板机器痕迹，例如不要出现 <code>Infobox/Skill: title: X; ID: Y;</code> 这种</li>
+<li>数值、配方、材料、位置、掉落 <strong>一个都不能漏</strong></li>
+<li><strong>不要编造</strong>原文没有的内容</li>
+</ul>
+</li>
+<li>正文里如果本来就有像 <code>=== 标题 ===</code> 的行，在该行行首加一个反斜杠转义。</li>
+<li>产出后用 <code>./scripts/validate-kb-doc.sh 文件.md</code> 自查，<strong>退出码必须是 0</strong>。</li>
+</ol>
+</blockquote>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>知识库文档格式规范.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

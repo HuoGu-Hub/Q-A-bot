@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>双端功能统计</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一公开站">一、公开站（/）</a></li>
+<li class="lvl-3"><a href="#11-首页">1.1 首页 /</a></li>
+<li class="lvl-3"><a href="#12-资料库-library">1.2 资料库 /library</a></li>
+<li class="lvl-3"><a href="#13-词条详情-entrytitle">1.3 词条详情 /entry/:title</a></li>
+<li class="lvl-3"><a href="#14-问答广场-plaza">1.4 问答广场 /plaza</a></li>
+<li class="lvl-3"><a href="#15-关于-about">1.5 关于 /about</a></li>
+<li class="lvl-2"><a href="#二管理后台admin">二、管理后台（/admin/）</a></li>
+<li class="lvl-3"><a href="#21-数据大屏-adminscreen">2.1 数据大屏 /admin/screen</a></li>
+<li class="lvl-3"><a href="#22-看板-admindashboard">2.2 看板 /admin/dashboard</a></li>
+<li class="lvl-3"><a href="#23-问答记录-adminrecords">2.3 问答记录 /admin/records</a></li>
+<li class="lvl-3"><a href="#24-术语表-adminglossary">2.4 术语表 /admin/glossary</a></li>
+<li class="lvl-3"><a href="#25-日志-adminlogs">2.5 日志 /admin/logs</a></li>
+<li class="lvl-3"><a href="#26-指令-admincommands">2.6 指令 /admin/commands</a></li>
+<li class="lvl-3"><a href="#27-设置-adminsettings">2.7 设置 /admin/settings</a></li>
+<li class="lvl-3"><a href="#28-模型-adminmodels">2.8 模型 /admin/models</a></li>
+<li class="lvl-3"><a href="#29-广场-adminplaza">2.9 广场 /admin/plaza</a></li>
+<li class="lvl-2"><a href="#三功能分布的问题">三、功能分布的问题</a></li>
+<li class="lvl-3"><a href="#31-公开站">3.1 公开站</a></li>
+<li class="lvl-3"><a href="#32-管理后台">3.2 管理后台</a></li>
+<li class="lvl-2"><a href="#四后端接口清单">四、后端接口清单</a></li>
+<li class="lvl-2"><a href="#五待补的功能你提到的">五、待补的功能（你提到的）</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一公开站">一、公开站（/）</a></li>
+<li class="lvl-3"><a href="#11-首页">1.1 首页 /</a></li>
+<li class="lvl-3"><a href="#12-资料库-library">1.2 资料库 /library</a></li>
+<li class="lvl-3"><a href="#13-词条详情-entrytitle">1.3 词条详情 /entry/:title</a></li>
+<li class="lvl-3"><a href="#14-问答广场-plaza">1.4 问答广场 /plaza</a></li>
+<li class="lvl-3"><a href="#15-关于-about">1.5 关于 /about</a></li>
+<li class="lvl-2"><a href="#二管理后台admin">二、管理后台（/admin/）</a></li>
+<li class="lvl-3"><a href="#21-数据大屏-adminscreen">2.1 数据大屏 /admin/screen</a></li>
+<li class="lvl-3"><a href="#22-看板-admindashboard">2.2 看板 /admin/dashboard</a></li>
+<li class="lvl-3"><a href="#23-问答记录-adminrecords">2.3 问答记录 /admin/records</a></li>
+<li class="lvl-3"><a href="#24-术语表-adminglossary">2.4 术语表 /admin/glossary</a></li>
+<li class="lvl-3"><a href="#25-日志-adminlogs">2.5 日志 /admin/logs</a></li>
+<li class="lvl-3"><a href="#26-指令-admincommands">2.6 指令 /admin/commands</a></li>
+<li class="lvl-3"><a href="#27-设置-adminsettings">2.7 设置 /admin/settings</a></li>
+<li class="lvl-3"><a href="#28-模型-adminmodels">2.8 模型 /admin/models</a></li>
+<li class="lvl-3"><a href="#29-广场-adminplaza">2.9 广场 /admin/plaza</a></li>
+<li class="lvl-2"><a href="#三功能分布的问题">三、功能分布的问题</a></li>
+<li class="lvl-3"><a href="#31-公开站">3.1 公开站</a></li>
+<li class="lvl-3"><a href="#32-管理后台">3.2 管理后台</a></li>
+<li class="lvl-2"><a href="#四后端接口清单">四、后端接口清单</a></li>
+<li class="lvl-2"><a href="#五待补的功能你提到的">五、待补的功能（你提到的）</a></li></ol></details>
+</nav>
+<main>
+<h1 id="双端功能统计">双端功能统计</h1>
+<blockquote>
+<p>用途：重新规划 Web 端功能分布时的现状清单 ｜ 2026-09-25
+只列功能，不做设计说明。</p>
+</blockquote>
+<hr>
+<h2 id="一公开站"><a class="anchor" href="#一公开站">一、公开站（<code>/</code>）</a></h2>
+<p>面向群友。导航 4 项：首页 / 资料库 / 问答广场 / 关于。</p>
+<h3 id="11-首页"><a class="anchor" href="#11-首页">1.1 首页 <code>/</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数据概览</td>
+<td>「这个助手有多少料」—— 问答数、知识库条目、术语数</td>
+</tr>
+<tr>
+<td>使用说明</td>
+<td>「怎么用」—— 引导去群里 @ 机器人</td>
+</tr>
+</tbody></table></div>
+<h3 id="12-资料库-library"><a class="anchor" href="#12-资料库-library">1.2 资料库 <code>/library</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>分类浏览</td>
+<td>按 Wiki 分类列出条目</td>
+</tr>
+<tr>
+<td>关键词搜索</td>
+<td>搜条目名</td>
+</tr>
+</tbody></table></div>
+<h3 id="13-词条详情-entrytitle"><a class="anchor" href="#13-词条详情-entrytitle">1.3 词条详情 <code>/entry/:title</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>条目正文</td>
+<td>从 Wiki 清洗后的文本</td>
+</tr>
+<tr>
+<td>原文链接</td>
+<td>跳转到 enshrouded.wiki.gg</td>
+</tr>
+<tr>
+<td>不存在兜底</td>
+<td>「没有这个词条」</td>
+</tr>
+</tbody></table></div>
+<h3 id="14-问答广场-plaza"><a class="anchor" href="#14-问答广场-plaza">1.4 问答广场 <code>/plaza</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>热词列表</td>
+<td>「大家都在查什么」—— 只显示有获赞答案的词</td>
+</tr>
+<tr>
+<td>关键词页</td>
+<td>某关键词下 <strong>top-3 获赞回答</strong></td>
+</tr>
+<tr>
+<td>投票</td>
+<td>👍 赞 / 👎 踩 / 🕐 已过时</td>
+</tr>
+<tr>
+<td>去重</td>
+<td>相似回答合并（相似度 &gt; 0.9）</td>
+</tr>
+<tr>
+<td><strong>二级降级</strong></td>
+<td>3 条全被踩 → 「问问新答案」（调模型重新生成）</td>
+</tr>
+<tr>
+<td><strong>三级降级</strong></td>
+<td>再全被踩 → 「求助大佬」（生成文案，让用户复制到群里）</td>
+</tr>
+<tr>
+<td>隐私保护</td>
+<td>只展示被点赞过的答案</td>
+</tr>
+</tbody></table></div>
+<h3 id="15-关于-about"><a class="anchor" href="#15-关于-about">1.5 关于 <code>/about</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>介绍</td>
+<td>飘雪喵是什么</td>
+</tr>
+<tr>
+<td>资料来源</td>
+<td>Wiki 署名与许可</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="二管理后台admin"><a class="anchor" href="#二管理后台admin">二、管理后台（<code>/admin/</code>）</a></h2>
+<p>导航 9 项。</p>
+<h3 id="21-数据大屏-adminscreen"><a class="anchor" href="#21-数据大屏-adminscreen">2.1 数据大屏 <code>/admin/screen</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>每日提问量</td>
+<td>趋势图</td>
+</tr>
+<tr>
+<td>检索来源</td>
+<td>向量路 / 关键词路占比</td>
+</tr>
+<tr>
+<td>关键词排行</td>
+<td>被问最多的词</td>
+</tr>
+</tbody></table></div>
+<h3 id="22-看板-admindashboard"><a class="anchor" href="#22-看板-admindashboard">2.2 看板 <code>/admin/dashboard</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>未命中 · 该补什么</td>
+<td><strong>群友问了但知识库查不到的词</strong></td>
+</tr>
+<tr>
+<td>关键词排行</td>
+<td>同上，带明细</td>
+</tr>
+<tr>
+<td>检索来源 / 标注</td>
+<td>命中情况</td>
+</tr>
+<tr>
+<td>最高余弦分布</td>
+<td>阈值参考（调 min-score 用）</td>
+</tr>
+</tbody></table></div>
+<h3 id="23-问答记录-adminrecords"><a class="anchor" href="#23-问答记录-adminrecords">2.3 问答记录 <code>/admin/records</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>记录列表</td>
+<td>历史问答，含问题/回答/命中情况</td>
+</tr>
+<tr>
+<td>标注</td>
+<td>人工标 good / bad</td>
+</tr>
+</tbody></table></div>
+<h3 id="24-术语表-adminglossary"><a class="anchor" href="#24-术语表-adminglossary">2.4 术语表 <code>/admin/glossary</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>增删改</td>
+<td>中英对照词条（检索 B 路依赖它）</td>
+</tr>
+<tr>
+<td>搜索</td>
+<td>按中/英文查</td>
+</tr>
+</tbody></table></div>
+<h3 id="25-日志-adminlogs"><a class="anchor" href="#25-日志-adminlogs">2.5 日志 <code>/admin/logs</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>业务层日志</strong></td>
+<td>内存环形缓冲 + SSE 实时推送，级别过滤、搜索、暂停</td>
+</tr>
+<tr>
+<td><strong>NapCat 日志</strong></td>
+<td>读容器日志文件，文件列表 + 只读尾部</td>
+</tr>
+<tr>
+<td>脱敏</td>
+<td>token / QQ 号自动打码</td>
+</tr>
+</tbody></table></div>
+<h3 id="26-指令-admincommands"><a class="anchor" href="#26-指令-admincommands">2.6 指令 <code>/admin/commands</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>指令增删改</td>
+<td>触发词 + 回复模板</td>
+</tr>
+<tr>
+<td>变量插入</td>
+<td>点击插入 <code>{user}</code> <code>{time}</code> 等 15 个变量</td>
+</tr>
+<tr>
+<td>实时预览</td>
+<td>保存前看渲染结果</td>
+</tr>
+<tr>
+<td>使用统计</td>
+<td>最常用 + <strong>「群友发了但没配」排行</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="27-设置-adminsettings"><a class="anchor" href="#27-设置-adminsettings">2.7 设置 <code>/admin/settings</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Bot 行为配置</td>
+<td><strong>31 项，8 组</strong>：回复行为 / 频率限制 / 话术 / 功能开关 / 指令系统 / 媒体 / 知识库 / 统计</td>
+</tr>
+<tr>
+<td>热生效</td>
+<td>保存立即生效，不用重启</td>
+</tr>
+<tr>
+<td>白名单</td>
+<td>基础设施配置<strong>不显示也拒绝写入</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="28-模型-adminmodels"><a class="anchor" href="#28-模型-adminmodels">2.8 模型 <code>/admin/models</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>调用链展示</td>
+<td>默认 → 降级顺序（只读）</td>
+</tr>
+<tr>
+<td><strong>模型 ID 可改</strong></td>
+<td>唯一可改项，其余只读</td>
+</tr>
+<tr>
+<td>测试连通性</td>
+<td>建临时客户端发最小请求</td>
+</tr>
+<tr>
+<td>拉取模型列表</td>
+<td>调 <code>/v1/models</code> 做下拉</td>
+</tr>
+<tr>
+<td>先测再换</td>
+<td>测不通拒绝保存</td>
+</tr>
+<tr>
+<td>热生效</td>
+<td>改完立即生效</td>
+</tr>
+</tbody></table></div>
+<h3 id="29-广场-adminplaza"><a class="anchor" href="#29-广场-adminplaza">2.9 广场 <code>/admin/plaza</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>概览卡片</td>
+<td>投票数 / 已上架 / 该降级 / 求助数 / 今日限额</td>
+</tr>
+<tr>
+<td>投票内容</td>
+<td><strong>含未上架的</strong>（有人在踩但还没上架的，提前发现）</td>
+</tr>
+<tr>
+<td>投票明细</td>
+<td>谁投的（hash）、什么时候</td>
+</tr>
+<tr>
+<td><strong>下架</strong></td>
+<td>清空投票 → 自动从公开站消失</td>
+</tr>
+<tr>
+<td>求助记录</td>
+<td>pending（申请了没发）/ sent</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="三功能分布的问题"><a class="anchor" href="#三功能分布的问题">三、功能分布的问题</a></h2>
+<h3 id="31-公开站"><a class="anchor" href="#31-公开站">3.1 公开站</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>首页内容单薄</strong></td>
+<td>只有两个数字块 + 使用说明，没有引导</td>
+</tr>
+<tr>
+<td><strong>资料库与问答广场割裂</strong></td>
+<td>一个查 Wiki、一个看问答，互相不打通</td>
+</tr>
+<tr>
+<td>无搜索入口</td>
+<td>首页没有搜索框，要先进资料库</td>
+</tr>
+<tr>
+<td>词条页无相关问答</td>
+<td>看 Wiki 时看不到「别人问过什么」</td>
+</tr>
+<tr>
+<td>广场入口深</td>
+<td>导航第 3 项，且要先进关键词列表</td>
+</tr>
+<tr>
+<td>移动端未验证</td>
+<td>布局是响应式的，但没在手机上试过</td>
+</tr>
+</tbody></table></div>
+<h3 id="32-管理后台"><a class="anchor" href="#32-管理后台">3.2 管理后台</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>导航 9 项偏多</strong></td>
+<td>大屏/看板/记录 三者内容有重叠</td>
+</tr>
+<tr>
+<td>大屏 vs 看板职责不清</td>
+<td>都是统计，一个给&quot;看&quot;一个给&quot;分析&quot;</td>
+</tr>
+<tr>
+<td>记录与广场割裂</td>
+<td>广场的投票内容也是记录，但分在两个页面</td>
+</tr>
+<tr>
+<td>术语表无批量操作</td>
+<td>3,282 条，只能一条条改</td>
+</tr>
+<tr>
+<td>缺少知识库构建入口</td>
+<td>重建索引要跑命令行</td>
+</tr>
+<tr>
+<td>无「回答格式」配置</td>
+<td>← <strong>你刚提的需求</strong>，目前不存在</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="四后端接口清单"><a class="anchor" href="#四后端接口清单">四、后端接口清单</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>前缀</th>
+<th>用途</th>
+<th>认证</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/public/**</code></td>
+<td>公开站：统计、资料库、广场</td>
+<td>无（IP 限流）</td>
+</tr>
+<tr>
+<td><code>/admin/api/**</code></td>
+<td>管理后台全部接口</td>
+<td>会话 Cookie</td>
+</tr>
+<tr>
+<td><code>/onebot/**</code></td>
+<td>NapCat 上报入口</td>
+<td>Token</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="五待补的功能你提到的"><a class="anchor" href="#五待补的功能你提到的">五、待补的功能（你提到的）</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>功能</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>回答格式配置</strong></td>
+<td>📌 已列入开发任务 —— 见 <code>plans/开发任务.html</code> 的 T4</td>
+</tr>
+<tr>
+<td><strong>知识库完善方式</strong></td>
+<td>✅ 已做 —— <code>KbManageView</code>（审核资料 · 建立索引 · 邀请码）+ <code>GlossaryView</code>（补词，改完热生效）</td>
+</tr>
+</tbody></table></div>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>双端功能统计.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

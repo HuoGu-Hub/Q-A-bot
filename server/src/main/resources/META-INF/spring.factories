@@ -1,0 +1,3 @@
+# 让 .env 的加载不依赖进程工作目录（见 DotenvEnvironmentPostProcessor 的注释）
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  com.example.qqbot.config.DotenvEnvironmentPostProcessor

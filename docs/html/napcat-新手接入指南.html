@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>从零理解：NapCat 到底怎么用，我该写什么代码</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一先破除一个误解napcat-不是机器人框架">一、先破除一个误解：NapCat 不是「机器人框架」</a></li>
+<li class="lvl-2"><a href="#二谁负责什么">二、谁负责什么</a></li>
+<li class="lvl-2"><a href="#三所以我要改它的代码吗">三、所以，我要改它的代码吗？</a></li>
+<li class="lvl-2"><a href="#四通信协议层是什么意思用大白话说">四、「通信协议层」是什么意思？用大白话说</a></li>
+<li class="lvl-2"><a href="#五一个真实的来回我们实测跑通的">五、一个真实的来回（我们实测跑通的）</a></li>
+<li class="lvl-2"><a href="#六上手三步">六、上手三步</a></li>
+<li class="lvl-3"><a href="#第-1-步把-napcat-跑起来并登录">第 1 步：把 NapCat 跑起来并登录</a></li>
+<li class="lvl-3"><a href="#第-2-步在网页界面里配置消息推给谁">第 2 步：在网页界面里配置「消息推给谁」</a></li>
+<li class="lvl-3"><a href="#第-3-步跑你自己的程序">第 3 步：跑你自己的程序</a></li>
+<li class="lvl-2"><a href="#七没有-qq-号也能先开发">七、没有 QQ 号也能先开发</a></li>
+<li class="lvl-2"><a href="#八从能回话到接上大模型只差一行">八、从「能回话」到「接上大模型」，只差一行</a></li>
+<li class="lvl-2"><a href="#九那篇复杂的架构文档什么时候才用得上">九、那篇复杂的架构文档什么时候才用得上？</a></li>
+<li class="lvl-2"><a href="#十你可以怎么验证自己懂了">十、你可以怎么验证自己懂了</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一先破除一个误解napcat-不是机器人框架">一、先破除一个误解：NapCat 不是「机器人框架」</a></li>
+<li class="lvl-2"><a href="#二谁负责什么">二、谁负责什么</a></li>
+<li class="lvl-2"><a href="#三所以我要改它的代码吗">三、所以，我要改它的代码吗？</a></li>
+<li class="lvl-2"><a href="#四通信协议层是什么意思用大白话说">四、「通信协议层」是什么意思？用大白话说</a></li>
+<li class="lvl-2"><a href="#五一个真实的来回我们实测跑通的">五、一个真实的来回（我们实测跑通的）</a></li>
+<li class="lvl-2"><a href="#六上手三步">六、上手三步</a></li>
+<li class="lvl-3"><a href="#第-1-步把-napcat-跑起来并登录">第 1 步：把 NapCat 跑起来并登录</a></li>
+<li class="lvl-3"><a href="#第-2-步在网页界面里配置消息推给谁">第 2 步：在网页界面里配置「消息推给谁」</a></li>
+<li class="lvl-3"><a href="#第-3-步跑你自己的程序">第 3 步：跑你自己的程序</a></li>
+<li class="lvl-2"><a href="#七没有-qq-号也能先开发">七、没有 QQ 号也能先开发</a></li>
+<li class="lvl-2"><a href="#八从能回话到接上大模型只差一行">八、从「能回话」到「接上大模型」，只差一行</a></li>
+<li class="lvl-2"><a href="#九那篇复杂的架构文档什么时候才用得上">九、那篇复杂的架构文档什么时候才用得上？</a></li>
+<li class="lvl-2"><a href="#十你可以怎么验证自己懂了">十、你可以怎么验证自己懂了</a></li></ol></details>
+</nav>
+<main>
+<h1 id="从零理解napcat-到底怎么用我该写什么代码">从零理解：NapCat 到底怎么用，我该写什么代码</h1>
+<blockquote>
+<p>这篇不讲架构，只回答一个问题：<strong>下载了 NapCat 之后，我到底要动它哪里？</strong></p>
+</blockquote>
+<hr>
+<h2 id="一先破除一个误解napcat-不是机器人框架"><a class="anchor" href="#一先破除一个误解napcat-不是机器人框架">一、先破除一个误解：NapCat 不是「机器人框架」</a></h2>
+<p>NapCat 是<strong>一台翻译机</strong>。</p>
+<p>QQ 客户端和腾讯服务器之间说话，用的是一套私有的、不公开的协议。你的程序根本听不懂。NapCat 做的事情是：</p>
+<ul>
+<li>它假装自己是一个 QQ 客户端，登录你的 QQ 号；</li>
+<li>把腾讯那边发来的消息，<strong>翻译成人人都看得懂的 JSON</strong>，转交给你的程序；</li>
+<li>把你的程序想发的话，<strong>翻译回 QQ 的私有格式</strong>，发出去。</li>
+</ul>
+<p>一个更好懂的类比：<strong>电源转接头</strong>。</p>
+<pre><code>   腾讯服务器                NapCat                你的程序
+  （美标插座）            （转接头）             （国标插头的电器）
+        │                     │                       │
+        │  QQ 私有协议         │                       │
+        ├────────────────────▶│                       │
+        │                     │   标准 JSON 格式       │
+        │                     ├──────────────────────▶│
+        │                     │                       │ 你的代码在这里
+        │                     │◀──────────────────────┤ 想好了要回什么
+        │                     │                       │
+        │◀────────────────────┤                       │
+</code></pre>
+<p>那个「标准 JSON 格式」有个名字，叫 <strong>OneBot 11 协议</strong>。你不用背它，用到的时候查文档照抄就行。</p>
+<hr>
+<h2 id="二谁负责什么"><a class="anchor" href="#二谁负责什么">二、谁负责什么</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>角色</th>
+<th>负责</th>
+<th>不负责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>NapCat</strong></td>
+<td>登录 QQ、收发消息、把协议翻译成 JSON</td>
+<td>完全不管你的业务逻辑，它不知道你在做 AI 还是做签到</td>
+</tr>
+<tr>
+<td><strong>你的程序</strong></td>
+<td>决定「这条消息要不要回」「回什么」</td>
+<td>不用管 QQ 协议细节，不用管登录</td>
+</tr>
+<tr>
+<td><strong>大模型</strong></td>
+<td>生成回复的文字内容</td>
+<td>不知道 QQ 的存在，它只是被你的程序调用</td>
+</tr>
+<tr>
+<td><strong>数据库</strong></td>
+<td>记历史对话、长期记忆</td>
+<td>——</td>
+</tr>
+</tbody></table></div>
+<p><strong>关键认知：NapCat 和你的程序是两个独立的程序，跑在两个进程里，通过网络说话。</strong> 就像浏览器和网站服务器一样，互不干涉。</p>
+<hr>
+<h2 id="三所以我要改它的代码吗"><a class="anchor" href="#三所以我要改它的代码吗">三、所以，我要改它的代码吗？</a></h2>
+<p><strong>不用。一行都不用改。</strong></p>
+<p>你只需要做两件事：</p>
+<ol>
+<li><strong>改 NapCat 的配置文件</strong>（在网页界面里点几下就行）—— 告诉它两件事：<ul>
+<li>「有新消息，往这个地址推送」</li>
+<li>「我的接口在这个端口，允许你调用它发消息」</li>
+</ul>
+</li>
+<li><strong>自己写一个程序</strong> —— 接收它推来的消息，调用它的接口把回复发出去。</li>
+</ol>
+<p>三个「不需要」：</p>
+<ul>
+<li>❌ 不需要把 NapCat 的源码 clone 下来改</li>
+<li>❌ 不需要懂 TypeScript（NapCat 是用它写的，但你不用碰）</li>
+<li>❌ 不需要把代码写进 NapCat 的插件目录</li>
+</ul>
+<blockquote>
+<p>例外：只有当你想给 NapCat 本身加新功能（比如支持一个它还不支持的 QQ 新特性）或者修它的 bug 时，才需要看源码。99% 的人一辈子不需要。</p>
+</blockquote>
+<hr>
+<h2 id="四通信协议层是什么意思用大白话说"><a class="anchor" href="#四通信协议层是什么意思用大白话说">四、「通信协议层」是什么意思？用大白话说</a></h2>
+<p>就是<strong>两个程序约定的说话格式</strong>。</p>
+<p>比如约定好：要和 NapCat 说话，必须把内容写成这样：</p>
+<pre><code class="language-json">{
+  &quot;action&quot;: &quot;send_group_msg&quot;,
+  &quot;params&quot;: { &quot;group_id&quot;: 123456, &quot;message&quot;: &quot;你好呀&quot; }
+}
+</code></pre>
+<p>NapCat 收到这段 JSON，就知道「哦，他要我往 123456 这个群发一句你好呀」。</p>
+<p>反过来，QQ 群里有人说话了，NapCat 会推给你这样一段：</p>
+<pre><code class="language-json">{
+  &quot;post_type&quot;: &quot;message&quot;,
+  &quot;message_type&quot;: &quot;group&quot;,
+  &quot;group_id&quot;: 123456,
+  &quot;user_id&quot;: 456789,
+  &quot;self_id&quot;: 999999,
+  &quot;message&quot;: [
+    { &quot;type&quot;: &quot;at&quot;,   &quot;data&quot;: { &quot;qq&quot;: &quot;999999&quot; } },
+    { &quot;type&quot;: &quot;text&quot;, &quot;data&quot;: { &quot;text&quot;: &quot; 你好呀&quot; } }
+  ]
+}
+</code></pre>
+<p>这段的意思是：「群里 456789 这个人发了条消息，内容是 @999999 你好呀」。</p>
+<p><strong>「协议层」= 这套约定俗成的 JSON 格式。</strong> 它不是玄学，就是一份双方约定的「信件格式规范」。你查文档照着填就行。</p>
+<hr>
+<h2 id="五一个真实的来回我们实测跑通的"><a class="anchor" href="#五一个真实的来回我们实测跑通的">五、一个真实的来回（我们实测跑通的）</a></h2>
+<p>这是真机跑出来的日志，一字不改：</p>
+<p><strong>你的程序收到的（NapCat 推来的）：</strong></p>
+<pre><code class="language-json">{&quot;post_type&quot;:&quot;message&quot;,&quot;message_type&quot;:&quot;group&quot;,&quot;group_id&quot;:123456,&quot;user_id&quot;:456789,
+ &quot;self_id&quot;:999999,&quot;message&quot;:[{&quot;type&quot;:&quot;at&quot;,&quot;data&quot;:{&quot;qq&quot;:&quot;999999&quot;}},
+ {&quot;type&quot;:&quot;text&quot;,&quot;data&quot;:{&quot;text&quot;:&quot; 你好呀&quot;}}]}
+</code></pre>
+<p><strong>你的程序发出去的（调用 NapCat 的接口）：</strong></p>
+<pre><code class="language-json">POST http://127.0.0.1:3000/send_group_msg
+{&quot;group_id&quot;:123456,&quot;message&quot;:[{&quot;type&quot;:&quot;at&quot;,&quot;data&quot;:{&quot;qq&quot;:&quot;456789&quot;}},
+ {&quot;type&quot;:&quot;text&quot;,&quot;data&quot;:{&quot;text&quot;:&quot; 你说的是：「你好呀」&quot;}}]}
+</code></pre>
+<p><strong>结果：</strong> QQ 群里出现了「@456789 你说的是：「你好呀」」。</p>
+<p>整件事就这么简单。所谓「基于 NapCat 开发一个机器人」，<strong>就是不断重复这个来回</strong>。</p>
+<hr>
+<h2 id="六上手三步"><a class="anchor" href="#六上手三步">六、上手三步</a></h2>
+<h3 id="第-1-步把-napcat-跑起来并登录"><a class="anchor" href="#第-1-步把-napcat-跑起来并登录">第 1 步：把 NapCat 跑起来并登录</a></h3>
+<pre><code class="language-bash">docker run -d --name napcat --restart always \
+  -p 3000:3000 -p 3001:3001 -p 6099:6099 \
+  -v $(pwd)/data/napcat:/app/napcat/config \
+  -v $(pwd)/data/qq:/app/.config/QQ \
+  mlikiowa/napcat-docker:latest
+</code></pre>
+<p>浏览器打开 <code>http://127.0.0.1:6099</code>，扫码登录一个<strong>专门注册的小号</strong>（这个号不能同时在手机 QQ 上登录）。</p>
+<h3 id="第-2-步在网页界面里配置消息推给谁"><a class="anchor" href="#第-2-步在网页界面里配置消息推给谁">第 2 步：在网页界面里配置「消息推给谁」</a></h3>
+<p>新建一个网络配置，填两样：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>填什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HTTP 服务端端口</td>
+<td><code>3000</code> ← 你的程序通过这个<strong>调用它</strong>发消息</td>
+</tr>
+<tr>
+<td>HTTP 上报地址</td>
+<td><code>http://你的机器IP:8080/</code> ← 它把消息<strong>推给</strong>你</td>
+</tr>
+<tr>
+<td>Token</td>
+<td>随便一串随机字符，两边填一样</td>
+</tr>
+</tbody></table></div>
+<h3 id="第-3-步跑你自己的程序"><a class="anchor" href="#第-3-步跑你自己的程序">第 3 步：跑你自己的程序</a></h3>
+<pre><code class="language-bash">cd demo
+NAPCAT_TOKEN=你刚填的token node http-bot.mjs
+</code></pre>
+<p>然后去群里 @ 一下机器人。</p>
+<hr>
+<h2 id="七没有-qq-号也能先开发"><a class="anchor" href="#七没有-qq-号也能先开发">七、没有 QQ 号也能先开发</a></h2>
+<p>我另外写了一个 <code>fake-napcat.mjs</code>，它假装自己是 NapCat，只提供那个 HTTP 接口。这样你可以<strong>完全不碰 QQ</strong>，先把程序逻辑调通：</p>
+<pre><code class="language-bash"># 终端 1：起假的 NapCat
+node demo/fake-napcat.mjs
+
+# 终端 2：起你的机器人，指向假的 NapCat
+NAPCAT_API=http://127.0.0.1:3999 node demo/http-bot.mjs
+
+# 终端 3：伪造一条「群里有人 @ 了机器人」的消息
+curl -X POST http://127.0.0.1:8080/ -H &#39;content-type: application/json&#39; -d &#39;{
+  &quot;post_type&quot;:&quot;message&quot;,&quot;message_type&quot;:&quot;group&quot;,&quot;group_id&quot;:123456,&quot;user_id&quot;:456789,
+  &quot;self_id&quot;:999999,
+  &quot;message&quot;:[{&quot;type&quot;:&quot;at&quot;,&quot;data&quot;:{&quot;qq&quot;:&quot;999999&quot;}},{&quot;type&quot;:&quot;text&quot;,&quot;data&quot;:{&quot;text&quot;:&quot; 你好呀&quot;}}]}&#39;
+</code></pre>
+<p>终端 2 会打印收到的消息，终端 1 会打印「我要发这个回复」。</p>
+<hr>
+<h2 id="八从能回话到接上大模型只差一行"><a class="anchor" href="#八从能回话到接上大模型只差一行">八、从「能回话」到「接上大模型」，只差一行</a></h2>
+<pre><code class="language-js">// 现在（demo 里的样子）
+const reply = `你说的是：「${text}」`
+
+// 以后（接大模型）
+const reply = await callLLM(text)   // 内部就是往 OpenAI / DeepSeek 发个 HTTP 请求
+</code></pre>
+<p><strong>「接 Agent」听起来很玄，落到实处就是：把生成回复的那一行，换成一个调用模型的 HTTP 请求。</strong> 剩下的（多轮记忆、工具调用、防注入）都是在这个基础上加东西。</p>
+<hr>
+<h2 id="九那篇复杂的架构文档什么时候才用得上"><a class="anchor" href="#九那篇复杂的架构文档什么时候才用得上">九、那篇复杂的架构文档什么时候才用得上？</a></h2>
+<p>分水岭很清楚：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>你现在的情况</th>
+<th>该用什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>就自己玩 / 一两个群</td>
+<td><strong>本文这一版就够了</strong>，一个文件，零依赖</td>
+</tr>
+<tr>
+<td>想记住多轮对话</td>
+<td>加一个 SQLite 存历史</td>
+</tr>
+<tr>
+<td>想让它会用工具（搜资料、查天气）</td>
+<td>加「工具调用」循环</td>
+</tr>
+<tr>
+<td>群多、消息量大、怕被刷爆</td>
+<td>加触发规则 + 限流</td>
+</tr>
+<tr>
+<td>有人试图套你的提示词 / 骗它干坏事</td>
+<td>加防注入</td>
+</tr>
+<tr>
+<td>每月 token 账单失控</td>
+<td>加路由过滤 + 预算</td>
+</tr>
+</tbody></table></div>
+<p><strong>复杂架构从来不是起点，而是被真实问题逼出来的结果。</strong> 先把这一个文件跑起来，比读十篇架构文都有用。</p>
+<hr>
+<h2 id="十你可以怎么验证自己懂了"><a class="anchor" href="#十你可以怎么验证自己懂了">十、你可以怎么验证自己懂了</a></h2>
+<p>回答这三个问题就够了：</p>
+<ol>
+<li>NapCat 挂掉的时候，你的程序会怎样？（答：收不到消息、发不出去，但它自己不崩——因为它们是两个独立进程）</li>
+<li>你想让机器人换个性格，改哪个文件？（答：改<strong>你自己的</strong>代码里的回复逻辑，不是改 NapCat）</li>
+<li>如果腾讯改了 QQ 协议，谁需要升级？（答：NapCat，你不用动）</li>
+</ol>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>napcat-新手接入指南.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

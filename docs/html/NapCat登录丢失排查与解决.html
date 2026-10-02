@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NapCat 掉登录与账号风控：根因与解决</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一根因从-napcat-源码里挖出来的">一、根因（从 NapCat 源码里挖出来的）</a></li>
+<li class="lvl-3"><a href="#为什么是容器重建而不是重启">为什么是容器重建而不是重启</a></li>
+<li class="lvl-3"><a href="#这一点我有一份责任">⚠️ 这一点我有一份责任</a></li>
+<li class="lvl-2"><a href="#二社区里搜到的前例你的情况不是个例">二、社区里搜到的前例（你的情况不是个例）</a></li>
+<li class="lvl-2"><a href="#三解决方案按顺序做">三、解决方案（按顺序做）</a></li>
+<li class="lvl-3"><a href="#第-1-步先把当前的设备标识取出来关键别跳过">第 1 步：先把当前的设备标识取出来（关键，别跳过）</a></li>
+<li class="lvl-3"><a href="#第-2-步固定-mac-地址">第 2 步：固定 MAC 地址</a></li>
+<li class="lvl-3"><a href="#第-3-步固定-machine-id如果第-1-步查到的不是固定值">第 3 步：固定 machine-id（如果第 1 步查到的不是固定值）</a></li>
+<li class="lvl-3"><a href="#第-4-步启用快速登录避免每次重启都要扫码">第 4 步：启用快速登录（避免每次重启都要扫码）</a></li>
+<li class="lvl-3"><a href="#第-5-步改变操作习惯">第 5 步：改变操作习惯</a></li>
+<li class="lvl-3"><a href="#第-6-步备份登录态">第 6 步：备份登录态</a></li>
+<li class="lvl-2"><a href="#四验证是否修好了">四、验证是否修好了</a></li>
+<li class="lvl-2"><a href="#五如果已经掉登录了怎么恢复">五、如果已经掉登录了怎么恢复</a></li>
+<li class="lvl-2"><a href="#六还有两件事要知道">六、还有两件事要知道</a></li>
+<li class="lvl-2"><a href="#四更严重的问题账号被冻结-要求身份认证">四、更严重的问题：账号被冻结 / 要求身份认证</a></li>
+<li class="lvl-3"><a href="#41-为什么会被冻结">4.1 为什么会被冻结</a></li>
+<li class="lvl-3"><a href="#42-社区验证过的解决方案按有效性排序">4.2 社区验证过的解决方案（按有效性排序）</a></li>
+<li class="lvl-3"><a href="#43-解封流程">4.3 解封流程</a></li>
+<li class="lvl-3"><a href="#44-必须知道的现实">4.4 ⚠️ 必须知道的现实</a></li>
+<li class="lvl-2"><a href="#附一句话总结">附：一句话总结</a></li>
+<li class="lvl-2"><a href="#八自动登录现状与验证2026-09-21-实测">八、自动登录：现状与验证（2026-09-21 实测）</a></li>
+<li class="lvl-3"><a href="#81-通过-webui-api-查到的真实状态">8.1 通过 WebUI API 查到的真实状态</a></li>
+<li class="lvl-3"><a href="#82-自动登录的完整链路">8.2 自动登录的完整链路</a></li>
+<li class="lvl-3"><a href="#83-已经做好的配置">8.3 已经做好的配置 ✅</a></li>
+<li class="lvl-3"><a href="#84-怎么验证重要">8.4 怎么验证（重要）</a></li>
+<li class="lvl-3"><a href="#85-万一自动登录失败怎么办">8.5 万一自动登录失败怎么办</a></li>
+<li class="lvl-3"><a href="#86-一键恢复设备标识万一又掉登录">8.6 一键恢复设备标识（万一又掉登录）</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一根因从-napcat-源码里挖出来的">一、根因（从 NapCat 源码里挖出来的）</a></li>
+<li class="lvl-3"><a href="#为什么是容器重建而不是重启">为什么是容器重建而不是重启</a></li>
+<li class="lvl-3"><a href="#这一点我有一份责任">⚠️ 这一点我有一份责任</a></li>
+<li class="lvl-2"><a href="#二社区里搜到的前例你的情况不是个例">二、社区里搜到的前例（你的情况不是个例）</a></li>
+<li class="lvl-2"><a href="#三解决方案按顺序做">三、解决方案（按顺序做）</a></li>
+<li class="lvl-3"><a href="#第-1-步先把当前的设备标识取出来关键别跳过">第 1 步：先把当前的设备标识取出来（关键，别跳过）</a></li>
+<li class="lvl-3"><a href="#第-2-步固定-mac-地址">第 2 步：固定 MAC 地址</a></li>
+<li class="lvl-3"><a href="#第-3-步固定-machine-id如果第-1-步查到的不是固定值">第 3 步：固定 machine-id（如果第 1 步查到的不是固定值）</a></li>
+<li class="lvl-3"><a href="#第-4-步启用快速登录避免每次重启都要扫码">第 4 步：启用快速登录（避免每次重启都要扫码）</a></li>
+<li class="lvl-3"><a href="#第-5-步改变操作习惯">第 5 步：改变操作习惯</a></li>
+<li class="lvl-3"><a href="#第-6-步备份登录态">第 6 步：备份登录态</a></li>
+<li class="lvl-2"><a href="#四验证是否修好了">四、验证是否修好了</a></li>
+<li class="lvl-2"><a href="#五如果已经掉登录了怎么恢复">五、如果已经掉登录了怎么恢复</a></li>
+<li class="lvl-2"><a href="#六还有两件事要知道">六、还有两件事要知道</a></li>
+<li class="lvl-2"><a href="#四更严重的问题账号被冻结-要求身份认证">四、更严重的问题：账号被冻结 / 要求身份认证</a></li>
+<li class="lvl-3"><a href="#41-为什么会被冻结">4.1 为什么会被冻结</a></li>
+<li class="lvl-3"><a href="#42-社区验证过的解决方案按有效性排序">4.2 社区验证过的解决方案（按有效性排序）</a></li>
+<li class="lvl-3"><a href="#43-解封流程">4.3 解封流程</a></li>
+<li class="lvl-3"><a href="#44-必须知道的现实">4.4 ⚠️ 必须知道的现实</a></li>
+<li class="lvl-2"><a href="#附一句话总结">附：一句话总结</a></li>
+<li class="lvl-2"><a href="#八自动登录现状与验证2026-09-21-实测">八、自动登录：现状与验证（2026-09-21 实测）</a></li>
+<li class="lvl-3"><a href="#81-通过-webui-api-查到的真实状态">8.1 通过 WebUI API 查到的真实状态</a></li>
+<li class="lvl-3"><a href="#82-自动登录的完整链路">8.2 自动登录的完整链路</a></li>
+<li class="lvl-3"><a href="#83-已经做好的配置">8.3 已经做好的配置 ✅</a></li>
+<li class="lvl-3"><a href="#84-怎么验证重要">8.4 怎么验证（重要）</a></li>
+<li class="lvl-3"><a href="#85-万一自动登录失败怎么办">8.5 万一自动登录失败怎么办</a></li>
+<li class="lvl-3"><a href="#86-一键恢复设备标识万一又掉登录">8.6 一键恢复设备标识（万一又掉登录）</a></li></ol></details>
+</nav>
+<main>
+<h1 id="napcat-掉登录与账号风控根因与解决">NapCat 掉登录与账号风控：根因与解决</h1>
+<blockquote>
+<p>⚠️ <strong>先看这个</strong>：如果你遇到的不只是掉登录，而是<strong>账号被冻结、要求身份认证（扫脸）</strong>，
+请直接跳到第四部分 —— 那是腾讯风控层面的问题，和第八部分的「设备指纹」是两码事。</p>
+</blockquote>
+<blockquote>
+<p>第一部分结论：<strong>腾讯的设备标识 GUID = MD5(/etc/machine-id + MAC 地址)</strong>，
+而容器重建会让这两个值变化 → 腾讯认为是新设备 → 登录票据作废 → 必须重新扫码。</p>
+</blockquote>
+<hr>
+<h2 id="一根因从-napcat-源码里挖出来的"><a class="anchor" href="#一根因从-napcat-源码里挖出来的">一、根因（从 NapCat 源码里挖出来的）</a></h2>
+<p>NapCat 自己的代码注释（<code>packages/napcat-webui-backend/src/utils/guid.ts:142</code>）写得很直白：</p>
+<pre><code> * GUID 生成算法:
+ *   GUID = MD5( /etc/machine-id + MAC地址 )
+</code></pre>
+<p>也就是说，<strong>设备指纹由两个东西决定</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>输入</th>
+<th>存在哪</th>
+<th>容器重建后会变吗</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MAC 地址</td>
+<td>NapCat 记在 <code>data/qq/nt_qq/global/nt_data/msf/machine-info</code></td>
+<td>记录本身不变，但<strong>容器实际的 MAC 会变</strong> ❌</td>
+</tr>
+<tr>
+<td><code>/etc/machine-id</code></td>
+<td><strong>容器自己的文件系统里</strong></td>
+<td><strong>可能变</strong> ❌</td>
+</tr>
+</tbody></table></div>
+<p>任一个变了 → GUID 变了 → 腾讯把这次登录当成「陌生设备」→ 触发风控 → 登录票据失效。</p>
+<h3 id="为什么是容器重建而不是重启"><a class="anchor" href="#为什么是容器重建而不是重启">为什么是容器重建而不是重启</a></h3>
+<ul>
+<li><code>docker compose restart</code> —— 容器不重建，<strong>MAC 和 machine-id 都不变</strong> ✅</li>
+<li><code>docker compose up -d</code>（配置有改动时）—— <strong>容器被销毁重建</strong>，Docker 分配新的随机 MAC ❌</li>
+</ul>
+<h3 id="这一点我有一份责任"><a class="anchor" href="#这一点我有一份责任">⚠️ 这一点我有一份责任</a></h3>
+<p>前面为了加日志目录、改配置，我多次让你执行 <code>docker compose up -d</code> ——
+<strong>每次都会重建容器，每次都可能让 GUID 变化</strong>。这是导致你频繁掉登录的直接原因之一。
+以后改 compose 之前，先按下面的方案把 MAC 固定住。</p>
+<hr>
+<h2 id="二社区里搜到的前例你的情况不是个例"><a class="anchor" href="#二社区里搜到的前例你的情况不是个例">二、社区里搜到的前例（你的情况不是个例）</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>说法</th>
+<th>出处</th>
+<th>可信度</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>「<strong>每次重建容器都会重新生成 MAC 地址</strong>，建议尽量用 restart 而非重建；若必须重建，可固定 MAC」</td>
+<td>NapCat-Docker 相关教程</td>
+<td>✅ 与源码分析一致</td>
+</tr>
+<tr>
+<td>「Linux 下 NapCat 使用 <code>/etc/machine-id</code> 的 MD5 与 MAC 等生成设备 GUID，WebUI 内提供 GUIDManager 可查看/备份/恢复」</td>
+<td>NapCat 文档</td>
+<td>✅ 源码确认</td>
+</tr>
+<tr>
+<td>「新号特别容易掉，挂上一到两周稳定后就好很多」</td>
+<td>LINUX DO 社区</td>
+<td>⚠️ 经验之谈</td>
+</tr>
+<tr>
+<td>「长时间不登录（&gt;7 天）仍可能要求重新验证」</td>
+<td>社区</td>
+<td>⚠️ 需注意</td>
+</tr>
+<tr>
+<td>「加 <code>-e NAPCAT_QQ=机器人QQ号</code> 可在重启时快速登录」</td>
+<td>NapCat-Docker</td>
+<td>✅ 建议加</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="三解决方案按顺序做"><a class="anchor" href="#三解决方案按顺序做">三、解决方案（按顺序做）</a></h2>
+<h3 id="第-1-步先把当前的设备标识取出来关键别跳过"><a class="anchor" href="#第-1-步先把当前的设备标识取出来关键别跳过">第 1 步：先把当前的设备标识取出来（<strong>关键，别跳过</strong>）</a></h3>
+<p>⚠️ <strong>直接改 MAC 会立刻掉登录</strong> —— 必须先把现在正在用的值记下来，然后固定成同一个值。</p>
+<pre><code class="language-bash"># 1) 当前的 MAC 地址
+docker exec napcat cat /sys/class/net/eth0/address
+
+# 2) 容器内的 machine-id
+docker exec napcat cat /etc/machine-id
+
+# 3) NapCat 记下来的设备 MAC（应该和第 1 步一致）
+cat deploy/data/qq/nt_qq/global/nt_data/msf/machine-info | tail -c 17; echo
+</code></pre>
+<p><strong>把前两个值抄下来。</strong></p>
+<h3 id="第-2-步固定-mac-地址"><a class="anchor" href="#第-2-步固定-mac-地址">第 2 步：固定 MAC 地址</a></h3>
+<p>在 <code>deploy/docker-compose.yml</code> 的 <code>services.napcat</code> 下加一行（值换成第 1 步查到的）：</p>
+<pre><code class="language-yaml">    mac_address: &quot;9a:c2:cc:a8:3c:33&quot;    # ← 换成你的实际值，冒号分隔
+</code></pre>
+<h3 id="第-3-步固定-machine-id如果第-1-步查到的不是固定值"><a class="anchor" href="#第-3-步固定-machine-id如果第-1-步查到的不是固定值">第 3 步：固定 machine-id（如果第 1 步查到的不是固定值）</a></h3>
+<p>先把当前值写进一个文件：</p>
+<pre><code class="language-bash">docker exec napcat cat /etc/machine-id &gt; deploy/data/machine-id
+</code></pre>
+<p>然后在 compose 里加挂载：</p>
+<pre><code class="language-yaml">    volumes:
+      - ./data/machine-id:/etc/machine-id:ro
+</code></pre>
+<blockquote>
+<p>怎么判断要不要做：<strong>重建一次容器，再查一次 <code>/etc/machine-id</code>，如果变了就必须固定。</strong></p>
+</blockquote>
+<h3 id="第-4-步启用快速登录避免每次重启都要扫码"><a class="anchor" href="#第-4-步启用快速登录避免每次重启都要扫码">第 4 步：启用快速登录（避免每次重启都要扫码）</a></h3>
+<p><strong>推荐做法：在 WebUI 里设置，不用重建容器。</strong></p>
+<blockquote>
+<p>WebUI → <strong>配置</strong> → <strong>登录配置</strong> → <strong>快速登录 QQ</strong> → 填你的机器人 QQ 号 → 保存</p>
+</blockquote>
+<p>这个页面里还有一个 <strong>GUID 管理器</strong>，可以查看/备份/恢复设备标识 —— 对第一部分的问题很有用。</p>
+<p><strong>为什么推荐 WebUI 而不是改 compose</strong>：改 compose 要 <code>up -d</code> 重建容器，
+而重建会改变设备指纹（见第一部分），可能又触发一次风控。</p>
+<hr>
+<p><strong>备选做法：用环境变量</strong>（需要重建容器，所以建议和固定 MAC 一起做）</p>
+<p>⚠️ 变量名是 <strong><code>NAPCAT_QUICK_ACCOUNT</code></strong>，不是 <code>NAPCAT_QQ</code>（后者在源码里根本不存在）。</p>
+<pre><code># deploy/.env
+NAPCAT_QUICK_ACCOUNT=100000003
+</code></pre>
+<pre><code class="language-yaml"># deploy/docker-compose.yml
+    environment:
+      NAPCAT_QUICK_ACCOUNT: &quot;${NAPCAT_QUICK_ACCOUNT:-}&quot;
+</code></pre>
+<p><strong>关于 <code>-q</code> 命令行参数</strong>：源码里确实支持（<code>packages/napcat-shell/base.ts:727</code>），
+格式是 <code>-q &lt;QQ号&gt;</code>，但它主要用于 <strong>Shell / AppImage 版</strong>部署。
+Docker 里用上面的环境变量等价且更简单（环境变量的逻辑在 <code>base.ts:543</code>）。</p>
+<p><strong>可选的密码回退</strong>：快速登录失败时可以自动用密码回退（同样不推荐明文）：</p>
+<pre><code class="language-yaml">      NAPCAT_QUICK_PASSWORD_MD5: &quot;${NAPCAT_QUICK_PASSWORD_MD5:-}&quot;   # 32 位 MD5，推荐
+      NAPCAT_QUICK_PASSWORD: &quot;${NAPCAT_QUICK_PASSWORD:-}&quot;           # 明文，不推荐
+</code></pre>
+<h3 id="第-5-步改变操作习惯"><a class="anchor" href="#第-5-步改变操作习惯">第 5 步：改变操作习惯</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>该用什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>只想重启 NapCat</td>
+<td><code>docker compose restart</code> ✅</td>
+</tr>
+<tr>
+<td>改了 compose（加挂载/环境变量）</td>
+<td><code>docker compose up -d</code>（会重建，但 MAC 已固定就安全了）</td>
+</tr>
+<tr>
+<td>只是想让它重连</td>
+<td>别动容器，去 WebUI 点重连</td>
+</tr>
+</tbody></table></div>
+<h3 id="第-6-步备份登录态"><a class="anchor" href="#第-6-步备份登录态">第 6 步：备份登录态</a></h3>
+<pre><code class="language-bash"># 登录态全在 deploy/data/qq 里，定期备份
+tar czf napcat-login-backup-$(date +%Y%m%d).tar.gz -C deploy/data qq
+</code></pre>
+<p>出问题时把这个目录恢复回去，通常就能免扫码恢复登录。</p>
+<hr>
+<h2 id="四验证是否修好了"><a class="anchor" href="#四验证是否修好了">四、验证是否修好了</a></h2>
+<p>做完第 2~4 步后，<strong>故意重建一次容器</strong>，然后检查：</p>
+<pre><code class="language-bash"># 重建前后各执行一次，对比输出
+echo &quot;machine-id: $(docker exec napcat cat /etc/machine-id)&quot;
+echo &quot;mac        : $(docker exec napcat cat /sys/class/net/eth0/address)&quot;
+</code></pre>
+<p><strong>两个值都不变 → 修好了。</strong> 之后重建容器应该能自动快速登录，不用扫码。</p>
+<hr>
+<h2 id="五如果已经掉登录了怎么恢复"><a class="anchor" href="#五如果已经掉登录了怎么恢复">五、如果已经掉登录了怎么恢复</a></h2>
+<ol>
+<li><strong>先别再重建容器</strong>（每重建一次情况可能更糟）</li>
+<li>把之前备份的 <code>deploy/data/qq</code> 恢复回去</li>
+<li>如果没备份：只能重新扫码，但<strong>扫码前先把 MAC 和 machine-id 固定住</strong>，否则下次还会掉</li>
+<li>WebUI 的 <strong>日志/设备</strong> 页面可以看到当前的 GUID，掉登录前后对比能确认是不是 GUID 变了</li>
+</ol>
+<hr>
+<h2 id="六还有两件事要知道"><a class="anchor" href="#六还有两件事要知道">六、还有两件事要知道</a></h2>
+<ol>
+<li><strong>新号更容易掉</strong>：社区反馈新注册的号前期风控严，挂一两周稳定后会明显好转。</li>
+<li><strong>别频繁重启</strong>：即使固定了标识，短时间内反复重启仍可能触发风控。</li>
+<li><strong>超过 7 天不登录</strong>：可能被要求重新验证。</li>
+</ol>
+<hr>
+<h2 id="四更严重的问题账号被冻结-要求身份认证"><a class="anchor" href="#四更严重的问题账号被冻结-要求身份认证">四、更严重的问题：账号被冻结 / 要求身份认证</a></h2>
+<blockquote>
+<p>如果你的号<strong>不只是掉登录，而是被冻结、要上传身份证/扫脸才能解封</strong>，
+那问题不在你的配置，而在<strong>腾讯的第三方协议风控</strong>。</p>
+</blockquote>
+<h3 id="41-为什么会被冻结"><a class="anchor" href="#41-为什么会被冻结">4.1 为什么会被冻结</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>原因</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>协议被检测</strong></td>
+<td>NapCat 本质是 hook 官方 NTQQ 客户端。腾讯只要检测到注入/hook，就按「外挂」处理</td>
+</tr>
+<tr>
+<td><strong>版本问题（最直接）</strong></td>
+<td><strong>GitHub Issue #1728</strong>：最新版 NapCat/QQ 会被风控频繁踢下线，几小时内就掉</td>
+</tr>
+<tr>
+<td><strong>端口暴露</strong></td>
+<td>2025.9.5 有攻击者扫未设 token 的公网 OneBot 服务发 <code>send_msg</code>，导致<strong>大量账号被永久封禁</strong></td>
+</tr>
+<tr>
+<td><strong>新号</strong></td>
+<td>社区共识：新注册的 QQ 号<strong>基本 100% 会被风控一次</strong>，且往往冻结几次</td>
+</tr>
+<tr>
+<td><strong>IP / 环境</strong></td>
+<td>机房 IP、境外 IP、频繁换 IP 风控严重；Windows 环境比 Linux 更容易被踢</td>
+</tr>
+<tr>
+<td><strong>离开时间</strong></td>
+<td>超过 7 天不登录可能被要求重新验证</td>
+</tr>
+</tbody></table></div>
+<h3 id="42-社区验证过的解决方案按有效性排序"><a class="anchor" href="#42-社区验证过的解决方案按有效性排序">4.2 社区验证过的解决方案（按有效性排序）</a></h3>
+<p><strong>① 降版本（社区最推荐）</strong></p>
+<pre><code class="language-yaml"># deploy/docker-compose.yml
+image: mlikiowa/napcat-docker:v4.15.19
+</code></pre>
+<p>社区实测：<strong>连续在线 63+ 小时不掉</strong>。同时有人建议把 QQ 版本回退到 3.2.21-42086 / 3.2.23-44343。</p>
+<pre><code class="language-bash">cd deploy
+# 改完 image 后
+docker compose pull &amp;&amp; docker compose up -d
+</code></pre>
+<p><strong>② 关闭端口公网暴露（已帮你改好）</strong></p>
+<pre><code class="language-yaml">ports:
+  - &quot;127.0.0.1:3000:3000&quot;    # ← 只绑本机
+  - &quot;127.0.0.1:3001:3001&quot;
+  - &quot;127.0.0.1:6099:6099&quot;
+</code></pre>
+<p>业务层就在同一台机器上，<strong>没有任何理由让 OneBot 接口暴露到公网</strong>。</p>
+<p><strong>③ 用专用小号，不要用常用号</strong></p>
+<p>这是最重要的一条。冻结会<strong>逐步升级</strong>：先同意协议 → 再上传身份证 → 再扫脸 → 最后可能变成<strong>只读账号</strong>。
+用日常号做实验，代价太大。</p>
+<p><strong>④ 养号</strong></p>
+<p>新号前期风控严，社区反馈<strong>挂一到两周稳定后会明显好转</strong>。前期别猛发消息、别频繁重启。</p>
+<p><strong>⑤ IP 要和手机 QQ 的地区接近</strong></p>
+<p>本地家宽最稳。机房/云服务器 IP 风控严重，境外 IP 更糟。</p>
+<p><strong>⑥ 固定设备指纹</strong>（见第一部分）</p>
+<p>把 MAC 和 machine-id 固定住，减少「陌生设备」的判定次数。</p>
+<h3 id="43-解封流程"><a class="anchor" href="#43-解封流程">4.3 解封流程</a></h3>
+<ol>
+<li>手机 QQ → 账号被冻结提示 → 按引导操作</li>
+<li>依次可能是：<strong>同意规则 → 上传身份证 → 扫脸认证</strong></li>
+<li>社区经验：如果扫脸一直失败，可以<strong>先卸载机器人环境、装官方 QQ 登录一次</strong>再试</li>
+</ol>
+<h3 id="44-必须知道的现实"><a class="anchor" href="#44-必须知道的现实">4.4 ⚠️ 必须知道的现实</a></h3>
+<blockquote>
+<p><strong>第三方协议这条路，永远存在被封的风险。</strong></p>
+<ul>
+<li>NapCat 已经是同类方案里风险最低的（基于官方 NTQQ，不是纯逆向协议）</li>
+<li>但腾讯的风控策略一直在变，<strong>任何第三方方案都不能保证不封号</strong></li>
+<li>如果你的场景<strong>要求稳定、可对外提供服务</strong>，应该认真考虑
+<strong>QQ 官方开放平台</strong>（零封号风险，代价是能力受限、审核门槛）</li>
+</ul>
+<p>用第三方协议的合理定位是：<strong>个人使用、专用小号、接受偶尔掉线和封号风险</strong>。</p>
+</blockquote>
+<hr>
+<h2 id="附一句话总结"><a class="anchor" href="#附一句话总结">附：一句话总结</a></h2>
+<p><strong>两个层面的问题，别混在一起：</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>根因</th>
+<th>解决</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>掉登录、要重新扫码</td>
+<td>设备指纹（GUID）变了</td>
+<td>固定 MAC + machine-id + 开快速登录（第一~三部分）</td>
+</tr>
+<tr>
+<td><strong>被冻结、要身份认证</strong></td>
+<td><strong>腾讯第三方协议风控</strong></td>
+<td><strong>降版本 + 关端口 + 专用小号 + 养号</strong>（第四部分）</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>关机重启本身不会「导致」封号，但它会触发一次完整的重新登录 ——
+正好撞上风控窗口。<strong>版本旧一点、端口收起来、号养熟一点</strong>，这两件事都会好很多。</p>
+</blockquote>
+<hr>
+<h2 id="八自动登录现状与验证2026-09-21-实测"><a class="anchor" href="#八自动登录现状与验证2026-09-21-实测">八、自动登录：现状与验证（2026-09-21 实测）</a></h2>
+<h3 id="81-通过-webui-api-查到的真实状态"><a class="anchor" href="#81-通过-webui-api-查到的真实状态">8.1 通过 WebUI API 查到的真实状态</a></h3>
+<p>NapCat 的 WebUI 提供了一套完整的登录管理接口（鉴权算法就是 <code>sha256(token + &#39;.napcat&#39;)</code>），
+可以直接查状态。实测结果：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>检查项</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>登录状态</td>
+<td>✅ 已登录在线（<code>loginPhase: ready</code>，示例助手 100000003）</td>
+</tr>
+<tr>
+<td><strong>快速登录 QQ 配置</strong></td>
+<td>❌ <strong>空的 —— 这就是重启后要扫码的原因</strong></td>
+</tr>
+<tr>
+<td>平台</td>
+<td>linux</td>
+</tr>
+<tr>
+<td><code>/etc/machine-id</code></td>
+<td><code>8e1509f19f844df08b0c4497e27dcc37</code></td>
+</tr>
+<tr>
+<td>machine-info 里的 MAC</td>
+<td><code>9a-c2-cc-a8-3c-33</code></td>
+</tr>
+<tr>
+<td>算出的设备 GUID</td>
+<td><code>a886f57a0cf0104a762c4fcd6fa3220b</code></td>
+</tr>
+<tr>
+<td>设备标识备份</td>
+<td>❌ 一个都没有</td>
+</tr>
+</tbody></table></div>
+<h3 id="82-自动登录的完整链路"><a class="anchor" href="#82-自动登录的完整链路">8.2 自动登录的完整链路</a></h3>
+<p>重启后能不能自动登录，取决于<strong>这三件事同时成立</strong>：</p>
+<pre><code>① 登录票据持久化        deploy/data/qq 已挂载            ✅ 已满足
+② 快速登录账号已配置    autoLoginAccount 或环境变量       ❌ 原来是空的
+③ 设备指纹没变          MAC + /etc/machine-id 稳定        ⚠️ 重建容器会变
+</code></pre>
+<p>第 ② 条的判定逻辑在 NapCat 源码 <code>base.ts:543</code>：</p>
+<pre><code class="language-javascript">const hasAutoLogin = process.env[&#39;NAPCAT_QUICK_ACCOUNT&#39;] || (quickLoginList.length &gt; 0);
+if (hasAutoLogin || NAPCAT_QUICK_PASSWORD...) { hasAttemptedFallback = true; }
+await WebUiDataRuntime.runWebUiConfigQuickFunction();   // 用 autoLoginAccount 去快速登录
+</code></pre>
+<p>而 <code>runWebUiConfigQuickFunction</code> 里：</p>
+<pre><code class="language-javascript">const autoLoginAccount = process.env[&#39;NAPCAT_QUICK_ACCOUNT&#39;] || WebUiConfig.getAutoLoginAccount();
+if (!autoLoginAccount) { /* 什么都不做，直接走二维码 */ }
+</code></pre>
+<p><strong>所以没有 <code>autoLoginAccount</code> 就一定会出二维码 —— 这正是你遇到的情况。</strong></p>
+<h3 id="83-已经做好的配置"><a class="anchor" href="#83-已经做好的配置">8.3 已经做好的配置 ✅</a></h3>
+<p>通过 WebUI API 完成了三件事（<strong>全程没有重建容器</strong>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>动作</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>创建设备标识备份</td>
+<td><code>machine-info.bak.20260921024218</code></td>
+</tr>
+<tr>
+<td>设置快速登录 QQ</td>
+<td><code>autoLoginAccount = &quot;100000003&quot;</code>（已写入 webui.json）</td>
+</tr>
+<tr>
+<td>记录设备指纹</td>
+<td>MAC / machine-id / GUID 三个值都已记下</td>
+</tr>
+</tbody></table></div>
+<h3 id="84-怎么验证重要"><a class="anchor" href="#84-怎么验证重要">8.4 怎么验证（重要）</a></h3>
+<p><strong>推荐用 <code>restart</code> 而不是关机</strong>，因为它不重建容器，设备指纹绝对不变：</p>
+<pre><code class="language-bash"># 终端 1：开始监控
+node tests/manual/watch-napcat-login.mjs
+
+# 终端 2：重启（注意是 restart，不是 up -d）
+cd deploy &amp;&amp; docker compose restart napcat
+</code></pre>
+<p>终端 1 会实时打印登录阶段：</p>
+<pre><code>  [    0.0s] 服务不可达（正在重启中…）
+  [   12.3s] loginPhase=offline  isLogin=false  coreReady=false
+  [   28.7s] loginPhase=reconnecting  isLogin=false  coreReady=false
+  [   41.2s] loginPhase=ready  isLogin=true  coreReady=true
+
+✅ 登录完成（用时 41.2 秒）
+</code></pre>
+<p><strong>看到从 <code>offline</code> 直接变 <code>ready</code>、全程没有停在 <code>qrcode</code> 阶段 → 自动登录成功。</strong>
+<strong>如果停在 <code>qrcode</code> → 说明快速登录失败了，得扫码。</strong></p>
+<h3 id="85-万一自动登录失败怎么办"><a class="anchor" href="#85-万一自动登录失败怎么办">8.5 万一自动登录失败怎么办</a></h3>
+<p>NapCat 会自动降级，按这个顺序尝试：</p>
+<pre><code>① 快速登录（用缓存的票据）   → 失败
+② 密码回退（需要配密码环境变量）→ 没配就跳过
+③ 二维码                    → 需要人工扫码
+</code></pre>
+<p>想补上第 ② 层，可以配：</p>
+<pre><code class="language-yaml"># deploy/docker-compose.yml
+NAPCAT_QUICK_PASSWORD_MD5: &quot;你的QQ密码的32位MD5&quot;
+</code></pre>
+<blockquote>
+<p>⚠️ 配密码等于把账号密码交给机器人，<strong>安全性明显下降</strong>。除非你确实需要，
+否则不建议 —— 扫码一次之后票据就能重新生效。</p>
+</blockquote>
+<h3 id="86-一键恢复设备标识万一又掉登录"><a class="anchor" href="#86-一键恢复设备标识万一又掉登录">8.6 一键恢复设备标识（万一又掉登录）</a></h3>
+<p>如果确认是设备指纹被人为改了（比如重建容器），可以恢复：</p>
+<pre><code class="language-bash"># 通过 WebUI：配置 → 登录配置 → GUID 管理器 → 从备份恢复
+# 或者调接口：
+#   POST /api/QQLogin/RestoreLinuxMachineInfoBackup  {&quot;fileName&quot;:&quot;machine-info.bak.20260921024218&quot;}
+</code></pre>
+<p>恢复后设备指纹回到备份时的状态，腾讯就不会认为是新设备了。</p>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>NapCat登录丢失排查与解决.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>

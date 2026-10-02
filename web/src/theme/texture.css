@@ -1,0 +1,118 @@
+/**
+ * 质感层 —— 「游戏感」靠这里，不靠贴图。
+ *
+ * 全部是 CSS/SVG 实现：无图片请求、可无限缩放、改颜色不用重新导出素材。
+ */
+
+/* ==================== 石材噪点 ====================
+   2% 不透明度叠加。有它才有「粗糙表面」，没有就是纯色 UI。 */
+.texture-noise { position: relative; }
+.texture-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .028;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 全局底层噪点：铺满视口，z-index 压在内容之下 */
+.texture-grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .022;
+  z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* ==================== 面板 ====================
+   结构 = 表面填充（表达层级深浅）+ 柔和边缘（表达"这是一块独立区域"）。
+
+   ⚠️ 这里走过一次弯路：最初把边框整个砍掉、只靠背景色差分层，结果相邻
+   配置项之间看不出分界（用户反馈"两两之间的间隔太不明显"）。正确的做法
+   不是"没有边框"，而是：
+     · 层级的深浅交给背景（表面阶梯）
+     · 区域的边界交给一道【低对比度】边缘，而不是原来那种每层一样重的 --line
+   原来"满屏线条框"的病根是"每层边框一样重 + 没有字阶 + 没有表面深浅"，
+   不是边框本身。
+
+   伪元素分工（原先是 bug：.panel--corners::before 与 .texture-noise::before
+   争用同一个伪元素，后者被覆盖 → 所有带角饰的面板噪点纹理失效）：
+     ::before → 噪点纹理（.texture-noise 独占）
+     ::after  → 装饰层（角饰 / 光晕，二者可共存于同一背景栈） */
+.panel {
+  position: relative;
+  background: var(--surface-panel);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-inset);
+}
+.panel--stone { background: var(--surface-raised); }
+.panel--sunken {
+  background: var(--surface-inset);
+  box-shadow: var(--shadow-sunken);
+}
+
+/* 装饰层：角饰与光晕都画在这一层，向内定位，绝不越出边框盒 */
+.panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* 四角铜饰 —— 用 4 组线性渐变画在【框内】，不再用负偏移。
+   只在页面级外壳用一次；每个面板都挂会腻，也会让边框重新变回噪音。 */
+.panel--corners::after {
+  background-image:
+    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper)),
+    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper)),
+    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper)),
+    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper));
+  background-repeat: no-repeat;
+  background-size: 11px 1px, 1px 11px, 11px 1px, 1px 11px, 11px 1px, 1px 11px, 11px 1px, 1px 11px;
+  background-position:
+    left 7px top 7px, left 7px top 7px,
+    right 7px top 7px, right 7px top 7px,
+    right 7px bottom 7px, right 7px bottom 7px,
+    left 7px bottom 7px, left 7px bottom 7px;
+}
+
+/* ==================== 灵火光晕 ====================
+   用在「指标卡」和「主按钮」上，制造被火光映到的感觉。
+   ⚠️ 与 .panel--corners 同占 ::after，二者同时用会互相覆盖 —— 别叠。 */
+.glow-flame { position: relative; overflow: hidden; }
+.glow-flame::after {
+  background: radial-gradient(140px 70px at 88% 0%, var(--flame-glow), transparent 70%);
+}
+
+/* 顶部一道火线：强调「这是当前选中/活跃的」 */
+.flame-rule { position: relative; }
+.flame-rule::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--flame), transparent);
+}
+
+/* ==================== 分隔线 ==================== */
+.rule {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+  margin: var(--sp-4) 0;
+}
+
+/* ==================== 雾层 ====================
+   页面顶部的雾状渐变，象征 Shroud。用在首屏。 */
+.veil-shroud {
+  background:
+    radial-gradient(80% 120px at 50% 0%, rgba(123, 138, 160, .10), transparent 70%),
+    radial-gradient(60% 90px at 80% 10%, var(--flame-veil), transparent 70%);
+}

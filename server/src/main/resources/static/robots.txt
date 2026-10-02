@@ -1,0 +1,12 @@
+# 公开站允许被索引（内容本来来自公开 Wiki）
+# 但搜索结果页是动态的，索引它只会产生大量重复页面
+User-agent: *
+Allow: /
+Disallow: /library?q=
+Disallow: /api/
+Disallow: /admin/
+Disallow: /onebot/
+
+# 管理后台绝对不该被索引（Nginx 层已经用 IP 白名单挡了，这里是第二道）
+User-agent: *
+Disallow: /admin
