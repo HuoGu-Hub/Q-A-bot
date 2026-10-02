@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.files.ProjectFiles;
 import org.apache.commons.logging.Log;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.boot.logging.DeferredLogFactory;

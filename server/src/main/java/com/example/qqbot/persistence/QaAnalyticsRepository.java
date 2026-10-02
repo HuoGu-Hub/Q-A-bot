@@ -1,6 +1,6 @@
 package com.example.qqbot.persistence;
 
-import com.example.qqbot.config.AppTime;
+import com.example.qqbot.time.AppTime;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -39,10 +39,11 @@ import java.util.Objects;
  * 对任何「近 7 / 30 / 90 天」都是空的，只有「全部」能出数据 —— 而且不报错。
  * 这个坑踩过一次，{@link #cosines} / {@link #sources} / {@link #verdicts} 三处有注释标记。
  *
- * <h2>⚠️ 对 {@code config.AppTime} 的依赖</h2>
- * 这是已知债务⑥（业务包依赖 config）的一部分，和 {@code SqliteDatabase} 读
- * {@code QaProperties} 同一类。{@code AppTime.SQL_DAY} 是**唯一**的日期口径定义，
- * 复制一份到持久层才是更糟的选择。
+ * <h2>日期口径来自 {@code time.AppTime}</h2>
+ * 它曾经在 {@code config} 包里，于是这一处依赖看起来像债务⑥的一部分 ——
+ * 其实不是：{@code AppTime} 一项 yml 都不读，只是两个常量，属于**放错了包**
+ * （2026-10-02 已挪到中性包）。挪完这里对 {@code config} 的依赖只剩
+ * {@code SqliteDatabase} 读 {@code QaProperties} 那一处 —— 那才是真债务。
  */
 @Repository
 public class QaAnalyticsRepository {

@@ -1,7 +1,7 @@
 package com.example.qqbot.admin;
 
 import com.example.qqbot.config.AdminProperties;
-import com.example.qqbot.config.ProjectFiles;
+import com.example.qqbot.files.ProjectFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

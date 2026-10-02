@@ -1,4 +1,4 @@
-package com.example.qqbot.config;
+package com.example.qqbot.files;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +23,11 @@ import java.nio.file.Paths;
  * <p><b>做法</b>：从工作目录逐级向上找<b>工程标记</b>（{@code AGENTS.md} 或
  * {@code server/pom.xml}），找到的那一级就是工程根。
  * 找不到（说明进程根本不在工程里）返回 {@code null}，调用方退回旧的相对路径行为。
+ *
+ * <h2>为什么不在 {@code config} 包里（2026-10-02 挪过来）</h2>
+ * 它<b>不是配置</b> —— 一项 yml 都不读，只是从工作目录向上找工程标记。
+ * 放在 {@code config} 里会让 {@code admin} 与 {@code settings} 的调用方
+ * 看起来在依赖配置（护栏会把它们算成违约），而它们要的只是"文件在哪"。
  */
 public final class ProjectFiles {
 

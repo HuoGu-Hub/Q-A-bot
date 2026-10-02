@@ -120,7 +120,7 @@ public class AdminAuthFilter extends OncePerRequestFilter {
         if (path.startsWith("/admin/api/")) {
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"error\":\"管理后台未启用：没读到 ADMIN_PASSWORD（"
-                    + com.example.qqbot.config.ProjectFiles.describe() + "）\"}");
+                    + com.example.qqbot.files.ProjectFiles.describe() + "）\"}");
         } else {
             response.setContentType("text/html;charset=UTF-8");
             response.getWriter().write("<meta charset=\"utf-8\">"
@@ -129,7 +129,7 @@ public class AdminAuthFilter extends OncePerRequestFilter {
                     + "<p>请在 <code>.env</code> 里设置 <code>ADMIN_PASSWORD</code> 后重启机器人。"
                     + "（.env 放在工程根目录即可，从子目录启动也能找到）</p>"
                     + "<p style=\"color:#888;font-size:13px\">诊断："
-                    + com.example.qqbot.config.ProjectFiles.describe() + "</p>"
+                    + com.example.qqbot.files.ProjectFiles.describe() + "</p>"
                     + "<p style=\"color:#888\">这是安全默认：没配密码就没有后台，而不是无密码可访问。</p>"
                     + "</div>");
         }

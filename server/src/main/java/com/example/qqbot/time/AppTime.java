@@ -1,4 +1,4 @@
-package com.example.qqbot.config;
+package com.example.qqbot.time;
 
 import java.time.ZoneId;
 
@@ -21,6 +21,12 @@ import java.time.ZoneId;
  *
  * <p>固定东八区：项目面向中文群，中国没有夏令时，所以不需要 tzdata 命名库
  * （用 {@code GMT+08:00} 表达，避免依赖系统 tzdata）。
+ *
+ * <h2>为什么不在 {@code config} 包里（2026-10-02 挪过来）</h2>
+ * 它<b>不是配置</b> —— 没有一项来自 yml，只是两个常量。
+ * 放在 {@code config} 里会让「业务包不得依赖 config」那条护栏把它算成违约，
+ * 于是有人会去给 {@code guard.BudgetGuard} 写一个"时间接口"来"修"它 ——
+ * 那是白费力气：它不是配置依赖，只是**放错了包**。
  */
 public final class AppTime {
 

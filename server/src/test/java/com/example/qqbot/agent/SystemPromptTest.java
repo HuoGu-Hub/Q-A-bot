@@ -1,6 +1,6 @@
 package com.example.qqbot.agent;
 
-import com.example.qqbot.config.ProjectFiles;
+import com.example.qqbot.files.ProjectFiles;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

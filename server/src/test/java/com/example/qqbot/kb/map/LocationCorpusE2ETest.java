@@ -2,7 +2,7 @@ package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.wiki.WikiApiClient;
 import com.example.qqbot.config.KbProperties;
-import com.example.qqbot.config.ProjectFiles;
+import com.example.qqbot.files.ProjectFiles;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.Glossary;
