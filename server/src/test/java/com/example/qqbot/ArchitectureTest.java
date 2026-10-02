@@ -188,9 +188,13 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1（S2 配置去中心化）。2026-10-02 实测（grep import com.example.qqbot.config）："
-            + "23 个包共 59 个类直接注入 config 包类型；GuardProperties 被 17 个类引用、"
-            + "KbProperties 13、QaProperties 11")
+    @Disabled("目标 Phase 1（S2 配置去中心化）。2026-10-02 **摘掉 @Disabled 真跑了一次**："
+            + "496 处违反 / 48 个类。最集中的：LlmRouter 62、WikiApiClient 29、"
+            + "MediaStorageGuard 29、GuardPipeline 23、FallbackService 20、EmbeddingClient 17。"
+            + "⚠️「违反处数」与「类数」是两件事 —— LlmRouter 一个类就占 12%（它把整个 "
+            + "LlmProperties 拖进构造器、然后到处读字段）。"
+            + "⚠️ 别用 grep import 估这个数字：既漏全限定名用法、又把死 import 算进去，"
+            + "而 ArchUnit 看的是字节码依赖")
     @DisplayName("【目标】业务包不得直接依赖 config（配置只应在装配层注入）")
     void businessPackagesDoNotDependOnConfig() {
         ArchRule rule = noClasses()
