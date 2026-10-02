@@ -11,7 +11,9 @@ import com.example.qqbot.config.SiteProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.example.qqbot.config.SettingsConfig;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,17 +36,15 @@ class SettingsPrefixTest {
     @Test
     @DisplayName("★ 白名单里出现的每个顶层前缀，都必须有配置对象接管（别再漏 llm 这种）")
     void everyWhitelistedPrefixIsRouted() {
+        // ⚠️ 表来自**真实的装配代码**（SettingsConfig），不是测试自己拼的 ——
+        //    否则「加了白名单却忘了注册」这件事就测不出来了。
+        SettingsRoots roots = new SettingsConfig().settingsRoots(
+                mock(GuardProperties.class), mock(KbProperties.class),
+                mock(MediaProperties.class), mock(QaProperties.class),
+                mock(LogProperties.class), mock(CommandProperties.class),
+                mock(SiteProperties.class), mock(LlmProperties.class));
         SettingsService service = new SettingsService(
-                new SettingsWhitelist(),
-                mock(GuardProperties.class),
-                mock(KbProperties.class),
-                mock(MediaProperties.class),
-                mock(QaProperties.class),
-                mock(LogProperties.class),
-                mock(CommandProperties.class),
-                mock(OverridesFile.class),
-                mock(SiteProperties.class),
-                mock(LlmProperties.class));
+                new SettingsWhitelist(), mock(OverridesFile.class), roots);
 
         Set<String> prefixes = new LinkedHashSet<>();
         Set<String> missing = new LinkedHashSet<>();

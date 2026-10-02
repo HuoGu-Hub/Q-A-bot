@@ -1,12 +1,5 @@
 package com.example.qqbot.settings;
 
-import com.example.qqbot.config.CommandProperties;
-import com.example.qqbot.config.GuardProperties;
-import com.example.qqbot.config.KbProperties;
-import com.example.qqbot.config.LlmProperties;
-import com.example.qqbot.config.LogProperties;
-import com.example.qqbot.config.MediaProperties;
-import com.example.qqbot.config.QaProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -42,35 +35,24 @@ public class SettingsService {
     private final OverridesFile overrides;
 
     /**
-     * 顶层前缀 → 承载它的配置对象。
+     * 顶层前缀 → 承载它的配置对象（由 {@link SettingsRoots} 递进来）。
      *
-     * <p>用一张表而不是 switch：白名单里出现的**每一个**前缀都必须在这里有归属。
-     * 漏一个的表现是「那一组配置项全部改不动，每条都报『不支持的配置前缀：X』」——
-     * 2026-10-01 的 llm（回复风格）就是这么漏的：白名单加了 5 项，这里没跟上，
-     * 界面上怎么点都失败，而错误信息只说前缀不支持，看不出是"漏注册"。
+     * <p><b>本类不认识任何 {@code config} 类型</b> —— 它全程用反射
+     * （{@code getDeclaredField} + {@code Field.set}）按**字段名**读写，
+     * 从不静态引用某个配置字段。那张表由**装配层**建好
+     * （见 {@code config.SettingsConfig}），这里只当它是一个"前缀 → Object"的映射。
      *
-     * <p>{@code SettingsPrefixTest} 会遍历白名单断言每个前缀都有人接管 ——
-     * 就是防这一类漏项。
+     * <p>漏注册一个前缀的表现是「那一组配置项全部改不动，每条都报
+     * 『不支持的配置前缀：X』」—— 表和它的解释现在都在 {@code SettingsConfig} 里。
      */
     private final Map<String, Object> roots;
 
     private final AtomicInteger applyCount = new AtomicInteger();
 
-    public SettingsService(SettingsWhitelist whitelist, GuardProperties guard, KbProperties kb,
-                           MediaProperties media, QaProperties qa, LogProperties logs,
-                           CommandProperties commands, OverridesFile overrides,
-                           com.example.qqbot.config.SiteProperties site, LlmProperties llm) {
+    public SettingsService(SettingsWhitelist whitelist, OverridesFile overrides, SettingsRoots roots) {
         this.whitelist = whitelist;
         this.overrides = overrides;
-        this.roots = Map.of(
-                "guard", guard,
-                "kb", kb,
-                "media", media,
-                "qa", qa,
-                "logs", logs,
-                "commands", commands,
-                "site", site,
-                "llm", llm);
+        this.roots = roots.byPrefix();
     }
 
     /** 仅供测试：白名单里的某个前缀有没有配置对象接管 */
