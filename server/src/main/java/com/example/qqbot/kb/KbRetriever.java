@@ -93,12 +93,24 @@ public class KbRetriever {
     private final KbCorpus corpus;
     private final Glossary glossary;
     private final EmbeddingClient embedding;
+    private final RerankClient rerankClient;
 
-    public KbRetriever(KbProperties props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding) {
+    public KbRetriever(KbProperties props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding,
+                       RerankClient rerankClient) {
         this.props = props;
         this.corpus = corpus;
         this.glossary = glossary;
         this.embedding = embedding;
+        this.rerankClient = rerankClient;
+    }
+
+    /**
+     * 便利构造：没有重排（等于关掉 {@code app.kb.rerank.enabled}）。
+     *
+     * <p>留着它主要是给**测试**用 —— 单测里不该为了验三路融合去构一个会发网络请求的客户端。
+     */
+    public KbRetriever(KbProperties props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding) {
+        this(props, corpus, glossary, embedding, null);
     }
 
     /**
@@ -167,6 +179,17 @@ public class KbRetriever {
      * @param minScore 向量路的相似度下限
      */
     public Retrieval retrieve(String query, boolean allowEmbedding, int topK, double minScore) {
+        return retrieve(query, allowEmbedding, topK, minScore, true);
+    }
+
+    /**
+     * 检索（可选择是否重排）。
+     *
+     * @param allowRerank 是否允许送 cross-encoder 重排。公开站搜索会**明确关掉**它：
+     *        那里有按天配额与 LRU 缓存，多一次外部调用不划算，而且它的目标是"按相关度排给人看"，
+     *        不是"决定要不要给资料"。
+     */
+    public Retrieval retrieve(String query, boolean allowEmbedding, int topK, double minScore, boolean allowRerank) {
         if (!props.isEnabled() || query == null || query.isBlank()) {
             return Retrieval.empty();
         }
@@ -205,8 +228,18 @@ public class KbRetriever {
                     String.format("%.3f", gate.cosine()), String.format("%.3f", props.getTitleGate()));
             return new Retrieval(List.of(), bestCosine, bestCosineRaw, 0, 0);
         }
-        List<Hit> fused = fuse(byVec, byKey, k, terms);
-        fused = pinGate(fused, gate, k);
+        // 要重排就必须融合出**多于 top-k** 的候选，否则重排没有翻盘空间（实测"藏红花幼苗 > 藏红花"
+        // 这类错序，只有把本体留在候选池里才可能被抬上来）
+        boolean doRerank = allowRerank && rerankClient != null && rerankClient.isAvailable();
+        int fuseLimit = doRerank ? Math.max(k, Math.max(1, props.getRerank().getCandidateLimit())) : k;
+
+        List<Hit> fused = fuse(byVec, byKey, fuseLimit, terms);
+        fused = pinGate(fused, gate, fuseLimit);
+        if (doRerank) {
+            fused = rerank(query, fused, k, gate.hit());
+        } else if (fused.size() > k) {
+            fused = fused.subList(0, k);
+        }
         log.debug("[KB] 融合后取 {} 块：{}（向量候选 {}，关键词候选 {}，最高余弦 {}）",
                 fused.size(), fused.stream().map(h -> h.entry().title()).toList(),
                 byVec.size(), byKey.size(), String.format("%.3f", bestCosine));
@@ -323,6 +356,62 @@ public class KbRetriever {
             out.add(h);
         }
         return out;
+    }
+
+    /**
+     * 重排：把融合后的候选交给 cross-encoder，并用**它的分数**决定"这次到底有没有资料"。
+     *
+     * <p><b>为什么不重排就没有区分度</b>（2026-10-02 黄金集实测）：双塔余弦"该答"的问题最低 0.548、
+     * "库里根本没有"的问题最高 0.559，分布完全重叠 —— 所以调 min-score 是死路。
+     * cross-encoder 把问题和文档拼在一起看，闲聊 top 分 ≤0.002、真实问题 ≥0.04，才有可分性。
+     *
+     * <p><b>fail-open</b>：重排挂了就保持原 RRF 顺序照常回答（最多是排序差一点），
+     * 绝不因为"锦上添花的一层"失败而不回答。
+     *
+     * @param gateHit C 路闸门是否命中。命中说明"用户就是在问这个实体名"（标题向量余弦 ≥0.70），
+     *                此时**不允许"一条都不给"** —— 那种情况下丢掉资料是明确的错。
+     */
+    private List<Hit> rerank(String query, List<Hit> fused, int topK, boolean gateHit) {
+        if (fused.isEmpty()) {
+            return fused;
+        }
+        KbProperties.Rerank cfg = props.getRerank();
+        int limit = Math.min(fused.size(), Math.max(1, cfg.getCandidateLimit()));
+        List<Hit> candidates = fused.subList(0, limit);
+        List<String> docs = new ArrayList<>(candidates.size());
+        for (Hit h : candidates) {
+            // 标题必须一起送：语料标题是「中文名（English）」，实体名就在标题里。
+            // 实测「氨液腺」→「氨腺」字面完全不重合，正是靠标题那半截才被重排认出来（0.596、第 1 名）。
+            docs.add(h.entry().title() + "\n" + h.entry().text());
+        }
+
+        double[] scores;
+        try {
+            scores = rerankClient.score(query, docs);
+        } catch (Exception e) {
+            log.warn("[KB-RERANK] 重排失败，保持 RRF 顺序继续回答：{}", e.getMessage());
+            return fused.size() <= topK ? fused : fused.subList(0, topK);
+        }
+
+        List<Hit> ranked = new ArrayList<>(candidates.size());
+        for (int i = 0; i < candidates.size(); i++) {
+            Hit h = candidates.get(i);
+            double s = i < scores.length ? scores[i] : 0.0;
+            // 分数换成重排分：它才是有区分度的相关度，进问答统计比 RRF 排名分更可解释
+            ranked.add(new Hit(h.entry(), s, h.source() + "+rerank"));
+        }
+        ranked.sort(Comparator.comparingDouble(Hit::score).reversed());
+        double best = ranked.get(0).score();
+
+        if (!gateHit && cfg.getMinScore() > 0 && best < cfg.getMinScore()) {
+            log.info("[KB-RERANK] 最高重排分 {} < {}，判定库里没有相关资料 —— 本次一条都不给（丢弃 {} 条候选）",
+                    String.format("%.4f", best), String.format("%.4f", cfg.getMinScore()), ranked.size());
+            return List.of();
+        }
+        log.info("[KB-RERANK] 重排完成：最高 {}（{}），前 {} 条取自候选 {} 条",
+                String.format("%.3f", best), ranked.get(0).entry().title(),
+                Math.min(topK, ranked.size()), ranked.size());
+        return ranked.size() <= topK ? ranked : ranked.subList(0, topK);
     }
 
     /** 带兜底值的 safe —— 术语展开/读语料挂了也不影响检索 */

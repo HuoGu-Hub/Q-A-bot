@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -53,6 +54,12 @@ class RetrievalGoldenTest {
     Path tmp;
 
     private QaStore qaStore;
+
+    /** 逐条明细（类别 / 最高余弦 / 命中数 / Top-1 / 问题），跑完写到 target/ 供分析 */
+    private final List<String> detail = new ArrayList<>();
+
+    /** 重排是否**真的生效**了（可用 + 确实产出了 +rerank 来源）。失败时会 fail-open 回 RRF，不能按重排后的门槛卡 */
+    private boolean rerankEffective;
 
     /** 一条黄金样本 */
     private record Item(String category, String question, Set<String> expected, String note) {
@@ -106,10 +113,18 @@ class RetrievalGoldenTest {
             kb.getEmbedding().setApiKey(key);
         }
         EmbeddingClient embedding = new EmbeddingClient(kb, mapper);
+        // 重排也共用同一个 key；-Dqqbot.golden.rerank=off 可以关掉它做前后对比
+        boolean rerankOn = !"off".equalsIgnoreCase(System.getProperty("qqbot.golden.rerank", "on"));
+        if (rerankOn && key != null && !key.isEmpty()) {
+            kb.getRerank().setApiKey(key);
+        } else {
+            kb.getRerank().setEnabled(false);
+        }
+        RerankClient rerankClient = new RerankClient(kb, mapper);
         KbTermStore terms = new KbTermStore(qaStore, kb, mapper, corpus);
         terms.init();
         Glossary glossary = new Glossary(terms);
-        KbRetriever retriever = new KbRetriever(kb, corpus, glossary, embedding);
+        KbRetriever retriever = new KbRetriever(kb, corpus, glossary, embedding, rerankClient);
 
         // 向量路到底活着没有 —— 决定下面要不要设门槛。
         // 外面没网 / key 失效时 EmbeddingClient 会退化，A 路与 C 路一起静默跳过，
@@ -122,6 +137,10 @@ class RetrievalGoldenTest {
         System.out.printf("语料：%d 块（维度 %d），标题向量 %d 条%n",
                 blocks.count(), blocks.dimensions(), blocks.countTitleVectors());
         System.out.printf("术语表：%d 条%n", glossary.size());
+        System.out.printf("重排：%s%n", rerankClient.isAvailable()
+                ? "已启用（" + kb.getRerank().getModel() + "，候选 " + kb.getRerank().getCandidateLimit()
+                        + "，阈值 " + kb.getRerank().getMinScore() + "）"
+                : "关闭（-Dqqbot.golden.rerank=off 或无 key）");
         System.out.printf("向量路：%s（top-k=%d, min-score=%.2f, title-gate=%.2f）%n",
                 vectorLive ? "已启用且可用（会产生 API 调用）"
                         : embedding.isAvailable() ? "★ 不可用（调用失败）—— 本次只跑本地关键词路，结果不可与基线比较"
@@ -149,6 +168,31 @@ class RetrievalGoldenTest {
         }
 
         System.out.println();
+        System.out.println("---- 最高余弦分布（bestCosineRaw，卡阈值【之前】的那一个）----");
+        System.out.printf("%-12s %8s %8s %8s %8s%n", "类别", "min", "p50", "max", "n");
+        for (Map.Entry<String, Stats> e : stats.entrySet()) {
+            List<Double> cs = new ArrayList<>(e.getValue().cosines());
+            if (cs.isEmpty()) {
+                continue;
+            }
+            Collections.sort(cs);
+            System.out.printf("%-12s %8.3f %8.3f %8.3f %8d%n", e.getKey(),
+                    cs.get(0), cs.get(cs.size() / 2), cs.get(cs.size() - 1), cs.size());
+        }
+
+        Path detailFile = Path.of("target", "golden-detail.tsv");
+        try {
+            Files.createDirectories(detailFile.getParent());
+            List<String> head = new ArrayList<>();
+            head.add("category\tbest_cosine_raw\thits\ttop1\tbest_cosine\tquestion");
+            head.addAll(detail);
+            Files.write(detailFile, head, StandardCharsets.UTF_8);
+            System.out.println("逐条明细已写出：" + detailFile.toAbsolutePath());
+        } catch (IOException e) {
+            System.out.println("明细写出失败（不影响结果）：" + e.getMessage());
+        }
+
+        System.out.println();
         System.out.println("---- descriptive（尚未人工标注，打印 Top-5 供判定）----");
         for (Item it : byCat.getOrDefault("descriptive", List.of())) {
             List<KbRetriever.Hit> hits = retriever.retrieve(it.question()).hits();
@@ -158,35 +202,59 @@ class RetrievalGoldenTest {
         System.out.println("================ 基线结束 ================");
 
         // ---------------- 回归门槛 ----------------
-        // 只有『本来就该做对』的类别设门槛：它们的下降一定是回归。
-        // gap / chitchat 现在本来就是 0% 干净率，那是 Phase 2 要修的**目标**而不是门槛 ——
-        // 把它们写成断言只会让构建常年发红，反而没人看。目标记在这里：
-        //   gap      : 5 条，干净率 0%（全部注入了 5 块）
-        //   chitchat : 15 条，干净率 6.7%（15 条里只有 1 条没注入）
-        //   → Phase 2 的 D1（意图分流）+ D5（相对阈值）完成后，这两个数字必须显著上升。
+        // 分两档，取决于**这一轮实际生效的是哪条路径**：
+        //   重排生效   → 用重排后的高门槛（这是当前生产默认路径）
+        //   只有向量路 → 用重排前的低门槛（离线/无 key 时的退化路径）
+        //   两者都无   → 不设门槛，只打印
+        // 说明：gap 类现在仍然是 0% 干净率 —— 那是**尚未解决**的问题（重排分不出"阳刺根本不存在"，
+        // 它只会挑一件看起来像胸甲的），所以它是目标而不是门槛。
+        System.out.println();
         if (!vectorLive) {
             System.out.println("★ 向量路不可用，本次不设回归门槛（只打印结果）");
+        } else if (!rerankEffective) {
+            System.out.println("★ 重排未生效，按**重排前**的门槛检查");
+        } else {
+            System.out.println("★ 重排已生效，按**重排后**的门槛检查");
         }
+
         Stats ent = vectorLive ? stats.get("entity") : null;
         if (ent != null && ent.n() > 0) {
-            assertTrue(ent.r1() >= Math.ceil(ent.n() * 0.58),
-                    "entity R@1 低于门槛（基线 66.7%）：" + ent.r1() + "/" + ent.n());
-            assertTrue(ent.r5() >= Math.ceil(ent.n() * 0.83),
+            double r1Floor = rerankEffective ? 0.83 : 0.58;
+            double r5Floor = rerankEffective ? 0.95 : 0.83;
+            assertTrue(ent.r1() >= Math.ceil(ent.n() * r1Floor),
+                    "entity R@1 低于门槛（重排后基线 91.7% / 重排前 66.7%）：" + ent.r1() + "/" + ent.n()
+                            + "，重排生效=" + rerankEffective);
+            assertTrue(ent.r5() >= Math.ceil(ent.n() * r5Floor),
                     "entity R@5 低于门槛（基线 100%）：" + ent.r5() + "/" + ent.n());
         }
         Stats col = vectorLive ? stats.get("colloquial") : null;
         if (col != null && col.n() > 0) {
-            assertTrue(col.r5() >= Math.ceil(col.n() * 0.75),
+            assertTrue(col.r5() >= col.n(),
                     "colloquial R@5 低于门槛（基线 100%）：" + col.r5() + "/" + col.n());
+            if (rerankEffective) {
+                assertTrue(col.r1() >= Math.ceil(col.n() * 0.75),
+                        "colloquial R@1 低于门槛（重排后基线 100%）：" + col.r1() + "/" + col.n());
+            }
+        }
+        // ★ 这一条是本次重排改造的**防退化**：闲聊的干净率从 6.7% 提到 93.3%，
+        //   没有它，将来任何人放松阈值都会悄悄把这个改进还回去。
+        Stats ch = rerankEffective ? stats.get("chitchat") : null;
+        if (ch != null && ch.n() > 0) {
+            assertTrue(ch.clean() >= Math.ceil(ch.n() * 0.80),
+                    "chitchat 干净率低于门槛（重排后基线 93.3%）：" + ch.clean() + "/" + ch.n());
         }
         int junkBlocks = (stats.containsKey("gap") ? stats.get("gap").injected() : 0)
                 + (stats.containsKey("chitchat") ? stats.get("chitchat").injected() : 0);
-        System.out.printf("Phase 2 待修：gap+chitchat 共注入 %d 块无关资料（今天就是这个问题）%n", junkBlocks);
+        int junkItems = (stats.containsKey("gap") ? stats.get("gap").n() : 0)
+                + (stats.containsKey("chitchat") ? stats.get("chitchat").n() : 0);
+        System.out.printf("gap+chitchat：%d 条不需要知识库的问题，共注入 %d 块无关资料（重排前基线 95 块）%n",
+                junkItems, junkBlocks);
         System.out.println();
     }
 
     /** 一个类别的统计结果 */
-    private record Stats(int n, int r1, int r5, int clean, int injected, double mrr) {
+    private record Stats(int n, int r1, int r5, int clean, int injected, double mrr,
+                         List<Double> cosines) {
     }
 
     /** 分类统计并打印，同时列出逐条明细 */
@@ -195,9 +263,21 @@ class RetrievalGoldenTest {
         double mrr = 0;
         int injected = 0;
         List<String> details = new ArrayList<>();
+        List<Double> cosines = new ArrayList<>();
 
         for (Item it : items) {
-            List<KbRetriever.Hit> hits = retriever.retrieve(it.question()).hits();
+            KbRetriever.Retrieval ret = retriever.retrieve(it.question());
+            List<KbRetriever.Hit> hits = ret.hits();
+            if (hits.stream().anyMatch(x -> x.source() != null && x.source().contains("rerank"))) {
+                rerankEffective = true;
+            }
+            cosines.add(ret.bestCosineRaw());
+            detail.add(String.join("\t", category,
+                    String.format("%.4f", ret.bestCosineRaw()),
+                    String.valueOf(hits.size()),
+                    hits.isEmpty() ? "-" : hits.get(0).entry().id(),
+                    String.valueOf(ret.bestCosine()),
+                    it.question()));
             n++;
             injected += hits.size();
             if (it.expectsAnswer()) {
@@ -230,7 +310,7 @@ class RetrievalGoldenTest {
             System.out.println("  ---- " + category + " 不该注入的 ----");
             details.forEach(System.out::println);
         }
-        return new Stats(n, r1, r5, clean, injected, mrr / Math.max(1, n));
+        return new Stats(n, r1, r5, clean, injected, mrr / Math.max(1, n), cosines);
     }
 
     /** 第一条命中期望块的排名（1 起）；没命中返回 0 */

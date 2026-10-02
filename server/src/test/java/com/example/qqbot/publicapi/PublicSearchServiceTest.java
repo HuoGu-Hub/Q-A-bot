@@ -58,8 +58,11 @@ class PublicSearchServiceTest {
     }
 
     private void answer(List<KbRetriever.Hit> hits) {
-        when(retriever.retrieve(anyString(), anyBoolean(), anyInt(), anyDouble()))
+        when(retriever.retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean()))
                 .thenReturn(new KbRetriever.Retrieval(hits, 0.6, 0.6, hits.size(), 0));
+        // 注意 5 个参数：最后一个是 allowRerank。公开站**明确传 false** ——
+        // 它有自己的按天配额与 LRU 缓存，"要不要给资料"的重排判断在这里没有意义，
+        // 多一次外部调用只是白花钱。下面几处 verify 都用 eq(false) 把这条锁住。
     }
 
     @Test
@@ -86,7 +89,7 @@ class PublicSearchServiceTest {
         PublicSearchService.Outcome out = service.search("废料杯", 20);
 
         assertThat(out.mode()).isEqualTo(PublicSearchService.MODE_SEMANTIC);
-        verify(retriever).retrieve(eq("废料杯"), eq(true), anyInt(), anyDouble());
+        verify(retriever).retrieve(eq("废料杯"), eq(true), anyInt(), anyDouble(), eq(false));
     }
 
     @Test
@@ -97,7 +100,7 @@ class PublicSearchServiceTest {
         service.search("废料杯怎么合成", 20);
         service.search("废料杯怎么合成", 20);
 
-        verify(retriever, times(1)).retrieve(anyString(), anyBoolean(), anyInt(), anyDouble());
+        verify(retriever, times(1)).retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean());
     }
 
     @Test
@@ -110,7 +113,7 @@ class PublicSearchServiceTest {
 
         assertThat(out.mode()).isEqualTo(PublicSearchService.MODE_KEYWORD);
         assertThat(out.hits()).as("降级不等于没结果").hasSize(1);
-        verify(retriever).retrieve(eq("废料杯"), eq(false), anyInt(), anyDouble());
+        verify(retriever).retrieve(eq("废料杯"), eq(false), anyInt(), anyDouble(), eq(false));
     }
 
     @Test
@@ -122,14 +125,14 @@ class PublicSearchServiceTest {
         PublicSearchService.Outcome out = service.search("废料杯", 20);
 
         assertThat(out.mode()).isEqualTo(PublicSearchService.MODE_KEYWORD);
-        verify(retriever).retrieve(eq("废料杯"), eq(false), anyInt(), anyDouble());
+        verify(retriever).retrieve(eq("废料杯"), eq(false), anyInt(), anyDouble(), eq(false));
     }
 
     @Test
     @DisplayName("空查询直接返回空，不触发检索")
     void blankQueryIsFree() {
         assertThat(service.search("   ", 20).hits()).isEmpty();
-        verify(retriever, times(0)).retrieve(anyString(), anyBoolean(), anyInt(), anyDouble());
+        verify(retriever, times(0)).retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean());
     }
 
     @Test

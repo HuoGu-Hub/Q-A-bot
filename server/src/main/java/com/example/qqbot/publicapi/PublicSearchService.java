@@ -102,7 +102,7 @@ public class PublicSearchService {
                 && takeQuota(cfg.getVectorDailyLimit());
 
         long t0 = System.currentTimeMillis();
-        KbRetriever.Retrieval r = retriever.retrieve(query, semantic, cfg.getCandidatePool(), cfg.getMinScore());
+        KbRetriever.Retrieval r = retriever.retrieve(query, semantic, cfg.getCandidatePool(), cfg.getMinScore(), false);
         String mode = semantic ? MODE_SEMANTIC : MODE_KEYWORD;
 
         if (semantic) {
