@@ -1,6 +1,5 @@
 package com.example.qqbot.admin;
 
-import com.example.qqbot.config.AdminProperties;
 import com.example.qqbot.files.ProjectFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,12 +34,12 @@ public class AdminAuth {
 
     private static final Logger log = LoggerFactory.getLogger(AdminAuth.class);
 
-    private final AdminProperties props;
+    private final AdminPolicy props;
 
     /** token → 过期时间 */
     private final Map<String, Instant> sessions = new ConcurrentHashMap<>();
 
-    public AdminAuth(AdminProperties props) {
+    public AdminAuth(AdminPolicy props) {
         this.props = props;
         if (isConfigured()) {
             log.info("[ADMIN] 管理后台已启用（已读到 ADMIN_PASSWORD）");

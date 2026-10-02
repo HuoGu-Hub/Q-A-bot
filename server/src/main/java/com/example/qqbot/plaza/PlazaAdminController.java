@@ -2,7 +2,6 @@ package com.example.qqbot.plaza;
 
 import com.example.qqbot.persistence.PlazaQueryRepository;
 
-import com.example.qqbot.config.PlazaProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,12 +32,12 @@ import java.util.Map;
 public class PlazaAdminController {
 
     private final PlazaStore store;
-    private final PlazaProperties props;
+    private final PlazaPolicy props;
     private final FallbackService fallback;
     /** 跨表读全部委托给它 —— 本类不再碰 java.sql */
     private final PlazaQueryRepository queries;
 
-    public PlazaAdminController(PlazaStore store, PlazaProperties props,
+    public PlazaAdminController(PlazaStore store, PlazaPolicy props,
                                 FallbackService fallback,
                                 PlazaQueryRepository queries) {
         this.store = store;

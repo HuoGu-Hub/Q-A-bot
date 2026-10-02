@@ -1,6 +1,5 @@
 package com.example.qqbot.admin;
 
-import com.example.qqbot.config.AdminProperties;
 import com.example.qqbot.qa.QaAnalytics;
 import com.example.qqbot.qa.QaStore;
 import jakarta.servlet.http.Cookie;
@@ -37,10 +36,10 @@ public class AdminController {
 
     private final QaAnalytics analytics;
     private final AdminAuth auth;
-    private final AdminProperties props;
+    private final AdminPolicy props;
     private final QaStore store;
 
-    public AdminController(QaAnalytics analytics, AdminAuth auth, AdminProperties props,
+    public AdminController(QaAnalytics analytics, AdminAuth auth, AdminPolicy props,
                            QaStore store) {
         this.analytics = analytics;
         this.auth = auth;

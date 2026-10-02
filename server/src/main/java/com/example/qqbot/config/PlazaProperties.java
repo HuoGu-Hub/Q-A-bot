@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.plaza.PlazaPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -8,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>这些都是**热生效**的 —— 改完立即起作用。
  */
 @ConfigurationProperties(prefix = "app.plaza")
-public class PlazaProperties {
+public class PlazaProperties implements PlazaPolicy {
 
     /** 广场总开关。关掉后公开站不显示问答内容 */
     private boolean enabled = true;
@@ -59,6 +60,7 @@ public class PlazaProperties {
 
     // ==================== getter / setter ====================
 
+    @Override
     public boolean isEnabled() {
         return enabled;
     }
@@ -67,6 +69,7 @@ public class PlazaProperties {
         this.enabled = enabled;
     }
 
+    @Override
     public boolean isOnlyVoted() {
         return onlyVoted;
     }
@@ -75,6 +78,7 @@ public class PlazaProperties {
         this.onlyVoted = onlyVoted;
     }
 
+    @Override
     public int getDownvoteThreshold() {
         return downvoteThreshold;
     }
@@ -83,6 +87,7 @@ public class PlazaProperties {
         this.downvoteThreshold = downvoteThreshold;
     }
 
+    @Override
     public int getMaxAnswersPerKeyword() {
         return maxAnswersPerKeyword;
     }
@@ -91,6 +96,7 @@ public class PlazaProperties {
         this.maxAnswersPerKeyword = maxAnswersPerKeyword;
     }
 
+    @Override
     public double getDedupThreshold() {
         return dedupThreshold;
     }
@@ -99,6 +105,7 @@ public class PlazaProperties {
         this.dedupThreshold = dedupThreshold;
     }
 
+    @Override
     public int getAskLimitPerKeywordPerDay() {
         return askLimitPerKeywordPerDay;
     }
@@ -107,6 +114,7 @@ public class PlazaProperties {
         this.askLimitPerKeywordPerDay = askLimitPerKeywordPerDay;
     }
 
+    @Override
     public int getAskLimitGlobalPerDay() {
         return askLimitGlobalPerDay;
     }
@@ -115,6 +123,7 @@ public class PlazaProperties {
         this.askLimitGlobalPerDay = askLimitGlobalPerDay;
     }
 
+    @Override
     public int getHelpLimitPerQuestionPerDay() {
         return helpLimitPerQuestionPerDay;
     }
@@ -123,6 +132,7 @@ public class PlazaProperties {
         this.helpLimitPerQuestionPerDay = helpLimitPerQuestionPerDay;
     }
 
+    @Override
     public int getHelpLimitPerUserPerDay() {
         return helpLimitPerUserPerDay;
     }
@@ -131,6 +141,7 @@ public class PlazaProperties {
         this.helpLimitPerUserPerDay = helpLimitPerUserPerDay;
     }
 
+    @Override
     public int getHelpLimitPerGroupPerHour() {
         return helpLimitPerGroupPerHour;
     }
@@ -139,6 +150,7 @@ public class PlazaProperties {
         this.helpLimitPerGroupPerHour = helpLimitPerGroupPerHour;
     }
 
+    @Override
     public String getVoteSalt() {
         return voteSalt;
     }

@@ -1,6 +1,5 @@
 package com.example.qqbot.plaza;
 
-import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.persistence.PlazaQueryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,9 +31,9 @@ public class AnswerAggregator {
 
     private final PlazaQueryRepository queries;
     private final PlazaStore plazaStore;
-    private final PlazaProperties props;
+    private final PlazaPolicy props;
 
-    public AnswerAggregator(PlazaQueryRepository queries, PlazaStore plazaStore, PlazaProperties props) {
+    public AnswerAggregator(PlazaQueryRepository queries, PlazaStore plazaStore, PlazaPolicy props) {
         this.queries = queries;
         this.plazaStore = plazaStore;
         this.props = props;

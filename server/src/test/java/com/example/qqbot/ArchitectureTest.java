@@ -189,8 +189,8 @@ class ArchitectureTest {
 
     @Test
     @Disabled("目标 Phase 1（S2 配置去中心化）。2026-10-02 **摘掉 @Disabled 真跑了一次**："
-            + "496 处违反 / 48 个类。最集中的：LlmRouter 62、WikiApiClient 29、"
-            + "MediaStorageGuard 29、GuardPipeline 23、FallbackService 20、EmbeddingClient 17。"
+            + "431 处违反 / 39 个类。最集中的：LlmRouter 62、WikiApiClient 29、"
+            + "MediaStorageGuard 29、GuardPipeline 23、EmbeddingClient 17、RerankClient 16。"
             + "⚠️「违反处数」与「类数」是两件事 —— LlmRouter 一个类就占 12%（它把整个 "
             + "LlmProperties 拖进构造器、然后到处读字段）。"
             + "⚠️ 别用 grep import 估这个数字：既漏全限定名用法、又把死 import 算进去，"

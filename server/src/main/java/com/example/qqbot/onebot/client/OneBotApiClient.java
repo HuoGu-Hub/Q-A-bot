@@ -1,6 +1,5 @@
 package com.example.qqbot.onebot.client;
 
-import com.example.qqbot.config.OneBotProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +27,7 @@ public class OneBotApiClient {
 
     private final RestClient restClient;
 
-    public OneBotApiClient(OneBotProperties props) {
+    public OneBotApiClient(OneBotPolicy props) {
         Duration timeout = Duration.ofMillis(props.getRequestTimeoutMs());
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);

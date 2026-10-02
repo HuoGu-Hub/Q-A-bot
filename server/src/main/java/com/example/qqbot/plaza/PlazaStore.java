@@ -1,6 +1,5 @@
 package com.example.qqbot.plaza;
 
-import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.persistence.PlazaRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -40,11 +39,11 @@ public class PlazaStore {
     /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
     private final PlazaRepository repo;
 
-    private final PlazaProperties plazaProps;
+    private final PlazaPolicy plazaProps;
 
     private volatile boolean available;
 
-    public PlazaStore(PlazaRepository repo, PlazaProperties plazaProps) {
+    public PlazaStore(PlazaRepository repo, PlazaPolicy plazaProps) {
         this.repo = repo;
         this.plazaProps = plazaProps;
     }

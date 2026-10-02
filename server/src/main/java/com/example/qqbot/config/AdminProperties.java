@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.admin.AdminPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -9,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 宁可打不开，也不能裸奔 —— 这个后台能看到群里的提问原文。
  */
 @ConfigurationProperties(prefix = "app.admin")
-public class AdminProperties {
+public class AdminProperties implements AdminPolicy {
 
     /** 总开关 */
     private boolean enabled = true;
@@ -42,6 +43,7 @@ public class AdminProperties {
     /** 触发后锁定时长（秒） */
     private int loginLockSeconds = 600;
 
+    @Override
     public boolean isEnabled() {
         return enabled;
     }
@@ -50,6 +52,7 @@ public class AdminProperties {
         this.enabled = enabled;
     }
 
+    @Override
     public String getPassword() {
         return password;
     }
@@ -58,6 +61,7 @@ public class AdminProperties {
         this.password = password;
     }
 
+    @Override
     public int getSessionHours() {
         return sessionHours;
     }
@@ -66,6 +70,7 @@ public class AdminProperties {
         this.sessionHours = sessionHours;
     }
 
+    @Override
     public boolean isRecordVisits() {
         return recordVisits;
     }
@@ -74,6 +79,7 @@ public class AdminProperties {
         this.recordVisits = recordVisits;
     }
 
+    @Override
     public int getLoginMaxFailures() {
         return loginMaxFailures;
     }
@@ -82,6 +88,7 @@ public class AdminProperties {
         this.loginMaxFailures = loginMaxFailures;
     }
 
+    @Override
     public int getLoginFailureWindowSeconds() {
         return loginFailureWindowSeconds;
     }
@@ -90,6 +97,7 @@ public class AdminProperties {
         this.loginFailureWindowSeconds = loginFailureWindowSeconds;
     }
 
+    @Override
     public int getLoginLockSeconds() {
         return loginLockSeconds;
     }

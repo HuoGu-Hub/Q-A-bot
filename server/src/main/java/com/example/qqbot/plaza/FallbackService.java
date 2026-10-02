@@ -1,6 +1,5 @@
 package com.example.qqbot.plaza;
 
-import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.llm.LlmException;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.kb.KbRetriever;
@@ -31,7 +30,7 @@ public class FallbackService {
 
     private static final Logger log = LoggerFactory.getLogger(FallbackService.class);
 
-    private final PlazaProperties props;
+    private final PlazaPolicy props;
     private final PlazaStore store;
     private final KbRetriever retriever;
     private final LlmRouter llm;
@@ -41,7 +40,7 @@ public class FallbackService {
     private final AtomicInteger askTodayTotal = new AtomicInteger();
     private final Map<String, AtomicInteger> askPerKeyword = new java.util.concurrent.ConcurrentHashMap<>();
 
-    public FallbackService(PlazaProperties props, PlazaStore store,
+    public FallbackService(PlazaPolicy props, PlazaStore store,
                            KbRetriever retriever, LlmRouter llm, OutboundSender outboundSender) {
         this.props = props;
         this.store = store;

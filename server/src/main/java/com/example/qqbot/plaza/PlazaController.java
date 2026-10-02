@@ -1,6 +1,5 @@
 package com.example.qqbot.plaza;
 
-import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.publicapi.PublicRateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -41,12 +40,12 @@ public class PlazaController {
 
     private final AnswerAggregator aggregator;
     private final PlazaStore store;
-    private final PlazaProperties props;
+    private final PlazaPolicy props;
     private final PublicRateLimiter limiter;
     private final FallbackService fallback;
 
     public PlazaController(AnswerAggregator aggregator, PlazaStore store,
-                           PlazaProperties props, PublicRateLimiter limiter,
+                           PlazaPolicy props, PublicRateLimiter limiter,
                            FallbackService fallback) {
         this.aggregator = aggregator;
         this.store = store;

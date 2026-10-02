@@ -1,6 +1,5 @@
 package com.example.qqbot.admin;
 
-import com.example.qqbot.config.AdminProperties;
 import com.example.qqbot.qa.QaStore;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -63,11 +62,11 @@ public class AdminAuthFilter extends OncePerRequestFilter {
      */
     private static final String[] PUBLIC_PREFIXES = {"/admin/assets/", "/admin/login"};
 
-    private final AdminProperties props;
+    private final AdminPolicy props;
     private final AdminAuth auth;
     private final QaStore store;
 
-    public AdminAuthFilter(AdminProperties props, AdminAuth auth, QaStore store) {
+    public AdminAuthFilter(AdminPolicy props, AdminAuth auth, QaStore store) {
         this.props = props;
         this.auth = auth;
         this.store = store;
