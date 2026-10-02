@@ -121,7 +121,9 @@ class ArchitectureTest {
     /* ==================== 目标：还债清单 ==================== */
 
     @Test
-    @Disabled("目标 Phase 1（S1 持久化去单点）。实测违反：8 个包共 12 个类直接持有/使用 java.sql —— CommandStore、KbBlockStore、CategoryStore、KbProposalService、KbTermStore、AnswerAggregator、PlazaAdminController、PlazaStore、QaAnalytics、QaStore、CarouselStore、SiteTextService")
+    @Disabled("目标 Phase 1（S1 持久化去单点）。2026-10-02 实测（grep import java.sql）："
+            + "业务侧还剩 5 个类直接持有 java.sql —— PlazaStore、QaStore、QaAnalytics、"
+            + "KbBlockStore、KbMapStore。全部迁完后摘掉这个 @Disabled")
     @DisplayName("【目标】持久化层之外不得出现 java.sql")
     void noJdbcOutsidePersistence() {
         ArchRule rule = noClasses()
@@ -186,7 +188,9 @@ class ArchitectureTest {
     }
 
     @Test
-    @Disabled("目标 Phase 1（S2 配置去中心化）。实测违反：全部 13 个包都直接注入 config 包类型；GuardProperties 单类被 17 个类引用、KbProperties 11、QaProperties 10")
+    @Disabled("目标 Phase 1（S2 配置去中心化）。2026-10-02 实测（grep import com.example.qqbot.config）："
+            + "23 个包共 59 个类直接注入 config 包类型；GuardProperties 被 17 个类引用、"
+            + "KbProperties 13、QaProperties 11")
     @DisplayName("【目标】业务包不得直接依赖 config（配置只应在装配层注入）")
     void businessPackagesDoNotDependOnConfig() {
         ArchRule rule = noClasses()
