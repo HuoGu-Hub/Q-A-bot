@@ -1,6 +1,7 @@
 package com.example.qqbot.qa;
 
 import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.QaAnalyticsRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 
 import com.example.qqbot.config.QaProperties;
@@ -41,7 +42,7 @@ class QaAnalyticsTest {
         db.init();
         store = new QaStore(db, props, new ObjectMapper());
         store.init();
-        analytics = new QaAnalytics(props, db, new Jdbc(db));
+        analytics = new QaAnalytics(new QaAnalyticsRepository(new Jdbc(db)));
     }
 
     private QaRecord rec(String question, int hitCount, double cosine, String source,
@@ -230,7 +231,7 @@ class QaAnalyticsTest {
         other.setDb(base.resolve("nope/never.sqlite").toString());
         // 不 init：SqliteDatabase.isAvailable() 为 false，等价于"库不存在"
         SqliteDatabase missing = new SqliteDatabase(other);
-        QaAnalytics empty = new QaAnalytics(other, missing, new Jdbc(missing));
+        QaAnalytics empty = new QaAnalytics(new QaAnalyticsRepository(new Jdbc(missing)));
 
         assertThat(empty.overview(30).total()).isZero();
         assertThat(empty.keywords(30, 10)).isEmpty();
