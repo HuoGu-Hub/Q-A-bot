@@ -5,6 +5,7 @@ import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,7 +49,7 @@ class KbDocImporterTermTest {
         qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
-        KbBlockStore store = new KbBlockStore(qaStore);
+        KbBlockStore store = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
         store.init();
         KbBlockIndex index = new KbBlockIndex(store);
 

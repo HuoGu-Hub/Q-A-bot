@@ -1,6 +1,8 @@
 package com.example.qqbot.kb.block;
 
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +38,7 @@ class KbBlockStoreTest {
         qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
-        store = new KbBlockStore(qaStore);
+        store = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
         store.init();
         assertThat(store.isAvailable()).isTrue();
     }
@@ -212,7 +214,7 @@ class KbBlockStoreTest {
     void survivesReopen() {
         store.upsert(block("a", "d", "标题", "正文"), vec(1, 2, 3));
 
-        KbBlockStore reopened = new KbBlockStore(qaStore);
+        KbBlockStore reopened = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
         reopened.init();
 
         assertThat(reopened.count()).isEqualTo(1);

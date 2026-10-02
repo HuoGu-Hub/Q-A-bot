@@ -326,6 +326,9 @@ public class Jdbc {
 
         boolean bool(String column);
 
+        /** BLOB 列（向量表用） */
+        byte[] bytes(String column);
+
         boolean isNull(String column);
     }
 
@@ -377,6 +380,15 @@ public class Jdbc {
         public boolean bool(String column) {
             try {
                 return rs.getInt(column) != 0;
+            } catch (SQLException e) {
+                throw new PersistenceException("读取列失败：" + column, e);
+            }
+        }
+
+        @Override
+        public byte[] bytes(String column) {
+            try {
+                return rs.getBytes(column);
             } catch (SQLException e) {
                 throw new PersistenceException("读取列失败：" + column, e);
             }

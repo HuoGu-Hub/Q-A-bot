@@ -1,20 +1,12 @@
 package com.example.qqbot.kb.block;
 
-import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.doc.ChunkMarkup;
-import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.KbBlockRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,67 +28,35 @@ import java.util.Map;
  * 块表有正文（小、要常列），向量表是 17 MB 的 BLOB（大、只在检索时整批读）。
  * 合成一张的话，管理端"列出所有块"会顺手把 17 MB 也拖出来。
  *
- * <h2>连接</h2>
- * ⚠️ 复用 {@link com.example.qqbot.persistence.SqliteConnectionProvider#connection()}，不自己开连接 —— 两个连接操作同一个
- * SQLite 文件会让 WAL 的共享内存段冲突（实测报 {@code SQLITE_IOERR_SHMOPEN}）。
+ * <h2>本类只剩「语义」</h2>
+ * SQL 与 {@code java.sql} 全部搬进了 {@link KbBlockRepository}。这里管的是：
+ * 标签行的拆装（{@link ChunkMarkup} 的格式）、对外的异常类型、
+ * 以及 {@code vec == null} 时"不动已有向量"这条调用约定。
  */
 @Component
 public class KbBlockStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbBlockStore.class);
 
-    private final SqliteConnectionProvider db;
+    /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
+    private final KbBlockRepository repo;
 
     private volatile boolean available;
 
-    public KbBlockStore(SqliteConnectionProvider db) {
-        this.db = db;
-    }
-
-    private Connection conn() {
-        return db.connection();
+    public KbBlockStore(KbBlockRepository repo) {
+        this.repo = repo;
     }
 
     @PostConstruct
     public void init() {
         try {
-            if (!db.isAvailable()) {
+            if (!repo.isAvailable()) {
                 log.warn("[KB-BLOCK] 问答库不可用，块存储一并关闭（知识库检索不可用）");
                 available = false;
                 return;
             }
-            try (Statement st = conn().createStatement()) {
-                // 用普通字符串而不是文本块 —— 与 KbTermStore / CategoryStore 保持一致
-                st.execute("CREATE TABLE IF NOT EXISTS kb_block ("
-                        + " id         TEXT PRIMARY KEY,"
-                        + " doc_id     TEXT NOT NULL DEFAULT '',"
-                        + " title      TEXT NOT NULL DEFAULT '',"
-                        + " body       TEXT NOT NULL DEFAULT '',"
-                        + " url        TEXT NOT NULL DEFAULT '',"
-                        + " tags       TEXT NOT NULL DEFAULT '',"
-                        + " source     TEXT NOT NULL DEFAULT '" + KbBlock.SRC_DOC + "',"
-                        + " retired    INTEGER NOT NULL DEFAULT 0,"
-                        + " updated_at TEXT NOT NULL DEFAULT '')");
-                st.execute("CREATE INDEX IF NOT EXISTS idx_block_doc ON kb_block(doc_id)");
-                st.execute("CREATE INDEX IF NOT EXISTS idx_block_retired ON kb_block(retired)");
-
-                st.execute("CREATE TABLE IF NOT EXISTS kb_block_vec ("
-                        + " id   TEXT PRIMARY KEY,"
-                        + " dim  INTEGER NOT NULL,"
-                        + " vec  BLOB NOT NULL)");
-
-                // C 路（标题向量）。单开一张表而不是给 kb_block_vec 加一列：
-                // 那张表的主键是 id，一列存不下"一个块两条向量"；重做主键要删表重建，
-                // 而新建一张表的迁移风险是零（老表一个字节都不用动）。
-                //
-                // ★ 为什么要存 title：这份向量是"对哪个标题算的"。标题改了而对不上，
-                //   就说明它过期了 —— 这是补建入口判断"要不要重算"的唯一依据。
-                st.execute("CREATE TABLE IF NOT EXISTS kb_block_title_vec ("
-                        + " id    TEXT PRIMARY KEY,"
-                        + " title TEXT NOT NULL DEFAULT '',"
-                        + " dim   INTEGER NOT NULL,"
-                        + " vec   BLOB NOT NULL)");
-            }
+            // source 列的默认值是个业务常量，由这边传进去 —— 持久层不该依赖 kb.block
+            repo.initSchema(KbBlock.SRC_DOC);
             available = true;
             log.info("[KB-BLOCK] 块存储就绪：{} 块（其中已下架 {}）", count(), countRetired());
         } catch (Exception e) {
@@ -112,99 +72,78 @@ public class KbBlockStore {
     // ==================== 读 ====================
 
     public int count() {
-        return scalar("SELECT COUNT(*) FROM kb_block");
+        return countOf(repo::count);
     }
 
     public int countRetired() {
-        return scalar("SELECT COUNT(*) FROM kb_block WHERE retired = 1");
+        return countOf(repo::countRetired);
     }
 
     /** 有向量的块数（用来发现"块进了库但还没算向量"的半成品状态） */
     public int countVectors() {
-        return scalar("SELECT COUNT(*) FROM kb_block_vec");
+        return countOf(repo::countVectors);
+    }
+
+    private int countOf(java.util.function.LongSupplier source) {
+        if (!available) {
+            return 0;
+        }
+        try {
+            return (int) source.getAsLong();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     public KbBlock get(String id) {
         if (!available || id == null || id.isBlank()) {
             return null;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "SELECT * FROM kb_block WHERE id = ?")) {
-                ps.setString(1, id);
-                try (ResultSet rs = ps.executeQuery()) {
-                    return rs.next() ? map(rs) : null;
-                }
-            } catch (Exception e) {
-                log.warn("[KB-BLOCK] 读取块 {} 失败：{}", id, e.getMessage());
-                return null;
-            }
+        try {
+            KbBlockRepository.Row r = repo.find(id);
+            return r == null ? null : toBlock(r);
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 读取块 {} 失败：{}", id, e.getMessage());
+            return null;
         }
     }
 
     /** 全部块（含已下架），按 id 排序 —— 顺序稳定，便于测试与导出 */
     public List<KbBlock> all() {
-        return query("SELECT * FROM kb_block ORDER BY id", null);
+        return blocks(repo::all, "查询");
     }
 
     /** 参与检索的块（不含已下架） */
     public List<KbBlock> allActive() {
-        return query("SELECT * FROM kb_block WHERE retired = 0 ORDER BY id", null);
+        return blocks(repo::allActive, "查询");
     }
 
     /** 某份文档下的所有块 */
     public List<KbBlock> byDoc(String docId) {
-        return query("SELECT * FROM kb_block WHERE doc_id = ? ORDER BY id", docId);
+        return blocks(() -> repo.byDoc(docId), "查询");
     }
 
-    private List<KbBlock> query(String sql, String param) {
-        List<KbBlock> out = new ArrayList<>();
+    private List<KbBlock> blocks(java.util.function.Supplier<List<KbBlockRepository.Row>> source,
+                                 String what) {
         if (!available) {
+            return List.of();
+        }
+        try {
+            List<KbBlock> out = new ArrayList<>();
+            for (KbBlockRepository.Row r : source.get()) {
+                out.add(toBlock(r));
+            }
             return out;
-        }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(sql)) {
-                if (param != null) {
-                    ps.setString(1, param);
-                }
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        out.add(map(rs));
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[KB-BLOCK] 查询失败：{}", e.getMessage());
-            }
-        }
-        return out;
-    }
-
-    private int scalar(String sql) {
-        if (!available) {
-            return 0;
-        }
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery(sql)) {
-                rs.next();
-                return rs.getInt(1);
-            } catch (Exception e) {
-                return 0;
-            }
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] {}失败：{}", what, e.getMessage());
+            return List.of();
         }
     }
 
-    private KbBlock map(ResultSet rs) throws SQLException {
-        return new KbBlock(
-                rs.getString("id"),
-                rs.getString("doc_id"),
-                rs.getString("title"),
-                rs.getString("body"),
-                rs.getString("url"),
-                ChunkMarkup.splitTags(rs.getString("tags")),
-                rs.getString("source"),
-                rs.getInt("retired") == 1,
-                rs.getString("updated_at"));
+    /** 列里的 tags 是 {@link ChunkMarkup} 的分隔格式，拆开是这边的事 */
+    private static KbBlock toBlock(KbBlockRepository.Row r) {
+        return new KbBlock(r.id(), r.docId(), r.title(), r.body(), r.url(),
+                ChunkMarkup.splitTags(r.tagsLine()), r.source(), r.retired(), r.updatedAt());
     }
 
     // ==================== 向量 ====================
@@ -214,40 +153,25 @@ public class KbBlockStore {
         if (!available || id == null || id.isBlank()) {
             return null;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "SELECT dim, vec FROM kb_block_vec WHERE id = ?")) {
-                ps.setString(1, id);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) {
-                        return null;
-                    }
-                    return toFloats(rs.getInt("dim"), rs.getBytes("vec"));
-                }
-            } catch (Exception e) {
-                log.warn("[KB-BLOCK] 读取向量 {} 失败：{}", id, e.getMessage());
-                return null;
-            }
+        try {
+            return repo.vector(id);
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 读取向量 {} 失败：{}", id, e.getMessage());
+            return null;
         }
     }
 
     /** 一次读出全部向量（检索要整批做暴力余弦，逐条查会慢） */
     public Map<String, float[]> allVectors() {
-        Map<String, float[]> out = new LinkedHashMap<>();
         if (!available) {
-            return out;
+            return new LinkedHashMap<>();
         }
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT id, dim, vec FROM kb_block_vec")) {
-                while (rs.next()) {
-                    out.put(rs.getString("id"), toFloats(rs.getInt("dim"), rs.getBytes("vec")));
-                }
-            } catch (Exception e) {
-                log.warn("[KB-BLOCK] 批量读向量失败：{}", e.getMessage());
-            }
+        try {
+            return repo.allVectors();
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 批量读向量失败：{}", e.getMessage());
+            return new LinkedHashMap<>();
         }
-        return out;
     }
 
     /** 向量维度；一个都没有时返回 0 */
@@ -255,13 +179,10 @@ public class KbBlockStore {
         if (!available) {
             return 0;
         }
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT dim FROM kb_block_vec LIMIT 1")) {
-                return rs.next() ? rs.getInt(1) : 0;
-            } catch (Exception e) {
-                return 0;
-            }
+        try {
+            return repo.dimensions();
+        } catch (Exception e) {
+            return 0;
         }
     }
 
@@ -278,7 +199,7 @@ public class KbBlockStore {
 
     /** 有多少块已经有标题向量（管理端看"补到几成"） */
     public int countTitleVectors() {
-        return scalar("SELECT COUNT(*) FROM kb_block_title_vec");
+        return countOf(repo::countTitleVectors);
     }
 
     /** 读一个块的标题向量；没有就返回 {@code null} */
@@ -286,21 +207,12 @@ public class KbBlockStore {
         if (!available || id == null || id.isBlank()) {
             return null;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "SELECT title, dim, vec FROM kb_block_title_vec WHERE id = ?")) {
-                ps.setString(1, id);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) {
-                        return null;
-                    }
-                    return new TitleVector(rs.getString("title"),
-                            toFloats(rs.getInt("dim"), rs.getBytes("vec")));
-                }
-            } catch (Exception e) {
-                log.warn("[KB-BLOCK] 读取标题向量 {} 失败：{}", id, e.getMessage());
-                return null;
-            }
+        try {
+            KbBlockRepository.TitleVec t = repo.titleVector(id);
+            return t == null ? null : new TitleVector(t.title(), t.vec());
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 读取标题向量 {} 失败：{}", id, e.getMessage());
+            return null;
         }
     }
 
@@ -310,16 +222,12 @@ public class KbBlockStore {
         if (!available) {
             return out;
         }
-        synchronized (this) {
-            try (Statement st = conn().createStatement();
-                 ResultSet rs = st.executeQuery("SELECT id, title, dim, vec FROM kb_block_title_vec")) {
-                while (rs.next()) {
-                    out.put(rs.getString("id"), new TitleVector(rs.getString("title"),
-                            toFloats(rs.getInt("dim"), rs.getBytes("vec"))));
-                }
-            } catch (Exception e) {
-                log.warn("[KB-BLOCK] 批量读标题向量失败：{}", e.getMessage());
+        try {
+            for (Map.Entry<String, KbBlockRepository.TitleVec> e : repo.allTitleVectors().entrySet()) {
+                out.put(e.getKey(), new TitleVector(e.getValue().title(), e.getValue().vec()));
             }
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 批量读标题向量失败：{}", e.getMessage());
         }
         return out;
     }
@@ -329,19 +237,10 @@ public class KbBlockStore {
         if (!available || id == null || id.isBlank() || vec == null || vec.length == 0) {
             return;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "INSERT INTO kb_block_title_vec (id, title, dim, vec) VALUES (?,?,?,?)"
-                            + " ON CONFLICT(id) DO UPDATE SET"
-                            + " title=excluded.title, dim=excluded.dim, vec=excluded.vec")) {
-                ps.setString(1, id);
-                ps.setString(2, title == null ? "" : title);
-                ps.setInt(3, vec.length);
-                ps.setBytes(4, toBytes(vec));
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                log.warn("[KB-BLOCK] 写入标题向量 {} 失败：{}", id, e.getMessage());
-            }
+        try {
+            repo.upsertTitleVector(id, title, vec);
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 写入标题向量 {} 失败：{}", id, e.getMessage());
         }
     }
 
@@ -350,32 +249,11 @@ public class KbBlockStore {
         if (!available || id == null || id.isBlank()) {
             return;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "DELETE FROM kb_block_title_vec WHERE id = ?")) {
-                ps.setString(1, id);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                log.warn("[KB-BLOCK] 删除标题向量 {} 失败：{}", id, e.getMessage());
-            }
+        try {
+            repo.deleteTitleVector(id);
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 删除标题向量 {} 失败：{}", id, e.getMessage());
         }
-    }
-
-    private static byte[] toBytes(float[] v) {
-        ByteBuffer buf = ByteBuffer.allocate(v.length * 4).order(ByteOrder.BIG_ENDIAN);
-        for (float f : v) {
-            buf.putFloat(f);
-        }
-        return buf.array();
-    }
-
-    private static float[] toFloats(int dim, byte[] raw) {
-        ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.BIG_ENDIAN);
-        float[] v = new float[dim];
-        for (int i = 0; i < dim; i++) {
-            v[i] = buf.getFloat();
-        }
-        return v;
     }
 
     // ==================== 写 ====================
@@ -386,6 +264,9 @@ public class KbBlockStore {
      * <p>{@code vec} 为 {@code null} 时**不动已有向量** —— 这样"只改标题/标签"
      * 这种不需要重算向量的操作，不用白白花一次 embedding 调用。
      *
+     * <p>「是新增还是覆盖」由 {@link KbBlockRepository#upsert} 在**事务内**判定：
+     * 判定放在外面的话，两个并发的导入可能都判成"新增"，统计就与实际相反了。
+     *
      * @return true = 是新增；false = 覆盖了已有的
      */
     public boolean upsert(KbBlock b, float[] vec) {
@@ -395,44 +276,14 @@ public class KbBlockStore {
         if (b == null || b.id() == null || b.id().isBlank()) {
             throw new IllegalArgumentException("块 id 不能为空");
         }
-        boolean isNew = get(b.id()) == null;
         String now = b.updatedAt() == null || b.updatedAt().isBlank()
                 ? Instant.now().toString() : b.updatedAt();
-
-        synchronized (this) {
-            try {
-                try (PreparedStatement ps = conn().prepareStatement(
-                        "INSERT INTO kb_block (id, doc_id, title, body, url, tags, source, retired, updated_at)"
-                                + " VALUES (?,?,?,?,?,?,?,?,?)"
-                                + " ON CONFLICT(id) DO UPDATE SET"
-                                + " doc_id=excluded.doc_id, title=excluded.title, body=excluded.body,"
-                                + " url=excluded.url, tags=excluded.tags, source=excluded.source,"
-                                + " retired=excluded.retired, updated_at=excluded.updated_at")) {
-                    ps.setString(1, b.id());
-                    ps.setString(2, b.docId());
-                    ps.setString(3, b.title());
-                    ps.setString(4, b.body());
-                    ps.setString(5, b.url());
-                    ps.setString(6, b.tagsLine());
-                    ps.setString(7, b.source());
-                    ps.setInt(8, b.retired() ? 1 : 0);
-                    ps.setString(9, now);
-                    ps.executeUpdate();
-                }
-                if (vec != null) {
-                    try (PreparedStatement ps = conn().prepareStatement(
-                            "INSERT INTO kb_block_vec (id, dim, vec) VALUES (?,?,?)"
-                                    + " ON CONFLICT(id) DO UPDATE SET dim=excluded.dim, vec=excluded.vec")) {
-                        ps.setString(1, b.id());
-                        ps.setInt(2, vec.length);
-                        ps.setBytes(3, toBytes(vec));
-                        ps.executeUpdate();
-                    }
-                }
-                return isNew;
-            } catch (SQLException e) {
-                throw new IllegalStateException("写入块失败：" + e.getMessage(), e);
-            }
+        KbBlockRepository.Row row = new KbBlockRepository.Row(b.id(), b.docId(), b.title(), b.body(),
+                b.url(), b.tagsLine(), b.source(), b.retired(), now);
+        try {
+            return repo.upsert(row, vec);
+        } catch (Exception e) {
+            throw new IllegalStateException("写入块失败：" + e.getMessage(), e);
         }
     }
 
@@ -441,17 +292,11 @@ public class KbBlockStore {
         if (!available) {
             return false;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE kb_block SET retired=?, updated_at=? WHERE id=?")) {
-                ps.setInt(1, retired ? 1 : 0);
-                ps.setString(2, Instant.now().toString());
-                ps.setString(3, id);
-                return ps.executeUpdate() > 0;
-            } catch (SQLException e) {
-                log.warn("[KB-BLOCK] 下架/恢复失败：{}", e.getMessage());
-                return false;
-            }
+        try {
+            return repo.setRetired(id, retired, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 下架/恢复失败：{}", e.getMessage());
+            return false;
         }
     }
 
@@ -460,24 +305,11 @@ public class KbBlockStore {
         if (!available) {
             return false;
         }
-        synchronized (this) {
-            try {
-                int n;
-                try (PreparedStatement ps = conn().prepareStatement("DELETE FROM kb_block WHERE id=?")) {
-                    ps.setString(1, id);
-                    n = ps.executeUpdate();
-                }
-                try (PreparedStatement ps = conn().prepareStatement("DELETE FROM kb_block_vec WHERE id=?")) {
-                    ps.setString(1, id);
-                    ps.executeUpdate();
-                }
-                // 标题向量跟着块走 —— 漏了它，删掉再新建一个同 id 的块会捡到旧标题的向量
-                deleteTitleVector(id);
-                return n > 0;
-            } catch (SQLException e) {
-                log.warn("[KB-BLOCK] 删除失败：{}", e.getMessage());
-                return false;
-            }
+        try {
+            return repo.delete(id);
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 删除失败：{}", e.getMessage());
+            return false;
         }
     }
 
@@ -486,15 +318,11 @@ public class KbBlockStore {
         if (!available) {
             return;
         }
-        synchronized (this) {
-            try (Statement st = conn().createStatement()) {
-                st.executeUpdate("DELETE FROM kb_block");
-                st.executeUpdate("DELETE FROM kb_block_vec");
-                st.executeUpdate("DELETE FROM kb_block_title_vec");
-                log.warn("[KB-BLOCK] 已清空全部块、正文向量与标题向量");
-            } catch (SQLException e) {
-                log.warn("[KB-BLOCK] 清空失败：{}", e.getMessage());
-            }
+        try {
+            repo.clearAll();
+            log.warn("[KB-BLOCK] 已清空全部块、正文向量与标题向量");
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 清空失败：{}", e.getMessage());
         }
     }
 }

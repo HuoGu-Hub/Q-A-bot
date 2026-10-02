@@ -10,6 +10,7 @@ import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.persistence.KbWikiPageRepository;
 import com.example.qqbot.qa.QaStore;
@@ -78,7 +79,7 @@ class WikiArticleImporterE2ETest {
         qaStore = new QaStore(qa, mapper);
         qaStore.init();
 
-        KbBlockStore blocks = new KbBlockStore(qaStore);
+        KbBlockStore blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
         blocks.init();
         KbBlockIndex index = new KbBlockIndex(blocks);
         index.reload();

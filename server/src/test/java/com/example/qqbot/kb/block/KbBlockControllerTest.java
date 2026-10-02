@@ -2,6 +2,8 @@ package com.example.qqbot.kb.block;
 
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -49,7 +51,7 @@ class KbBlockControllerTest {
         qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
-        store = new KbBlockStore(qaStore);
+        store = new KbBlockStore(new KbBlockRepository(new Jdbc(qaStore)));
         store.init();
         index = new KbBlockIndex(store);
 
