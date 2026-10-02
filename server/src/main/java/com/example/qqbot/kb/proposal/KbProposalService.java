@@ -1,7 +1,7 @@
 package com.example.qqbot.kb.proposal;
 
 import com.example.qqbot.llm.LlmRouter;
-import com.example.qqbot.persistence.SqliteConnectionProvider;
+import com.example.qqbot.persistence.KbProposalRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -10,10 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,9 +38,14 @@ import java.util.Map;
  * <ul>
  *   <li>{@code overwrite} → 走 {@link KbTermService#updateChunkText} 的单块重嵌：
  *       只重算这一块的向量、原地改索引，1 次 embedding 请求，行号不变</li>
- *   <li>{@code new} → 走已有的投递（{@link KbContributionStore}），进入
- *       「审核 → 增量建索引」那条已经跑通的链路</li>
+ *   <li>{@code new} → 走 {@link KbBlockAdminService#add} 直接落地
+ *       （2026-09-29 起不再绕「投递 → 审核 → 建索引」）</li>
  * </ul>
+ *
+ * <h2>本类只剩「语义」</h2>
+ * SQL 与 {@code java.sql} 全部搬进了 {@link KbProposalRepository}。
+ * 这里管的是：阈值判定、提示词、模型回复的解析与**纠错**（{@link #extractJson}）、
+ * 以及「先写知识库、再改提案状态」这个顺序。
  */
 @Service
 public class KbProposalService {
@@ -62,7 +63,8 @@ public class KbProposalService {
     public record AnalyzeResult(int goodTotal, int analyzed, int proposals, String message) {
     }
 
-    private final SqliteConnectionProvider db;
+    /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
+    private final KbProposalRepository repo;
     /** 当前语料 —— 见 {@link com.example.qqbot.kb.KbCorpus}（现在只有块表一个实现） */
     private final com.example.qqbot.kb.KbCorpus corpus;
     /** 提案落地要按块 id 写（会自动重算那一块的向量） */
@@ -78,47 +80,25 @@ public class KbProposalService {
 
     private volatile boolean available;
 
-    public KbProposalService(SqliteConnectionProvider db, com.example.qqbot.kb.KbCorpus corpus,
+    public KbProposalService(KbProposalRepository repo, com.example.qqbot.kb.KbCorpus corpus,
                              LlmRouter router,
                              ObjectMapper mapper,
                              com.example.qqbot.kb.block.KbBlockAdminService blockAdmin) {
-        this.db = db;
+        this.repo = repo;
         this.corpus = corpus;
         this.blockAdmin = blockAdmin;
         this.router = router;
         this.mapper = mapper;
     }
 
-    private Connection conn() {
-        return db.connection();
-    }
-
     @PostConstruct
     void init() {
         try {
-            if (!db.isAvailable()) {
+            if (!repo.isAvailable()) {
                 log.warn("[PROPOSAL] 问答库不可用，提案功能关闭");
                 return;
             }
-            try (Statement st = conn().createStatement()) {
-                st.execute("CREATE TABLE IF NOT EXISTS kb_proposal ("
-                        + " id            INTEGER PRIMARY KEY AUTOINCREMENT,"
-                        + " created_at    TEXT NOT NULL,"
-                        + " status        TEXT NOT NULL DEFAULT 'pending',"
-                        + " kind          TEXT NOT NULL,"
-                        + " title         TEXT NOT NULL,"
-                        + " question      TEXT DEFAULT '',"
-                        + " current_text  TEXT DEFAULT '',"
-                        + " proposed_text TEXT NOT NULL,"
-                        + " reason        TEXT DEFAULT '',"
-                        + " source_stat_id INTEGER NOT NULL DEFAULT 0,"
-                        + " reviewed_at   TEXT,"
-                        + " reviewed_by   TEXT)");
-                st.execute("CREATE INDEX IF NOT EXISTS idx_prop_status ON kb_proposal(status)");
-                // 同一条问答不重复出提案
-                st.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_prop_src"
-                        + " ON kb_proposal(source_stat_id) WHERE source_stat_id > 0");
-            }
+            repo.initSchema();
             available = true;
             log.info("[PROPOSAL] 提案库就绪：阈值 {} 条「有帮助」，当前待审 {} 条",
                     threshold, count("pending"));
@@ -139,12 +119,8 @@ public class KbProposalService {
         if (!available) {
             return 0;
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT COUNT(*) FROM qa_stat s WHERE s.verdict = 'good'"
-                        + " AND s.id NOT IN (SELECT source_stat_id FROM kb_proposal WHERE source_stat_id > 0)")) {
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
+        try {
+            return repo.pendingGoodCount();
         } catch (Exception e) {
             return 0;
         }
@@ -167,23 +143,9 @@ public class KbProposalService {
         if (!available) {
             return out;
         }
-        String where = status == null || status.isBlank() ? "" : " WHERE status = ?";
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT id, created_at, status, kind, title, question, current_text,"
-                        + " proposed_text, reason, source_stat_id, reviewed_at, reviewed_by"
-                        + " FROM kb_proposal" + where + " ORDER BY id DESC LIMIT ?")) {
-            int i = 1;
-            if (!where.isEmpty()) {
-                ps.setString(i++, status);
-            }
-            ps.setInt(i, Math.min(Math.max(1, limit), 500));
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    out.add(new Proposal(rs.getLong(1), rs.getString(2), rs.getString(3),
-                            rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7),
-                            rs.getString(8), rs.getString(9), rs.getLong(10),
-                            rs.getString(11), rs.getString(12)));
-                }
+        try {
+            for (KbProposalRepository.Row r : repo.list(status, limit)) {
+                out.add(toProposal(r));
             }
         } catch (Exception e) {
             log.warn("[PROPOSAL] 读取提案失败：{}", e.getMessage());
@@ -195,15 +157,17 @@ public class KbProposalService {
         if (!available) {
             return 0;
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT COUNT(*) FROM kb_proposal WHERE status = ?")) {
-            ps.setString(1, status);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : 0;
-            }
+        try {
+            return repo.countByStatus(status);
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    private static Proposal toProposal(KbProposalRepository.Row r) {
+        return new Proposal(r.id(), r.createdAt(), r.status(), r.kind(), r.title(), r.question(),
+                r.currentText(), r.proposedText(), r.reason(), r.sourceStatId(),
+                r.reviewedAt(), r.reviewedBy());
     }
 
     // ==================== 分析（agent）====================
@@ -230,32 +194,22 @@ public class KbProposalService {
             return new AnalyzeResult(pending, 0, 0,
                     "「有帮助」的回答只有 " + pending + " 条，还不够 " + threshold + " 条");
         }
-        List<Object[]> rows = new ArrayList<>();   // id, question, answer, retrieved
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT s.id, r.question, r.answer, s.retrieved FROM qa_stat s"
-                        + " LEFT JOIN qa_raw r ON r.id = s.id"
-                        + " WHERE s.verdict = 'good'"
-                        + " AND s.id NOT IN (SELECT source_stat_id FROM kb_proposal WHERE source_stat_id > 0)"
-                        + " ORDER BY s.id DESC LIMIT ?")) {
-            ps.setInt(1, Math.min(Math.max(1, maxItems), 20));
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    rows.add(new Object[]{rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)});
-                }
-            }
+        List<KbProposalRepository.GoodAnswer> rows;
+        try {
+            rows = repo.pendingGoodAnswers(maxItems);
         } catch (Exception e) {
             return new AnalyzeResult(0, 0, 0, "读取已认可回答失败：" + e.getMessage());
         }
         int made = 0;
         int done = 0;
-        for (Object[] row : rows) {
-            long statId = (Long) row[0];
-            String question = str(row[1]);
-            String answer = str(row[2]);
+        for (KbProposalRepository.GoodAnswer row : rows) {
+            long statId = row.statId();
+            String question = str(row.question());
+            String answer = str(row.answer());
             if (question.isEmpty() || answer.isEmpty()) {
                 continue;
             }
-            String title = topTitle(str(row[3]));
+            String title = topTitle(str(row.retrieved()));
             String current = title.isEmpty() ? "" : currentText(title);
             try {
                 JsonNode verdict = askModel(question, answer, title, current);
@@ -281,8 +235,9 @@ public class KbProposalService {
                 if (useTitle.isEmpty()) {
                     continue;
                 }
-                insert(kind, useTitle, question, current, text,
-                        verdict.path("reason").asText(""), statId);
+                repo.insertIgnore(new KbProposalRepository.NewProposal(kind, useTitle, question,
+                        current, text, verdict.path("reason").asText(""), statId),
+                        Instant.now().toString());
                 made++;
             } catch (Exception e) {
                 log.warn("[PROPOSAL] 分析 {} 失败：{}", statId, e.getMessage());
@@ -377,29 +332,14 @@ public class KbProposalService {
         return t.length() > 120 ? t.substring(0, 120) + "…" : t;
     }
 
-    private void insert(String kind, String title, String question, String current,
-                        String text, String reason, long statId) throws Exception {
-        try (PreparedStatement ps = conn().prepareStatement(
-                "INSERT OR IGNORE INTO kb_proposal (created_at, status, kind, title, question,"
-                        + " current_text, proposed_text, reason, source_stat_id)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?)")) {
-            ps.setString(1, Instant.now().toString());
-            ps.setString(2, "pending");
-            ps.setString(3, kind);
-            ps.setString(4, title);
-            ps.setString(5, question);
-            ps.setString(6, current);
-            ps.setString(7, text);
-            ps.setString(8, reason);
-            ps.setLong(9, statId);
-            ps.executeUpdate();
-        }
-    }
-
     // ==================== 审 ====================
 
     /**
      * 人工确认/拒绝。
+     *
+     * <p><b>顺序不能反</b>：先写知识库、成功了才把提案标记成 approved。
+     * 反过来的话，知识库写失败时提案已经是 approved —— 人工不会再点第二次，
+     * 这条改进就永远丢了。
      *
      * @param approve true = 写进知识库；false = 只标记拒绝，不动知识库
      * @return 结果说明（失败时作为错误信息回给前端）
@@ -446,13 +386,9 @@ public class KbProposalService {
                 return "写进知识库失败：" + e.getMessage();
             }
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "UPDATE kb_proposal SET status = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?")) {
-            ps.setString(1, approve ? "approved" : "rejected");
-            ps.setString(2, Instant.now().toString());
-            ps.setString(3, by == null ? "human" : by);
-            ps.setLong(4, id);
-            ps.executeUpdate();
+        try {
+            repo.markReviewed(id, approve ? "approved" : "rejected",
+                    Instant.now().toString(), by == null ? "human" : by);
         } catch (Exception e) {
             return "更新提案状态失败：" + e.getMessage();
         }
@@ -464,19 +400,9 @@ public class KbProposalService {
     }
 
     private Proposal byId(long id) {
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT id, created_at, status, kind, title, question, current_text,"
-                        + " proposed_text, reason, source_stat_id, reviewed_at, reviewed_by"
-                        + " FROM kb_proposal WHERE id = ?")) {
-            ps.setLong(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return new Proposal(rs.getLong(1), rs.getString(2), rs.getString(3),
-                            rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7),
-                            rs.getString(8), rs.getString(9), rs.getLong(10),
-                            rs.getString(11), rs.getString(12));
-                }
-            }
+        try {
+            KbProposalRepository.Row r = repo.findById(id);
+            return r == null ? null : toProposal(r);
         } catch (Exception ignored) {
             // 当作不存在
         }
