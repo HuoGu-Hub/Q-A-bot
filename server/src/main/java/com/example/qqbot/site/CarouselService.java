@@ -1,6 +1,5 @@
 package com.example.qqbot.site;
 
-import com.example.qqbot.config.SiteProperties;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +43,9 @@ public class CarouselService {
     private static final int MIN_INTERVAL_MS = 1000;
 
     private final CarouselStore store;
-    private final SiteProperties props;
+    private final SitePolicy props;
 
-    public CarouselService(CarouselStore store, SiteProperties props) {
+    public CarouselService(CarouselStore store, SitePolicy props) {
         this.store = store;
         this.props = props;
     }
@@ -74,7 +73,7 @@ public class CarouselService {
         log.info("[SITE] 首页轮播图片目录：{}（配置项 app.site.carousel.dir）", dir());
     }
 
-    private SiteProperties.Carousel config() {
+    private Carousel config() {
         return props.getCarousel();
     }
 

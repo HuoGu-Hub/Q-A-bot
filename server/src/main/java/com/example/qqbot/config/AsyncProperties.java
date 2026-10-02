@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.router.AsyncPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -9,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 而不同机器、不同模型需要的值不一样，硬编码在代码里改一次就要重新编译。
  */
 @ConfigurationProperties(prefix = "app.async")
-public class AsyncProperties {
+public class AsyncProperties implements AsyncPolicy {
 
     /**
      * 核心线程数。
@@ -84,6 +85,7 @@ public class AsyncProperties {
         this.allowCoreThreadTimeOut = allowCoreThreadTimeOut;
     }
 
+    @Override
     public int getMaxQueueWaitSeconds() {
         return maxQueueWaitSeconds;
     }

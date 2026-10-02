@@ -1,14 +1,25 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.site.Carousel;
+import com.example.qqbot.site.SitePolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 站点信息（公开站「关于」页展示的群信息）。
+ * 站点信息绑定 —— 对应 application.yml 里的 {@code app.site.*}
  *
  * <p>这些是**热生效**的 —— 后台改完立即起作用，不用重启。
+ *
+ * <h2>2026-10-02：{@code Carousel} 搬去了 {@code site} 包</h2>
+ * 它是<b>公开站自己的领域词汇</b>，只是碰巧从 yml 绑定过来 —— 留在本类的嵌套类里，
+ * 会让 {@code site} 包看起来"依赖配置的形状"。
+ *
+ * <p>搬迁是**纯搬运**：yml 的键一个都没变，绑定关系也没变 ——
+ * 本类仍然持有那个对象、仍然由 Spring 填值。
+ *
+ * <p>业务侧只读视图见 {@link SitePolicy} —— 业务包只依赖它，不依赖本类。
  */
 @ConfigurationProperties(prefix = "app.site")
-public class SiteProperties {
+public class SiteProperties implements SitePolicy {
 
     /** 群名称 */
     private String groupName = "";
@@ -25,6 +36,7 @@ public class SiteProperties {
     /** 首页图片轮播 */
     private Carousel carousel = new Carousel();
 
+    @Override
     public String getGroupName() {
         return groupName;
     }
@@ -33,6 +45,7 @@ public class SiteProperties {
         this.groupName = groupName;
     }
 
+    @Override
     public String getGroupNumber() {
         return groupNumber;
     }
@@ -41,6 +54,7 @@ public class SiteProperties {
         this.groupNumber = groupNumber;
     }
 
+    @Override
     public String getGroupDesc() {
         return groupDesc;
     }
@@ -49,6 +63,7 @@ public class SiteProperties {
         this.groupDesc = groupDesc;
     }
 
+    @Override
     public String getJoinHint() {
         return joinHint;
     }
@@ -57,75 +72,12 @@ public class SiteProperties {
         this.joinHint = joinHint;
     }
 
+    @Override
     public Carousel getCarousel() {
         return carousel;
     }
 
     public void setCarousel(Carousel carousel) {
         this.carousel = carousel;
-    }
-
-    /**
-     * 首页轮播。
-     *
-     * <p>图片本身存在 {@link #dir} 里、清单存在库里（见 {@code CarouselStore}）；
-     * 这里只是可调的那几个数 —— 它们都在管理后台可改、**热生效**。
-     */
-    public static class Carousel {
-
-        /** 总开关。关掉后公开站首页不渲染轮播（图还在，随时能开回来） */
-        private boolean enabled = true;
-
-        /** 自动切换间隔（毫秒）。小于 1000 按 1000 算，免得闪得人眼花 */
-        private int intervalMs = 4000;
-
-        /** 最多几张。到上限后管理端会拒绝上传（让人先删） */
-        private int maxCount = 8;
-
-        /** 单张图片大小上限（KB） */
-        private int maxSizeKb = 2048;
-
-        /** 图片存放目录（相对程序工作目录）。**只读不写进白名单** —— 改路径属于基础设施 */
-        private String dir = "./data/site-images";
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public int getIntervalMs() {
-            return intervalMs;
-        }
-
-        public void setIntervalMs(int intervalMs) {
-            this.intervalMs = intervalMs;
-        }
-
-        public int getMaxCount() {
-            return maxCount;
-        }
-
-        public void setMaxCount(int maxCount) {
-            this.maxCount = maxCount;
-        }
-
-        public int getMaxSizeKb() {
-            return maxSizeKb;
-        }
-
-        public void setMaxSizeKb(int maxSizeKb) {
-            this.maxSizeKb = maxSizeKb;
-        }
-
-        public String getDir() {
-            return dir;
-        }
-
-        public void setDir(String dir) {
-            this.dir = dir;
-        }
     }
 }

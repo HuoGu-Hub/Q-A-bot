@@ -1,6 +1,7 @@
 package com.example.qqbot.publicapi;
 
-import com.example.qqbot.config.SiteProperties;
+import com.example.qqbot.site.SitePolicy;
+import com.example.qqbot.site.Carousel;
 import com.example.qqbot.site.CarouselService;
 import com.example.qqbot.site.CarouselStore;
 import org.slf4j.Logger;
@@ -40,9 +41,9 @@ public class PublicCarouselController {
 
     private final CarouselStore store;
     private final CarouselService service;
-    private final SiteProperties site;
+    private final SitePolicy site;
 
-    public PublicCarouselController(CarouselStore store, CarouselService service, SiteProperties site) {
+    public PublicCarouselController(CarouselStore store, CarouselService service, SitePolicy site) {
         this.store = store;
         this.service = service;
         this.site = site;
@@ -56,7 +57,7 @@ public class PublicCarouselController {
      */
     @GetMapping("")
     public Map<String, Object> list() {
-        SiteProperties.Carousel cfg = site.getCarousel();
+        Carousel cfg = site.getCarousel();
         List<Map<String, Object>> items = new ArrayList<>();
         if (cfg.isEnabled() && store.isAvailable()) {
             for (CarouselStore.Item it : store.listEnabled()) {

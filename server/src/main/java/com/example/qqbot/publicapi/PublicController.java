@@ -1,5 +1,6 @@
 package com.example.qqbot.publicapi;
 
+import com.example.qqbot.site.SitePolicy;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.category.CategoryService;
 import com.example.qqbot.kb.KbRetriever;
@@ -50,7 +51,7 @@ public class PublicController {
     private static final int MAX_TEXT_CHARS = 1200;
 
     private final com.example.qqbot.kb.KbCorpus kbCorpus;
-    private final com.example.qqbot.config.SiteProperties site;
+    private final SitePolicy site;
     private final com.example.qqbot.config.BotProperties botProps;
     private final com.example.qqbot.kb.category.CategoryService categoryService;
     private final com.example.qqbot.site.SiteTextService siteText;
@@ -64,7 +65,7 @@ public class PublicController {
                             PublicSearchService publicSearch, Glossary glossary,
                             QaAnalytics analytics,
                             PublicRateLimiter limiter,
-                            com.example.qqbot.config.SiteProperties site,
+                            SitePolicy site,
                             com.example.qqbot.config.BotProperties botProps,
                             com.example.qqbot.kb.category.CategoryService categoryService,
                             com.example.qqbot.site.SiteTextService siteText) {

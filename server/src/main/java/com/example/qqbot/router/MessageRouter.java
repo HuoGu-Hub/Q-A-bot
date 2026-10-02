@@ -2,7 +2,6 @@ package com.example.qqbot.router;
 
 import com.example.qqbot.agent.ChatService;
 import com.example.qqbot.agent.ReplyMode;
-import com.example.qqbot.config.AsyncProperties;
 import com.example.qqbot.guard.Access;
 import com.example.qqbot.guard.RateLimit;
 import com.example.qqbot.guard.BlockNotifier;
@@ -61,7 +60,7 @@ public class MessageRouter {
     private final GuardPipeline guardPipeline;
     private final OutboundSender outboundSender;
     private final BudgetGuard budgetGuard;
-    private final AsyncProperties asyncProperties;
+    private final AsyncPolicy asyncProperties;
     private final RateLimit guardRateLimit;
     private final Access guardAccess;
     private final BlockNotifier blockNotifier;
@@ -80,7 +79,7 @@ public class MessageRouter {
                          GuardPipeline guardPipeline,
                          OutboundSender outboundSender,
                          BudgetGuard budgetGuard,
-                         AsyncProperties asyncProperties,
+                         AsyncPolicy asyncProperties,
                          RateLimit guardRateLimit,
                          Access guardAccess,
                          BlockNotifier blockNotifier,

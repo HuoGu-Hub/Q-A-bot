@@ -1,6 +1,7 @@
 package com.example.qqbot.admin;
 
-import com.example.qqbot.config.SiteProperties;
+import com.example.qqbot.site.SitePolicy;
+import com.example.qqbot.site.Carousel;
 import com.example.qqbot.site.CarouselService;
 import com.example.qqbot.site.CarouselStore;
 import org.slf4j.Logger;
@@ -50,9 +51,9 @@ public class CarouselController {
 
     private final CarouselStore store;
     private final CarouselService service;
-    private final SiteProperties props;
+    private final SitePolicy props;
 
-    public CarouselController(CarouselStore store, CarouselService service, SiteProperties props) {
+    public CarouselController(CarouselStore store, CarouselService service, SitePolicy props) {
         this.store = store;
         this.service = service;
         this.props = props;
@@ -61,7 +62,7 @@ public class CarouselController {
     /** 清单 + 当前配置（配置也回给前端，面板上要显示"最多几张 / 上限多大"） */
     @GetMapping("")
     public Map<String, Object> list() {
-        SiteProperties.Carousel cfg = props.getCarousel();
+        Carousel cfg = props.getCarousel();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
         out.put("items", views(store.list()));

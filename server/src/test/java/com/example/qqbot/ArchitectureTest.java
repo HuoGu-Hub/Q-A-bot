@@ -189,7 +189,7 @@ class ArchitectureTest {
 
     @Test
     @Disabled("目标 Phase 1（S2 配置去中心化）。2026-10-02 **摘掉 @Disabled 真跑了一次**："
-            + "62 处违反 / 11 个类。剩下的：CarouselService 10、PublicController 9、"
+            + "32 处违反 / 7 个类。剩下的：QaRecorder 7、QaReportRunner 7、QaCleaner 6、"
             + "MediaStorageGuard 29、GuardPipeline 23、EmbeddingClient 17、RerankClient 16。"
             + "⚠️「违反处数」与「类数」是两件事 —— LlmRouter 一个类就占 12%（它把整个 "
             + "LlmProperties 拖进构造器、然后到处读字段）。"
