@@ -11,6 +11,8 @@ import com.example.qqbot.kb.RerankClient;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -104,7 +106,7 @@ class LocationCorpusE2ETest {
 
         // ② 派生地点语料
         // 词条表要在派生之前就绪：派生器写完块会调 reconcile，让新块**立刻**对 B 路可见
-        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, index);
+        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), index);
         terms.init();
         LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, index, embedding, terms);
         LocationCorpusBuilder.BuildReport plan = builder.planOnly();

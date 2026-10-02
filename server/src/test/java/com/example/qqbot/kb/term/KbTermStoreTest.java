@@ -1,8 +1,9 @@
 package com.example.qqbot.kb.term;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.Glossary;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -55,10 +56,7 @@ class KbTermStoreTest {
         qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
-        KbProperties props = new KbProperties();
-        props.setDir(base.toString());
-
-        store = new KbTermStore(qaStore, props, new ObjectMapper(), kCorpus());
+        store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), kCorpus());
         store.init();
         glossary = new Glossary(store);
     }

@@ -5,6 +5,8 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -121,7 +123,7 @@ class RetrievalGoldenTest {
             kb.getRerank().setEnabled(false);
         }
         RerankClient rerankClient = new RerankClient(kb, mapper);
-        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, corpus);
+        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
         terms.init();
         Glossary glossary = new Glossary(terms);
         KbRetriever retriever = new KbRetriever(kb, corpus, glossary, embedding, rerankClient);

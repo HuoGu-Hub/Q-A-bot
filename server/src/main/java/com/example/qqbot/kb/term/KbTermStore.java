@@ -1,28 +1,15 @@
 package com.example.qqbot.kb.term;
 
-import com.example.qqbot.config.KbProperties;
-import com.example.qqbot.persistence.SqliteConnectionProvider;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.qqbot.persistence.KbTermRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -46,25 +33,36 @@ import java.util.concurrent.atomic.AtomicLong;
  * page / category 原样带回来，否则整条 upsert 会把它们抹掉。
  *
  * <h2>key 空间是「Wiki 页面」，不是「有正文的页面」</h2>
- * 表里的行按语料的 {@code docId} 补齐（{@code reconcile}），
+ * 表里的行按语料的 {@code docId} 补齐（{@link #reconcile}），
  * 于是 {@code Equipment}、{@code Sets/*} 这类**没有正文但需要翻译**的伞形词也在表里。
- * 「有没有正文」由语料现算，不落库；孤儿词条只由 {@code deleteOrphans} 显式清理。
+ * 「有没有正文」由语料现算，不落库；孤儿词条只由 {@link #deleteOrphans} 显式清理。
+ *
+ * <h2>本类只剩「语义」</h2>
+ * SQL 与 {@code java.sql} 全部搬进了 {@link KbTermRepository}。这里管的是：
+ * 状态口径、版本号（{@link #version()}）、降级策略、以及导入格式的解析
+ * （CSV/TSV 的表头识别与别名合并是**给人看的格式**，不是数据访问）。
  *
  * <h2>和 {@link com.example.qqbot.kb.category.CategoryStore} 一样</h2>
- * 共用问答库那个 SQLite 连接（{@code db.connection()}），
- * 库不可用时整体降级为「没有术语表」（B 路退化成只认英文词），**绝不让机器人挂掉**。
+ * 共用问答库那条 SQLite 连接，库不可用时整体降级为「没有术语表」
+ * （B 路退化成只认英文词），**绝不让机器人挂掉**。
  */
 @Component
 public class KbTermStore {
 
     private static final Logger log = LoggerFactory.getLogger(KbTermStore.class);
 
-    /** 合法状态。认不出来的一律归 draft —— 和旧 GlossaryStore 同一口径 */
-    public static final List<String> STATUSES = List.of("draft", "verified", "rejected");
+    /**
+     * 合法状态。认不出来的一律归 draft —— 和旧 GlossaryStore 同一口径。
+     *
+     * <p>取值域定义在 {@link KbTermRepository}：那是 {@code status} 这一列的事，
+     * 而且批量改状态要在事务里比较归一化后的值。这里转发一次，免得两处各写一份、
+     * 改一处忘一处。
+     */
+    public static final List<String> STATUSES = KbTermRepository.STATUSES;
 
-    private final SqliteConnectionProvider db;
-    private final KbProperties props;
-    private final ObjectMapper mapper;
+    /** 数据访问全部委托给它 —— SQL 与 java.sql 都在 persistence */
+    private final KbTermRepository repo;
+
     private final com.example.qqbot.kb.KbCorpus corpus;
 
     private volatile boolean available;
@@ -78,11 +76,8 @@ public class KbTermStore {
      */
     private final AtomicLong version = new AtomicLong();
 
-    public KbTermStore(SqliteConnectionProvider db, KbProperties props, ObjectMapper mapper,
-                       com.example.qqbot.kb.KbCorpus corpus) {
-        this.db = db;
-        this.props = props;
-        this.mapper = mapper;
+    public KbTermStore(KbTermRepository repo, com.example.qqbot.kb.KbCorpus corpus) {
+        this.repo = repo;
         this.corpus = corpus;
     }
 
@@ -106,34 +101,20 @@ public class KbTermStore {
         return version.get();
     }
 
-    private Connection conn() {
-        return db.connection();
-    }
-
     // ==================== 建表 + 补齐 ====================
 
     /** 初始化（public 以便测试显式调用，和 QaStore 一致（它也是连接持有者）） */
     @PostConstruct
     public void init() {
         try {
-            if (!db.isAvailable()) {
+            if (!repo.isAvailable()) {
                 log.warn("[KB-TERM] 问答库不可用，词条功能关闭（B 路退化为只认英文词）");
                 return;
             }
-            try (Statement st = conn().createStatement()) {
-                // 用普通字符串而不是文本块 —— 与 CategoryStore 保持一致，文本块的结束符
-                // 必须独占一行，生成代码时极易写错
-                st.execute("CREATE TABLE IF NOT EXISTS kb_term ("
-                        + " en         TEXT PRIMARY KEY,"
-                        + " zh         TEXT NOT NULL DEFAULT '',"
-                        + " status     TEXT NOT NULL DEFAULT 'draft',"
-                        + " updated_at TEXT NOT NULL DEFAULT '')");
-                st.execute("CREATE INDEX IF NOT EXISTS idx_term_status ON kb_term(status)");
-            }
+            repo.initSchema();
             available = true;
-            log.info("[KB-TERM] 存储就绪：{} 条词条", count());
-            // 顺序很重要：先搬旧 TSV（只在表为空时），再按语料补齐页面。
-            // 反过来的话表已经不空了，旧数据就永远搬不过来。
+            log.info("[KB-TERM] 存储就绪：{} 条词条", repo.count());
+            // 顺序很重要：先建表，再按语料补齐页面
             int seeded = reconcile();
             if (seeded > 0) {
                 log.info("[KB-TERM] 从语料补齐 {} 个页面（新增的页面第一次有了中文名的位置）", seeded);
@@ -144,18 +125,6 @@ public class KbTermStore {
         }
     }
 
-    /**
-     * 一次性搬迁：把旧格式的 TSV（{@code data/kb/glossary/zh-en.tsv}）读进表里。
-     *
-     * <p><b>只在表为空时做</b>。理由：表非空就说明已经搬过了（或已经进入新模型），
-     * 再搬一次会把人工核对过的状态用旧文件的初稿覆盖掉 —— 那是真丢数据。
-     *
-     * <p>搬完之后 TSV 就只是"可以导出/导入的中间格式"，不再是数据源；
-     * 留着它不影响任何行为。
-     *
-     * @return 导入了多少条（0 = 不需要搬）
-     */
-    
     /**
      * 按**当前语料**把缺的词条补进表里（缺的才插入）。
      *
@@ -168,46 +137,27 @@ public class KbTermStore {
      * <p>⚠️ 只在 {@code init()} 时跑一次 —— 所以**运行期新导入的块，要等下次启动才会进词条表**。
      * 这就是导入器在写完之后要显式再调一次它的原因（见 {@code WikiArticleImporter}）。
      *
+     * <p>「新增了几条」靠比较补齐前后的行数得出：{@code INSERT OR IGNORE} 只报提交行数，
+     * 分不出哪些被忽略了 —— 而"不忽略"正是这里必须保住的东西（人工成果优先）。
+     *
      * @return 本次新插入的行数
      */
-    public synchronized int reconcile() {
+    public int reconcile() {
         if (!available) {
             return 0;
         }
-        List<String[]> titles = knownPages();
-        if (titles.isEmpty()) {
+        List<KbTermRepository.Row> rows = knownPages();
+        if (rows.isEmpty()) {
             return 0;
         }
-        int before = (int) count();
-        synchronized (this) {
-            try {
-                conn().setAutoCommit(false);
-                try (PreparedStatement ps = conn().prepareStatement(
-                        // 已存在的一行都不动：中文名和核对状态是人工成果，绝不能被语料重建冲掉
-                        "INSERT OR IGNORE INTO kb_term (en, zh, status, updated_at) VALUES (?,?,?,?)")) {
-                    String now = Instant.now().toString();
-                    for (String[] t : titles) {
-                        ps.setString(1, t[0]);
-                        // 顺手给一个**建议中文名**：名字留空的话，这些页面在词条列表里
-                        // 只是"待起名的空行"，关键词路也永远认不出它们。
-                        // 有人工核对过的名字时不会走到这里（INSERT OR IGNORE）。
-                        ps.setString(2, t[1]);
-                        ps.setString(3, "draft");
-                        ps.setString(4, now);
-                        ps.addBatch();
-                    }
-                    ps.executeBatch();
-                }
-                conn().commit();
-            } catch (Exception e) {
-                rollbackQuietly();
-                log.warn("[KB-TERM] 补齐页面失败：{}", e.getMessage());
-                return 0;
-            } finally {
-                autoCommitOn();
-            }
+        long before = repo.count();
+        try {
+            repo.insertMissing(rows, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 补齐页面失败：{}", e.getMessage());
+            return 0;
         }
-        int added = (int) count() - before;
+        int added = (int) (repo.count() - before);
         if (added > 0) {
             version.incrementAndGet();
         }
@@ -239,21 +189,15 @@ public class KbTermStore {
         if (orphans.isEmpty()) {
             return 0;
         }
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement("DELETE FROM kb_term WHERE en = ?")) {
-                for (String en : orphans) {
-                    ps.setString(1, en);
-                    ps.addBatch();
-                }
-                ps.executeBatch();
-            } catch (Exception e) {
-                log.warn("[KB-TERM] 清理孤儿词条失败：{}", e.getMessage());
-                return 0;
-            }
-            version.incrementAndGet();
-            log.warn("[KB-TERM] 已清掉 {} 条没有对应块的词条", orphans.size());
-            return orphans.size();
+        try {
+            repo.deleteByEn(orphans);
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 清理孤儿词条失败：{}", e.getMessage());
+            return 0;
         }
+        version.incrementAndGet();
+        log.warn("[KB-TERM] 已清掉 {} 条没有对应块的词条", orphans.size());
+        return orphans.size();
     }
 
     /**
@@ -263,14 +207,14 @@ public class KbTermStore {
      * 词条列表看着像没名字，关键词路（{@link com.example.qqbot.kb.Glossary} 只读词条表）
      * 也永远认不出这一页。所以补齐时顺手给个能用的名字。
      *
-     * <p>取名规则：**文档身份本身是中文就用它**（很多文档的 name 就是中文标题，
-     * 如「水体系统与建造（Water）」）；否则退回这一页第一个块的标题。
+     * <p>取名规则：**块标题里带括号的中文名就拆出来**（很多文档的标题是
+     * 「深渊之翼斧（Abyssal Wing Axe）」这种写法）；拆不出来就原样用标题。
      * 都不合适也没关系 —— 人可以在「词条」面板里改，改过之后 INSERT OR IGNORE 不会再动它。
      *
-     * @return 每项 {docId, 建议中文名}，按 docId 去重
+     * @return 每项 {块 id, 建议中文名}，状态一律 draft
      */
-    private List<String[]> knownPages() {
-        List<String[]> out = new ArrayList<>();
+    private List<KbTermRepository.Row> knownPages() {
+        List<KbTermRepository.Row> out = new ArrayList<>();
         try {
             for (com.example.qqbot.kb.KbCorpus.Entry e : corpus.entries()) {
                 // **一块一条**：词条的身份就是块 id，中文名就是块标题
@@ -279,7 +223,7 @@ public class KbTermStore {
                     continue;
                 }
                 String zh = termName(e.title());
-                out.add(new String[]{key, zh.isEmpty() ? key : zh});
+                out.add(new KbTermRepository.Row(key, zh.isEmpty() ? key : zh, "draft"));
             }
         } catch (Exception e) {
             log.warn("[KB-TERM] 从语料取块失败：{}", e.getMessage());
@@ -314,38 +258,32 @@ public class KbTermStore {
         return t;
     }
 
-    /** 含中日韩汉字？用来判断"这个名字本身是不是中文" */
-    private static boolean hasCjk(String s) {
-        return s != null && s.chars().anyMatch(c -> c >= 0x4e00 && c <= 0x9fff);
-    }
-
     // ==================== 读 ====================
 
     /**
      * 全部词条（含 rejected —— 后台要展示它们）。
      *
-     * <p>读也加锁：所有方法共用 {@code db.connection()} 这一条 JDBC 连接，
-     * 而批量写会把它切成手动提交。读出到半个事务里是"看起来偶发"的那类 bug，
-     * 花一次锁把它按住更省事。
+     * <p>读也加锁这件事已经下沉到 {@link KbTermRepository}（共用连接是全局串行的），
+     * 这里不再自己 synchronized。
      */
-    public synchronized List<Entry> list() {
+    public List<Entry> list() {
         if (!available) {
             return List.of();
         }
-        List<Entry> out = new ArrayList<>();
-        try (Statement st = conn().createStatement();
-             ResultSet rs = st.executeQuery("SELECT en, zh, status FROM kb_term")) {
-            while (rs.next()) {
-                out.add(new Entry(rs.getString(1), nz(rs.getString(2)), normalizeStatus(rs.getString(3))));
+        try {
+            List<Entry> out = new ArrayList<>();
+            for (KbTermRepository.Row r : repo.all()) {
+                out.add(new Entry(r.en(), r.zh(), normalizeStatus(r.status())));
             }
+            return out;
         } catch (Exception e) {
             log.warn("[KB-TERM] 读取失败：{}", e.getMessage());
+            return List.of();
         }
-        return out;
     }
 
     /** 按英文名索引 —— 列表组装用，避免每条都查一次库 */
-    public synchronized Map<String, Entry> map() {
+    public Map<String, Entry> map() {
         Map<String, Entry> out = new LinkedHashMap<>();
         for (Entry e : list()) {
             out.put(e.en(), e);
@@ -353,42 +291,31 @@ public class KbTermStore {
         return out;
     }
 
-    public synchronized Entry get(String en) {
+    public Entry get(String en) {
         if (!available || en == null || en.isBlank()) {
             return null;
         }
-        try (PreparedStatement ps = conn().prepareStatement(
-                "SELECT en, zh, status FROM kb_term WHERE en = ?")) {
-            ps.setString(1, en);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next()
-                        ? new Entry(rs.getString(1), nz(rs.getString(2)), normalizeStatus(rs.getString(3)))
-                        : null;
-            }
+        try {
+            KbTermRepository.Row r = repo.find(en);
+            return r == null ? null : new Entry(r.en(), r.zh(), normalizeStatus(r.status()));
         } catch (Exception e) {
             log.warn("[KB-TERM] 查询失败：{}", e.getMessage());
             return null;
         }
     }
 
-    public synchronized long count() {
+    public long count() {
         if (!available) {
             return 0;
         }
-        try (Statement st = conn().createStatement();
-             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM kb_term")) {
-            return rs.next() ? rs.getLong(1) : 0;
+        try {
+            return repo.count();
         } catch (Exception e) {
             return 0;
         }
     }
 
     // ==================== 写 ====================
-
-    private static final String UPSERT =
-            "INSERT INTO kb_term (en, zh, status, updated_at) VALUES (?,?,?,?) "
-            + "ON CONFLICT(en) DO UPDATE SET "
-            + "zh = excluded.zh, status = excluded.status, updated_at = excluded.updated_at";
 
     /**
      * 新增或更新一条。写完 {@link #version()} 自增，检索侧下一问就用到新词。
@@ -400,18 +327,11 @@ public class KbTermStore {
         if (!available || en == null || en.isBlank()) {
             return false;
         }
-        String name = en.trim();
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(UPSERT)) {
-                ps.setString(1, name);
-                ps.setString(2, zh == null ? "" : zh.trim());
-                ps.setString(3, normalizeStatus(status));
-                ps.setString(4, Instant.now().toString());
-                ps.executeUpdate();
-            } catch (Exception e) {
-                log.warn("[KB-TERM] 保存失败：{}", e.getMessage());
-                return false;
-            }
+        try {
+            repo.upsert(en.trim(), zh == null ? "" : zh.trim(), status, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 保存失败：{}", e.getMessage());
+            return false;
         }
         version.incrementAndGet();
         return true;
@@ -422,84 +342,43 @@ public class KbTermStore {
         if (!available || en == null) {
             return false;
         }
-        int n;
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE kb_term SET status = ?, updated_at = ? WHERE en = ?")) {
-                ps.setString(1, normalizeStatus(status));
-                ps.setString(2, Instant.now().toString());
-                ps.setString(3, en);
-                n = ps.executeUpdate();
-            } catch (Exception e) {
-                log.warn("[KB-TERM] 改状态失败：{}", e.getMessage());
-                return false;
-            }
+        boolean ok;
+        try {
+            ok = repo.updateStatus(en, status, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 改状态失败：{}", e.getMessage());
+            return false;
         }
-        if (n > 0) {
+        if (ok) {
             version.incrementAndGet();
         }
-        return n > 0;
+        return ok;
     }
 
     /**
      * 批量改状态 —— 核对模式的快路径，**一个事务**。
      *
      * <p>旧实现是一条一个 {@code UPDATE} 加一次全表重写，勾 200 条就重写 200 遍文件。
+     * 事务边界与「本来就对的不写」这两件事都在 {@link KbTermRepository#setStatusBatch}。
+     *
+     * <p>失败时返回全 0（并记 warn）：事务已整体回滚，报告部分统计只会误导 ——
+     * 那正是旧实现干的事（它把回滚前攒到的 {@code missing} 报了出去）。
      */
     public BatchResult setStatusBatch(List<String> ens, String status) {
         if (!available || ens == null || ens.isEmpty()) {
             return new BatchResult(0, 0, List.of());
         }
-        String wanted = normalizeStatus(status);
-        int updated = 0;
-        int unchanged = 0;
-        List<String> missing = new ArrayList<>();
-        synchronized (this) {
-            try {
-                conn().setAutoCommit(false);
-                try (PreparedStatement read = conn().prepareStatement(
-                             "SELECT status FROM kb_term WHERE en = ?");
-                     PreparedStatement write = conn().prepareStatement(
-                             "UPDATE kb_term SET status = ?, updated_at = ? WHERE en = ?")) {
-                    String now = Instant.now().toString();
-                    for (String en : ens) {
-                        if (en == null || en.isBlank()) {
-                            continue;
-                        }
-                        String cur = null;
-                        read.setString(1, en);
-                        try (ResultSet rs = read.executeQuery()) {
-                            if (rs.next()) {
-                                cur = normalizeStatus(rs.getString(1));
-                            }
-                        }
-                        if (cur == null) {
-                            missing.add(en);
-                        } else if (cur.equals(wanted)) {
-                            // 已经是目标状态：跳过。写进去也没区别，反而让"改了几条"失真
-                            unchanged++;
-                        } else {
-                            write.setString(1, wanted);
-                            write.setString(2, now);
-                            write.setString(3, en);
-                            write.executeUpdate();
-                            updated++;
-                        }
-                    }
-                }
-                conn().commit();
-            } catch (Exception e) {
-                rollbackQuietly();
-                log.warn("[KB-TERM] 批量改状态失败：{}", e.getMessage());
-                return new BatchResult(0, 0, missing);
-            } finally {
-                autoCommitOn();
-            }
+        KbTermRepository.StatusOutcome out;
+        try {
+            out = repo.setStatusBatch(ens, status, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 批量改状态失败：{}", e.getMessage());
+            return new BatchResult(0, 0, List.of());
         }
-        if (updated > 0) {
+        if (out.updated() > 0) {
             version.incrementAndGet();
         }
-        return new BatchResult(updated, unchanged, missing);
+        return new BatchResult(out.updated(), out.unchanged(), out.missing());
     }
 
     /**
@@ -512,22 +391,17 @@ public class KbTermStore {
         if (!available || en == null) {
             return false;
         }
-        int n;
-        synchronized (this) {
-            try (PreparedStatement ps = conn().prepareStatement(
-                    "UPDATE kb_term SET zh = '', status = 'draft', updated_at = ? WHERE en = ?")) {
-                ps.setString(1, Instant.now().toString());
-                ps.setString(2, en);
-                n = ps.executeUpdate();
-            } catch (Exception e) {
-                log.warn("[KB-TERM] 清除失败：{}", e.getMessage());
-                return false;
-            }
+        boolean ok;
+        try {
+            ok = repo.clearName(en, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 清除失败：{}", e.getMessage());
+            return false;
         }
-        if (n > 0) {
+        if (ok) {
             version.incrementAndGet();
         }
-        return n > 0;
+        return ok;
     }
 
     /**
@@ -551,18 +425,16 @@ public class KbTermStore {
         if (!available) {
             return 0;
         }
-        synchronized (this) {
-            int n = (int) count();
-            try (java.sql.Statement st = conn().createStatement()) {
-                st.executeUpdate("DELETE FROM kb_term");
-            } catch (Exception e) {
-                log.warn("[KB-TERM] 清空失败：{}", e.getMessage());
-                return 0;
-            }
-            version.incrementAndGet();
-            log.warn("[KB-TERM] 已清空全部词条：{} 条（不可逆）", n);
-            return n;
+        long before = count();
+        try {
+            repo.deleteAll();
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 清空失败：{}", e.getMessage());
+            return 0;
         }
+        version.incrementAndGet();
+        log.warn("[KB-TERM] 已清空全部词条：{} 条（不可逆）", before);
+        return (int) before;
     }
 
     /**
@@ -583,6 +455,9 @@ public class KbTermStore {
      * 而语义完全一样。
      *
      * <p>没有表头（旧导出文件）时退回 {@link #importLegacyTsv} 按列位置解析。
+     *
+     * <p>「新增 / 更新」是按导入前的快照算的：同一份文件里同一个英文名出现两次会各记一次，
+     * 因为最终只有一行 —— 这与旧实现一致，也是"这次导入动了多少"最有用的口径。
      */
     public ImportResult importTable(String text) {
         if (!available || text == null || text.isBlank()) {
@@ -616,46 +491,35 @@ public class KbTermStore {
         int updated = 0;
         int skipped = 0;
         Map<String, Entry> existing = map();
-        String now = Instant.now().toString();
-        synchronized (this) {
-            try {
-                conn().setAutoCommit(false);
-                try (PreparedStatement ps = conn().prepareStatement(UPSERT)) {
-                    for (int i = headerAt + 1; i < rows.size(); i++) {
-                        List<String> r = rows.get(i);
-                        if (r.isEmpty() || (r.size() == 1 && r.get(0).isBlank())) {
-                            continue;
-                        }
-                        if (cell(r, 0).startsWith("#")) {
-                            continue;
-                        }
-                        String en = cell(r, iEn);
-                        if (en.isEmpty()) {
-                            skipped++;
-                            continue;
-                        }
-                        ps.setString(1, en);
-                        ps.setString(2, mergeAliases(cell(r, iZh), cell(r, iAlias)));
-                        String status = cell(r, iStatus);
-                        ps.setString(3, normalizeStatus(status.isEmpty() ? "draft" : status));
-                        ps.setString(4, now);
-                        ps.addBatch();
-                        if (existing.containsKey(en)) {
-                            updated++;
-                        } else {
-                            created++;
-                        }
-                    }
-                    ps.executeBatch();
-                }
-                conn().commit();
-            } catch (Exception e) {
-                rollbackQuietly();
-                log.warn("[KB-TERM] 导入失败：{}", e.getMessage());
-                return new ImportResult(0, 0, 0);
-            } finally {
-                autoCommitOn();
+        List<KbTermRepository.Row> batch = new ArrayList<>();
+        for (int i = headerAt + 1; i < rows.size(); i++) {
+            List<String> r = rows.get(i);
+            if (r.isEmpty() || (r.size() == 1 && r.get(0).isBlank())) {
+                continue;
             }
+            if (cell(r, 0).startsWith("#")) {
+                continue;
+            }
+            String en = cell(r, iEn);
+            if (en.isEmpty()) {
+                skipped++;
+                continue;
+            }
+            String status = cell(r, iStatus);
+            batch.add(new KbTermRepository.Row(en,
+                    mergeAliases(cell(r, iZh), cell(r, iAlias)),
+                    status.isEmpty() ? "draft" : status));
+            if (existing.containsKey(en)) {
+                updated++;
+            } else {
+                created++;
+            }
+        }
+        try {
+            repo.upsertBatch(batch, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 导入失败：{}", e.getMessage());
+            return new ImportResult(0, 0, 0);
         }
         if (created + updated > 0) {
             version.incrementAndGet();
@@ -727,48 +591,35 @@ public class KbTermStore {
         int updated = 0;
         int skipped = 0;
         Map<String, Entry> existing = map();
-        String now = Instant.now().toString();
-        synchronized (this) {
-            try {
-                conn().setAutoCommit(false);
-                try (PreparedStatement ps = conn().prepareStatement(UPSERT)) {
-                    for (String line : text.split("\r?\n")) {
-                        if (line.isBlank() || line.charAt(0) == '#') {
-                            continue;
-                        }
-                        String[] c = line.split("\t", -1);
-                        if (c.length < 2) {
-                            skipped++;
-                            continue;
-                        }
-                        String en = c[0].trim();
-                        String zh = c[1].trim();
-                        String status = c.length >= 5 ? c[4].trim() : "draft";
-                        if (en.isEmpty()) {
-                            skipped++;
-                            continue;
-                        }
-                        ps.setString(1, en);
-                        ps.setString(2, zh);
-                        ps.setString(3, normalizeStatus(status));
-                        ps.setString(4, now);
-                        ps.addBatch();
-                        if (existing.containsKey(en)) {
-                            updated++;
-                        } else {
-                            created++;
-                        }
-                    }
-                    ps.executeBatch();
-                }
-                conn().commit();
-            } catch (Exception e) {
-                rollbackQuietly();
-                log.warn("[KB-TERM] 导入失败：{}", e.getMessage());
-                return new ImportResult(0, 0, 0);
-            } finally {
-                autoCommitOn();
+        List<KbTermRepository.Row> batch = new ArrayList<>();
+        for (String line : text.split("\r?\n")) {
+            if (line.isBlank() || line.charAt(0) == '#') {
+                continue;
             }
+            String[] c = line.split("\t", -1);
+            if (c.length < 2) {
+                skipped++;
+                continue;
+            }
+            String en = c[0].trim();
+            String zh = c[1].trim();
+            String status = c.length >= 5 ? c[4].trim() : "draft";
+            if (en.isEmpty()) {
+                skipped++;
+                continue;
+            }
+            batch.add(new KbTermRepository.Row(en, zh, status));
+            if (existing.containsKey(en)) {
+                updated++;
+            } else {
+                created++;
+            }
+        }
+        try {
+            repo.upsertBatch(batch, Instant.now().toString());
+        } catch (Exception e) {
+            log.warn("[KB-TERM] 导入失败：{}", e.getMessage());
+            return new ImportResult(0, 0, 0);
         }
         if (created + updated > 0) {
             version.incrementAndGet();
@@ -779,32 +630,8 @@ public class KbTermStore {
 
     // ==================== 工具 ====================
 
-    /** 空值或认不出来的值一律算 draft —— 和旧 GlossaryStore 同一口径 */
+    /** 空值或认不出来的值一律算 draft —— 定义在 {@link KbTermRepository}，见 {@link #STATUSES} */
     public static String normalizeStatus(String s) {
-        if (s == null || s.isBlank()) {
-            return "draft";
-        }
-        String v = s.trim().toLowerCase(Locale.ROOT);
-        return STATUSES.contains(v) ? v : "draft";
-    }
-
-    private static String nz(String s) {
-        return s == null ? "" : s;
-    }
-
-    private void rollbackQuietly() {
-        try {
-            conn().rollback();
-        } catch (SQLException ignored) {
-            // 回滚失败也没什么可做的
-        }
-    }
-
-    private void autoCommitOn() {
-        try {
-            conn().setAutoCommit(true);
-        } catch (SQLException ignored) {
-            // 同上
-        }
+        return KbTermRepository.normalizeStatus(s);
     }
 }

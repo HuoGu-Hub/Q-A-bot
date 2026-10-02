@@ -1,10 +1,11 @@
 package com.example.qqbot.kb.block;
 
-import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -55,9 +56,7 @@ class KbDocImporterTermTest {
         when(embedding.isAvailable()).thenReturn(true);
         when(embedding.embedOne(anyString())).thenAnswer(inv -> new float[]{1f, 0f, 0f});
 
-        KbProperties props = new KbProperties();
-        props.setDir(base.resolve("kb").toString());
-        termStore = new KbTermStore(qaStore, props, new ObjectMapper(), mock(KbCorpus.class));
+        termStore = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), mock(KbCorpus.class));
         termStore.init();
 
         importer = new KbDocImporter(store, index, embedding, termStore);

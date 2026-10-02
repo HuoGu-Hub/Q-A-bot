@@ -5,6 +5,8 @@ import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.category.CategoryService;
 import com.example.qqbot.kb.category.CategoryStore;
 import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,11 +103,11 @@ class SwitchTimeDependenciesTest {
                 entry("kiln-0", "kiln", List.of()));
 
         // 先放一条人工成果，reconcile 不能把它冲掉（这条是术语表最容易出事的地方）
-        KbTermStore seed = new KbTermStore(qaStore, props, new ObjectMapper(), corpus);
+        KbTermStore seed = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
         seed.init();
         seed.upsert("flame-altar", "灵火祭坛", "verified");
 
-        KbTermStore store = new KbTermStore(qaStore, props, new ObjectMapper(), corpus);
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
         store.init();
         assertThat(store.get("flame-altar").zh()).as("★ 人工成果不能被语料重建冲掉").isEqualTo("灵火祭坛");
         assertThat(store.get("flame-altar").status()).isEqualTo("verified");
@@ -132,7 +134,7 @@ class SwitchTimeDependenciesTest {
                 entry("acid-bite", "物品图鉴·法杖",
                         "酸蚀之咬（Acid Bite）", List.of()));
 
-        KbTermStore store = new KbTermStore(qaStore, props, new ObjectMapper(), corpus);
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpus);
         store.init();
 
         assertThat(store.count()).as("★ 同一份文档的两个块 → 两条词条").isEqualTo(2);
@@ -152,7 +154,7 @@ class SwitchTimeDependenciesTest {
         QaStore qaStore = new QaStore(qa, new ObjectMapper());
         qaStore.init();
 
-        KbTermStore store = new KbTermStore(qaStore, props, new ObjectMapper(), corpusOf());
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), corpusOf());
         store.init();
         store.upsert("has-block", "有正文的", "draft");
         store.upsert("no-block", "早期版本留下的文档名", "draft");

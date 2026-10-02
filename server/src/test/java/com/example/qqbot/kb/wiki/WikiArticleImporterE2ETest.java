@@ -10,6 +10,7 @@ import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
+import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.persistence.KbWikiPageRepository;
 import com.example.qqbot.qa.QaStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -101,7 +102,7 @@ class WikiArticleImporterE2ETest {
         pageStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
         // 词条表要在导入之前就绪：导入器写完块会调 reconcile，让新块**立刻**对 B 路可见
-        KbTermStore terms = new KbTermStore(qaStore, kb, mapper, index);
+        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(qaStore)), index);
         terms.init();
         WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, index, embedding, terms);
 
