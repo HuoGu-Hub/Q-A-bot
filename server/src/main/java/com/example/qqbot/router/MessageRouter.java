@@ -15,12 +15,12 @@ import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.command.BotCommand;
+import com.example.qqbot.command.CommandPolicy;
 import com.example.qqbot.command.CommandMatcher;
 import com.example.qqbot.command.CommandRateLimiter;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.plaza.FallbackService;
-import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -66,7 +66,7 @@ public class MessageRouter {
     private final Access guardAccess;
     private final BlockNotifier blockNotifier;
     private final QaCollector qaCollector;
-    private final CommandProperties commandProperties;
+    private final CommandPolicy commandProperties;
     private final CommandMatcher commandMatcher;
     private final CommandRateLimiter commandRateLimiter;
     private final CommandStore commandStore;
@@ -85,7 +85,7 @@ public class MessageRouter {
                          Access guardAccess,
                          BlockNotifier blockNotifier,
                          QaCollector qaCollector,
-                         CommandProperties commandProperties,
+                         CommandPolicy commandProperties,
                          CommandMatcher commandMatcher,
                          CommandRateLimiter commandRateLimiter,
                          CommandStore commandStore,

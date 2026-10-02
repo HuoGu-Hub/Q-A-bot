@@ -1,6 +1,5 @@
 package com.example.qqbot.command;
 
-import com.example.qqbot.config.CommandProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayDeque;
@@ -20,13 +19,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class CommandRateLimiter {
 
-    private final CommandProperties props;
+    private final CommandPolicy props;
     private final Map<String, Deque<Long>> hits = new ConcurrentHashMap<>();
 
     /** 最多跟踪多少用户，超了清空（防内存打爆） */
     private static final int MAX_TRACKED = 5000;
 
-    public CommandRateLimiter(CommandProperties props) {
+    public CommandRateLimiter(CommandPolicy props) {
         this.props = props;
     }
 

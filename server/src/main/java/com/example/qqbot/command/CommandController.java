@@ -1,10 +1,5 @@
 package com.example.qqbot.command;
 
-import com.example.qqbot.config.CommandProperties;
-import com.example.qqbot.config.KbProperties;
-import com.example.qqbot.config.MediaProperties;
-import com.example.qqbot.config.QaProperties;
-import com.example.qqbot.config.LogProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -34,9 +29,9 @@ public class CommandController {
 
     private final CommandStore store;
     private final VariableRenderer renderer;
-    private final CommandProperties props;
+    private final CommandPolicy props;
 
-    public CommandController(CommandStore store, VariableRenderer renderer, CommandProperties props) {
+    public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;

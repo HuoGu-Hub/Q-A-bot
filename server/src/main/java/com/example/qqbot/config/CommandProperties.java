@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.command.CommandPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -9,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 因为调用方持有的是本对象的引用，每次都实时读字段。
  */
 @ConfigurationProperties(prefix = "app.commands")
-public class CommandProperties {
+public class CommandProperties implements CommandPolicy {
 
     /** 指令系统总开关 */
     private boolean enabled = true;
@@ -51,6 +52,7 @@ public class CommandProperties {
     /** 回复最大长度（防止配了一个超长文本把群刷屏） */
     private int maxReplyLength = 1500;
 
+    @Override
     public boolean isEnabled() {
         return enabled;
     }
@@ -59,6 +61,7 @@ public class CommandProperties {
         this.enabled = enabled;
     }
 
+    @Override
     public boolean isRequireMention() {
         return requireMention;
     }
@@ -67,6 +70,7 @@ public class CommandProperties {
         this.requireMention = requireMention;
     }
 
+    @Override
     public boolean isRequireSlash() {
         return requireSlash;
     }
@@ -75,6 +79,7 @@ public class CommandProperties {
         this.requireSlash = requireSlash;
     }
 
+    @Override
     public int getRateLimitPerMinute() {
         return rateLimitPerMinute;
     }
@@ -83,6 +88,7 @@ public class CommandProperties {
         this.rateLimitPerMinute = rateLimitPerMinute;
     }
 
+    @Override
     public boolean isAllowUserIds() {
         return allowUserIds;
     }
@@ -91,6 +97,7 @@ public class CommandProperties {
         this.allowUserIds = allowUserIds;
     }
 
+    @Override
     public int getMaxReplyLength() {
         return maxReplyLength;
     }

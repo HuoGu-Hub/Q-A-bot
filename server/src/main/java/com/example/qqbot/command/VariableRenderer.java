@@ -1,6 +1,5 @@
 package com.example.qqbot.command;
 
-import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.qa.QaAnalytics;
@@ -51,7 +50,7 @@ public class VariableRenderer {
     private static final String ESC_OPEN = "\\u0000LBRACE\\u0000";
     private static final String ESC_CLOSE = "\\u0000RBRACE\\u0000";
 
-    private final CommandProperties props;
+    private final CommandPolicy props;
     private final CommandStore store;
     private final KbBlockStore blockStore;
     private final Glossary glossary;
@@ -60,7 +59,7 @@ public class VariableRenderer {
 
     private final Instant startedAt = Instant.now();
 
-    public VariableRenderer(CommandProperties props, CommandStore store,
+    public VariableRenderer(CommandPolicy props, CommandStore store,
                             KbBlockStore blockStore, Glossary glossary, QaAnalytics analytics,
                             com.example.qqbot.config.BotProperties botProps) {
         this.props = props;

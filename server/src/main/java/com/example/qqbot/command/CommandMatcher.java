@@ -1,6 +1,5 @@
 package com.example.qqbot.command;
 
-import com.example.qqbot.config.CommandProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -31,10 +30,10 @@ public class CommandMatcher {
     /** 匹配 "/xxx"：斜杠后跟非空白字符 */
     private static final Pattern SLASH_COMMAND = Pattern.compile("^/(\\S+)\\s*$");
 
-    private final CommandProperties props;
+    private final CommandPolicy props;
     private final CommandStore store;
 
-    public CommandMatcher(CommandProperties props, CommandStore store) {
+    public CommandMatcher(CommandPolicy props, CommandStore store) {
         this.props = props;
         this.store = store;
     }
