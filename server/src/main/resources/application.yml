@@ -486,6 +486,12 @@ app:
       # 启动时自动同步一次。**默认关** —— 这是运维动作，不该每次重启都跑
       sync-on-start: false
 
+    # 地点语料派生（由地图 marker 生成地点/NPC 块）。
+    # 先跑地图同步把 marker 灌进来，再跑这个。purge 可整批回滚。
+    location-corpus:
+      # 启动时自动派生一次。**默认关** —— 运维动作
+      build-on-start: false
+
     # wiki 文章导入（任务 / 机制）—— 地图里没有这两类内容
     # 实测：地图的 Quests 分组**只有 1 个 marker**，而 Category:Quests 有 **149 篇**文章；
     # 机制（Combat Mechanics / Crafting / Survival）地图里完全没有。
