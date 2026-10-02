@@ -1,6 +1,5 @@
 package com.example.qqbot.logs;
 
-import com.example.qqbot.config.LogProperties;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +21,9 @@ public class LogBufferBridge {
     private static final Logger log = LoggerFactory.getLogger(LogBufferBridge.class);
 
     private final LogBuffer buffer;
-    private final LogProperties props;
+    private final LogPolicy props;
 
-    public LogBufferBridge(LogBuffer buffer, LogProperties props) {
+    public LogBufferBridge(LogBuffer buffer, LogPolicy props) {
         this.buffer = buffer;
         this.props = props;
     }

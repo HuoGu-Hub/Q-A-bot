@@ -1,6 +1,5 @@
 package com.example.qqbot.logs;
 
-import com.example.qqbot.config.LogProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -50,11 +49,11 @@ public class LogController {
 
     private final LogBuffer buffer;
     private final LogMasker masker;
-    private final LogProperties props;
+    private final LogPolicy props;
 
     private final AtomicInteger activeStreams = new AtomicInteger();
 
-    public LogController(LogBuffer buffer, LogMasker masker, LogProperties props) {
+    public LogController(LogBuffer buffer, LogMasker masker, LogPolicy props) {
         this.buffer = buffer;
         this.masker = masker;
         this.props = props;

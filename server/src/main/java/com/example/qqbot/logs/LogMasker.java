@@ -1,6 +1,5 @@
 package com.example.qqbot.logs;
 
-import com.example.qqbot.config.LogProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.regex.Pattern;
@@ -34,9 +33,9 @@ public class LogMasker {
     private static final Pattern SIGNED_URL = Pattern.compile(
             "(https?://[^\\s\"']*?)([?&](?:rkey|fileid|token|sig)=[^\\s\"'&]+)");
 
-    private final LogProperties props;
+    private final LogPolicy props;
 
-    public LogMasker(LogProperties props) {
+    public LogMasker(LogPolicy props) {
         this.props = props;
     }
 

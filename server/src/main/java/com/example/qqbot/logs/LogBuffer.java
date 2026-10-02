@@ -1,6 +1,5 @@
 package com.example.qqbot.logs;
 
-import com.example.qqbot.config.LogProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -26,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Component
 public class LogBuffer {
 
-    private final LogProperties props;
+    private final LogPolicy props;
     private final Deque<LogEntry> entries;
     private final AtomicLong totalWritten = new AtomicLong();
     private final AtomicLong dropped = new AtomicLong();
@@ -34,7 +33,7 @@ public class LogBuffer {
     /** 每个 SSE 订阅者的游标（下一次该读哪条） */
     private final AtomicLong sequence = new AtomicLong();
 
-    public LogBuffer(LogProperties props) {
+    public LogBuffer(LogPolicy props) {
         this.props = props;
         this.entries = new ArrayDeque<>(Math.max(64, props.getBufferSize()));
     }

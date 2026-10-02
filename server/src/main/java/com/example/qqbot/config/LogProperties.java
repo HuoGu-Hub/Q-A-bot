@@ -1,9 +1,12 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.logs.LogPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * 日志界面的配置，对应 application.yml 里的 app.logs.*
+ *
+ * <p>业务侧只读视图见 {@link LogPolicy} —— 业务包只依赖它，不依赖本类。
  *
  * <p>只收**本进程（业务层）**的日志：内存环形缓冲 + SSE 实时推送。
  *
@@ -12,7 +15,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 分页的界面，喧宾夺主。
  */
 @ConfigurationProperties(prefix = "app.logs")
-public class LogProperties {
+public class LogProperties implements LogPolicy {
 
     private boolean enabled = true;
 
@@ -38,6 +41,7 @@ public class LogProperties {
      */
     private boolean maskSensitive = true;
 
+    @Override
     public boolean isEnabled() {
         return enabled;
     }
@@ -46,6 +50,7 @@ public class LogProperties {
         this.enabled = enabled;
     }
 
+    @Override
     public int getBufferSize() {
         return bufferSize;
     }
@@ -54,6 +59,7 @@ public class LogProperties {
         this.bufferSize = bufferSize;
     }
 
+    @Override
     public int getStreamTimeoutMinutes() {
         return streamTimeoutMinutes;
     }
@@ -62,6 +68,7 @@ public class LogProperties {
         this.streamTimeoutMinutes = streamTimeoutMinutes;
     }
 
+    @Override
     public int getMaxStreams() {
         return maxStreams;
     }
@@ -70,6 +77,7 @@ public class LogProperties {
         this.maxStreams = maxStreams;
     }
 
+    @Override
     public boolean isMaskSensitive() {
         return maskSensitive;
     }
