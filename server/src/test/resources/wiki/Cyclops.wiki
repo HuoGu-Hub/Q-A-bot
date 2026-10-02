@@ -1,0 +1,60 @@
+{{NPC Infobox
+| title = Cyclops
+| images = Cyclops.png
+| description = A Cyclops
+| Behavior = Hostile
+| Faction = Cyclops
+| Region = Albaneve Summits
+| Cutting = Neutral
+| Piercing = Neutral
+| Blunt = Resisted
+| Poison = Neutral
+| Fire = Effective
+| Ice = Resisted
+| Shroud = Effective
+| Shock = Neutral
+}}
+
+The '''Cyclops''' is a boss in Enshrouded.
+
+==Locations==
+{| class="wikitable" style="margin:auto; width:60%;" 
+! style="width: 10%;" | Region
+! style="width: 30%;" | Location
+! style="width: 60%;"  | Details
+|-
+|[[Albaneve Summits]]
+|Cave Passage
+|Located in the cave passage between Everfrore Keep and Howling Peak 
+|-
+|[[Albaneve Summits]]
+|Cyclops Cave Passage below Everfrore Keep
+|Located below Everfrore Keep Balefire
+|-
+|[[Albaneve Summits]]
+|Quiet Caves
+|Located in the west section of the summits, near Wildwater Basin
+|-
+|[[Albaneve Summits]]
+|Cyclops Cave Passage
+|Located in the east section of the summits, Cyclops Cave Passage leading to Balefire Tower "1000 Miles"
+|-
+|[[Albaneve Summits]]
+|Cyclops Cave
+|Located near Lake Luma
+|}
+
+== Behavior ==
+
+== Loot ==
+=== Drops ===
+{{ItemsTableHeader
+|content=
+{{ItemsLine|image=Cyclops Head.png|item=Cyclops Head|quantity=1|type=Materials|source=Drop}}
+}}
+=== Unique Drops ===
+
+== See Also ==
+{{Bestiary}}
+
+[[Category:Bosses]]

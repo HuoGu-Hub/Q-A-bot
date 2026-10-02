@@ -135,6 +135,15 @@ public class WikiMapClient {
     }
 
     private List<List<String>> batches(List<String> titles) {
+        // 批间主动放慢：别把对方服务器打疼，也降低被限流的概率
+        long delay = props.getMapSync().getBatchDelayMillis();
+        if (delay > 0) {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         int size = Math.max(1, props.getMapSync().getBatchSize());
         List<List<String>> out = new ArrayList<>();
         for (int i = 0; i < titles.size(); i += size) {
@@ -154,33 +163,76 @@ public class WikiMapClient {
         return sb.toString();
     }
 
+    /**
+     * 发一次请求，**命中限流就退避重试**。
+     *
+     * <p><b>为什么必须有重试</b>（2026-10-02 实测）：wiki 会对没有自定义 User-Agent 的请求
+     * 直接回 `{"error":{"code":"ratelimited"}}`；即使 UA 正确，批量拉取（任务页有 149 篇）
+     * 也可能触发限流。一次同步不该因为第 40 页被限流就整体失败。
+     *
+     * <p>退避是**指数**的（`backoffMillis * 2^(n-1)`），并且只对"限流/服务端错误"重试；
+     * 4xx 里那些"你请求写错了"的错误立刻抛，重试没有意义。
+     */
     private JsonNode get(String url) {
         KbProperties.MapSync cfg = props.getMapSync();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(cfg.getTimeoutSeconds()))
-                .header("User-Agent", cfg.getUserAgent())
-                .header("Accept", "application/json")
-                .GET()
-                .build();
-        HttpResponse<String> response;
-        try {
-            response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            throw new WikiException("请求 wiki API 失败：" + e.getMessage(), e);
-        }
-        if (response.statusCode() != 200) {
-            throw new WikiException("wiki API HTTP " + response.statusCode() + "：" + url);
-        }
-        try {
-            JsonNode root = mapper.readTree(response.body());
-            if (root.path("error").isObject()) {
-                throw new WikiException("wiki API 返回错误：" + root.path("error").path("info").asText(""));
+        int maxRetries = Math.max(1, cfg.getMaxRetries());
+        WikiException last = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(cfg.getTimeoutSeconds()))
+                    .header("User-Agent", cfg.getUserAgent())
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+            HttpResponse<String> response;
+            try {
+                response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                last = new WikiException("请求 wiki API 失败：" + e.getMessage(), e);
+                sleepBackoff(cfg, attempt);
+                continue;
             }
-            return root;
-        } catch (WikiException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new WikiException("解析 wiki API 响应失败：" + e.getMessage(), e);
+
+            boolean retryable = response.statusCode() == 429 || response.statusCode() >= 500;
+            JsonNode root = null;
+            try {
+                root = mapper.readTree(response.body());
+            } catch (Exception ignored) {
+                // 非 JSON 响应：下面按状态码判断
+            }
+            if (root != null && root.path("error").isObject()) {
+                String code = root.path("error").path("code").asText("");
+                String info = root.path("error").path("info").asText("");
+                if ("ratelimited".equals(code) || "maxlag".equals(code)) {
+                    retryable = true;
+                }
+                last = new WikiException("wiki API 返回错误：" + code + " " + info);
+            } else if (response.statusCode() != 200) {
+                last = new WikiException("wiki API HTTP " + response.statusCode() + "：" + url);
+            } else if (root != null) {
+                return root;
+            }
+
+            if (!retryable) {
+                throw last;
+            }
+            log.warn("[KB-MAP] wiki 请求被限流/服务端错误（第 {}/{} 次）：{} —— {} ms 后重试",
+                    attempt, maxRetries, last == null ? "?" : last.getMessage(),
+                    cfg.getBackoffMillis() * (1L << Math.min(attempt - 1, 6)));
+            sleepBackoff(cfg, attempt);
+        }
+        throw last != null ? last : new WikiException("wiki API 请求失败：" + url);
+    }
+
+    private static void sleepBackoff(KbProperties.MapSync cfg, int attempt) {
+        long wait = Math.max(0, cfg.getBackoffMillis()) * (1L << Math.min(attempt - 1, 6));
+        if (wait <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(wait);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

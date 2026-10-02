@@ -1,0 +1,28 @@
+{{Quest|{{SUBPAGENAME}}}} is a quest in [[Enshrouded]], given to you by the [[Alchemist]].
+
+== Quest Prerequisites ==
+* Complete {{quest+icon|Scientific Instruments For A Laboratory}}
+* Accept {{quest+icon|Ignite The Snowy Mountaintops}}
+
+== Quest Objectives ==
+: '''Reward''': {{item+iconright|Ripped Alchemist's Wall Hanging (Left)}}, 150 XP
+{| class="wikitable" style="width:90%;"
+! style="width:9%;" | Objective #
+! style="width:20%;" | Objective Title
+! style="width:20%;" | Location
+! style="width:51%;" | Description
+|-
+| 1 || Reach The City Behind The Mountain Range || {{MapLink |icon= Village | Wickmouth | Wickmouth }} || The Alchemist requires new knowledge of the realms to proceed on his journey in alchemy! The Flame has shown him a new source of wisdom beyond the mountain range - a lighthouse before a lake.<br><br>Find a way into the mountains with the help of the Flame and search for the town!<br><br>Obtaining new alchemical wisdom should reveal more crafting recipes and enable the crafting of better mage armors!
+|-
+| 2 || Search In The Lighthouse || - || You've reached the city by the lake. A part of the port has been swallowed by the Shroud, but a keen eye can spot the tip of a lighthouse not far away.<br><br>Reach the lighthouse and search the inside for a new source of wisdom!
+|-
+| 3 || Follow The Vultures To Their Nest || {{MapLink |icon= Mine | CamelliaLakeMarbleQuarry | Camellia Lake Marble Quarry }} || You've entered the lighthouse and found half of a wall hanging. Its imagery depicts the makeup of complex alchemical solutions... or so you think. Without the other half, you can't fully decipher the meaning, but combining both pieces will reveal many '''new crafting recipes''', including purple fabric for crafting better '''mage armor!'''<br><br>The lighthouse was seemingly attacked by vultures. Perhaps they took part of the wall hanging to their nests.<br><br>'''Reach the vulture nests to find the second half of the schematic!'''
+|-
+| 4 || Search The Quarry Vulture Nests || - || You've reached the nesting location of the vultures. The second half of the wall hanging cannot be far.<br><br>Search the vulture nests marked on your map!
+|-
+| 5 || Combine The Pieces In A Frame || - || You've obtained both parts of the wall hanging!<br><br>To decipher the meaning of its depiction, you must return home and place both pieces inside a frame!<br><br>Combining the pieces will reveal more crafting recipes and enable you to create better mage armor with mauveine and purple fabric!
+|}
+
+{{QuestNav}}
+[[Category:Quests|{{SUBPAGENAME}}]]
+[[Category:Souls Of The Frozen Frontier Update]]

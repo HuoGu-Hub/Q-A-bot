@@ -1,0 +1,228 @@
+== Enemy Resistances ==
+
+Each enemy may be vulnerable or resistant to each damage type.
+
+This vulnerability or resistance is encoded as a hidden multiplier to damage taken, that is unique for each enemy and damage type.
+
+Any multiplier greater than 1 will display as "Effective" damage; any multiplier less than 1 will display as "Resisted" damage. 
+
+'''Note that the increase/decrease in damage from "Effective" or "Resisted" damage differs for each enemy and damage type.''' 
+
+If an enemy takes damage that is split between different types, each type of damage will be modified by the enemy's resistance/vulnerability to that damage, in proportion to how that damage is divided.
+
+If damage is split between a damage type an enemy is vulnerable to, and a damage type an enemy is resistant to, both the "Resisted" and "Effective" tags will display under the enemy's damage taken.
+
+Fell enemies are immune to Shroud damage.
+
+
+
+Some examples:
+* A Fell enemy has a multiplier of 1.2 against Blunt damage. A listed damage of 93 (100% Blunt) will display as 112 "Effective" damage.
+* A Hollow enemy has a multiplier of 1.5 against Blunt damage. A listed damage of 93 (100% Blunt) will display as 140 "Effective" damage.
+* A Wolf enemy has a multiplier of 1.3 against Fire damage, and 1.0 against Cutting damage. A listed damage of 62 (50% Cutting, 50% Fire) will display as 71 "Effective" damage.
+* A Hollow enemy has a multiplier of 1.5 against Blunt damage, and 0.5 against Shroud damage. A listed damage of 62 (50% Blunt, 50% Shroud) will display as 62 "Effective" '''and''' "Resisted" damage. 
+
+
+
+Tested enemy resistances are shown below. Enemies in the same "family" (Scavengers, Wildlife, Vukah, Fell) tend to have the same multipliers, but this is not always the case.
+
+The data below are incomplete and a work in progress. Note that not all enemy names are known and some placeholders have been used.
+
+===Fell===
+All Fell enemies are vulnerable to Fire and immune to Shroud damage.
+
+{| class="wikitable"
+|+ Fell Multipliers to Damage Taken
+|-
+! Enemy                                         !! Blunt !! Cutting !! Piercing !! Poison !! Fire !! Ice  !! Shock !! Shroud 
+|-
+| Footsoldier                                   || 1.2   || 1.2     || 1.2      || 0.5    || 1.2  || 1.0  || 1.0   || Immune       
+|-
+| Ranger                                        || 1.0   || 1.0     || 1.0      || 0.8    || 1.2  || 1.0  || 1.0   || Immune 
+|-
+| Charger                                      || 1.0   || 1.0     || 1.0      || 0.9    || 1.2  || 1.0  || 1.0   || Immune
+|-
+| [[Fell Banshee|Banshee]]                      || 1.2   || 1.2     || 1.2      || 0.9    || 1.2  || 0.8  || 1.0   || Immune
+|-
+| [[Fell Commander|Commander]]                  || 1.0   || 1.0     || 1.0      || 0.9    || 1.2  || 1.0  || 1.0   || Immune
+|-
+| [[Fell Critter|Critter]]                      || 1.5   || 1.2     || 1.2      || 1.0    || 1.5  || 1.0  || 1.0   || Immune
+|-
+| [[Exploding Fell Critter|Explosive Critter]]  || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| [[Shroud Stalker|Stalker]]                    || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| [[Depthdweller]]                              || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| Gazer                                         || 1.0   || 1.0     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| [[Fell Draconian Vulture|Draconian Vulture]]  || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| [[Fell Vicious Vine|Vicious Vine]]            || 0.8   || 1.2     || 1.0      || 0.8    || 1.5  || 1.0  || 1.0   || Immune
+|-
+| [[Shroud Flayer|Flayer]]                      || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| [[Fell Boar|Boar]]                            || 1.0   || 1.0     || 1.0      || 1.0    || 1.2  || 1.0  || 1.0   || Immune
+|-
+| [[Fell Thunderbrute|Thunderbrute]]            || 1.0   || 1.0     || 1.0      || 0.9    || 1.2  || 1.0  || 1.0   || Immune
+|-
+| [[Fell Critter Queen|Critter Queen]]          || 1.5   || 1.2     || 1.2      || 1.0    || 1.5  || 1.0  || 1.0   || Immune
+|-
+| [[Fell Sicklescythe|Sicklescythe]]            || 1.2   || 1.2     || 1.2      || 0.9    || 1.2  || 0.8  || 1.0   || Immune
+|-
+| [[Fell Monstrosity|Monstrosity]]              || 1.0   || 1.0     || 1.0      || 0.9    || 1.2  || 1.0  || 1.0   || Immune
+|-
+| [[Fell Wispwyvern|Wispwyvern]]                || 0.5/2.5   || 0.5/2.5     || 0.5/2.5      || 0.9/0.9    || 0.6/2.8  || 0.5/2.5  || 0.5/2.5   || Immune
+|-
+| [[Fell Cyclops|Cyclops]]                      || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|-
+| [[Fell Dragon Youngling|Dragon Youngling]]    || ???   || ???     || ???      || ???    || ???  || ???  || ???   || Immune
+|}
+
+===Wildlife===
+All Wildlife are vulnerable to Shroud damage but that does not include their Fell counterparts.
+
+{| class="wikitable"
+|+ Wildlife Multipliers to Damage Taken
+|-
+! Enemy                           !! Blunt !! Cutting !! Piercing !! Poison !! Fire !! Ice !! Shock !! Shroud 
+|-
+| [[Wolf]]                        || 1.0   || 1.0     || 1.0      || 1.0    || 1.3  || 0.7 || 1.0   || 1.3
+|-
+| [[Rat]]                         || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Bat]]                         || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Boar]]                        || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Spider]]                      || 1.0   || 1.0     || 1.0      || 1.0    || 0.7  || 1.0 || 1.0   || ???
+|-
+| Tarantula                       || 1.0   || 1.0     || 1.0      || 1.0    || 0.7  || 1.0 || 1.0   || ???
+|-
+| [[Snapjaw]]                     || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Giant Wasp]]                  || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Wisp]]                        || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Sabertooth Tiger]]            || 1.0   || 1.0     || 1.0      || ???    || 1.3  || 1.0 || 1.0   || ???
+|-
+| [[Scorpion]]                    || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Draconian Vulture]]           || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Snow Leopard]]                || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Frost Wisp]]                  || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Frost Draconian Vulture]]     || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Cyclops]]                     || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Common Goat]]                        || 1.0   || 1.0     || 1.0      || 1.0    || 1.3  || 0.7 || 1.0   || 1.3
+|-
+| [[Hophare]]                     || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Fae Deer]]                    || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Flightless Redtail]]          || 1.0   || 1.0     || 1.0      || ???    || 1.3  || 0.7 || ???   || ???
+|-
+| [[Dune Armadillo]]              || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Round-Billed Sailer]]         || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Frizzy Goat]]                 || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Yak]]                         || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|}
+
+===Scavenger===
+Scavengers are highly vulnerable to Ice and highly resistant to Fire, with the exception of the Wolf, until you reach [[Albaneve Summits]] and [[Veilwater Basin]] where they swap.
+
+{| class="wikitable"
+|+ Scavenger Multipliers to Damage Taken
+|-
+! Enemy                                    !! Blunt !! Cutting !! Piercing !! Poison !! Fire !! Ice !! Shock !! Shroud 
+|-
+| [[Scavenger Scalper|Scalper]]            || 1.0   || 1.0     || 1.0      || 0.8    || 0.5  || 1.5 || 1.0   || 1.3           
+|-
+| [[Scavenger Ranged|Ranger]]              || 1.0   || 1.0     || 1.0      || 0.8    || 0.5  || 1.5 || 1.0   || 1.3
+|-
+| [[Scavenger Wolf|Wolf]]                  || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Scavenger Berserker|Berserker]]        || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Scavenger Matron|Matron]]              || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Scavenger Pyreblade|Pyreblade]]        || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Scavenger Tyrant|Tyrant]]              || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|}
+
+===Vukah===
+Vukah are universally vulnerable to Fire and Shroud and resistant to Ice.
+
+{| class="wikitable"
+|+ Vukah Multipliers to Damage Taken
+|-
+! Enemy                           !! Blunt !! Cutting !! Piercing !! Poison !! Fire       !! Ice      !! Shock    !! Shroud      
+|-
+| [[Vukah Warrior|Warrior]]       || 1.0   || 1.0     || 1.0      || 1.0    || 1.5  || 0.5 || 1.0   || 1.3       
+|-
+| Skirmisher                      || 1.0   || 1.0     || 1.0      || 1.0    || 1.5  || 0.5 || 1.0   || 1.3 
+|-
+| [[Vukah Shaman|Shaman]]         || 1.0   || 1.0     || 1.0      || 1.0    || 1.5  || 0.5 || 1.0   || 1.3 
+|-
+| [[Vukah Berserker|Berserker]]   || 1.0   || 1.0     || 1.0      || 1.0    || 1.5  || 0.5 || 1.0   || 1.3
+|-
+| [[Vukah Brawler|Brawler]]       || 0.8   || 1.0     || 1.0      || 1.0    || 1.5  || 0.5 || 1.0   || 1.3
+|}
+
+===Hollow===
+{| class="wikitable"
+|+ Hollow Multipliers to Damage Taken
+|-
+! Enemy                           !! Blunt !! Cutting !! Piercing !! Poison !! Fire !! Ice !! Shock !! Shroud 
+|-
+| Soldier                         || 1.0   || 1.0     || 1.0      || ???    || 1.3  || 0.7 || ???   || 1.3  
+|-
+| [[Hollow Mage|Mage]]            || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Hollow Reaper|Reaper]]        || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Hollow Hound|Hound]]          || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| [[Hollow Cyclops|Cyclops]]      || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|}
+
+===Drak===
+{| class="wikitable"
+|+ Drak'Dal Multipliers to Damage Taken
+|-
+! Enemy                          !! Blunt !! Cutting !! Piercing !! Poison !! Fire !! Ice !! Shock !! Shroud
+|-
+| Warrior                        || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| Chakram Thrower                || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| Priest                         || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+| Chief                          || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|-
+|Hydrak'Dal                      || ???   || ???     || ???      || ???    || ???  || ??? || ???   || ???
+|}
+
+
+
+
+base
+blunt 44
+cutting 45
+piercing 57
+poison 106
+Fire 154
+Ice 144
+Shock 209
+Shroud 110-131
+
+[[Category:Gameplay]]

@@ -1,0 +1,71 @@
+'''Crafting''' is the process of creating new items from [[:c:Crafting Materials|Crafting Materials]]. [[Manual Crafting]] can be done anywhere, but most recipes require a [[:Category:Workshops|Workshop]], such as a [[Workbench]], or [[Survivors#Craftspeople|Craftspeople]].
+
+==Workshops==
+=== [[Manual Crafting]] ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+|Manual Crafting
+|Workbench
+}}
+{{Footnote|Manual Crafting can be done from anywhere, as long as you have the materials to craft the items in your inventory, or if you are within the range of a [[Storage#Magic Chests|magic chest]] with the required materials.}}
+</div>
+=== [[File:Blacksmith_Quests.png|50px|frameless]] [[Blacksmith]] Workshops ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+|Charcoal Kiln
+|Forge
+|Smelter
+|Blast Furnace}}
+</div>
+=== [[File:Alchemist Quests.png|50px|frameless]] [[Alchemist]] Workshops ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+|Grinding Stones
+|Mortar
+|Alchemy Station
+|Laboratory
+|Mill}}
+</div>
+
+=== [[File:Carpenter Quests.png|50px|frameless]] [[Carpenter]] Workshops ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+|Kiln
+| Table Saw
+| Decoration Workbench}}
+</div>
+=== [[File:Hunter Quests.png|50px|frameless]] [[Hunter]] Workshops ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+| Drying Rack
+| Hand Spindle
+| Tanning Station
+| Loom
+| Spinning Wheel
+| Spinning Machine}}
+</div>
+=== [[File:Farmer Quests.png|50px|frameless]] [[Farmer]] Workshops ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+| Seedbed
+| Cooking Station
+| Oven
+| Beehive
+| Seafood Grill
+| Coffee Drum Roaster
+| Coffee Brewery
+| Butter Churn
+| Kitchen }}
+</div>
+=== [[File:Collector Quests.png|50px|frameless]] [[Collector]] Workshops ===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+| Ectoplasm Press}}
+</div>
+=== [[File:Barber Quests.png|50px|frameless]] [[Barber]] Workshops===
+<div style="overflow:auto;”>
+{{Crafting Equipment
+| Coloring Station}}
+</div>
+[[Category:Gameplay]]
+[[FR:Fabrication]]

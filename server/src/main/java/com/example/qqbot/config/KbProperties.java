@@ -310,6 +310,22 @@ public class KbProperties {
         /** 最多同步多少页（防止命名空间里冒出成千上万页时失控） */
         private int maxPages = 500;
 
+        /**
+         * 命中限流时最多重试几次。
+         *
+         * <p><b>为什么需要它（实测）</b>：wiki 会对**没有自定义 User-Agent** 的请求直接限流，
+         * 返回 `{"error":{"code":"ratelimited"}}`。我们在 Node 探针里就撞上了这个 ——
+         * 连发几个请求之后全部失败。批量导入（任务页有 149 篇）必然触发，
+         * 所以必须有退避重试，而不是把整次同步判死。
+         */
+        private int maxRetries = 4;
+
+        /** 退避基数（毫秒）。第 n 次重试等 `backoffMillis * 2^(n-1)` */
+        private long backoffMillis = 1000;
+
+        /** 每批之间的固定间隔（毫秒）—— 主动放慢，别把对方服务器打疼 */
+        private long batchDelayMillis = 200;
+
         /** 启动时自动同步一次。**默认关**：这是运维动作，不该每次重启都跑 */
         private boolean syncOnStart = false;
 
@@ -375,6 +391,30 @@ public class KbProperties {
 
         public void setSyncOnStart(boolean syncOnStart) {
             this.syncOnStart = syncOnStart;
+        }
+
+        public int getMaxRetries() {
+            return maxRetries;
+        }
+
+        public void setMaxRetries(int maxRetries) {
+            this.maxRetries = maxRetries;
+        }
+
+        public long getBackoffMillis() {
+            return backoffMillis;
+        }
+
+        public void setBackoffMillis(long backoffMillis) {
+            this.backoffMillis = backoffMillis;
+        }
+
+        public long getBatchDelayMillis() {
+            return batchDelayMillis;
+        }
+
+        public void setBatchDelayMillis(long batchDelayMillis) {
+            this.batchDelayMillis = batchDelayMillis;
         }
     }
 

@@ -1,0 +1,28 @@
+{{Quest|{{SUBPAGENAME}}}} is a quest in [[Enshrouded]], given to you by the [[Farmer]].
+
+== Quest Prerequisites ==
+* Complete {{quest+icon|In Need Of A Tanning Station}}
+* Complete {{Quest+icon|A Black Cauldron For The Alchemist}}
+* Complete {{Quest+icon|Almanac of Plants and Seedlings For The Farmer}}
+
+== Quest Objectives ==
+: '''Reward''': {{item+iconright|Beehive Smoker}}, 150 XP
+{| class="wikitable" style="width:90%;"
+! style="width:9%;" | Objective #
+! style="width:20%;" | Objective Title
+! style="width:20%;" | Location
+! style="width:51%;" | Description
+|-
+| 1 || Investigate Emily Fray's Tavern In Brittlebush || {{MapLink | icon= Camp | FarAwayFrayTavern | "Far Away Fray" Tavern | size= 25px }} || The '''Farmer''' wants to make beehives and honey, but lacks a '''Beehive Smoker'''. Ages ago, she ordered a '''Beehive Smoker''' to her tavern in '''Brittlebush''', but her shipment didn't arrive before she left. The '''Beehive Smoker''' unlocks the ability to craft a '''Honey Beehive'''.<br><br>Search for '''Emily Fray's tavern in Brittlebush''' to look for clues and retrieve the '''Beehive Smoker'''.
+|-
+| 2 || Investigate The Honey Shipment Route || - || The '''Beehive Smoker''' was sent from '''East Lapis''', but didn't arrive. Investigating the trade route will reveal more clues. The spot is marked on the map.
+|-
+| 3 || Defeat The Vukah Honey Thief || {{MapLink | icon= Enemy Camp | VukahSacrificeHill | Vukah Sacrifice Hill | size= 25px }} || The '''Beehive Smoker''' was stolen and brought to the Vukah Sacrifice Hill, alongside honey and wax.<br><br>Follow the trail and eliminate the Vukah thief to retrieve the '''Beehive Smoker'''. This will unlock '''Honey Beehive'''s and honey production.
+|-
+| 4 || Place The Beehive Smoker || - || The '''Beehive Smoker''' was found. It must be placed in the base to unlock the '''Honey Beehive''', which enables a regular supply of honey.
+|}
+
+{{QuestNav}}
+[[Category:Quests|{{SUBPAGENAME}}]]
+[[Category:Early Access Launch]]
+[[Category:Missing Requirements]]
