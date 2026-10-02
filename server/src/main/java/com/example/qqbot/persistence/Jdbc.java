@@ -47,6 +47,19 @@ public class Jdbc {
     /** 全局互斥。共用连接 + SQLite ⇒ 本来就得串行化，这里显式做掉 */
     private final Object monitor = new Object();
 
+    /**
+     * 事务嵌套深度（**只在 monitor 内访问**）。
+     *
+     * <p>为什么需要它：{@link #batch} 原先自己 {@code setAutoCommit(false)}…{@code commit()}…
+     * {@code setAutoCommit(true)}。如果它被调在一个已经开着的事务里（{@code transaction} 的块内），
+     * 那一下 {@code setAutoCommit(true)} 会把**外层事务的工作提前提交**，
+     * 并让外层随后的 {@code commit()} 报 {@code database in auto-commit mode}。
+     * 实测就是这样炸的（见 {@code JdbcTest.reentrantInsideTransaction}）。
+     *
+     * <p>现在只有**最外层**才真正开关自动提交与提交/回滚；内层只干活。
+     */
+    private int txDepth = 0;
+
     public Jdbc(SqliteConnectionProvider db) {
         this.db = db;
     }
@@ -148,10 +161,11 @@ public class Jdbc {
     public int batch(String sql, List<Object[]> rows) {
         synchronized (monitor) {
             Connection c = conn();
-            boolean oldAutoCommit;
+            boolean outermost = txDepth == 0;
             try {
-                oldAutoCommit = c.getAutoCommit();
-                c.setAutoCommit(false);
+                if (outermost) {
+                    c.setAutoCommit(false);
+                }
                 int n = 0;
                 try (PreparedStatement ps = c.prepareStatement(sql)) {
                     for (Object[] args : rows) {
@@ -161,20 +175,82 @@ public class Jdbc {
                     }
                     ps.executeBatch();
                 }
-                c.commit();
+                if (outermost) {
+                    c.commit();
+                }
                 return n;
             } catch (SQLException e) {
-                try {
-                    c.rollback();
-                } catch (SQLException ignored) {
-                    // 回滚也失败就只能记着原异常
+                if (outermost) {
+                    try {
+                        c.rollback();
+                    } catch (SQLException ignored) {
+                        // 回滚也失败就只能记着原异常
+                    }
                 }
                 throw new PersistenceException("批量执行失败：" + sql, e);
             } finally {
+                if (outermost) {
+                    try {
+                        c.setAutoCommit(true);
+                    } catch (SQLException ignored) {
+                        // 恢复自动提交失败不影响已提交的结果
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * **显式事务边界** —— 整段成功才提交，抛异常则回滚。
+     *
+     * <h2>为什么 batch() 不够</h2>
+     * {@link #batch} 只能表达"同一批语句一起写"。而 {@code KbTermStore.setStatusBatch}
+     * 这类操作是**读与写交替**：先 {@code SELECT status} 看旧值、再决定这条要不要
+     * {@code UPDATE}，循环若干条。那不是一批语句，是一段逻辑，必须整体原子。
+     *
+     * <p>块内照常调用 {@link #update}/{@link #query}/{@link #batch}（同一把可重入锁，
+     * 不会死锁，也不会各自提交 —— 它们用的是同一个连接与同一个事务）。
+     *
+     * @throws PersistenceException 提交失败时；业务异常原样上抛（回滚后）
+     */
+    public <T> T transaction(Callable<T> body) {
+        synchronized (monitor) {
+            Connection c = conn();
+            boolean outermost = txDepth == 0;
+            if (outermost) {
                 try {
-                    c.setAutoCommit(true);
-                } catch (SQLException ignored) {
-                    // 恢复自动提交失败不影响已提交的结果
+                    c.setAutoCommit(false);
+                } catch (SQLException e) {
+                    throw new PersistenceException("开启事务失败", e);
+                }
+            }
+            txDepth++;
+            try {
+                T result = body.call();
+                if (outermost) {
+                    c.commit();
+                }
+                return result;
+            } catch (Exception e) {
+                if (outermost) {
+                    try {
+                        c.rollback();
+                    } catch (SQLException ignored) {
+                        // 回滚也失败就只能记着原异常
+                    }
+                }
+                if (e instanceof RuntimeException re) {
+                    throw re;
+                }
+                throw new PersistenceException("事务执行失败", e);
+            } finally {
+                txDepth--;
+                if (outermost) {
+                    try {
+                        c.setAutoCommit(true);
+                    } catch (SQLException ignored) {
+                        // 恢复自动提交失败不影响已提交/已回滚的结果
+                    }
                 }
             }
         }
