@@ -1,5 +1,6 @@
 package com.example.qqbot.kb.wiki;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
@@ -78,8 +79,9 @@ class WikiArticleImporterE2ETest {
 
         ObjectMapper mapper = new ObjectMapper();
         QaProperties qa = new QaProperties();
-        qa.setDb(db.toString());
-        sqlite = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(db.toString());
+        sqlite = new SqliteDatabase(persist);
         sqlite.init();
         qaStore = new QaStore(new QaStoreRepository(new Jdbc(sqlite)), qa, mapper);
         qaStore.init();

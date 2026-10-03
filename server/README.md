@@ -413,8 +413,9 @@ ADMIN_PASSWORD=你的密码
 
 | 配置 | 默认值 | 说明 |
 |---|---|---|
-| `app.qa.enabled` | `true` | 记录总开关（关掉后回答流程完全不变） |
-| `app.qa.db` | `./data/qa/qa.sqlite` | SQLite 文件 |
+| `app.qa.enabled` | `true` | 记录总开关（关掉后**只停止记录**，库仍然开着，指令/轮播不受影响） |
+| `app.persistence.enabled` | `true` | 数据库总开关（关掉后不开库，依赖库的功能全部降级；仅排障用） |
+| `app.persistence.db` | `./data/qa/qqbot.sqlite` | SQLite 文件（**多个功能共用**：问答统计/指令/词条/分类/文案/轮播清单） |
 | `app.qa.retention-days` | `180` | **原文**保留天数，`0` = 永不删除 |
 | `app.qa.queue-capacity` | `2000` | 异步队列容量，满了丢弃并计数 |
 | `app.qa.cleanup-cron` | 每天 4:30 | 清理任务 cron |

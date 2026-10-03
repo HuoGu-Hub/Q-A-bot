@@ -1,5 +1,6 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.category.CategoryService;
@@ -96,8 +97,9 @@ class SwitchTimeDependenciesTest {
     @DisplayName("★ 词条表按语料的 docId 补齐（切换后新导入的文档才会出现在词条里）")
     void termReconcileSeedsFromCorpus() {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa.sqlite").toString());
-        SqliteDatabase db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa.sqlite").toString());
+        SqliteDatabase db = new SqliteDatabase(persist);
         db.init();
         QaStore qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();
@@ -128,8 +130,9 @@ class SwitchTimeDependenciesTest {
     @DisplayName("★ 一块一条：同一份文档的两个块 → 两条词条（不是一条）")
     void reconcileSeedsPerBlock() {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa2.sqlite").toString());
-        SqliteDatabase db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa2.sqlite").toString());
+        SqliteDatabase db = new SqliteDatabase(persist);
         db.init();
         QaStore qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();
@@ -156,8 +159,9 @@ class SwitchTimeDependenciesTest {
     @DisplayName("清理孤儿词条：没有对应块的删掉，有对应块的不动")
     void deleteOrphanTerms() {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa-orphan.sqlite").toString());
-        SqliteDatabase db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa-orphan.sqlite").toString());
+        SqliteDatabase db = new SqliteDatabase(persist);
         db.init();
         QaStore qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();

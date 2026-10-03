@@ -1623,7 +1623,7 @@ tags: 必需品, 制作台
 </ul>
 <h3 id="82-配置中心后台设置页"><a class="anchor" href="#82-配置中心后台设置页">8.2 配置中心（后台&quot;设置&quot;页）</a></h3>
 <ul>
-<li><strong>可写白名单</strong>是安全的核心：只有 <code>SettingsWhitelist</code> 里列出的项才允许从界面修改，<strong>其余一律拒绝</strong>（即使有人伪造请求改 <code>app.qa.db</code> 也会被挡掉）；</li>
+<li><strong>可写白名单</strong>是安全的核心：只有 <code>SettingsWhitelist</code> 里列出的项才允许从界面修改，<strong>其余一律拒绝</strong>（即使有人伪造请求改 <code>app.persistence.db</code> 也会被挡掉）；</li>
 <li>分类原则：🟢 可写 = 纯业务行为（话术、开关、限流数值）；🔴 禁写 = 基础设施（端口、数据库路径、线程池）与密钥；</li>
 <li>覆盖 <strong>61 项，分 13 组</strong>：回复行为 / 频率限制 / 话术 / 成本预算 / 出站节奏 / 首页轮播 / 回复风格 / 功能开关 / 指令系统 / 媒体 / 知识库 / 站点信息 / 统计；</li>
 <li><strong>保存即热生效</strong>（写进 <code>overrides.yml</code>，下一轮判定就读到）。</li>

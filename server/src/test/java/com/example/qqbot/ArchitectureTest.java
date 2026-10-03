@@ -204,12 +204,15 @@ class ArchitectureTest {
         //   搬不动（yml 键在根上）就只给那几个字段声明只读接口。
         //
         // ⚠️ 加新包时记得回来更新下面这份名单，否则新包不会被这条规则保护。
-        // ⚠️ persistence 不在名单里：SqliteDatabase 借用了 app.qa.db / app.qa.enabled，
-        //    它们该叫 app.persistence.*，但改名会动到现网配置，单独一步做。
+        //
+        // 2026-10-02 补上 persistence：SqliteDatabase 原先直接 import config.QaProperties
+        // （它借用了 app.qa.db / app.qa.enabled）。改名到 app.persistence.* 的同时给了它
+        // persistence/PersistencePolicy，依赖方向摆正。至此除了 config 自己和组合根，
+        // **没有任何包读 config**。
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
                         "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..", "..llm..",
-                        "..plaza..", "..onebot..", "..settings..", "..router..")
+                        "..plaza..", "..onebot..", "..settings..", "..router..", "..persistence..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
         rule.check(CLASSES);
     }

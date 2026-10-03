@@ -1,5 +1,6 @@
 package com.example.qqbot.command;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.CommandRepository;
@@ -39,8 +40,9 @@ class CommandMatcherTest {
     @BeforeEach
     void setUp() {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa.sqlite").toString());
-        db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa.sqlite").toString());
+        db = new SqliteDatabase(persist);
         db.init();
         qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();

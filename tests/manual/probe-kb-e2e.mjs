@@ -5,7 +5,7 @@
 // 用法（两步，强烈建议指向【隔离实例】）：
 //   1) 起一个独立库 + 独立端口的业务层，别用正在服务的生产实例：
 //        cd server && mvn spring-boot:run \
-//          -Dspring-boot.run.arguments="--app.qa.db=./data/qa/kb-e2e.sqlite --server.port=8099"
+//          -Dspring-boot.run.arguments="--app.persistence.db=./data/qa/kb-e2e.sqlite --server.port=8099"
 //   2) 起本探针（它自己占 3000 端口当假 NapCat），并指向上面那个实例：
 //        APP_URL=http://127.0.0.1:8099/onebot/event node tests/manual/probe-kb-e2e.mjs
 //   3) 跑完直接删掉隔离库，不留痕迹。

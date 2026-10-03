@@ -21,18 +21,26 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>业务侧只读视图见 {@link QaPolicy} —— 业务包只依赖它，不依赖本类。
  *
- * <h2>⚠️ {@code db} / {@code enabled} 是「借来的」键</h2>
- * 键名是 {@code app.qa.*}，但真正的使用者是 {@code persistence.SqliteDatabase}。
- * 它们该叫 {@code app.persistence.*} —— 改名会动到现网配置，单独一步做。
+ * <h2>2026-10-02：{@code db} 与「关库」的语义搬去了 {@code app.persistence.*}</h2>
+ * 原先这里还有 {@code app.qa.db} 和 {@code app.qa.enabled}，因为问答记录是历史上第一个
+ * 需要库的功能。但那个 SQLite 文件是**多个功能共用**的（问答统计 / 指令 / 词条 /
+ * 分类 / 文案 / 轮播清单），挂在 {@code qa} 名下会让人以为"关掉问答记录"等于"不建库"。
+ *
+ * <p>现在拆成两个独立开关：{@code app.persistence.enabled} 管库，
+ * 本类的 {@code enabled}（{@code app.qa.enabled}）只管**记不记录问答**。
+ * 这是一条**行为变化** —— 详见 {@code PersistenceProperties} 的类注释。
  */
 @ConfigurationProperties(prefix = "app.qa")
 public class QaProperties implements QaPolicy {
 
-    /** 记录总开关。关掉后完全不写库（回答流程也完全不受影响） */
+    /**
+     * 记录总开关。关掉后完全不记录问答（回答流程也完全不受影响）。
+     *
+     * <p><b>它不再关掉数据库</b> —— 2026-10-02 之前它会（那时 {@code SqliteDatabase}
+     * 读的就是这个键），于是"关掉问答记录"会连带让指令 / 词条 / 轮播一起失效。
+     * 现在库的开关是 {@code app.persistence.enabled}。
+     */
     private boolean enabled = true;
-
-    /** SQLite 文件路径（相对路径以程序工作目录为基准） */
-    private String db = "./data/qa/qa.sqlite";
 
     /**
      * 原文保留天数。<b>0 = 永不删除</b>。
@@ -60,15 +68,6 @@ public class QaProperties implements QaPolicy {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-    }
-
-    @Override
-    public String getDb() {
-        return db;
-    }
-
-    public void setDb(String db) {
-        this.db = db;
     }
 
     @Override

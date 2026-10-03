@@ -19,21 +19,21 @@ package com.example.qqbot.qa;
  *
  * <p>{@link Report} 本身也**搬到了本包**。
  *
- * <h2>⚠️ {@code getDb()} / {@code isEnabled()} 是「借来的」键</h2>
- * 键名是 {@code app.qa.db} / {@code app.qa.enabled}，但真正的使用者是
- * {@code persistence.SqliteDatabase}（它是全库唯一的连接持有者）。
- * 它们该叫 {@code app.persistence.*} —— 改名会动到现网配置，单独一步做。
- * 在那之前 {@code persistence} 不在护栏名单里（见交付说明的债务⑥ 一节）。
+ * <h2>2026-10-02：{@code db} 与「关库」的语义搬去了 {@code app.persistence.*}</h2>
+ * 那个 SQLite 文件是**多个功能共用**的（问答统计 / 指令 / 词条 / 分类 / 文案 /
+ * 轮播清单），不该挂在 {@code qa} 名下。现在 {@code getDb()} 已从本接口移除 ——
+ * 业务侧看不到库路径（它本来也不该关心）。详见 {@code config.PersistenceProperties}。
  *
  * <p>完整理由与粒度说明见 {@code command.CommandPolicy}（债务⑥ 的模板样例）。
  */
 public interface QaPolicy {
 
-    /** 记录总开关。关掉后完全不写库（回答流程也完全不受影响） */
+    /**
+     * 记录总开关。关掉后完全不记录问答（回答流程也完全不受影响）。
+     *
+     * <p><b>它不再关掉数据库</b> —— 库的开关是 {@code app.persistence.enabled}。
+     */
     boolean isEnabled();
-
-    /** SQLite 文件路径（相对路径以程序工作目录为基准） */
-    String getDb();
 
     /** 原文保留天数。<b>0 = 永不删除</b>（只影响 qa_raw） */
     int getRetentionDays();

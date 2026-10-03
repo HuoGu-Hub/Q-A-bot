@@ -363,7 +363,7 @@ mvn -q clean package -DskipTests
 <h3 id="53-systemd-服务"><a class="anchor" href="#53-systemd-服务">5.3 systemd 服务</a></h3>
 <blockquote>
 <p>⚠️ <strong><code>WorkingDirectory</code> 决定了所有数据放在哪</strong>，不是 jar 放在哪。
-<code>app.qa.db</code>、<code>app.kb.dir</code>、<code>app.site.carousel.dir</code>（首页轮播图片）、图片缓存、临时图片、日志
+<code>app.persistence.db</code>、<code>app.kb.dir</code>、<code>app.site.carousel.dir</code>（首页轮播图片）、图片缓存、临时图片、日志
 —— 全是<strong>相对路径</strong>，基准就是进程的工作目录。上面写成 <code>/opt/qqbot/server</code>，
 所以数据都在 <code>/opt/qqbot/server/data/</code> 下。</p>
 <p>这个搞错的后果<strong>不是报错</strong>，而是它在新位置<strong>现建一套空库空语料</strong> —— 看起来就像数据全丢了。
@@ -380,7 +380,7 @@ APP_KB_DIR=/opt/qqbot/data/kb
 APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 </code></pre>
 <p>（变量名 = 配置项去掉短横线后大写：<code>app.media.kb-images.dir</code> → <code>APP_MEDIA_KBIMAGES_DIR</code>。）
-也可以在 ExecStart 后面直接加 <code>--app.qa.db=/opt/qqbot/data/qqbot.sqlite</code> 这种参数，效果一样。
+也可以在 ExecStart 后面直接加 <code>--app.persistence.db=/opt/qqbot/data/qqbot.sqlite</code> 这种参数，效果一样。
 注意换了位置要同步改下面的 <code>ReadWritePaths</code>，否则 <code>ProtectSystem=strict</code> 会让它写不进去。</p>
 </blockquote>
 <pre><code class="language-bash">sudo tee /etc/systemd/system/qqbot.service &gt; /dev/null &lt;&lt;&#39;EOF&#39;

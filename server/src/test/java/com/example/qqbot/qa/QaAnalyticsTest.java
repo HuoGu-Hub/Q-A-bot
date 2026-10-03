@@ -1,5 +1,6 @@
 package com.example.qqbot.qa;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.QaAnalyticsRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
@@ -36,10 +37,11 @@ class QaAnalyticsTest {
     @BeforeEach
     void setUp() {
         props = new QaProperties();
-        props.setDb(base.resolve("qa.sqlite").toString());
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa.sqlite").toString());
         // ⚠️ 一个测试只开**一个**库，store 与 analytics 共用 ——
         //    否则测试自己就制造了"两个连接开同一个文件"（正是这次要消掉的问题）
-        db = new SqliteDatabase(props);
+        db = new SqliteDatabase(persist);
         db.init();
         store = new QaStore(new QaStoreRepository(new Jdbc(db)), props, new ObjectMapper());
         store.init();
@@ -228,7 +230,7 @@ class QaAnalyticsTest {
     @Test
     @DisplayName("库不存在时返回空结果，不抛异常")
     void missingDatabaseIsFine() {
-        QaProperties other = new QaProperties();
+        PersistenceProperties other = new PersistenceProperties();
         other.setDb(base.resolve("nope/never.sqlite").toString());
         // 不 init：SqliteDatabase.isAvailable() 为 false，等价于"库不存在"
         SqliteDatabase missing = new SqliteDatabase(other);

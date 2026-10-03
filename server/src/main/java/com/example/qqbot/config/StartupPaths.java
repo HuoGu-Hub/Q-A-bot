@@ -13,7 +13,7 @@ import java.nio.file.Paths;
  * 启动时把**所有数据目录解析后的绝对路径**打一遍。
  *
  * <h2>为什么值得单独做一件事</h2>
- * 这个项目里 {@code app.qa.db}、{@code app.kb.dir}、{@code app.site.carousel.dir}、
+ * 这个项目里 {@code app.persistence.db}、{@code app.kb.dir}、{@code app.site.carousel.dir}、
  * 日志文件……全是**相对路径**，而相对路径的基准是**进程的工作目录**（不是 jar 在哪、
  * 也不是代码在哪）。于是同一份 jar：
  * <pre>
@@ -31,13 +31,14 @@ public class StartupPaths implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(StartupPaths.class);
 
-    private final QaProperties qa;
+    private final PersistenceProperties persistence;
     private final KbProperties kb;
     private final SiteProperties site;
     private final MediaProperties media;
 
-    public StartupPaths(QaProperties qa, KbProperties kb, SiteProperties site, MediaProperties media) {
-        this.qa = qa;
+    public StartupPaths(PersistenceProperties persistence, KbProperties kb, SiteProperties site,
+                        MediaProperties media) {
+        this.persistence = persistence;
         this.kb = kb;
         this.site = site;
         this.media = media;
@@ -46,7 +47,7 @@ public class StartupPaths implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         log.info("[路径] 进程工作目录：{}", abs("."));
-        log.info("[路径] 问答库（统计 / 词条表 / 分类 / 文案 / 轮播清单）：{}", abs(qa.getDb()));
+        log.info("[路径] 问答库（统计 / 词条表 / 分类 / 文案 / 轮播清单）：{}", abs(persistence.getDb()));
         log.info("[路径] 知识库目录（块表在 SQLite 里，这里只放导出的文档）：{}", abs(kb.getDir()));
         log.info("[路径] 首页轮播图片：{}", abs(site.getCarousel().getDir()));
         log.info("[路径] 知识库图片缓存：{}", abs(media.getKbImages().getDir()));

@@ -1,5 +1,6 @@
 package com.example.qqbot.kb.term;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.persistence.Jdbc;
@@ -55,8 +56,9 @@ class KbTermStoreTest {
     @BeforeEach
     void setUp() {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa.sqlite").toString());
-        db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa.sqlite").toString());
+        db = new SqliteDatabase(persist);
         db.init();
         qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();

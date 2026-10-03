@@ -95,7 +95,7 @@ console.log('')
 console.log('═══ ⑧ ★ 白名单：禁改项应被拒 ═══')
 const bad = await fetch(B + '/admin/api/settings', {
   method: 'POST', headers: H(),
-  body: JSON.stringify({ changes: { 'app.qa.db': '/tmp/hacked.sqlite', 'app.admin.password': 'hacked' } }),
+  body: JSON.stringify({ changes: { 'app.persistence.db': '/tmp/hacked.sqlite', 'app.admin.password': 'hacked' } }),
 }).then(r => r.json())
 console.log('  rejected:', JSON.stringify(bad.rejected))
 console.log('  ' + (bad.rejected?.length === 2 ? '✅ 两项都被拒绝' : '❌ 有漏网'))

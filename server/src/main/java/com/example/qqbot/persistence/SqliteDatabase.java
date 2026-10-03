@@ -1,6 +1,5 @@
 package com.example.qqbot.persistence;
 
-import com.example.qqbot.config.QaProperties;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -30,29 +29,29 @@ import java.sql.Statement;
  * <p><b>2026-10-02：那个转发实现已经删掉了</b>，本类现在是
  * {@link SqliteConnectionProvider} 的**唯一**实现，所以不再需要 {@code @Primary}。
  *
- * <p>⚠️ 配置仍借用 {@code app.qa.db} / {@code app.qa.enabled}（那是历史上第一个
- * 需要库的功能）。键名确实该叫 {@code app.persistence.*}，但改名会动到现网配置，
- * 单独一步做。
+ * <p>配置来自 {@code app.persistence.*}（2026-10-02 从 {@code app.qa.*} 改名过来）。
+ * 那个库是**多个功能共用**的 —— 问答统计 / 指令 / 词条 / 分类 / 文案 / 轮播清单，
+ * 所以它不该挂在 {@code qa} 名下。
  */
 @Component
 public class SqliteDatabase implements SqliteConnectionProvider, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SqliteDatabase.class);
 
-    private final QaProperties props;
+    private final PersistencePolicy props;
     private final Object lock = new Object();
 
     private Connection conn;
     private volatile boolean available;
 
-    public SqliteDatabase(QaProperties props) {
+    public SqliteDatabase(PersistencePolicy props) {
         this.props = props;
     }
 
     @PostConstruct
     public void init() {
         if (!props.isEnabled()) {
-            log.info("[DB] 数据库已关闭（app.qa.enabled=false）");
+            log.info("[DB] 数据库已关闭（app.persistence.enabled=false）");
             return;
         }
         try {

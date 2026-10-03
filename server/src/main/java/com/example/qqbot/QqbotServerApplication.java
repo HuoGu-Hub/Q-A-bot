@@ -10,6 +10,7 @@ import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.config.LogProperties;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.config.OneBotProperties;
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.config.SiteProperties;
@@ -42,7 +43,7 @@ import org.springframework.util.StringUtils;
 @EnableConfigurationProperties({OneBotProperties.class, GuardProperties.class, LlmProperties.class,
         AsyncProperties.class, MediaProperties.class, KbProperties.class, QaProperties.class,
         AdminProperties.class, LogProperties.class, CommandProperties.class, PlazaProperties.class,
-        BotProperties.class, SiteProperties.class})
+        BotProperties.class, SiteProperties.class, PersistenceProperties.class})
 public class QqbotServerApplication {
 
     private static final Logger log = LoggerFactory.getLogger(QqbotServerApplication.class);

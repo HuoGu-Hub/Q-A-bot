@@ -1,5 +1,6 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
@@ -44,8 +45,9 @@ class GlossaryTest {
     /** 用若干「英文名 → 中文名 / 状态」建一个真的词条库，再包成 Glossary */
     private Glossary glossaryWith(String... enZhStatus) {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa-" + System.nanoTime() + ".sqlite").toString());
-        SqliteDatabase db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa-" + System.nanoTime() + ".sqlite").toString());
+        SqliteDatabase db = new SqliteDatabase(persist);
         db.init();
         createdDbs.add(db);
         QaStore qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());

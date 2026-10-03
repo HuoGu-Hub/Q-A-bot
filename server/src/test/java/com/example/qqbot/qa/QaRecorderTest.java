@@ -1,5 +1,6 @@
 package com.example.qqbot.qa;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.QaStoreRepository;
@@ -46,8 +47,8 @@ class QaRecorderTest {
         }
     }
 
-    private Fixture fixture(QaProperties props) {
-        SqliteDatabase db = new SqliteDatabase(props);
+    private Fixture fixture(QaProperties props, PersistenceProperties persist) {
+        SqliteDatabase db = new SqliteDatabase(persist);
         db.init();
         QaStore s = new QaStore(new QaStoreRepository(new Jdbc(db)), props, new ObjectMapper());
         s.init();
@@ -65,8 +66,9 @@ class QaRecorderTest {
     @DisplayName("投递后异步落库")
     void recordsAsynchronously() throws Exception {
         QaProperties props = new QaProperties();
-        props.setDb(base.resolve("a.sqlite").toString());
-        Fixture f = fixture(props);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("a.sqlite").toString());
+        Fixture f = fixture(props, persist);
         QaStore s = f.store();
         QaRecorder recorder = new QaRecorder(props, s);
         recorder.start();
@@ -86,8 +88,9 @@ class QaRecorderTest {
     @DisplayName("★ 存储不可用时投递仍然立即返回、不抛异常")
     void survivesBrokenStore() {
         QaProperties props = new QaProperties();
-        props.setDb(base.resolve("b.sqlite").toString());
-        SqliteDatabase brokenDb = new SqliteDatabase(props);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("b.sqlite").toString());
+        SqliteDatabase brokenDb = new SqliteDatabase(persist);
         brokenDb.init();
         QaStore broken = new QaStore(new QaStoreRepository(new Jdbc(brokenDb)), props, new ObjectMapper());
         broken.init();
@@ -108,11 +111,12 @@ class QaRecorderTest {
     @DisplayName("队列满时丢弃并计数，绝不阻塞投递方")
     void dropsWhenQueueFull() throws Exception {
         QaProperties props = new QaProperties();
-        props.setDb(base.resolve("c.sqlite").toString());
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("c.sqlite").toString());
         props.setQueueCapacity(1);
 
         // 造一个"卡住的存储"：worker 一进去就出不来，队列必然堆满
-        SqliteDatabase stuckDb = new SqliteDatabase(props);
+        SqliteDatabase stuckDb = new SqliteDatabase(persist);
         stuckDb.init();
         QaStore stuck = new QaStore(new QaStoreRepository(new Jdbc(stuckDb)), props, new ObjectMapper()) {
             @Override
@@ -144,8 +148,10 @@ class QaRecorderTest {
     @DisplayName("关掉开关时完全不投递")
     void disabledRecordsNothing() {
         QaProperties props = new QaProperties();
-        props.setEnabled(false);
-        Fixture f = fixture(props);
+        props.setEnabled(false);          // 关的是"问答记录"，库照样开着
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("disabled.sqlite").toString());
+        Fixture f = fixture(props, persist);
         QaStore s = f.store();
         QaRecorder recorder = new QaRecorder(props, s);
         recorder.start();
@@ -155,5 +161,9 @@ class QaRecorderTest {
         assertThat(recorder.backlog()).isZero();
         assertThat(s.countStat()).isZero();
         recorder.stop();
+        // ⚠️ 必须关：2026-10-02 之后"关掉问答记录"**不再关库**，
+        // 所以这个 fixture 真的开了一个 SQLite 文件，不关的话 @TempDir 在 Windows 上删不掉。
+        // （以前 app.qa.enabled=false 会让 SqliteDatabase 直接不开库，于是不需要关。）
+        f.close();
     }
 }

@@ -1,5 +1,6 @@
 package com.example.qqbot.qa;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.QaStoreRepository;
@@ -34,8 +35,9 @@ class QaStoreTest {
     @BeforeEach
     void setUp() {
         props = new QaProperties();
-        props.setDb(base.resolve("qa.sqlite").toString());
-        db = new SqliteDatabase(props);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa.sqlite").toString());
+        db = new SqliteDatabase(persist);
         db.init();
         store = new QaStore(new QaStoreRepository(new Jdbc(db)), props, new ObjectMapper());
         store.init();
@@ -164,9 +166,10 @@ class QaStoreTest {
     @DisplayName("关掉开关时不建库、写入变空操作")
     void disabledIsNoop() {
         QaProperties off = new QaProperties();
-        off.setEnabled(false);
-        off.setDb(base.resolve("never.sqlite").toString());
-        SqliteDatabase offDb = new SqliteDatabase(off);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setEnabled(false);   // 关的是"库"，不是"问答记录"
+        persist.setDb(base.resolve("never.sqlite").toString());
+        SqliteDatabase offDb = new SqliteDatabase(persist);
         offDb.init();
         QaStore offStore = new QaStore(new QaStoreRepository(new Jdbc(offDb)), off, new ObjectMapper());
         offStore.init();

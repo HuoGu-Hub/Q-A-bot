@@ -1,5 +1,6 @@
 package com.example.qqbot.kb.map;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.kb.wiki.WikiApiClient;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.QaProperties;
@@ -55,8 +56,9 @@ class KbMapSyncTest {
 
         ObjectMapper mapper = new ObjectMapper();
         QaProperties qa = new QaProperties();
-        qa.setDb(tmp.resolve("map.sqlite").toString());
-        sqlite = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(tmp.resolve("map.sqlite").toString());
+        sqlite = new SqliteDatabase(persist);
         sqlite.init();
         qaStore = new QaStore(new QaStoreRepository(new Jdbc(sqlite)), qa, mapper);
         qaStore.init();

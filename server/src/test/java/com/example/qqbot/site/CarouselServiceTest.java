@@ -1,5 +1,6 @@
 package com.example.qqbot.site;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.SiteCarouselRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
@@ -48,8 +49,9 @@ class CarouselServiceTest {
     @BeforeEach
     void setUp() {
         QaProperties qa = new QaProperties();
-        qa.setDb(base.resolve("qa.sqlite").toString());
-        db = new SqliteDatabase(qa);
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa.sqlite").toString());
+        db = new SqliteDatabase(persist);
         db.init();
         qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
         qaStore.init();

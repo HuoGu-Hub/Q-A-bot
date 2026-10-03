@@ -1,5 +1,6 @@
 package com.example.qqbot.persistence;
 
+import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,13 +24,13 @@ class JdbcTest {
     @TempDir
     Path tmp;
 
-    private QaProperties props;
+    private PersistenceProperties props;
     private SqliteDatabase db;
     private Jdbc jdbc;
 
     @BeforeEach
     void setUp() {
-        props = new QaProperties();
+        props = new PersistenceProperties();
         props.setDb(tmp.resolve("jdbc-test.sqlite").toString());
         db = new SqliteDatabase(props);
         db.init();

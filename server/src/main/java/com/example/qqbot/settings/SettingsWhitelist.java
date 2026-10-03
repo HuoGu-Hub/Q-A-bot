@@ -12,7 +12,7 @@ import java.util.Set;
  *
  * <p>你明确说过「不能开放这么大权限，改坏了怎么办」——这个类就是那道闸门。
  * 只有列在这里的配置项才允许从界面修改；**其余一律拒绝**，
- * 即使有人伪造请求改 §app.qa.db§ 也会被挡掉。
+ * 即使有人伪造请求改 §app.persistence.db§ 也会被挡掉。
  *
  * <p>分类原则：
  * <ul>
@@ -135,8 +135,11 @@ public class SettingsWhitelist {
                     "bool", "⚠️ 打开后机器人完全不回复", false),
             new Item("app.kb.enabled", "知识库检索", "功能开关",
                     "bool", "关掉后退化成没有知识库的普通回答", true),
+            // 注意：它只管"记不记录问答"，**不再关掉数据库** ——
+            // 库的开关是 app.persistence.enabled，但那个**故意不进白名单**：
+            // 关掉它会让指令 / 词条 / 轮播一起失效，不该是个点一下就生效的开关。
             new Item("app.qa.enabled", "问答记录", "功能开关",
-                    "bool", "关掉后不记录问答", true),
+                    "bool", "关掉后不记录问答（库仍然开着，其他功能不受影响）", true),
             new Item("app.logs.mask-sensitive", "日志脱敏", "功能开关",
                     "bool", "把 token/QQ号 等替换掉", true),
 
