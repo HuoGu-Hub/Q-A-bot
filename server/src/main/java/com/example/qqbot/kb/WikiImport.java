@@ -10,9 +10,16 @@ import java.util.List;
  * 实测地图的 `Quests` 分组**只有 1 个 marker**，而 `Category:Quests` 有 **149 篇**文章。
  * 任务的做法、前置、目标、奖励全在文章正文里，地图只有个坐标点。
  *
- * <h2>为什么正文要截断</h2>
+ * <h2>为什么正文要限长 —— 但**不是截断**（2026-10-02 改）</h2>
  * 检索是"把 top-5 拼进 prompt"，单块太长会把 prompt 撑爆、也会稀释语义。
- * 实测任务页约 2 KB、机制页约 11 KB，所以按 {@link #maxBodyChars} 截断。
+ * 实测任务页约 2 KB、机制页约 11 KB。
+ *
+ * <p>原先的做法是 {@code substring(0, maxBodyChars)} —— 机制页会**丢掉 86% 的正文**，
+ * 关键信息（前置条件、数值）很可能正好在被截掉的部分。这与实测缺口
+ * 「任务/机制的中文检索只有 2/4」吻合。
+ *
+ * <p>现在 {@link #maxBodyChars} 的含义是 <b>单块上限</b>：超长页面由
+ * {@code KbTextChunker} 按段落/句子边界**切成多块**，一块都不丢。
  *
  * <p>正文进库前一律过 {@code WikitextCleaner} —— 不清洗等于把 `{{` 和 `[[` 当内容喂给模型。
  *
@@ -37,7 +44,13 @@ public class WikiImport {
     /** 派生块 docId 的前缀，形如 `wiki·任务`。purge 就按它清 */
     private String docIdPrefix = "wiki";
 
-    /** 单块正文上限（字符）。超长页面截断，别把 prompt 撑爆 */
+    /**
+     * **单块**正文上限（字符）。超长页面按段落/句子边界**切成多块**，不再截断
+     * —— 见 {@code KbTextChunker}。
+     *
+     * <p>注意它的含义变了：以前是"超过就丢掉"，现在是"超过就切下一块"。
+     * 所以调它只影响**块的粒度**，不再影响"有没有丢内容"。
+     */
     private int maxBodyChars = 1500;
 
     /** 启动时自动导入一次。**默认关** —— 运维动作 */

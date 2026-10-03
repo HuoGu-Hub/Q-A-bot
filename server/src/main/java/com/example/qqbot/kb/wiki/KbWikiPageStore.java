@@ -20,8 +20,13 @@ import java.util.Map;
  * 既慢又白花钱（embedding 是按量计费的）。存下每篇的 `revid`，
  * 版本没变就一个字节都不动 —— 和地图同步是同一个思路。
  *
- * <p>同时记 `block_id`：这样"这篇文章对应哪个块"是可查的，
- * 页面在 wiki 上被删掉时也能把对应块一起清掉。
+ * <p>同时记 `block_id` 与 `block_count`：这样"这篇文章对应哪些块"是可查的，
+ * 页面在 wiki 上被删掉时能把对应块一起清掉。
+ *
+ * <p><b>2026-10-02：一页可能对应多块</b> —— 超长正文改为切块（见 {@code KbTextChunker}），
+ * 块 id 约定 {@code <block_id>}、{@code <block_id>-2}、{@code <block_id>-3}…。
+ * `block_count` 就是为"页面被改短时要清掉上次多出来的块"而存的 ——
+ * 没有它就会留下永久孤儿块。
  */
 @Component
 public class KbWikiPageStore {
@@ -66,11 +71,17 @@ public class KbWikiPageStore {
         return available ? repo.pages() : List.of();
     }
 
-    public void upsert(String page, String source, long revid, String pageUpdatedAt, int chars, String blockId) {
+    public void upsert(String page, String source, long revid, String pageUpdatedAt, int chars,
+                       String blockId, int blockCount) {
         if (!available) {
             return;
         }
-        repo.upsert(page, source, revid, pageUpdatedAt, Instant.now().toString(), chars, blockId);
+        repo.upsert(page, source, revid, pageUpdatedAt, Instant.now().toString(), chars, blockId, blockCount);
+    }
+
+    /** 这页上一次切了几块（0 = 没记过）。用于清掉本次多出来的块 */
+    public int blockCount(String page) {
+        return available ? repo.blockCountOf(page) : 0;
     }
 
     /** 记一次失败；**不动 revid**（动了会把这页永久跳过，与地图同步同一条教训） */

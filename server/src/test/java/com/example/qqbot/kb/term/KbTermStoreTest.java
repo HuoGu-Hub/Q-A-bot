@@ -45,6 +45,30 @@ class KbTermStoreTest {
     }
 
 
+    // ==================== 纯函数：块标题 → 词条名（不需要库） ====================
+
+    @Test
+    @DisplayName("★ 切块标记「（续 2）」不算名字 —— 否则会把它当英文名，长出一批垃圾词条")
+    void chunkMarkerIsNotPartOfTheName() {
+        // 语料里的常态：中文名（English）
+        assertThat(KbTermStore.termName("深渊之翼斧（Abyssal Wing Axe）"))
+                .isEqualTo("深渊之翼斧、Abyssal Wing Axe");
+        // 切块产生的后续块：多一段「（续 N）」。
+        // 不剥掉的话末尾括号正则会把「续 2」当成英文名 →
+        //   "水（Water）、续 2" —— 一个永远匹配不到任何提问的垃圾词条
+        assertThat(KbTermStore.termName("水（Water）（续 2）")).isEqualTo("水、Water");
+        assertThat(KbTermStore.termName("水（Water）（续 10）")).isEqualTo("水、Water");
+        assertThat(KbTermStore.termName("Combat Mechanics（续 3）")).isEqualTo("Combat Mechanics");
+        // 没有中文名的英文页，续块也应还原成英文名本身
+        assertThat(KbTermStore.termName("Water")).isEqualTo("Water");
+    }
+
+    @Test
+    @DisplayName("括号不在结尾就原样保留（不乱动）")
+    void parenthesisedMiddleIsKept() {
+        assertThat(KbTermStore.termName("A（B）C")).isEqualTo("A（B）C");
+    }
+
     @TempDir
     Path base;
 

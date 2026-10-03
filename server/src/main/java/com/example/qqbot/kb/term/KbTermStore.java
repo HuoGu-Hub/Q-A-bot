@@ -240,9 +240,20 @@ public class KbTermStore {
      * "这个名字出现在问句里"，而群友不会把整条带英文的长标题说出来。
      *
      * <p>括号不在结尾（比如「A（B）C」）就原样保留，不乱动。
+     * <p>⚠️ 切块标记要先去掉：超长页面会被切成多块，后续块标题是
+     * 「水（Water）（续 2）」。不去掉的话上面那个"末尾括号"正则会把
+     * <b>「续 2」当成英文名</b>，长出一批名为「水（Water）、续 2」的垃圾词条。
      */
+    /** 分块标记：{@code （续 2）} —— 它不属于名字，见 {@code KbTextChunker} */
+    private static final java.util.regex.Pattern CHUNK_MARK =
+            java.util.regex.Pattern.compile("\\s*[（(]续\\s*\\d+[）)]$");
+
     public static String termName(String title) {
         String t = title == null ? "" : title.trim();
+        if (t.isEmpty()) {
+            return "";
+        }
+        t = CHUNK_MARK.matcher(t).replaceFirst("").trim();
         if (t.isEmpty()) {
             return "";
         }

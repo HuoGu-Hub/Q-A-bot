@@ -35,6 +35,16 @@ import java.util.Map;
  *   <li><b>可回滚</b>：块全落在 `docId = <前缀>·<来源>` 下，{@link #purge()} 一条命令清干净。</li>
  * </ol>
  *
+ * <h2>超长正文是**切块**，不是截断（2026-10-02 改）</h2>
+ * 原先超长直接 {@code substring(0, maxBodyChars)} —— 而机制页实测约 11KB、
+ * 上限 1.5KB，<b>86% 的正文被丢掉</b>，关键信息很可能正好在被截掉的部分
+ * （这与实测缺口「任务/机制的中文检索只有 2/4」吻合）。
+ *
+ * <p>现在交给 {@link KbTextChunker} 按段落/句子边界切：一页对应多块，
+ * 块 id 是 {@code <基础id>}、{@code <基础id>-2}、{@code <基础id>-3}…
+ * `kb_wiki_page.block_count` 记住切了几块，页面**改短**时据此清掉多出来的
+ * —— 不清就是永久孤儿块。
+ *
  * <p>失败**按页隔离**：一篇坏了只记 error，其余照常导入；且**不推进它的 revid**，
  * 下次会重试（和地图同步同一条教训）。
  */
@@ -179,32 +189,45 @@ public class WikiArticleImporter {
                     String body = WikitextCleaner.clean(rev.content());
                     if (body.isBlank()) {
                         // 清洗后为空说明这页没有可读正文（纯模板页）——记状态但不建块
-                        store.upsert(title, src.label(), rev.revid(), rev.timestamp(), 0, "");
+                        store.upsert(title, src.label(), rev.revid(), rev.timestamp(), 0, "", 0);
                         continue;
                     }
-                    if (body.length() > cfg.getMaxBodyChars()) {
-                        body = body.substring(0, cfg.getMaxBodyChars());
-                    }
-                    String id = blockIdOf(title);
                     String name = titleOf(title);
                     // ★ 有核对来的中文名就写成「中文（English）」——中英都能命中。
                     //   查不到就保持英文，**不编**（见 NameZhIndex 类注释）。
                     String zh = nameIndex.resolve(name);
                     String display = zh != null ? zh + "（" + name + "）" : name;
-                    // 中文名也塞进正文开头：多一处中文 token，向量与字面两条路都受益
-                    if (zh != null) {
-                        body = zh + "。" + body;
-                    }
+                    // ★ 切块（不是截断）——见类注释与 KbTextChunker
+                    List<String> chunks = KbTextChunker.split(body, cfg.getMaxBodyChars());
+                    String baseId = blockIdOf(title);
                     String docId = cfg.getDocIdPrefix() + "·" + src.label();
                     String url = "https://enshrouded.wiki.gg/wiki/" + title.replace(' ', '_');
-                    KbBlock block = new KbBlock(id, docId, display, body, url,
-                            List.of("wiki", src.kind(), src.label()), SRC_WIKI, false, Instant.now().toString());
-                    if (blockStore.upsert(block, embedding.embedOne(name + "\n" + body))) {
-                        blockStore.upsertTitleVector(id, name, embedding.embedOne(name));
-                        imported++;
-                        chars += body.length();
+                    String now = Instant.now().toString();
+                    // 先清掉上一次多切出来的块：页面在 wiki 上被**改短**时不清就是永久孤儿块
+                    for (int i = store.blockCount(title); i > chunks.size(); i--) {
+                        String stale = chunkId(baseId, i);
+                        blockStore.deleteTitleVector(stale);
+                        blockStore.delete(stale);
                     }
-                    store.upsert(title, src.label(), rev.revid(), rev.timestamp(), body.length(), id);
+                    for (int i = 0; i < chunks.size(); i++) {
+                        String id = chunkId(baseId, i + 1);
+                        // 第 1 块用干净标题；后续块标「（续 N）」——模型据此知道这是同一页的节选，
+                        // 也免得 prompt 里出现几个看起来重复的标题
+                        String chunkTitle = i == 0 ? display : display + "（续 " + (i + 1) + "）";
+                        // 中文名**每块都带**：块是独立检索单位，缺了它中文提问够不到后面的块
+                        String text = zh != null ? zh + "。" + chunks.get(i) : chunks.get(i);
+                        KbBlock block = new KbBlock(id, docId, chunkTitle, text, url,
+                                List.of("wiki", src.kind(), src.label()), SRC_WIKI, false, now);
+                        if (blockStore.upsert(block, embedding.embedOne(name + "\n" + text))) {
+                            // 标题向量一律用**干净的页面名**：C 路闸门问的是"这是哪一页"，
+                            // 同一页的每一块都该同样命中；并列时按 id 顺序取到第 1 块（导语段）
+                            blockStore.upsertTitleVector(id, chunkTitle, embedding.embedOne(name));
+                            imported++;
+                        }
+                    }
+                    chars += body.length();
+                    store.upsert(title, src.label(), rev.revid(), rev.timestamp(), body.length(),
+                            baseId, chunks.size());
                 } catch (Exception e) {
                     failed++;
                     errors.add(title + "：" + e.getMessage());
@@ -234,9 +257,13 @@ public class WikiArticleImporter {
             if (id == null || id.isBlank()) {
                 continue;
             }
-            blockStore.deleteTitleVector(id);
-            if (blockStore.delete(id)) {
-                n++;
+            // 一页可能多块（切块）——blockCount 为 0 的老行只删基础 id
+            for (int i = Math.max(1, p.blockCount()); i >= 1; i--) {
+                String bid = chunkId(id, i);
+                blockStore.deleteTitleVector(bid);
+                if (blockStore.delete(bid)) {
+                    n++;
+                }
             }
         }
         if (n > 0) {
@@ -253,6 +280,16 @@ public class WikiArticleImporter {
         return src.kind().equals("prefix")
                 ? client.listByPrefix(src.name(), limit)
                 : client.listCategoryMembers(src.name(), limit);
+    }
+
+    /**
+     * 块 id：第 1 块用基础 id，之后是 {@code <基础id>-2}、{@code <基础id>-3}…
+     *
+     * <p>确定性 + 可推导 —— 所以 {@code purge()} 与"页面改短时清孤儿块"都不需要额外记账，
+     * 只靠 {@code block_count} 就能推出来。
+     */
+    public static String chunkId(String baseId, int part) {
+        return part <= 1 ? baseId : baseId + "-" + part;
     }
 
     /** 页面名 → 块 id（确定性，重跑幂等） */

@@ -172,11 +172,41 @@ class WikiArticleImporterE2ETest {
         //   门槛设在实测值上：已知缺口不该把构建常年卡红，但也不该被伪装成通过。
         assertThat(retrieved).as("至少命中两个导入块（实测 2/4，见上方注释）").isGreaterThanOrEqualTo(2);
 
-        // ⑤ 回滚：purge 之后块数回到原值
+        // ⑤ ★ 切块生效（2026-10-02）：超长页面产出**多块**，而不是被 substring 截掉。
+        //    这条断言的意义是：以后谁把切块改回截断，这里会红。
+        List<com.example.qqbot.persistence.KbWikiPageRepository.Page> pages = pageStore.pages();
+        long multi = pages.stream().filter(p -> p.blockCount() > 1).count();
+        int maxParts = pages.stream().mapToInt(com.example.qqbot.persistence.KbWikiPageRepository.Page::blockCount)
+                .max().orElse(0);
+        System.out.printf("  切块：%d/%d 页产出多块，最多一页 %d 块%n", multi, pages.size(), maxParts);
+        assertThat(multi).as("应当有页面被切成多块 —— 全是 1 块就等于没切").isGreaterThan(0);
+        // ⚠️ 只对**有块的页**要求记账：清洗后没有正文的纯模板页
+        //    （Category:Debuffs / Equipment 这种）本来就不建块，blockCount=0 是对的
+        assertThat(pages).allSatisfy(p -> {
+            if (!p.blockId().isBlank()) {
+                assertThat(p.blockCount()).as("有块就必须有 blockCount 记账（否则 purge 会漏块）")
+                        .isGreaterThan(0);
+            }
+        });
+
+        // 每一块都不超过单块上限 —— 这正是"不再截断"的直接体现。
+        // +64 是给"中文名。前缀"留的余量（它是导入器加的，不属于切块内容）。
+        int limit = kb.getWikiImport().getMaxBodyChars();
+        List<com.example.qqbot.kb.block.KbBlock> importedBlocks = blocks.allActive().stream()
+                .filter(b -> b.docId() != null && b.docId().startsWith("wiki·"))
+                .toList();
+        assertThat(importedBlocks).as("导入的块应当都在库里").hasSize(r.imported());
+        assertThat(importedBlocks).allSatisfy(b ->
+                assertThat(b.body().length()).as("块 %s 超过单块上限", b.id())
+                        .isLessThanOrEqualTo(limit + 64));
+
+        // ⑥ 回滚：purge 之后块数回到原值
         int purged = importer.purge();
         System.out.printf("回滚：清除 %d 块，块总数回到 %d%n", purged, blocks.count());
-        assertThat(purged).isEqualTo(r.imported());
+        assertThat(purged).as("purge 必须把**每一块**都清掉（含续块）").isEqualTo(r.imported());
         assertThat(blocks.count()).isEqualTo(before);
+        assertThat(blocks.allActive().stream().filter(b -> b.docId() != null && b.docId().startsWith("wiki·")))
+                .as("purge 后不该留下任何续块孤儿").isEmpty();
     }
 
     private static Path findRepoRoot() {
