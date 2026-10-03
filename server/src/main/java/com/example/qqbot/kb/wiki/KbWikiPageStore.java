@@ -101,4 +101,12 @@ public class KbWikiPageStore {
     public int count() {
         return available ? repo.count() : 0;
     }
+
+    /**
+     * 清空全部状态行。**purge 时必须调** —— 见 {@code KbWikiPageRepository#deleteAll}：
+     * 留着 revid 会让下一次导入空转，purge 就成了单向门。
+     */
+    public int clear() {
+        return available ? repo.deleteAll() : 0;
+    }
 }

@@ -248,11 +248,19 @@ public class WikiArticleImporter {
                 errors, dryRun, bySource);
     }
 
-    /** 清掉全部 wiki 文章块 —— 回滚用 */
+    /**
+     * 清掉全部 wiki 文章块 —— 回滚用。
+     *
+     * <h2>为什么必须连 {@code kb_wiki_page} 的状态行一起清</h2>
+     * 增量判据是"这页的 {@code revid} 变过吗"。状态行留着的话，purge 之后再跑导入
+     * <b>会一篇都不处理</b> —— 于是 purge 变成一扇**单向门**：撤掉之后再也导不回来。
+     * 2026-10-02 修：purge = 完全回到"从没导入过"的状态。
+     */
     public int purge() {
         WikiImport cfg = props.getWikiImport();
+        List<KbWikiPageRepository.Page> pages = store.pages();
         int n = 0;
-        for (KbWikiPageRepository.Page p : store.pages()) {
+        for (KbWikiPageRepository.Page p : pages) {
             String id = p.blockId();
             if (id == null || id.isBlank()) {
                 continue;
@@ -266,13 +274,15 @@ public class WikiArticleImporter {
                 }
             }
         }
+        // ★ 连状态一起清 —— 否则下一次导入会空转（见方法注释）
+        int cleared = store.clear();
         if (n > 0) {
             index.reload();
         // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
         // 不补这一下，运行期导入的块要等下次重启才进词表。
         termStore.reconcile();
         }
-        log.info("[KB-WIKI] 已清除 wiki 文章块 {} 个（前缀 {}）", n, cfg.getDocIdPrefix());
+        log.info("[KB-WIKI] 已清除 wiki 文章块 {} 个、状态行 {} 条（前缀 {}）", n, cleared, cfg.getDocIdPrefix());
         return n;
     }
 

@@ -207,6 +207,17 @@ class WikiArticleImporterE2ETest {
         assertThat(blocks.count()).isEqualTo(before);
         assertThat(blocks.allActive().stream().filter(b -> b.docId() != null && b.docId().startsWith("wiki·")))
                 .as("purge 后不该留下任何续块孤儿").isEmpty();
+
+        // ⑦ ★ 回滚必须是**双向**的：purge 之后要能重新导入。
+        //    原先 purge() 不清 kb_wiki_page 的状态行，而增量判据就是"revid 变过吗"——
+        //    状态行留着 → 再导入**一篇都不处理** → purge 是一扇单向门。
+        //    这条断言就是盯它的：把 purge 改回"只删块不清状态"会红。
+        WikiArticleImporter.ImportReport again2 = importer.importAll(false);
+        System.out.printf("回滚后重新导入：写入 %d 块（首次是 %d）%n", again2.imported(), r.imported());
+        assertThat(again2.imported())
+                .as("purge 后必须能重新导入 —— 否则回滚是单向门")
+                .isEqualTo(r.imported());
+        assertThat(blocks.count()).isEqualTo(before + r.imported());
     }
 
     private static Path findRepoRoot() {

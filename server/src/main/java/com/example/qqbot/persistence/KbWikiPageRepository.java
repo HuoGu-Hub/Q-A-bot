@@ -119,4 +119,15 @@ public class KbWikiPageRepository {
     public int count() {
         return (int) jdbc.count("SELECT COUNT(*) FROM kb_wiki_page");
     }
+
+    /**
+     * 清空全部状态行 —— **回滚时必须连它一起清**。
+     *
+     * <p>不清的话 {@code revid} 还记着，再跑一次导入会一篇都不处理
+     * （判据就是"revid 变过"）—— 于是 purge 变成一扇**单向门**：
+     * 撤掉之后再也导不回来。2026-10-02 修。
+     */
+    public int deleteAll() {
+        return jdbc.update("DELETE FROM kb_wiki_page");
+    }
 }
