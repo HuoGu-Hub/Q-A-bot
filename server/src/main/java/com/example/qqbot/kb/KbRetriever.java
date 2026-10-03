@@ -4,6 +4,7 @@ import com.example.qqbot.kb.map.LocationCorpusBuilder;
 import com.example.qqbot.trace.KbTrace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -96,6 +97,19 @@ public class KbRetriever {
     private final EmbeddingClient embedding;
     private final RerankClient rerankClient;
 
+    /**
+     * 主构造器。
+     *
+     * <p>⚠️ <b>{@code @Autowired} 不能去掉。</b>本类有**两个** public 构造器
+     * （下面那个是给测试用的便利构造）。Spring 遇到"多个构造器、且都没有
+     * {@code @Autowired}"时会退回去找**无参**构造器 —— 找不到就报
+     * {@code No default constructor found}，<b>整个应用起不来</b>。
+     *
+     * <p>这个坑是 2026-10-02 的 cross-encoder 提交引入的（加第二个构造器时忘了标注），
+     * 之后服务一直启动失败，直到有人真的去启动它才发现。
+     * {@code SpringWiringTest} 现在盯着这一类问题。
+     */
+    @Autowired
     public KbRetriever(KbPolicy props, KbCorpus corpus, Glossary glossary, EmbeddingClient embedding,
                        RerankClient rerankClient) {
         this.props = props;
