@@ -22,11 +22,16 @@ entity	稻草在哪里	straw
 entity	现在钓鱼还像很久以前那样钓不上来吗	wake-of-water-4	真实提问；问的是钓鱼机制不是鱼竿（天真匹配会选 excellent-fishing-rod）
 entity	可以挤牛奶吗	milk	真实提问；语料正文写「从春之原野的家养普通山羊身上收集」
 entity	腐血是什么	rotblood	真实提问；腐血是双手锤
+entity	高炉解锁了没	wiki-quests-a-blast-furnace-for-the-blacksmith	真实提问；正文「Reward: Blast Furnace, 150 XP」正面回答。2026-10-04 导入 Quests/ 后才可答
+entity	寻找永恒法术任务是不是有bug	wiki-quests-an-eternal-spell	真实提问；正文「is a quest… Reward: Eternal Ice Bolt, 75 XP」
+entity	拾荒者主母能打过魔幼龙吗	wiki-scavenger-matron	真实提问；正文「The Scavenger Matron is the 2nd boss」
+entity	游侠跑得快算有用吗	wiki-ranger	真实提问；正文「游侠。is a skill… +2 Endurance +2 Dexterity +5 Stamina Recharge」
 entity	正常的话满技能点是多少	wiki-skill-points	原标为 gap（当时全库无技能点页）；2026-10-04 导入 Quests/技能 语料后已能正确检回 —— **扩充语料后必须复查 gap 标注**
 
 # ---- colloquial：玩家用俗称，语料里是官方译名（考 D6 别名表）----
 colloquial	雾锁铁矿在哪里挖	iron-ore	玩家说『铁矿』，语料是『铁矿石』
 colloquial	氨液腺这个一般都在哪啊	ammonia-gland	玩家说『氨液腺』，语料是『氨腺』——关键词路 0 命中，**靠向量路第 3 名捞回**
+colloquial	还是不能召唤空荡独眼巨人	wiki-hollow-cyclops	真实提问；玩家说『空荡独眼巨人』，语料是『空洞（Hollow Cyclops）』—— 俗称差异。2026-10-04 导入 Bosses 后才可答
 colloquial	黑魔法是什么	wiki-dark-arts	原标为 gap；玩家说『黑魔法』，语料是『黑暗（Dark Arts）』—— 俗称差异。2026-10-04 导入 Mage Skills 后才可答
 colloquial	红毯方块的四个机关分别在哪	red-carpet-block	真实提问；玩家说『红毯方块』（语料『红地毯方块』）、说『机关』（语料正文写『需要 4 个开关才能打开的门』）—— 两处说法都不同，关键词路必失手
 
