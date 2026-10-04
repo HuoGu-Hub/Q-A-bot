@@ -64,9 +64,9 @@ public class KbDocImporter {
      *
      * @throws IllegalArgumentException 文档有致命格式问题（消息里带逐条原因）
      */
-    public ChunkImportPlan preview(String documentText) {
+    public ChunkImportPlan<ChunkMarkup.Block> preview(String documentText) {
         ChunkMarkup.Parsed parsed = parseOrThrow(documentText);
-        return ChunkImportPlan.of(library(), parsed.blocks());
+        return planOf(parsed, sourceOf(parsed));
     }
 
     /**
@@ -81,9 +81,9 @@ public class KbDocImporter {
         String docId = docIdOf(parsed);
         String url = parsed.meta("url");
         List<String> tags = ChunkMarkup.splitTags(parsed.meta("tags"));
-        String source = parsed.meta("source").isBlank() ? KbBlock.SRC_DOC : parsed.meta("source");
+        String source = sourceOf(parsed);
 
-        ChunkImportPlan plan = ChunkImportPlan.of(library(), parsed.blocks());
+        ChunkImportPlan plan = planOf(parsed, source);
 
         // ★ 只为"新增 + 覆盖"的块算向量；无变化的块一次 embedding 都不调
         List<ChunkMarkup.Block> todo = new ArrayList<>();
@@ -229,6 +229,50 @@ public class KbDocImporter {
             log.warn("[KB-IMPORT] 标题向量计算失败（本次不补，不影响导入）：{}", e.getMessage());
             return List.of();
         }
+    }
+
+    /** 文档头里的 {@code source}；没写就用默认的 {@code doc} */
+    private static String sourceOf(ChunkMarkup.Parsed parsed) {
+        String s = parsed.meta("source");
+        return s.isBlank() ? KbBlock.SRC_DOC : s;
+    }
+
+    /**
+     * 导入计划 + **文档级字段的比对**。
+     *
+     * <h2>为什么不能直接用 {@code ChunkImportPlan.of(...)}</h2>
+     * 它只比对**正文**（块级字段）。而 {@code source} 是**文档级**的，不参与块的身份 ——
+     * 于是"只改了文档头的 {@code source}"会被一律判成**无变化**：导入是空转，
+     * {@code source} 事实上**永远改不掉**（2026-10-04 实测踩到）。
+     *
+     * <p>修法：正文相同、但库里那一块的 {@code source} 与本次文档头不一致时，
+     * 把它从「无变化」挪进「覆盖」。
+     *
+     * <p><b>preview 与真导入共用这一份计算</b> —— 所以不会出现
+     * "预览说改动 0 条、实际却改了 N 条"这种自相矛盾。
+     */
+    private ChunkImportPlan<ChunkMarkup.Block> planOf(ChunkMarkup.Parsed parsed, String source) {
+        ChunkImportPlan<ChunkMarkup.Block> raw = ChunkImportPlan.of(library(), parsed.blocks());
+        if (raw.unchanged().isEmpty()) {
+            return raw;
+        }
+        List<ChunkMarkup.Block> moved = new ArrayList<>();
+        List<ChunkMarkup.Block> stay = new ArrayList<>();
+        for (ChunkMarkup.Block b : raw.unchanged()) {
+            KbBlock cur = store.get(b.key());
+            if (cur != null && !source.equals(cur.source())) {
+                moved.add(b);
+            } else {
+                stay.add(b);
+            }
+        }
+        if (moved.isEmpty()) {
+            return raw;
+        }
+        List<ChunkMarkup.Block> updated = new ArrayList<>(raw.updated());
+        updated.addAll(moved);
+        return new ChunkImportPlan<>(raw.added(), List.copyOf(updated), List.copyOf(stay),
+                raw.untouchedExisting(), raw.warnings());
     }
 
     /** 库里现有的块，key → 块（导入计划的比对基线） */

@@ -94,6 +94,20 @@ class KbDocImporterTest {
         return sb.toString();
     }
 
+    /** 一份带文档头、且**指定 source** 的文档（默认的 doc(...) 不写 source，走默认值 doc） */
+    private static String docWithSource(String name, String source, String... blockLines) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<!-- doc").append('\n')
+                .append("name: ").append(name).append('\n')
+                .append("source: ").append(source).append('\n')
+                .append("url: https://w/").append(name).append('\n')
+                .append("-->").append('\n').append('\n');
+        for (String l : blockLines) {
+            sb.append(l).append('\n');
+        }
+        return sb.toString();
+    }
+
     /* ==================== 首次导入 ==================== */
 
     @AfterEach
@@ -125,6 +139,51 @@ class KbDocImporterTest {
         assertThat(index.isReady()).isTrue();
         assertThat(index.searchable()).hasSize(2);
         assertThat(index.vector("flame-altar-0")).hasSize(DIM);
+    }
+
+    /* ==================== ★ 文档级字段 source 也要能被改 ==================== */
+
+    @Test
+    @DisplayName("★ 只改文档头的 source，也要算「覆盖」—— 否则 source 永远改不掉")
+    void changingSourceIsAnUpdateEvenWhenBodyIsIdentical() {
+        // 首次：来源是 wiki
+        importer.importDocument(docWithSource("页面", "wiki",
+                "=== 甲 === <!-- id: p-0 -->", "正文甲",
+                "", "=== 乙 === <!-- id: p-1 -->", "正文乙"));
+        assertThat(store.get("p-0").source()).isEqualTo("wiki");
+
+        // 再导同一份内容，**只把 source 改成 manual**
+        String again = docWithSource("页面", "manual",
+                "=== 甲 === <!-- id: p-0 -->", "正文甲",
+                "", "=== 乙 === <!-- id: p-1 -->", "正文乙");
+
+        // ① 预览必须如实报出"要覆盖 2 条" —— 预览与真导入共用同一份计算
+        ChunkImportPlan<com.example.qqbot.kb.doc.ChunkMarkup.Block> plan = importer.preview(again);
+        assertThat(plan.added()).isEmpty();
+        assertThat(plan.updated()).as("正文没变，但 source 变了 → 两条都要覆盖").hasSize(2);
+        assertThat(plan.unchanged()).isEmpty();
+
+        // ② 真导入的结果与预览一致
+        KbDocImporter.Result r = importer.importDocument(again);
+        assertThat(r.updated()).isEqualTo(2);
+        assertThat(r.added()).isZero();
+
+        // ③ 库里真的改了 —— 这正是"我们维护的内容"那一段能不能生效的关键
+        assertThat(store.get("p-0").source()).isEqualTo("manual");
+        assertThat(store.get("p-1").source()).isEqualTo("manual");
+    }
+
+    @Test
+    @DisplayName("source 没变时仍然是「无变化」（幂等，不白花 embedding）")
+    void sameSourceStaysUnchanged() {
+        String d = docWithSource("页面", "manual", "=== 甲 === <!-- id: p-0 -->", "正文甲");
+        importer.importDocument(d);
+        clearInvocations(embedding);
+
+        KbDocImporter.Result r = importer.importDocument(d);
+        assertThat(r.unchanged()).isEqualTo(1);
+        assertThat(r.changed()).isZero();
+        verify(embedding, times(0)).embedOne(anyString());
     }
 
     /* ==================== ★ 用户的核心场景：只给变更的块 ==================== */
