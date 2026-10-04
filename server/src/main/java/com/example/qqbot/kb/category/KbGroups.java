@@ -245,7 +245,25 @@ public final class KbGroups {
      * <p>清单来源：把 604 个 Wiki 原始分类逐个过 autoGroup + LABELS，
      * 挑出「词典里已经有中文名、但规则没归类」的那些。
      */
+    public static final String DEFAULT_GROUP = "other";
+
+    /** 特殊值：标记为隐藏（不展示给玩家） */
+    public static final String HIDDEN = "__hidden__";
+
     private static final Map<String, String> EXACT_GROUPS = Map.ofEntries(
+            // ── 内容类型标记：隐藏（同中文的「物品」那一条）──
+            // ⚠️ 2026-10-04：wiki 自动导入的块，tags 是 **[来源标记, 类型, 真实分类]**，
+            //    形如 wiki,category,Mage Skills。而 boardOf 取**第一个非 HIDDEN** 的判定，
+            //    于是 autoGroup("wiki") → other 直接把板块定死，**第三个标签（真分类）永远轮不到**。
+            //    实测后果：403+364 个导入块全被丢进「其他」，占该桶的 93%。
+            //    隐藏这三个标记之后，真分类就能被读到（Bosses→creature、Mage Skills→system…）。
+            Map.entry("wiki", HIDDEN),
+            Map.entry("category", HIDDEN),
+            Map.entry("prefix", HIDDEN),
+            // ── 剧情 ──
+            // ⚠️ 「Lore」里含子串「ore」，会被材料规则抢走 → 必须精确表兜住。
+            //    它就是游戏里的收集品笔记/背景故事，归「任务剧情」。
+            Map.entry("Lore", "quest"),
             // ── 建造装饰：家具与装饰（子串规则漏掉的复数/专名）──
             Map.entry("Statues", "build"),
             Map.entry("Shelves", "build"),
@@ -280,11 +298,6 @@ public final class KbGroups {
             Map.entry("Assistants", "creature"),
             // ── 任务剧情：书籍属于世界观读物 ──
             Map.entry("Books", "quest"));
-
-    public static final String DEFAULT_GROUP = "other";
-
-    /** 特殊值：标记为隐藏（不展示给玩家） */
-    public static final String HIDDEN = "__hidden__";
 
     /**
      * 中文标签 → 大类。

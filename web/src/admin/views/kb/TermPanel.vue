@@ -841,17 +841,30 @@ async function applyBatch(status: TermStatus) {
 async function exportTsv() {
   error.value = ''
   try {
-    const r = await adminApi.get<KbTermExportResponse>('/kb/terms/export')
+    // ★ 把**当前筛选原样带上** —— 「看到什么就导出什么」。
+    //   最关键的是 view=unnamed：自动导入的英文页有 651 条没有中文名，
+    //   在网页上逐条点不现实，导到 Excel 填完再 /import 导回。
+    //   带上 board 之后就能**按板块分批**（战斗装备 / 建造装饰 / 材料消耗 …）。
+    const params = new URLSearchParams()
+    if (view.value) params.set('view', view.value)
+    if (board.value) params.set('board', board.value)
+    if (q.value.trim()) params.set('q', q.value.trim())
+    const qs = params.toString()
+
+    const r = await adminApi.get<KbTermExportResponse>('/kb/terms/export' + (qs ? '?' + qs : ''))
     const url = URL.createObjectURL(new Blob([r.tsv], { type: 'text/tab-separated-values' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = 'kb-terms.tsv'
+    // 文件名带上筛选，否则分几批导出会互相覆盖，也对不上账
+    a.download = 'kb-terms' + (view.value ? '-' + view.value : '')
+      + (board.value ? '-' + board.value : '') + '.tsv'
     document.body.appendChild(a)
     a.click()
     a.remove()
     // 立即 revoke 会让部分浏览器取消下载 —— 等一拍再释放
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    flash('已导出 ' + r.count + ' 条词条（TSV）')
+    const scope = [view.value, board.value].filter(Boolean).join(' · ')
+    flash('已导出 ' + r.count + ' 条词条（TSV）' + (scope ? ' —— ' + scope : ''))
   } catch (e) {
     error.value = describeError(e)
   }

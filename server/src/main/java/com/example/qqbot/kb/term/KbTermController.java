@@ -245,14 +245,22 @@ public class KbTermController {
      * <p>返回 JSON 而不是裸文本，因为前端的 {@code adminApi} 一律按 JSON 解析。
      * 前端拿到 {@code tsv} 后自己造 Blob 触发下载。
      *
-     * @param view 可选，见 {@code KbTermService.VIEWS}。例如
-     *             {@code /admin/api/kb/terms/export?view=unnamed} 只导「还没有中文名」的那批 ——
-     *             651 条在网页上逐条点不现实，导到 Excel 里填完再用 {@code /import} 导回。
-     *             留空 = 导全部（保持老行为）。
+     * <p>三个筛选参数**与列表接口完全一致**（共用同一份筛选），
+     * 所以「列表里看到多少条，导出就是多少条」。
+     *
+     * @param q     搜索词，可选
+     * @param view  见 {@code KbTermService.VIEWS}，可选。例如
+     *              {@code ?view=unnamed} 只导「还没有中文名」的那批（2026-10-04 实测 651 条）——
+     *              在网页上逐条点不现实，导到 Excel 里填完再用 {@code /import} 导回。
+     *              留空 = 导全部（保持老行为）。
+     * @param board 板块 key，可选。补译名没有优先级，但**按板块分批**能一次只面对一小撮：
+     *              {@code combat / build / material / creature / world / quest / system / guide / other}
      */
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(defaultValue = "") String view) {
-        String tsv = service.exportTsv(view);
+    public Map<String, Object> export(@RequestParam(defaultValue = "") String q,
+                                      @RequestParam(defaultValue = "") String view,
+                                      @RequestParam(defaultValue = "") String board) {
+        String tsv = service.exportTsv(q, view, board);
         long count = tsv.lines().filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);

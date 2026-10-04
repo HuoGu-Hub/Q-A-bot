@@ -174,9 +174,30 @@ public class KbTermService {
         List<BoardStat> boards = boardStats(all);
         boolean available = termStore.isAvailable();
 
+        // 默认视图是 main；导出那边默认是 all —— 所以默认值由调用方给，这里只认传进来的
+        List<Term> filtered = filter(all, q, view == null || view.isBlank() ? "main" : view, board);
+
+        int from = Math.max(0, offset);
+        if (from >= filtered.size()) {
+            return new Page(filtered.size(), List.of(), counts, boards, available);
+        }
+        int to = Math.min(filtered.size(), from + Math.max(1, limit));
+        return new Page(filtered.size(), filtered.subList(from, to), counts, boards, available);
+    }
+
+    /**
+     * 列表与导出**共用**的筛选 —— 保证「**看到什么就导出什么**」。
+     *
+     * <p>以前导出是单独一份逻辑（只认 view），于是「在某个板块视图下点导出」
+     * 得到的是全表 —— 651 条待补译名混在 3416 行里，人得自己筛。
+     * 抽成一份之后，前端把当前的 {@code view / board / q} 原样传过来即可。
+     *
+     * @param view 已定好默认值（列表是 main、导出是 all），这里不再兜底
+     */
+    private List<Term> filter(Map<String, Term> all, String q, String view, String board) {
         String needle = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
-        String v = view == null || view.isBlank() ? "main" : view.trim().toLowerCase(Locale.ROOT);
-        List<Term> filtered = new ArrayList<>();
+        String v = view == null || view.isBlank() ? "all" : view.trim().toLowerCase(Locale.ROOT);
+        List<Term> out = new ArrayList<>();
         for (Term t : all.values()) {
             if (!matchesView(t, v)) {
                 continue;
@@ -187,17 +208,11 @@ public class KbTermService {
             if (!needle.isEmpty() && !matchesQuery(t, needle)) {
                 continue;
             }
-            filtered.add(t);
+            out.add(t);
         }
-        // 按英文名排序：列表要能翻页，顺序必须稳定且可预期
-        filtered.sort(Comparator.comparing(Term::en, String.CASE_INSENSITIVE_ORDER));
-
-        int from = Math.max(0, offset);
-        if (from >= filtered.size()) {
-            return new Page(filtered.size(), List.of(), counts, boards, available);
-        }
-        int to = Math.min(filtered.size(), from + Math.max(1, limit));
-        return new Page(filtered.size(), filtered.subList(from, to), counts, boards, available);
+        // 按英文名排序：列表要能翻页、导出要能对账，顺序必须稳定且可预期
+        out.sort(Comparator.comparing(Term::en, String.CASE_INSENSITIVE_ORDER));
+        return out;
     }
 
     private static boolean matchesView(Term t, String view) {
@@ -487,28 +502,33 @@ public class KbTermService {
 
     /** 导出全表 TSV（Excel 旁路）。中间两列由语料现算，不落库 */
     public String exportTsv() {
-        return exportTsv("");
+        return exportTsv("", "", "");
     }
 
     /**
-     * 按**视图**导出 TSV —— 让「导出还没中文名的那批 → Excel 填 → 导回」这条路走得通。
+     * 按**当前视图所见**导出 TSV —— 让「导出待补译名的那批 → Excel 填 → 导回」这条路走得通。
      *
-     * <p>为什么需要它：{`unnamed`} 现在有 651 条（2026-10-04 实测）。
+     * <h2>为什么需要它</h2>
+     * 自动导入的英文页有 **651 条**没有中文名（2026-10-04 实测）。
      * 在网页上逐条点 651 次不现实，而 `POST /terms/import` 本来就收 TSV ——
-     * 所以导出必须能只导那一批，否则那 3416 行里混着 651 行要补的，人得自己筛。
+     * 所以导出必须能只导**当前筛出来的那批**，否则 651 行混在 3416 行里，人得自己筛。
      *
-     * @param view 见 {@link #VIEWS}；空 = 全部（保持老行为）
+     * <p>筛选条件与 {@link #page} **完全共用一份**（{@link #filter}），
+     * 所以「看到什么就导出什么」，不会出现"列表 651 条、导出 3416 条"这种对不上。
+     *
+     * <h2>按板块分批</h2>
+     * 补译名没有优先级，但**按板块（{@code board}）分批**能让人一次只面对一小撮 ——
+     * 板块就是玩家视角的那 9 类（战斗装备 / 建造装饰 / 材料消耗 / 敌人生物 /
+     * 地点探索 / 任务剧情 / 系统机制 / 大佬攻略 / 其他）。
+     *
+     * @param q     搜索词；空 = 不按词筛
+     * @param view  见 {@link #VIEWS}；**空 = 全部**（保持老行为，注意与列表默认的 main 不同）
+     * @param board 板块 key；空 = 不限
      */
-    public String exportTsv(String view) {
-        String v = view == null ? "" : view.trim().toLowerCase(Locale.ROOT);
-        Map<String, Term> all = buildAll();
-        List<Term> sorted = new ArrayList<>(all.values());
-        sorted.sort(Comparator.comparing(Term::en, String.CASE_INSENSITIVE_ORDER));
+    public String exportTsv(String q, String view, String board) {
+        List<Term> sorted = filter(buildAll(), q, view, board);
         StringBuilder sb = new StringBuilder(TSV_HEADER);
         for (Term t : sorted) {
-            if (!v.isEmpty() && !matchesView(t, v)) {
-                continue;
-            }
             if (t.zh().isEmpty() && t.chunkCount() == 0) {
                 continue;   // 既没名字又没正文的空页面不进导出，免得淹掉有用的行
             }

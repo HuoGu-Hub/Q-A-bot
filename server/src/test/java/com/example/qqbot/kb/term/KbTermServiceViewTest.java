@@ -123,12 +123,39 @@ class KbTermServiceViewTest {
         block("wiki-intelligence", "Intelligence");
         block("灵火祭坛", "灵火祭坛（Flame Altar）");
 
-        String only = service.exportTsv("unnamed");
+        String only = service.exportTsv("", "unnamed", "");
         assertThat(only).contains("wiki-strength").contains("wiki-intelligence");
         assertThat(only).as("有中文名的那条不该出现在 unnamed 导出里").doesNotContain("灵火祭坛");
 
         String all = service.exportTsv();
         assertThat(all).contains("wiki-strength").contains("灵火祭坛");
-        assertThat(all.lines().count()).as("不带 view 时行为不变").isGreaterThan(only.lines().count());
+        assertThat(all.lines().count()).as("不带筛选时行为不变").isGreaterThan(only.lines().count());
+    }
+
+    @Test
+    @DisplayName("★ 导出与列表**用同一套筛选** —— 列表里看到多少条，导出就是多少条")
+    void exportAndListShareTheSameFilter() {
+        // 三个块给不同的 tags，让它们落进不同板块
+        blocks.upsert(new KbBlock("a", "d", "Sword", "x", "", List.of("武器"), KbBlock.SRC_DOC, false, "t"),
+                new float[]{0.1f, 0.2f, 0.3f});
+        blocks.upsert(new KbBlock("b", "d", "Table", "x", "", List.of("家具"), KbBlock.SRC_DOC, false, "t"),
+                new float[]{0.1f, 0.2f, 0.3f});
+        blocks.upsert(new KbBlock("c", "d", "剑（Sword）", "x", "", List.of("武器"), KbBlock.SRC_DOC, false, "t"),
+                new float[]{0.1f, 0.2f, 0.3f});
+
+        // 列表（board=combat）与导出（同一 board）必须一致
+        int listTotal = service.page("", "all", "combat", 500, 0).total();
+        long exportRows = service.exportTsv("", "all", "combat").lines()
+                .filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
+        assertThat(exportRows).as("列表 %d 条，导出 %d 条 —— 必须相等", listTotal, exportRows)
+                .isEqualTo(listTotal);
+
+        // unnamed + board 叠加也要生效
+        // ⚠️ 只看**数据行**：表头里有 "rejected" 这种带字母 c 的说明文字，
+        //    直接对整段做 doesNotContain("c") 会假红（本测试第一次就是这么挂的）
+        String both = service.exportTsv("", "unnamed", "combat").lines()
+                .filter(l -> !l.isBlank() && l.charAt(0) != '#')
+                .collect(java.util.stream.Collectors.joining("\n"));
+        assertThat(both).contains("a").doesNotContain("c");
     }
 }
