@@ -1,0 +1,410 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "飘雪喵 QQ 机器人 · 系统架构",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "message-main-path",
+        "label": "群消息主链",
+        "focus": [
+          "qq_users",
+          "napcat",
+          "bot",
+          "guard",
+          "agent"
+        ],
+        "note": "一条群消息从协议端进入业务层，先过零成本判定，再交给模型。"
+      },
+      {
+        "id": "retrieval-and-state",
+        "label": "检索与数据",
+        "focus": [
+          "agent",
+          "kb",
+          "embed",
+          "sqlite"
+        ],
+        "note": "三路召回、外部向量模型与单一 SQLite 文件的关系。"
+      },
+      {
+        "id": "web-plane",
+        "label": "双端站点",
+        "focus": [
+          "browsers",
+          "nginx",
+          "webapp",
+          "bot"
+        ],
+        "note": "公开站与管理后台共用同一个后端，入口只有 Nginx。"
+      }
+    ],
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "前端"
+        },
+        "backend": {
+          "label": "后端服务"
+        },
+        "database": {
+          "label": "数据存储"
+        },
+        "cloud": {
+          "label": "容器/云"
+        },
+        "security": {
+          "label": "安全边界"
+        },
+        "external": {
+          "label": "外部服务"
+        },
+        "messagebus": {
+          "label": "消息通道"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "browsers",
+      "type": "external",
+      "label": "双端浏览器",
+      "sublabel": "访客 + 管理员",
+      "pos": [
+        330,
+        92
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "nginx",
+      "type": "security",
+      "label": "Nginx :443",
+      "sublabel": "TLS · 限流 · 白名单",
+      "pos": [
+        640,
+        88
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "公网唯一入口"
+    },
+    {
+      "id": "webapp",
+      "type": "frontend",
+      "label": "双端 Web 前端",
+      "sublabel": "公开站 · 管理后台",
+      "pos": [
+        980,
+        92
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "Vue3 产物"
+    },
+    {
+      "id": "qq_users",
+      "type": "external",
+      "label": "QQ 群友",
+      "sublabel": "@机器人 · /命令",
+      "pos": [
+        40,
+        420
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "napcat",
+      "type": "cloud",
+      "label": "NapCat 协议端",
+      "sublabel": "OneBot 11 · 容器",
+      "pos": [
+        330,
+        416
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "127.0.0.1:3000"
+    },
+    {
+      "id": "bot",
+      "type": "backend",
+      "label": "Spring Boot 业务层",
+      "sublabel": "单体 · 事件编排",
+      "pos": [
+        640,
+        406
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "tag": ":8080"
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "Guard 安全中间层",
+      "sublabel": "五层零成本拦截",
+      "pos": [
+        980,
+        410
+      ],
+      "size": [
+        180,
+        72
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "ChatService + LlmRouter",
+      "sublabel": "上下文组装 · 降级链",
+      "pos": [
+        1310,
+        360
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "大模型服务",
+      "sublabel": "opencode-go → DeepSeek",
+      "pos": [
+        1650,
+        360
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "kb",
+      "type": "backend",
+      "label": "知识库检索",
+      "sublabel": "向量 · 词条 · 标题闸门",
+      "pos": [
+        1310,
+        620
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "embed",
+      "type": "external",
+      "label": "向量模型",
+      "sublabel": "BAAI/bge-m3",
+      "pos": [
+        1650,
+        620
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "SQLite 单文件",
+      "sublabel": "统计 · 块与向量",
+      "pos": [
+        640,
+        660
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "tag": "data/qa/"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Docker 容器 · 只跑协议层",
+      "wraps": [
+        "napcat"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "security-group",
+      "label": "宿主机业务进程 · systemd（单 JVM）",
+      "wraps": [
+        "bot",
+        "guard",
+        "agent",
+        "kb",
+        "sqlite"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "e_https",
+      "from": "browsers",
+      "to": "nginx",
+      "label": "HTTPS"
+    },
+    {
+      "id": "e_static",
+      "from": "nginx",
+      "to": "webapp",
+      "label": "静态资源"
+    },
+    {
+      "id": "e_proxy",
+      "from": "nginx",
+      "to": "bot",
+      "label": "反代 /api",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e_msg_in",
+      "from": "qq_users",
+      "to": "napcat",
+      "label": "QQ 消息",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_report",
+      "from": "napcat",
+      "to": "bot",
+      "label": "/onebot/event",
+      "variant": "emphasis",
+      "labelDx": 20
+    },
+    {
+      "id": "e_action",
+      "from": "bot",
+      "to": "napcat",
+      "label": "send_group_msg",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          735,
+          560
+        ],
+        [
+          415,
+          560
+        ]
+      ]
+    },
+    {
+      "id": "e_guard",
+      "from": "bot",
+      "to": "guard",
+      "label": "先过安全判定",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_pass",
+      "from": "guard",
+      "to": "agent",
+      "label": "Pass 放行",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_llm",
+      "from": "agent",
+      "to": "llm",
+      "label": "OpenAI 兼容"
+    },
+    {
+      "id": "e_retrieve",
+      "from": "agent",
+      "to": "kb",
+      "label": "检索 top-5",
+      "labelDy": 26
+    },
+    {
+      "id": "e_embed",
+      "from": "kb",
+      "to": "embed",
+      "label": "取向量"
+    },
+    {
+      "id": "e_blocks",
+      "from": "kb",
+      "to": "sqlite",
+      "label": "块 + 向量"
+    },
+    {
+      "id": "e_qa",
+      "from": "bot",
+      "to": "sqlite",
+      "label": "问答异步落库",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          880,
+          446
+        ],
+        [
+          880,
+          696
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "四条结构铁律",
+      "items": [
+        "onebot/ 是唯一出现协议细节的包",
+        "OneBotApiClient 是全工程唯一发消息出口",
+        "llm/ 是唯一知道用哪个模型的地方",
+        "guard/ 是唯一有权说「不」的地方"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "信任边界",
+      "items": [
+        "NapCat 端口只绑回环，绝不暴露公网",
+        "Nginx 是公网唯一入口，后台另有 IP 白名单",
+        "公开接口用独立 DTO，不复用管理接口返回值"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "状态与数据",
+      "items": [
+        "所有人工成果落在一个 SQLite 文件，备份一条命令",
+        "知识库块与统计共用一个连接，避免 WAL 冲突",
+        "标题向量是 C 路闸门，不参与 RRF 投票"
+      ]
+    }
+  ]
+}

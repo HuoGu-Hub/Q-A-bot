@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "飘雪喵 QQ 机器人 · 一条群消息的业务流程",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "zero-cost",
+        "label": "零成本判定链",
+        "focus": [
+          "ingress",
+          "command",
+          "guard",
+          "fixreply"
+        ],
+        "note": "准入、指令、限流、内容与敏感词，全部在调模型之前完成。"
+      },
+      {
+        "id": "retrieval",
+        "label": "三路召回与作答",
+        "focus": [
+          "retrieve",
+          "chat"
+        ],
+        "note": "向量、词条、标题闸门三路召回，融合成资料块再交给模型。"
+      },
+      {
+        "id": "delivery",
+        "label": "出站与记录",
+        "focus": [
+          "send",
+          "record"
+        ],
+        "note": "出站过滤与节奏控制在前，落库在回答之后异步进行。"
+      }
+    ],
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "逻辑处理"
+        },
+        "security": {
+          "label": "策略与闸门"
+        },
+        "messagebus": {
+          "label": "事件"
+        },
+        "database": {
+          "label": "数据与上下文"
+        },
+        "external": {
+          "label": "外部系统"
+        },
+        "frontend": {
+          "label": "前端"
+        },
+        "cloud": {
+          "label": "容器/云"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "qq",
+      "label": "QQ 群消息"
+    },
+    {
+      "id": "entry",
+      "label": "接入与路由"
+    },
+    {
+      "id": "command",
+      "label": "指令系统"
+    },
+    {
+      "id": "gate",
+      "label": "安全与成本闸门"
+    },
+    {
+      "id": "kb",
+      "label": "知识库检索"
+    },
+    {
+      "id": "llm",
+      "label": "模型作答"
+    },
+    {
+      "id": "out",
+      "label": "出站与记录"
+    },
+    {
+      "id": "exception",
+      "label": "兜底与异常",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "接入",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "judge",
+      "label": "零成本判定",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "security"
+    },
+    {
+      "id": "answer",
+      "label": "检索 + 作答",
+      "fromCol": 4,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "deliver",
+      "label": "出站与记录",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "exception_path",
+      "label": "拦截 / 超限 → 固定话术",
+      "lane": "exception",
+      "fromCol": 2,
+      "toCol": 5,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "event",
+    "ingress",
+    "guard",
+    "retrieve",
+    "chat",
+    "send",
+    "record"
+  ],
+  "nodes": [
+    {
+      "id": "event",
+      "lane": "qq",
+      "col": 0,
+      "type": "messagebus",
+      "label": "群友 @提问",
+      "sublabel": "文本 / 图片 / 引用"
+    },
+    {
+      "id": "ingress",
+      "lane": "entry",
+      "col": 1,
+      "type": "backend",
+      "label": "事件接入",
+      "sublabel": "去重 → 立即 204",
+      "tag": "超 20s 丢弃"
+    },
+    {
+      "id": "command",
+      "lane": "command",
+      "col": 1,
+      "type": "backend",
+      "label": "指令匹配",
+      "sublabel": "话术类秒回"
+    },
+    {
+      "id": "guard",
+      "lane": "gate",
+      "col": 3,
+      "type": "security",
+      "label": "五层 Guard",
+      "sublabel": "零成本拦截",
+      "tag": "顺序固定"
+    },
+    {
+      "id": "retrieve",
+      "lane": "kb",
+      "col": 4,
+      "type": "database",
+      "label": "三路召回",
+      "sublabel": "向量 · 词条 · 标题"
+    },
+    {
+      "id": "chat",
+      "lane": "llm",
+      "col": 4,
+      "type": "external",
+      "label": "大模型作答",
+      "sublabel": "自动降级链"
+    },
+    {
+      "id": "send",
+      "lane": "out",
+      "col": 4,
+      "type": "backend",
+      "label": "出站与发送",
+      "sublabel": "分片 · 节奏"
+    },
+    {
+      "id": "record",
+      "lane": "out",
+      "col": 5,
+      "type": "database",
+      "label": "异步落库",
+      "sublabel": "统计与原文"
+    },
+    {
+      "id": "fixreply",
+      "lane": "exception",
+      "col": 3,
+      "type": "security",
+      "label": "固定话术回复",
+      "sublabel": "拦截 / 超限"
+    }
+  ],
+  "edges": [
+    {
+      "from": "event",
+      "to": "ingress",
+      "label": "上报",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "ingress",
+      "to": "guard",
+      "variant": "emphasis",
+      "role": "main",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          430,
+          243
+        ]
+      ]
+    },
+    {
+      "from": "guard",
+      "to": "retrieve",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "retrieve",
+      "to": "chat",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "chat",
+      "to": "send",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "send",
+      "to": "record",
+      "role": "async",
+      "variant": "dashed",
+      "route": "bottom-channel",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "from": "ingress",
+      "to": "command",
+      "role": "branch",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "guard",
+      "to": "fixreply",
+      "role": "error",
+      "variant": "security",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "顺序即成本",
+      "items": [
+        "五层 Guard 全是内存判定，跑完才轮到花钱的模型",
+        "指令匹配在 Guard 之前：/help 秒回，不受问答限流",
+        "智能问答类指令仍然回到 Guard 与成本预算"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "失败即沉默",
+      "items": [
+        "Drop 静默丢弃，Reply 回固定话术，绝不半途调模型",
+        "排队超过 20 秒直接丢弃，并回一句「刚才太挤了」",
+        "预算判定在调模型之前，token 不花出去"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "记录不阻塞",
+      "items": [
+        "问答记录异步投递，绝不占用回答线程",
+        "队列有界，满了丢弃并计数",
+        "库写坏了只记日志，机器人照常回答"
+      ]
+    }
+  ]
+}
