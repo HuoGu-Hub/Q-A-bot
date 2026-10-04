@@ -240,14 +240,19 @@ public class KbTermController {
     // ==================== 导入 / 导出（Excel 旁路）====================
 
     /**
-     * 导出全表 TSV。
+     * 导出 TSV。
      *
      * <p>返回 JSON 而不是裸文本，因为前端的 {@code adminApi} 一律按 JSON 解析。
      * 前端拿到 {@code tsv} 后自己造 Blob 触发下载。
+     *
+     * @param view 可选，见 {@code KbTermService.VIEWS}。例如
+     *             {@code /admin/api/kb/terms/export?view=unnamed} 只导「还没有中文名」的那批 ——
+     *             651 条在网页上逐条点不现实，导到 Excel 里填完再用 {@code /import} 导回。
+     *             留空 = 导全部（保持老行为）。
      */
     @GetMapping("/export")
-    public Map<String, Object> export() {
-        String tsv = service.exportTsv();
+    public Map<String, Object> export(@RequestParam(defaultValue = "") String view) {
+        String tsv = service.exportTsv(view);
         long count = tsv.lines().filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);

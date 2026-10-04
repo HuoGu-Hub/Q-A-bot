@@ -203,13 +203,14 @@ public class KbTermService {
     private static boolean matchesView(Term t, String view) {
         return switch (view) {
             case "all" -> true;
-            // 默认视图：把「既没正文、又没中文名」的那 200 多个空页面挡在外面，
+            // 默认视图：把「既没正文、又没中文名」的空页面挡在外面，
             // 它们只该在「无正文」预设里被主动看到
-            case "main" -> t.chunkCount() > 0 || !t.zh().isEmpty();
+            case "main" -> t.chunkCount() > 0 || hasChinese(t.zh());
             case "draft" -> "draft".equals(t.status());
             case "verified" -> "verified".equals(t.status());
             case "rejected" -> "rejected".equals(t.status());
-            case "unnamed" -> t.zh().isEmpty();
+            // 「还没有中文名」= zh 里**一个中文字符都没有**（不是 isEmpty，理由见 hasChinese）
+            case "unnamed" -> !hasChinese(t.zh());
             case "nochunk" -> t.chunkCount() == 0;
             default -> true;
         };
@@ -325,10 +326,10 @@ public class KbTermService {
             } else {
                 noChunk++;
             }
-            if (t.zh().isEmpty()) {
+            if (!hasChinese(t.zh())) {
                 unnamed++;
             }
-            if (t.chunkCount() > 0 || !t.zh().isEmpty()) {
+            if (t.chunkCount() > 0 || hasChinese(t.zh())) {
                 main++;
             }
             switch (t.status()) {
@@ -395,6 +396,33 @@ public class KbTermService {
     }
 
     /** 中文名用「、」「/」「｜」「|」分隔多个别名（与 Glossary 的解析保持一致） */
+    /**
+     * 这个中文名里**有没有中文字符** —— 判定「还没有中文名」的唯一正确方式。
+     *
+     * <h2>⚠️ 为什么不能用 {@code isEmpty()}（2026-10-04 实测踩到）</h2>
+     * {@link #buildAll} 里有一句回退：{@code zh = name[0].isEmpty() ? b.title() : name[0]} ——
+     * **词条没中文名时会退回用块标题**。而自动导入的英文页（技能 / 机制 / 属性 / 收集品笔记）
+     * 标题就是英文，于是它们的 {@code zh} 是 {@code "Strength"} 这种**非空英文**。
+     *
+     * <p>结果：{@code case "unnamed" -> t.zh().isEmpty()} **恒为 false**，
+     * 「无中文名」筛选器**一条都抓不到**（实测 651 条该被抓的抓不到），
+     * 而 {@code main} 的「挡掉空页面」也同时失效 —— 两处都是同一个原因。
+     *
+     * <p>所以这里按「有没有汉字」判定：不依赖回退行为，也不会把
+     * {@code "Bamboo Ladder、Bamboo Ladder"} 这种「中文名和别名都是英文」的漏掉。
+     */
+    private static boolean hasChinese(String s) {
+        if (s == null) {
+            return false;
+        }
+        for (int i = 0; i < s.length(); i++) {
+            if (Character.UnicodeScript.of(s.charAt(i)) == Character.UnicodeScript.HAN) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static List<String> splitAliases(String zh) {
         if (zh.isEmpty()) {
             return List.of();
@@ -459,11 +487,28 @@ public class KbTermService {
 
     /** 导出全表 TSV（Excel 旁路）。中间两列由语料现算，不落库 */
     public String exportTsv() {
+        return exportTsv("");
+    }
+
+    /**
+     * 按**视图**导出 TSV —— 让「导出还没中文名的那批 → Excel 填 → 导回」这条路走得通。
+     *
+     * <p>为什么需要它：{`unnamed`} 现在有 651 条（2026-10-04 实测）。
+     * 在网页上逐条点 651 次不现实，而 `POST /terms/import` 本来就收 TSV ——
+     * 所以导出必须能只导那一批，否则那 3416 行里混着 651 行要补的，人得自己筛。
+     *
+     * @param view 见 {@link #VIEWS}；空 = 全部（保持老行为）
+     */
+    public String exportTsv(String view) {
+        String v = view == null ? "" : view.trim().toLowerCase(Locale.ROOT);
         Map<String, Term> all = buildAll();
         List<Term> sorted = new ArrayList<>(all.values());
         sorted.sort(Comparator.comparing(Term::en, String.CASE_INSENSITIVE_ORDER));
         StringBuilder sb = new StringBuilder(TSV_HEADER);
         for (Term t : sorted) {
+            if (!v.isEmpty() && !matchesView(t, v)) {
+                continue;
+            }
             if (t.zh().isEmpty() && t.chunkCount() == 0) {
                 continue;   // 既没名字又没正文的空页面不进导出，免得淹掉有用的行
             }
