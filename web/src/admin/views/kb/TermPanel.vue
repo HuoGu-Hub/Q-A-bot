@@ -849,28 +849,53 @@ async function exportTsv() {
     if (view.value) params.set('view', view.value)
     if (board.value) params.set('board', board.value)
     if (q.value.trim()) params.set('q', q.value.trim())
-    // ★ 导 CSV 而不是 TSV：机器上只有 WPS 没有 Excel 的人，双击 .tsv 不一定被表格程序接管。
-    //   CSV 带 UTF-8 BOM，WPS/Excel 打开中文都不乱码；导入侧本来就自动识别分隔符。
-    params.set('format', 'csv')
+    // ★ 导 xlsx（真 Excel 文件）。
+    //   为什么不用 CSV：WPS/Excel 在中文 Windows 上另存 CSV 默认 GBK，
+    //   而浏览器读文件固定按 UTF-8 解码 —— 中文变乱码**而且不报错**，直接写坏词条表。
+    //   xlsx 内部是 UTF-8 的 XML，没有编码这回事。
+    params.set('format', 'xlsx')
     const qs = params.toString()
 
     const r = await adminApi.get<KbTermExportResponse>('/kb/terms/export' + (qs ? '?' + qs : ''))
-    const url = URL.createObjectURL(new Blob([r.text ?? r.tsv], { type: 'text/csv;charset=utf-8' }))
+    const bytes = base64ToBytes(r.xlsxBase64 ?? '')
+    // 传 .buffer 而不是 Uint8Array 本身：TS 5.7 起 Uint8Array 带上了 ArrayBufferLike 泛型，
+    // 不再直接满足 BlobPart。这里 base64ToBytes 建的是独立数组，buffer 就是它自己，没有多余字节。
+    const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }))
     const a = document.createElement('a')
     a.href = url
     // 文件名带上筛选，否则分几批导出会互相覆盖，也对不上账
     a.download = 'kb-terms' + (view.value ? '-' + view.value : '')
-      + (board.value ? '-' + board.value : '') + '.csv'
+      + (board.value ? '-' + board.value : '') + '.xlsx'
     document.body.appendChild(a)
     a.click()
     a.remove()
     // 立即 revoke 会让部分浏览器取消下载 —— 等一拍再释放
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     const scope = [view.value, board.value].filter(Boolean).join(' · ')
-    flash('已导出 ' + r.count + ' 条词条（CSV，可用 WPS 直接打开）' + (scope ? ' —— ' + scope : ''))
+    flash('已导出 ' + r.count + ' 条词条（xlsx，WPS/Excel 双击直接打开）' + (scope ? ' —— ' + scope : ''))
   } catch (e) {
     error.value = describeError(e)
   }
+}
+
+/** 字节 → base64。分块处理：一次性展开大数组会超出 String.fromCharCode 的参数上限 */
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
+/** base64 → 字节 */
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
 }
 
 function pickImport() {
@@ -886,8 +911,12 @@ async function onImportFile(ev: Event) {
   busy.value = true
   error.value = ''
   try {
-    const tsv = await file.text()
-    const r = await adminApi.post<KbTermImportResponse>('/kb/terms/import', { tsv })
+    // ★ 读**原始字节**再 base64，不读文本 ——
+    //   file.text() 固定按 UTF-8 解码，读 xlsx 会得到乱码。
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const r = await adminApi.post<KbTermImportResponse>('/kb/terms/import', {
+      xlsxBase64: bytesToBase64(bytes),
+    })
     flash('导入完成：新增 ' + r.created + '，更新 ' + r.updated + '，跳过 ' + r.skipped)
     await load()
   } catch (e) {
@@ -1402,7 +1431,7 @@ defineExpose({
 
     <!-- 导入用的文件选择器：藏在模板里，由页面栏的「导入」按钮触发 -->
     <input
-      ref="fileInput" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
+      ref="fileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       class="hidden-file" aria-hidden="true" tabindex="-1" @change="onImportFile"
     />
   </div>

@@ -65,6 +65,20 @@
       <version>3.53.4.0</version>
     </dependency>
 
+    <!--
+      Excel 读写（词条表的导入导出旁路）。
+      为什么值得为此加一个依赖：CSV 在中文 Windows 上有**编码陷阱** ——
+      WPS/Excel 另存 CSV 默认 GBK，而浏览器读文件固定按 UTF-8 解码，
+      中文会变成乱码**而且不报错**，直接写进词条表污染检索。
+      xlsx 内部就是 UTF-8 的 XML，没有这个问题；而且现在没人用 CSV 了。
+      体积约 10MB（含 xmlbeans），只在后台词条面板的导入导出路径上用。
+    -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.3.0</version>
+    </dependency>
+
     <!-- 架构护栏：编译期之外的模块边界约束（纯测试期依赖，不进产物） -->
     <dependency>
       <groupId>com.tngtech.archunit</groupId>

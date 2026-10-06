@@ -76,7 +76,12 @@ final class CsvTable {
                 } else {
                     cell.append(c);
                 }
-            } else if (c == '"') {
+            } else if (c == '"' && cell.length() == 0) {
+                // ⚠️ **只有字段开头**的引号才开启引号模式（RFC4180）。
+                //    原来这里不判断位置，于是字段中间一个游离的 " 就会开启引号模式，
+                //    把后面的制表符和换行**全部吞进同一个字段** ——
+                //    用户在表格里打错一个引号，整份导入就全乱，而且不报错。
+                //    实测踩到：TSV "带\"引号\"的名字" 被解析成 "带引号的名字"（引号丢了）。
                 quoted = true;
             } else if (c == delim) {
                 row.add(cell.toString());

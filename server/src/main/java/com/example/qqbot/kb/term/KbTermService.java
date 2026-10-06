@@ -552,6 +552,15 @@ public class KbTermService {
         return export(q, view, board, '\t');
     }
 
+    /**
+     * 导出 **xlsx 字节** —— 后台默认走这条（见 {@link KbTermXlsx} 里为什么弃用 CSV）。
+     *
+     * <p>先出 TSV 文本再转，**不重复实现一份导出规则**。
+     */
+    public byte[] exportXlsx(String q, String view, String board) {
+        return KbTermXlsx.write(export(q, view, board, '\t'));
+    }
+
     private String export(String q, String view, String board, char delim) {
         List<Term> sorted = filter(buildAll(), q, view, board);
         StringBuilder sb = new StringBuilder(TSV_HEADER);

@@ -264,19 +264,31 @@ public class KbTermController {
                                       @RequestParam(defaultValue = "") String view,
                                       @RequestParam(defaultValue = "") String board,
                                       @RequestParam(defaultValue = "tsv") String format) {
-        boolean csv = "csv".equalsIgnoreCase(format == null ? "" : format.trim());
-        String text = csv ? service.exportCsv(q, view, board) : service.exportTsv(q, view, board);
+        String fmt = format == null ? "xlsx" : format.trim().toLowerCase(Locale.ROOT);
         // ⚠️ 数行数前先剥 BOM：CSV 以 U+FEFF 开头，会让**第一行注释**不再以 '#' 开头，
         //    于是它被算成一条数据 → 报给用户的条数比实际多 1（2026-10-04 实测踩到）。
-        long count = stripBom(text).lines()
+        String tsv = service.exportTsv(q, view, board);
+        long count = stripBom(tsv).lines()
                 .filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
-        // 两个字段名都给：前端老代码读 tsv，新的按 format 读
-        out.put("tsv", text);
-        out.put("text", text);
-        out.put("format", csv ? "csv" : "tsv");
         out.put("count", count);
+        if ("tsv".equals(fmt)) {
+            out.put("tsv", tsv);
+            out.put("text", tsv);
+            out.put("format", "tsv");
+        } else if ("csv".equals(fmt)) {
+            String csv = service.exportCsv(q, view, board);
+            out.put("tsv", csv);
+            out.put("text", csv);
+            out.put("format", "csv");
+        } else {
+            // xlsx 是二进制 —— 用 base64 塞进 JSON，前端照旧走 res.json()（见 client 的注释）
+            out.put("xlsxBase64", java.util.Base64.getEncoder()
+                    .encodeToString(service.exportXlsx(q, view, board)));
+            out.put("format", "xlsx");
+        }
         return out;
     }
 
@@ -295,6 +307,17 @@ public class KbTermController {
         String tsv = body == null ? null : asString(body.get("csv"));
         if (tsv == null || tsv.isBlank()) {
             tsv = body == null ? null : asString(body.get("tsv"));
+        }
+        // xlsx：先转成 TSV 文本，**再走下面那条完全相同的导入路径** ——
+        // 校验规则（唯一性 / 状态合法 / 已存在不覆盖）一份就够，两份必然漂移
+        String b64 = body == null ? null : asString(body.get("xlsxBase64"));
+        if ((tsv == null || tsv.isBlank()) && b64 != null && !b64.isBlank()) {
+            try {
+                tsv = KbTermXlsx.read(java.util.Base64.getDecoder().decode(b64.trim()));
+            } catch (IllegalArgumentException | java.io.UncheckedIOException e) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "xlsx 读不出来：" + e.getMessage()));
+            }
         }
         if (tsv == null || tsv.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "表内容不能为空（csv 或 tsv）"));

@@ -273,7 +273,9 @@ export interface KbTermExportResponse {
   tsv: string
   /** 按 ?format= 决定的文本：csv（带 UTF-8 BOM）或 tsv */
   text?: string
-  format?: 'csv' | 'tsv'
+  /** format=xlsx 时的文件字节（base64）—— 二进制塞不进 JSON 文本字段 */
+  xlsxBase64?: string
+  format?: 'xlsx' | 'csv' | 'tsv'
   count: number
 }
 
