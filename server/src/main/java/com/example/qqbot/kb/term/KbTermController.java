@@ -240,7 +240,7 @@ public class KbTermController {
     // ==================== 导入 / 导出（Excel 旁路）====================
 
     /**
-     * 导出 TSV。
+     * 导出 TSV / CSV。
      *
      * <p>返回 JSON 而不是裸文本，因为前端的 {@code adminApi} 一律按 JSON 解析。
      * 前端拿到 {@code tsv} 后自己造 Blob 触发下载。
@@ -255,16 +255,27 @@ public class KbTermController {
      *              留空 = 导全部（保持老行为）。
      * @param board 板块 key，可选。补译名没有优先级，但**按板块分批**能一次只面对一小撮：
      *              {@code combat / build / material / creature / world / quest / system / guide / other}
+     * @param format {@code csv} 或 {@code tsv}（默认）。**机器上只有 WPS 的选 csv** ——
+     *               WPS 双击就能开，而 {@code .tsv} 不一定被表格程序接管。
+     *               CSV 带 UTF-8 BOM，中文不会乱码；导入侧不用改（本来就自动识别分隔符）。
      */
     @GetMapping("/export")
     public Map<String, Object> export(@RequestParam(defaultValue = "") String q,
                                       @RequestParam(defaultValue = "") String view,
-                                      @RequestParam(defaultValue = "") String board) {
-        String tsv = service.exportTsv(q, view, board);
-        long count = tsv.lines().filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
+                                      @RequestParam(defaultValue = "") String board,
+                                      @RequestParam(defaultValue = "tsv") String format) {
+        boolean csv = "csv".equalsIgnoreCase(format == null ? "" : format.trim());
+        String text = csv ? service.exportCsv(q, view, board) : service.exportTsv(q, view, board);
+        // ⚠️ 数行数前先剥 BOM：CSV 以 U+FEFF 开头，会让**第一行注释**不再以 '#' 开头，
+        //    于是它被算成一条数据 → 报给用户的条数比实际多 1（2026-10-04 实测踩到）。
+        long count = stripBom(text).lines()
+                .filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
-        out.put("tsv", tsv);
+        // 两个字段名都给：前端老代码读 tsv，新的按 format 读
+        out.put("tsv", text);
+        out.put("text", text);
+        out.put("format", csv ? "csv" : "tsv");
         out.put("count", count);
         return out;
     }
@@ -288,6 +299,16 @@ public class KbTermController {
         if (tsv == null || tsv.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "表内容不能为空（csv 或 tsv）"));
         }
+        // BOM：Excel/WPS 存 UTF-8 CSV 时会加，留着会粘进第一个字段（英文名）→ 整条对不上
+        tsv = stripBom(tsv);
+        // ★ 乱码防护：浏览器读文件固定按 UTF-8 解码，而 WPS/Excel 在中文 Windows 上
+        //   另存 CSV **默认是 GBK** → 中文变成替换字符 U+FFFD。
+        //   不拦的话这些乱码会**写进词条表、污染检索**，而且全程不报错。
+        if (tsv.indexOf('\uFFFD') >= 0) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "文件编码不对：中文变成了乱码（U+FFFD）。"
+                    + "在 WPS/Excel 里另存时请选「CSV UTF-8」，或直接用后台导出的 CSV。"));
+        }
         KbTermStore.ImportResult r = store.importTsv(tsv);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
@@ -295,6 +316,11 @@ public class KbTermController {
         out.put("updated", r.updated());
         out.put("skipped", r.skipped());
         return ResponseEntity.ok(out);
+    }
+
+    /** 去掉 UTF-8 BOM —— 它的存在会破坏「首字符是不是 #」这类判断 */
+    private static String stripBom(String s) {
+        return s != null && !s.isEmpty() && s.charAt(0) == '\uFEFF' ? s.substring(1) : s;
     }
 
     // ==================== 工具 ====================

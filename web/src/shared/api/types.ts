@@ -266,10 +266,14 @@ export interface KbTermChunksResponse {
   chunks: KbTermChunk[]
 }
 
-/** Excel 旁路：导出拿到的是 JSON 包着的 TSV 文本（client 永远走 res.json()） */
+/** Excel/WPS 旁路：导出拿到的是 JSON 包着的表格文本（client 永远走 res.json()） */
 export interface KbTermExportResponse {
   ok: boolean
+  /** 老字段名，值同 text —— 后端两个都给了 */
   tsv: string
+  /** 按 ?format= 决定的文本：csv（带 UTF-8 BOM）或 tsv */
+  text?: string
+  format?: 'csv' | 'tsv'
   count: number
 }
 

@@ -849,22 +849,25 @@ async function exportTsv() {
     if (view.value) params.set('view', view.value)
     if (board.value) params.set('board', board.value)
     if (q.value.trim()) params.set('q', q.value.trim())
+    // ★ 导 CSV 而不是 TSV：机器上只有 WPS 没有 Excel 的人，双击 .tsv 不一定被表格程序接管。
+    //   CSV 带 UTF-8 BOM，WPS/Excel 打开中文都不乱码；导入侧本来就自动识别分隔符。
+    params.set('format', 'csv')
     const qs = params.toString()
 
     const r = await adminApi.get<KbTermExportResponse>('/kb/terms/export' + (qs ? '?' + qs : ''))
-    const url = URL.createObjectURL(new Blob([r.tsv], { type: 'text/tab-separated-values' }))
+    const url = URL.createObjectURL(new Blob([r.text ?? r.tsv], { type: 'text/csv;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
     // 文件名带上筛选，否则分几批导出会互相覆盖，也对不上账
     a.download = 'kb-terms' + (view.value ? '-' + view.value : '')
-      + (board.value ? '-' + board.value : '') + '.tsv'
+      + (board.value ? '-' + board.value : '') + '.csv'
     document.body.appendChild(a)
     a.click()
     a.remove()
     // 立即 revoke 会让部分浏览器取消下载 —— 等一拍再释放
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     const scope = [view.value, board.value].filter(Boolean).join(' · ')
-    flash('已导出 ' + r.count + ' 条词条（TSV）' + (scope ? ' —— ' + scope : ''))
+    flash('已导出 ' + r.count + ' 条词条（CSV，可用 WPS 直接打开）' + (scope ? ' —— ' + scope : ''))
   } catch (e) {
     error.value = describeError(e)
   }
@@ -1031,6 +1034,17 @@ defineExpose({
 
     <!-- ==================== 核对模式 ==================== -->
     <Panel v-if="mode === 'review'" title="核对模式">
+      <!--
+        面板标题行上的出口。
+        以前退出核对模式**只有**页面栏那个「列表」按钮 —— 它在页面最上方、
+        和筛选 / 新建 / 导入挤在一排，名字里也没有"退出"两个字，进来之后
+        人只会往面板里找出口（2026-10 反馈：进了核对模式找不到地方退）。
+        标题行是这个面板自己的地盘，放在这里的出口不用去别处找。
+      -->
+      <template #actions>
+        <Button size="sm" @click="switchMode('list')">退出核对模式</Button>
+      </template>
+
       <!-- 进度条的数据源仍是 counts（后端返回的全库口径），不受搜索词影响 -->
       <div class="progress">
         <div class="track"><div class="fill" :style="{ width: progressPct + '%' }" /></div>
@@ -1388,7 +1402,7 @@ defineExpose({
 
     <!-- 导入用的文件选择器：藏在模板里，由页面栏的「导入」按钮触发 -->
     <input
-      ref="fileInput" type="file" accept=".tsv,.txt,text/tab-separated-values,text/plain"
+      ref="fileInput" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
       class="hidden-file" aria-hidden="true" tabindex="-1" @change="onImportFile"
     />
   </div>

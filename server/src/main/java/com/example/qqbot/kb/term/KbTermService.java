@@ -426,6 +426,15 @@ public class KbTermService {
      * <p>所以这里按「有没有汉字」判定：不依赖回退行为，也不会把
      * {@code "Bamboo Ladder、Bamboo Ladder"} 这种「中文名和别名都是英文」的漏掉。
      */
+    /** 按 RFC4180 转义一个 CSV 单元格：含分隔符/引号/换行时用双引号包住，内部引号翻倍 */
+    private static String cell(String v, char delim) {
+        String s = v == null ? "" : v;
+        if (s.indexOf(delim) < 0 && s.indexOf('"') < 0 && s.indexOf('\n') < 0 && s.indexOf('\r') < 0) {
+            return s;
+        }
+        return '"' + s.replace("\"", "\"\"") + '"';
+    }
+
     private static boolean hasChinese(String s) {
         if (s == null) {
             return false;
@@ -525,18 +534,38 @@ public class KbTermService {
      * @param view  见 {@link #VIEWS}；**空 = 全部**（保持老行为，注意与列表默认的 main 不同）
      * @param board 板块 key；空 = 不限
      */
+    /**
+     * 导出 **CSV**（UTF-8 **带 BOM**）。
+     *
+     * <h2>为什么需要它</h2>
+     * 很多人机器上只有 WPS 没有 Excel，而 `.tsv` 双击不一定被表格程序接管。
+     * CSV 是两边都认的格式，{@code CsvTable} 本来就会自动识别分隔符 —— 导入侧不用改。
+     *
+     * <p><b>BOM 是必须的</b>：不带 BOM 的 UTF-8 CSV，中文 Windows 上的 WPS/Excel
+     * 会按 GBK 打开 → 中文全是乱码。带了 BOM 它们才认得这是 UTF-8。
+     */
+    public String exportCsv(String q, String view, String board) {
+        return "\uFEFF" + export(q, view, board, ',');
+    }
+
     public String exportTsv(String q, String view, String board) {
+        return export(q, view, board, '\t');
+    }
+
+    private String export(String q, String view, String board, char delim) {
         List<Term> sorted = filter(buildAll(), q, view, board);
         StringBuilder sb = new StringBuilder(TSV_HEADER);
         for (Term t : sorted) {
             if (t.zh().isEmpty() && t.chunkCount() == 0) {
                 continue;   // 既没名字又没正文的空页面不进导出，免得淹掉有用的行
             }
-            sb.append(t.en()).append('\t')
-                    .append(t.zh()).append('\t')
-                    .append(t.en().replace(' ', '_')).append('\t')
-                    .append(t.cats().isEmpty() ? "" : t.cats().get(0)).append('\t')
-                    .append(t.status().isEmpty() ? "draft" : t.status()).append('\n');
+            // ⚠️ 必须转义：中文名里本来就可能含逗号/引号（别名常用「、」和逗号分隔），
+            //    不转义的话 CSV 会被切错列，而且**不报错**
+            sb.append(cell(t.en(), delim)).append(delim)
+                    .append(cell(t.zh(), delim)).append(delim)
+                    .append(cell(t.en().replace(' ', '_'), delim)).append(delim)
+                    .append(cell(t.cats().isEmpty() ? "" : t.cats().get(0), delim)).append(delim)
+                    .append(cell(t.status().isEmpty() ? "draft" : t.status(), delim)).append('\n');
         }
         return sb.toString();
     }
