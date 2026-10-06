@@ -531,7 +531,8 @@ cp -r /opt/qqbot/server/data/site-images /backup/
 </code></pre>
 <blockquote>
 <p>⚠️ <strong>术语表已经不在 TSV 里了</strong>（2026-09-27 起搬进 ① 那个 sqlite 的 <code>kb_term</code> 表）。
-<code>data/kb/glossary/zh-en.tsv</code> 现在只是&quot;导入导出用的中间格式&quot;，<strong>不用再单独备份</strong>。</p>
+原来那个 <code>data/kb/glossary/zh-en.tsv</code> <strong>文件已经删掉</strong> —— 现在只在「导出 / 导入」时临时生成，
+<strong>不用再单独备份</strong>。备份好 ① 那个 sqlite 就够了。</p>
 <p>语料和索引<strong>不用备份</strong> —— 可以随时重建（<code>from-raw</code> 模式 18 秒；
 但<strong>改了清洗规则就必须连向量一起重建</strong>，约 4 分钟、按 embedding 计费，见下一节）。</p>
 <p>首页轮播的图片走<strong>管理端上传</strong>（<code>页面信息 → 首页轮播</code>），

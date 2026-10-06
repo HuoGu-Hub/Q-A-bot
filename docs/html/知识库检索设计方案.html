@@ -247,6 +247,17 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <main>
 <h1 id="知识库检索rag设计方案">知识库检索（RAG）设计方案</h1>
 <blockquote>
+<p><strong>⚠️ 文档状态（2026-10-04 更新）</strong>：这是<strong>当时的方案</strong>，保留原貌以便追溯决策。
+其中<strong>已经变了</strong>的部分：</p>
+<ul>
+<li><strong>术语对照表已不在 <code>data/kb/glossary/zh-en.tsv</code></strong> —— 2026-09-27 迁进 SQLite <code>kb_term</code> 表，文件已删；
+TSV 降级为「导入导出中间格式」，现在导出默认给 <strong>xlsx</strong></li>
+<li>术语表<strong>不是 3,358 条</strong>了 —— 语料已扩到 3,416 条（详见《检索基线》）</li>
+<li>评测集<strong>已定为 67 条黄金集</strong>，不是&quot;待定&quot;</li>
+</ul>
+<p><strong>当前实际情况</strong>看《知识库运营手册》（业务视角）和《知识库运维命令速查》（技术视角）。</p>
+</blockquote>
+<blockquote>
 <p>状态：<strong>待评审</strong> ｜ 2026-09-21 ｜ 文中所有数字均来自当日实测，不是估算</p>
 </blockquote>
 <hr>

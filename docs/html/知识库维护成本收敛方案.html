@@ -233,6 +233,13 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <main>
 <h1 id="知识库维护成本收敛方案">知识库维护成本收敛方案</h1>
 <blockquote>
+<p><strong>⚠️ 文档状态（2026-10-04 更新）</strong>：<strong>本方案的改造已经全部完成。</strong>
+现在术语表就在 SQLite <code>kb_term</code> 表里，<code>GlossaryStore</code> 已删，<code>Glossary</code> 改读表，
+「关键词」面板不再 JOIN TSV。
+保留原文是为了记录<strong>为什么当时要这么改</strong>（&quot;用文件当数据库&quot;的代价）。</p>
+<p><strong>当前实际情况</strong>看《知识库运营手册》和《知识库运维命令速查》。</p>
+</blockquote>
+<blockquote>
 <p>2026-09-27 ｜ 内测阶段，数据可重建，优先「好用、健壮、维护成本低」
 目标：消灭「关键词 / 术语核对」这对高重复功能，把维护面砍掉一半</p>
 </blockquote>

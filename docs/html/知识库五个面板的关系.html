@@ -271,7 +271,7 @@ cats[] 字段   →   chunks.jsonl 的 title   →   chunks.jsonl 正文  →  i
 <tr>
 <td><strong>术语表</strong></td>
 <td>中英对照：英文名 / 中文名 / 页面 / 类别 / 状态</td>
-<td><code>glossary/zh-en.tsv</code></td>
+<td><strong>SQLite <code>kb_term</code> 表</strong>（2026-09-27 从 <code>glossary/zh-en.tsv</code> 迁入）</td>
 <td>✅ B 路关键词检索的命脉</td>
 </tr>
 </tbody></table></div>
@@ -297,7 +297,7 @@ cats[] 字段   →   chunks.jsonl 的 title   →   chunks.jsonl 正文  →  i
 </ul>
 <h3 id="3-术语核对-名字翻译对不对"><a class="anchor" href="#3-术语核对-名字翻译对不对">3. 术语核对 —— 名字翻译对不对</a></h3>
 <ul>
-<li><p><strong>管什么</strong>：<code>zh-en.tsv</code> 那张中英对照表的<strong>人工核对工作台</strong>。每条有状态：<code>draft</code>（机器初稿）/ <code>verified</code>（已核对）/ <code>rejected</code>（不要用）。</p>
+<li><p><strong>管什么</strong>：术语表（<code>kb_term</code> 表，2026-09-27 从 <code>zh-en.tsv</code> 迁入）的<strong>人工核对工作台</strong>。每条有状态：<code>draft</code>（机器初稿）/ <code>verified</code>（已核对）/ <code>rejected</code>（不要用）。</p>
 </li>
 <li><p><strong>现状</strong>：3,358 条里 <strong>3,357 条还是 draft</strong>，只有 1 条 verified。这就是「术语核对」面板存在的理由——它是个内容活，不是代码活。</p>
 </li>
@@ -390,10 +390,10 @@ cats[] 字段   →   chunks.jsonl 的 title   →   chunks.jsonl 正文  →  i
 </tr>
 <tr>
 <td><strong>术语核对</strong></td>
-<td><code>zh-en.tsv</code></td>
+<td><code>kb_term</code> 表</td>
 <td>中文名翻得对不对</td>
 <td>✅ B 路命脉</td>
-<td><strong>0 成本，改文件即生效</strong></td>
+<td><strong>0 成本，改完即生效</strong></td>
 </tr>
 <tr>
 <td><strong>提案</strong></td>

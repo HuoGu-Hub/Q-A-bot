@@ -213,6 +213,11 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <main>
 <h1 id="知识库导入设计定稿">知识库导入设计（定稿）</h1>
 <blockquote>
+<p><strong>⚠️ 文档状态（2026-10-04 更新）</strong>：这是<strong>当时的导入设计</strong>，已实现并继续演进。
+其中<strong>已经变了</strong>的部分：词条表载体从 CSV 改成 <strong>xlsx</strong>（CSV 在中文 Windows 上有
+静默乱码的陷阱，见《知识库运维命令速查》第六节）；术语表已迁进 SQLite <code>kb_term</code> 表。</p>
+</blockquote>
+<blockquote>
 <p>本文取代之前关于&quot;语料重建 / 合并式写入 / 三路合并&quot;的讨论 —— <strong>那些设计已被废弃</strong>，
 原因见第三节。现状诊断与回答策略部分见 <code>回答策略与知识库设施设计.md</code>。</p>
 </blockquote>
@@ -430,7 +435,7 @@ source: wiki
 <tr>
 <td>载体</td>
 <td><code>.md</code>（含文档头）</td>
-<td><code>.csv</code>（Excel 另存为）</td>
+<td><strong><code>.xlsx</code></strong>（Excel/WPS 编辑；CSV 因中文编码陷阱已不推荐）</td>
 </tr>
 <tr>
 <td>落到哪</td>
@@ -466,9 +471,10 @@ source: wiki
 <td>可选：待核对 / 已核对 / 弃用</td>
 </tr>
 </tbody></table></div>
-<p><strong>现有资产</strong>：<code>kb_term</code> 表里已有 3,903 条（3,359 条填过中文名），
-以及 <code>data/kb/glossary/zh-en.tsv</code>（236 KB，由 <code>GlossaryBuilder</code> 从 wiki 生成 —— 那个生成器要删）。
-导入入口 <code>POST /kb/terms/import</code> <strong>已存在</strong>（现在是 TSV），扩展成 CSV 即可。</p>
+<p><strong>当时的资产</strong>：<code>kb_term</code> 表里已有 3,903 条（3,359 条填过中文名），
+<del>以及 <code>data/kb/glossary/zh-en.tsv</code>（236 KB，由 <code>GlossaryBuilder</code> 从 wiki 生成）</del>
+—— <strong>已废弃</strong>：2026-09-27 迁进 <code>kb_term</code> 表，文件与生成器都已删。
+导入入口 <code>POST /kb/terms/import</code> <strong>已存在</strong>，且已支持 <strong>xlsx / csv / tsv</strong> 三种输入。</p>
 <hr>
 <h2 id="八新老语料切换用户已确认"><a class="anchor" href="#八新老语料切换用户已确认">八、新老语料切换（用户已确认）</a></h2>
 <p><strong>首次导入中文文档之前，清空现有语料。</strong></p>

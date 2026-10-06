@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>知识库运维命令速查</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --radius: 10px;
+  --content: 860px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1220px; margin: 0 auto; padding: 40px 28px 96px; }
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .lvl-3 a { padding-left: 24px; font-size: 12.8px; color: var(--fg-faint); }
+.toc details { display: none; }
+
+/* ---------- content ---------- */
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 {
+  font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em;
+  border-left: 4px solid var(--accent);
+}
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+
+/* callout-ish blockquotes: the docs use these for warnings and key facts */
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em;
+}
+thead th {
+  background: var(--bg-soft); text-align: left; font-weight: 700;
+  padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* heading self-links stay visually quiet until hovered */
+h2 > .anchor, h3 > .anchor, h4 > .anchor { color: inherit; border-bottom: 0; }
+h2 > .anchor:hover, h3 > .anchor:hover, h4 > .anchor:hover { color: var(--accent); }
+
+/* GFM task lists: render as a checklist block */
+li.task-list-item { list-style: none; margin-left: -1.35em; padding-left: 1.6em; position: relative; }
+li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; height: 1em; accent-color: var(--accent); }
+
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc {
+    position: static; flex: none; width: auto; max-height: none;
+    border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px;
+  }
+  .toc > ol, .toc > .toc-title { display: none; }
+  .toc details { display: block; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+
+/* ---------- print ---------- */
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol><li class="lvl-2"><a href="#一体检改完语料有没有变好">一、体检：改完语料有没有变好</a></li>
+<li class="lvl-2"><a href="#二wiki-导入三个入口顺序有依赖">二、wiki 导入：三个入口，顺序有依赖</a></li>
+<li class="lvl-3"><a href="#抓什么往-appkbwiki-importcategories-里加分类名">抓什么：往 app.kb.wiki-import.categories 里加分类名</a></li>
+<li class="lvl-3"><a href="#三个必须知道的坑">三个必须知道的坑</a></li>
+<li class="lvl-2"><a href="#三回滚">三、回滚</a></li>
+<li class="lvl-2"><a href="#四手写文档校验格式">四、手写文档：校验格式</a></li>
+<li class="lvl-2"><a href="#五source-字段决定模型怎么引用它">五、source 字段决定模型怎么引用它</a></li>
+<li class="lvl-2"><a href="#六格式与用途对照tsv-csv-xlsx">六、格式与用途对照（tsv / csv / xlsx）</a></li>
+<li class="lvl-3"><a href="#①-词条表-唯一的人机往返通道">① 词条表 —— 唯一的「人机往返」通道</a></li>
+<li class="lvl-3"><a href="#②-黄金集">② 黄金集</a></li>
+<li class="lvl-3"><a href="#③-物品总表一次性产物">③ 物品总表（一次性产物）</a></li>
+<li class="lvl-3"><a href="#④-术语表已迁进-sqlite">④ 术语表（已迁进 SQLite）</a></li>
+<li class="lvl-2"><a href="#七已知缺口尚未解决">七、已知缺口（尚未解决）</a></li></ol>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一体检改完语料有没有变好">一、体检：改完语料有没有变好</a></li>
+<li class="lvl-2"><a href="#二wiki-导入三个入口顺序有依赖">二、wiki 导入：三个入口，顺序有依赖</a></li>
+<li class="lvl-3"><a href="#抓什么往-appkbwiki-importcategories-里加分类名">抓什么：往 app.kb.wiki-import.categories 里加分类名</a></li>
+<li class="lvl-3"><a href="#三个必须知道的坑">三个必须知道的坑</a></li>
+<li class="lvl-2"><a href="#三回滚">三、回滚</a></li>
+<li class="lvl-2"><a href="#四手写文档校验格式">四、手写文档：校验格式</a></li>
+<li class="lvl-2"><a href="#五source-字段决定模型怎么引用它">五、source 字段决定模型怎么引用它</a></li>
+<li class="lvl-2"><a href="#六格式与用途对照tsv-csv-xlsx">六、格式与用途对照（tsv / csv / xlsx）</a></li>
+<li class="lvl-3"><a href="#①-词条表-唯一的人机往返通道">① 词条表 —— 唯一的「人机往返」通道</a></li>
+<li class="lvl-3"><a href="#②-黄金集">② 黄金集</a></li>
+<li class="lvl-3"><a href="#③-物品总表一次性产物">③ 物品总表（一次性产物）</a></li>
+<li class="lvl-3"><a href="#④-术语表已迁进-sqlite">④ 术语表（已迁进 SQLite）</a></li>
+<li class="lvl-2"><a href="#七已知缺口尚未解决">七、已知缺口（尚未解决）</a></li></ol></details>
+</nav>
+<main>
+<h1 id="知识库运维命令速查">知识库运维命令速查</h1>
+<blockquote>
+<p><strong>给谁看</strong>：技术同学。运营同学看《知识库运营手册》就够了。
+本文是那份手册里被有意去掉的命令与细节 —— 需要敲命令、改配置、看数字的都在这里。</p>
+</blockquote>
+<hr>
+<h2 id="一体检改完语料有没有变好"><a class="anchor" href="#一体检改完语料有没有变好">一、体检：改完语料有没有变好</a></h2>
+<pre><code class="language-bash">mvn test -Dqqbot.golden.rerank=on -Dtest=RetrievalGoldenTest
+</code></pre>
+<p>跑的是 <strong>67 条黄金集</strong>（真实提问），用<strong>生产库的副本</strong>，不碰真库；逐条明细写到 <code>target/golden-detail.tsv</code>。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>门槛</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>entity R@1</td>
+<td>≥ 65%</td>
+</tr>
+<tr>
+<td>entity R@5</td>
+<td>≥ 90%</td>
+</tr>
+<tr>
+<td>colloquial R@5</td>
+<td>≥ 80%</td>
+</tr>
+<tr>
+<td>gap clean</td>
+<td>≥ 25%</td>
+</tr>
+<tr>
+<td>chitchat clean</td>
+<td>≥ 80%</td>
+</tr>
+</tbody></table></div>
+<p>门槛是<strong>实测定的，不是拍的</strong>。完整基线（重排开/关两张表、盲区分析）在《检索基线》。</p>
+<blockquote>
+<p>⚠️ 需要 <code>.env</code> 里有 <code>SILICONFLOW_API_KEY</code>（真实调用 API，约 30 秒）。
+<strong>任何语料改动前后都跑一次</strong> —— 不跑就是闭着眼睛改检索质量。</p>
+</blockquote>
+<hr>
+<h2 id="二wiki-导入三个入口顺序有依赖"><a class="anchor" href="#二wiki-导入三个入口顺序有依赖">二、wiki 导入：三个入口，顺序有依赖</a></h2>
+<pre><code class="language-bash"># ① 地图同步（地点 / NPC 的来源）—— 增量，只拉 revid 变过的页
+mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
+--app.kb.map-sync.sync-on-start=true --spring.main.web-application-type=none&quot;
+
+# ② 地点语料派生（由 marker 生成地点 / NPC 块）
+mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
+--app.kb.location-corpus.build-on-start=true --spring.main.web-application-type=none&quot;
+
+# ③ wiki 文章导入（任务 / 机制 / 世界观…）
+mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
+--app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none&quot;
+</code></pre>
+<p><strong>每一步都能先空跑</strong>（加 <code>--app.kb.xxx.dry-run=true</code>），也都能单独回滚。</p>
+<blockquote>
+<p>⚠️ <strong>导入之后必须重启服务</strong> —— 索引只在进程内重载，没有定时刷新。
+不重启的话后台还是旧数据。</p>
+</blockquote>
+<h3 id="抓什么往-appkbwiki-importcategories-里加分类名"><a class="anchor" href="#抓什么往-appkbwiki-importcategories-里加分类名">抓什么：往 <code>app.kb.wiki-import.categories</code> 里加分类名</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>分类</th>
+<th>页数</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Quests/</code> 前缀</td>
+<td>155</td>
+<td>✅ 已导入</td>
+</tr>
+<tr>
+<td><code>Ranger/Mage/Warrior Skills</code></td>
+<td>148</td>
+<td>✅ 已导入</td>
+</tr>
+<tr>
+<td><code>Wildlife</code> 生物</td>
+<td>38</td>
+<td>✅ 已导入</td>
+</tr>
+<tr>
+<td><code>Gameplay</code> / <code>Bosses</code> / <code>Craftspeople</code></td>
+<td>32</td>
+<td>✅ 已导入</td>
+</tr>
+<tr>
+<td><code>Lore</code> 收集品笔记</td>
+<td>264</td>
+<td>✅ 已导入（<strong>不是世界观，是收集品故事</strong>）</td>
+</tr>
+<tr>
+<td><code>Armor Set</code> 套装</td>
+<td>59</td>
+<td>⬜ 未导入（与现有单件护甲块部分重叠）</td>
+</tr>
+<tr>
+<td><code>Item catalogs</code> 索引页</td>
+<td>70</td>
+<td>❌ <strong>别开</strong>：占新增文本量 34%，但内容是链接与表格，会和现有物品块在向量空间里几乎重合</td>
+</tr>
+<tr>
+<td><code>Music</code></td>
+<td><strong>0</strong></td>
+<td>❌ <strong>开了等于没开</strong>：正文命名空间 0 页（95 是含子分类/文件的计数）</td>
+</tr>
+</tbody></table></div>
+<h3 id="三个必须知道的坑"><a class="anchor" href="#三个必须知道的坑">三个必须知道的坑</a></h3>
+<ol>
+<li><strong><code>max-pages-per-source: 300</code> 是&quot;每个来源&quot;独立算的</strong>，超了会<strong>静默截断</strong>。
+<code>Lore</code> 264 刚好压线 —— 它再涨就会丢页。</li>
+<li><strong><code>max-body-chars: 1500</code> 现在是「单块上限」</strong>，超长页面会<strong>按段落切块</strong>（不再是截断）。
+调它只影响块的粒度，不影响&quot;有没有丢内容&quot;。</li>
+<li><strong>每个分类是一个独立来源</strong>，所以 <code>bySource</code> 的输出就是&quot;哪个分类贡献了多少页&quot;。</li>
+</ol>
+<hr>
+<h2 id="三回滚"><a class="anchor" href="#三回滚">三、回滚</a></h2>
+<pre><code class="language-bash"># 清掉全部 wiki 文章块（含切出来的续块）+ 导入状态
+mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
+--app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.purge=true \
+--spring.main.web-application-type=none&quot;
+
+# 清掉全部派生地点块
+mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
+--app.kb.location-corpus.build-on-start=true --app.kb.location-corpus.purge=true \
+--spring.main.web-application-type=none&quot;
+</code></pre>
+<p>回滚是<strong>双向</strong>的（会连状态一起清），回滚后可以重新导入。
+<strong>回滚完记得在后台点「清理孤儿词条」。</strong></p>
+<hr>
+<h2 id="四手写文档校验格式"><a class="anchor" href="#四手写文档校验格式">四、手写文档：校验格式</a></h2>
+<pre><code class="language-bash"># ① 校验格式（不启动 Spring、不碰数据库、不联网）
+./scripts/validate-kb-doc.sh 你的文档.md
+
+# ② 带上基线，看&quot;这次导入会改动多少条&quot;
+./scripts/validate-kb-doc.sh --against docs/gamedata/现有文档.md 你的新文档.md
+</code></pre>
+<p>输出示例：</p>
+<pre><code>[可导入] kb-doc-ok.md
+  文档头 : name=Absorb  url=…  ⚠缺 tags
+  分块   : 6 块，正文共 5782 字（平均 963 字/块）
+  导入计划：新增 0 条，覆盖 1 条，无变化 1 条；库里未被触及 4 条
+结论：格式全部通过，可以导入。        ← 退出码 0
+</code></pre>
+<blockquote>
+<p>⚠️ <strong>脚本依赖两件事</strong>：<code>$JAVA_HOME</code>（没设时回退到 <code>.toolchain/jdk-17.0.2</code>，
+而那个目录<strong>在本仓库里并不存在</strong> —— 请确保 <code>JAVA_HOME</code> 指向一个 JDK 17+），
+以及 <code>server/target/classes</code>（即<strong>先编译过</strong>）。缺任何一个它会明确报出来。</p>
+</blockquote>
+<hr>
+<h2 id="五source-字段决定模型怎么引用它"><a class="anchor" href="#五source-字段决定模型怎么引用它">五、<code>source</code> 字段决定模型怎么引用它</a></h2>
+<p>代码里的判据是 <code>source == &quot;manual&quot;</code>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>source</code></th>
+<th>模型看到的分段</th>
+<th>措辞</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>manual</code></td>
+<td><strong>【我们维护的内容】</strong></td>
+<td>&quot;我们资料库里写的是…&quot;</td>
+</tr>
+<tr>
+<td>其他（<code>wiki</code>/<code>doc</code>/…）</td>
+<td><strong>【导入的资料】</strong></td>
+<td>&quot;资料上写的是…<strong>可能已经过期</strong>&quot;</td>
+</tr>
+</tbody></table></div>
+<p><strong>怎么分</strong>（按文档性质，不要一刀切）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文档</th>
+<th>应该是</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>物品图鉴（27 份）</td>
+<td><code>wiki</code></td>
+<td>它是 wiki 数据的翻译整理，wiki 本身会过期</td>
+</tr>
+<tr>
+<td>更新 / 攻略（6 份）</td>
+<td><strong><code>manual</code></strong></td>
+<td><strong>我们自己写的摘要与判断</strong></td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>⚠️ <strong>2026-10-04 修过一个 bug，这个改动以前是空转的。</strong>
+导入计划（<code>ChunkImportPlan</code>）只比对<strong>正文</strong>，而 <code>source</code> 是<strong>文档级</strong>字段、不在块里 ——
+所以&quot;只改了文档头 <code>source</code>&quot;会被判成<strong>无变化</strong>，导入什么都不写。
+现在 <code>KbDocImporter</code> 会额外比对文档级字段，<strong>预览与真导入共用同一份计算</strong>。</p>
+<p>因此导入那 6 份时，预览应当显示 <strong>覆盖 72 条、无变化 0 条</strong>。
+<strong>如果预览说&quot;无变化&quot;，说明改动没生效，别继续。</strong></p>
+</blockquote>
+<hr>
+<h2 id="六格式与用途对照tsv-csv-xlsx"><a class="anchor" href="#六格式与用途对照tsv-csv-xlsx">六、格式与用途对照（tsv / csv / xlsx）</a></h2>
+<p>系统里一共有四处用到表格格式，<strong>真正在跑的只有前两处</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>用途</th>
+<th>格式</th>
+<th>谁读谁写</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>①</strong></td>
+<td><strong>词条表导入导出</strong></td>
+<td><strong>xlsx</strong>（主）/ csv / tsv</td>
+<td>人 ↔ 管理后台</td>
+<td>✅ <strong>活的主线</strong></td>
+</tr>
+<tr>
+<td><strong>②</strong></td>
+<td><strong>黄金集</strong>（测试夹具）</td>
+<td>tsv</td>
+<td>人（编辑器）↔ 测试</td>
+<td>✅ 活</td>
+</tr>
+<tr>
+<td>③</td>
+<td>物品总表（翻译原料）</td>
+<td>tsv / jsonl</td>
+<td>外部 AI</td>
+<td>📦 一次性产物</td>
+</tr>
+<tr>
+<td>④</td>
+<td>术语表本体</td>
+<td><del>tsv</del> → <strong>SQLite <code>kb_term</code></strong></td>
+<td>—</td>
+<td>🔄 已迁移</td>
+</tr>
+</tbody></table></div>
+<h3 id="①-词条表-唯一的人机往返通道"><a class="anchor" href="#①-词条表-唯一的人机往返通道">① 词条表 —— 唯一的「人机往返」通道</a></h3>
+<pre><code>GET  /admin/api/kb/terms/export?format=xlsx|csv|tsv&amp;view=&amp;board=&amp;q=
+POST /admin/api/kb/terms/import     {xlsxBase64} / {csv} / {tsv}
+</code></pre>
+<ul>
+<li><strong>筛选与列表接口共用同一份逻辑</strong> —— 「看到什么就导出什么」</li>
+<li>xlsx 是<strong>二进制</strong>，用 base64 塞进 JSON（前端 client 永远走 <code>res.json()</code>）</li>
+<li>导入防护：剥 BOM、<strong>乱码拦截</strong>（<code>U+FFFD</code> → 报错，不静默写坏）</li>
+<li>规则：key 唯一、状态合法、<strong>已存在的词条不覆盖</strong>（只在中文名为空时补齐）</li>
+</ul>
+<p><strong>为什么弃用 CSV</strong>：WPS/Excel 在中文 Windows 上「另存为 CSV」默认是 <strong>GBK</strong>，
+而浏览器读文件固定按 <strong>UTF-8</strong> 解码 → 中文变乱码<strong>而且不报错</strong>，直接污染词条表。
+xlsx 内部就是 UTF-8 的 XML，<strong>没有编码这回事</strong>。</p>
+<h3 id="②-黄金集"><a class="anchor" href="#②-黄金集">② 黄金集</a></h3>
+<ul>
+<li><code>tests/golden/retrieval-golden.tsv</code>（7.2 KB，<strong>进版本控制</strong>）</li>
+<li>格式：<code>类别 ⇥ 问题 ⇥ 期望块 id ⇥ 备注</code></li>
+<li><strong>不走 WPS、没有&quot;另存为&quot;这一步</strong> → 纯文本 UTF-8 两端一致，<strong>没有编码风险</strong></li>
+<li>这也是它<strong>不需要</strong>改成 xlsx 的原因：它是版本控制里的测试数据，纯文本能 diff</li>
+</ul>
+<h3 id="③-物品总表一次性产物"><a class="anchor" href="#③-物品总表一次性产物">③ 物品总表（一次性产物）</a></h3>
+<ul>
+<li><code>docs/gamedata/index/物品总表.tsv</code>（549 KB，9 列）</li>
+<li><code>docs/gamedata/index/物品图鉴目录.tsv</code>、<code>items-full.jsonl</code>（2.2 MB）</li>
+<li><strong>没有代码读它</strong> → 喂给外部 AI 做翻译的中间数据，不在任何运行时流程里</li>
+</ul>
+<h3 id="④-术语表已迁进-sqlite"><a class="anchor" href="#④-术语表已迁进-sqlite">④ 术语表（已迁进 SQLite）</a></h3>
+<ul>
+<li>原：<code>data/kb/glossary/zh-en.tsv</code>（5 列 TSV，236 KB）<strong>就是术语表本体</strong></li>
+<li><strong>2026-09-27 搬进 SQLite <code>kb_term</code> 表</strong> → TSV 降级为「导入导出中间格式」</li>
+<li><strong>文件已不存在</strong>；<code>Glossary</code> 类注释写着「以前本类自己去读…」</li>
+</ul>
+<hr>
+<h2 id="七已知缺口尚未解决"><a class="anchor" href="#七已知缺口尚未解决">七、已知缺口（尚未解决）</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>表现</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>651 条词条没有中文名</strong></td>
+<td>中文提问够不到（见运营手册第四节）</td>
+<td><strong>最高优先级</strong></td>
+</tr>
+<tr>
+<td><strong>近名污染</strong></td>
+<td>具体物品块赢过通用页（<code>空洞独眼巨人战利品</code> &gt; <code>空洞独眼巨人</code>）</td>
+<td>待解</td>
+</tr>
+<tr>
+<td><strong>短提问返回空</strong></td>
+<td><code>游侠跑得快算有用吗</code> / <code>可以挤牛奶吗</code> —— 东西在库里却 0 命中</td>
+<td>与 <code>gap</code> <strong>恰好相反</strong></td>
+</tr>
+<tr>
+<td>自动导入正文是英文</td>
+<td>且有模板残渣（<code>[wiki-abyss] &quot;is a skill in Enshrouded.&quot;</code>）</td>
+<td>需要人工整理</td>
+</tr>
+</tbody></table></div>
+
+<p class="footer">由 <code>tools/md2html</code> 从 <code>知识库运维命令速查.md</code> 生成 · 用浏览器打开即可，样式已内嵌，可离线阅读与打印</p>
+</main>
+</div>
+</body>
+</html>
