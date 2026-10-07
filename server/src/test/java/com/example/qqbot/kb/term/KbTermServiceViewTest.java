@@ -160,31 +160,25 @@ class KbTermServiceViewTest {
     }
 
     @Test
-    @DisplayName("★ CSV 导出要能直接给 WPS 用：带 BOM、字段转义、行数与列表一致")
-    void csvExportIsUsableInWps() {
+    @DisplayName("★ TSV 导出（唯一的文本出口）：无 BOM、字段能原样往返、行数与列表一致")
+    void tsvExportRoundTrips() {
         block("a", "Strength");
-        // 标题里故意放**逗号和引号** —— 不转义的话 CSV 会被切错列，而且不报错
-        blocks.upsert(new KbBlock("b", "d", "Black Is Your Absence, Dark Is My Night", "x", "",
+        // 标题里故意放**制表符**（TSV 的分隔符）—— 不转义就会被切错列，而且不报错
+        blocks.upsert(new KbBlock("b", "d", "Tab\tInside", "x", "",
                 List.of("武器"), KbBlock.SRC_DOC, false, "t"), new float[]{0.1f, 0.2f, 0.3f});
 
-        String csv = service.exportCsv("", "all", "");
+        String tsv = service.exportTsv("", "all", "");
+        assertThat(tsv.charAt(0)).as("TSV 不该带 BOM").isNotEqualTo('\uFEFF');
 
-        assertThat(csv.charAt(0))
-                .as("必须带 UTF-8 BOM —— 否则中文 Windows 上 WPS/Excel 按 GBK 打开，中文全乱码")
-                .isEqualTo('\uFEFF');
-        assertThat(csv)
-                .as("含逗号的字段必须被引号包住")
-                .contains("\"Black Is Your Absence, Dark Is My Night\"");
-        assertThat(service.exportTsv("", "all", "").charAt(0))
-                .as("TSV 不该带 BOM")
-                .isNotEqualTo('\uFEFF');
-
-        // ⚠️ 剥 BOM 之后再数：BOM 会让第一行注释不再以 '#' 开头，
-        //    不剥就会把它算成一条数据（报给用户的条数多 1）
-        long rows = csv.substring(1).lines()
-                .filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
+        // 关键性质：用**同一个解析器**读回来，字段必须逐字对得上
+        List<List<String>> rows = CsvTable.parse(tsv, '\t').stream()
+                .filter(r -> !r.isEmpty() && !r.get(0).startsWith("#"))
+                .toList();
         assertThat(rows)
-                .as("CSV 数据行数必须等于列表条数")
-                .isEqualTo(service.page("", "all", "", 500, 0).total());
+                .as("数据行数必须等于列表条数")
+                .hasSize((int) service.page("", "all", "", 500, 0).total());
+        assertThat(rows.stream().flatMap(List::stream).toList())
+                .as("含制表符的标题必须被引号包住，读回来还是原样")
+                .contains("Tab\tInside");
     }
 }

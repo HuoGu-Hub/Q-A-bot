@@ -73,6 +73,18 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
         return blocks.stream().filter(b -> vectors.containsKey(b.id())).toList();
     }
 
+    /**
+     * 语料版本 —— 直接转发给存储。
+     *
+     * <p>索引自己的快照也是按这个版本加载的（见 {@link #ensureLoaded()}），
+     * 所以它天然就是「这份语料的新旧程度」：词条表靠它判断要不要补齐
+     * （{@code KbTermStore.ensureReconciled()}），调用方不需要再手工调 reconcile()。
+     */
+    @Override
+    public long version() {
+        return store.version();
+    }
+
     /** {@link com.example.qqbot.kb.KbCorpus} 的实现 —— 检索器只认这个方法 */
     @Override
     public List<com.example.qqbot.kb.KbCorpus.Entry> entries() {

@@ -5,7 +5,6 @@ import com.example.qqbot.kb.WikiImport;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.KbWikiPageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,18 +59,15 @@ public class WikiArticleImporter {
     private final KbWikiPageStore store;
     private final KbBlockStore blockStore;
     private final EmbeddingClient embedding;
-    private final KbTermStore termStore;
 
-    /* 不持有块索引：写完索引自己失效（见 KbBlockStore.version） */
+    /* 既不持有块索引、也不持有词条表：写完索引自己失效、词条表自己补齐 */
     public WikiArticleImporter(KbPolicy props, WikiApiClient client, KbWikiPageStore store,
-                               KbBlockStore blockStore, EmbeddingClient embedding,
-                               KbTermStore termStore) {
+                               KbBlockStore blockStore, EmbeddingClient embedding) {
         this.props = props;
         this.client = client;
         this.store = store;
         this.blockStore = blockStore;
         this.embedding = embedding;
-        this.termStore = termStore;
     }
 
     /** 一个导入来源：前缀（如 `Quests/`）或分类（如 `Gameplay`） */
@@ -125,6 +121,8 @@ public class WikiArticleImporter {
         int chars = 0;
         List<String> errors = new ArrayList<>();
         Map<String, Integer> bySource = new LinkedHashMap<>();
+        // 块 id 占用登记：撞车时必须吵（否则一页的内容会静默覆盖另一页）
+        java.util.Map<String, String> blockIdOwner = new java.util.HashMap<>();
 
         for (Source src : sources) {
             WikiApiClient.Collected listed;
@@ -162,6 +160,24 @@ public class WikiArticleImporter {
                 continue;
             }
             Map<String, Long> known = store.knownRevisions();
+            // ⚠️ 上次**失败**的页必须重试 —— 别看 revid。失败行里的 revid 不可信
+            //    （见 KbWikiPageStore.markError 的注释），只信"这页有没有 error"。
+            java.util.Set<String> pending = store.pendingRetries();
+            if (!pending.isEmpty()) {
+                log.info("[KB-WIKI] 上次失败待重试：{} 页", pending.size());
+            }
+            // ⚠️ 块 id 撞车检查放在**列页之后、增量判断之前**：
+            //    这样不管这次有没有页要导（正常增量跑就是 0 页），它都会出现在报告里。
+            //    已知并接受（方案 C，2026-10-08 决定）：见缺陷清单 §10.2 ——
+            //    撞车的两组都是近似重复页，暂不改 id 约定，但**不许再静默**。
+            for (String title : titles) {
+                String collideWith = registerBlockId(blockIdOwner, blockIdOf(title), title);
+                if (collideWith != null) {
+                    errors.add(title + "：块 id 与「" + collideWith + "」撞车（" + blockIdOf(title)
+                            + "）—— 这一页的正文进不了语料（已知问题，见缺陷清单 §10.2）");
+                }
+            }
+
             List<String> changed = new ArrayList<>();
             for (String title : titles) {
                 WikiApiClient.Meta m = meta.get(title);
@@ -169,7 +185,7 @@ public class WikiArticleImporter {
                     continue;
                 }
                 Long local = known.get(title);
-                if (local == null || local != m.revid()) {
+                if (local == null || local != m.revid() || pending.contains(title)) {
                     changed.add(title);
                 }
             }
@@ -191,7 +207,7 @@ public class WikiArticleImporter {
                 if (rev == null) {
                     failed++;
                     errors.add(title + "：API 没返回内容");
-                    store.markError(title, src.label(), 0, "API 没返回内容");
+                    store.markError(title, src.label(), "API 没返回内容");
                     continue;
                 }
                 try {
@@ -240,17 +256,16 @@ public class WikiArticleImporter {
                 } catch (Exception e) {
                     failed++;
                     errors.add(title + "：" + e.getMessage());
-                    store.markError(title, src.label(), rev.revid(), e.getMessage());
+                    // ⚠️ 记失败**绝不能带上新的 revid** —— 那等于宣称"这页已经导完"，
+                    //    而增量判据是 revid 相等就跳过 → 这页会被永久跳过、静默留白。
+                    //    签名已经从参数上堵死了（见 KbWikiPageStore.markError）。
+                    store.markError(title, src.label(), e.getMessage());
                 }
             }
         }
 
-        if (!dryRun && imported > 0) {
-            // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
-            // 不补这一下，运行期导入的块要等下次重启才进词表。
-            // （块索引不用管：它自己看 KbBlockStore 的版本，写完就失效）
-            termStore.reconcile();
-        }
+        // 词条表**不用管**：下次有人读词条（B 路检索 / 管理端）时，KbTermStore 会自己发现
+        // "语料版本变了"并补齐 —— 见 KbTermStore.ensureReconciled()。这里以前显式调 reconcile()。
         log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字",
                 sources.size(), totalPages, totalChanged, imported, failed, chars);
         return new ImportReport(sources.size(), totalPages, totalChanged, imported, failed, chars,
@@ -285,13 +300,30 @@ public class WikiArticleImporter {
         }
         // ★ 连状态一起清 —— 否则下一次导入会空转（见方法注释）
         int cleared = store.clear();
-        if (n > 0) {
-            // 删完也要让词条表跟上：否则刚 rollback 掉的页面还留在词表里
-            // （块索引不用管：它自己看 KbBlockStore 的版本）
-            termStore.reconcile();
-        }
+        // 词条表不用管：删块同样让语料版本前进，下次读取时自动补齐。
+        // ⚠️ 但**孤儿词条不会自动清** —— 那是管理端的手动动作（deleteOrphans）：
+        //    "先起中文名、正文以后再导"的人工行也长得像孤儿，自动清会误伤。
         log.info("[KB-WIKI] 已清除 wiki 文章块 {} 个、状态行 {} 条（前缀 {}）", n, cleared, cfg.getDocIdPrefix());
         return n;
+    }
+
+    /**
+     * 登记块 id 的占用，返回**之前占用它的那个页面**（null = 第一次）。
+     *
+     * <p>为什么需要：{@link #blockIdOf} 是有损的（标点→短横、大小写归一），
+     * 于是**两个不同的上游页可能映射到同一个块 id**。实测 2026-10-07：
+     * {@code Quests/Farmer's Advice} 与 {@code Quests/Farmer’s Advice}（直引号 vs 弯引号）、
+     * {@code Crash Down Force} 与 {@code Crash Down: Force} —— 两组各抢一个 id，
+     * 后写的把先写的**整块内容覆盖掉**，而两页的状态行都报成功（账上 792 块 / 实际 790 块）。
+     *
+     * <p>这里只负责**认出来**：真正的修法要动 id 约定。**2026-10-08 决定按方案 C**：
+     * 不改 id 约定（撞车的两组都是近似重复页），但每次导入都必须把撞车报出来。
+     * 所以调用点在"列完页之后"（`importAll` 里），而不是"真要写块"的时候 ——
+     * 后者在正常增量跑（0 页要导）里根本不会执行，等于没有告警。
+     */
+    static String registerBlockId(java.util.Map<String, String> seen, String id, String title) {
+        String prev = seen.putIfAbsent(id, title);
+        return prev == null || prev.equals(title) ? null : prev;
     }
 
     /** 列来源下的页名 —— 返回的是带"是否被上限截断"的结果，调用方必须把截断报出来 */

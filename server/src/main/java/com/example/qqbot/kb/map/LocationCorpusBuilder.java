@@ -3,7 +3,6 @@ package com.example.qqbot.kb.map;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.term.KbTermStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -121,15 +120,13 @@ public class LocationCorpusBuilder {
     private final KbMapStore mapStore;
     private final KbBlockStore blockStore;
     private final EmbeddingClient embedding;
-    private final KbTermStore termStore;
 
-    /* 不持有块索引：写完索引自己失效（见 KbBlockStore.version） */
+    /* 既不持有块索引、也不持有词条表：写完索引自己失效、词条表自己补齐 */
     public LocationCorpusBuilder(KbMapStore mapStore, KbBlockStore blockStore,
-                                 EmbeddingClient embedding, KbTermStore termStore) {
+                                 EmbeddingClient embedding) {
         this.mapStore = mapStore;
         this.blockStore = blockStore;
         this.embedding = embedding;
-        this.termStore = termStore;
     }
 
     /** 一个待写入的派生块 */
@@ -184,10 +181,7 @@ public class LocationCorpusBuilder {
                 written++;
             }
         }
-        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
-        // 不补这一下，运行期导入的块要等下次重启才进词表。
-        // （块索引不用管：它自己看 KbBlockStore 的版本，写完就失效）
-        termStore.reconcile();
+        // 词条表不用管：下次读取时会自己发现语料版本变了并补齐（KbTermStore.ensureReconciled）
         log.info("[KB-MAP] 地点语料派生完成：{} 条（区域 {} / POI {} / 具名 {} / NPC {}），跳过 Lore {} 条",
                 written, countKind(entries, "region"), countKind(entries, "poi"),
                 countKind(entries, "place"), countKind(entries, "npc"), skippedLore);
@@ -203,8 +197,8 @@ public class LocationCorpusBuilder {
                 n++;
             }
         }
-        // 删完也要让词条表跟上（块索引自己看版本，不用管）
-        termStore.reconcile();
+        // 词条表不用管：删块也会让语料版本前进，下次读取时自动补齐
+        // （孤儿词条仍然由管理端手动清，理由见 KbTermStore.deleteOrphans）
         log.info("[KB-MAP] 已清除派生地点语料 {} 条", n);
         return n;
     }

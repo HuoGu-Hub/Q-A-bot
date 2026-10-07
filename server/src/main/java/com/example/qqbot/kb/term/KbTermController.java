@@ -255,16 +255,23 @@ public class KbTermController {
      *              留空 = 导全部（保持老行为）。
      * @param board 板块 key，可选。补译名没有优先级，但**按板块分批**能一次只面对一小撮：
      *              {@code combat / build / material / creature / world / quest / system / guide / other}
-     * @param format {@code csv} 或 {@code tsv}（默认）。**机器上只有 WPS 的选 csv** ——
-     *               WPS 双击就能开，而 {@code .tsv} 不一定被表格程序接管。
-     *               CSV 带 UTF-8 BOM，中文不会乱码；导入侧不用改（本来就自动识别分隔符）。
+     * @param format {@code xlsx}（默认）或 {@code tsv}。想要能直接双击打开的表格就选 xlsx；
+     *               {@code tsv} 是**机机 / 调试**用的文本形态（不带 BOM）。
+     *               **CSV 导出 2026-10-08 删除**：中文 Windows 上另存 CSV 默认 GBK，
+     *               而浏览器按 UTF-8 读 → 中文**静默**变乱码（见 {@link KbTermXlsx}）。
+     *               约定：人机交界用 xlsx，机机用 tsv。
      */
     @GetMapping("/export")
     public Map<String, Object> export(@RequestParam(defaultValue = "") String q,
                                       @RequestParam(defaultValue = "") String view,
                                       @RequestParam(defaultValue = "") String board,
-                                      @RequestParam(defaultValue = "tsv") String format) {
-        String fmt = format == null ? "xlsx" : format.trim().toLowerCase(Locale.ROOT);
+                                      @RequestParam(defaultValue = "xlsx") String format) {
+        String fmt = format.trim().toLowerCase(Locale.ROOT);
+        // ⚠️ 明确报错，而不是"悄悄回退成 xlsx" —— 后者会让调用方以为拿到的是 CSV
+        if ("csv".equals(fmt)) {
+            return Map.of("ok", false, "error", "CSV 导出已弃用（中文 Windows 上 GBK 会静默乱码）："
+                    + "请用 format=xlsx（人 / Excel）或 format=tsv（机机）");
+        }
         // ⚠️ 数行数前先剥 BOM：CSV 以 U+FEFF 开头，会让**第一行注释**不再以 '#' 开头，
         //    于是它被算成一条数据 → 报给用户的条数比实际多 1（2026-10-04 实测踩到）。
         String tsv = service.exportTsv(q, view, board);
@@ -278,11 +285,6 @@ public class KbTermController {
             out.put("tsv", tsv);
             out.put("text", tsv);
             out.put("format", "tsv");
-        } else if ("csv".equals(fmt)) {
-            String csv = service.exportCsv(q, view, board);
-            out.put("tsv", csv);
-            out.put("text", csv);
-            out.put("format", "csv");
         } else {
             // xlsx 是二进制 —— 用 base64 塞进 JSON，前端照旧走 res.json()（见 client 的注释）
             out.put("xlsxBase64", java.util.Base64.getEncoder()

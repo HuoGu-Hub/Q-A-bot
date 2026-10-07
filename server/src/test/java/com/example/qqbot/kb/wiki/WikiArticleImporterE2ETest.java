@@ -109,10 +109,11 @@ class WikiArticleImporterE2ETest {
         KbWikiPageStore pageStore = new KbWikiPageStore(new KbWikiPageRepository(new Jdbc(sqlite)));
         pageStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        // 词条表要在导入之前就绪：导入器写完块会调 reconcile，让新块**立刻**对 B 路可见
+        // 词条表要在导入之前就绪：它现在自己看语料版本补齐（KbTermStore.ensureReconciled），
+        // 这里先把实例建好，后面断言 B 路能查到为止
         KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
         terms.init();
-        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, embedding, terms);
+        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, embedding);
 
         // ① dryRun：只列页、比版本
         WikiArticleImporter.ImportReport dry = importer.importAll(true);

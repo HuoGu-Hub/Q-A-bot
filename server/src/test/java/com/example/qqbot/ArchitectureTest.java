@@ -148,6 +148,20 @@ class ArchitectureTest {
         sourcesDoNotHoldIndex.check(CLASSES);
     }
 
+    @Test
+    @DisplayName("★ 摄入来源不许再碰词条表 —— 它自己看语料版本补齐（2026-10-08）")
+    void ingestSourcesDoNotTouchTermTable() {
+        // 迁移前：wiki 导入器 / 地图派生器写完之后各显式调一次 KbTermStore.reconcile()（共 4 处）。
+        // 现在 KbTermStore 在**读**词条时自己比对 KbCorpus.version() 并补齐（ensureReconciled），
+        // 所以生产者连 KbTermStore 都不该认识 —— 少一个"忘了调就静默少一批中文名"的入口。
+        //（kb.block.KbDocImporter 不在本规则范围内，且它用 KbTermStore 是合理的：
+        //  导文档时**逐块登记**名字，那是它的职责。）
+        ArchRule rule = noClasses()
+                .that().resideInAnyPackage("..kb.wiki..", "..kb.map..")
+                .should().dependOnClassesThat().haveSimpleName("KbTermStore");
+        rule.check(CLASSES);
+    }
+
     /* ==================== 目标：还债清单 ==================== */
 
     @Test

@@ -76,6 +76,9 @@ public class KbTermStore {
      */
     private final AtomicLong version = new AtomicLong();
 
+    /** 上一次按语料补齐时，语料是哪个版本（{@code -1} = 还没补过）—— 见 {@link #ensureReconciled()} */
+    private volatile long reconciledVersion = -1L;
+
     public KbTermStore(KbTermRepository repo, com.example.qqbot.kb.KbCorpus corpus) {
         this.repo = repo;
         this.corpus = corpus;
@@ -134,8 +137,11 @@ public class KbTermStore {
      * <p>幂等，重复执行无副作用。放在启动时跑一次的意义：重新爬过语料之后，
      * 新页面自动获得"可以给它起中文名"的位置，不需要任何额外操作。
      *
-     * <p>⚠️ 只在 {@code init()} 时跑一次 —— 所以**运行期新导入的块，要等下次启动才会进词条表**。
-     * 这就是导入器在写完之后要显式再调一次它的原因（见 {@code WikiArticleImporter}）。
+     * <p><b>运行期不用调用方操心</b>（2026-10-08 改）：{@link #list()} 会先比
+     * {@link com.example.qqbot.kb.KbCorpus#version()}，发现语料比自己上次补齐时新就顺手补一次 ——
+     * 所以导入器/派生器**不再需要**在写完之后显式调它。
+     *（旧做法就是让它们显式调：迁移前共 4 处，新增一个写入口就漏一个，
+     *而漏了的症状是「新页面没有中文名的位置」——B 路搜不到，也不报错。）
      *
      * <p>「新增了几条」靠比较补齐前后的行数得出：{@code INSERT OR IGNORE} 只报提交行数，
      * 分不出哪些被忽略了 —— 而"不忽略"正是这里必须保住的东西（人工成果优先）。
@@ -146,8 +152,11 @@ public class KbTermStore {
         if (!available) {
             return 0;
         }
+        // ⚠️ 先取版本、再读语料（和 KbBlockIndex.ensureLoaded 同一条规矩）
+        long corpusVersion = corpus.version();
         List<KbTermRepository.Row> rows = knownPages();
         if (rows.isEmpty()) {
+            reconciledVersion = corpusVersion;   // 这一版语料确实没东西可补
             return 0;
         }
         long before = repo.count();
@@ -155,9 +164,10 @@ public class KbTermStore {
             repo.insertMissing(rows, Instant.now().toString());
         } catch (Exception e) {
             log.warn("[KB-TERM] 补齐页面失败：{}", e.getMessage());
-            return 0;
+            return 0;   // 失败**不记版本** → 下次访问还会再试
         }
         int added = (int) (repo.count() - before);
+        reconciledVersion = corpusVersion;
         if (added > 0) {
             version.incrementAndGet();
         }
@@ -277,10 +287,39 @@ public class KbTermStore {
      * <p>读也加锁这件事已经下沉到 {@link KbTermRepository}（共用连接是全局串行的），
      * 这里不再自己 synchronized。
      */
+    /**
+     * 语料变了就自己补一次（幂等；快路径只比一个 long）。
+     *
+     * <h2>为什么挂在读路径上（懒）</h2>
+     * 写路径可能是 CLI 进程里**一次写上千块**：在那里补齐既慢又没人看；
+     * 而「忘了补」的代价是**新页面没有中文名的位置** —— B 路关键词搜不到它，还不报错。
+     * 让真正要读的人（B 路检索 / 管理端）顺手补上，两个问题一起没了：
+     * 第一次读发现版本对不上 → 补一次；之后每次读只是比一个 long。
+     *
+     * <p>旧做法：让每个导入器写完之后显式调 {@link #reconcile()}（迁移前共 4 处）——
+     * 和块索引的 {@code reload()} 是同一条教训：**新增一个写入口就漏一个**，
+     * 漏了的症状是静默的。
+     */
+    private void ensureReconciled() {
+        if (!available || corpus.version() == reconciledVersion) {
+            return;
+        }
+        synchronized (this) {
+            if (!available || corpus.version() == reconciledVersion) {
+                return;
+            }
+            int added = reconcile();
+            if (added > 0) {
+                log.info("[KB-TERM] 语料变了，自动补齐 {} 条词条", added);
+            }
+        }
+    }
+
     public List<Entry> list() {
         if (!available) {
             return List.of();
         }
+        ensureReconciled();   // 语料变了就顺手补齐 —— 调用方不需要记得调 reconcile()
         try {
             List<Entry> out = new ArrayList<>();
             for (KbTermRepository.Row r : repo.all()) {

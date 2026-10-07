@@ -534,20 +534,6 @@ public class KbTermService {
      * @param view  见 {@link #VIEWS}；**空 = 全部**（保持老行为，注意与列表默认的 main 不同）
      * @param board 板块 key；空 = 不限
      */
-    /**
-     * 导出 **CSV**（UTF-8 **带 BOM**）。
-     *
-     * <h2>为什么需要它</h2>
-     * 很多人机器上只有 WPS 没有 Excel，而 `.tsv` 双击不一定被表格程序接管。
-     * CSV 是两边都认的格式，{@code CsvTable} 本来就会自动识别分隔符 —— 导入侧不用改。
-     *
-     * <p><b>BOM 是必须的</b>：不带 BOM 的 UTF-8 CSV，中文 Windows 上的 WPS/Excel
-     * 会按 GBK 打开 → 中文全是乱码。带了 BOM 它们才认得这是 UTF-8。
-     */
-    public String exportCsv(String q, String view, String board) {
-        return "\uFEFF" + export(q, view, board, ',');
-    }
-
     public String exportTsv(String q, String view, String board) {
         return export(q, view, board, '\t');
     }

@@ -103,13 +103,25 @@ public class KbWikiPageRepository {
     }
 
     /**
-     * 记一次失败。**不动 revid** —— 动了会让下一次导入误以为"这页已经处理过"而永久跳过它。
+     * 记一次失败。**revid 恒写 0，且不接受调用方传** —— 见 {@link KbWikiPageStore#markError}：
+     * 这行的 revid 是增量判据，写了真 revid 会让这页被永久跳过。
      */
-    public void markError(String page, String source, long revid, String syncedAt, String message) {
+    public void markError(String page, String source, String syncedAt, String message) {
         jdbc.update("INSERT INTO kb_wiki_page (page, source, revid, synced_at, chars, block_id, error)"
-                + " VALUES (?,?,?,?,0,'',?)"
+                + " VALUES (?,?,0,?,0,'',?)"
                 + " ON CONFLICT(page) DO UPDATE SET error=excluded.error, synced_at=excluded.synced_at",
-                page, source, revid, syncedAt, message);
+                page, source, syncedAt, message);
+    }
+
+    /**
+     * 上次**没导成功**的页（error 非空）。
+     *
+     * <p>为什么它必须参与增量判据：这类页的 revid 不可信 —— 老版本曾把真 revid 写进失败行
+     * （见 {@link #markError}），于是"revid 相等就跳过"会把这页永久跳过。
+     * 判据里带上它，历史坏行也能自愈。
+     */
+    public List<String> pagesWithError() {
+        return jdbc.query("SELECT page FROM kb_wiki_page WHERE COALESCE(error,'') <> ''", r -> r.str("page"));
     }
 
     public List<String> pagesOfSource(String source) {

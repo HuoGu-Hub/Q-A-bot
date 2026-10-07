@@ -84,13 +84,28 @@ public class KbWikiPageStore {
         return available ? repo.blockCountOf(page) : 0;
     }
 
-    /** 记一次失败；**不动 revid**（动了会把这页永久跳过，与地图同步同一条教训） */
-    public void markError(String page, String source, long revid, String message) {
+    /**
+     * 记一次失败。**revid 一律写 0，永远不写真 revid。**
+     *
+     * <p>这行的 revid 就是增量判据（和远端相等 = 跳过），所以：给一页**成功**导完才许写
+     * 它的真 revid；记失败时写了，等于宣称"这页已经导完"——那页会被**永久跳过**，
+     * 而它其实一个字都没进语料。这才是最坏的漏页：不报错、不复现、日志里只有一行 failed。
+     *
+     * <p>所以这个方法**干脆不接受 revid 参数** —— 从签名上堵死，而不是靠注释提醒。
+     * 实测（2026-10-07 重导）：{@code Lore/Cat Naming Problem} 的标题向量因代理 GOAWAY
+     * 失败，状态行却记下了新 revid 33016 → 下次导入再也不会重试它。
+     */
+    public void markError(String page, String source, String message) {
         if (!available) {
             return;
         }
-        repo.markError(page, source, revid, Instant.now().toString(),
+        repo.markError(page, source, Instant.now().toString(),
                 message == null ? "" : message.substring(0, Math.min(300, message.length())));
+    }
+
+    /** 上次没导成功的页（error 非空）—— 这些页**必须重试**，不管 revid 相等不相等 */
+    public java.util.Set<String> pendingRetries() {
+        return available ? java.util.Set.copyOf(repo.pagesWithError()) : java.util.Set.of();
     }
 
     /** 某个来源下的全部页面（用于按来源回滚） */

@@ -275,7 +275,7 @@ export interface KbTermExportResponse {
   text?: string
   /** format=xlsx 时的文件字节（base64）—— 二进制塞不进 JSON 文本字段 */
   xlsxBase64?: string
-  format?: 'xlsx' | 'csv' | 'tsv'
+  format?: 'xlsx' | 'tsv'
   count: number
 }
 
