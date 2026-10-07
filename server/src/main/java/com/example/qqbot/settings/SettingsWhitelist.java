@@ -171,6 +171,12 @@ public class SettingsWhitelist {
             new Item("app.kb.public-search.vector-daily-limit", "语义搜索每日上限", "知识库",
                     "int", "超过后当天自动降级为关键词搜索，不会报错", 800),
 
+            // ---------- 机器人身份 ----------
+            // ⚠️ 只放真的有人读的项。org / author 目前全项目没有调用点，
+            //    放进来只会变成「改了没反应」的假开关 —— 等真接上再加。
+            new Item("app.bot.name", "机器人昵称", "机器人身份",
+                    "string", "用在 {bot} 变量和限流提示话术里；改完立即生效", "示例助手"),
+
             // ---------- 站点信息 ----------
             new Item("app.site.group-name", "群名称", "站点信息",
                     "string", "显示在「关于」页", "示例玩家群"),

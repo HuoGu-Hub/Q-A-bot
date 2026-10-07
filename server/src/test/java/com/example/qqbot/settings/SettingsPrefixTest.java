@@ -1,5 +1,6 @@
 package com.example.qqbot.settings;
 
+import com.example.qqbot.config.BotProperties;
 import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.GuardProperties;
 import com.example.qqbot.config.KbProperties;
@@ -42,7 +43,8 @@ class SettingsPrefixTest {
                 mock(GuardProperties.class), mock(KbProperties.class),
                 mock(MediaProperties.class), mock(QaProperties.class),
                 mock(LogProperties.class), mock(CommandProperties.class),
-                mock(SiteProperties.class), mock(LlmProperties.class));
+                mock(SiteProperties.class), mock(LlmProperties.class),
+                mock(BotProperties.class));
         SettingsService service = new SettingsService(
                 new SettingsWhitelist(), mock(OverridesFile.class), roots);
 

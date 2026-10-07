@@ -34,7 +34,8 @@ public class SettingsConfig {
     public SettingsRoots settingsRoots(GuardProperties guard, KbProperties kb,
                                        MediaProperties media, QaProperties qa,
                                        LogProperties logs, CommandProperties commands,
-                                       SiteProperties site, LlmProperties llm) {
+                                       SiteProperties site, LlmProperties llm,
+                                       BotProperties bot) {
         return new SettingsRoots(Map.of(
                 "guard", guard,
                 "kb", kb,
@@ -43,6 +44,7 @@ public class SettingsConfig {
                 "logs", logs,
                 "commands", commands,
                 "site", site,
-                "llm", llm));
+                "llm", llm,
+                "bot", bot));
     }
 }
