@@ -70,6 +70,10 @@ tests/screenshots/
 node_modules/
 .npmtmp/
 
+# 自托管字体（思源宋体分片，101 个 woff2 / 约 3MB）：不进仓库，
+# 需要的人在 clone 后跑 web/scripts/fetch-fonts.ps1 自行补齐（见 web/README.md）
+web/public/fonts/
+
 # 配置中心写入的覆盖层（本地行为配置，不进仓库）
 server/config/overrides.yml
 

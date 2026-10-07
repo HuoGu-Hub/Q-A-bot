@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import net from 'node:net'
@@ -37,10 +37,13 @@ const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:8080'
  * 前导点 `.` 表示「该域名本身 + 任意子域」—— 隧道服务给的子域名会变，
  * 用点前缀就不用每次改代码。
  *
- * 换域名也可以完全不碰这个文件：
- *   ALLOWED_HOSTS=abc.com,xyz.com pnpm dev
+ * ⚠️ 域名**不写死在这个文件里**（仓库是公开的）——统一放仓库根的 .env，
+ *    和后端共用同一个 env 文件；也可以临时用命令行覆盖：
+ *   ALLOWED_HOSTS=a.com,b.com pnpm dev
  */
-const TUNNEL_HOSTS = (process.env.ALLOWED_HOSTS ?? '')
+const ROOT_ENV = loadEnv('development', fileURLToPath(new URL('..', import.meta.url)), 'ALLOWED_HOSTS')
+
+const TUNNEL_HOSTS = (process.env.ALLOWED_HOSTS ?? ROOT_ENV.ALLOWED_HOSTS ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
@@ -180,11 +183,10 @@ export default defineConfig({
      * 想更稳：把 dist/ 交给后端 8080 提供（SpaForwardController 那条路），
      * 穿透指向 8080 而不是 5173。
      */
-    allowedHosts: [
-      '.example.com', // 你现在在用的两个穿透域名
-      '.example.com',
-      ...TUNNEL_HOSTS, // 额外域名：ALLOWED_HOSTS=a.com,b.com
-    ],
+    // ⚠️ 故意不写任何真实域名（仓库公开）。要透过隧道/域名访问 dev server，
+    //    把域名写进仓库根的 .env（前导点 = 该域名 + 任意子域）：
+    //      ALLOWED_HOSTS=.a.com,.b.com
+    allowedHosts: ['.localhost', ...TUNNEL_HOSTS],
     /**
      * 容器里改的文件也能触发热更新 / 自动重启（原因见上面 USE_POLLING 的注释）。
      * interval 越小越灵、越费 CPU；300ms 是这个项目上够用又不吵的值。
