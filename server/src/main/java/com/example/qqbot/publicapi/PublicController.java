@@ -93,7 +93,8 @@ public class PublicController {
     /**
      * 站点信息（公开站「关于」页用）。
      *
-     * <p>只有群名称/群号/说明，**不含任何隐私**。
+     * <p>只有群名称/群号/说明 + 运营方/署名，**不含任何隐私**：
+     * 这些值都是运营方自己填的展示文案（默认是示例值，留空则前端不渲染那一行）。
      */
     @GetMapping("/site")
     public Map<String, Object> siteInfo() {
@@ -103,6 +104,8 @@ public class PublicController {
         out.put("groupDesc", site.getGroupDesc());
         out.put("joinHint", site.getJoinHint());
         out.put("botName", botProps.getName());
+        out.put("org", botProps.getOrg());
+        out.put("author", botProps.getAuthor());
         // 页面固定文案的**覆盖值**（键是 "page.block"）。
         // 只回被改过的：没改过的由前端用自带默认文案渲染 ——
         // 这样接口小，而且后端不可用时站点也不会变空白。

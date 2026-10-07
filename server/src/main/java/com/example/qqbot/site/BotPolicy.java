@@ -27,4 +27,10 @@ public interface BotPolicy {
 
     /** 机器人昵称 —— 用于 {bot} 变量、限流话术等 */
     String getName();
+
+    /** 运营方 / 组织名 —— 公开站「关于」页展示（空则不显示那一行） */
+    String getOrg();
+
+    /** 技术支持署名 —— 公开站「关于」页展示（空则不显示那一行） */
+    String getAuthor();
 }

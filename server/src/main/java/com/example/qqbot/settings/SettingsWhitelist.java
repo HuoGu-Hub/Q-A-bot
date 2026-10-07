@@ -176,6 +176,10 @@ public class SettingsWhitelist {
             //    「改了没反应」的假开关，比少一个开关更难排查。
             new Item("app.bot.name", "机器人昵称", "机器人身份",
                     "string", "用在 {bot} 变量和限流提示话术里；改完立即生效", "示例助手"),
+            new Item("app.bot.org", "运营方 / 组织名", "机器人身份",
+                    "string", "公开站「关于」页展示；留空则隐藏那一行", "示例组织"),
+            new Item("app.bot.author", "技术支持署名", "机器人身份",
+                    "string", "公开站「关于」页展示；留空则隐藏那一行", "示例作者"),
 
             // ---------- 站点信息 ----------
             new Item("app.site.group-name", "群名称", "站点信息",

@@ -33,4 +33,28 @@ public class BotProperties implements BotPolicy {
     public void setName(String name) {
         this.name = name;
     }
+
+    /** 运营方 / 组织名 —— 公开站「关于」页展示（留空则不显示那一行） */
+    private String org = "示例组织";
+
+    /** 技术支持署名 —— 公开站「关于」页展示（留空则不显示那一行） */
+    private String author = "示例作者";
+
+    @Override
+    public String getOrg() {
+        return org;
+    }
+
+    public void setOrg(String org) {
+        this.org = org;
+    }
+
+    @Override
+    public String getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(String author) {
+        this.author = author;
+    }
 }

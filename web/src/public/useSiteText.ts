@@ -24,6 +24,10 @@ export interface SiteInfo {
   groupDesc: string
   joinHint: string
   botName: string
+  /** 运营方 / 组织名（「关于」页展示；可为空） */
+  org: string
+  /** 技术支持署名（「关于」页展示；可为空） */
+  author: string
   /** 页面文案的**覆盖值**，键是 `page.block`；没被改过的键不存在 */
   texts?: Record<string, string>
 }
