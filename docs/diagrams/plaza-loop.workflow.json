@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "飘雪喵 · 问答广场的三级降级",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "逻辑处理"
+        },
+        "security": {
+          "label": "策略与闸门"
+        },
+        "messagebus": {
+          "label": "事件"
+        },
+        "database": {
+          "label": "数据与上下文"
+        },
+        "external": {
+          "label": "外部系统"
+        },
+        "frontend": {
+          "label": "前端"
+        },
+        "cloud": {
+          "label": "容器/云"
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "browse-vote",
+        "label": "浏览与投票",
+        "focus": [
+          "hot",
+          "answers",
+          "vote"
+        ],
+        "note": "只展示被点赞过的问答，投票只收随机 clientId。"
+      },
+      {
+        "id": "level-two",
+        "label": "二级降级",
+        "focus": [
+          "allbad",
+          "asknew"
+        ],
+        "note": "三条历史回答全被踩，才让模型重新生成一条。"
+      },
+      {
+        "id": "level-three",
+        "label": "三级降级与闭环",
+        "focus": [
+          "help",
+          "confirm",
+          "answers"
+        ],
+        "note": "再不行就生成待办文案，由用户复制到群里，新回答回到问答库。"
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "visitor",
+      "label": "公开站访客"
+    },
+    {
+      "id": "plaza",
+      "label": "问答广场"
+    },
+    {
+      "id": "library",
+      "label": "问答库"
+    },
+    {
+      "id": "llm",
+      "label": "模型复答"
+    },
+    {
+      "id": "group",
+      "label": "QQ 群"
+    },
+    {
+      "id": "exception",
+      "label": "受限与拒绝",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "browse",
+      "label": "浏览与投票",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "level2",
+      "label": "二级降级",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "level3",
+      "label": "三级降级",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "limit",
+      "label": "每一级都有日限额",
+      "lane": "exception",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "hot",
+    "answers",
+    "vote",
+    "allbad",
+    "asknew",
+    "help",
+    "confirm"
+  ],
+  "nodes": [
+    {
+      "id": "hot",
+      "lane": "plaza",
+      "col": 0,
+      "type": "backend",
+      "label": "关键词热榜",
+      "sublabel": "只展示被赞过"
+    },
+    {
+      "id": "answers",
+      "lane": "library",
+      "col": 1,
+      "type": "database",
+      "label": "历史回答",
+      "sublabel": "相似度去重"
+    },
+    {
+      "id": "vote",
+      "lane": "visitor",
+      "col": 2,
+      "type": "frontend",
+      "label": "投票与匿名",
+      "sublabel": "哈希后存库",
+      "tag": "不关联到人"
+    },
+    {
+      "id": "allbad",
+      "lane": "exception",
+      "col": 3,
+      "type": "security",
+      "label": "全被踩",
+      "sublabel": "踩 > 赞"
+    },
+    {
+      "id": "asknew",
+      "lane": "llm",
+      "col": 4,
+      "type": "external",
+      "label": "问问新答案",
+      "sublabel": "模型重新生成"
+    },
+    {
+      "id": "help",
+      "lane": "plaza",
+      "col": 5,
+      "type": "backend",
+      "label": "生成求助文案",
+      "sublabel": "「求助：xxx」"
+    },
+    {
+      "id": "confirm",
+      "lane": "group",
+      "col": 5,
+      "type": "messagebus",
+      "label": "群里发布",
+      "sublabel": "只发当前群",
+      "tag": "群号来自群聊"
+    }
+  ],
+  "edges": [
+    {
+      "from": "hot",
+      "to": "answers",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "answers",
+      "to": "vote",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "vote",
+      "to": "allbad",
+      "variant": "security",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "三条全被踩"
+    },
+    {
+      "from": "allbad",
+      "to": "asknew",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "二级降级"
+    },
+    {
+      "from": "asknew",
+      "to": "help",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "再全被踩"
+    },
+    {
+      "from": "help",
+      "to": "confirm",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "复制到群里 @"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "隐私是硬约束",
+      "items": [
+        "广场只展示「被点赞过」的问答，没被认可的不会露面",
+        "投票只收前端随机 clientId，服务端加盐哈希后存库",
+        "UNIQUE(stat_id, voter_hash) 保证每人每答案一票，且不关联到人"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "每一级都要限额",
+      "items": [
+        "问问新答案会真的调模型：每关键词每天 3 次、全局每天 100 次",
+        "求助大佬会打扰群友：同问每天 1 次、每人每天 3 次、每群每小时 1 条",
+        "先扣额度再调用，失败退还，避免并发绕过"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "网页永远不能指定群号",
+      "items": [
+        "访客无法证明自己属于某个群，能填群号就等于能向任意群广播",
+        "所以网页只生成一句待办文案，由用户复制到群里 @ 机器人",
+        "群号取自群聊上下文；群里答完会记入问答库，下次就有历史回答"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "飘雪喵 · 知识库「导入 → 召回 → 作答」数据流",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1120,
+      500
+    ],
+    "views": [
+      {
+        "id": "ingest-chain",
+        "label": "两条入库路径",
+        "focus": [
+          "author",
+          "import",
+          "wikipage",
+          "cleaner",
+          "block"
+        ],
+        "note": "日常走管理端文档导入；wiki 抓取是默认关闭的运维入口，同样落到块表。"
+      },
+      {
+        "id": "recall-chain",
+        "label": "三路召回",
+        "focus": [
+          "block",
+          "term",
+          "titlevec",
+          "retriever"
+        ],
+        "note": "A 正文向量、B 术语关键词、C 标题闸门，按排名融合而不是分数相加。"
+      },
+      {
+        "id": "answer-chain",
+        "label": "注入与作答",
+        "focus": [
+          "retriever",
+          "inject",
+          "model",
+          "reply"
+        ],
+        "note": "检索结果拼进上下文 → 模型作答 → 回答回到群里，同时异步落库。"
+      }
+    ],
+    "legend": {
+      "entries": {
+        "emphasis": {
+          "label": "主数据路径"
+        },
+        "dashed": {
+          "label": "异步 / 批量"
+        },
+        "database": {
+          "label": "数据存储"
+        },
+        "default": {
+          "label": "数据流"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "产出与抓取"
+    },
+    {
+      "label": "导入与清洗"
+    },
+    {
+      "label": "落盘与索引"
+    },
+    {
+      "label": "三路召回"
+    },
+    {
+      "label": "注入作答"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "author",
+      "type": "external",
+      "label": "外部 AI / 人",
+      "sublabel": "按格式写中文",
+      "stage": 0,
+      "row": 0,
+      "tag": "系统外"
+    },
+    {
+      "id": "admin",
+      "type": "frontend",
+      "label": "管理员",
+      "sublabel": "文档/词条/分类/提案",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "import",
+      "type": "backend",
+      "label": "文档导入",
+      "sublabel": "校验 → 预览 → 确认",
+      "stage": 1,
+      "row": 0,
+      "tag": "只为变更块重算"
+    },
+    {
+      "id": "termedit",
+      "type": "backend",
+      "label": "词条维护",
+      "sublabel": "CSV / TSV 批量",
+      "stage": 1,
+      "row": 2
+    },
+    {
+      "id": "block",
+      "type": "database",
+      "label": "块 + 正文向量",
+      "sublabel": "稳定 id · 可覆盖",
+      "stage": 2,
+      "row": 0
+    },
+    {
+      "id": "titlevec",
+      "type": "database",
+      "label": "标题向量",
+      "sublabel": "C 路闸门专用",
+      "stage": 2,
+      "row": 1
+    },
+    {
+      "id": "term",
+      "type": "database",
+      "label": "词条",
+      "sublabel": "中文名 + 别名",
+      "stage": 2,
+      "row": 2
+    },
+    {
+      "id": "retriever",
+      "type": "backend",
+      "label": "三路召回",
+      "sublabel": "A 向量 + B 词条",
+      "stage": 3,
+      "row": 1,
+      "tag": "绝不抛异常"
+    },
+    {
+      "id": "inject",
+      "type": "backend",
+      "label": "资料块注入",
+      "sublabel": "两段：维护/导入",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "model",
+      "type": "external",
+      "label": "大模型",
+      "sublabel": "组织成人话",
+      "stage": 4,
+      "row": 1
+    },
+    {
+      "id": "reply",
+      "type": "messagebus",
+      "label": "回答回到群里",
+      "sublabel": "引用原文 + 回答",
+      "stage": 4,
+      "row": 2,
+      "tag": "异步落库"
+    },
+    {
+      "id": "wikipage",
+      "type": "external",
+      "label": "Wiki 页面",
+      "sublabel": "wiki.gg API",
+      "stage": 0,
+      "row": 1,
+      "tag": "运维入口"
+    },
+    {
+      "id": "cleaner",
+      "type": "backend",
+      "label": "语料清洗与切块",
+      "sublabel": "WikitextCleaner",
+      "stage": 1,
+      "row": 1,
+      "tag": "默认关"
+    }
+  ],
+  "flows": [
+    {
+      "from": "author",
+      "to": "import",
+      "label": "中文文档",
+      "classification": "doc 头 + 块 id",
+      "variant": "emphasis"
+    },
+    {
+      "from": "admin",
+      "to": "termedit",
+      "label": "词条表",
+      "classification": "人工校对"
+    },
+    {
+      "from": "import",
+      "to": "block",
+      "label": "块正文",
+      "classification": "幂等",
+      "variant": "emphasis",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": -24
+    },
+    {
+      "from": "block",
+      "to": "titlevec",
+      "label": "标题向量",
+      "classification": "补建",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "termedit",
+      "to": "term",
+      "label": "词条写入",
+      "classification": "保存即生效"
+    },
+    {
+      "from": "block",
+      "to": "retriever",
+      "label": "候选块",
+      "classification": "≥ 0.45",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          745,
+          157
+        ]
+      ]
+    },
+    {
+      "from": "titlevec",
+      "to": "retriever",
+      "label": "标题闸门",
+      "classification": "≥ 0.70",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "term",
+      "to": "retriever",
+      "label": "术语命中",
+      "classification": "字面匹配",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          745,
+          385
+        ]
+      ]
+    },
+    {
+      "from": "retriever",
+      "to": "inject",
+      "label": "top-5 资料",
+      "classification": "RRF 融合",
+      "variant": "emphasis"
+    },
+    {
+      "from": "inject",
+      "to": "model",
+      "label": "拼进上下文",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "classification": "资料 + 提问"
+    },
+    {
+      "from": "model",
+      "to": "reply",
+      "label": "回答文本",
+      "classification": "回答与指标",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "wikipage",
+      "to": "cleaner",
+      "label": "原始 wikitext",
+      "classification": "含模板 / 链接",
+      "variant": "dashed"
+    },
+    {
+      "from": "cleaner",
+      "to": "block",
+      "label": "清洗后正文",
+      "classification": "按段落切块",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "一个文件装下全部人工成果",
+      "items": [
+        "块、正文向量、标题向量、词条、分类、提案、指令、投票都在同一个 SQLite 文件",
+        "备份就是一条 sqlite3 .backup，不用分别处理",
+        "建表都是 CREATE TABLE IF NOT EXISTS + 幂等补列，老库升级不用删库"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "两条入库路径，别混用",
+      "items": [
+        "文档面板：外部产出 → 格式校验 → 预览 → 确认，只有它重算向量",
+        "Wiki 导入：WikitextCleaner 清洗 → KbTextChunker 切块 → 增量写块，默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发",
+        "只改文本不重算向量，检索仍按旧正文匹配，等于没改；换向量模型必须整库重建"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "回答要真的发出去，也要记下来",
+      "items": [
+        "检索到的块拼成 <<<KNOWLEDGE>>> 一段，和场景/发言者/引用/用户输入一起进上下文",
+        "模型返回后走出站过滤与节奏控制，再由 NapCat 发回群；记录的是实际发出的文本",
+        "落库异步且不阻塞回答；库写坏了只记日志，机器人照常回答"
+      ]
+    }
+  ]
+}

@@ -6,6 +6,19 @@
     "quality_profile": "showcase",
     "views": [
       {
+        "id": "round-trip",
+        "label": "一问一答",
+        "focus": [
+          "event",
+          "ingress",
+          "guard",
+          "chat",
+          "send",
+          "reply"
+        ],
+        "note": "从群友提问到回答回到群里，完整闭环。"
+      },
+      {
         "id": "zero-cost",
         "label": "零成本判定链",
         "focus": [
@@ -24,15 +37,6 @@
           "chat"
         ],
         "note": "向量、词条、标题闸门三路召回，融合成资料块再交给模型。"
-      },
-      {
-        "id": "delivery",
-        "label": "出站与记录",
-        "focus": [
-          "send",
-          "record"
-        ],
-        "note": "出站过滤与节奏控制在前，落库在回答之后异步进行。"
       }
     ],
     "legend": {
@@ -218,6 +222,14 @@
       "type": "security",
       "label": "固定话术回复",
       "sublabel": "拦截 / 超限"
+    },
+    {
+      "id": "reply",
+      "lane": "qq",
+      "col": 5,
+      "type": "messagebus",
+      "label": "回复到群里",
+      "sublabel": "引用原文 + 回答"
     }
   ],
   "edges": [
@@ -297,6 +309,29 @@
       "route": "drop",
       "fromSide": "bottom",
       "toSide": "top"
+    },
+    {
+      "from": "send",
+      "to": "reply",
+      "label": "回到群聊",
+      "variant": "emphasis",
+      "role": "return",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [
+        [
+          500,
+          786
+        ],
+        [
+          700,
+          786
+        ],
+        [
+          700,
+          119
+        ]
+      ]
     }
   ],
   "cards": [
@@ -311,20 +346,20 @@
     },
     {
       "dot": "amber",
-      "title": "失败即沉默",
+      "title": "出站也要管",
       "items": [
-        "Drop 静默丢弃，Reply 回固定话术，绝不半途调模型",
-        "排队超过 20 秒直接丢弃，并回一句「刚才太挤了」",
-        "预算判定在调模型之前，token 不花出去"
+        "出站敏感词过滤在 OutboundSender 内部，单一出口绕不过",
+        "同群两条消息最小间隔 800 ms ± 400 ms 抖动，长回复按句分片",
+        "切出 3 段以上打包成合并转发，协议端不支持时退回逐条发"
       ]
     },
     {
       "dot": "emerald",
-      "title": "记录不阻塞",
+      "title": "记录不阻塞回答",
       "items": [
         "问答记录异步投递，绝不占用回答线程",
-        "队列有界，满了丢弃并计数",
-        "库写坏了只记日志，机器人照常回答"
+        "队列有界，满了丢弃并计数；库坏只记日志",
+        "落库的是实际发出的那段文本，不是模型原始输出"
       ]
     }
   ]
