@@ -546,7 +546,13 @@ defineExpose({
   resize: vertical;
   outline: none;
 }
-.text.edit:focus { border-color: var(--flame); box-shadow: inset 2px 0 0 var(--moss), 0 0 0 3px var(--flame-glow); }
+/* ⚠️ 用 :focus-visible，并且把焦点环换成**实色双环**。
+   原来是 :focus + 3px 的半透明橙晕（--flame-glow 的 alpha 只有 .28）——
+   在深色底上对比度约 1.2:1，等于没有焦点指示（WCAG 2.4.11 要求 ≥3:1）。 */
+.text.edit:focus-visible {
+  border-color: var(--ember);
+  box-shadow: inset 2px 0 0 var(--vital), 0 0 0 2px var(--stone-200), 0 0 0 4px var(--ember);
+}
 
 /* 「已改」是状态标记，不是装饰 */
 .dirty {

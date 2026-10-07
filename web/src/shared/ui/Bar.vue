@@ -31,17 +31,24 @@ const width = () => {
   gap: var(--sp-3);
   font-size: var(--fs-xs);
 }
-.lbl { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.track { height: 9px; background: var(--bg-sunken); border-radius: var(--r-xs); overflow: hidden; }
+.lbl { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 轨道是刻进去的槽：底色更深 + 内阴影 */
+.track {
+  height: 8px;
+  background: var(--stone-void);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  box-shadow: var(--bevel-inset);
+}
 .fill {
   display: block;
   height: 100%;
-  border-radius: var(--r-xs);
-  background: linear-gradient(90deg, var(--flame-deep), var(--flame-bright));
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--ember-deep), var(--ember));
   transition: width var(--dur-slow) var(--ease);
 }
-.t-moss { background: linear-gradient(90deg, var(--moss-deep), var(--moss)); }
-.t-rust { background: linear-gradient(90deg, var(--rust-deep), var(--rust)); }
-.t-mist { background: linear-gradient(90deg, var(--line-strong), var(--mist)); }
-.val { color: var(--ink-dim); min-width: 28px; text-align: right; }
+.t-moss { background: linear-gradient(90deg, var(--vital-deep), var(--vital)); }
+.t-rust { background: linear-gradient(90deg, var(--blight-deep), var(--blight)); }
+.t-mist { background: linear-gradient(90deg, var(--stone-600), var(--mist)); }
+.val { color: var(--ink-2); min-width: 30px; text-align: right; }
 </style>

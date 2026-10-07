@@ -392,11 +392,14 @@ async function saveSettings() {
 
           <div class="upload-bar">
             <!-- 真 input 藏起来，样式交给共享 Button；accept 只管选择器，真正的类型校验在后端 -->
+            <!-- sr-only 也是"存在但看不见"：它仍然是表单控件，必须有名字，
+                 否则读屏与自动化检查都只会看到一个无名的"选择文件"按钮。 -->
             <input
               ref="fileInput"
               class="sr-only"
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
+              aria-label="选择要上传的图片文件"
               @change="onFile"
             >
             <Button variant="primary" :disabled="!canUpload" @click="pickFile">
@@ -429,7 +432,17 @@ async function saveSettings() {
             <tr v-for="(it, i) in items" :key="it.id">
               <td class="num">{{ i + 1 }}</td>
               <td>
-                <img class="thumb" :src="it.imageUrl" :alt="it.caption || '轮播图'" loading="lazy">
+                <!-- width/height 让浏览器提前留好位置：不写的话图片到位前缩略图高度是 0，
+                     表格会"塌一下再撑开"（CLS）。后端读不出尺寸时是 0 → undefined，交给 CSS。 -->
+                <img
+                  class="thumb"
+                  :src="it.imageUrl"
+                  :alt="it.caption || '轮播图'"
+                  :width="it.width || undefined"
+                  :height="it.height || undefined"
+                  loading="lazy"
+                  decoding="async"
+                >
               </td>
               <td>
                 <div :class="{ faint: !it.caption }">{{ it.caption || '（没有说明）' }}</div>

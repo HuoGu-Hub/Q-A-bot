@@ -203,12 +203,14 @@ const entryTitle = computed(() => {
 
 /**
  * 下拉选项改成 Select 组件要的数组结构。
- * label 仍是「图标 + 名称」，和原来的 <option> 文本逐字一致；
+ * ⚠️ label 里**不再**拼后端下发的 emoji。
+ * 原生 <option> 里的 emoji 是系统字体画的，Windows / iOS / Android 三套样子，
+ * 而这是个深色下拉，"一排彩色小图"和旁边的表单控件完全不是一个语言。
  * 「隐藏」是后端约定的特殊值 __hidden__，不属于 groups，所以单独追加。
  */
 const groupOptions = computed(() => [
-  ...groups.value.map(g => ({ value: g.key, label: g.icon + ' ' + g.label })),
-  { value: '__hidden__', label: '🙈 隐藏' },
+  ...groups.value.map(g => ({ value: g.key, label: g.label })),
+  { value: '__hidden__', label: '隐藏' },
 ])
 const filterOptions = computed(() => [
   { value: '', label: '全部大类' },

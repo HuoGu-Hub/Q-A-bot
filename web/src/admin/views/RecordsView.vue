@@ -108,12 +108,14 @@ onMounted(load)
         class="scope"
         :model-value="scope"
         :options="SCOPE_OPTIONS"
+        aria-label="记录范围"
         @update:model-value="(v: string) => { scope = v as 'questions' | 'all'; load() }"
       />
       <Select
         class="days"
         :model-value="String(days)"
         :options="DAY_OPTIONS"
+        aria-label="时间范围"
         @update:model-value="onDays"
       />
       <Button size="sm" :disabled="loading" @click="load">{{ loading ? '读取中…' : '刷新' }}</Button>
@@ -151,9 +153,24 @@ onMounted(load)
         </thead>
         <tbody>
           <template v-for="r in rows" :key="r.id">
-            <tr class="row" @click="toggle(r.id)">
+            <tr class="row">
               <td class="muted nowrap">{{ shortTime(r.ts) }}</td>
-              <td class="q">{{ r.question || '(原文已清理)' }}</td>
+              <td class="q">
+                <!--
+                  ⚠️ 原来展开详情挂在 <tr @click> 上：鼠标能用，键盘用户进不去
+                  （<tr> 不是可聚焦控件，读屏也不会把整行当按钮念）。
+                  改成问题本身是一个真正的 <button>，带 aria-expanded ——
+                  键盘 Tab 得到、回车能开、读屏会念"已展开/已折叠"，
+                  而且不会再出现"点「对/错」时顺手把详情展开"的误触。
+                -->
+                <button
+                  type="button"
+                  class="q-btn"
+                  :aria-expanded="expanded === r.id"
+                  :title="expanded === r.id ? '收起详情' : '展开详情'"
+                  @click="toggle(r.id)"
+                >{{ r.question || '(原文已清理)' }}</button>
+              </td>
               <td class="num" :class="{ miss: r.hitCount === 0 }">{{ r.hitCount }}</td>
               <td class="num">{{ fmtCosine(r.bestCosine) }}</td>
               <td class="muted" :title="sourceHint(r.sources)">{{ sourceLabel(r.sources) }}</td>
@@ -196,8 +213,22 @@ onMounted(load)
 .days { flex: 0 0 128px; }
 .scope { flex: 0 0 128px; }
 
-/* 行可点展开：DataTable 已经给了悬浮底色，这里只补"可点"的光标 */
-.row { cursor: pointer; }
+/* 展开详情改挂在问题按钮上（见模板注释）。按钮长得像文本 ——
+   它是"标题"不是"控件"，画成按钮会在七列里显得很吵。 */
+.q-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-xs);
+}
+.q-btn:hover { color: var(--ember-hot); }
+.row:hover { background: var(--surface-hover); }
 
 .q { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nowrap { white-space: nowrap; }

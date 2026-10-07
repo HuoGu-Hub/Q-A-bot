@@ -1,100 +1,165 @@
 /**
- * 设计令牌 —— 「雾中灵火」
+ * 设计令牌 —— 「雾中灵火」v2
  *
- * 颜色不是拍脑袋定的：从 wiki 官方美术素材（Flame Altar / Embervale / 站点 logo）
- * 提取主色后归纳而来。实测主导色是「暗底 + 雾霭蓝灰 + 苔藓土黄」，
- * 不是泛中世纪的金碧辉煌 —— 所以整体走暗色，暖色只留给灵火。
+ * 这一版改的是**观感**，不是配色方向。原来的暗底 + 灵火橙 + 苔藓绿都留着，
+ * 但把它从「一堆描了边的深色小方块」整理成一套有物理感的表面体系。
+ *
+ * 三条规矩，全站通用：
+ *
+ * ① **层级靠光，不靠线。**
+ *    上一版每个面板都描 1px 边框、每条分隔线一样重，于是满屏同权重的框，
+ *    眼睛分不出主次 —— 这是"低级感"最主要的来源。
+ *    现在用两组内阴影表达"凸"和"凹"：
+ *      --bevel-*  亮在上、暗在下 → 这块石头是**凸出来**的（面板、按钮）
+ *      --engrave  暗在上、亮在下 → 这条槽是**刻进去**的（输入框、凹槽、进度轨）
+ *    边框只留给"必须一眼看出能操作"的控件。
+ *
+ * ② **一套半径，三种含义。**
+ *    上一版 2/3/6/10px 混着用，搜索框 6px 而紧挨着的按钮 3px —— 并排的圆角不一致，
+ *    是最容易被眼睛抓到、又最难说清"哪里别扭"的那种低级。
+ *    现在：3px 刻痕（标签）/ 6px 控件 / 10px 石板 / 16px 画面 / 全圆药丸。
+ *
+ * ③ **字号阶梯要真的拉开。**
+ *    上一版正文 14px、标题 16px，差 2px 不算阶梯；现在正文 15px、区块标题 17px、
+ *    页面标题 29px、首屏 56px，跨度足够让"谁重要"不需要靠加粗去猜。
  */
-
 :root {
-  /* ==================== 背景层次 ====================
-     由深到浅，模拟「洞穴 → 雾层 → 石材 → 抬升面」 */
-  --bg-abyss:  #0c0e12;
-  --bg-shroud: #141922;
-  --bg-stone:  #1c222c;
-  --bg-raised: #252c38;
-  --bg-sunken: #08090c;
+  /* ==================== 石头：背景阶梯 ====================
+     由深到浅六档。**只用背景色差表达层级**，这是全站最重要的一条。 */
+  --stone-void:  #06070a;   /* 光之外的虚空：页面最底、输入槽 */
+  --stone-200:   #0b0e13;   /* 页面底 */
+  --stone-300:   #12161d;   /* 石板（面板） */
+  --stone-400:   #1a1f28;   /* 抬升面：控件静息、表头 */
+  --stone-500:   #232935;   /* 悬浮面 */
+  --stone-600:   #2e3542;   /* 分隔/描边加强 */
 
   /* ==================== 灵火 ====================
-     唯一的高饱和暖色。克制使用：只给「最需要看一眼」的东西。
-     满屏都是橙 = 没有重点。 */
-  --flame-bright: #ffc46b;
-  --flame:        #e8a04c;
-  --flame-deep:   #b0702c;
-  --flame-dark:   #7a4a18;
-  --flame-glow:   rgba(232, 160, 76, .28);
-  --flame-veil:   rgba(232, 160, 76, .10);
+     全站唯一的高饱和暖色。克制使用：一屏之内"最该先看一眼"的东西才配用。
+     满屏都是橙 = 没有重点 = 也没有灵火。 */
+  --ember-hot:   #ffd08a;
+  --ember:       #f2ab55;
+  --ember-deep:  #c8823a;
+  --ember-dark:  #7d4d1c;
+  --ember-veil:  rgba(242, 171, 85, .10);
+  --ember-glow:  rgba(242, 171, 85, .26);
 
-  /* ==================== 自然色（语义） ==================== */
-  --moss:      #6b8f5e;   /* 命中 / 成功 */
-  --moss-deep: #3f5638;
-  --moss-veil: rgba(107, 143, 94, .14);
-  --rust:      #b5533f;   /* 未命中 / 失败 */
-  --rust-deep: #6f3226;
-  --rust-veil: rgba(181, 83, 63, .14);
-  --amber:     #c9a227;   /* 警告 / 疑似 */
-  --amber-veil: rgba(201, 162, 39, .14);
-  --mist:      #7b8aa0;   /* 中性蓝灰 */
-  --mist-veil: rgba(123, 138, 160, .14);
+  /* ==================== 语义色 ====================
+     只表达状态，不表达装饰。四组各一个正文级色值（都过了 4.5:1）。 */
+  --vital:       #7ea36a;   /* 命中 / 成功 / 通过 */
+  --vital-deep:  #3d5535;
+  --vital-veil:  rgba(126, 163, 106, .13);
+  --blight:      #cf6349;   /* 未命中 / 失败 */
+  --blight-lift: #e2846c;   /* 抬升面上的失败文字（#cf6349 在 stone-500 上只有 3.8:1） */
+  --blight-deep: #6e2f22;
+  --blight-veil: rgba(207, 99, 73, .13);
+  --warn:        #cfa334;   /* 警告 / 疑似过时 */
+  --warn-deep:   #6b5416;
+  --warn-veil:   rgba(207, 163, 52, .13);
+  --mist:        #8b9aab;   /* 中性蓝灰：次要、信息、无状态 */
+  --mist-veil:   rgba(139, 154, 171, .13);
 
   /* ==================== 文字 ====================
-     正文对比度 ≥ 4.5:1（暗底上测过） */
-  --ink:       #e6e2d8;   /* 石灰白 */
-  --ink-dim:   #a8b0bd;
-  --ink-faint: #6b7482;
-  --ink-on-flame: #1a1206;  /* 橙底上的字 */
+     四档，对比度在 --stone-200 ~ --stone-500 全区间都测过：
+       ink  16→11.6:1   正文
+       ink-2 11→8:1     次要文字
+       ink-3 6.6→4.8:1  三级文字（下限仍 ≥4.5:1，所以可以承载真内容）
+       ink-4 3.8→2.7:1  **只用于装饰**：刻痕、幽灵数字、禁用态，绝不承载正文。 */
+  --ink:         #eae5da;
+  --ink-2:       #b9c0cb;
+  --ink-3:       #8b95a3;
+  --ink-4:       #626c7a;
+  --ink-on-ember: #20160a;  /* 橙底上的字：9.1:1 */
 
-  /* ==================== 线条与描边 ==================== */
-  --line:        #2c3440;
-  --line-soft:   #232a34;
-  --line-strong: #3d4756;
-  --copper:      #8a6a3f;   /* 暗铜装饰 */
-  --copper-dim:  #5c4728;
+  /* ==================== 刻与凸 ====================
+     这四条是"石头感"的全部来源，别在页面里再手写一遍同款阴影。 */
+  --bevel-raised:  inset 0 1px 0 rgba(255, 255, 255, .055),
+                   inset 0 -1px 0 rgba(0, 0, 0, .50);
+  --bevel-inset:   inset 0 1px 0 rgba(0, 0, 0, .55),
+                   inset 0 -1px 0 rgba(255, 255, 255, .045);
+  --bevel-shelf:   inset 0 1px 0 rgba(255, 255, 255, .07);
+  --hairline:      rgba(255, 255, 255, .085);
+  --hairline-lit:  rgba(242, 171, 85, .30);
 
-  /* ==================== 圆角 ====================
-     偏硬朗。石材/金属不做大圆角，那是移动端卡片语言。 */
-  --r-xs: 2px;
-  --r-sm: 3px;
-  --r-md: 6px;
-  --r-lg: 10px;
-  --r-pill: 999px;
+  /* ==================== 边缘与交互 ====================
+     可交互控件的边缘必须看得见；装饰性容器的边缘必须看不见。
+     上一版把两者混成一条 --line，结果"每个框都像能点、每个按钮都不像能点"。 */
+  --edge-soft:    rgba(255, 255, 255, .055);
+  --edge:         rgba(255, 255, 255, .12);
+  --edge-hover:   rgba(255, 255, 255, .24);
+  --surface-hover:  rgba(255, 255, 255, .045);
+  --surface-active: rgba(0, 0, 0, .28);
 
   /* ==================== 阴影 ====================
-     暗色主题靠「暗得更深」而不是「投影变黑」 */
-  --shadow-inset:  inset 0 1px 0 rgba(255, 255, 255, .04);
-  --shadow-sunken: inset 0 2px 8px rgba(0, 0, 0, .55);
-  --shadow-lift:   0 8px 24px rgba(0, 0, 0, .5);
-  --shadow-pop:    0 16px 48px rgba(0, 0, 0, .65);
-  --shadow-flame:  0 0 0 1px rgba(255, 196, 107, .15), 0 4px 18px var(--flame-glow);
+     暗色主题里"浮起来"靠的是**暗得更深 + 上方一道光**，不是投影变黑。 */
+  --shadow-lift:  0 2px 4px rgba(0, 0, 0, .35), 0 14px 34px -18px rgba(0, 0, 0, .85);
+  --shadow-pop:   0 8px 16px rgba(0, 0, 0, .45), 0 32px 64px -24px rgba(0, 0, 0, .95);
+  --shadow-flame: 0 0 0 1px rgba(255, 208, 138, .18), 0 6px 20px -6px var(--ember-glow);
+  --shadow-sunken: var(--bevel-inset);
+  --shadow-inset:  var(--bevel-shelf);
+
+  /* ==================== 圆角 ====================
+     三种含义，见文件头 ②。 */
+  --r-xs:   3px;    /* 刻痕：标签、徽标、进度轨 */
+  --r-sm:   6px;    /* 控件：按钮、输入框、下拉 */
+  --r-md:   10px;   /* 石板：面板、弹窗、卡片 */
+  --r-lg:   16px;   /* 画面：首屏大图这种"一屏只出现一次"的 */
+  --r-pill: 999px;
 
   /* ==================== 字体 ====================
-     标题衬线（石碑/古卷感）+ 正文无衬线（可读性优先）
-     不做花体字 —— 风格不能牺牲功能 */
-  --font-title: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
-  --font-body:  "Noto Sans SC", "Source Han Sans SC", -apple-system, BlinkMacSystemFont,
-                "Segoe UI", Roboto, sans-serif;
-  --font-mono:  "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+     标题是**自托管**的思源宋体（见 theme/fonts.css）：上一版只写了 font-family
+     却没有 @font-face，本机装了 Noto Serif SC 所以作者看着挺好，而群友的手机上没有 ——
+     Android 无衬线可退（标题直接变正文）、Windows 退到 SimSun（46px 的宋体像 Word 文档）。
+     中文标题的"高级感"八成死在这一步上，所以字体必须自己带。
 
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
-  --fs-3xl: 34px;
+     正文用系统无衬线：中文字体包太大，而各平台的默认中文字体（苹方 / 鸿蒙 / 雅黑）
+     本来就是为屏幕小字号调的，比任何网络字体都更清楚。 */
+  --font-title: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "Noto Serif CJK SC", serif;
+  --font-body:  "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans SC",
+                "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system,
+                "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono:  ui-monospace, "Cascadia Mono", "SF Mono", "JetBrains Mono", Menlo,
+                Consolas, "Liberation Mono", monospace;
 
-  --lh-tight: 1.3;
-  --lh-normal: 1.65;
+  /* 字阶：正文 15px 起。上一版的 14px 在 1440 宽的桌面上偏小，整页读起来"发紧"。 */
+  --fs-micro: 11px;   /* 拉丁小标签（eyebrow），一律配字距 */
+  --fs-xs:    12px;
+  --fs-base:  15px;   /* ← 上一版这个变量被 3 处引用却从未定义，控件字号静默失效 */
+  --fs-sm:    13px;
+  --fs-md:    15px;
+  --fs-lg:    17px;
+  --fs-xl:    21px;
+  --fs-2xl:   29px;
+  --fs-3xl:   38px;
 
-  /* ==================== 间距 ==================== */
+  /* 角色别名（组件层用） */
+  --fs-display: var(--fs-2xl);
+  --fs-section: var(--fs-lg);
+  --fs-body:    var(--fs-base);
+  --fs-meta:    var(--fs-xs);
+
+  --lh-tight:  1.25;
+  --lh-normal: 1.75;
+  --lh-snug:   1.5;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semi:   600;
+  --fw-bold:   700;
+
+  --tracking-label: .12em;   /* 拉丁小标签 */
+  --tracking-ink:   .10em;   /* 中文大标题：刻字要紧一点才有碑感 */
+
+  /* ==================== 间距 ====================
+     比上一版整体放大约 1.15 倍：密不透气的内容也是"低级"的一部分。 */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
-  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+  --sp-5: 24px; --sp-6: 34px; --sp-7: 52px; --sp-8: 76px; --sp-9: 104px;
 
   /* ==================== 动效 ====================
-     克制：只在「状态变化」和「悬停」上用，不做入场动画 */
+     只做状态反馈，不做入场表演。有意义的动效全部 ≤ 200ms。 */
   --ease: cubic-bezier(.22, .61, .36, 1);
-  --dur-fast: 120ms;
-  --dur: 180ms;
+  --ease-out: cubic-bezier(.16, .84, .44, 1);
+  --dur-fast: 110ms;
+  --dur: 170ms;
   --dur-slow: 320ms;
 
   /* ==================== 层级 ==================== */
@@ -104,60 +169,51 @@
   --z-toast: 400;
 
   /* ==================== 布局 ==================== */
-  --page-max: 1180px;
-  --header-h: 60px;
+  --page-max: 1160px;
+  --read-max: 760px;
+  --header-h: 58px;
+  --tabbar-h: 58px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
 
-  /* ==================== 表面层级 ====================
-     用来表达「嵌套深度」，取代「每一层都描一遍边框」。
+  /* ==================== 兼容层 ====================
+     ⚠️ 下面这些名字是 v1 留下的，30 多个文件还在用。
+     保留**同名不同值**，是为了把主题升级和页面重构拆成两步走：
+     先换底座（这一步），再一页一页重做。别在新代码里继续用它们。 */
+  --bg-abyss:  var(--stone-void);
+  --bg-shroud: var(--stone-300);
+  --bg-stone:  var(--stone-400);
+  --bg-raised: var(--stone-500);
+  --bg-sunken: var(--stone-void);
 
-     规则：层级靠【背景色差】表达；边框只留给两种东西 ——
-     可交互元素（输入框、按钮）和页面级外壳。
-     这就是「雾的深度」：越靠内容越亮，越外围越沉进雾里。 */
-  --surface-page:   var(--bg-abyss);    /* 页面底 */
-  --surface-panel:  var(--bg-shroud);   /* 区块（面板） */
-  --surface-raised: var(--bg-stone);    /* 面板里的抬升块 */
-  --surface-inset:  var(--bg-sunken);   /* 输入框 / 凹槽 */
+  --flame-bright: var(--ember-hot);
+  --flame:        var(--ember);
+  --flame-deep:   var(--ember-deep);
+  --flame-dark:   var(--ember-dark);
+  --flame-glow:   var(--ember-glow);
+  --flame-veil:   var(--ember-veil);
 
-  /* 分隔线：用于【同级之间】的分隔与容器边缘。
-     ⚠️ 别调得太淡 —— 0.06 时相邻配置项之间几乎看不出分界，
-     用户反馈"两两之间的间隔太不明显"。0.10 是能看见又不抢戏的值。 */
-  --hairline: rgba(255, 255, 255, .10);
+  --moss: var(--vital);  --moss-deep: var(--vital-deep);  --moss-veil: var(--vital-veil);
+  --rust: var(--blight); --rust-deep: var(--blight-deep); --rust-veil: var(--blight-veil);
+  --amber: var(--warn);  --amber-veil: var(--warn-veil);
 
-  /* ==================== 边缘与交互反馈 ====================
-     原来按钮悬浮只改边框色和文字色、背景不动，在深色底上几乎看不出差别，
-     导致"分不清能不能点"。交互反馈必须同时动【背景 + 边缘 + 位移】。 */
-  --edge-soft:  rgba(255, 255, 255, .07);   /* 容器的柔和边缘（替代旧的统一 --line） */
-  --edge:       rgba(255, 255, 255, .13);   /* 可交互控件边缘 */
-  --edge-hover: rgba(255, 255, 255, .26);   /* 悬浮时的边缘 */
-  --surface-hover: rgba(255, 255, 255, .05); /* 悬浮时的背景提亮 */
-  --surface-active: rgba(0, 0, 0, .22);      /* 按下时的背景压暗 */
+  --ink-dim:   var(--ink-2);
+  --ink-faint: var(--ink-3);
 
-  /* ==================== 字阶 ====================
-     ⚠️ 这里修的是一个老问题：页面标题、区块标题、正文原来【都是 14px】，
-     标题根本不成为标题 —— 满屏同样大小的字，只能靠线条框硬分区。
+  --line:        var(--edge-soft);
+  --line-soft:   rgba(255, 255, 255, .04);
+  --line-strong: var(--edge);
+  /* 铜色只做"刻痕"，不再拿去给数字上色（#8a6a3f 在深底上只有 3.4:1）。 */
+  --copper:      #a8814c;
+  --copper-dim:  #55401f;
 
-     层级由「字号 + 字重 + 字距」三者共同决定，不要只调字号。 */
-  --fs-display: 24px;   /* 页面标题 */
-  --fs-section: 16px;   /* 区块标题 */
-  --fs-body:    14px;   /* 正文 */
-  --fs-meta:    12px;   /* 元信息 / 说明 */
+  --surface-page:   var(--stone-200);
+  --surface-panel:  var(--stone-300);
+  --surface-raised: var(--stone-400);
+  --surface-inset:  var(--stone-void);
 
-  --fw-normal: 400;
-  --fw-medium: 500;
-  --fw-semi:   600;
-
-  --tracking-label: .06em;   /* 小号标签 / 字段名 */
-
-  /* 只做深色。游戏本身就是暗色调，浅色版会完全不像；
-     而且群友多在手机上看。少一套配色 = 少一半维护成本。
-
-     ⚠️ 这一行【必须】留在 :root 里面。它原来写在 :root 外面（第 113 行），
-     构建后紧跟 base.css 的 `*,*::before,*::after{box-sizing:border-box}`，
-     于是解析器把 `color-scheme: dark; *,*::before,*::after` 整体当成一条
-     非法选择器（顶层不认 `;` 作终止符）→ 整条 box-sizing 规则被静默丢弃。
-
-     后果：全站退回 content-box，任何 `width:100%` + padding 的控件都会比
-     容器宽出「padding×2 + border×2」。实测设置页 53 个控件里 35 个越界
-     约 6.8px，直接压过面板边框 —— 这就是「内层框的边界超出外层框」的根因。 */
+  /* ⚠️ 必须留在 :root 里（v1 曾经写在块外，把紧跟其后的 box-sizing 整条规则
+     解析成非法选择器而静默丢弃）。这一行让浏览器把滚动条、表单控件、
+     自动填充都按暗色渲染。 */
   color-scheme: dark;
 }

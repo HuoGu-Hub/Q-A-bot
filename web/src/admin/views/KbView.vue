@@ -130,6 +130,7 @@ const docLoading = computed(() => doc.value?.isLoading() ?? false)
           class="w-view"
           :model-value="tmView"
           :options="tmViewOptions"
+          aria-label="视图预设"
           @update:model-value="(v: string) => tm?.pickView(v)"
         />
         <Input
@@ -139,7 +140,9 @@ const docLoading = computed(() => doc.value?.isLoading() ?? false)
           @update:model-value="(v: string) => tm?.setKeyword(v)"
           @keyup.enter="tm?.search()"
         />
+        <!-- 核对模式下这个按钮就是出口，悬浮提示把话说全（面板标题行里另有一个） -->
         <Button size="sm" :variant="tmMode === 'list' ? 'primary' : 'ghost'"
+                :title="tmMode === 'review' ? '退出核对模式，回到列表' : '列表模式'"
                 @click="tm?.switchMode('list')">列表</Button>
         <Button size="sm" :variant="tmMode === 'review' ? 'primary' : 'ghost'"
                 @click="tm?.switchMode('review')">

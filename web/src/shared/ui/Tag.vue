@@ -12,16 +12,16 @@ withDefaults(defineProps<{
 <style scoped>
 .tag {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-xs);
   font-size: var(--fs-xs);
-  line-height: 1.7;
-  border: 1px solid var(--line-strong);
-  color: var(--ink-dim);
+  line-height: 1.55;
+  border: 1px solid var(--edge);
+  color: var(--ink-2);
   white-space: nowrap;
 }
-.t-good { color: var(--moss); border-color: var(--moss); background: var(--moss-veil); }
-.t-bad { color: var(--rust); border-color: var(--rust); background: var(--rust-veil); }
-.t-warn { color: var(--amber); border-color: var(--amber); background: var(--amber-veil); }
-.t-flame { color: var(--flame); border-color: var(--copper); background: var(--flame-veil); }
+.t-good { color: var(--vital); border-color: color-mix(in srgb, var(--vital) 45%, transparent); background: var(--vital-veil); }
+.t-bad { color: var(--blight-lift); border-color: color-mix(in srgb, var(--blight) 45%, transparent); background: var(--blight-veil); }
+.t-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-veil); }
+.t-flame { color: var(--ember); border-color: color-mix(in srgb, var(--ember) 40%, transparent); background: var(--ember-veil); }
 </style>

@@ -181,6 +181,7 @@ onMounted(load)
           <Select
             :model-value="current(m)"
             :options="modelOptions(m)"
+            :aria-label="m.name + ' 的模型'"
             @update:model-value="onEdit(m, $event)"
           />
         </div>

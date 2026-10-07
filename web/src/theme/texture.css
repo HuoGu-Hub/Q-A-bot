@@ -1,23 +1,49 @@
 /**
- * 质感层 —— 「游戏感」靠这里，不靠贴图。
+ * 质感层 —— 「石头与灯」
  *
- * 全部是 CSS/SVG 实现：无图片请求、可无限缩放、改颜色不用重新导出素材。
+ * 全部是 CSS / 内联 SVG：没有图片请求、可无限缩放、改颜色不用重新导出素材。
+ *
+ * 这一版把「游戏感」的实现从**画装饰**换成**做材质**：
+ *   v1 靠四角铜饰、径向光晕、噪点贴图去"暗示"游戏 UI，结果装饰是加上了，
+ *   但底子仍然是一堆同样粗细的描边方块 —— 装饰和结构是两层皮。
+ *   v2 只做三件事，且全站共用：
+ *     · 石头阶梯：靠背景明度差表达层级（tokens 的 --stone-*）
+ *     · 刻与凸：靠内阴影表达"凹进去"和"凸出来"（--bevel-inset / --bevel-raised）
+ *     · 一盏灯：每个页面只有一处被照亮（.lit），其余全部安静
  */
 
+/* ==================== 雾 ====================
+   页面底噪：一层固定的雾。z-index 压在内容之下（内容外壳是 z-index: 2）。
+   为什么不用 background-attachment: fixed —— 它在移动端 Safari/Chrome 上会掉帧。 */
+.mist-veil::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* 顶上那盏灯：暖光从正上方压下来，越往下越淡 */
+    radial-gradient(130% 300px at 50% -60px, rgba(242, 171, 85, .075), transparent 72%),
+    /* 右上角的冷雾：避免整页只有一种色温 */
+    radial-gradient(85% 55% at 100% 0%, rgba(139, 154, 171, .06), transparent 62%),
+    /* 四周压暗：把视线的中心让出来 */
+    radial-gradient(140% 100% at 50% 42%, transparent 42%, rgba(0, 0, 0, .38) 100%);
+}
+
 /* ==================== 石材噪点 ====================
-   2% 不透明度叠加。有它才有「粗糙表面」，没有就是纯色 UI。 */
+   2% 的不透明度叠加。有它才有"粗糙表面"，没有就是纯色 UI。 */
 .texture-noise { position: relative; }
 .texture-noise::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: .028;
+  opacity: .03;
   border-radius: inherit;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* 全局底层噪点：铺满视口，z-index 压在内容之下 */
+/* 全局底层噪点：铺满视口。噪点要**静态**（fixed），跟着内容滚会像屏幕脏了。 */
 .texture-grain::after {
   content: '';
   position: fixed;
@@ -28,36 +54,27 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 
-/* ==================== 面板 ====================
-   结构 = 表面填充（表达层级深浅）+ 柔和边缘（表达"这是一块独立区域"）。
+/* ==================== 石板（面板）====================
+   结构 = 背景明度阶梯（表达层级）+ 上下两道内阴影（表达"这块是凸出来的"）。
 
-   ⚠️ 这里走过一次弯路：最初把边框整个砍掉、只靠背景色差分层，结果相邻
-   配置项之间看不出分界（用户反馈"两两之间的间隔太不明显"）。正确的做法
-   不是"没有边框"，而是：
-     · 层级的深浅交给背景（表面阶梯）
-     · 区域的边界交给一道【低对比度】边缘，而不是原来那种每层一样重的 --line
-   原来"满屏线条框"的病根是"每层边框一样重 + 没有字阶 + 没有表面深浅"，
-   不是边框本身。
-
-   伪元素分工（原先是 bug：.panel--corners::before 与 .texture-noise::before
-   争用同一个伪元素，后者被覆盖 → 所有带角饰的面板噪点纹理失效）：
-     ::before → 噪点纹理（.texture-noise 独占）
-     ::after  → 装饰层（角饰 / 光晕，二者可共存于同一背景栈） */
+   ⚠️ 这里不再挂 --shadow-lift。v1 给每个面板都加了一圈 34px 的大投影，
+   而暗色底上的投影本来就几乎看不见 —— 花了 GPU 的时间，什么也没换来。
+   投影只留给**真正浮在页面之上**的东西：弹窗、抽屉、吸顶栏、提示。 */
 .panel {
   position: relative;
-  background: var(--surface-panel);
-  border: 1px solid var(--edge-soft);
+  background: var(--stone-300);
   border-radius: var(--r-md);
   padding: var(--sp-5);
-  box-shadow: var(--shadow-inset);
+  box-shadow: var(--bevel-raised);
 }
-.panel--stone { background: var(--surface-raised); }
+.panel--stone { background: var(--stone-400); }
 .panel--sunken {
-  background: var(--surface-inset);
-  box-shadow: var(--shadow-sunken);
+  background: var(--stone-void);
+  box-shadow: var(--bevel-inset);
 }
 
-/* 装饰层：角饰与光晕都画在这一层，向内定位，绝不越出边框盒 */
+/* 装饰层：角饰与灯光都画在这一层，向内定位，绝不越出边框盒。
+   ::before 归 .texture-noise 独占（噪点），这里只用 ::after。 */
 .panel::after {
   content: '';
   position: absolute;
@@ -66,29 +83,39 @@
   border-radius: inherit;
 }
 
-/* 四角铜饰 —— 用 4 组线性渐变画在【框内】，不再用负偏移。
-   只在页面级外壳用一次；每个面板都挂会腻，也会让边框重新变回噪音。 */
+/* 内衬刻痕（.panel--corners）——
+   v1 是四角 11px 的铜色直角，远看像印刷裁切标记（crop marks），四角对称反而更没设计感。
+   v2 只留**左上**与**右下**两个内衬角，且是白色的发丝线：
+   非对称 = 是选择，不是套模板。 */
 .panel--corners::after {
-  background-image:
-    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper)),
-    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper)),
-    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper)),
-    linear-gradient(var(--copper), var(--copper)), linear-gradient(var(--copper), var(--copper));
+  inset: 7px;
+  border-radius: calc(var(--r-md) - 5px);
   background-repeat: no-repeat;
-  background-size: 11px 1px, 1px 11px, 11px 1px, 1px 11px, 11px 1px, 1px 11px, 11px 1px, 1px 11px;
+  background-image:
+    linear-gradient(var(--edge-soft), var(--edge-soft)),
+    linear-gradient(var(--edge-soft), var(--edge-soft)),
+    linear-gradient(var(--edge-soft), var(--edge-soft)),
+    linear-gradient(var(--edge-soft), var(--edge-soft));
+  background-size: 16px 1px, 1px 16px, 16px 1px, 1px 16px;
   background-position:
-    left 7px top 7px, left 7px top 7px,
-    right 7px top 7px, right 7px top 7px,
-    right 7px bottom 7px, right 7px bottom 7px,
-    left 7px bottom 7px, left 7px bottom 7px;
+    left top, left top,
+    right bottom, right bottom;
 }
 
-/* ==================== 灵火光晕 ====================
-   用在「指标卡」和「主按钮」上，制造被火光映到的感觉。
-   ⚠️ 与 .panel--corners 同占 ::after，二者同时用会互相覆盖 —— 别叠。 */
+/* ==================== 灯 ====================
+   一页只有一处被照亮。v1 是"每个面板右上角一圈橙光"，等于没重点。
+   现在是左上角一盏灯罩下来的偏心暖光（人写字的姿势：光在左上、影子在右下）。 */
+.lit { position: relative; overflow: hidden; }
+.lit::after {
+  background:
+    radial-gradient(120% 150% at 0% 0%, rgba(242, 171, 85, .105), transparent 58%),
+    radial-gradient(70% 90% at 100% 100%, rgba(0, 0, 0, .30), transparent 70%);
+}
+
+/* v1 的名字，留着给尚未重做的页面用（值收得更淡了） */
 .glow-flame { position: relative; overflow: hidden; }
 .glow-flame::after {
-  background: radial-gradient(140px 70px at 88% 0%, var(--flame-glow), transparent 70%);
+  background: radial-gradient(140px 70px at 88% 0%, var(--ember-veil), transparent 70%);
 }
 
 /* 顶部一道火线：强调「这是当前选中/活跃的」 */
@@ -98,21 +125,38 @@
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--flame), transparent);
+  background: linear-gradient(90deg, var(--ember-deep), var(--ember), transparent);
 }
 
-/* ==================== 分隔线 ==================== */
+/* ==================== 刻痕分隔线 ==================== */
 .rule {
   height: 1px;
   border: 0;
-  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
-  margin: var(--sp-4) 0;
+  background: linear-gradient(90deg, transparent, var(--hairline), transparent);
+  margin: var(--sp-5) 0;
 }
 
-/* ==================== 雾层 ====================
-   页面顶部的雾状渐变，象征 Shroud。用在首屏。 */
+/* ==================== 首屏那块石碑 ====================
+   全宽、无圆角、下缘一道刻线收口。它承接页面顶部那盏灯，是整页唯一的"实体"。 */
+.slab {
+  position: relative;
+  background:
+    radial-gradient(115% 160% at 12% -30%, rgba(242, 171, 85, .10), transparent 58%),
+    linear-gradient(180deg, var(--stone-300), var(--stone-200));
+  box-shadow: var(--bevel-shelf);
+}
+/* 下缘刻线：中间实、两端虚，把石碑"压"在页面上 */
+.slab::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hairline) 18%, var(--hairline) 82%, transparent);
+}
+
+/* 雾层（v1 名字，首屏顶部用） */
 .veil-shroud {
   background:
-    radial-gradient(80% 120px at 50% 0%, rgba(123, 138, 160, .10), transparent 70%),
-    radial-gradient(60% 90px at 80% 10%, var(--flame-veil), transparent 70%);
+    radial-gradient(80% 120px at 50% 0%, rgba(139, 154, 171, .10), transparent 70%),
+    radial-gradient(60% 90px at 80% 10%, var(--ember-veil), transparent 70%);
 }

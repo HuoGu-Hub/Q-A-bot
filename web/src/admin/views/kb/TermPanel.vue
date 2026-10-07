@@ -560,8 +560,9 @@ async function openBoardEditor() {
     }>('/kb/categories')
     categoryItems.value = c.items ?? []
     groupOptions.value = [
-      ...(c.groups ?? []).map((g) => ({ value: g.key, label: g.icon + ' ' + g.label })),
-      { value: '__hidden__', label: '🙈 隐藏' },
+      // 不拼 g.icon：原生的 <option> 画不了自绘图标，而 emoji 在三个平台上三套样子
+      ...(c.groups ?? []).map((g) => ({ value: g.key, label: g.label })),
+      { value: '__hidden__', label: '隐藏' },
     ]
     groupDraft.value = categoryItems.value.find((i) => i.raw === catOf(t))?.groupKey ?? ''
     boardEditing.value = true
@@ -1294,6 +1295,7 @@ defineExpose({
                   class="dr-status"
                   :model-value="dStatus"
                   :options="DRAWER_STATUS"
+                  aria-label="词条状态"
                   @update:model-value="onDrawerStatus"
                 />
               </div>
@@ -1326,7 +1328,7 @@ defineExpose({
                   <span class="dr-lbl">原始分类</span>
                   <span class="mono bcat">{{ selCat || '（没有分类）' }}</span>
                   <span class="faint">，把这个分类归到</span>
-                  <Select class="bselect" v-model="groupDraft" :options="groupOptions" />
+                  <Select class="bselect" v-model="groupDraft" :options="groupOptions" aria-label="归入的大类" />
                 </div>
                 <p class="faint dr-note warn-line">
                   这个分类下的 <span class="num">{{ affectedChunks }}</span> 个文本块、

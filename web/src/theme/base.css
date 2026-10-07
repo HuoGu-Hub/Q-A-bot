@@ -1,125 +1,229 @@
+@import './fonts.css';
 @import './tokens.css';
 
 /* ==================== 重置 ==================== */
 *, *::before, *::after { box-sizing: border-box; }
 
-html, body { height: 100%; }
+html {
+  height: 100%;
+  /* iOS 横屏时会自己放大字号，把版心搞乱 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* 兜底：任何装饰性的横向外溢都不该换来一条滚动条（首页轮播的环境光就是这种）。
+     ⚠️ 用 clip 而不是 hidden —— hidden 会把 html 变成滚动容器，
+     吸顶导航立刻失效；clip 不建立滚动容器，纵向滚动与 sticky 都不受影响。
+     这不掩盖布局问题：正文元素该不该溢出，仍然按各页自己的规矩来。 */
+  overflow-x: clip;
+}
 
 body {
   margin: 0;
-  background: var(--bg-abyss);
+  min-height: 100%;
+  background: var(--stone-200);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
   line-height: var(--lh-normal);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* 中文没有连字，但等宽数字会让表格里的数字上下对齐 */
+  font-variant-numeric: tabular-nums;
+  overscroll-behavior-y: none;
+  /* 长英文/URL/代码串不许撑破容器。中文会在任意字之间断行，出问题的永远是拉丁串。 */
+  overflow-wrap: break-word;
 }
 
 h1, h2, h3, h4 {
   font-family: var(--font-title);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   line-height: var(--lh-tight);
   margin: 0;
-  letter-spacing: .02em;
+  letter-spacing: .01em;
+  /* 宋体的中宫比黑体大，长标题换行时靠 balance 让两行长度相近，不要出现孤字 */
+  text-wrap: balance;
 }
-
-h1 { font-size: var(--fs-2xl); }
+h1 { font-size: var(--fs-2xl); letter-spacing: var(--tracking-ink); }
 h2 { font-size: var(--fs-xl); }
 h3 { font-size: var(--fs-lg); }
+h4 { font-size: var(--fs-base); }
 
 p { margin: 0 0 var(--sp-3); }
+p:last-child { margin-bottom: 0; }
 
+/*
+  ⚠️ 正文链接**默认带下划线**，不能只靠颜色区分。
+  上一版是 "a { text-decoration: none } + hover 才出现下划线"，结果正文里的链接
+  和普通文字的唯一差别就是颜色 —— 色觉障碍用户看不到这条线（axe 实测：
+  链接色 #f2ab55 与正文色 #b9c0cb 的对比度只有 1.06:1，远低于要求的 3:1）。
+
+  下划线颜色压到 45% 不透明度：它要"存在"，但不该比正文还抢眼；
+  悬停时提到实色，形成"这条能点"的第二重反馈。
+  导航、按钮、卡片标题这类**本身就是控件**的链接，各自在自己的样式里把它关掉。 */
 a {
-  color: var(--flame);
-  text-decoration: none;
-  transition: color var(--dur-fast) var(--ease);
+  color: var(--ember);
+  text-decoration: underline;
+  text-decoration-color: rgba(242, 171, 85, .45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease),
+              text-decoration-color var(--dur-fast) var(--ease);
 }
-a:hover { color: var(--flame-bright); }
+
+/* ==================== 触控 ====================
+   · touch-action: manipulation —— 手机浏览器为了等"双击缩放"会在点击后压 300ms 再派发
+     click，按钮因此有延迟感。这个属性明确告诉浏览器"这里只做单击"，双击缩放照旧可用
+     （真正禁掉缩放的是 user-scalable=no，那个我们没写）。
+   · -webkit-tap-highlight-color —— 默认是半透明的灰蓝方块，在深色底上像一块脏印子。
+     关掉它是因为**我们自己的 :active 状态已经给了更清楚的反馈**，不是因为怕麻烦。 */
+button, a, label, select, summary, [role="button"] {
+  touch-action: manipulation;
+}
+html {
+  -webkit-tap-highlight-color: transparent;
+  /* 吸顶导航高 58px：锚点跳转/聚焦元素滚进视口时，别被它压在下面 */
+  scroll-padding-top: calc(var(--header-h) + 12px);
+}
+a:hover { color: var(--ember-hot); text-decoration-color: currentColor; }
 
 code, pre, .mono { font-family: var(--font-mono); }
 
 code {
-  background: var(--bg-sunken);
-  border: 1px solid var(--line-soft);
+  background: var(--stone-void);
+  border: 1px solid var(--edge-soft);
   border-radius: var(--r-xs);
   padding: 1px 5px;
-  font-size: .9em;
+  font-size: .88em;
+  color: var(--ink-2);
 }
 
 pre {
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
+  background: var(--stone-void);
+  border: 1px solid var(--edge-soft);
   border-radius: var(--r-md);
   padding: var(--sp-3) var(--sp-4);
   overflow-x: auto;
   font-size: var(--fs-sm);
-  line-height: 1.6;
+  line-height: 1.65;
+  box-shadow: var(--bevel-inset);
 }
-pre code { background: none; border: 0; padding: 0; }
+pre code { background: none; border: 0; padding: 0; color: inherit; }
 
 img { max-width: 100%; display: block; }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 
-/* 焦点可见性：键盘用户必须看得见焦点 */
+/* ==================== 焦点 ====================
+   键盘用户必须看得见焦点。上一版有 11 处 outline:none 把它吞掉了 ——
+   现在组件层只允许用 box-shadow 画"聚焦光晕"，禁止再写 outline:none。 */
 :focus-visible {
-  outline: 2px solid var(--flame);
+  outline: 2px solid var(--ember);
   outline-offset: 2px;
+  border-radius: var(--r-xs);
 }
+/* 鼠标点击不要焦点环（键盘用户照旧有） */
+:focus:not(:focus-visible) { outline: none; }
 
-::selection { background: var(--flame-glow); color: var(--flame-bright); }
+::selection { background: var(--ember-glow); color: var(--ember-hot); }
 
-/* 滚动条（WebKit） */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--bg-sunken); }
+/* ==================== 滚动条 ====================
+   由 10px 收到 8px、去掉铜色（原来的铜色滚动条在深底上像 2005 年的皮肤）。 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
+  background: var(--stone-600);
   border-radius: var(--r-pill);
-  border: 2px solid var(--bg-sunken);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--copper); }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-4); background-clip: padding-box; }
+* { scrollbar-color: var(--stone-600) transparent; scrollbar-width: thin; }
+
+/* ==================== 版心 ==================== */
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 var(--sp-5);
+}
+.read { max-width: var(--read-max); }
 
 /* ==================== 排版工具类 ==================== */
-.page { max-width: var(--page-max); margin: 0 auto; padding: 0 var(--sp-4); }
-.muted { color: var(--ink-dim); }
-.faint { color: var(--ink-faint); }
-.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
 .title-serif { font-family: var(--font-title); }
 
-/* 章节标题：两侧渐变分隔线，中间亮两端淡 —— 古籍章节感 */
+/* 拉丁小标签：全站只有它用大写 + 大字距 */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ==================== 章节标题 ====================
+   上一版是「两侧对称渐变线 + 中间标题」，那是模板答案：线只负责好看，不编码信息。
+   现在只留右侧一条渐隐的刻线，表达「这一节的管辖范围到此为止」——
+   左侧的对齐点就是标题自己，不需要对称。
+
+   ⚠️ 竖着的那道灵火刻痕是 Panel 标题的记号（见 Panel.vue），
+   页面级标题不再重复用它，否则两级标题看起来一样重要。 */
 .section-title {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   font-family: var(--font-title);
-  font-size: var(--fs-lg);
-  margin: var(--sp-6) 0 var(--sp-4);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tracking-ink);
+  margin: 0 0 var(--sp-5);
 }
-.section-title::before,
 .section-title::after {
   content: '';
-  height: 1px;
   flex: 1;
-  background: linear-gradient(90deg, transparent, var(--copper-dim), transparent);
-}
-.section-title::before {
-  max-width: 36px;
-  flex: none;
-  background: linear-gradient(90deg, transparent, var(--flame));
+  height: 1px;
+  min-width: var(--sp-5);
+  background: linear-gradient(90deg, var(--hairline), transparent);
 }
 
-/* 无障碍：仅屏幕阅读器可见 */
+/* ==================== 无障碍 ==================== */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* 减少动效偏好 */
+/* ==================== 减少动效偏好 ====================
+   ⚠️ 这里**不能**一刀切压掉 transition。
+
+   上一版曾经写过「所有元素 transition-duration: .01ms !important」，那是抄来的通用
+   片段。后果不是"少一点动效"，而是把状态反馈也一起抹了 —— 按钮悬浮、输入框聚焦、
+   提示浮入、抽屉淡入全部硬切。而关掉系统动画的人不少（Windows「设置 → 辅助功能 →
+   视觉效果 → 动画效果」关掉就报 reduce，开发机常年是这个状态）。这些人看到的是
+   "这个网站很塑料"，而不是"更安静"。
+
+   本站也确实没有会引起前庭不适的大位移（全站 transform 不超过 20px / 5% 缩放，
+   都是状态反馈），所以现在的策略是：
+     · keyframes 动画 → 瞬时到位、只播一次（挡的是自动播放 / 循环动画）；
+     · transition → 保留设计时长；
+     · 轮播那类大画面的运动由组件自己 opt-in 处理（见 ImageCarousel 的 .no-anim）。 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
   }
+}
+
+/* ==================== 窄屏基线 ====================
+   ⚠️ 表单控件字号必须 ≥16px：iOS Safari 在聚焦字号小于 16px 的输入框时会
+   **自动放大整个页面**，用户得再手动缩回去。这是手机端最容易被忽略的硬伤。 */
+@media (max-width: 760px) {
+  :root { --fs-2xl: 25px; --fs-3xl: 32px; }
+  input, select, textarea { font-size: 16px; }
+  .page { padding: 0 var(--sp-4); }
 }

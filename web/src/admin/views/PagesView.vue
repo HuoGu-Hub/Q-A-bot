@@ -178,10 +178,17 @@ onMounted(load)
               <span class="spacer" />
               <Button v-if="b.overridden" size="sm" :disabled="saving" @click="resetBlock(b)">恢复默认</Button>
             </div>
+            <!--
+              ⚠️ aria-label 是必须的：上一行那块标签文字只是"看起来像标签"，
+              和这个输入框在无障碍树里毫无关系（axe 判 critical：form element has no label）。
+              这里没有用 <label> 包住，是因为输入框是多行/单行两种形态切换，
+              包一层反而会把块级结构塞进 <label> 里。
+            -->
             <Input
               :model-value="val(b)"
               :multiline="b.multiline"
               :rows="3"
+              :aria-label="b.label"
               @update:model-value="(v: string) => onEdit(b, v)"
             />
             <!--

@@ -168,6 +168,7 @@ onMounted(load)
             v-else-if="item.type === 'enum'"
             :model-value="val(item)"
             :options="enumOpts(item)"
+            :aria-label="item.label"
             @update:model-value="onEdit(item, $event)"
           />
           <Input

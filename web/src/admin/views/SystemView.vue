@@ -92,6 +92,7 @@ const logWarns = computed(() => logs.value?.warnCount() ?? 0)
           class="w-level"
           :model-value="logLevel"
           :options="logLevelOptions"
+          aria-label="日志级别"
           @update:model-value="(v: string) => logs?.setLevel(v)"
         />
         <Input

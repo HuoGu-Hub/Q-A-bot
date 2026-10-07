@@ -208,7 +208,12 @@ onMounted(load)
   <AdminPage width="wide">
     <template #actions>
       <div class="days">
-        <Select :model-value="String(days)" :options="DAY_OPTIONS" @update:model-value="onDays" />
+        <Select
+          :model-value="String(days)"
+          :options="DAY_OPTIONS"
+          aria-label="统计范围"
+          @update:model-value="onDays"
+        />
       </div>
       <label class="auto">
         <Switch :model-value="auto" aria-label="自动刷新" @update:model-value="toggleAuto" />
@@ -432,8 +437,13 @@ onMounted(load)
 /* 主次：提问量是这一屏最该先看到的数字，给它更大的字号；其余指标同尺寸退后 */
 .kpis > :first-child :deep(.v) { font-size: var(--fs-3xl); }
 
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
-.miss { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+/* ⚠️ 每一列都写 minmax(0, 1fr)，不能只写 1fr。
+   1fr 等于 minmax(auto, 1fr)，轨道的下限是内容的 min-content ——
+   而右边那两张表里有"问题"这种长文本，单元格的 min-content 能撑到 900px，
+   于是在 390px 的手机上整页被顶出横向滚动条（实测文档宽度 470）。
+   minmax(0, …) 把下限压到 0，表格自己的 .tbl-wrap 有 overflow-x:auto，照样能横滑。 */
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); }
+.miss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-5); }
 
 /* 面板内的小节标签：不是标题（区块标题归 Panel），所以压到元信息字号，
    并靠字距区分层级，而不是靠加粗 */
@@ -566,7 +576,7 @@ onMounted(load)
 }
 
 @media (max-width: 900px) {
-  .two, .miss, .cosine { grid-template-columns: 1fr; }
+  .two, .miss, .cosine { grid-template-columns: minmax(0, 1fr); }
 }
 /* 窄屏：10 个「0.0~0.1」挤不下，字号再收一档 */
 @media (max-width: 560px) {
