@@ -1,12 +1,21 @@
-# Piaoxue Miao — an Enshrouded Q&A bot for QQ groups
+# Piaoxue Miao · Q&A Bot
 
-> A group member @-mentions the bot with a question → the bot **searches our own curated Chinese knowledge base first**
-> → then hands the retrieved material to an LLM to be phrased as a human answer.
-> Two web frontends ride along: a **public site** for players and an **admin console** for the maintainer.
->
-> The system **does not train models**. What it does is **retrieval + prompt orchestration + safety & cost control**.
+[简体中文](README.md) ｜ **English**
 
-*中文版见 [README.md](README.md)。项目文档目前以中文为主，本文是英文概览。*
+> A **question-answering bot**: it turns “a question asked in a group chat” into an answer that **first searches our own
+> knowledge base**, which an LLM then phrases in plain language. It **does not train models** — it does
+> **retrieval + prompt orchestration + safety & cost control**. A **public site** and an **admin console** ride along.
+
+**Current adaptations** — the two “currently only” items below are the present state, and both are replaceable by design:
+
+| Dimension | Currently | What you change to move it |
+|---|---|---|
+| Messaging platform | **QQ only** (via NapCat / OneBot 11) | `onebot/` (protocol details) + `incoming/` (the single entry point); retrieval, knowledge base and safety logic stay untouched |
+| Knowledge corpus | **Enshrouded only** | Pure data: import new material following the [document format spec](docs/md/知识库文档格式规范.md); wiki sources live in configuration |
+| Bot persona | `AGENTS.md` (not tracked; template `AGENTS.md.example`) | Edit that one file — **no rebuild needed** |
+| Chat model | opencode-go (default) → DeepSeek (fallback) | Admin “Settings” page; `llm/` is the only place that knows the model |
+
+*Project documentation is currently written in Chinese; this file is an English overview.*
 
 [Quick start](#8-run-it-locally) · [Deployment](docs/md/公网部署指南.md) · [System manual](docs/md/系统说明书.md) · [Architecture diagram](docs/diagrams/system-architecture.html)
 
@@ -31,11 +40,11 @@ Three entry points:
 
 | Entry point | For whom | Form |
 |---|---|---|
-| **QQ groups** | Players | @-mention the bot / `/commands` |
+| **QQ groups** | Players | @-mention the bot / `/commands` (**the only adapted platform today**) |
 | **Public site** | Players and visitors | `public.html` (`/`) — browse the library and the Q&A plaza |
 | **Admin console** | Maintainer | `admin.html` (`/admin`) — dashboard, knowledge base, settings |
 
-### 1.1 QQ side
+### 1.1 Group chat side (currently QQ)
 
 - **Knowledge-base QA**: three recall paths — A (body vectors) + B (terminology keywords) + C (title-vector gate) —
   fused with RRF and reranked down to the top 5, wrapped as `<<<KNOWLEDGE>>>` and handed to the LLM.
@@ -61,7 +70,7 @@ command management, settings (configuration centre), models, logs, page copy & c
 
 - Two **peer-level** ingestion paths:
   1. `.md` documents written by a human or an AI to a fixed format → imported from the admin “Documents” panel;
-  2. automated wiki harvesting (a CLI batch job, **optional** — if it cannot run, you fill the gap by hand and the core keeps working).
+  2. automated wiki harvesting (a CLI batch job, **optional** — if it cannot run, you fill the gap by hand and the core keeps
 - Both paths converge on “write a block”, after which **writes take effect immediately**: the block index and the term table
   invalidate/refresh themselves based on a corpus version stamp — no restart, and no caller has to remember anything.
 - Everything that must survive long-term (Chinese term names, category mapping, proposals, …) lives in a single SQLite file.
