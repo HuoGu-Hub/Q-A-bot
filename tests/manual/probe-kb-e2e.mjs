@@ -28,7 +28,8 @@ const API_PORT = 3000
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:8080/onebot/event'
 const USING_DEFAULT_TARGET = !process.env.APP_URL
 
-const BOT_QQ = 100000003
+// 机器人自身 QQ 号：真实号不进仓库，从环境变量传（缺省用它跑本机自测）
+const BOT_QQ = Number(process.env.BOT_QQ ?? 100000003)
 
 // 假群号基数：700000 + i。这个范围同时写死在清理 SQL 里
 // （tests/cleanup-sql/cleanup-probe-test-data.sql），改这里就要同步改那边。

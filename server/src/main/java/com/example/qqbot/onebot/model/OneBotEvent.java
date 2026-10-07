@@ -15,13 +15,13 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
  * <p>注意 message 字段：NapCat 的 messagePostFormat 配成 array 时是「消息段数组」，
  * 配成 string 时是纯文本。两种都要能处理，所以这里先存成 JsonNode，交给 MessageCodec 解析。
  *
- * <p>真实样本（从 NapCat 日志里抓的）：
+ * <p>样本（结构与真实 NapCat 事件一致，账号类字段已替换为占位值）：
  * <pre>
  * {
  *   "post_type": "message", "message_type": "group",
  *   "self_id": 100000003, "user_id": 100000001, "group_id": 100000002,
  *   "message_id": 100000006,
- *   "sender": { "user_id": 100000001, "nickname": "示例作者", "role": "owner" },
+ *   "sender": { "user_id": 100000001, "nickname": "示例用户", "role": "owner" },
  *   "raw_message": "[CQ:at,qq=100000003] bot通信测试",
  *   "message": [ { "type": "at", "data": { "qq": "100000003" } },
  *                { "type": "text", "data": { "text": " bot通信测试" } } ]

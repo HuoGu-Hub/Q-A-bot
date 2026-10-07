@@ -59,7 +59,7 @@ class OutboundSenderTest {
 
         identity = new BotIdentity();
         identity.setSelfId(999L);
-        identity.setSelfName("飘雪喵");
+        identity.setSelfName("示例助手");
 
         // 出站过滤现在在发送器内部（单一出口），测试里让它**原样透传** ——
         // 这样这个测试仍然只验分片/节奏/合并转发，过滤本身由 MessageRouterCommandTest 那条覆盖
@@ -129,9 +129,9 @@ class OutboundSenderTest {
             // 两套署名字段都要有：NapCat 认 user_id(数字)/nickname，go-cqhttp/Lagrange 认 uin/name
             assertThat(data.path("user_id").isNumber()).as("user_id 必须是数字（NapCat 的要求）").isTrue();
             assertThat(data.path("user_id").asLong()).isEqualTo(999L);
-            assertThat(data.path("nickname").asText()).isEqualTo("飘雪喵");
+            assertThat(data.path("nickname").asText()).isEqualTo("示例助手");
             assertThat(data.path("uin").asText()).isEqualTo("999");
-            assertThat(data.path("name").asText()).isEqualTo("飘雪喵");
+            assertThat(data.path("name").asText()).isEqualTo("示例助手");
             assertThat(data.path("content").isArray()).isTrue();
             assertThat(data.path("content").path(0).path("type").asText()).isEqualTo("text");
         }

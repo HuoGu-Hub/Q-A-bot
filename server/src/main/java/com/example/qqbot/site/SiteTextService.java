@@ -59,7 +59,7 @@ public class SiteTextService {
                     "资料来源于 Enshrouded Wiki（CC BY-NC-SA 3.0）· 游戏素材版权归 Keen Games 所有"),
             new Block("layout", "全站", "footer_copy", "页脚 · 版权行",
                     "年份会自动替换 {year}", false,
-                    "© {year} 飘雪喵 · 由示例作者提供技术支持"),
+                    "© {year} 示例助手 · 由示例作者提供技术支持"),
 
             // ---- 首页 ----
             new Block("home", "首页", "tagline", "副标语",
@@ -84,7 +84,7 @@ public class SiteTextService {
             // 中途试过把段落名挪到 hint（右侧浅色小字），但这类注释小字本身就是噪声
             // （2026-09-28 决定）：标签只留角色，hint 一律留空。
             // 分不清哪块是哪块？看右边预览 —— 它就是这一页的版式。
-            new Block("about", "关于", "what_title", "标题", "", false, "飘雪喵是什么"),
+            new Block("about", "关于", "what_title", "标题", "", false, "示例助手是什么"),
             new Block("about", "关于", "what_body", "正文", "", true,
                     "一个《雾锁王国》（Enshrouded）的问答助手。在 QQ 群里 @ 我提问，"
                             + "我会先在本地资料库里检索，再依据检索到的内容回答 —— 而不是凭空编。"),

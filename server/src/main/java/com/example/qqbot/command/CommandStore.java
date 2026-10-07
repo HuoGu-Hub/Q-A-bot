@@ -76,7 +76,7 @@ public class CommandStore {
         List<CommandRepository.Seed> builtins = List.of(
                 new CommandRepository.Seed("help", "{cmd.list}", "查看所有指令", 1),
                 new CommandRepository.Seed("list", "{cmd.list}", "列出所有指令", 2),
-                new CommandRepository.Seed("ping", "在的喵～（已运行 {uptime}）", "看看我在不在", 3),
+                new CommandRepository.Seed("ping", "在的～（已运行 {uptime}）", "看看我在不在", 3),
                 new CommandRepository.Seed("stats", """
                         知识库：{kb.count} 条资料
                         术语表：{kb.terms} 条

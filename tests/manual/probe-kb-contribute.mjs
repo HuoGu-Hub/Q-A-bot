@@ -37,7 +37,7 @@ console.log('')
 console.log('═══ ④ 提交资料（消耗 token）═══')
 const sub = await ppost('/kb/contribute', {
   token: tok.body.token,
-  title: '测试词条·飘雪喵专属',
+  title: '测试词条·示例专属',
   text: '这是一条用于验证增量索引的测试资料。\\n\\n它包含一些独特的关键词：喵喵验证码 ZXCVBNM，用于确认检索能命中新加的内容。\\n\\n如果这段文字能被搜到，说明增量索引工作正常。',
   url: 'https://example.com/test',
   submitter: '自动化测试',

@@ -38,11 +38,18 @@ class SystemPromptTest {
         assertThat(root)
                 .as("测试必须在工程目录内运行，否则这个守卫是空的")
                 .isNotNull();
-        Path f = root.resolve("AGENTS.md");
-        assertThat(Files.isRegularFile(f))
-                .as("找不到 AGENTS.md：提示词守卫失效，必须让测试失败而不是静默跳过")
+        Path real = root.resolve("AGENTS.md");
+        if (Files.isRegularFile(real)) {
+            return real;
+        }
+        // 公开仓库里没有真实人设（AGENTS.md 已被 .gitignore 排除），此时退回模板
+        // AGENTS.md.example —— 它同样要满足下面这些安全底线断言，
+        // 所以这不是"静默跳过"：模板被改坏照样是红的。
+        Path example = root.resolve("AGENTS.md.example");
+        assertThat(Files.isRegularFile(example))
+                .as("既没有 AGENTS.md 也没有 AGENTS.md.example：提示词守卫失效，必须让测试失败而不是静默跳过")
                 .isTrue();
-        return f;
+        return example;
     }
 
     private static String prompt() throws IOException {

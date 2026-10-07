@@ -1,5 +1,6 @@
 package com.example.qqbot.qa;
 
+import com.example.qqbot.TestIds;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.persistence.Jdbc;
@@ -44,7 +45,7 @@ class QaStoreTest {
     }
 
     private QaRecord record(String ts, String question, String answer) {
-        return new QaRecord(ts, 100000002L, 100000001L, 12345L,
+        return new QaRecord(ts, TestIds.GROUP, TestIds.USER, 12345L,
                 question, null, answer,
                 0, true, 3, 0.18, 0.53, 0.53, "both",
                 "[{\"i\":12,\"title\":\"Scrap Cup\",\"score\":0.53,\"src\":\"both\"}]",

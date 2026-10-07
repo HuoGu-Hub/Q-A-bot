@@ -52,7 +52,7 @@ const isActive = (to: string) =>
                需要链接时直接在文案里写 [文字](链接) —— renderInline 支持行内链接。 -->
           <span v-html="renderInline(t('layout.footer_note', '资料来源于 Enshrouded Wiki（CC BY-NC-SA 3.0）· 游戏素材版权归 Keen Games 所有'))" />
         </p>
-        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} 飘雪喵 · 由示例作者提供技术支持'))" /></p>
+        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} 示例助手 · 由示例作者提供技术支持'))" /></p>
       </div>
     </footer>
   </div>

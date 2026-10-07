@@ -300,7 +300,7 @@ public class VariableRenderer {
      * §{cmd.list}§ —— 渲染所有启用的指令。
      *
      * <p>这是 §/help§ 和 §/list§ 的实现方式（**不写死在代码里**），
-     * 所以你可以自由调整文案，比如前面加一句「我是飘雪喵，可以这样用：」。
+     * 所以你可以自由调整文案，比如前面加一句「我是示例助手，可以这样用：」。
      */
     private String cmdList(boolean preview) {
         List<BotCommand> cmds = preview

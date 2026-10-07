@@ -5,7 +5,12 @@ import crypto from 'node:crypto'
 
 const BASE = process.env.NAPCAT_WEBUI ?? 'http://192.168.65.254:6099'
 const cfgPath = '/app/workspace/qqbot/deploy/data/napcat/config/webui.json'
-const BOT_QQ = process.env.BOT_QQ ?? '100000003'
+// 真实 QQ 号不进仓库：必须显式传 BOT_QQ，避免有人把真号写回代码
+const BOT_QQ = process.env.BOT_QQ
+if (!BOT_QQ) {
+  console.error('缺少 BOT_QQ。用法：BOT_QQ=你的机器人QQ node tests/manual/setup-napcat-autologin.mjs')
+  process.exit(1)
+}
 const token = JSON.parse(fs.readFileSync(cfgPath, 'utf8')).token
 const hash = crypto.createHash('sha256').update(token + '.napcat').digest('hex')
 
