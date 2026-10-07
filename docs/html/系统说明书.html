@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>飘雪喵 QQ 机器人 · 系统说明书</title>
+<title>飘雪喵 · 问答机器人 · 系统说明书</title>
 <style>
 :root {
   --bg: #ffffff;
@@ -281,9 +281,10 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <li class="lvl-2"><a href="#附录-b术语表">附录 B：术语表</a></li></ol></details>
 </nav>
 <main>
-<h1 id="飘雪喵-qq-机器人-系统说明书">飘雪喵 QQ 机器人 · 系统说明书</h1>
+<h1 id="飘雪喵-问答机器人-系统说明书">飘雪喵 · 问答机器人 · 系统说明书</h1>
 <blockquote>
-<p><strong>系统名称</strong>：飘雪喵（QQ 群问答机器人 + 双端 Web 站点）
+<p><strong>系统名称</strong>：飘雪喵（问答机器人 + 双端 Web 站点）
+<strong>适配现状</strong>：消息平台<strong>只适配了 QQ</strong>（经 NapCat / OneBot 11）；知识库<strong>只装了《雾锁王国》</strong>（Enshrouded）语料
 <strong>运营</strong>：示例组织 ｜ <strong>技术支持</strong>：示例作者
 <strong>文档版本</strong>：v1.0 ｜ <strong>日期</strong>：2026-10-02 ｜ <strong>依据</strong>：仓库当前代码（master 工作区）
 <strong>读者</strong>：接手维护、评审、二次开发这套系统的人
@@ -292,8 +293,12 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <hr>
 <h2 id="一系统是什么"><a class="anchor" href="#一系统是什么">一、系统是什么</a></h2>
 <h3 id="11-一句话定位"><a class="anchor" href="#11-一句话定位">1.1 一句话定位</a></h3>
-<p>一个跑在 QQ 群里的《雾锁王国》（Enshrouded）游戏问答助手：群友 @ 机器人提问，机器人<strong>先查我们自己的中文知识库</strong>，再把资料交给大模型组织成人话回答；外部还有两个 Web 界面 —— 给群友看的<strong>公开站</strong>、给自己用的<strong>管理后台</strong>。</p>
+<p>一个<strong>通用的问答机器人</strong>：把「群聊里的一句提问」变成「先查我们自己的知识库、再由大模型组织成人话」的回答；外部还有两个 Web 界面 —— 给群友看的<strong>公开站</strong>、给自己用的<strong>管理后台</strong>。</p>
 <p>系统<strong>不训练模型</strong>。它做的是：<strong>检索 + 提示词编排 + 安全与成本控制</strong>。知识库的原料有三条平级来路：外部（人或另一个 AI）按固定格式产出 → 管理后台导入；进程内 <strong>wiki 抓取</strong>；<strong>地图 / 地点语料同步</strong>。后两条是<strong>离线批处理、默认关</strong>，契约见《知识库摄入边界与激活协议》。</p>
+<blockquote>
+<p><strong>当前适配</strong>：消息平台只有 <strong>QQ</strong>（协议细节限制在 <code>onebot/</code> + <code>incoming/</code>，换平台不动机器人逻辑）；
+知识库只有 <strong>《雾锁王国》</strong>（Enshrouded）语料 —— 语料是数据，按《知识库文档格式规范》导入新的即可。</p>
+</blockquote>
 <h3 id="12-三个入口"><a class="anchor" href="#12-三个入口">1.2 三个入口</a></h3>
 <div class="table-wrap"><table>
 <thead>
@@ -442,25 +447,33 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </thead>
 <tbody><tr>
 <td>后端 Java</td>
-<td>126 个源文件 / 约 24,000 行</td>
+<td>198 个源文件 / 约 30,700 行</td>
 </tr>
 <tr>
 <td>后端测试</td>
-<td>34 个测试类 / 约 6,300 行</td>
+<td>58 个测试类 / 约 10,000 行</td>
 </tr>
 <tr>
 <td>前端 Vue+TS+CSS</td>
-<td>59 个文件 / 约 12,300 行</td>
+<td>61 个文件 / 约 15,500 行</td>
 </tr>
 <tr>
 <td>端到端与探针脚本</td>
-<td>40 个（Playwright + Node/Python 探针）</td>
+<td>42 个（Playwright + Node/Python 探针）</td>
 </tr>
 <tr>
-<td>知识库（线上实测，2026-10-01）</td>
-<td>2,649 个块全部有向量；标题向量 2,649 条；词条 3,903 条（3,359 条填过中文名）</td>
+<td>知识库（线上实测，2026-10-08）</td>
+<td>3,439 个块全部有向量；标题向量 3,438 条；词条 3,439 条（2,772 条含中文名）</td>
+</tr>
+<tr>
+<td>wiki 语料状态（2026-10-08 重导后）</td>
+<td>635 页 / 清洗为空 0 页 / 失败 0 页</td>
 </tr>
 </tbody></table></div>
+<blockquote>
+<p>口径：文件与行数用脚本数（<code>server/src/main</code>、<code>server/src/test</code>、<code>web/src</code>、<code>tests/</code>，排除 <code>target</code>/<code>node_modules</code>/<code>web-dist</code>）；
+知识库数字直接查 <code>server/data/qa/qqbot.sqlite</code>。<strong>改完代码/重导语料后请重新数一遍</strong>，别让这张表变成装饰。</p>
+</blockquote>
 <hr>
 <h2 id="二总体架构"><a class="anchor" href="#二总体架构">二、总体架构</a></h2>
 <h3 id="21-组件拓扑"><a class="anchor" href="#21-组件拓扑">2.1 组件拓扑</a></h3>
@@ -690,7 +703,7 @@ MessageRouter.handle(event)
 </tr>
 <tr>
 <td>为什么用<strong>外部 embedding + 本地余弦</strong>，不接向量数据库</td>
-<td>2,649 块 × 1024 维 = 一次全量扫描 <strong>2.64 ms</strong>；引入向量库要额外常驻进程，收益为零</td>
+<td>3,439 块 × 1024 维 ≈ 一次全量扫描 <strong>3 ms</strong>（2026-10-01 在 2,649 块上实测 2.64 ms，按块数线性外推）；引入向量库要额外常驻进程，收益为零</td>
 </tr>
 <tr>
 <td>为什么 A 路（正文向量）之外<strong>必须</strong>有 B 路（术语关键词）</td>
@@ -796,8 +809,8 @@ MessageRouter.handle(event)
 </tr>
 <tr>
 <td>测试</td>
-<td>spring-boot-starter-test（JUnit 5）</td>
-<td>34 个测试类</td>
+<td>spring-boot-starter-test（JUnit 5）+ Mockito + <strong>ArchUnit</strong></td>
+<td>58 个测试类</td>
 </tr>
 <tr>
 <td>构建</td>
@@ -827,7 +840,7 @@ MessageRouter.handle(event)
 </tr>
 <tr>
 <td>UI</td>
-<td><strong>自研组件库</strong>（18 个，<code>src/shared/ui/</code>）+ CSS 设计令牌</td>
+<td><strong>自研组件库</strong>（17 个，<code>src/shared/ui/</code>）+ CSS 设计令牌</td>
 </tr>
 <tr>
 <td>状态</td>
@@ -1884,7 +1897,9 @@ tags: 必需品, 制作台
 </thead>
 <tbody><tr>
 <td>单元测试</td>
-<td>34 个测试类、约 6.3k 行；覆盖 Guard、检索（含标题向量专测）、导入解析与增量计划、媒体清理与目录隔离、指令匹配与变量、广场、公开检索、后台鉴权</td>
+<td>58 个测试类、约 10k 行（<strong>431 个用例</strong>，其中 3 个联网 E2E 默认跳过）；覆盖 Guard、检索（含标题向量专测与黄金集）、
+导入解析与增量计划、媒体清理与目录隔离、指令匹配与变量、广场、公开检索、后台鉴权，
+外加<strong>架构护栏</strong>（ArchUnit：依赖方向越界即构建失败）与知识库的&quot;写入即生效&quot;（索引自动失效 / 词条表自动补齐 / 失败页重试）</td>
 </tr>
 <tr>
 <td>端到端（假协议端）</td>

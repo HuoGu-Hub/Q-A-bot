@@ -68,10 +68,12 @@ command management, settings (configuration centre), models, logs, page copy & c
 
 ### 1.4 The knowledge base — the core asset
 
-- Two **peer-level** ingestion paths:
-  1. `.md` documents written by a human or an AI to a fixed format → imported from the admin “Documents” panel;
-  2. automated wiki harvesting (a CLI batch job, **optional** — if it cannot run, you fill the gap by hand and the core keeps
-- Both paths converge on “write a block”, after which **writes take effect immediately**: the block index and the term table
+- Three **peer-level** ingestion paths (the last two are **offline batch jobs, disabled by default**):
+  1. `.md` documents written by a human or an AI to a fixed format → imported from the admin “Documents” panel
+     (**the always-available main line**);
+  2. automated wiki harvesting (today the Enshrouded wiki; if it cannot run you fill the gap by hand and the core keeps working);
+  3. map / location corpus sync (derives location blocks from the wiki map pages; implemented, disabled by default).
+- All three converge on “write a block”, after which **writes take effect immediately**: the block index and the term table
   invalidate/refresh themselves based on a corpus version stamp — no restart, and no caller has to remember anything.
 - Everything that must survive long-term (Chinese term names, category mapping, proposals, …) lives in a single SQLite file.
 
