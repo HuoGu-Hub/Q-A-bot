@@ -225,7 +225,7 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <main>
 <h1 id="回答策略-与-知识库设施设计v2">回答策略 与 知识库设施设计（v2）</h1>
 <blockquote>
-<p>本文是 <code>知识库时效性与回答策略方案.md</code>（下称 v1）的<strong>设计升级</strong>。v1 的<strong>现状诊断全部有效</strong>（回答链路、语料冻结、build.json 误导、Game Updates 结构缺失）；本文<strong>取代 v1 的方案与路线图部分</strong>，因为你的三条补充改变了设计的形状。</p>
+<p>本文是早期《知识库时效性与回答策略方案》（下称 v1，已随 2026-10-08 文档清理删除）的<strong>设计升级</strong>。v1 的<strong>现状诊断全部有效</strong>（回答链路、语料冻结、build.json 误导、Game Updates 结构缺失）；本文<strong>取代 v1 的方案与路线图部分</strong>，因为你的三条补充改变了设计的形状。</p>
 <p><strong>一句话结论</strong>：你的第 1 点（时效）我 v1 已量化；第 2 点（温度）<strong>需要纠正</strong>——温度不控制&quot;依赖哪份资料&quot;，它控制采样的发散度；第 3 点（忠于<strong>自有</strong>知识库）<strong>是最重要的一击</strong>，它把诊断从&quot;知识库权重过大&quot;改成了更准确的**&quot;知识库缺少区分度&quot;**——系统现在无法区分「wiki 原文（未核对、可能过期）」和「你人工订正过的权威内容」，把两者一起升格成了&quot;以资料为准&quot;。<strong>所以真正的第一优先级，是给知识库补上元数据骨架。</strong></p>
 </blockquote>
 <hr>

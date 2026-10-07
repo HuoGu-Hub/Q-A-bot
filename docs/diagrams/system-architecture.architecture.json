@@ -41,18 +41,28 @@
           "chat",
           "llm"
         ],
-        "note": "提问进来到回答发回群里，两条方向相反的线就是问与答。"
+        "note": "提问进来的那条线和回答出去的那条线方向相反，回路是闭合的。"
       },
       {
         "id": "retrieval",
-        "label": "检索与数据",
+        "label": "检索与重排",
         "focus": [
           "chat",
           "kb",
-          "embed",
+          "model_api",
           "sqlite"
         ],
-        "note": "三路召回、外部向量模型，以及承载全部人工成果的单一 SQLite 文件。"
+        "note": "三路召回先出候选，再交 bge-reranker 重排，最后取 top-5 塞进提示词。"
+      },
+      {
+        "id": "corpus",
+        "label": "语料怎么进来",
+        "focus": [
+          "ingest",
+          "sqlite",
+          "kb"
+        ],
+        "note": "文档导入 / wiki 抓取 / 地图同步都是平级的摄入来源，清洗分块后落进同一张块表。"
       },
       {
         "id": "web-plane",
@@ -60,9 +70,10 @@
         "focus": [
           "browsers",
           "nginx",
-          "webapp"
+          "webapp",
+          "bot"
         ],
-        "note": "公开站与管理后台共用 Nginx 与同一个后端，接口前缀各自独立。"
+        "note": "公开站与后台共用 Nginx 与同一个后端，接口前缀各自独立。"
       }
     ]
   },
@@ -143,8 +154,8 @@
     {
       "id": "bot",
       "type": "backend",
-      "label": "事件接入与路由",
-      "sublabel": "去重 · 队列 · 指令 · 广场求助",
+      "label": "接入与路由",
+      "sublabel": "OneBot 事件 · REST · 去重 · 指令",
       "pos": [
         640,
         406
@@ -158,7 +169,7 @@
       "id": "guard",
       "type": "security",
       "label": "Guard 安全中间层",
-      "sublabel": "五层零成本拦截",
+      "sublabel": "五层零成本拦截 · 成本预算",
       "pos": [
         980,
         410
@@ -199,32 +210,19 @@
       ]
     },
     {
-      "id": "kb",
+      "id": "ingest",
       "type": "backend",
-      "label": "知识库检索",
-      "sublabel": "A 向量 · B 词条 · C 标题",
+      "label": "语料摄入与清洗",
+      "sublabel": "文档导入 · wiki 抓取 · 地图同步",
       "pos": [
-        1310,
+        640,
         660
       ],
       "size": [
         190,
         76
-      ]
-    },
-    {
-      "id": "embed",
-      "type": "external",
-      "label": "向量模型",
-      "sublabel": "BAAI/bge-m3 · 1024 维",
-      "pos": [
-        1640,
-        660
       ],
-      "size": [
-        190,
-        72
-      ]
+      "tag": "离线批处理 · 默认关"
     },
     {
       "id": "sqlite",
@@ -240,6 +238,34 @@
         76
       ],
       "tag": "data/qa/"
+    },
+    {
+      "id": "kb",
+      "type": "backend",
+      "label": "知识库检索",
+      "sublabel": "三路召回 · 重排 · 标题闸门",
+      "pos": [
+        1310,
+        660
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "model_api",
+      "type": "external",
+      "label": "模型 API · SiliconFlow",
+      "sublabel": "bge-m3 · bge-reranker-v2-m3",
+      "pos": [
+        1640,
+        660
+      ],
+      "size": [
+        190,
+        72
+      ]
     }
   ],
   "boundaries": [
@@ -260,7 +286,8 @@
         "guard",
         "chat",
         "kb",
-        "sqlite"
+        "sqlite",
+        "ingest"
       ],
       "pad": 18
     }
@@ -277,6 +304,13 @@
       "from": "nginx",
       "to": "webapp",
       "label": "静态资源"
+    },
+    {
+      "id": "e_rest",
+      "from": "webapp",
+      "to": "bot",
+      "label": "双端 REST 接口",
+      "labelDy": 24
     },
     {
       "id": "e_ask_in",
@@ -398,16 +432,28 @@
       "labelDy": 24
     },
     {
+      "id": "e_ingest",
+      "from": "ingest",
+      "to": "sqlite",
+      "label": "清洗分块后落库"
+    },
+    {
+      "id": "e_blocks",
+      "from": "kb",
+      "to": "sqlite",
+      "label": "块 + 统计"
+    },
+    {
       "id": "e_embed",
       "from": "kb",
-      "to": "embed",
-      "label": "查询文本"
+      "to": "model_api",
+      "label": "查询向量 / 候选"
     },
     {
       "id": "e_embed_back",
-      "from": "embed",
+      "from": "model_api",
       "to": "kb",
-      "label": "1024 维向量",
+      "label": "向量 / 重排分",
       "fromSide": "bottom",
       "toSide": "bottom",
       "via": [
@@ -420,12 +466,6 @@
           762
         ]
       ]
-    },
-    {
-      "id": "e_blocks",
-      "from": "kb",
-      "to": "sqlite",
-      "label": "块 + 统计"
     }
   ],
   "cards": [
@@ -433,10 +473,10 @@
       "dot": "rose",
       "title": "一问一答，回路是闭合的",
       "items": [
-        "去程：QQ 群友 → NapCat → 事件接入与路由（POST /onebot/event）",
-        "判定：黑名单 → 指令 → Guard 五层 → 成本预算，全部跑完才轮到模型",
-        "模型侧：ChatService → 提问 + 资料块 → 大模型服务 → 回答文本",
-        "回路：ChatService → 回答文本 → 事件接入与路由 → send_group_msg → NapCat → 回复到群"
+        "去程：QQ 群友 → NapCat → 接入与路由（POST /onebot/event）",
+        "判定：去重 → 黑名单 → 指令秒回 → Guard 五层 → 成本预算，全部跑完才轮到模型",
+        "模型侧：ChatService 组上下文 → 检索 top-5 → 大模型服务 → 回答文本",
+        "回路：回答文本 → 接入与路由 → send_group_msg → NapCat → 回复到群"
       ]
     },
     {
@@ -451,11 +491,11 @@
     },
     {
       "dot": "emerald",
-      "title": "入口与记录",
+      "title": "三个入口，一份 SQLite",
       "items": [
-        "三个入口：/onebot/** 上报、/api/public/** 公开站、/admin/api/** 后台",
-        "问答记录异步投递，绝不占用回答线程；队列有界，满了丢弃并计数",
-        "库写坏了只记日志，机器人照常回答；同人 60 秒内再问自动标 follow_up"
+        "QQ 走 /onebot/** 上报，公开站走 /api/public/**，后台走 /admin/api/** —— 同一个 JVM",
+        "语料三条来路（后台文档导入 / wiki 抓取 / 地图同步）都先清洗分块，再落进同一张块表",
+        "问答记录异步落库、不占回答线程；库写坏了只记日志，机器人照常回答"
       ]
     }
   ]

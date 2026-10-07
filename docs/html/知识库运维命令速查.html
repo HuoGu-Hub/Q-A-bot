@@ -425,9 +425,9 @@ mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 <tbody><tr>
 <td><strong>①</strong></td>
 <td><strong>词条表导入导出</strong></td>
-<td><strong>xlsx</strong>（主）/ csv / tsv</td>
+<td><strong>xlsx</strong>（主）/ tsv（机机）</td>
 <td>人 ↔ 管理后台</td>
-<td>✅ <strong>活的主线</strong></td>
+<td>✅ <strong>活的主线</strong>（CSV 导出 2026-10-08 删除）</td>
 </tr>
 <tr>
 <td><strong>②</strong></td>
@@ -452,7 +452,7 @@ mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 </tr>
 </tbody></table></div>
 <h3 id="①-词条表-唯一的人机往返通道"><a class="anchor" href="#①-词条表-唯一的人机往返通道">① 词条表 —— 唯一的「人机往返」通道</a></h3>
-<pre><code>GET  /admin/api/kb/terms/export?format=xlsx|csv|tsv&amp;view=&amp;board=&amp;q=
+<pre><code>GET  /admin/api/kb/terms/export?format=xlsx|tsv&amp;view=&amp;board=&amp;q=   # 默认 xlsx；format=csv 明确报错
 POST /admin/api/kb/terms/import     {xlsxBase64} / {csv} / {tsv}
 </code></pre>
 <ul>
@@ -464,6 +464,10 @@ POST /admin/api/kb/terms/import     {xlsxBase64} / {csv} / {tsv}
 <p><strong>为什么弃用 CSV</strong>：WPS/Excel 在中文 Windows 上「另存为 CSV」默认是 <strong>GBK</strong>，
 而浏览器读文件固定按 <strong>UTF-8</strong> 解码 → 中文变乱码<strong>而且不报错</strong>，直接污染词条表。
 xlsx 内部就是 UTF-8 的 XML，<strong>没有编码这回事</strong>。</p>
+<blockquote>
+<p><strong>导出的 CSV 已于 2026-10-08 删除</strong>（<code>?format=csv</code> 会返回明确错误，不再&quot;悄悄回退成 xlsx&quot;）。 <strong>导入侧仍然收 CSV/TSV</strong> —— 别人递过来的表还能吃，而且有 <code>U+FFFD</code> 乱码拦截。 约定：<strong>人机交界用 xlsx，机机用 tsv</strong>。</p>
+</blockquote>
+
 <h3 id="②-黄金集"><a class="anchor" href="#②-黄金集">② 黄金集</a></h3>
 <ul>
 <li><code>tests/golden/retrieval-golden.tsv</code>（7.2 KB，<strong>进版本控制</strong>）</li>

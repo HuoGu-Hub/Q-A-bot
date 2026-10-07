@@ -293,7 +293,7 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <h2 id="一系统是什么"><a class="anchor" href="#一系统是什么">一、系统是什么</a></h2>
 <h3 id="11-一句话定位"><a class="anchor" href="#11-一句话定位">1.1 一句话定位</a></h3>
 <p>一个跑在 QQ 群里的《雾锁王国》（Enshrouded）游戏问答助手：群友 @ 机器人提问，机器人<strong>先查我们自己的中文知识库</strong>，再把资料交给大模型组织成人话回答；外部还有两个 Web 界面 —— 给群友看的<strong>公开站</strong>、给自己用的<strong>管理后台</strong>。</p>
-<p>系统<strong>不训练模型</strong>，也不自己抓取网页。它做的是：<strong>检索 + 提示词编排 + 安全与成本控制</strong>。知识库的原料由系统外部（人或另一个 AI）按固定格式产出，再从管理后台导入。</p>
+<p>系统<strong>不训练模型</strong>。它做的是：<strong>检索 + 提示词编排 + 安全与成本控制</strong>。知识库的原料有三条平级来路：外部（人或另一个 AI）按固定格式产出 → 管理后台导入；进程内 <strong>wiki 抓取</strong>；<strong>地图 / 地点语料同步</strong>。后两条是<strong>离线批处理、默认关</strong>，契约见《知识库摄入边界与激活协议》。</p>
 <h3 id="12-三个入口"><a class="anchor" href="#12-三个入口">1.2 三个入口</a></h3>
 <div class="table-wrap"><table>
 <thead>
@@ -1926,7 +1926,7 @@ tags: 必需品, 制作台
 <tr>
 <td>2</td>
 <td>早期文档描述的&quot;wiki 抓取 → chunks.jsonl + index.bin&quot;链路</td>
-<td><strong>已整块删除</strong>；现在是&quot;外部 AI 产出文档 → 管理端导入 → SQLite 块表&quot;</td>
+<td>那套<strong>文件式索引</strong>已删掉；<strong>wiki 摄入本身还在</strong> —— 2026-10 重建为&quot;抓取 → WikitextCleaner 清洗 → 分块 → SQLite 块表&quot;（离线批处理、默认关），与&quot;外部文档 → 管理端导入&quot;平级</td>
 </tr>
 <tr>
 <td>3</td>
