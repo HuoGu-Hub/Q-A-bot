@@ -6,7 +6,7 @@ package com.example.qqbot.site;
  * <h2>为什么放在 {@code site} 包（这里值得解释一句）</h2>
  * 它和 {@link SitePolicy} 是<b>同一类东西</b>：都是"对外展示的文本"。
  * {@code SitePolicy} 是群的信息（群名/群号/群说明/加群提示），本接口是机器人的信息
- * （昵称/组织/署名）。两个消费者也印证了这一点：
+ * （目前只有昵称一个字段）。两个消费者也印证了这一点：
  * <ul>
  *   <li>{@code publicapi.PublicController} —— 公开站同时发布这两组信息；</li>
  *   <li>{@code command.VariableRenderer} —— 渲染 {@code {bot}} 这个<b>展示</b>变量。</li>
@@ -27,10 +27,4 @@ public interface BotPolicy {
 
     /** 机器人昵称 —— 用于 {bot} 变量、限流话术等 */
     String getName();
-
-    /** 机器人所属组织 */
-    String getOrg();
-
-    /** 技术支持署名 */
-    String getAuthor();
 }
