@@ -459,7 +459,8 @@ POST /admin/api/kb/terms/import     {xlsxBase64} / {csv} / {tsv}
 <li><strong>筛选与列表接口共用同一份逻辑</strong> —— 「看到什么就导出什么」</li>
 <li>xlsx 是<strong>二进制</strong>，用 base64 塞进 JSON（前端 client 永远走 <code>res.json()</code>）</li>
 <li>导入防护：剥 BOM、<strong>乱码拦截</strong>（<code>U+FFFD</code> → 报错，不静默写坏）</li>
-<li>规则：key 唯一、状态合法、<strong>已存在的词条不覆盖</strong>（只在中文名为空时补齐）</li>
+<li>规则：key 唯一、状态合法、<strong>导入是「覆盖」</strong>（以最新导入为准，想只动几行就只导那几行）；
+<strong>按语料自动补齐</strong>才是一个字都不动（<code>INSERT OR IGNORE</code>）—— 两者别搞混</li>
 </ul>
 <p><strong>为什么弃用 CSV</strong>：WPS/Excel 在中文 Windows 上「另存为 CSV」默认是 <strong>GBK</strong>，
 而浏览器读文件固定按 <strong>UTF-8</strong> 解码 → 中文变乱码<strong>而且不报错</strong>，直接污染词条表。

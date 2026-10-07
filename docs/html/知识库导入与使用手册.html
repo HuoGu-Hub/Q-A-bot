@@ -177,21 +177,21 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <div class="layout">
 <nav class="toc" aria-label="目录">
   <p class="toc-title">目录</p>
-  <ol><li class="lvl-2"><a href="#一现在是什么状态2026-09-29-之后">一、现在是什么状态（2026-09-29 之后）</a></li>
+  <ol><li class="lvl-2"><a href="#一现在是什么状态2026-10-08-更新">一、现在是什么状态（2026-10-08 更新）</a></li>
 <li class="lvl-2"><a href="#二导入文档主要入口">二、导入文档（主要入口）</a></li>
 <li class="lvl-3"><a href="#步骤">步骤</a></li>
 <li class="lvl-3"><a href="#导入规则就一条">导入规则（就一条）</a></li>
-<li class="lvl-2"><a href="#三导入术语表csv">三、导入术语表（CSV）</a></li>
+<li class="lvl-2"><a href="#三导入术语表">三、导入术语表</a></li>
 <li class="lvl-3"><a href="#格式">格式</a></li>
 <li class="lvl-3"><a href="#注意">注意</a></li>
 <li class="lvl-2"><a href="#四改已经导进来的内容">四、改已经导进来的内容</a></li>
 <li class="lvl-2"><a href="#五验收脚本">五、验收脚本</a></li>
 <li class="lvl-2"><a href="#六给外部-ai-的交付要求一句话版">六、给外部 AI 的交付要求（一句话版）</a></li></ol>
-  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一现在是什么状态2026-09-29-之后">一、现在是什么状态（2026-09-29 之后）</a></li>
+  <details><summary>目录（点击展开）</summary><ol><li class="lvl-2"><a href="#一现在是什么状态2026-10-08-更新">一、现在是什么状态（2026-10-08 更新）</a></li>
 <li class="lvl-2"><a href="#二导入文档主要入口">二、导入文档（主要入口）</a></li>
 <li class="lvl-3"><a href="#步骤">步骤</a></li>
 <li class="lvl-3"><a href="#导入规则就一条">导入规则（就一条）</a></li>
-<li class="lvl-2"><a href="#三导入术语表csv">三、导入术语表（CSV）</a></li>
+<li class="lvl-2"><a href="#三导入术语表">三、导入术语表</a></li>
 <li class="lvl-3"><a href="#格式">格式</a></li>
 <li class="lvl-3"><a href="#注意">注意</a></li>
 <li class="lvl-2"><a href="#四改已经导进来的内容">四、改已经导进来的内容</a></li>
@@ -205,8 +205,8 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 设计背景与摄入边界见《知识库摄入边界与激活协议》；格式要求见 <code>知识库文档格式规范.html</code>。</p>
 </blockquote>
 <hr>
-<h2 id="一现在是什么状态2026-09-29-之后"><a class="anchor" href="#一现在是什么状态2026-09-29-之后">一、现在是什么状态（2026-09-29 之后）</a></h2>
-<p><strong>只有一套存储，导入即生效。</strong> 旧的 wiki 抓取那一套已经整块删掉：</p>
+<h2 id="一现在是什么状态2026-10-08-更新"><a class="anchor" href="#一现在是什么状态2026-10-08-更新">一、现在是什么状态（2026-10-08 更新）</a></h2>
+<p><strong>只有一套存储，导入即生效。</strong> 2026-09-29 那次大清理删掉的是<strong>旧实现</strong>（行号即身份的语料文件，以及那一代的类）：</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -215,8 +215,8 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </tr>
 </thead>
 <tbody><tr>
-<td>wiki 抓取 / 清洗 / 建索引</td>
-<td><code>KbCorpusBuilder</code>、<code>WikiClient</code>、<code>WikiTextCleaner</code>、<code>KbIndexBuilder</code>、<code>GlossaryBuilder</code></td>
+<td><del>wiki 抓取</del> <strong>旧实现</strong></td>
+<td><code>KbCorpusBuilder</code>、<code>WikiClient</code>、<code>WikiTextCleaner</code>、<code>KbIndexBuilder</code>、<code>GlossaryBuilder</code>。⚠️ <strong>wiki 抓取已以新形态回来</strong>：<code>WikiApiClient</code> / <code>WikitextCleaner</code> / <code>WikiArticleImporter</code> / <code>KbTextChunker</code>（CLI 批处理、默认关），契约见《知识库摄入边界与激活协议》</td>
 </tr>
 <tr>
 <td>旧语料文件</td>
@@ -275,10 +275,11 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </blockquote>
 <p>所以<strong>更新时只给改动过的几块</strong>是完全支持的，也正是推荐的用法。</p>
 <hr>
-<h2 id="三导入术语表csv"><a class="anchor" href="#三导入术语表csv">三、导入术语表（CSV）</a></h2>
+<h2 id="三导入术语表"><a class="anchor" href="#三导入术语表">三、导入术语表</a></h2>
 <p>术语表是<strong>人工成果</strong>（2026-10-08 实测 3,439 条，其中 2,772 条含中文名；条数随语料增减），导入要小心。</p>
 <h3 id="格式"><a class="anchor" href="#格式">格式</a></h3>
-<p>Excel 另存为 <strong>CSV</strong>，<strong>第一行是表头</strong>，列名认这些（中英文都认）：</p>
+<p><strong>在 Excel / WPS 里编辑 <code>.xlsx</code>，改完直接导回</strong> —— 后台「词条」面板的「导出」拿到的就是 xlsx。<br>
+<strong>第一行是表头</strong>，列名认这些（中英文都认）：</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -308,21 +309,47 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <td>可选（默认 draft）</td>
 </tr>
 </tbody></table></div>
-<p>例：</p>
-<pre><code class="language-csv">英文名,中文名,别名,状态
-Kiln,熔炉,炉子,verified
-Flame Altar,灵火祭坛,祭坛/圣坛,verified
-</code></pre>
+<p>例（<strong>只给改动过的那几行也可以</strong>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>英文名</th>
+<th>中文名</th>
+<th>别名</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Kiln</td>
+<td>熔炉</td>
+<td>炉子</td>
+<td>verified</td>
+</tr>
+<tr>
+<td>Flame Altar</td>
+<td>灵火祭坛</td>
+<td>祭坛、圣坛</td>
+<td>verified</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>⚠️ <strong>为什么改用 xlsx、不再推荐 CSV</strong>：中文 Windows 上 Excel / WPS「另存为 CSV」默认是 <strong>GBK</strong>，
+而浏览器读文件固定按 <strong>UTF-8</strong> 解码 → 中文变乱码<strong>而且不报错</strong>，直接污染词条表。
+xlsx 内部就是 UTF-8 的 XML，<strong>没有编码这回事</strong>。
+导出的 CSV 已于 2026-10-08 删除（接口 <code>format=csv</code> 现在会<strong>明确报错</strong>，不会悄悄换成 xlsx）。</p>
+</blockquote>
 <p><strong>别名不用单开一列存</strong> —— 库里「别名」本来就是中文名用 <code>、</code> 分隔的若干写法，
 导入时自动合并去重。所以 <code>Kiln</code> 存进去就是 <code>熔炉、炉子</code>。</p>
 <h3 id="注意"><a class="anchor" href="#注意">注意</a></h3>
 <ul>
-<li>Excel 里别名带逗号时会<strong>加双引号</strong>（<code>&quot;炉子,窑&quot;</code>），解析器认这个，不会把一个别名拆成两列；</li>
-<li><strong>旧的无表头 TSV 也还能导</strong>（按列位置认，状态在第 5 列）；</li>
-<li>同一份文件导两次 = 不产生重复行，<strong>以最新导入为准</strong>（覆盖）；</li>
+<li><strong>导入是「覆盖」，以最新导入为准</strong> —— 同一份文件导两次不产生重复行，但<strong>已存在的行会被文件里的值覆盖</strong>。
+只想动几行，就只导那几行（key 是<strong>英文名</strong>）。
+与之相对，<strong>按语料自动补齐</strong>（新块自动获得一条空词条）走的是 <code>INSERT OR IGNORE</code>，一个字都不动 ——
+那是为了保护人工成果，<strong>两者别搞混</strong>。</li>
+<li><strong>旧的无表头 TSV 也还能导</strong>（按列位置认，状态在第 5 列）；<code>.csv</code> / <code>.tsv</code> 导入侧仍然收，
+并且会剥 BOM、用 <code>U+FFFD</code> 拦截明显的乱码文件（但能用 xlsx 就别用 CSV）；</li>
 <li>保存即生效（词表按版本号自动感知，不用重启）；</li>
-<li>入口：管理端 → 知识库 → 词条 → 「导入」。<strong>推荐 <code>.xlsx</code></strong>（Excel/WPS 直接编辑，没有编码问题）；
-<code>.csv</code> / <code>.tsv</code> 仍然收，但中文 Windows 上另存 CSV 容易变成 GBK → 中文乱码，所以导出默认给 xlsx。</li>
+<li>入口：管理端 → 知识库 → 词条 → 「导入」。</li>
 </ul>
 <hr>
 <h2 id="四改已经导进来的内容"><a class="anchor" href="#四改已经导进来的内容">四、改已经导进来的内容</a></h2>
