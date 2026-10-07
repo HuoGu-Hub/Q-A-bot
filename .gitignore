@@ -11,6 +11,11 @@ deploy/data/
 .env
 .env.local
 
+# 容器设备指纹的一半（GUID = MD5(/etc/machine-id + MAC)）。真实值放
+# deploy/data/machine-id（已被 deploy/data/ 覆盖）；这里再挡一次，防止有人在
+# 仓库根跑 `docker exec napcat cat /etc/machine-id > machine-id` 把真机 id 提交上去。
+/machine-id
+
 # 机器人人设（真实系统提示词）不进仓库；仓库里放的是 AGENTS.md.example 模板
 /AGENTS.md
 
