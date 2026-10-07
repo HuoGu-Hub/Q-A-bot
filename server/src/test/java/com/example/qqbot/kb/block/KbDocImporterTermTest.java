@@ -67,7 +67,7 @@ class KbDocImporterTermTest {
         termStore = new KbTermStore(new KbTermRepository(new Jdbc(db)), mock(KbCorpus.class));
         termStore.init();
 
-        importer = new KbDocImporter(store, index, embedding, termStore);
+        importer = new KbDocImporter(store, embedding, termStore);
     }
 
     /** 一份带文档头、含多个块的文档（文档头不参与命名，命名只看块标题） */

@@ -117,7 +117,7 @@ class LocationCorpusE2ETest {
         // 词条表要在派生之前就绪：派生器写完块会调 reconcile，让新块**立刻**对 B 路可见
         KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
         terms.init();
-        LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, index, embedding, terms);
+        LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, embedding, terms);
         LocationCorpusBuilder.BuildReport plan = builder.planOnly();
         System.out.printf("派生计划：%d 条（区域 %d / POI %d / 具名地点 %d / NPC %d），排除 Lore %d 条%n",
                 plan.entries(), plan.regions(), plan.pois(), plan.places(), plan.npcs(), plan.skippedLore());

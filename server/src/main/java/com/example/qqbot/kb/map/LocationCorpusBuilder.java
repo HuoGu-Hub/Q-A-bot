@@ -2,7 +2,6 @@ package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
-import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
 import org.slf4j.Logger;
@@ -38,7 +37,7 @@ import java.util.Set;
  * </ul>
  *
  * <h2>可回滚</h2>
- * 派生块全部落在 `docId = {@link #DOC_ID}` 下，{@link #purge()} 一条命令清干净 ——
+ * 派生块全部落在 `docId = {@link PlaceIntent#PLACE_DOC_ID}` 下，{@link #purge()} 一条命令清干净 ——
  * 这是"每阶段可回滚"在语料层的落点。id 由 article 确定性生成，所以重跑是幂等覆盖。
  */
 @Service
@@ -47,7 +46,8 @@ public class LocationCorpusBuilder {
     private static final Logger log = LoggerFactory.getLogger(LocationCorpusBuilder.class);
 
     /** 派生块都归在这份"文档"下，便于整份清除与统计 */
-    public static final String DOC_ID = "地图·地点";
+    // docId 由核心定义（PlaceIntent.PLACE_DOC_ID）—— 见那边的注释：那是契约，不是实现细节
+    private static final String DOC_ID = com.example.qqbot.kb.PlaceIntent.PLACE_DOC_ID;
     /** 块来源标记 —— 与 doc / manual 并列，便于区分"这份是机器从地图派生的" */
     public static final String SRC_MAP = "map";
 
@@ -120,15 +120,14 @@ public class LocationCorpusBuilder {
 
     private final KbMapStore mapStore;
     private final KbBlockStore blockStore;
-    private final KbBlockIndex index;
     private final EmbeddingClient embedding;
     private final KbTermStore termStore;
 
-    public LocationCorpusBuilder(KbMapStore mapStore, KbBlockStore blockStore, KbBlockIndex index,
+    /* 不持有块索引：写完索引自己失效（见 KbBlockStore.version） */
+    public LocationCorpusBuilder(KbMapStore mapStore, KbBlockStore blockStore,
                                  EmbeddingClient embedding, KbTermStore termStore) {
         this.mapStore = mapStore;
         this.blockStore = blockStore;
-        this.index = index;
         this.embedding = embedding;
         this.termStore = termStore;
     }
@@ -185,9 +184,9 @@ public class LocationCorpusBuilder {
                 written++;
             }
         }
-        index.reload();
         // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
         // 不补这一下，运行期导入的块要等下次重启才进词表。
+        // （块索引不用管：它自己看 KbBlockStore 的版本，写完就失效）
         termStore.reconcile();
         log.info("[KB-MAP] 地点语料派生完成：{} 条（区域 {} / POI {} / 具名 {} / NPC {}），跳过 Lore {} 条",
                 written, countKind(entries, "region"), countKind(entries, "poi"),
@@ -204,9 +203,7 @@ public class LocationCorpusBuilder {
                 n++;
             }
         }
-        index.reload();
-        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
-        // 不补这一下，运行期导入的块要等下次重启才进词表。
+        // 删完也要让词条表跟上（块索引自己看版本，不用管）
         termStore.reconcile();
         log.info("[KB-MAP] 已清除派生地点语料 {} 条", n);
         return n;

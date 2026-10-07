@@ -53,11 +53,16 @@ class WikitextCleanerTest {
     }
 
     @Test
-    @DisplayName("怪物页：Infobox 类模板整块丢掉，正文保留")
+    @DisplayName("怪物页：Infobox 的 description 取出来，其它参数与标记丢掉")
     void bossPage() throws IOException {
         String out = WikitextCleaner.clean(fixture("Cyclops.wiki"));
         assertThat(out).contains("Cyclops");
         assertThat(out).doesNotContain("{{").doesNotContain("NPC Infobox");
+        // ★ 2026-10-05：{{NPC Infobox}} 的 description 现在会被取出（原来整块丢，
+        //    9 个 Baby * 页 + Bees 因此清洗成 0 字）
+        assertThat(out).contains("A Cyclops");
+        // 参数里的噪声不许混进来
+        assertThat(out).doesNotContain("Cyclops.png").doesNotContain("Hostile");
     }
 
     @Test
@@ -118,6 +123,38 @@ class WikitextCleanerTest {
         assertThat(a.get(0).strip()).isEqualTo("MapLink");
         List<String> b = WikitextCleaner.splitTopLevel("Quest|{{a|b}}|c");
         assertThat(b).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("★ NPC Infobox：取 description；没有 description 仍然整块丢")
+    void npcInfobox() {
+        // 实测 Baby Capybara / Bees 这类页面的正文**只有**这一个模板
+        String wiki = "{{NPC Infobox\n| images = Baby Capybara.png\n"
+                + "| description = A tiny Capybara. It enjoys headpats.\n"
+                + "| Behavior = Fleeting\n| Tameable = No\n}}";
+        assertThat(WikitextCleaner.clean(wiki)).isEqualTo("A tiny Capybara. It enjoys headpats.");
+        // 缺 description → 整块丢（宁可少留，不要留错）
+        assertThat(WikitextCleaner.clean("{{NPC Infobox|name=Cyclops|health=100}}")).isEmpty();
+        // 单词类参数不许混进来（它们只会灌噪声）
+        assertThat(WikitextCleaner.clean(wiki))
+                .doesNotContain("Baby Capybara.png").doesNotContain("Fleeting").doesNotContain("No");
+    }
+
+    @Test
+    @DisplayName("★ 表格：单元格里 <br> 之后的内容、以及表格内的散行都不能丢")
+    void tableKeepsEverything() {
+        // 实测形态：Equipment 整页就是一个"图片链接表格" —— 原来会清成 0 字
+        String wiki = "{| class=\"wikitable\"\n|-\n"
+                + "| [[File:Knight Chestplate.png|100px|link=Armor/Melee]]<br>[[Armor/Melee|Melee Armor]]\n"
+                + "| [[File:Mystic Chest.png|100px|link=Armor/Magic]]<br>[[Armor/Magic|Magic Armor]]\n"
+                + "|}\n";
+        String out = WikitextCleaner.clean(wiki);
+        assertThat(out).isNotEmpty();
+        assertThat(out).contains("Melee Armor").contains("Magic Armor");
+        assertThat(out).doesNotContain("File:").doesNotContain("Chestplate.png");
+        // 单元格里的**真实换行**（不是 <br>）也要留住 —— 靠 stripTables 的兜底分支
+        assertThat(WikitextCleaner.clean("{|\n| 第一行\n第二行\n|}"))
+                .contains("第一行").contains("第二行");
     }
 
     @Test

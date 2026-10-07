@@ -45,14 +45,17 @@ public class KbBlockAdminService {
     private static final int BACKFILL_PAGE = 50;
 
     private final KbBlockStore store;
-    private final KbBlockIndex index;
     private final EmbeddingClient embedding;
     private final KbDocImporter importer;
 
-    public KbBlockAdminService(KbBlockStore store, KbBlockIndex index,
+    /**
+     * ⚠️ 这里**不再持有** {@code KbBlockIndex}（2026-10-06）：写完之后不再手工 reload()，
+     * 索引自己看 {@code KbBlockStore.version()} 决定要不要重载。
+     * 少一个"忘了调就悄悄用旧语料"的入口。
+     */
+    public KbBlockAdminService(KbBlockStore store,
                                EmbeddingClient embedding, KbDocImporter importer) {
         this.store = store;
-        this.index = index;
         this.embedding = embedding;
         this.importer = importer;
     }
@@ -137,7 +140,6 @@ public class KbBlockAdminService {
         KbBlock updated = new KbBlock(old.id(), old.docId(), old.title(), text, old.url(),
                 old.tags(), old.source(), old.retired(), Instant.now().toString());
         store.upsert(updated, embed(text, id));
-        index.reload();
         log.info("[KB-BLOCK] 块 {} 正文已更新（{} 字，向量已重算）", id, text.length());
         return BlockView.of(updated);
     }
@@ -172,25 +174,19 @@ public class KbBlockAdminService {
         if (!b.title().isBlank()) {
             store.upsertTitleVector(bid, b.title(), embed(b.title(), bid));
         }
-        index.reload();
         log.info("[KB-BLOCK] 新增块 {}（文档 {}，{} 字）", bid, doc, body.length());
         return BlockView.of(b);
     }
 
     /** 下架 / 恢复一块（保留数据，随时能回来） */
     public boolean setRetired(String id, boolean retired) {
-        boolean ok = store.setRetired(id, retired);
-        if (ok) {
-            index.reload();
-        }
-        return ok;
+        return store.setRetired(id, retired);
     }
 
     /** **真删除**一块 —— 旧设计做不到（只能打墓碑），id 即身份之后才敢这么干 */
     public boolean delete(String id) {
         boolean ok = store.delete(id);
         if (ok) {
-            index.reload();
             log.warn("[KB-BLOCK] 块 {} 已真删除", id);
         }
         return ok;
@@ -205,7 +201,6 @@ public class KbBlockAdminService {
             }
         }
         if (n > 0) {
-            index.reload();
             log.info("[KB-BLOCK] 文档「{}」{}了 {} 块", docId, retired ? "下架" : "恢复", n);
         }
         return n;
@@ -299,8 +294,7 @@ public class KbBlockAdminService {
             done += slice.size();
             log.info("[KB-TITLE] 补建进度 {}/{}", done, todo.size());
         }
-        index.reload();
-        log.info("[KB-TITLE] 标题向量补建完成：{} 条（索引已重载，无需重启）", done);
+        log.info("[KB-TITLE] 标题向量补建完成：{} 条（索引自动失效，无需重启）", done);
         return new TitleBackfill(blocks, missing, stale, done, false);
     }
 

@@ -1,6 +1,5 @@
 package com.example.qqbot.kb;
 
-import com.example.qqbot.kb.map.LocationCorpusBuilder;
 import com.example.qqbot.trace.KbTrace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -770,7 +769,7 @@ public class KbRetriever {
             docIds.add(h.entry().docId());
             titles.add(h.entry().title());
         }
-        int at = PlaceIntent.findPlaceBlock(docIds, titles, place, LocationCorpusBuilder.DOC_ID);
+        int at = PlaceIntent.findPlaceBlock(docIds, titles, place, PlaceIntent.PLACE_DOC_ID);
         if (at < 0) {
             return hits;
         }

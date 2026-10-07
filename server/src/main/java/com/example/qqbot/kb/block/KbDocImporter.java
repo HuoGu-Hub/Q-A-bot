@@ -38,15 +38,14 @@ public class KbDocImporter {
     private static final Logger log = LoggerFactory.getLogger(KbDocImporter.class);
 
     private final KbBlockStore store;
-    private final KbBlockIndex index;
     private final EmbeddingClient embedding;
     /** 导入一份文档 = 在词条表里登记这个页面（词条是"按页定位分块"的入口） */
     private final com.example.qqbot.kb.term.KbTermStore termStore;
 
-    public KbDocImporter(KbBlockStore store, KbBlockIndex index, EmbeddingClient embedding,
+    /** 同样不再持有块索引：写完索引自己失效（见 {@code KbBlockStore.version}） */
+    public KbDocImporter(KbBlockStore store, EmbeddingClient embedding,
                          com.example.qqbot.kb.term.KbTermStore termStore) {
         this.store = store;
-        this.index = index;
         this.embedding = embedding;
         this.termStore = termStore;
     }
@@ -145,9 +144,6 @@ public class KbDocImporter {
             }
         }
 
-        if (!todo.isEmpty()) {
-            index.reload();
-        }
         // ★ 登记/补齐词条：**一个块 = 一个词条**（块标题就是它的中文名）。
 //   词条表因此就是"按块定位"的目录 —— 一份文档有多少块，就多出多少词条。
         //   词条是"按页定位分块"的入口（词条 → docId → 该文档的全部块），
@@ -160,10 +156,9 @@ public class KbDocImporter {
                 terms, plan.warnings());
     }
 
-    /** 清空全部块（"首次导入中文语料前清空"用），并重载索引 */
+    /** 清空全部块（"首次导入中文语料前清空"用）—— 索引自己会失效，不用手工重载 */
     public void clearAll() {
         store.clearAll();
-        index.reload();
     }
 
     /**

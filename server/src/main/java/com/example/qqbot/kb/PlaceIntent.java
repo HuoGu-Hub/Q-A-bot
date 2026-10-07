@@ -33,6 +33,18 @@ public final class PlaceIntent {
     /** 地点词后面常见的方位/语气助词，取地点名时要剥掉 */
     private static final String TRAILING_PARTICLES = "里内中面那这的地了";
 
+    /**
+     * 地点语料的 {@code docId} —— **由核心定义，生产者引用**（2026-10-06 从
+     * {@code LocationCorpusBuilder.DOC_ID} 挪过来）。
+     *
+     * <p>原来定义在地图生产者里，于是核心的检索器为了读这一个字符串，
+     * 反向 import 了 {@code kb.map.LocationCorpusBuilder} —— 方向反了：
+     * 边界是【生产者 → 核心】单向，核心不该认识任何一个生产者
+     * （ArchitectureTest 有规则盯着）。它其实是**契约**（"哪些块是地点块"），
+     * 契约该由消费它的一方定义。
+     */
+    public static final String PLACE_DOC_ID = "地图·地点";
+
     private PlaceIntent() {
     }
 

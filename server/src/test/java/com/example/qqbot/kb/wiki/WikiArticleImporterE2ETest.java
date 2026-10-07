@@ -112,7 +112,7 @@ class WikiArticleImporterE2ETest {
         // 词条表要在导入之前就绪：导入器写完块会调 reconcile，让新块**立刻**对 B 路可见
         KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
         terms.init();
-        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, index, embedding, terms);
+        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, embedding, terms);
 
         // ① dryRun：只列页、比版本
         WikiArticleImporter.ImportReport dry = importer.importAll(true);

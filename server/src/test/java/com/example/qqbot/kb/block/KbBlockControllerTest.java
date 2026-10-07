@@ -74,7 +74,7 @@ class KbBlockControllerTest {
             return out;
         });
 
-        service = new KbBlockAdminService(store, index, embedding, new KbDocImporter(store, index, embedding,
+        service = new KbBlockAdminService(store, embedding, new KbDocImporter(store, embedding,
                 org.mockito.Mockito.mock(com.example.qqbot.kb.term.KbTermStore.class)));
         controller = new KbBlockController(service);
     }

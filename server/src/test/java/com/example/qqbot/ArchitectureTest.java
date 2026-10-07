@@ -122,6 +122,32 @@ class ArchitectureTest {
         rule.check(CLASSES);
     }
 
+    @Test
+    @DisplayName("★ 知识库核心不得依赖摄入来源（wiki / map）—— 抓不到 wiki 也必须照常运转（2026-10-06）")
+    void kbCoreDoesNotDependOnIngestSources() {
+        // 边界是**单向**的：kb.wiki / kb.map 是"生产者"（一次性批处理，可整体 purge），
+        // kb.block / kb.term / 检索是"核心"（机器人每次回答都要走它）。
+        // 反向一条都不许有 —— 否则"wiki 抓不到"就会拖累检索与管理，而设计要求明确是：
+        // 抓不到最坏只是人工补资料，核心照常运转。
+        //
+        // 2026-10-06 实际修掉的越界：KbRetriever 为了读一个 docId 常量，
+        // import 了 kb.map.LocationCorpusBuilder。修法是把那个常量挪进核心
+        // （PlaceIntent.PLACE_DOC_ID）—— 契约该由消费它的一方定义。
+        ArchRule noBackReference = noClasses()
+                .that().resideInAPackage("..kb..")
+                .and().resideOutsideOfPackages("..kb.wiki..", "..kb.map..")
+                .should().dependOnClassesThat().resideInAnyPackage("..kb.wiki..", "..kb.map..");
+        noBackReference.check(CLASSES);
+
+        // 生产者也不许再认识"索引"这个内部组件：写完 KbBlockStore 就结束，
+        // 索引自己看版本失效（见 KbBlockStore.version / KbBlockIndex.ensureLoaded）。
+        // 以前是"写完请调用方记得 reload()"，全项目 12 处手工调用，漏一处就悄悄用旧语料。
+        ArchRule sourcesDoNotHoldIndex = noClasses()
+                .that().resideInAnyPackage("..kb.wiki..", "..kb.map..")
+                .should().dependOnClassesThat().haveSimpleName("KbBlockIndex");
+        sourcesDoNotHoldIndex.check(CLASSES);
+    }
+
     /* ==================== 目标：还债清单 ==================== */
 
     @Test

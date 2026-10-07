@@ -4,7 +4,6 @@ import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.kb.WikiImport;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbBlock;
-import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.KbWikiPageRepository;
@@ -60,18 +59,17 @@ public class WikiArticleImporter {
     private final WikiApiClient client;
     private final KbWikiPageStore store;
     private final KbBlockStore blockStore;
-    private final KbBlockIndex index;
     private final EmbeddingClient embedding;
     private final KbTermStore termStore;
 
+    /* 不持有块索引：写完索引自己失效（见 KbBlockStore.version） */
     public WikiArticleImporter(KbPolicy props, WikiApiClient client, KbWikiPageStore store,
-                               KbBlockStore blockStore, KbBlockIndex index, EmbeddingClient embedding,
+                               KbBlockStore blockStore, EmbeddingClient embedding,
                                KbTermStore termStore) {
         this.props = props;
         this.client = client;
         this.store = store;
         this.blockStore = blockStore;
-        this.index = index;
         this.embedding = embedding;
         this.termStore = termStore;
     }
@@ -129,13 +127,24 @@ public class WikiArticleImporter {
         Map<String, Integer> bySource = new LinkedHashMap<>();
 
         for (Source src : sources) {
+            WikiApiClient.Collected listed;
             List<String> titles;
             try {
-                titles = list(src, cfg.getMaxPagesPerSource());
+                listed = list(src, cfg.getMaxPagesPerSource());
+                titles = listed.titles();
             } catch (Exception e) {
                 errors.add(src.label() + "：列页失败 " + e.getMessage());
                 failed++;
                 continue;
+            }
+            // ⚠️ 顶到上限时**必须吵**：多出来的页既不在本次导入里、也不会进状态表 ——
+            //    静默漏页是最难查的一类问题（见 WikiApiClient.collect）。
+            if (listed.truncated()) {
+                String warn = src.label() + "：列到 " + titles.size() + " 页就顶到上限"
+                        + "（wiki-import.max-pages-per-source=" + cfg.getMaxPagesPerSource()
+                        + "），**后面还有页没列** —— 调大上限，或把它拆成多个来源";
+                log.warn("[KB-WIKI] {}", warn);
+                errors.add(warn);
             }
             totalPages += titles.size();
             bySource.put(src.label(), titles.size());
@@ -237,10 +246,10 @@ public class WikiArticleImporter {
         }
 
         if (!dryRun && imported > 0) {
-            index.reload();
-        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
-        // 不补这一下，运行期导入的块要等下次重启才进词表。
-        termStore.reconcile();
+            // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
+            // 不补这一下，运行期导入的块要等下次重启才进词表。
+            // （块索引不用管：它自己看 KbBlockStore 的版本，写完就失效）
+            termStore.reconcile();
         }
         log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字",
                 sources.size(), totalPages, totalChanged, imported, failed, chars);
@@ -277,16 +286,16 @@ public class WikiArticleImporter {
         // ★ 连状态一起清 —— 否则下一次导入会空转（见方法注释）
         int cleared = store.clear();
         if (n > 0) {
-            index.reload();
-        // 新块要**立刻**能被 B 路（关键词）看到：词条表只在启动时 reconcile 一次，
-        // 不补这一下，运行期导入的块要等下次重启才进词表。
-        termStore.reconcile();
+            // 删完也要让词条表跟上：否则刚 rollback 掉的页面还留在词表里
+            // （块索引不用管：它自己看 KbBlockStore 的版本）
+            termStore.reconcile();
         }
         log.info("[KB-WIKI] 已清除 wiki 文章块 {} 个、状态行 {} 条（前缀 {}）", n, cleared, cfg.getDocIdPrefix());
         return n;
     }
 
-    private List<String> list(Source src, int limit) {
+    /** 列来源下的页名 —— 返回的是带"是否被上限截断"的结果，调用方必须把截断报出来 */
+    private WikiApiClient.Collected list(Source src, int limit) {
         return src.kind().equals("prefix")
                 ? client.listByPrefix(src.name(), limit)
                 : client.listCategoryMembers(src.name(), limit);

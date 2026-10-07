@@ -13,8 +13,14 @@ import java.util.Map;
  * 块索引的**内存视图** —— 检索时不查数据库。
  *
  * <p>为什么要有它：{@link KbBlockStore} 每次查询都是一次 SQLite 往返。
- * 检索一轮要遍历全部块算余弦，逐块查库显然不行。所以这里做一份常驻内存的快照，
- * 写入之后由调用方显式 {@link #reload()}。
+ * 检索一轮要遍历全部块算余弦，逐块查库显然不行。所以这里做一份常驻内存的快照。
+ *
+ * <p><b>写入之后不需要调用方做任何事</b>（2026-10-06 改）：{@link KbBlockStore}
+ * 每次写成功都会 +1 版本，这里对不上就自己重载。旧契约是"写完请调用方记得调
+ * {@link #reload()}" —— 导入器 / 地图派生 / 管理端一共 12 处手工调用，
+ * 新增一个写入口就漏一个，而漏了的症状是**检索一直用旧语料、且不报错**
+ * （和 {@code KbTermStore.version} 是同一条教训）。
+ * {@link #reload()} 保留给 CLI / 测试强制刷新用。
  *
  * <p>与旧设计的根本区别：**索引是"id → 块/向量"，不是"第 k 行 → 块/向量"**。
  * 所以增删改都不会让别的块错位，也不需要墓碑。
@@ -27,6 +33,8 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
     private final KbBlockStore store;
 
     private volatile boolean loaded;
+    /** 这份快照对应的语料版本；和 {@link KbBlockStore#version()} 对不上就是过期了 */
+    private volatile long loadedVersion = -1L;
     private volatile List<KbBlock> blocks = List.of();
     private volatile Map<String, float[]> vectors = Map.of();
     /** 标题向量 + 它的输入标题（缺这一路的块照常检索，只是不吃闸门） */
@@ -101,10 +109,11 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
         return blocks;
     }
 
-    /** 写入之后调一次 —— 不重启服务即可生效 */
+    /** 强制立即重载（CLI / 测试用）。正常写入路径**不需要调** —— 索引自己看版本 */
     public boolean reload() {
         synchronized (this) {
             loaded = false;
+            loadedVersion = -1L;
             blocks = List.of();
             vectors = Map.of();
             titleVectors = Map.of();
@@ -118,13 +127,18 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
     }
 
     private void ensureLoaded() {
-        if (loaded) {
+        // 快路径只读一个 volatile long —— 每次检索都会走到这里，不能去查库
+        if (loaded && loadedVersion == store.version()) {
             return;
         }
         synchronized (this) {
-            if (loaded) {
+            if (loaded && loadedVersion == store.version()) {
                 return;
             }
+            // ⚠️ 版本要在**读数据之前**取：读的这段时间里如果有人写入，我们记下的是旧版本
+            //    → 下一次访问会再重载一遍（宁可多重载一次）。反过来"读完再取版本"会把
+            //    "旧数据 + 新版本号"钉死，那才是真错误。
+            long versionAtLoad = store.version();
             try {
                 List<KbBlock> active = store.allActive();
                 Map<String, float[]> vecs = store.allVectors();
@@ -161,6 +175,7 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
                 this.byId = Map.of();
                 this.entries = List.of();
             } finally {
+                loadedVersion = versionAtLoad;
                 loaded = true;
             }
         }

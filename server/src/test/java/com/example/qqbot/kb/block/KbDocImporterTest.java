@@ -66,7 +66,7 @@ class KbDocImporterTest {
         when(embedding.isAvailable()).thenReturn(true);
         when(embedding.embedOne(anyString())).thenAnswer(inv -> vecOf(inv.getArgument(0)));
 
-        importer = new KbDocImporter(store, index, embedding,
+        importer = new KbDocImporter(store, embedding,
                 org.mockito.Mockito.mock(com.example.qqbot.kb.term.KbTermStore.class));
     }
 

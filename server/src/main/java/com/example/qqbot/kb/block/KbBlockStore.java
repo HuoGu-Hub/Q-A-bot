@@ -43,8 +43,30 @@ public class KbBlockStore {
 
     private volatile boolean available;
 
+    /**
+     * 语料版本：**每次写成功 +1**。
+     *
+     * <p>存在的理由和 {@code KbTermStore.version} 一样 —— 让内存快照
+     * （{@link KbBlockIndex}）自己判断"我缓存的那一份是不是旧的"。旧契约是
+     * "写完请调用方记得调 {@link KbBlockIndex#reload()}"：全项目 12 处手工调用，
+     * 新增一个写入口就漏一个，而漏了的症状是**检索一直用旧语料、且不报错**。
+     *
+     * <p>初值取 1 而不是 0：{@code 0} 要留给"索引从未加载过"的哨兵（见 KbBlockIndex）。
+     */
+    private final java.util.concurrent.atomic.AtomicLong version = new java.util.concurrent.atomic.AtomicLong(1);
+
     public KbBlockStore(KbBlockRepository repo) {
         this.repo = repo;
+    }
+
+    /** 当前语料版本 —— 内存快照用它对账（见上面字段说明） */
+    public long version() {
+        return version.get();
+    }
+
+    /** 写成功之后 +1。只在**确实可能改变语料**的地方调 */
+    private void touch() {
+        version.incrementAndGet();
     }
 
     @PostConstruct
@@ -239,6 +261,7 @@ public class KbBlockStore {
         }
         try {
             repo.upsertTitleVector(id, title, vec);
+            touch();
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 写入标题向量 {} 失败：{}", id, e.getMessage());
         }
@@ -251,6 +274,7 @@ public class KbBlockStore {
         }
         try {
             repo.deleteTitleVector(id);
+            touch();
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 删除标题向量 {} 失败：{}", id, e.getMessage());
         }
@@ -281,7 +305,9 @@ public class KbBlockStore {
         KbBlockRepository.Row row = new KbBlockRepository.Row(b.id(), b.docId(), b.title(), b.body(),
                 b.url(), b.tagsLine(), b.source(), b.retired(), now);
         try {
-            return repo.upsert(row, vec);
+            boolean added = repo.upsert(row, vec);
+            touch();
+            return added;
         } catch (Exception e) {
             throw new IllegalStateException("写入块失败：" + e.getMessage(), e);
         }
@@ -293,7 +319,11 @@ public class KbBlockStore {
             return false;
         }
         try {
-            return repo.setRetired(id, retired, Instant.now().toString());
+            boolean changed = repo.setRetired(id, retired, Instant.now().toString());
+            if (changed) {
+                touch();
+            }
+            return changed;
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 下架/恢复失败：{}", e.getMessage());
             return false;
@@ -306,7 +336,11 @@ public class KbBlockStore {
             return false;
         }
         try {
-            return repo.delete(id);
+            boolean deleted = repo.delete(id);
+            if (deleted) {
+                touch();
+            }
+            return deleted;
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 删除失败：{}", e.getMessage());
             return false;
@@ -320,6 +354,7 @@ public class KbBlockStore {
         }
         try {
             repo.clearAll();
+            touch();
             log.warn("[KB-BLOCK] 已清空全部块、正文向量与标题向量");
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 清空失败：{}", e.getMessage());

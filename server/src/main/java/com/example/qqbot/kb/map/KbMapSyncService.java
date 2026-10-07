@@ -68,7 +68,12 @@ public class KbMapSyncService {
             return new SyncReport(0, 0, 0, 0, 0, List.of("地图存储不可用（问答库没起来）"), dryRun, 0, Map.of());
         }
 
-        List<String> pages = client.listNamespacePages();
+        WikiApiClient.Collected listed = client.listNamespacePages();
+        List<String> pages = listed.titles();
+        if (listed.truncated()) {
+            log.warn("[KB-MAP] 命名空间页列表顶到上限（map-sync.max-pages），共 {} 页 —— 后面还有页没列",
+                    pages.size());
+        }
         if (pages.isEmpty()) {
             return new SyncReport(0, 0, 0, 0, 0, List.of("命名空间里没有页面"), dryRun,
                     System.currentTimeMillis() - t0, Map.of());
