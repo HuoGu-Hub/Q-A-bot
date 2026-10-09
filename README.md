@@ -18,13 +18,7 @@
 
 ![系统架构](docs/diagrams/system-architecture.png)
 
-![一条群消息的业务流程](docs/diagrams/message-workflow.png)
-
-![知识库数据流](docs/diagrams/kb-dataflow.png)
-
-![问答广场的三级降级](docs/diagrams/plaza-loop.png)
-
-交互版本是 `docs/diagrams/` 下的同名 HTML，下载后用浏览器打开。
+交互版本是 `docs/diagrams/system-architecture.html`，下载后用浏览器打开。
 
 ## 能力
 

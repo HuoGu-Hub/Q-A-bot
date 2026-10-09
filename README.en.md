@@ -19,13 +19,7 @@ can try in a browser.
 
 ![System architecture](docs/diagrams/system-architecture.png)
 
-![Message lifecycle](docs/diagrams/message-workflow.png)
-
-![Knowledge-base data flow](docs/diagrams/kb-dataflow.png)
-
-![Q&A plaza degradation](docs/diagrams/plaza-loop.png)
-
-The interactive versions are the matching HTML files in `docs/diagrams/`. Download and open them in a browser.
+The interactive version is `docs/diagrams/system-architecture.html`. Download and open it in a browser.
 
 Project documentation is written in Chinese.
 
