@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "RAG 检索管线：官方骨架 + 保留自研",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1700,
+      660
+    ],
+    "views": [
+      {
+        "id": "main-path",
+        "label": "主路径",
+        "focus": [
+          "entry",
+          "chat",
+          "augmentor",
+          "rA",
+          "rB",
+          "rC",
+          "fuse",
+          "inject",
+          "llm"
+        ],
+        "note": "一次提问从入口到模型：三路召回 → 融合 → 注入。"
+      },
+      {
+        "id": "official-skeleton",
+        "label": "可用官方骨架",
+        "focus": [
+          "augmentor",
+          "rA",
+          "fuse",
+          "inject"
+        ],
+        "note": "这四个位置在 langchain4j-core 里都有现成实现，且已经在 classpath 上。"
+      },
+      {
+        "id": "kept-custom",
+        "label": "必须保留自研",
+        "focus": [
+          "rB",
+          "rC"
+        ],
+        "note": "术语表召回与标题闸门是实测调出来的资产，框架里没有对应物。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "entry",
+      "type": "external",
+      "label": "消息入口",
+      "sublabel": "QQ 群 / 公开站",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        130,
+        60
+      ]
+    },
+    {
+      "id": "chat",
+      "type": "backend",
+      "label": "ChatService",
+      "sublabel": "组装 <<<KNOWLEDGE>>>",
+      "pos": [
+        230,
+        300
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "augmentor",
+      "type": "backend",
+      "label": "DefaultRetrievalAugmentor",
+      "sublabel": "官方编排骨架",
+      "tag": "官方骨架",
+      "pos": [
+        450,
+        300
+      ],
+      "size": [
+        190,
+        60
+      ]
+    },
+    {
+      "id": "rA",
+      "type": "backend",
+      "label": "A 路 · 正文向量",
+      "sublabel": "EmbeddingStoreContentRetriever",
+      "tag": "官方骨架",
+      "pos": [
+        700,
+        180
+      ],
+      "size": [
+        185,
+        58
+      ]
+    },
+    {
+      "id": "rB",
+      "type": "backend",
+      "label": "B 路 · 术语关键词",
+      "sublabel": "自研 ContentRetriever",
+      "tag": "自研保留",
+      "pos": [
+        700,
+        300
+      ],
+      "size": [
+        185,
+        58
+      ]
+    },
+    {
+      "id": "rC",
+      "type": "backend",
+      "label": "C 路 · 标题闸门",
+      "sublabel": "自研 ContentAggregator",
+      "tag": "自研保留",
+      "pos": [
+        700,
+        420
+      ],
+      "size": [
+        185,
+        58
+      ]
+    },
+    {
+      "id": "fuse",
+      "type": "backend",
+      "label": "RRF 融合 + 重排",
+      "sublabel": "ReciprocalRankFuser",
+      "tag": "官方骨架",
+      "pos": [
+        950,
+        300
+      ],
+      "size": [
+        200,
+        60
+      ]
+    },
+    {
+      "id": "inject",
+      "type": "backend",
+      "label": "两段出处注入",
+      "sublabel": "ContentInjector",
+      "tag": "官方骨架",
+      "pos": [
+        1220,
+        300
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "大模型",
+      "sublabel": "ChatModel",
+      "pos": [
+        1470,
+        300
+      ],
+      "size": [
+        140,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "单体 Spring Boot 进程 · 2 GB",
+      "wraps": [
+        "chat",
+        "augmentor",
+        "rA",
+        "rB",
+        "rC",
+        "fuse",
+        "inject"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "entry-chat",
+      "from": "entry",
+      "to": "chat",
+      "label": "提问",
+      "variant": "emphasis"
+    },
+    {
+      "id": "chat-augmentor",
+      "from": "chat",
+      "to": "augmentor"
+    },
+    {
+      "id": "aug-rA",
+      "from": "augmentor",
+      "to": "rA",
+      "via": [
+        [
+          660,
+          330
+        ],
+        [
+          660,
+          209
+        ],
+        [
+          700,
+          209
+        ]
+      ]
+    },
+    {
+      "id": "aug-rB",
+      "from": "augmentor",
+      "to": "rB"
+    },
+    {
+      "id": "aug-rC",
+      "from": "augmentor",
+      "to": "rC",
+      "via": [
+        [
+          680,
+          330
+        ],
+        [
+          680,
+          449
+        ],
+        [
+          700,
+          449
+        ]
+      ]
+    },
+    {
+      "id": "rA-fuse",
+      "from": "rA",
+      "to": "fuse",
+      "via": [
+        [
+          915,
+          209
+        ],
+        [
+          915,
+          330
+        ],
+        [
+          950,
+          330
+        ]
+      ]
+    },
+    {
+      "id": "rB-fuse",
+      "from": "rB",
+      "to": "fuse"
+    },
+    {
+      "id": "rC-fuse",
+      "from": "rC",
+      "to": "fuse",
+      "via": [
+        [
+          935,
+          449
+        ],
+        [
+          935,
+          330
+        ],
+        [
+          950,
+          330
+        ]
+      ]
+    },
+    {
+      "id": "fuse-inject",
+      "from": "fuse",
+      "to": "inject",
+      "label": "top-5"
+    },
+    {
+      "id": "inject-llm",
+      "from": "inject",
+      "to": "llm",
+      "label": "资料 + 问题",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "骨架已在 classpath",
+      "items": [
+        "langchain4j-core 1.20.0 是 langchain4j-open-ai 的传递依赖，已经在产物里",
+        "DefaultRetrievalAugmentor / ContentRetriever / ReciprocalRankFuser / ReRankingContentAggregator / ContentInjector 全都现成",
+        "第 1 步改造：零新增依赖、零新框架"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "保留自研的算法资产",
+      "items": [
+        "术语表跨语言召回 · B 路，框架里没有对应物",
+        "标题向量闸门 · C 路：名字提问 R@1 从 49.5% 抬到 99.5% 靠它",
+        "两段出处注入的文案策略、黄金集 61 条与检索基线"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "暂不采纳",
+      "items": [
+        "Spring AI 全家桶：与现有 LangChain4j 并存的第二套 AI 框架",
+        "Dify 与 RAGFlow 独立服务：跨进程、容器，2 GB 机器不划算"
+      ]
+    }
+  ]
+}

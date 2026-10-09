@@ -13,7 +13,19 @@ can try in a browser.
 | Bot persona | `AGENTS.md`, template `AGENTS.md.example` | Edit that one file, no rebuild |
 | Chat model | opencode-go, DeepSeek as fallback | Admin Settings page, or `llm/` |
 
-[Quick start](#run-it-locally) · [Deployment](docs/md/公网部署指南.md) · [System manual](docs/md/系统说明书.md) · [Architecture](docs/diagrams/system-architecture.html)
+[Quick start](#run-it-locally) · [Deployment](docs/md/公网部署指南.md) · [System manual](docs/md/系统说明书.md)
+
+## Diagrams
+
+![System architecture](docs/diagrams/system-architecture.png)
+
+![Message lifecycle](docs/diagrams/message-workflow.png)
+
+![Knowledge-base data flow](docs/diagrams/kb-dataflow.png)
+
+![Q&A plaza degradation](docs/diagrams/plaza-loop.png)
+
+The interactive versions are the matching HTML files in `docs/diagrams/`. Download and open them in a browser.
 
 Project documentation is written in Chinese.
 

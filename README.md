@@ -12,7 +12,19 @@
 | 机器人人设 | `AGENTS.md`，模板 `AGENTS.md.example` | 只改这份文件，不用重新打包 |
 | 对话模型 | opencode-go，降级 DeepSeek | 后台「设置」页，或 `llm/` |
 
-[快速开始](#本地跑起来) · [部署](docs/md/公网部署指南.md) · [系统说明书](docs/md/系统说明书.md) · [架构图](docs/diagrams/system-architecture.html)
+[快速开始](#本地跑起来) · [部署](docs/md/公网部署指南.md) · [系统说明书](docs/md/系统说明书.md)
+
+## 架构图
+
+![系统架构](docs/diagrams/system-architecture.png)
+
+![一条群消息的业务流程](docs/diagrams/message-workflow.png)
+
+![知识库数据流](docs/diagrams/kb-dataflow.png)
+
+![问答广场的三级降级](docs/diagrams/plaza-loop.png)
+
+交互版本是 `docs/diagrams/` 下的同名 HTML，下载后用浏览器打开。
 
 ## 能力
 
