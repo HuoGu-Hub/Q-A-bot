@@ -39,31 +39,22 @@ class ChatServiceKnowledgeSplitTest {
     /** 条目里的向量在提示词测试里用不到，给个占位 */
     private static final float[] V = {1f, 0f};
 
-    private LlmRouter llmRouter;
-    private KbRetriever kbRetriever;
-    private ChatService chatService;
+    /** 渲染器是真实实现：本测试断言的正是它渲染出来的文本 */
+    private final com.example.qqbot.kb.TwoSectionInjector injector =
+            new com.example.qqbot.kb.TwoSectionInjector();
 
-    @BeforeEach
-    void setUp() {
-        llmRouter = mock(LlmRouter.class);
-        kbRetriever = mock(KbRetriever.class);
-        when(llmRouter.isAvailable()).thenReturn(true);
-        when(llmRouter.chat(anyString())).thenReturn("好的");
-
-        chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new ContentGate(),
-                new MediaProperties(), kbRetriever, new KbProperties());
-    }
-
-    private String userMessageSeenByModel() {
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(llmRouter).chat(captor.capture());
-        return captor.getValue();
-    }
-
-    private static OneBotEvent privateEvent() {
-        OneBotEvent event = mock(OneBotEvent.class);
-        when(event.isGroupMessage()).thenReturn(false);
-        return event;
+    /**
+     * 渲染结果 —— 原来这里断言的是"ChatService 拼给模型的消息"。
+     *
+     * <p>2026-10-09 切换之后，资料改由官方管线末端注入（{@code KbContentInjector}），
+     * 渲染的归属地变成了 {@code kb}。所以本测试直接测渲染器：
+     * 断言对象没变（还是那段文本），只是不再经过对话编排。
+     *
+     * <p>「模型确实收到了这段文本」由 {@code KbToolAssistantTest.flipFlowWorksEndToEnd} 覆盖 ——
+     * 两条测试各管一段，合起来才是完整的。
+     */
+    private String rendered(List<KbRetriever.Hit> hits) {
+        return injector.render(hits);
     }
 
     @Test
@@ -74,21 +65,15 @@ class ChatServiceKnowledgeSplitTest {
         KbCorpus.Entry wiki = new KbCorpus.Entry("flame-altar-0", "Flame Altar",
                 "Flame Altar is a respawn point.",
                 "https://w/Flame_Altar", List.of(), false, "2026-03-04T19:52:31Z", V);
-        when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
-                List.of(new KbRetriever.Hit(curated, 1.0, "vector"),
-                        new KbRetriever.Hit(wiki, 0.9, "vector")),
-                0.9, 0.9, 2, 0, List.of()));
-
-        chatService.reply(privateEvent(), "废料杯怎么做", null, List.of());
-
-        String msg = userMessageSeenByModel();
+        String msg = rendered(List.of(new KbRetriever.Hit(curated, 1.0, "vector"),
+                new KbRetriever.Hit(wiki, 0.9, "vector")));
         assertThat(msg).contains("【我们维护的内容】").contains("【导入的资料");
         assertThat(msg).contains("废料杯由 5 个废料合成。").contains("Flame Altar is a respawn point.");
         assertThat(msg.indexOf("【我们维护的内容】"))
                 .as("我们维护的排在导入的资料前面（模型的注意力有先后）")
                 .isLessThan(msg.indexOf("【导入的资料"));
         // ⚠️ 作用范围：这条只管 **ChatService 拼出来的注入文本**。
-        //    系统提示词（AGENTS.md）里的措辞由 SystemPromptTest 守 —— 两处都要守，
+        //    系统提示词（system.md）里的措辞由 SystemPromptTest 守 —— 两处都要守，
         //    因为"以它为准"那种权威宣称放哪一处都会生效。
         assertThat(msg).as("★ 注入文本里不能出现「以它为准」这类权威宣称：改过 ≠ 一定对")
                 .doesNotContain("以它为准")
@@ -102,12 +87,7 @@ class ChatServiceKnowledgeSplitTest {
     void noCuratedSectionWhenNone() {
         KbCorpus.Entry wiki = new KbCorpus.Entry("absorb-0", "Absorb", "Absorb is a skill.",
                 "https://w/Absorb", List.of(), false, "2026-09-21T10:00:00Z", V);
-        when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
-                List.of(new KbRetriever.Hit(wiki, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
-
-        chatService.reply(privateEvent(), "Absorb 是什么", null, List.of());
-
-        String msg = userMessageSeenByModel();
+        String msg = rendered(List.of(new KbRetriever.Hit(wiki, 0.9, "vector")));
         assertThat(msg).contains("【导入的资料 · 资料时间 2026-09-21】");
         assertThat(msg).doesNotContain("【我们维护的内容】");
     }
@@ -119,13 +99,10 @@ class ChatServiceKnowledgeSplitTest {
                 List.of(), false, "2026-09-20T10:00:00Z", V);
         KbCorpus.Entry b = new KbCorpus.Entry("b-0", "B", "b", "https://w/B",
                 List.of(), false, "2026-09-21T10:00:00Z", V);
-        when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
-                List.of(new KbRetriever.Hit(a, 1.0, "vector"), new KbRetriever.Hit(b, 0.9, "vector")),
-                0.9, 0.9, 2, 0, List.of()));
+        String msg = rendered(List.of(new KbRetriever.Hit(a, 1.0, "vector"),
+                new KbRetriever.Hit(b, 0.9, "vector")));
 
-        chatService.reply(privateEvent(), "问题", null, List.of());
-
-        assertThat(userMessageSeenByModel()).contains("资料时间 2026-09-20 ~ 2026-09-21");
+        assertThat(msg).contains("资料时间 2026-09-20 ~ 2026-09-21");
     }
 
     @Test
@@ -133,22 +110,12 @@ class ChatServiceKnowledgeSplitTest {
     void unknownDateWhenMissing() {
         KbCorpus.Entry old = new KbCorpus.Entry("legacy-0", "Legacy", "legacy text", "https://w/L",
                 List.of(), false, "", V);
-        when(kbRetriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
-                List.of(new KbRetriever.Hit(old, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
+        String msg = rendered(List.of(new KbRetriever.Hit(old, 0.9, "vector")));
 
-        chatService.reply(privateEvent(), "问题", null, List.of());
-
-        assertThat(userMessageSeenByModel()).contains("【导入的资料 · 时间未知】");
+        assertThat(msg).contains("【导入的资料 · 时间未知】");
     }
 
-    @Test
-    @DisplayName("「不用知识库」模式：一次检索都不做，模型也不会看到资料块")
-    void noneModeSkipsRetrievalEntirely() {
-        chatService.reply(privateEvent(), "今天什么版本", null, List.of(), ReplyMode.NONE);
-
-        String msg = userMessageSeenByModel();
-        assertThat(msg).doesNotContain("KNOWLEDGE");
-        assertThat(msg).contains("不使用知识库");
-        verify(kbRetriever, org.mockito.Mockito.never()).retrieve(anyString());
-    }
+    // 「不用知识库」模式那条用例已随切换搬走：
+    // 它现在考的是助手把开关透传给管线（KbToolAssistantTest.flipFlowWithKnowledgeOff），
+    // 而不再是 ChatService 跳过检索 —— 编排那边已经没有"跳过"这个分支了。
 }

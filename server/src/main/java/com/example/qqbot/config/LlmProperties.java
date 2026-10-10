@@ -63,15 +63,15 @@ public class LlmProperties implements LlmPolicy {
      *   <li>classpath 内置副本 —— 打包时从仓库根目录复制进来，保证 jar 自包含</li>
      * </ol>
      *
-     * <p>采用 {@code AGENTS.md} 这个约定名（而不是自创的 {@code prompts/system.md}）——
+     * <p>采用 {@code system.md} 这个约定名（而不是自创的 {@code prompts/system.md}）——
      * 它是 Agent 生态的通行约定，将来迁移到正式 Agent 框架时可以无缝复用。
      */
-    private String systemPromptFile = "AGENTS.md";
+    private String systemPromptFile = "system.md";
 
     /** 厂商名 → 配置 */
     private Map<String, Provider> providers = new LinkedHashMap<>();
 
-    /** 回复风格（表现层约束，和 AGENTS.md 那份安全底座分开） */
+    /** 回复风格（表现层约束，和 system.md 那份安全底座分开） */
     private ReplyStyle replyStyle = new ReplyStyle();
 
     @Override

@@ -40,7 +40,7 @@ const { connectCDP } = require('/root/.playwright/cdp')
 const { installDepShim } = require('./lib/dep-shim.cjs')
 
 const ROOT = path.resolve(__dirname, '..')
-/** 容器里没有 Vite：能打开宿主 5173 的是宿主网关 IP（见 AGENTS.md） */
+/** 容器里没有 Vite：能打开宿主 5173 的是宿主网关 IP（见 system.md） */
 const HOST_IP = (() => {
   try {
     return execSync("getent ahostsv4 host.docker.internal | awk '{print $1}' | head -n1", { encoding: 'utf8' }).trim()

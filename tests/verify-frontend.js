@@ -11,7 +11,7 @@
  *   node tests/verify-frontend.js --keep          # 跑完不关标签页，留给手工点
  *   BASE=http://localhost:8080 node tests/verify-frontend.js
  *
- * 宿主机 Chrome 需带 --remote-debugging-port=9222 启动（连不上见 AGENTS.md）。
+ * 宿主机 Chrome 需带 --remote-debugging-port=9222 启动（连不上见 system.md）。
  * 密码默认从仓库根的 .env 读 ADMIN_PASSWORD，也可用 --password=xxx 覆盖。
  * 全程只新开一个标签页，跑完关掉，不碰你正在看的页面。
  */

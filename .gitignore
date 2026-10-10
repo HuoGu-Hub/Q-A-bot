@@ -16,8 +16,8 @@ deploy/data/
 # 仓库根跑 `docker exec napcat cat /etc/machine-id > machine-id` 把真机 id 提交上去。
 /machine-id
 
-# 机器人人设（真实系统提示词）不进仓库；仓库里放的是 AGENTS.md.example 模板
-/AGENTS.md
+# 机器人人设（真实系统提示词）不进仓库；仓库里放的是 system.md.example 模板
+/system.md
 
 # ============================================================
 #  第三方源码参考（493MB，不需要进仓库）

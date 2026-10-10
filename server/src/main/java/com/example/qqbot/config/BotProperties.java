@@ -9,9 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>为什么单独抽出来：名字散落在提示词、变量渲染、前端页面好几处，
  * 改一次要动 6 个文件容易漏。抽成配置项后**只改这里**。
  *
- * <p>⚠️ 注意：{@code AGENTS.md} 里的名字是**写死在提示词里的** ——
+ * <p>⚠️ 注意：{@code system.md} 里的名字是**写死在提示词里的** ——
  * 那是模型人格的一部分，不适合运行时替换（而且提示词是纯文本文件）。
- * 改提示词里的名字需要手动改 AGENTS.md。
+ * 改提示词里的名字需要手动改 system.md。
  *
  * <p>业务侧只读视图见 {@link BotPolicy} —— 业务包只依赖它，不依赖本类。
  */

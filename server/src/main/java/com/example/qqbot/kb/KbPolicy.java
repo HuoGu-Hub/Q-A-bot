@@ -42,6 +42,15 @@ public interface KbPolicy {
     /** C 路（标题向量）的闸门阈值；{@code <= 0} 表示关掉 C 路 */
     double getTitleGate();
 
+    /**
+     * 检索结果缓存容量（条）。
+     *
+     * <p>⚠️ 它<b>不是热生效</b>的：缓存在构造时建好，改它要重启。
+     * 这与本项目其他配置不同，是刻意的 —— 换容量意味着丢掉已有条目，
+     * 热改会在下一轮悄悄清空缓存，反而更难理解。
+     */
+    int getCacheSize();
+
     /** 标题向量补建 */
     TitleIndex getTitleIndex();
 

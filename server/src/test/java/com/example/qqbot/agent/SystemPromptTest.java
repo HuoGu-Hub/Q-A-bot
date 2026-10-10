@@ -12,9 +12,9 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 系统提示词（{@code AGENTS.md}）内容的验收测试。
+ * 系统提示词（{@code system.md}）内容的验收测试。
  *
- * <p><b>为什么需要它</b>：提示词是**唯一**的行为准则来源（AGENTS.md 第十条自己这么写的），
+ * <p><b>为什么需要它</b>：提示词是**唯一**的行为准则来源（system.md 第十条自己这么写的），
  * 但它一直没有任何测试。{@code LlmRouter} 的注释里记着一次事故：
  * <i>「合并提示词时把「飘雪喵」误还原成了占位符，单元测试全过，因为没人检查提示词内容。」</i>
  *
@@ -38,16 +38,16 @@ class SystemPromptTest {
         assertThat(root)
                 .as("测试必须在工程目录内运行，否则这个守卫是空的")
                 .isNotNull();
-        Path real = root.resolve("AGENTS.md");
+        Path real = root.resolve("system.md");
         if (Files.isRegularFile(real)) {
             return real;
         }
-        // 公开仓库里没有真实人设（AGENTS.md 已被 .gitignore 排除），此时退回模板
-        // AGENTS.md.example —— 它同样要满足下面这些安全底线断言，
+        // 公开仓库里没有真实人设（system.md 已被 .gitignore 排除），此时退回模板
+        // system.md.example —— 它同样要满足下面这些安全底线断言，
         // 所以这不是"静默跳过"：模板被改坏照样是红的。
-        Path example = root.resolve("AGENTS.md.example");
+        Path example = root.resolve("system.md.example");
         assertThat(Files.isRegularFile(example))
-                .as("既没有 AGENTS.md 也没有 AGENTS.md.example：提示词守卫失效，必须让测试失败而不是静默跳过")
+                .as("既没有 system.md 也没有 system.md.example：提示词守卫失效，必须让测试失败而不是静默跳过")
                 .isTrue();
         return example;
     }

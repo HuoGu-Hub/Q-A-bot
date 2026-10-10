@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG 重构：以 LangChain4j 官方骨架二开</title>
+<style>
+:root {
+  --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#f4f6f8;
+  --fg:#1f2328; --fg-soft:#57606a; --fg-faint:#8b949e;
+  --border:#d8dee4; --border-soft:#e6eaef;
+  --accent:#2563eb; --accent-soft:#eff4ff;
+  --warn:#b45309; --warn-bg:#fffbeb; --ok:#15803d;
+  --radius:10px; --content:900px; --sidebar:250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0d1117; --bg-soft:#161b22; --bg-code:#161b22;
+    --fg:#e6edf3; --fg-soft:#9198a1; --fg-faint:#6e7681;
+    --border:#30363d; --border-soft:#21262d;
+    --accent:#6ea8fe; --accent-soft:#16233a;
+    --warn:#f0b429; --warn-bg:#2a2109; --ok:#4ade80;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16.5px; line-height:1.85; -webkit-font-smoothing:antialiased;
+}
+.layout { display:flex; align-items:flex-start; gap:40px; max-width:1240px; margin:0 auto; padding:40px 28px 96px; }
+.toc { position:sticky; top:28px; flex:0 0 var(--sidebar); width:var(--sidebar); max-height:calc(100vh - 56px); overflow-y:auto; font-size:13.5px; line-height:1.6; border-right:1px solid var(--border-soft); padding-right:18px; }
+.toc-title { font-weight:700; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-faint); margin:0 0 12px; }
+.toc ol { list-style:none; margin:0; padding:0; }
+.toc a { display:block; padding:5px 10px; border-radius:6px; color:var(--fg-soft); text-decoration:none; border-left:2px solid transparent; border-bottom:0; }
+.toc a:hover { background:var(--accent-soft); color:var(--accent); }
+.toc details { display:none; }
+main { flex:1 1 auto; min-width:0; max-width:var(--content); }
+h1,h2,h3 { line-height:1.4; font-weight:700; scroll-margin-top:20px; }
+h1 { font-size:1.95em; margin:0 0 .7em; letter-spacing:-.015em; padding-bottom:.4em; border-bottom:2px solid var(--border); }
+h2 { font-size:1.4em; margin:2.4em 0 .8em; padding-left:.55em; border-left:4px solid var(--accent); }
+h3 { font-size:1.12em; margin:1.9em 0 .6em; }
+p { margin:0 0 1.05em; }
+a { color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color:var(--accent); }
+ul,ol { margin:0 0 1.05em; padding-left:1.5em; }
+li { margin:.32em 0; }
+blockquote { margin:1.4em 0; padding:.85em 1.15em; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; }
+blockquote > :last-child { margin-bottom:0; }
+blockquote p { margin:.35em 0; }
+.warn { background:var(--warn-bg); border-left-color:var(--warn); }
+code { font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; font-size:.875em; background:var(--bg-code); border:1px solid var(--border-soft); border-radius:5px; padding:.14em .38em; word-break:break-word; }
+pre { margin:1.3em 0; padding:1.05em 1.2em; background:var(--bg-code); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; line-height:1.65; }
+pre code { background:none; border:0; padding:0; font-size:.855em; }
+.table-wrap { margin:1.4em 0; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:.94em; margin:0; }
+thead th { background:var(--bg-soft); text-align:left; font-weight:700; padding:.62em .85em; border-bottom:2px solid var(--border); white-space:nowrap; }
+tbody td { padding:.62em .85em; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom:0; }
+.pill { display:inline-block; font-size:.78em; font-weight:700; padding:.1em .5em; border-radius:999px; border:1px solid var(--border); background:var(--bg-soft); color:var(--fg-soft); white-space:nowrap; }
+.pill.ok { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.pill.warn { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.footer { margin-top:4em; padding-top:1.2em; border-top:1px solid var(--border-soft); font-size:.85em; color:var(--fg-faint); }
+@media (max-width:1000px) {
+  .layout { flex-direction:column; gap:0; padding:22px 18px 72px; }
+  .toc { position:static; flex:none; width:auto; max-height:none; border-right:0; border-bottom:1px solid var(--border); padding:0 0 14px; margin-bottom:26px; }
+  .toc > ol, .toc > .toc-title { display:none; }
+  .toc details { display:block; }
+  .toc summary { cursor:pointer; font-weight:700; color:var(--accent); padding:6px 0; }
+  body { font-size:16px; line-height:1.8; }
+}
+@media print {
+  .toc { display:none; }
+  .layout { display:block; max-width:none; padding:0; }
+  main { max-width:none; }
+  body { font-size:11.5pt; line-height:1.6; background:#fff; color:#000; }
+  h2 { page-break-after:avoid; }
+  pre, table, blockquote { page-break-inside:avoid; }
+  a { color:#000; border:0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol>
+    <li><a href="#eco">一、生态与版本</a></li>
+    <li><a href="#pipeline">二、官方管线与我们的对应</a></li>
+    <li><a href="#samples">三、官方样例逐条对照</a></li>
+    <li><a href="#routes">四、两条接入路线</a></li>
+    <li><a href="#plan">五、分阶段路线</a></li>
+    <li><a href="#eval">六、评测与完成判据</a></li>
+    <li><a href="#risk">七、风险</a></li>
+    <li><a href="#decide">八、待拍板</a></li>
+  </ol>
+  <details><summary>目录</summary>
+    <ol>
+      <li><a href="#eco">一、生态与版本</a></li>
+      <li><a href="#pipeline">二、官方管线与我们的对应</a></li>
+      <li><a href="#samples">三、官方样例逐条对照</a></li>
+      <li><a href="#routes">四、两条接入路线</a></li>
+      <li><a href="#plan">五、分阶段路线</a></li>
+      <li><a href="#eval">六、评测与完成判据</a></li>
+      <li><a href="#risk">七、风险</a></li>
+      <li><a href="#decide">八、待拍板</a></li>
+    </ol>
+  </details>
+</nav>
+<main>
+
+<h1>RAG 重构：以 LangChain4j 官方骨架二开</h1>
+
+<blockquote>
+<p><strong>官方就是 LangChain4j 本身。</strong>它的官方 RAG 管线已经随现有依赖进入我们的产物，官方样例里有 12 个 RAG 例子，其中 7 个我们已手写等价实现。所以这件事的性质是：把骨架换成官方实现，把领域参数留下来。</p>
+<p>目标管线与扩展点映射见 <a href="rag-pipeline-mapping.html">rag-pipeline-mapping.html</a>。</p>
+</blockquote>
+
+<h2 id="eco">一、生态与版本</h2>
+
+<p>下列数字抓取于 2026-10-08。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>项目</th><th>star</th><th>形态</th><th>与我们的关系</th></tr></thead>
+<tbody>
+<tr><td><code>langchain4j/langchain4j</code></td><td>13,214</td><td>Java 库</td><td>已经在用它的 OpenAI 模块</td></tr>
+<tr><td><code>langchain4j/langchain4j-examples</code></td><td>1,892</td><td>官方样例</td><td>二开的直接对象</td></tr>
+<tr><td><code>spring-projects/spring-ai</code></td><td>9,515</td><td>Java 库</td><td>同类框架，引入即两套 AI 栈</td></tr>
+<tr><td><code>infiniflow/ragflow</code></td><td>91,802</td><td>独立平台</td><td>跨进程与容器，不引入</td></tr>
+<tr><td><code>langgenius/dify</code></td><td>158,068</td><td>独立平台</td><td>跨进程与容器，不引入</td></tr>
+<tr><td><code>run-llama/llama_index</code></td><td>52,435</td><td>Python 库</td><td>换语言栈，不引入</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>LangChain4j 最新发布 <strong>1.21.0</strong>，时间 2026-10-02；我们现在是 1.20.0。独立平台的 star 远高于库，但那是产品不是可嵌入的组件，数字不能直接兑换成我们的收益。</p>
+
+<h2 id="pipeline">二、官方管线与我们的对应</h2>
+
+<p>官方 <code>rag.md</code> 定义的检索链是五个槽位，由 <code>DefaultRetrievalAugmentor</code> 串起来：</p>
+
+<pre><code>QueryTransformer → QueryRouter → ContentRetriever → ContentAggregator → ContentInjector</code></pre>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>槽位</th><th>官方实现</th><th>我们的等价物</th><th>处理</th></tr></thead>
+<tbody>
+<tr><td>QueryTransformer</td><td><code>DefaultQueryTransformer</code></td><td>无</td><td>可留空，后续补查询改写</td></tr>
+<tr><td>QueryRouter</td><td><code>DefaultQueryRouter</code></td><td>三路并行分发</td><td>换官方</td></tr>
+<tr><td>ContentRetriever</td><td><code>EmbeddingStoreContentRetriever</code></td><td>A 路正文向量</td><td>换官方</td></tr>
+<tr><td>ContentRetriever</td><td>无对应物</td><td>B 路术语关键词</td><td>自研</td></tr>
+<tr><td>ContentAggregator</td><td><code>ReciprocalRankFuser</code>、<code>ReRankingContentAggregator</code></td><td>RRF 加标题加成、闸门置顶、重排、意图提权</td><td>组合式自研聚合器</td></tr>
+<tr><td>ContentInjector</td><td><code>DefaultContentInjector</code></td><td>两段出处注入</td><td>自研</td></tr>
+</tbody>
+</table>
+</div>
+
+<blockquote class="warn">
+<p><strong>关键约束：官方管线只有一个聚合器槽位。</strong>我们的四段处理必须收进同一个 <code>ContentAggregator</code>。收益是阶段名固定、每个启发式有了归属；风险是这个组合器会变成新的巨石类。所以要求它内部只做纯函数组合，每段单独可测。</p>
+</blockquote>
+
+<h2 id="samples">三、官方样例逐条对照</h2>
+
+<p><code>rag-examples</code> 模块的结构与我们现有的实现几乎一一对应。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>官方样例</th><th>我们的等价物</th></tr></thead>
+<tbody>
+<tr><td><code>_1_easy/Easy_RAG_Example</code></td><td>无，依赖 SPI 自动装配，不需要</td></tr>
+<tr><td><code>_2_naive/Naive_RAG_Example</code></td><td>有，最小接入形态</td></tr>
+<tr><td><code>_3_advanced/_01 Query Compression</code></td><td>没有，可补</td></tr>
+<tr><td><code>_3_advanced/_02 Query Routing</code></td><td>部分，C 路闸门与意图分流</td></tr>
+<tr><td><code>_3_advanced/_03 ReRanking</code></td><td>有，<code>RerankClient</code></td></tr>
+<tr><td><code>_3_advanced/_04 Metadata</code></td><td>部分，<code>curated</code> 出处</td></tr>
+<tr><td><code>_3_advanced/_05 Metadata Filtering</code></td><td>部分，按 <code>docId</code> 过滤</td></tr>
+<tr><td><code>_3_advanced/_06 Skip Retrieval</code></td><td>有，<code>ReplyMode.NONE</code></td></tr>
+<tr><td><code>_3_advanced/_07 Multiple Retrievers</code></td><td>有，A / B / C 三路</td></tr>
+<tr><td><code>_3_advanced/_08 Web Search</code></td><td>没有，暂不需要</td></tr>
+<tr><td><code>_3_advanced/_09 Return Sources</code></td><td>有，注入时的编号与 url</td></tr>
+<tr><td><code>_3_advanced/_10 SQL Database Retriever</code></td><td>有，SQLite 语料</td></tr>
+<tr><td><code>_4_low_level/_01 Low Level Naive RAG</code></td><td>有，就是我们现在的手工编排</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>结论不是"我们毫无章法"，而是<strong>把官方样例的每一项都手写了一遍</strong>，还额外调出了一批领域参数。重构要做的是把前者换成官方骨架，把后者留下来。</p>
+
+<h2 id="routes">四、两条接入路线</h2>
+
+<p>两者的差别取决于用到哪个 jar：<code>langchain4j-core</code> 已经在我们的 classpath 上，<code>AiServices</code> 在主包里，主包本地目前只有 1.19.0。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>路线</th><th>做法</th><th>新增依赖</th><th>改动面</th><th>风险</th></tr></thead>
+<tbody>
+<tr><td>A 只用 RetrievalAugmentor</td><td>调用 <code>augmentor.augment(...)</code>，ChatService 继续自己拼 prompt</td><td>无</td><td>kb 包与 ChatService 的检索段</td><td><span class="pill warn">工具要自己写</span></td></tr>
+<tr><td>B 交给 AiServices 接管</td><td><code>AiServices.builder(...).retrievalAugmentor(...)</code></td><td><code>langchain4j</code> 主包</td><td>还包括 chat 调用、厂商降级链、预算守卫</td><td><span class="pill ok">推荐</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>工具调用是确定要做的能力，而工具执行的整套机制不在 core 里：轮次上限、参数错误处理、执行失败处理、编造工具名的兜底、调用前钩子、并发执行、工具检索、工具来源 SPI。手写这九项等于再造一个 KbRetriever，<strong>所以终点选 B</strong>。</p>
+
+<p>但 A 与 B 的差别只在最后一公里：<code>RetrievalAugmentor</code> 与 <code>AiServices</code> 是两层，检索骨架的改造在两条路线上完全一样。第 1 步与第 2 步照原计划做，不必等这个决定落地。</p>
+
+<h2 id="plan">五、分阶段路线</h2>
+
+<h3>第 0 步 评测门禁 · 已完成</h3>
+<p><code>./scripts/golden-gate.sh</code> 一条命令，退出码就是结论。它把"测不了"从跳过改成失败，并接进 <code>preflight.sh</code> 第 5 步。手册见 <a href="检索回归门禁.html">检索回归门禁.html</a>。</p>
+
+<h3>第 1 步 接缝化 · 已完成</h3>
+<p>KbRetriever 从 781 行降到 381 行，只剩编排。算法各归其位，每个接缝一个接口加一个默认实现，默认实现就是重构前那段代码本身。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>接缝</th><th>接口</th><th>默认实现</th></tr></thead>
+<tbody>
+<tr><td>召回器 A 路</td><td><code>KbRecallPath</code></td><td><code>VectorRecallPath</code></td></tr>
+<tr><td>召回器 B 路</td><td><code>KbRecallPath</code></td><td><code>KeywordRecallPath</code></td></tr>
+<tr><td>闸门 C 路</td><td><code>KbTitleGateSource</code></td><td><code>TitleVectorGate</code></td></tr>
+<tr><td>融合器</td><td><code>KbFuser</code></td><td><code>RrfFuser</code></td></tr>
+<tr><td>重排器</td><td><code>KbReranker</code></td><td><code>CrossEncoderReranker</code></td></tr>
+<tr><td>注入器</td><td><code>KbKnowledgeInjector</code></td><td><code>TwoSectionInjector</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>C 路单独一个接缝而不是并进召回器：闸门命中的块不参与 RRF 投票，伪装成一条召回路径就得让融合器靠 <code>source</code> 字符串去猜哪一条是闸门，那种隐式约定迟早会错。</p>
+
+<p><strong>验收</strong>：430 条单测通过，全量 Spring 上下文可启动；门禁实测在重构前后完全一致 —— entity 20 条 70.0% / 90.0%，colloquial 5 条 80.0% / 80.0%，chitchat 干净率 93.3%，gap 干净率 29.4%，注入块均值 4.5 / 5.0 / 3.5 / 0.3 全部相同。</p>
+
+<h3>第 2 步 换官方骨架 · 已完成</h3>
+<p><strong>A 路已完成</strong>：向量检索改走官方 <code>EmbeddingStore</code> 接口，实现在 <code>CorpusEmbeddingStore</code> —— 余弦、阈值、候选数仍是我们那套，但对外的形状是官方的，下一轮 <code>EmbeddingStoreContentRetriever</code> 要消费的正是它。</p>
+
+<p>官方 retriever 本身<b>没有</b>接受"已算好的问题向量"的入口，它必然自己调 <code>EmbeddingModel.embed()</code>。直接换会破坏"一次检索只调一次 embedding、A 与 C 共用同一个问题向量"这条钉死的验收，所以这一轮只换存储接口，retriever 与 EmbeddingModel 适配器留到与编排一起换。</p>
+
+<p><strong>顺带收窄了一条护栏</strong>：<code>ArchitectureTest</code> 原先禁止 <code>llm</code> 之外出现任何 <code>dev.langchain4j</code> 类型，与本方案直接冲突。现在改为：框架类型只许出现在 <code>llm</code> 与 <code>kb</code>；模型 SDK 仍然只有 <code>llm</code> 能用；<code>data.message</code> 仍然不许进 <code>kb</code>，那正是当初转正这条规则的原因。</p>
+
+<p><strong>编排与 B、C 路也已落地</strong>：<code>DefaultRetrievalAugmentor</code> 加 <code>DefaultQueryRouter</code> 负责"变换 → 路由 → 检索 → 聚合"；A 路与 B 路各自实现官方 <code>ContentRetriever</code>；融合、闸门置顶、重排、意图提权收在一个官方 <code>ContentAggregator</code> 里，内部仍复用既有的 <code>KbFuser</code>、<code>KbTitleGateSource</code>、<code>KbReranker</code>。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>官方管线那一格</th><th>我们的实现</th></tr></thead>
+<tbody>
+<tr><td><code>QueryRouter</code></td><td><code>DefaultQueryRouter</code>，广播给两条召回</td></tr>
+<tr><td><code>ContentRetriever</code> A 路</td><td><code>VectorContentRetriever</code>，向量检索走官方 <code>EmbeddingStore</code></td></tr>
+<tr><td><code>ContentRetriever</code> B 路</td><td><code>KeywordContentRetriever</code></td></tr>
+<tr><td><code>ContentAggregator</code></td><td><code>KbContentAggregator</code>：融合 → 置顶 → 重排 → 提权 → 截断</td></tr>
+<tr><td><code>ContentInjector</code></td><td>直通。资料仍由 agent 层拼，<code>KNOWLEDGE</code> 标记与两段出处的契约挂在系统提示词第九章上</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>两个新概念是这次换骨架的副产物，都不是可选项：</p>
+
+<ul>
+<li><code>KbRetrievalContext</code> —— 一次检索的共享输入（语料快照、术语展开、已算好的问题向量），走官方 <code>InvocationParameters</code> 通道传给各检索器。没有它，检索器拿不到"一次检索内只该算一遍"的东西。</li>
+<li><code>KbRetrievalDiagnostics</code> —— 一次检索的过程记录。官方只回传 <code>List&lt;Content&gt;</code>，而各路候选数与<b>卡阈值之前</b>的最高余弦从结果里反推不出来，只能由检索器与聚合器写进这个记录本。</li>
+</ul>
+
+<p><strong>验收</strong>：430 条单测通过，全量 Spring 上下文可启动；门禁指标与换骨架之前完全一致。</p>
+
+<h3>第 2 步里明确不做的两项</h3>
+
+<p>计划表里还写着 <code>ReciprocalRankFuser</code> 与 <code>ReRankingContentAggregator</code>，逐条查过之后<b>不做</b>，理由不是"麻烦"：</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>官方实现</th><th>实测到的性质</th><th>换掉会失去什么</th></tr></thead>
+<tbody>
+<tr><td><code>ReciprocalRankFuser</code></td><td>字节码里 <code>K</code> 硬编码为 <b>60</b>；两路<b>等权</b>；没有任何加成钩子</td><td>我们的 <code>K=10</code>、关键词权重 2.0、标题精确加成 0.5 —— 三项全是实测调出来的，换掉等于把调好的排序器换成通用排序器</td></tr>
+<tr><td><code>ReRankingContentAggregator</code></td><td>功能与我们的 <code>CrossEncoderReranker</code> 等价，但要一个 <code>ScoringModel</code></td><td><code>ScoringModel</code> 在 <code>model</code> 包里，只能放 <code>llm</code>，于是要新增一条 <code>llm → kb</code> 依赖来搬运一段已经在工作的代码，功能上零收益</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>结论：这两项不是"第二步没做完"，而是<b>做完了会变差</b>。所以它们的状态是"明确不做"，而不是"待办"。将来若真要换，<code>ReciprocalRankFuser</code> 必须先接受一次排序质量重调，那是一次实验而不是一次重构。</p>
+
+<h3>第 3 步 按需补能力 · 进行中</h3>
+
+<p><strong>群聊检索缓存已完成</strong>：<code>KbRetrievalCache</code>，有界 LRU，键里带<b>语料版本</b>与检索参数。公开站一直有缓存与配额，群聊路径此前是裸的 —— 每条消息都触发一次 embedding 加一次 rerank，群里同一个问题被问很多遍时全是白付的钱和延迟。键里带语料版本意味着写完语料旧条目自动失效，不需要"记得清缓存"的约定。</p>
+
+<p><strong>按天配额：明确不做。</strong>你决定群聊暂不限制，所以不加这个开关 —— 一个永远不生效的配置项只会增加理解成本。真要限的时候照公开站的做法加即可。</p>
+
+<h4>一次实测：重排阈值不是可调项</h4>
+
+<p>黄金集里有两条 entity 样本返回空，余弦 <b>0.5539 / 0.5522</b> —— 都在向量阈值 0.45 之上，所以不是被向量挡的，是<b>被重排判定成"库里没有资料"</b>。把重排下限从 0.02 调到 0.010 实测：</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>指标</th><th>0.020</th><th>0.010</th></tr></thead>
+<tbody>
+<tr><td>entity R@1</td><td>70.0%</td><td><b>75.0%</b></td></tr>
+<tr><td>entity R@5</td><td>90.0%</td><td><b>95.0%</b></td></tr>
+<tr><td>entity MRR</td><td>0.779</td><td><b>0.829</b></td></tr>
+<tr><td>colloquial R@1 / R@5</td><td>80.0% / 80.0%</td><td>80.0% / 80.0%</td></tr>
+<tr><td>gap 干净率</td><td>29.4%</td><td>29.4%</td></tr>
+<tr><td>chitchat 干净率</td><td>93.3%</td><td><b>80.0%</b></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>结论：<b>1 条 entity 换 2 条 chitchat</b>，而且 chitchat 掉到正好压在 80% 的地板上 —— 再退一条门禁就红。所以回滚到 0.02，并把这段记录写进了 <code>Rerank</code> 的注释。</p>
+
+<p>更重要的结论是：被拒的 21 次分数从 0.0003 <b>连续分布</b>到 0.0197，两类在 0.012~0.020 区间<b>重叠</b> —— 和当初双塔余弦的困境一模一样。<b>调这个阈值是权衡，不是修复</b>；<code>Rerank</code> 注释里"真实问题 ≥ 0.04"那句话已被这次实测推翻。</p>
+
+<h4>补中文名：先做数据，再改一处代码才真正生效</h4>
+
+<p>查清词条表后发现它的形状与文档描述不同：2649 条物品类词条的 <code>zh</code> 存「中文名、English Name」两截；790 条 wiki 导入类词条的 <code>en</code> 是 <b>slug</b>（<code>wiki-intelligence</code>），<code>zh</code> 直接存了英文名（<code>Intelligence</code>）。</p>
+
+<p><strong>第一次尝试只改了数据</strong>（写入 17 条属性与机制词的中文名：力量、智力、体质、敏捷、耐力、制作、舒适度、战斗机制、瘴气、瘴气滤器、瘴气抗性、永恒之火），<b>指标零变化</b> —— 因为黄金集没有覆盖这批词。按纪律补了 3 条样本去验证，<b>门禁直接红了</b>（entity R@1 60.9%、R@5 82.6%）。</p>
+
+<p>那个红色给出了真正的根因：<code>Glossary.load()</code> 把每个中文别名映射到 <code>e.en()</code>，而 <code>en</code> 是 <b>slug</b> —— slug 只出现在块的 id 里，<b>永远不会出现在标题或正文</b>，所以关键词路拿它去找必然一条都匹配不到，而且不报错，只是静默少一路召回。</p>
+
+<p>修法是在 <code>load()</code> 里把"英文那一侧"取成 <code>zh</code> 里那截英文名（物品类取「、」后面那半截，wiki 类本身就是英文名），拿不到才退回 slug。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>entity 类别</th><th>修复前 20 条</th><th>修复后 23 条</th></tr></thead>
+<tbody>
+<tr><td>R@1 答对数</td><td>14</td><td><b>15</b></td></tr>
+<tr><td>R@5 答对数</td><td>18</td><td><b>21</b></td></tr>
+<tr><td>R@1 / R@5 百分比</td><td>70.0% / 90.0%</td><td>65.2% / 91.3%</td></tr>
+<tr><td>chitchat 干净率</td><td>93.3%</td><td>93.3%</td></tr>
+<tr><td>gap 干净率</td><td>29.4%</td><td>29.4%</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>3 条新样本<b>全部进 R@5</b>，其中 1 条排第 1。百分比反而下降只是因为分母从 20 涨到 23 —— <b>答对的绝对条数是涨的</b>。这也说明门槛用的是百分比，会随样本增长而漂移，值得单独处理。</p>
+
+<h3>第 3 步 按需补能力</h3>
+<ul>
+<li>补 <code>QueryTransformer</code>，做查询改写，这是目前唯一空着的槽位。</li>
+<li>群聊路径补缓存与配额，与公开站拉齐。</li>
+<li><code>KbBlockIndex</code> 实现 <code>EmbeddingStore</code>，接入增量更新，去掉整份重载。</li>
+<li>用官方 observability 监听接口替换自制的 KbTrace。</li>
+</ul>
+
+<h3>第 4 步 工具接入 · 前置已完成</h3>
+<ul>
+<li><strong>已完成</strong>：<code>LlmRouter</code> 把"空文本 + 工具请求"与"空回复"分开判定。模型请求调用工具时 content 本来就是空的，两者混在一起的话，工具一接上，第一次工具调用就会被判成空回复 → 切换厂商 → 这次调用直接丢掉。</li>
+<li><strong>已完成</strong>：补上 <code>CAP_TOOLS</code> 能力标签（<code>Provider.capabilities</code> 里本来就预留了 <code>tools</code>），降级链可以按"这家会不会调工具"过滤。</li>
+<li><strong>已完成</strong>：加入 <code>dev.langchain4j:langchain4j</code> 主包并<b>对齐版本</b>（主包 1.20.0 与 core 1.20.0 一致）。<code>AiServices</code> 只在主包里。两件事必须一起做：core 与主包版本错配会在运行期炸且报错难懂；而 <code>build-server.sh</code> 默认离线，新依赖必须先联网拉进本机仓库。</li>
+<li><strong>已完成</strong>：<code>LlmRouter.chatMessages(...)</code> —— 消息级入口，<b>不注入系统提示词</b>（AiServices 自己管系统消息）；<code>LlmRouterChatModel implements ChatModel</code> 把降级链包成官方模型，工具循环因此走的是我们的降级、能力过滤与预算累加。</li>
+<li><strong>已完成</strong>：第一个只读工具 <code>KbLookupTool</code>，以及 <code>KbToolAssistant</code>（AiServices + 轮次上限 3 + 授权钩子）。授权是<b>默认拒绝</b>的白名单：新增工具必须同时改白名单，否则模型调它会被当场拒绝并记日志 —— "能被触发"与"该被触发"是两件事。</li>
+<li><strong>已完成</strong>：工具循环与授权拒绝的端到端验证，用假模型跑，不碰网络。两条测试分别钉住：模型要工具时<b>工具真的被执行</b>（<code>verify(retriever).retrieve(...)</code>），以及白名单外的工具被拦下且<b>根本没有被执行</b>（<code>verify(retriever, never())</code>）。后者是安全边界，必须由测试钉住而不是靠注释。</li>
+<li><strong>未做</strong>：工具还没有生产入口 —— <code>KbToolAssistant</code> 目前只在测试里被调用。接入口是下一步。</li>
+<li>补工具能力标签，让降级链能过滤不支持工具调用的厂商。</li>
+<li>接入 <code>AiServices</code> 与 <code>tools</code>，每一轮工具调用都计入预算。</li>
+<li>第一批只开放只读工具；敏感性操作不给群聊入口，授权依据是 <code>BeforeToolExecution</code> 里的调用方上下文。</li>
+</ul>
+
+<h2 id="eval">六、评测与完成判据</h2>
+
+<p>官方 <code>testing-and-evaluation</code> 文档给出的推荐读物就是黄金集那一套，与我们已有的 <a href="../md/检索基线.md">检索基线.md</a> 做法一致。所以纪律不必另起：</p>
+
+<ul>
+<li>黄金集 61 条作为任何改动的准入门槛。</li>
+<li>一次改动对应一条失败样本，说不出来源的改动不进主干。</li>
+<li>启发式数量设上限，超出即重构而不是继续追加。</li>
+<li>连续两批语料扩充门槛无退化，即冻结本轮扩张。</li>
+</ul>
+
+<p>目标值待定：entity R@1 与 R@5 达标，gap 干净率显著高于当前的 31.6%。</p>
+
+<h2 id="risk">七、风险</h2>
+
+<ul>
+<li>组合式聚合器可能变成新的巨石类，这是本次重构最大的内部风险。</li>
+<li>迁移期两套编排并存，必须靠开关切换，不能让两条链路同时是事实来源。</li>
+<li><code>ContentInjector</code> 的默认拼装格式与我们两段出处的写法不同，必须自研，否则系统提示词第九章的规则失去落点。</li>
+<li>闸门置顶发生在融合之后、重排之前，接官方管线时要显式定义这个顺序。</li>
+<li>从 1.20.0 升到 1.21.0 需要一次完整回归，主包与 core 的版本要一起对齐。</li>
+</ul>
+
+<h2 id="decide">八、待拍板</h2>
+
+<ol>
+<li>B 已定，需要确认的是落地顺序。</li>
+<li>第 1 步立刻做，还是先只补群聊缓存与配额。</li>
+<li>是否把 Spring AI 与独立平台明确排除。</li>
+<li>黄金集目标值定多少。</li>
+<li>迁移期是否保留 KbRetriever 作为回退实现。</li>
+</ol>
+
+<div class="footer">
+证据来源：GitHub API 抓取的仓库数据与 1.21.0 发布信息；langchain4j 官方文档 <code>docs/docs/tutorials/rag.md</code>、<code>testing-and-evaluation.md</code>、<code>observability.md</code>；<code>langchain4j-examples</code> 的 <code>rag-examples</code> 模块源码；本地 Maven 仓库的 core 1.20.0 与主包 1.19.0 jar 清单。抓取时间 2026-10-08。
+</div>
+
+</main>
+</div>
+</body>
+</html>

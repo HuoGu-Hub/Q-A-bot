@@ -241,6 +241,16 @@ public class Glossary {
         return c >= 0x4e00 && c <= 0x9fff;
     }
 
+    /** 是否纯 ASCII 名字 —— 用来从 zh 里认出"英文那一侧"（见 load()） */
+    private static boolean isAsciiName(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) > 127) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** 术语条目数（供启动日志/排查） */
     public int size() {
         ensureLoaded();
@@ -303,11 +313,32 @@ public class Glossary {
             // 中文名可以写多个别名，用「、」或「/」分隔 —— 人工核对时很有用。
             // 例如 Flame Altar 的官方译名可能是「火焰祭坛」，但群友习惯叫「灵火祭坛」，
             // 写「灵火祭坛、火焰祭坛」两个都能命中。
-            for (String alias : e.zh().split("[、/｜|]")) {
+            String[] aliases = e.zh().split("[、/｜|]");
+
+            // ★ 这一条在关键词路上该用哪一侧的"英文"去匹配。
+            //
+            //   ⚠️ 不能直接用 e.en()：它是**身份 id（slug）**，如 wiki-strength / acid-bite。
+            //   slug 只出现在块的 id 里，**永远不会出现在标题或正文**，
+            //   拿它去关键词路找必然一条都匹配不到 —— 而且不报错，只是静默少一路召回。
+            //
+            //   实际语料里"英文那一侧"藏在 zh 里，有两种写法：
+            //     · 物品类：zh = 「酸蚀之咬、Acid Bite」→ 取那截英文名
+            //     · wiki 导入类：zh 直接就是英文名（"Intelligence"）→ 就是它本身
+            //     · 只有中文名：退回 e.en()，此时靠中文别名自己匹配（中文语料/带中文名的标题）
+            String englishSide = e.en();
+            for (String alias : aliases) {
+                String a = alias.trim();
+                if (a.length() >= 2 && isAsciiName(a)) {
+                    englishSide = a;
+                    break;
+                }
+            }
+
+            for (String alias : aliases) {
                 String name = alias.trim();
                 // 中文至少要 2 个字才值得做子串匹配，否则「剑」「弓」这种单字会命中一大片
                 if (name.length() >= 2) {
-                    map.putIfAbsent(name, e.en());
+                    map.putIfAbsent(name, englishSide);
                 }
             }
         }

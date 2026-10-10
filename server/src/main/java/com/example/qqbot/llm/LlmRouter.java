@@ -46,6 +46,15 @@ public class LlmRouter {
     public static final String CAP_VISION = "vision";
 
     /**
+     * 能力标签：支持函数调用。
+     *
+     * <p>降级链按能力过滤时用它 —— 链里某个厂商不支持工具调用的话，
+     * 一次工具调用会在中途断掉（模型要调工具、而这家不会）。
+     * 工具执行接入之前它只用于显式筛选，不影响现有路径。
+     */
+    public static final String CAP_TOOLS = "tools";
+
+    /**
      * provider 名 → 模型客户端。
      *
      * <p>用 ConcurrentHashMap：支持**热替换**（后台改完模型 ID 立即生效），
@@ -250,11 +259,11 @@ public class LlmRouter {
     }
 
     /**
-     * 加载系统提示词（{@code AGENTS.md}）。
+     * 加载系统提示词（{@code system.md}）。
      *
      * <p><b>按优先级依次尝试</b>，第一个读到的生效：
      * <ol>
-     *   <li><b>外部文件</b>：相对运行目录查找（如 {@code ../AGENTS.md}、{@code ./AGENTS.md}）
+     *   <li><b>外部文件</b>：相对运行目录查找（如 {@code ../system.md}、{@code ./system.md}）
      *       —— 在服务器上改完重启即生效，**不用重新打包**</li>
      *   <li><b>classpath 内置副本</b>：打包时从仓库根目录复制进来，保证 jar 自包含、
      *       换台机器也能跑</li>
@@ -263,7 +272,7 @@ public class LlmRouter {
      * <p>两条都失败才用兜底话术 —— 那种情况下机器人虽然能跑，但没有任何人格与安全约束，
      * 所以日志打到 <b>ERROR</b> 级别，必须让人看见。
      *
-     * <p><b>为什么用 {@code AGENTS.md}</b>：它是 Agent 生态的通行约定，
+     * <p><b>为什么用 {@code system.md}</b>：它是 Agent 生态的通行约定，
      * 迁移到正式 Agent 框架时可以直接复用，不用再翻译一遍。
      */
     private String loadSystemPrompt(LlmPolicy props, ResourceLoader loader) {
@@ -309,7 +318,7 @@ public class LlmRouter {
                     [LLM] ⚠️ 读不到系统提示词 {}！
                       已尝试：外部文件 ./ ../ ../.. 和 classpath
                       → 机器人将以【无人格、无安全约束】的默认模式运行
-                      → 请在仓库根目录放一份 AGENTS.md，或重新执行 ./scripts/build-web.sh 打包""", name);
+                      → 请在仓库根目录放一份 system.md，或重新执行 ./scripts/build-web.sh 打包""", name);
             return "你是一个 QQ 群里的聊天助手，回答要简洁、友好、口语化。";
         }
 
@@ -344,7 +353,7 @@ public class LlmRouter {
                     [LLM] ⚠️ 提示词里有【未被替换的占位符】：{}
                       来源：{}
                       这些花括号会被原样送给模型，行为可能异常。
-                      请检查 AGENTS.md，把它们改成实际内容（或加转义）。
+                      请检查 system.md，把它们改成实际内容（或加转义）。
                       注：<<<KNOWLEDGE>>> 这类标记是正常的，不在检查范围内""",
                     String.join(" ", found), source);
         }
@@ -371,12 +380,18 @@ public class LlmRouter {
     }
 
     /**
-     * 本轮实际用的系统消息 = AGENTS.md（启动时读一次）+ 后台配的回复风格（每轮现取）。
+     * 本轮实际用的系统消息 = system.md（启动时读一次）+ 后台配的回复风格（每轮现取）。
      *
      * <p>风格是**追加**的，永远不可能覆盖或削弱上面的安全规则 —— 风格段开头也写明了
      * 「冲突时以安全规则为准」。
      */
-    private String systemPromptWithStyle() {
+    /**
+     * 本轮该用的系统消息：{@code system.md} 加后台配置的回复风格。
+     *
+     * <p>包级可见是给 {@code ToolChatAssistant} 用的 —— AiServices 自己管系统消息，
+     * 得有个地方把"我们那份"交给它。**不能让它自己拼**：安全底座只有一份。
+     */
+    String systemPromptWithStyle() {
         String style = describeReplyStyle(props.getReplyStyle());
         return style.isEmpty() ? systemPrompt : systemPrompt + "\n\n" + style;
     }
@@ -436,7 +451,23 @@ public class LlmRouter {
      *
      * @param requiredCapability 需要的模型能力（null = 任意）
      */
+    /**
+     * 消息级入口：**原样把消息发出去，不注入系统提示词**。
+     *
+     * <p>AiServices 自己管系统消息，所以它需要一个"别替我加"的入口；
+     * 而 {@link #chat(String)} / {@link #chatWithImages} 那两条老路径仍然
+     * 走各自带系统提示词的组装，行为不变。
+     */
+    public ChatResponse chatMessages(List<ChatMessage> messages) {
+        return callWithFallbackResponse(messages, null);
+    }
+
+    /** 老路径用的字符串版：成功响应的正文 */
     private String callWithFallback(List<ChatMessage> messages, String requiredCapability) {
+        return callWithFallbackResponse(messages, requiredCapability).aiMessage().text();
+    }
+
+    private ChatResponse callWithFallbackResponse(List<ChatMessage> messages, String requiredCapability) {
         List<String> candidates = new ArrayList<>();
         for (String name : chain) {
             if (requiredCapability == null || configs.get(name).hasCapability(requiredCapability)) {
@@ -457,10 +488,22 @@ public class LlmRouter {
                 ChatResponse response = model.chat(messages);
                 long cost = System.currentTimeMillis() - start;
                 String text = response.aiMessage().text();
+                boolean wantsTools = response.aiMessage().hasToolExecutionRequests();
                 // 空回复必须当成失败！推理模型（如 deepseek-v4.1-flash）在预算不够时
                 // 会把 token 全花在「思考」上，content 返回空字符串。
                 // 直接发出去就是一条空白消息，用户只会觉得机器人坏了。
                 if (text == null || text.isBlank()) {
+                    // ★ 但"空文本 + 有工具请求"是**正常**的一次工具调用，不是故障。
+                    //   模型请求调用工具时，content 本来就是空的，要读的是 toolExecutionRequests。
+                    //   这两种情况必须分开：混在一起的话，工具一接上，
+                    //   第一次工具调用就会被判成"空回复"→ 换厂商 → 这次调用直接丢掉。
+                    //   工具执行器接入之前，这种情况按"当前厂商用不了"处理，并把原因记清楚。
+                    if (wantsTools) {
+                        log.warn("[LLM] {} ({}) 只返回了工具调用请求（工具执行尚未接入），尝试下一个 provider",
+                                name, configs.get(name).getModelName());
+                        errors.add(name + " -> 只返回工具请求");
+                        continue;
+                    }
                     log.warn("[LLM] {} ({}) 返回了空内容（推理模型可能把预算花在思考上了），尝试下一个 provider",
                             name, configs.get(name).getModelName());
                     errors.add(name + " -> 空回复");
@@ -473,7 +516,7 @@ public class LlmRouter {
                 if (response.tokenUsage() != null) {
                     budgetGuard.recordTokens(response.tokenUsage().totalTokenCount());
                 }
-                return text;
+                return response;
             } catch (Exception e) {
                 log.warn("[LLM] {} 调用失败，尝试下一个：{}", name, e.getMessage());
                 errors.add(name + " -> " + e.getMessage());

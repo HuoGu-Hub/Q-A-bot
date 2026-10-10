@@ -72,7 +72,7 @@ spring:
     #    IDEA 自定义 working directory），.env 读不到 → ADMIN_PASSWORD 变空 →
     #    后台整个 503「请在 .env 里设置 ADMIN_PASSWORD」，而用户明明设置过。
     #    所以：既把常见层级都列上，又加了一道硬保险 ——
-    #    DotenvEnvironmentPostProcessor 会从工作目录向上找工程根（AGENTS.md / server/pom.xml），
+    #    DotenvEnvironmentPostProcessor 会从工作目录向上找工程根（system.md / server/pom.xml），
     #    找到就直接从【工程根】读 .env，与工作目录无关。
     import:
       - optional:file:./.env[.properties]
@@ -90,7 +90,7 @@ app:
   #    真实昵称在**管理后台「设置 → 机器人身份」**里改：热生效、不用重启，
   #    并自动写进 server/config/overrides.yml（不进版本控制）持久化。
   # 名字只在这里改 —— 其他地方都读这个配置。
-  # ⚠️ AGENTS.md 里的名字是提示词的一部分，需单独改（那是模型人格，不运行时替换）
+  # ⚠️ system.md 里的名字是提示词的一部分，需单独改（那是模型人格，不运行时替换）
   #    org / author 由公开站「关于」页展示（publicapi 的 /site → AboutView）；留空则那一行不显示。
   bot:
     name: 示例助手
@@ -430,6 +430,10 @@ app:
     # 真正决定"这次到底有没有资料"的是下面的 rerank.min-score。
     min-score: 0.45
 
+    # 检索结果缓存容量（条）。改它要重启 —— 换容量意味着丢掉已有条目，
+    # 热改会在下一轮悄悄清空缓存，反而更难理解。
+    cache-size: 512
+
     # C 路（标题向量）的闸门阈值：余弦 ≥ 它才认为"这次提问就是在问某个名字"，把那条置顶。
     # 为什么需要它：语料 94% 的块标题是「中文名（English）」，而正文几乎不重复这个名字 ——
     # 用名字提问时正文向量必然把同族词排前面（「酸蚀之咬」本体第 7）。标题向量治这个。
@@ -577,17 +581,17 @@ app:
   llm:
     default-provider: opencode-go
     fallback-providers: [deepseek]
-    # 系统提示词文件。采用 AGENTS.md 这个【Agent 生态约定名】，
+    # 系统提示词文件。采用 system.md 这个【Agent 生态约定名】，
     # 而不是自创的 prompts/system.md —— 将来迁移到正式 Agent 框架可直接复用。
     #
     # 加载优先级（第一个读到的生效）：
-    #   ① 外部文件：./AGENTS.md → ../AGENTS.md → ../../AGENTS.md  ← 改完重启即生效，不用重新打包
+    #   ① 外部文件：./system.md → ../system.md → ../../system.md  ← 改完重启即生效，不用重新打包
     #   ② classpath 内置副本（构建时从仓库根目录复制进 jar）
-    system-prompt-file: AGENTS.md
+    system-prompt-file: system.md
 
     # ---------- 回复风格（表现层约束）----------
-    # 为什么不写进 AGENTS.md：那是安全底座，改它风险大；而且这里要能热生效。
-    # 风格段是每轮现拼到【系统消息】里的（AGENTS.md 之后追加），用户改不到，
+    # 为什么不写进 system.md：那是安全底座，改它风险大；而且这里要能热生效。
+    # 风格段是每轮现拼到【系统消息】里的（system.md 之后追加），用户改不到，
     # 也不可能覆盖上面任何安全规则。
     # 默认值全是"不约束"，所以开着也不改变现有行为；想调节奏再动下面几项。
     reply-style:

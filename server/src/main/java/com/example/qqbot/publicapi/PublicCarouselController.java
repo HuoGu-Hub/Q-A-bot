@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -85,11 +86,16 @@ public class PublicCarouselController {
      * <p><b>immutable 长缓存</b>：同一个 id 的内容永远不会变（要换图就删掉重传，
      * 重传后 URL 上的 {@code ?v=} 会变）。这条 + Nginx 那边的独立 location，
      * 让首页刷新时图片走浏览器缓存，既不打扰后端也不吃公开 API 的限流配额。
+     *
+     * <p><b>{@code ?w=}</b> 取目标宽度，服务端按需缩放并在磁盘上缓存结果。
+     * 不传就是原图 —— 老链接、后台预览、第三方引用都不会因为这次改动而变样。
+     * 前端用 {@code srcset} 一次给出几档，浏览器按屏幕密度和布局自己挑。
      */
     @GetMapping("/image/{id}")
-    public ResponseEntity<byte[]> image(@PathVariable long id) {
+    public ResponseEntity<byte[]> image(@PathVariable long id,
+                                        @RequestParam(name = "w", required = false) String w) {
         try {
-            CarouselService.ImageData data = service.read(id);
+            CarouselService.ImageData data = service.read(id, parseWidth(w));
             if (data == null) {
                 return ResponseEntity.notFound().build();
             }
@@ -100,6 +106,26 @@ public class PublicCarouselController {
         } catch (IOException e) {
             log.warn("[SITE] 读取轮播图失败：id={} {}", id, e.getMessage());
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 解析 {@code ?w=}。**任何异常输入都退回原图**，不报 400。
+     *
+     * <p>这个参数只影响清晰度与体积，不影响正确性；为了它把整张图变成错误页，
+     * 代价远大于收益。真正的范围校验在服务层，这里只负责"是不是个整数"。
+     */
+    private static int parseWidth(String w) {
+        if (w == null || w.isBlank()) {
+            return 0;
+        }
+        try {
+            int parsed = Integer.parseInt(w.trim());
+            // 负数与 0 一样表示"不用缩"：把判断收在这一个函数里，
+            // 服务层就只需要认"0 = 原图，正数 = 目标宽度"这一种约定。
+            return Math.max(0, parsed);
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 }

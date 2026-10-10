@@ -55,6 +55,20 @@
     </dependency>
 
     <!--
+      LangChain4j 主包：AiServices（工具执行循环：轮次上限、参数错误处理、编造工具名的兜底、
+      调用前钩子、并发执行、工具检索）在它里面，core 里没有 —— 这些是"自己写等于再造一个
+      KbRetriever"的那批机制。
+
+      ⚠️ 必须与 langchain4j-open-ai 用**同一个版本号**：core 与主包错配会在运行期炸，
+         而且报错很难懂。两者要升一起升。
+    -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+
+    <!--
       SQLite：问答记录的本地存储。
       选它而不是 JSONL —— 统计要用 SQL 聚合，JSONL 每次统计都得全表扫。
       选它而不是独立数据库服务 —— 2G 内存的机器上多一个常驻服务不划算。
@@ -97,22 +111,22 @@
   <build>
     <resources>
       <!--
-        打包时把仓库根目录的 AGENTS.md 复制进 classpath。
+        打包时把仓库根目录的 system.md 复制进 classpath。
 
-        为什么：AGENTS.md 的**唯一权威副本在仓库根目录**（Agent 生态约定位置），
+        为什么：system.md 的**唯一权威副本在仓库根目录**（Agent 生态约定位置），
         但 jar 要自包含 —— 换台机器部署时不该依赖外部文件是否存在。
         于是构建时复制一份进 jar 作为【回退】：
 
-          运行时优先读外部 AGENTS.md（改完重启即生效）
+          运行时优先读外部 system.md（改完重启即生效）
           读不到才用 jar 里的这份（保证能跑）
 
         注意：不复制到 prompts/ 子目录，就直接放 classpath 根，
-        因为约定名就是 AGENTS.md。
+        因为约定名就是 system.md。
       -->
       <resource>
         <directory>${project.basedir}/..</directory>
         <includes>
-          <include>AGENTS.md</include>
+          <include>system.md</include>
         </includes>
         <targetPath>.</targetPath>
       </resource>

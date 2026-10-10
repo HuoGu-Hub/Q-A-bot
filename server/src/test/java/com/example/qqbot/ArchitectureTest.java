@@ -204,15 +204,31 @@ class ArchitectureTest {
     }
 
     @Test
-    @DisplayName("★ 铁律③（加强）：llm 之外不得出现任何 dev.langchain4j 类型")
-    // 2026-10-02 转正：agent/ChatService 原先为了组装图片列表 import 了
-    // dev.langchain4j.data.message.ImageContent。
-    // 修法：新增中性的 llm.VisionImage(base64, mimeType)，转换只发生在 LlmRouter 内部。
-    void noLangchain4jOutsideLlm() {
-        ArchRule rule = noClasses()
-                .that().resideOutsideOfPackage("..llm..")
+    @DisplayName("★ 铁律③（收窄）：框架类型只许出现在 llm 与 kb；model 包与消息类型仍然关着")
+    // 2026-10-02 原版是「llm 之外不得出现任何 dev.langchain4j 类型」，
+    // 转正理由是 agent/ChatService 为了组装图片列表 import 了
+    // dev.langchain4j.data.message.ImageContent（修法是新增中性的 llm.VisionImage）。
+    //
+    // 2026-10-08 **有意收窄**：我们选定用 LangChain4j 的 RAG 抽象作为检索管线的词汇
+    // （ContentRetriever / ContentAggregator / ContentInjector / EmbeddingStore），
+    // 而这些实现天然住在 kb 里 —— 原版规则与这个决定直接冲突，只能留一个。
+    //
+    // 收窄之后保护的是**当初那条教训本身**，而不是"任何框架类型"：
+    //   · dev.langchain4j.model.. 仍然只有 llm 能用（见 onlyLlmDependsOnModelSdk）
+    //   · 其余业务包（agent/qa/command/media/site/publicapi/admin/logs/guard/plaza/
+    //     onebot/router）一律不得出现任何 dev.langchain4j 类型 —— **这一条就挡住了
+    //     当初那次事故**（ChatService 在 agent 包里 import ImageContent）
+    // 换句话说：框架词汇被限制在**两个**包里，模型 SDK 被限制在**一个**包里。
+    //
+    // 曾经想再加一条"kb 也不许碰 data.message"，实测站不住：
+    // 官方 RAG 的入口 AugmentationRequest 收的就是 ChatMessage，
+    // 编排要交给官方管线就必须构造它。而它要防的那次事故已经被上面第一条挡住了，
+    // 所以不额外加这条 —— 护栏要挡真实风险，不是挡"看起来像风险"的类型名。
+    void noLangchain4jOutsideLlmAndKb() {
+        ArchRule confined = noClasses()
+                .that().resideOutsideOfPackages("..llm..", "..kb..")
                 .should().dependOnClassesThat().resideInAPackage("dev.langchain4j..");
-        rule.check(CLASSES);
+        confined.check(CLASSES);
     }
 
     @Test

@@ -500,21 +500,21 @@ sudo certbot --nginx -d www.example.com -d admin.example.com
 <hr>
 <h2 id="八日常运维"><a class="anchor" href="#八日常运维">八、日常运维</a></h2>
 <h3 id="改系统提示词不用重新打包"><a class="anchor" href="#改系统提示词不用重新打包">改系统提示词（不用重新打包）</a></h3>
-<p>系统提示词就是仓库根目录的 <strong><code>AGENTS.md</code></strong>。加载优先级：</p>
-<pre><code class="language-text">① 外部文件  ./AGENTS.md → ../AGENTS.md → ../../AGENTS.md   ← 优先
+<p>系统提示词就是仓库根目录的 <strong><code>system.md</code></strong>。加载优先级：</p>
+<pre><code class="language-text">① 外部文件  ./system.md → ../system.md → ../../system.md   ← 优先
 ② classpath 内置副本（构建时从根目录复制进 jar）           ← 回退
 ③ 都没有 → 兜底话术（日志打 ERROR 提醒）
 </code></pre>
-<p>上线后想改人格/规则，<strong>直接在服务器上改 <code>AGENTS.md</code> 然后重启即可</strong>：</p>
-<pre><code class="language-bash">vi /opt/qqbot/AGENTS.md
+<p>上线后想改人格/规则，<strong>直接在服务器上改 <code>system.md</code> 然后重启即可</strong>：</p>
+<pre><code class="language-bash">vi /opt/qqbot/system.md
 sudo systemctl restart qqbot
 sudo journalctl -u qqbot | grep &quot;已加载系统提示词&quot;
 </code></pre>
 <p>日志能一眼看出读的是哪份：</p>
-<pre><code class="language-text">[LLM] 已加载系统提示词：file:../AGENTS.md（外部文件，改完重启即生效）（3256 字）
+<pre><code class="language-text">[LLM] 已加载系统提示词：file:../system.md（外部文件，改完重启即生效）（3256 字）
 </code></pre>
 <blockquote>
-<p><strong>为什么用 <code>AGENTS.md</code> 这个名字</strong>：它是 Agent 生态的通行约定，
+<p><strong>为什么用 <code>system.md</code> 这个名字</strong>：它是 Agent 生态的通行约定，
 将来迁移到正式 Agent 框架（Claude Code / Cursor 等）可以直接复用提示词，不用重写。</p>
 </blockquote>
 <h3 id="看日志"><a class="anchor" href="#看日志">看日志</a></h3>

@@ -49,8 +49,8 @@ mkdir -p "$CI"
 rm -rf "$CI/src"
 cp -f "$ROOT/server/pom.xml" "$CI/pom.xml"
 cp -a "$ROOT/server/src" "$CI/src"
-# pom 的 resources 里有 ${project.basedir}/../AGENTS.md —— 从 server-ci 看就是 .toolchain/AGENTS.md
-cp -f "$ROOT/AGENTS.md" "$ROOT/.toolchain/AGENTS.md"
+# pom 的 resources 里有 ${project.basedir}/../system.md —— 从 server-ci 看就是 .toolchain/system.md
+cp -f "$ROOT/system.md" "$ROOT/.toolchain/system.md"
 
 # ---------- 构建 ----------
 GOALS=("$@")

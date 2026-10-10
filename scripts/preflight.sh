@@ -5,14 +5,21 @@
 #  跑一遍所有该跑的东西，任何一项失败就退出非零。
 #  部署前执行这个，比 CI 更直接 —— 你就是那道 CI。
 #
-#  用法：./scripts/preflight.sh [--skip-web]
+#  用法：./scripts/preflight.sh [--skip-web] [--skip-golden]
 # ============================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
 SKIP_WEB=0
-[ "${1:-}" = "--skip-web" ] && SKIP_WEB=1
+SKIP_GOLDEN=0
+for arg in "$@"; do
+  case "$arg" in
+    --skip-web)    SKIP_WEB=1 ;;
+    --skip-golden) SKIP_GOLDEN=1 ;;
+    *) echo "未知参数：$arg（支持 --skip-web / --skip-golden）" >&2; exit 2 ;;
+  esac
+done
 
 # ---------- 工具链 ----------
 export JAVA_HOME="${JAVA_HOME:-$ROOT/.toolchain/jdk-17.0.2}"
@@ -28,7 +35,7 @@ ok()   { printf '  \033[32m✅ %s\033[0m\n' "$1"; }
 bad()  { printf '  \033[31m❌ %s\033[0m\n' "$1"; FAILED=1; }
 
 # ---------- 0. 密钥检查 ----------
-step "0/4  检查 .env 关键项"
+step "0/5  检查 .env 关键项"
 if [ ! -f .env ]; then
   bad ".env 不存在（应该从 .env.example 复制）"
 else
@@ -42,7 +49,7 @@ else
 fi
 
 # ---------- 1. 后端测试 ----------
-step "1/4  后端测试"
+step "1/5  后端测试"
 if ./scripts/build-server.sh -q clean test 2>&1 | tail -3; then
   ok "测试通过（隔离副本 .toolchain/server-ci/）"
 else
@@ -50,7 +57,7 @@ else
 fi
 
 # ---------- 2. 后端打包 ----------
-step "2/4  后端打包"
+step "2/5  后端打包"
 if ./scripts/build-server.sh -q clean package -DskipTests 2>&1 | tail -3; then
   JAR=$(ls -1 .toolchain/server-ci/target/qqbot-server-*.jar 2>/dev/null | grep -v original | head -1)
   [ -n "$JAR" ] && ok "产物 $JAR" || bad "没找到 jar"
@@ -60,9 +67,9 @@ fi
 
 # ---------- 3. 前端 ----------
 if [ "$SKIP_WEB" = "1" ]; then
-  step "3/4  前端（已跳过）"
+  step "3/5  前端（已跳过）"
 else
-  step "3/4  前端类型检查与构建"
+  step "3/5  前端类型检查与构建"
   if ./scripts/build-web.sh > /tmp/preflight-web.log 2>&1; then
     ok "构建完成并已同步到 server/web-dist"
   else
@@ -72,21 +79,29 @@ else
 fi
 
 # ---------- 4. 配置自检 ----------
-step "4/4  配置自检"
-if [ -f server/data/kb/index.bin ]; then
-  SIZE=$(du -h server/data/kb/index.bin | cut -f1)
-  ok "向量索引存在（$SIZE）"
+step "4/5  配置自检"
+# 2026-10-08：块、向量、词条表、问答记录现在都在同一个 SQLite 里。
+# 旧检查指向的 data/kb/index.bin 与 pages.jsonl 已经不存在 —— 那两个检查恒定失败，
+# 而"永远红的检查"等于没有检查，所以删掉。这里只确认库在，
+# 块数与向量数由下面的门禁步骤打印出来。
+DB="server/data/qa/qqbot.sqlite"
+if [ -f "$DB" ]; then
+  ok "语料与问答库存在（$(du -h "$DB" | cut -f1)）"
 else
-  bad "向量索引缺失 —— 知识库检索会静默失效，跑：--app.kb.index.enabled=true"
+  bad "语料库缺失：$DB —— 知识库检索会静默失效"
 fi
-# 2026-09-27：词条表（中文名 / 核对状态）已从 TSV 文件搬进 SQLite 单表 kb_term，
-# 服务启动时按 pages.jsonl 自动补齐缺失的页面。所以这里只检查语料侧，
-# 词条表由服务自己管（见 KbTermStore.reconcile）。
-if [ -f server/data/kb/pages.jsonl ]; then
-  N=$(wc -l < server/data/kb/pages.jsonl)
-  ok "页面清单 $N 页（词条表启动时按它补齐）"
+
+# ---------- 5. 检索回归门禁 ----------
+if [ "$SKIP_GOLDEN" = "1" ]; then
+  step "5/5  检索回归门禁（已跳过）"
+  printf '  \033[33m⚠ 跳过门禁：本次发布没有检索质量基线背书\033[0m\n'
 else
-  bad "pages.jsonl 缺失 —— 词条表无法自动补齐新页面"
+  step "5/5  检索回归门禁"
+  if ./scripts/golden-gate.sh; then
+    ok "黄金集底线守住"
+  else
+    bad "检索质量低于底线，或门禁无法度量（详见 .toolchain/verify/golden-gate.log）"
+  fi
 fi
 
 # ---------- 结果 ----------

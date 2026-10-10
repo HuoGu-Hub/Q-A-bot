@@ -263,7 +263,7 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <p><strong>结论：温度不能用来选择知识来源。</strong> 想控制&quot;用哪份资料&quot;，真正的旋钮是这四个：</p>
 <ol>
 <li><strong>上下文里放了什么</strong>（检索策略、资料块组装）——决定 90%</li>
-<li><strong>系统提示词怎么要求</strong>（<code>AGENTS.md</code> 第九章的&quot;以资料为准&quot;）</li>
+<li><strong>系统提示词怎么要求</strong>（<code>system.md</code> 第九章的&quot;以资料为准&quot;）</li>
 <li><strong>允许不允许模型说&quot;我不确定/我的资料可能过期&quot;</strong></li>
 <li>（可选）要求它标注每条事实的来源</li>
 </ol>
@@ -306,10 +306,10 @@ private static ChatModel buildClient(LlmProperties.Provider cfg) {
 <p>所以&quot;每请求切换温度&quot;要<strong>为每个 provider 建多套客户端实例</strong>（严谨/默认/发散），按模式选实例。工作量不大，但不是改个数字。</p>
 <p><strong>而且这个功能有现成的家</strong>：<code>LlmProperties.ReplyStyle</code>（<code>config/LlmProperties.java:116</code>）就是为了这类需求建的——它的注释写得很明白：</p>
 <blockquote>
-<p>表现层约束，和 AGENTS.md 那份「安全底座」刻意分开。
-① AGENTS.md 改它风险大、且每次都进系统提示词越长越贵；② 这里要能<strong>热生效</strong>（后台改完下一句就变）。</p>
+<p>表现层约束，和 system.md 那份「安全底座」刻意分开。
+① system.md 改它风险大、且每次都进系统提示词越长越贵；② 这里要能<strong>热生效</strong>（后台改完下一句就变）。</p>
 </blockquote>
-<p><strong>严谨度档应该挂在 <code>ReplyStyle</code> 这套机制上</strong>（后台可配、热生效、与安全底座隔离），而不是去动 <code>AGENTS.md</code>。</p>
+<p><strong>严谨度档应该挂在 <code>ReplyStyle</code> 这套机制上</strong>（后台可配、热生效、与安全底座隔离），而不是去动 <code>system.md</code>。</p>
 <hr>
 <h2 id="二关于忠于自有知识库这改变了诊断"><a class="anchor" href="#二关于忠于自有知识库这改变了诊断">二、关于&quot;忠于自有知识库&quot;：这改变了诊断</a></h2>
 <p>你这句话把问题定位得更准了。我 v1 说&quot;别降低知识库权重&quot;，但理由还不够锋利。现在重新表述：</p>
@@ -340,7 +340,7 @@ private static ChatModel buildClient(LlmProperties.Provider cfg) {
 <p>而现在系统<strong>把 A 和 B 一视同仁</strong>：</p>
 <ul>
 <li><code>ChatService.java:221-224</code> 把它们混成<strong>一个</strong> <code>&lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;</code> 块；</li>
-<li><code>AGENTS.md</code> 第九章说&quot;<strong>以资料为准（它更新、更具体）</strong>&quot;——把 B 类和 A 类一起升格成权威；</li>
+<li><code>system.md</code> 第九章说&quot;<strong>以资料为准（它更新、更具体）</strong>&quot;——把 B 类和 A 类一起升格成权威；</li>
 <li><code>KbChunk</code> 的字段是 <code>(i, title, cats, text, url)</code>（<code>kb/KbChunk.java:14</code>）——<strong>没有任何字段能区分 A 和 B，也没有日期</strong>。</li>
 </ul>
 <p><strong>所以你感受到的&quot;过度忠于 wiki&quot;，准确说法是：系统没有能力区分&quot;我们核对过的知识&quot;和&quot;wiki 的原料&quot;，于是把原料也当成了结论。</strong></p>
@@ -535,7 +535,7 @@ public record KbChunk(
 </tr>
 <tr>
 <td><strong>提示词口径</strong></td>
-<td><code>AGENTS.md</code> 第九章改成：<strong>已核对资料以它为准；wiki 原文与你的知识冲突时，说明分歧并在必要时指出&quot;我的资料截至 X&quot;</strong></td>
+<td><code>system.md</code> 第九章改成：<strong>已核对资料以它为准；wiki 原文与你的知识冲突时，说明分歧并在必要时指出&quot;我的资料截至 X&quot;</strong></td>
 </tr>
 </tbody></table></div>
 <h3 id="43-顺带把-v1-的-b1-修掉这是-bug不是功能"><a class="anchor" href="#43-顺带把-v1-的-b1-修掉这是-bug不是功能">4.3 顺带把 v1 的 B1 修掉（这是 bug，不是功能）</a></h3>
@@ -573,7 +573,7 @@ public record KbChunk(
 <li><strong><code>web</code> 模式的实时来源取哪个</strong>：wiki 的渲染结果（<code>action=parse</code>）、还是直接吃 Steam 官方新闻/更新日志？
 （我建议<strong>先只做 wiki 渲染结果</strong>，范围小；Steam RSS 留作&quot;版本更新&quot;专项。）</li>
 <li><strong><code>hybrid</code>（对照）模式要不要</strong>？它最有诊断价值（能直接看出知识库和实时源的分歧），但回答最长、最贵。</li>
-<li><strong>双重确认</strong>：<code>AGENTS.md</code> 第九章的口径按 4.2 改（已核对资料优先，wiki 原文允许分歧）——这是动你机器人人格规则的地方，需要你点头。</li>
+<li><strong>双重确认</strong>：<code>system.md</code> 第九章的口径按 4.2 改（已核对资料优先，wiki 原文允许分歧）——这是动你机器人人格规则的地方，需要你点头。</li>
 </ol>
 <hr>
 <h2 id="七实现进度滚动更新"><a class="anchor" href="#七实现进度滚动更新">七、实现进度（滚动更新）</a></h2>
@@ -684,7 +684,7 @@ public record KbChunk(
 </tr>
 <tr>
 <td>提示词口径</td>
-<td><code>AGENTS.md</code> 第九章（已改，见下）</td>
+<td><code>system.md</code> 第九章（已改，见下）</td>
 </tr>
 </tbody></table></div>
 <p><strong>合并规则</strong>（<code>mergeChunkLines</code>，抽成 static 专为可单测）：</p>
@@ -696,7 +696,7 @@ public record KbChunk(
 </code></pre>
 <p>想要&quot;彻底从零重建&quot;用 <code>--app.kb.build.reset=true</code>（<strong>会丢弃全部人工成果</strong>，默认关）。</p>
 <p><strong>⚠️ 一处被用户纠正的设计过度推断（2026-09-28 晚）</strong></p>
-<p>第一版把 <code>src=curated</code> 写成了<strong>权威等级</strong>：<code>AGENTS.md</code> 里写&quot;已人工核对…<strong>最可信，以它为准</strong>&quot;。
+<p>第一版把 <code>src=curated</code> 写成了<strong>权威等级</strong>：<code>system.md</code> 里写&quot;已人工核对…<strong>最可信，以它为准</strong>&quot;。
 用户澄清：</p>
 <blockquote>
 <p>不是有了人工订正就一定认定这个数据对的，只要保证<strong>能够对知识库进行修改，
@@ -704,7 +704,7 @@ public record KbChunk(
 </blockquote>
 <p>也就是说，要的是<strong>能力</strong>（能改、能存住、能生效），不是<strong>权威</strong>（改过 = 对）。
 所以已改为<strong>出处标注</strong>，并把&quot;生效&quot;做成端到端可验证的：</p>
-<p><strong><code>AGENTS.md</code> 第九章现在的措辞</strong>（只标出处，不做权威排序）：</p>
+<p><strong><code>system.md</code> 第九章现在的措辞</strong>（只标出处，不做权威排序）：</p>
 <blockquote>
 <ol start="2">
 <li>资料块可能分两部分，区别只是<strong>出处</strong>，不代表哪一部分一定更准：<ul>
@@ -763,7 +763,7 @@ public record KbChunk(
 已在构建日志末尾打了醒目 WARN 提醒。</li>
 </ol>
 <h3 id="下一步原计划里的-1-2-3-步"><a class="anchor" href="#下一步原计划里的-1-2-3-步">⏳ 下一步（原计划里的 1 / 2 / 3 步）</a></h3>
-<p><strong>为什么 AGENTS.md 现在还没改</strong>：第九章第 5 点要改成&quot;区分已核对资料与 wiki 原文&quot;，
+<p><strong>为什么 system.md 现在还没改</strong>：第九章第 5 点要改成&quot;区分已核对资料与 wiki 原文&quot;，
 前提是<strong>资料块里能标出这两类</strong>，而那需要 chunk 级的 <code>source / reviewed / contentAt</code>。
 现在就改，等于把<strong>你人工订正过的那部分</strong>也一并降权 —— 正是你明确反对的方向。</p>
 <p>拟改的措辞（等元数据就位后落地，你可以先审）：</p>

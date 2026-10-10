@@ -14,9 +14,9 @@ package com.example.qqbot.site;
  * 放在 {@code site} 而不是 {@code command}，是因为"机器人的展示身份"比"指令系统"更宽，
  * 而 {@code site} 已经在管"对外展示什么"。
  *
- * <p>⚠️ 注意：{@code AGENTS.md} 里的名字是**写死在提示词里的** ——
+ * <p>⚠️ 注意：{@code system.md} 里的名字是**写死在提示词里的** ——
  * 那是模型人格的一部分，不适合运行时替换（而且提示词是纯文本文件）。
- * 改提示词里的名字需要手动改 AGENTS.md。
+ * 改提示词里的名字需要手动改 system.md。
  *
  * <p>⚠️ 接口而不是 record：配置是热生效的（{@code SettingsService} 就地改字段、
  * 各 Bean 长期持引用实时读），写成快照就再也看不到后台的修改，而且不报错。

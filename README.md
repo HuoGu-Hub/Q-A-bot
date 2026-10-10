@@ -9,7 +9,7 @@
 |---|---|---|
 | 消息平台 | QQ，经 NapCat / OneBot 11 | `onebot/` 与 `incoming/` |
 | 知识库语料 | 《雾锁王国》 | 按[文档格式规范](docs/md/知识库文档格式规范.md)导入新语料 |
-| 机器人人设 | `AGENTS.md`，模板 `AGENTS.md.example` | 只改这份文件，不用重新打包 |
+| 机器人人设 | `system.md`，模板 `system.md.example` | 只改这份文件，不用重新打包 |
 | 对话模型 | opencode-go，降级 DeepSeek | 后台「设置」页，或 `llm/` |
 
 [快速开始](#本地跑起来) · [部署](docs/md/公网部署指南.md) · [系统说明书](docs/md/系统说明书.md)
@@ -54,7 +54,7 @@ plans/    规划文档
 - 数据库在 `server/data/qa/qqbot.sqlite`，路径按进程工作目录解析，务必从 `server/` 启动。
 - 配置优先级：命令行与环境变量 → `server/config/overrides.yml` → `application.yml`。
 - 密钥放在仓库根 `.env`，模板 `.env.example`。
-- 不进仓库：`.env`、`AGENTS.md`、`deploy/data/`、`server/data/`、`server/web-dist/`、`web/node_modules/`、自托管字体。
+- 不进仓库：`.env`、`system.md`、`deploy/data/`、`server/data/`、`server/web-dist/`、`web/node_modules/`、自托管字体。
 
 ## 本地跑起来
 

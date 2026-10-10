@@ -19,6 +19,7 @@ import org.springframework.mock.web.MockMultipartFile;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -204,5 +205,129 @@ class CarouselServiceTest {
 
         props.getCarousel().setIntervalMs(6000);
         assertThat(service.publicIntervalMs()).isEqualTo(6000);
+    }
+
+    /* ==================== 按需缩放（见 CarouselService.read(long, int)） ====================
+       背景：原图 2560 宽，而首屏那块只显示到大约 600×340。
+       直接下发原图让六张图合计 16.86 MB，弱网下把链路占满、点导航要等 20 秒以上。
+       下面验的是**接口契约**，不是画质 —— 画质靠 ImageScaler 里那两段逻辑。 */
+
+    /** 真的用到透明的 PNG：左半边透明、右半边不透明 */
+    private static byte[] transparentPng(int w, int h) throws Exception {
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                img.setRGB(x, y, x < w / 2 ? 0x00000000 : 0xFF3366CC);
+            }
+        }
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", bos);
+        return bos.toByteArray();
+    }
+
+    /** 缓存目录里属于这张原图的缩放件数量。目录还不存在就是 0 —— 它是按需创建的 */
+    private long variantCount(String file) throws Exception {
+        Path dir = service.cacheDir();
+        if (!Files.isDirectory(dir)) {
+            return 0;
+        }
+        String base = file.substring(0, file.lastIndexOf("."));
+        try (var stream = Files.newDirectoryStream(dir, base + "@*")) {
+            long n = 0;
+            for (Path ignored : stream) {
+                n++;
+            }
+            return n;
+        }
+    }
+
+    @Test
+    @DisplayName("★ 传了宽度就缩到那个宽度，全不透明的图重编码成 JPEG")
+    void scalesToRequestedWidth() throws Exception {
+        props.getCarousel().setMaxSizeKb(20000);
+        CarouselStore.Item item = service.add(file("big.png", noisyPng(1200, 600)), "", "");
+
+        CarouselService.ImageData scaled = service.read(item.id(), 400);
+
+        assertThat(scaled.mime())
+                .as("照片存成 PNG 自带的全不透明 alpha 不该让它继续以 PNG 下发，否则等于白缩")
+                .isEqualTo("image/jpeg");
+        BufferedImage back = ImageIO.read(new ByteArrayInputStream(scaled.bytes()));
+        assertThat(back.getWidth()).isEqualTo(400);
+        assertThat(back.getHeight()).isEqualTo(200);
+
+        CarouselService.ImageData raw = service.read(item.id());
+        assertThat(scaled.bytes().length).as("缩放件必须明显小于原图").isLessThan(raw.bytes().length);
+    }
+
+    @Test
+    @DisplayName("不放大：要的宽度比原图还大就老实发原图")
+    void doesNotUpscale() throws Exception {
+        byte[] bytes = png(300, 200);
+        CarouselStore.Item item = service.add(file("s.png", bytes), "", "");
+
+        CarouselService.ImageData data = service.read(item.id(), 1280);
+
+        assertThat(data.bytes()).isEqualTo(bytes);
+        assertThat(data.mime()).isEqualTo("image/png");
+    }
+
+    @Test
+    @DisplayName("真的用到透明的图仍然发 PNG，不许压平")
+    void keepsPngWhenAlphaIsUsed() throws Exception {
+        props.getCarousel().setMaxSizeKb(20000);
+        CarouselStore.Item item = service.add(file("t.png", transparentPng(600, 300)), "", "");
+
+        CarouselService.ImageData scaled = service.read(item.id(), 200);
+
+        assertThat(scaled.mime()).isEqualTo("image/png");
+        BufferedImage back = ImageIO.read(new ByteArrayInputStream(scaled.bytes()));
+        assertThat(back.getWidth()).isEqualTo(200);
+        assertThat(back.getColorModel().hasAlpha()).as("透明通道要留住").isTrue();
+    }
+
+    @Test
+    @DisplayName("GIF 原样透传：缩放只会把动图变成一张静帧")
+    void passesGifThrough() throws Exception {
+        BufferedImage img = new BufferedImage(400, 200, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ImageIO.write(img, "gif", bos);
+        byte[] gif = bos.toByteArray();
+        CarouselStore.Item item = service.add(file("a.gif", gif), "", "");
+
+        CarouselService.ImageData data = service.read(item.id(), 100);
+
+        assertThat(data.bytes()).isEqualTo(gif);
+        assertThat(data.mime()).isEqualTo("image/gif");
+        assertThat(variantCount(item.file())).as("透传就不该产生缓存件").isZero();
+    }
+
+    @Test
+    @DisplayName("★ 同一宽度只生成一次；删图时缩放件一起清掉")
+    void cachesVariantAndClearsOnDelete() throws Exception {
+        props.getCarousel().setMaxSizeKb(20000);
+        CarouselStore.Item item = service.add(file("c.png", noisyPng(1000, 500)), "", "");
+
+        byte[] first = service.read(item.id(), 320).bytes();
+        assertThat(variantCount(item.file())).as("第一次生成一份").isEqualTo(1);
+
+        byte[] second = service.read(item.id(), 320).bytes();
+        assertThat(second).isEqualTo(first);
+        assertThat(variantCount(item.file())).as("第二次必须命中缓存，不能再写一份").isEqualTo(1);
+
+        service.delete(item.id());
+        assertThat(variantCount(item.file())).as("删图要连缩放件一起带走").isZero();
+    }
+
+    @Test
+    @DisplayName("宽度超出允许范围就退回原图，不缩")
+    void ignoresOutOfRangeWidth() throws Exception {
+        props.getCarousel().setMaxSizeKb(20000);
+        byte[] bytes = noisyPng(1200, 600);
+        CarouselStore.Item item = service.add(file("r.png", bytes), "", "");
+
+        assertThat(service.read(item.id(), 8).bytes()).as("比下限还小").isEqualTo(bytes);
+        assertThat(service.read(item.id(), 99999).bytes()).as("比上限还大").isEqualTo(bytes);
+        assertThat(variantCount(item.file())).isZero();
     }
 }

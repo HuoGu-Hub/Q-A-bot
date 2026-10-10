@@ -225,9 +225,10 @@ class KbRetrieverTest {
     @Test
     @DisplayName("余弦计算本身是对的")
     void cosineIsCorrect() {
-        assertThat(KbRetriever.cosine(new float[]{1f, 0f}, new float[]{1f, 0f})).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-6));
-        assertThat(KbRetriever.cosine(new float[]{1f, 0f}, new float[]{0f, 1f})).isCloseTo(0.0, org.assertj.core.data.Offset.offset(1e-6));
-        assertThat(KbRetriever.cosine(new float[]{0f, 0f}, new float[]{1f, 0f})).isZero();
+        // 数学搬到了 KbVectors：A 路与 C 路共用同一份，两份必然漂移。
+        assertThat(KbVectors.cosine(new float[]{1f, 0f}, new float[]{1f, 0f})).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-6));
+        assertThat(KbVectors.cosine(new float[]{1f, 0f}, new float[]{0f, 1f})).isCloseTo(0.0, org.assertj.core.data.Offset.offset(1e-6));
+        assertThat(KbVectors.cosine(new float[]{0f, 0f}, new float[]{1f, 0f})).isZero();
     }
 
     @Test

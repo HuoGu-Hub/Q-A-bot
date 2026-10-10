@@ -2,8 +2,8 @@
 
 > **这是模板，不是真实人设。** 真实系统提示词不进版本控制（公开仓库不公开人设与安全规则）。
 >
-> 用法：把本文件复制成同目录下的 `AGENTS.md`，再按你的机器人改。
-> 运行时由 `app.llm.system-prompt-file: AGENTS.md` 读取（启动时读一次），
+> 用法：把本文件复制成同目录下的 `system.md`，再按你的机器人改。
+> 运行时由 `app.llm.system-prompt-file: system.md` 读取（启动时读一次），
 > 改完**重启即生效**，不用重新打包；缺文件时会退化成内置的兜底话术。
 >
 > ⚠️ `SystemPromptTest` 会拿本文件当兜底来跑安全底线断言，
@@ -53,6 +53,6 @@
 
 ### 维护提示
 
-- 人设属于**本地配置**：想保留真实人设，请只改本地的 `AGENTS.md`（已被 `.gitignore` 排除）。
+- 人设属于**本地配置**：想保留真实人设，请只改本地的 `system.md`（已被 `.gitignore` 排除）。
 - 机器人身份（名字 / 组织 / 署名）走 `application.yml`，那里的默认值是示例占位；
   真实值请用 `.env` 里的 `APP_BOT_NAME` / `APP_BOT_ORG` / `APP_BOT_AUTHOR` 覆盖。

@@ -263,7 +263,7 @@ outbound-fallback-text: "主人不让我说「{word}」，我们换个话题吧�
 |---|---|
 | `app.llm.default-provider` | 默认用哪个厂商 |
 | `app.llm.fallback-providers` | 降级顺序，例如 `[deepseek, qwen-vl]` |
-| `app.llm.system-prompt-file` | 人格文件。默认 `AGENTS.md`，**权威副本在仓库根目录** |
+| `app.llm.system-prompt-file` | 人格文件。默认 `system.md`，**权威副本在仓库根目录** |
 | `app.llm.providers.<名字>.base-url` | 接口地址 |
 | `app.llm.providers.<名字>.api-key` | **留空 = 跳过这个厂商** |
 | `app.llm.providers.<名字>.model-name` | 模型 ID |

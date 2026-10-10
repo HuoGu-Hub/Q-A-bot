@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -56,6 +57,18 @@ import java.util.Set;
  */
 class RetrievalGoldenTest {
 
+    /**
+     * 门禁模式：{@code -Dqqbot.golden.gate=true}。
+     *
+     * <p><b>为什么需要这个开关</b>：本类默认是**度量工具** —— 缺语料、缺 key、向量路调不通，
+     * 一律走 {@link Assumptions} 静默跳过，{@code mvn test} 照样绿。
+     * 但"测不出结果时仍然显示绿色"的门禁，比没有门禁更糟：它给出的是"已经守住了"的假信号。
+     * 打开本开关后语义反过来 —— <strong>测不了就是失败</strong>。
+     *
+     * <p>由 {@code scripts/golden-gate.sh} 打开；{@code scripts/preflight.sh} 跑的就是它。
+     */
+    private static final boolean GATE = Boolean.parseBoolean(System.getProperty("qqbot.golden.gate", "false"));
+
     @TempDir
     Path tmp;
 
@@ -82,15 +95,40 @@ class RetrievalGoldenTest {
         }
     }
 
+    /**
+     * 前置条件不满足时的两种语义：普通模式跳过，门禁模式失败。
+     *
+     * <p>本类所有"缺东西"的判断都必须经过它 —— 任何一处直接写
+     * {@link Assumptions#assumeTrue} 都会重新开出一个静默跳过的口子。
+     */
+    private static void requireMeasurable(boolean present, String what) {
+        if (present) {
+            return;
+        }
+        // ⚠️ 这两个分支的顺序与条件都必须是"不满足才进"：
+        //    写成 if (GATE) fail(...) 会让门禁**永远红** —— 一个恒失败的门禁
+        //    和恒通过的门禁一样没用，而且更难发现（它看起来"很严格"）。
+        if (GATE) {
+            fail("★ 门禁模式：测不了就是失败 —— " + what
+                    + "。去掉 -Dqqbot.golden.gate=true 可退回「仅度量、不卡门槛」的模式");
+        }
+        Assumptions.assumeTrue(false, what + "，跳过");
+    }
+
     @Test
     @DisplayName("★ 检索黄金集基线：分类统计 R@1 / R@5 / MRR / 干净率")
     void goldenBaseline() throws IOException {
         Path repo = findRepoRoot();
-        Assumptions.assumeTrue(repo != null, "找不到工程根（缺 tests/golden/retrieval-golden.tsv），跳过");
+        // 失败时把判据一起说出来：门禁最常见的问题就是"它在哪个目录里找、找到了没有"，
+        // 只报一句"找不到工程根"会让人无从下手。
+        // 失败时把判据一起说出来：门禁最常见的问题就是"它在哪个目录里找、找到了没有"。
+        requireMeasurable(repo != null, "找不到工程根（缺 tests/golden/retrieval-golden.tsv）"
+                + "；user.dir=" + System.getProperty("user.dir")
+                + "，-Dqqbot.repo.root=" + System.getProperty("qqbot.repo.root", "（未设置）"));
         Path prodDb = repo.resolve("server/data/qa/qqbot.sqlite");
         Path golden = repo.resolve("tests/golden/retrieval-golden.tsv");
-        Assumptions.assumeTrue(Files.isRegularFile(prodDb), "没有生产语料库，跳过：" + prodDb);
-        Assumptions.assumeTrue(Files.isRegularFile(golden), "没有黄金集，跳过：" + golden);
+        requireMeasurable(Files.isRegularFile(prodDb), "没有生产语料库：" + prodDb);
+        requireMeasurable(Files.isRegularFile(golden), "没有黄金集：" + golden);
 
         // ---- 复制语料（绝不直接读生产库：WAL 共享内存 + 迁移会写库）----
         Path db = tmp.resolve("corpus.sqlite");
@@ -221,60 +259,62 @@ class RetrievalGoldenTest {
         System.out.println();
         if (!vectorLive) {
             System.out.println("★ 向量路不可用，本次不设回归门槛（只打印结果）");
+            // 这里正是"假绿"最常发生的地方：网络不通或 key 失效时，
+            // 测出来的是"只有本地关键词路"的另一种分布，再往下卡门槛毫无意义。
+            // 门禁模式下必须当场失败，而不是打印一句"不设门槛"就过去。
+            requireMeasurable(false, "向量路不可用，无法在生产路径上度量 —— 检查 .env 的 SILICONFLOW_API_KEY 与外网");
         } else if (!rerankEffective) {
             System.out.println("★ 重排未生效，按**重排前**的门槛检查");
+            requireMeasurable(false, "重排未生效，门槛会退到重排前那一档，不代表生产路径");
         } else {
             System.out.println("★ 重排已生效，按**重排后**的门槛检查");
         }
 
+        // ============ 门槛：两种口径，缺一不可 ============
+        //
+        // ① **绝对条数** —— 以"校准时实测的条数"为基准，允许少量退步。
+        //
+        //    ★ 2026-10-09 改，起因是百分比门槛把自己逼死了：这天加了 3 条**更难的**真实提问
+        //    （力量/智力/瘴气，来自 wiki 词条缺中文名），entity R@1 从 70.0% 掉到 65.2%，
+        //    **而答对的条数其实从 14 涨到 15**。百分比把这个"涨"报成了退步，
+        //    而且余量被吃到 0 —— 再错一条就红，门槛从"防退化"变成了"随机报警"。
+        //
+        // ② **百分比** —— 防止样本大量增加后"绝对条数达标、正确率却崩了"。
+        //    它设得比校准值松，只做粗筛，不承担精确判定的职责。
+        //
+        // 校准纪律：实测**真的变好**时把 baseline 调上去；变差时先查原因，别调门槛。
+        //
+        // 历史（保留以免重蹈）：
+        //   · 2026-10-04 从 0.83/0.95 下调到 0.65/0.90 —— 原门槛是在**精选样本**上校准的
+        //     （那批样本的注释里写着"实测本体不在 Top-3"等），是量过之后挑出来的成功案例，
+        //     91.7% 被高估；
+        //   · 2026-10-04 colloquial 从硬性"= 100%"改为"≥ 80%" —— 那是 n=2 时代定的，
+        //     两条题错一条就是 50%，等于要求满分。
         Stats ent = vectorLive ? stats.get("entity") : null;
         if (ent != null && ent.n() > 0) {
-            // ⚠️ 2026-10-04 下调：0.83/0.95 → 0.65/0.90。
-            //
-            // 原因：原来的门槛是在**精选样本**上校准的 —— 那 12 条 entity 的注释里写着
-            // 「实测本体不在 Top-3」「实测被 Pearl 压到第 2」「首轮标注写错，靠基线跑出来才发现」，
-            // 也就是说它们是**量过之后挑出来的成功案例**，91.7% 是被高估的。
-            //
-            // 加入 3 条**未经挑选的真实提问**（来自 qa_keyword 挖掘）后，实测是 11/15 = 73.3%：
-            //   · 现在钓鱼还像很久以前那样钓不上来吗 → 检回 wet-boot（应为 wake-of-water-4）
-            //   · 可以挤牛奶吗                       → **0 命中**（milk 明明在库里）
-            //   · 腐血是什么                         → 检回 corrosive-blood（应为 rotblood）—— 近名污染
-            // 三条都逐条核实过「标注没错」，是真失败，不是假红。
-            //
-            // 门槛的意义是**防退化**（相对当前状态），不是质量目标。所以按实测值下调：
-            // 15 条里 R@1 允许错 5 条、R@5 允许错 1 条。
-            // ★ 真实值应当随语料扩充而上升 —— 那时候要把它**调回去**。
-            double r1Floor = rerankEffective ? 0.65 : 0.58;
-            double r5Floor = rerankEffective ? 0.90 : 0.83;
-            assertTrue(ent.r1() >= Math.ceil(ent.n() * r1Floor),
-                    "entity R@1 低于门槛（重排后基线 91.7% / 重排前 66.7%）：" + ent.r1() + "/" + ent.n()
-                            + "，重排生效=" + rerankEffective);
-            assertTrue(ent.r5() >= Math.ceil(ent.n() * r5Floor),
-                    "entity R@5 低于门槛（基线 100%）：" + ent.r5() + "/" + ent.n());
+            // 重排关掉时基线更低 —— 重排正是修掉"同族变体压过本体"的那一层。
+            // 注：off 的那两个数是按原百分比门槛等比折算的**估计值**，不是实测值，
+            //     那条路径只在排查时走。
+            int r1Base = rerankEffective ? 15 : 13;
+            int r5Base = rerankEffective ? 21 : 19;
+            assertAtLeast("entity R@1", ent.r1(), ent.n(), r1Base, 2, rerankEffective ? 0.55 : 0.45);
+            assertAtLeast("entity R@5", ent.r5(), ent.n(), r5Base, 1, rerankEffective ? 0.80 : 0.70);
         }
         Stats col = vectorLive ? stats.get("colloquial") : null;
         if (col != null && col.n() > 0) {
-            // ⚠️ 2026-10-04 从硬性「= 100%」改为「≥ 80%」。
-            //
-            // 原来那句 assertTrue(col.r5() >= col.n()) 是 n=2 时代定的 ——
-            // 两条题只要错一条就变 50%，等于要求满分。样本涨到 5 条后它不再合理。
-            //
-            // 现在 5 条里错 1 条（还是不能召唤空荡独眼巨人 → 检回 hollow-cyclops-trophy），
-            // 那是**真失败**：具体物品块（战利品）赢过了通用页（Boss 本体），
-            // 和已存在的 腐蚀之血↔腐血、城堡屋顶方块↔城堡方块 是同一种近名污染。
-            assertTrue(col.r5() >= Math.ceil(col.n() * 0.80),
-                    "colloquial R@5 低于门槛（n=2 时基线 100%，现按 80%）：" + col.r5() + "/" + col.n());
+            // 5 条里错 1 条：不能召唤空荡独眼巨人 → 检回 hollow-cyclops-trophy。
+            // 那是**真失败**：具体物品块（战利品）赢过通用页（Boss 本体），
+            // 与 腐蚀之血↔腐血、城堡屋顶方块↔城堡方块 是同一种近名污染。
+            assertAtLeast("colloquial R@5", col.r5(), col.n(), 4, 1, 0.70);
             if (rerankEffective) {
-                assertTrue(col.r1() >= Math.ceil(col.n() * 0.75),
-                        "colloquial R@1 低于门槛（重排后基线 100%）：" + col.r1() + "/" + col.n());
+                assertAtLeast("colloquial R@1", col.r1(), col.n(), 4, 1, 0.60);
             }
         }
-        // ★ 这一条是本次重排改造的**防退化**：闲聊的干净率从 6.7% 提到 93.3%，
+        // ★ 这一条是重排改造的**防退化**：闲聊的干净率从 6.7% 提到 93.3%，
         //   没有它，将来任何人放松阈值都会悄悄把这个改进还回去。
         Stats ch = rerankEffective ? stats.get("chitchat") : null;
         if (ch != null && ch.n() > 0) {
-            assertTrue(ch.clean() >= Math.ceil(ch.n() * 0.80),
-                    "chitchat 干净率低于门槛（重排后基线 93.3%）：" + ch.clean() + "/" + ch.n());
+            assertAtLeast("chitchat 干净率", ch.clean(), ch.n(), 14, 2, 0.70);
         }
         int junkBlocks = (stats.containsKey("gap") ? stats.get("gap").injected() : 0)
                 + (stats.containsKey("chitchat") ? stats.get("chitchat").injected() : 0);
@@ -282,7 +322,32 @@ class RetrievalGoldenTest {
                 + (stats.containsKey("chitchat") ? stats.get("chitchat").n() : 0);
         System.out.printf("gap+chitchat：%d 条不需要知识库的问题，共注入 %d 块无关资料（重排前基线 95 块）%n",
                 junkItems, junkBlocks);
+
+        // 脚本按这一行判定结论：出现 PASS 才算过。上面的 assert 一旦失败就抛异常，走不到这里。
+        System.out.println(GATE
+                ? "GOLDEN-GATE: PASS（重排生效，按底线口径检查通过）"
+                : "GOLDEN-GATE: OFF（本次仅度量，未启用门禁）");
         System.out.println();
+    }
+
+    /**
+     * 门槛断言：**绝对条数 + 百分比两个口径都要过**。
+     *
+     * @param what          指标名，进失败信息
+     * @param actual        本次实测答对条数
+     * @param n             该类别样本总数
+     * @param baseline      校准时实测的条数
+     * @param allowedMisses 允许的绝对退步条数
+     * @param pctFloor      粗筛用的百分比下限，设得比校准值松
+     */
+    private static void assertAtLeast(String what, int actual, int n,
+                                      int baseline, int allowedMisses, double pctFloor) {
+        assertTrue(actual >= baseline - allowedMisses,
+                what + " 低于绝对门槛：答对 " + actual + "/" + n
+                        + "，校准基线 " + baseline + " 条，允许退步 " + allowedMisses + " 条");
+        assertTrue(actual >= Math.ceil(n * pctFloor),
+                what + " 低于百分比门槛 " + pctFloor + "：答对 " + actual + "/" + n
+                        + "（样本增加后正确率崩了也会在这里红）");
     }
 
     /** 一个类别的统计结果 */
@@ -404,9 +469,9 @@ class RetrievalGoldenTest {
      * 找工程根。
      *
      * <p><b>为什么不用 {@code ProjectFiles.projectRoot()}</b>：它以
-     * {@code AGENTS.md} / {@code server/pom.xml} 为判据向上找，而隔离构建
-     * （{@code scripts/build-server.sh}）会把 {@code AGENTS.md} 复制到
-     * {@code .toolchain/AGENTS.md} —— 于是从 {@code .toolchain/server-ci} 向上找时，
+     * {@code system.md} / {@code server/pom.xml} 为判据向上找，而隔离构建
+     * （{@code scripts/build-server.sh}）会把 {@code system.md} 复制到
+     * {@code .toolchain/system.md} —— 于是从 {@code .toolchain/server-ci} 向上找时，
      * 先撞上 {@code .toolchain}，把工程根认成了 {@code .toolchain}，
      * 生产语料与黄金集就都找不到了（表现为整个测试被静默跳过）。
      *

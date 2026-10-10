@@ -890,7 +890,7 @@ MessageRouter.handle(event)
 两段都只是标注出处，<strong>不说&quot;以哪段为准&quot;</strong>；冲突时由系统提示词要求模型<strong>明确说出分歧</strong>。</li>
 </ul>
 </li>
-<li>系统提示词 = 仓库根目录的 <code>AGENTS.md</code>（<strong>唯一权威副本</strong>，改完重启即生效），加载优先级：外部文件 → jar 内副本 → 兜底话术；</li>
+<li>系统提示词 = 仓库根目录的 <code>system.md</code>（<strong>唯一权威副本</strong>，改完重启即生效），加载优先级：外部文件 → jar 内副本 → 兜底话术；</li>
 <li>风格约束（长度/格式/是否附来源/语气）在后台配置，<strong>每轮追加在系统消息里</strong>，热生效。</li>
 </ul>
 <h4 id="512-引用消息与图片理解"><a class="anchor" href="#512-引用消息与图片理解">5.1.2 引用消息与图片理解</a></h4>
@@ -1631,7 +1631,8 @@ tags: 必需品, 制作台
 ③ server/src/main/resources/application.yml   ← 代码默认值
 </code></pre>
 <ul>
-<li><code>.env</code> 是 <strong>properties 格式</strong>（一行一个 <code>KEY=value</code>，<strong>值不要加引号</strong>）；<code>DotenvEnvironmentPostProcessor</code> 会从工作目录向上找工程根（<code>AGENTS.md</code> / <code>server/pom.xml</code>），<strong>与工作目录无关</strong>；</li>
+<li><code>.env</code> 是 <strong>properties 格式</strong>（一行一个 <code>KEY=value</code>，<strong>值不要加引号</strong>）；<code>DotenvEnvironmentPostProcessor</code> 会从工作目录向上找工程根，<strong>与工作目录无关</strong>；</li>
+<li>工程根定位是<strong>两轮查找</strong>：先沿整条路径找 <code>server/pom.xml</code>，整条都没有才退回用提示词文件 <code>system.md</code>。顺序不能反 —— 隔离构建会把提示词复制到 <code>.toolchain/system.md</code>，单轮查找会在 <code>.toolchain</code> 那一层提前命中，把工程根认错，<code>.env</code> 与 <code>overrides.yml</code> 随即全部找错地方，<strong>而且不报错</strong>；</li>
 <li><code>overrides.yml</code> <strong>不能有重复的顶层键</strong> —— 曾经两个写入方各写各的，生成了两个 <code>app:</code> 块导致 YAML 解析失败、服务起不来。现在统一走 <code>OverridesFile</code>：读全量 → 合并 → <strong>按路径树整份重写</strong>。</li>
 </ul>
 <h3 id="82-配置中心后台设置页"><a class="anchor" href="#82-配置中心后台设置页">8.2 配置中心（后台&quot;设置&quot;页）</a></h3>
@@ -1682,7 +1683,7 @@ tags: 必需品, 制作台
 </tr>
 <tr>
 <td><code>app.llm.system-prompt-file</code></td>
-<td><code>AGENTS.md</code></td>
+<td><code>system.md</code></td>
 <td>人格与安全底座，<strong>权威副本在仓库根目录</strong></td>
 </tr>
 <tr>
@@ -1701,6 +1702,22 @@ tags: 必需品, 制作台
 <td><strong>留空 = 整个 /admin 返回 503</strong></td>
 </tr>
 </tbody></table></div>
+<h3 id="84-系统提示词"><a class="anchor" href="#84-系统提示词">8.4 系统提示词</a></h3>
+<ul>
+<li><strong>唯一权威副本在仓库根目录 <code>system.md</code></strong>，改完重启即生效，不用重新打包；</li>
+<li>加载优先级：外部文件 <code>./</code> → <code>../</code> → <code>../../</code> → jar 内副本 → 兜底话术。前两条都读不到时日志打到 <strong>ERROR</strong> 级，因为那等于机器人<strong>无人格、无安全约束</strong>地运行；</li>
+<li>每轮实际使用的系统消息 = <code>system.md</code>（启动时读一次）+ 后台配置的回复风格（每轮现取）。风格是<strong>追加</strong>的，永远覆盖不了安全规则。</li>
+</ul>
+<h4>为什么文件名叫 <code>system.md</code> 而不是 <code>AGENTS.md</code></h4>
+<p><code>AGENTS.md</code> 是 Agent 生态的通行约定，但<strong>正是这个约定名会引发冲突</strong>：各类 Agent 工具会把工作区里的 <code>AGENTS.md</code> 当作<strong>给 Agent 的指令</strong>加载。而构建时 pom 要从仓库根取这份文件，隔离构建便把它复制到 <code>.toolchain/system.md</code> —— 于是每次构建都会在工作区留下一份机器人人格文件，随后被 Agent 工具当成指令读进上下文，<strong>机器人的安全规则混进了开发工具的指令区</strong>。</p>
+<p>改用 <code>system.md</code> 之后这层耦合消失。这是"约定名"的代价：一个文件同时被两套系统认领时，吃亏的总是安全那一侧。</p>
+<h4>为什么不存进数据库</h4>
+<p>系统提示词是<strong>安全底座</strong>，不是普通配置。存进数据库有两个问题：</p>
+<ol>
+<li><strong>全新数据库 = 没有安全底座</strong>。现在的兜底链保证 jar 自包含、换台机器也能跑；进数据库后空库就是无人格、无安全约束地运行；</li>
+<li><strong>与写能力共存</strong>。工具接入之后，"能写数据库的工具"与"安全规则"住在同一个可写介质里，那是一条<strong>持久的提示注入路径</strong>。现在它是启动时读一次的文件，模型永远碰不到。</li>
+</ol>
+<p>代价是改提示词要重启。这是刻意的取舍：安全底座的修改频率极低，重启成本可以接受；需要热生效的是表现层约束（回复风格），那部分已经单独放在配置中心。</p>
 <hr>
 <h2 id="九部署与运维"><a class="anchor" href="#九部署与运维">九、部署与运维</a></h2>
 <h3 id="91-部署形态"><a class="anchor" href="#91-部署形态">9.1 部署形态</a></h3>
@@ -1990,8 +2007,8 @@ tags: 必需品, 制作台
 </tr>
 <tr>
 <td>2</td>
-<td><code>kb_term.en</code> 存的是 slug（<code>acid-bite</code>），语料里写的是 <code>Acid Bite</code></td>
-<td>B 路的英文匹配实际上完全依赖人工把英文名写进 <code>zh</code></td>
+<td><code>kb_term.en</code> 存的是 slug（<code>acid-bite</code>），而语料标题里是 <code>Acid Bite</code></td>
+<td><strong>已修</strong>：<code>Glossary.load()</code> 改为从 <code>zh</code> 取英文那一侧，物品类取「中文名、English Name」的后半截，wiki 导入类本身就是英文名，拿不到才退回 slug。剩余缺口是 <strong>603 条 wiki 词条仍没有中文名</strong>，中文提问够不到它们</td>
 </tr>
 <tr>
 <td>3</td>
@@ -2012,6 +2029,11 @@ tags: 必需品, 制作台
 <td>6</td>
 <td>生产库里有测试探针残留的假群号（700000~700004）</td>
 <td>看板&quot;独立群&quot;数字虚高；<code>tests/cleanup-sql/</code> 下有清理 SQL，需在宿主机执行</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>gap</code> 干净率 <strong>29.4%</strong>：17 条「库里根本没有」的问题里，<strong>12 条仍注入了无关资料</strong></td>
+<td>2026-10-09 实测确认<strong>调阈值是权衡不是修复</strong> —— 被重排拒掉的 21 次分数从 0.0003 连续分布到 0.0197，而该答的 entity 样本也在 0.012~0.020，<strong>两类重叠</strong>。要换机制，例如给检索加一道「可答性」判定，而不是继续调参</td>
 </tr>
 </tbody></table></div>
 <h3 id="113-后续路线"><a class="anchor" href="#113-后续路线">11.3 后续路线</a></h3>
@@ -2084,7 +2106,7 @@ node tests/manual/fake-onebot-server.mjs
 <p><strong>启动日志里应该看到</strong>：</p>
 <pre><code class="language-text">[LLM] provider 就绪：opencode-go  model=deepseek-v4.1-flash
 [LLM] 降级链：opencode-go -&gt; deepseek
-[LLM] 已加载系统提示词：file:../AGENTS.md（外部文件，改完重启即生效）
+[LLM] 已加载系统提示词：file:../system.md（外部文件，改完重启即生效）
 [GUARD] 安全中间层已启用
 [GUARD]   顺序：access -&gt; mention -&gt; rate-limit -&gt; content-gate -&gt; inbound-words
 [KB-BLOCK] 块存储就绪：2649 块（其中已下架 0）

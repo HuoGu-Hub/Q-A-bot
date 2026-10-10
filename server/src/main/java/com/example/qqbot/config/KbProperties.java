@@ -61,6 +61,9 @@ public class KbProperties implements KbPolicy {
      */
     private double titleGate = 0.70;
 
+    /** 检索结果缓存容量。见 {@link KbPolicy#getCacheSize} —— 改它要重启 */
+    private int cacheSize = 512;
+
     private Embedding embedding = new Embedding();
 
     /** 重排（cross-encoder）配置，见 docs/md/知识库口语问答重构方案.md D4 */
@@ -113,6 +116,15 @@ public class KbProperties implements KbPolicy {
 
     public void setMinScore(double minScore) {
         this.minScore = minScore;
+    }
+
+    @Override
+    public int getCacheSize() {
+        return cacheSize;
+    }
+
+    public void setCacheSize(int cacheSize) {
+        this.cacheSize = cacheSize;
     }
 
     @Override

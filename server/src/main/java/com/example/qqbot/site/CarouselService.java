@@ -10,6 +10,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -42,6 +43,13 @@ public class CarouselService {
     /** 自动切换间隔的下限：再小就成闪光弹了 */
     private static final int MIN_INTERVAL_MS = 1000;
 
+    /** 缩放宽度的允许区间。下限挡住"缩成缩略图"，上限挡住 ?w=99999 打内存 */
+    private static final int MIN_VARIANT_WIDTH = 64;
+    private static final int MAX_VARIANT_WIDTH = 2560;
+
+    /** JPEG 质量。0.82 是照片在"看得清"和"够小"之间比较稳的一档 */
+    private static final float JPEG_QUALITY = 0.82f;
+
     private final CarouselStore store;
     private final SitePolicy props;
 
@@ -71,6 +79,7 @@ public class CarouselService {
     @PostConstruct
     void logDir() {
         log.info("[SITE] 首页轮播图片目录：{}（配置项 app.site.carousel.dir）", dir());
+        log.info("[SITE] 首页轮播缩放件缓存目录：{}（派生物，可随时整个删掉重建）", cacheDir());
     }
 
     private Carousel config() {
@@ -175,11 +184,37 @@ public class CarouselService {
             // 文件删不掉不影响"这张图已下线"：清单里已经没有了，永远不会再被读到
             log.warn("[SITE] 轮播图文件删除失败（清单已删，图不会再出现）：{}", e.getMessage());
         }
+        deleteVariants(gone.file());
         return gone;
     }
 
-    /** 按 id 读图片字节；没有返回 null */
+    /** 按 id 读原图字节；没有返回 null */
     public ImageData read(long id) throws IOException {
+        return read(id, 0);
+    }
+
+    /**
+     * 按 id 读图片字节，可指定期望宽度。
+     *
+     * <p><b>为什么要有这个重载</b>：原图是 2560 宽的照片，而首屏那块只显示到大约 600×340。
+     * 直接下发原图，等于让每个访客都下载一张四倍于需要的图 ——
+     * 实测六张合计 16.86 MB，弱网下把链路占满，点导航要等 20 秒以上，
+     * 表现出来就是"按钮坏了"。缩到显示尺寸之后同一条链路降到 2.8 秒。
+     *
+     * <p>规则：
+     * <ul>
+     *   <li>{@code width <= 0}、或原图本来就不比目标宽 → 原图；</li>
+     *   <li>WebP 与 GIF → 原图。JDK 自带的 ImageIO 解不开 WebP，
+     *       而 GIF 可能带动画，缩放只会留下第一帧；</li>
+     *   <li>其余 → 缩到目标宽度、重编码，结果落在缓存目录，之后直接命中。</li>
+     * </ul>
+     *
+     * <p>缓存键用**磁盘文件名**而不是 id。文件名是每次上传新生成的 UUID，
+     * 天生不可变；而 id 与 {@code ?v=} 的关系将来若调整，缓存也不会读串。
+     *
+     * @param width 期望宽度，{@code <= 0} 表示要原图
+     */
+    public ImageData read(long id, int width) throws IOException {
         CarouselStore.Item item = store.get(id);
         if (item == null) {
             return null;
@@ -189,7 +224,108 @@ public class CarouselService {
             log.warn("[SITE] 轮播图文件缺失：id={} file={}", id, item.file());
             return null;
         }
-        return new ImageData(Files.readAllBytes(p), item.mime());
+        ImageData scaled = scaledOrNull(item, p, width);
+        return scaled != null ? scaled : new ImageData(Files.readAllBytes(p), item.mime());
+    }
+
+    /**
+     * 缩放件缓存目录。
+     *
+     * <p>放在图片目录的**兄弟**位置（{@code site-images} → {@code site-images-cache}），
+     * 不放进图片目录内部：那个目录记的是"上传了什么"这个事实，
+     * 混进派生物之后，将来想整目录备份或清理，就分不清哪些是原始资产了。
+     *
+     * <p>刻意不加配置项 —— 它是纯派生物，跟着图片目录走就永远不会配错。
+     */
+    public Path cacheDir() {
+        Path images = dir();
+        Path parent = images.getParent();
+        String name = images.getFileName() + "-cache";
+        return (parent == null ? images.resolve(name) : parent.resolve(name)).toAbsolutePath().normalize();
+    }
+
+    /** 能缩就返回缩好的；不能缩返回 null，由调用方发原图 */
+    private ImageData scaledOrNull(CarouselStore.Item item, Path src, int width) throws IOException {
+        if (width < MIN_VARIANT_WIDTH || width > MAX_VARIANT_WIDTH) {
+            return null;
+        }
+        String mime = item.mime() == null ? "" : item.mime().toLowerCase();
+        if (mime.contains("webp") || mime.contains("gif")) {
+            return null;
+        }
+        if (!ImageScaler.worthScaling(item.width(), width)) {
+            return null;
+        }
+        ImageData hit = cached(item, width);
+        return hit != null ? hit : generate(item, src, width);
+    }
+
+    /** 缓存命中直接返回，不解码 —— 稳态下这就是全部开销 */
+    private ImageData cached(CarouselStore.Item item, int width) throws IOException {
+        Path jpg = cachePath(item, width, "jpg");
+        if (Files.isRegularFile(jpg)) {
+            return new ImageData(Files.readAllBytes(jpg), "image/jpeg");
+        }
+        Path png = cachePath(item, width, "png");
+        if (Files.isRegularFile(png)) {
+            return new ImageData(Files.readAllBytes(png), "image/png");
+        }
+        return null;
+    }
+
+    /** 第一次要这个宽度：解码 → 缩小 → 看有没有真透明 → 选 JPEG 还是 PNG → 落盘 */
+    private ImageData generate(CarouselStore.Item item, Path src, int width) throws IOException {
+        byte[] raw = Files.readAllBytes(src);
+        BufferedImage img = decode(raw);
+        if (img == null) {
+            return null;   // 解不开就退回原图：缩不了不该让接口挂掉
+        }
+        BufferedImage out = ImageScaler.scale(img, width);
+        boolean alpha = ImageScaler.hasVisibleAlpha(out);
+        String ext = alpha ? "png" : "jpg";
+        byte[] bytes = alpha ? ImageScaler.encodePng(out) : ImageScaler.encodeJpeg(out, JPEG_QUALITY);
+
+        writeAtomically(cachePath(item, width, ext), bytes);
+        log.info("[SITE] 轮播图缩放件已生成：id={} {}×{} → {}×{} .{}（{} KB → {} KB）",
+                item.id(), img.getWidth(), img.getHeight(), out.getWidth(), out.getHeight(), ext,
+                raw.length / 1024, bytes.length / 1024);
+        return new ImageData(bytes, alpha ? "image/png" : "image/jpeg");
+    }
+
+    /** 缓存文件名：&lt;原文件去扩展名&gt;@&lt;宽度&gt;.&lt;扩展名&gt;，便于按前缀整组删除 */
+    private Path cachePath(CarouselStore.Item item, int width, String ext) {
+        String file = item.file() == null ? "unknown" : item.file();
+        int dot = file.lastIndexOf('.');
+        String base = dot > 0 ? file.substring(0, dot) : file;
+        return cacheDir().resolve(base + "@" + width + "." + ext);
+    }
+
+    /** 先写 .part 再原子换名 —— 和上传落盘同一套，避免并发读到写了一半的文件 */
+    private static void writeAtomically(Path target, byte[] bytes) throws IOException {
+        Files.createDirectories(target.getParent());
+        Path tmp = target.resolveSibling(target.getFileName() + ".part");
+        Files.write(tmp, bytes);
+        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    /** 删图时把它的缩放件一起删掉，别在缓存目录里留下没人认领的字节 */
+    private void deleteVariants(String file) {
+        if (file == null || file.isBlank()) {
+            return;
+        }
+        Path dir = cacheDir();
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        int dot = file.lastIndexOf('.');
+        String prefix = (dot > 0 ? file.substring(0, dot) : file) + "@";
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, prefix + "*")) {
+            for (Path p : stream) {
+                Files.deleteIfExists(p);
+            }
+        } catch (IOException e) {
+            log.warn("[SITE] 轮播图缩放件清理失败（原件已删，不影响使用）：{}", e.getMessage());
+        }
     }
 
     /**

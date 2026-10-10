@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>检索回归门禁</title>
+<style>
+:root {
+  --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#f4f6f8;
+  --fg:#1f2328; --fg-soft:#57606a; --fg-faint:#8b949e;
+  --border:#d8dee4; --border-soft:#e6eaef;
+  --accent:#2563eb; --accent-soft:#eff4ff;
+  --warn:#b45309; --warn-bg:#fffbeb; --ok:#15803d;
+  --radius:10px; --content:900px; --sidebar:250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0d1117; --bg-soft:#161b22; --bg-code:#161b22;
+    --fg:#e6edf3; --fg-soft:#9198a1; --fg-faint:#6e7681;
+    --border:#30363d; --border-soft:#21262d;
+    --accent:#6ea8fe; --accent-soft:#16233a;
+    --warn:#f0b429; --warn-bg:#2a2109; --ok:#4ade80;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16.5px; line-height:1.85; -webkit-font-smoothing:antialiased;
+}
+.layout { display:flex; align-items:flex-start; gap:40px; max-width:1240px; margin:0 auto; padding:40px 28px 96px; }
+.toc { position:sticky; top:28px; flex:0 0 var(--sidebar); width:var(--sidebar); max-height:calc(100vh - 56px); overflow-y:auto; font-size:13.5px; line-height:1.6; border-right:1px solid var(--border-soft); padding-right:18px; }
+.toc-title { font-weight:700; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-faint); margin:0 0 12px; }
+.toc ol { list-style:none; margin:0; padding:0; }
+.toc a { display:block; padding:5px 10px; border-radius:6px; color:var(--fg-soft); text-decoration:none; border-left:2px solid transparent; border-bottom:0; }
+.toc a:hover { background:var(--accent-soft); color:var(--accent); }
+.toc details { display:none; }
+main { flex:1 1 auto; min-width:0; max-width:var(--content); }
+h1,h2,h3 { line-height:1.4; font-weight:700; scroll-margin-top:20px; }
+h1 { font-size:1.9em; margin:0 0 .7em; letter-spacing:-.015em; padding-bottom:.4em; border-bottom:2px solid var(--border); }
+h2 { font-size:1.38em; margin:2.4em 0 .8em; padding-left:.55em; border-left:4px solid var(--accent); }
+h3 { font-size:1.1em; margin:1.9em 0 .6em; }
+p { margin:0 0 1.05em; }
+a { color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color:var(--accent); }
+ul,ol { margin:0 0 1.05em; padding-left:1.5em; }
+li { margin:.32em 0; }
+blockquote { margin:1.4em 0; padding:.85em 1.15em; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; }
+blockquote > :last-child { margin-bottom:0; }
+blockquote p { margin:.35em 0; }
+.warn { background:var(--warn-bg); border-left-color:var(--warn); }
+code { font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; font-size:.875em; background:var(--bg-code); border:1px solid var(--border-soft); border-radius:5px; padding:.14em .38em; word-break:break-word; }
+pre { margin:1.3em 0; padding:1.05em 1.2em; background:var(--bg-code); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; line-height:1.65; }
+pre code { background:none; border:0; padding:0; font-size:.855em; }
+.table-wrap { margin:1.4em 0; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:.94em; margin:0; }
+thead th { background:var(--bg-soft); text-align:left; font-weight:700; padding:.62em .85em; border-bottom:2px solid var(--border); white-space:nowrap; }
+tbody td { padding:.62em .85em; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom:0; }
+.pill { display:inline-block; font-size:.78em; font-weight:700; padding:.1em .5em; border-radius:999px; border:1px solid var(--border); background:var(--bg-soft); color:var(--fg-soft); white-space:nowrap; }
+.pill.ok { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.pill.warn { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.footer { margin-top:4em; padding-top:1.2em; border-top:1px solid var(--border-soft); font-size:.85em; color:var(--fg-faint); }
+@media (max-width:1000px) {
+  .layout { flex-direction:column; gap:0; padding:22px 18px 72px; }
+  .toc { position:static; flex:none; width:auto; max-height:none; border-right:0; border-bottom:1px solid var(--border); padding:0 0 14px; margin-bottom:26px; }
+  .toc > ol, .toc > .toc-title { display:none; }
+  .toc details { display:block; }
+  .toc summary { cursor:pointer; font-weight:700; color:var(--accent); padding:6px 0; }
+  body { font-size:16px; line-height:1.8; }
+}
+@media print {
+  .toc { display:none; }
+  .layout { display:block; max-width:none; padding:0; }
+  main { max-width:none; }
+  body { font-size:11.5pt; line-height:1.6; background:#fff; color:#000; }
+  h2 { page-break-after:avoid; }
+  pre, table, blockquote { page-break-inside:avoid; }
+  a { color:#000; border:0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol>
+    <li><a href="#why">一、为什么需要它</a></li>
+    <li><a href="#run">二、怎么跑</a></li>
+    <li><a href="#does">三、它做了什么</a></li>
+    <li><a href="#floor">四、门槛口径：底线</a></li>
+    <li><a href="#fail">五、失败怎么办</a></li>
+    <li><a href="#where">六、在哪里被使用</a></li>
+  </ol>
+  <details><summary>目录</summary>
+    <ol>
+      <li><a href="#why">一、为什么需要它</a></li>
+      <li><a href="#run">二、怎么跑</a></li>
+      <li><a href="#does">三、它做了什么</a></li>
+      <li><a href="#floor">四、门槛口径：底线</a></li>
+      <li><a href="#fail">五、失败怎么办</a></li>
+      <li><a href="#where">六、在哪里被使用</a></li>
+    </ol>
+  </details>
+</nav>
+<main>
+
+<h1>检索回归门禁</h1>
+
+<blockquote>
+<p>一条命令，退出码就是结论：<code>./scripts/golden-gate.sh</code>。它和"跑一次黄金集"的区别只有一点 —— <strong>测不了算失败，不算跳过</strong>。</p>
+</blockquote>
+
+<h2 id="why">一、为什么需要它</h2>
+
+<p>黄金集跑手早就存在，但它默认是<strong>度量工具</strong>：缺语料、缺 key、向量路调不通，一律走 JUnit 的 <code>Assumptions</code> 静默跳过，<code>mvn test</code> 照样绿。日常开发这样是合理的，但不能当门禁。</p>
+
+<blockquote class="warn">
+<p>一个在测不出结果时仍然显示绿色的门禁，比没有门禁更糟：它给出的是"已经守住了"的假信号，而且没有人会去查一个绿色的步骤。</p>
+</blockquote>
+
+<p>这不是假设，是代码里真实存在的两条退路：向量路不可用时打印一句"本次不设回归门槛"，重排未生效时门槛悄悄退到重排前那一档。两者都会让测试通过，而实际什么都没测。</p>
+
+<h2 id="run">二、怎么跑</h2>
+
+<pre><code>./scripts/golden-gate.sh                # 生产路径，重排生效
+./scripts/golden-gate.sh --rerank off   # 对比用：关掉重排</code></pre>
+
+<p>前置条件三项，缺任何一项直接退出 <code>2</code>：</p>
+
+<ul>
+<li><code>tests/golden/retrieval-golden.tsv</code> 黄金集</li>
+<li><code>server/data/qa/qqbot.sqlite</code> 生产语料</li>
+<li><code>.env</code> 里的 <code>SILICONFLOW_API_KEY</code>，向量与重排共用</li>
+</ul>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>退出码</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>通过，检索底线守住</td></tr>
+<tr><td>1</td><td>未通过，或测出来了但低于门槛</td></tr>
+<tr><td>2</td><td>前置条件不满足 —— <strong>同样算未通过</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="does">三、它做了什么</h2>
+
+<ol>
+<li>检查上面三项前置条件。</li>
+<li>用隔离副本 <code>.toolchain/server-ci/</code> 跑 <code>RetrievalGoldenTest</code> 这一个测试，并显式打开 <code>-Dqqbot.golden.gate=true</code>，同时把工程根用 <code>-Dqqbot.repo.root</code> 传进去 —— 门禁不能依赖"恰好从哪个目录启动"。</li>
+<li>汇总四类指标，把逐条明细留在 <code>.toolchain/verify/golden-detail.tsv</code>，日志留在 <code>.toolchain/verify/golden-gate.log</code>。</li>
+</ol>
+
+<p>打开门禁开关之后，三种情况从"跳过"变成"失败"：找不到工程根、缺语料或黄金集、向量路不可用或重排未生效。</p>
+
+<h2 id="floor">四、门槛口径：两种口径，缺一不可</h2>
+
+<p><strong>门槛是防退化，不是质量目标。</strong>但它必须用<b>两个口径</b>同时表达，否则会自己把自己逼死。</p>
+
+<ul>
+<li><b>绝对条数</b> —— 以"校准时实测的条数"为基准，允许少量退步。这是主要判据。</li>
+<li><b>百分比粗筛</b> —— 防止样本大量增加后"绝对条数达标、正确率却崩了"。设得比校准值松，只做粗筛，不承担精确判定。</li>
+</ul>
+
+<p><b>为什么不能只用百分比</b>：2026-10-09 加了 3 条更难的样本（力量 / 智力 / 瘴气，来自 wiki 词条缺中文名），entity R@1 从 70.0% 掉到 65.2%，<b>而答对的条数其实从 14 涨到 15</b>。百分比把这个"涨"报成了退步，并且把余量吃到 0 —— 再错一条就红。门槛于是从"防退化"变成了"随机报警"。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>类别</th><th>绝对门槛</th><th>百分比粗筛</th><th>当前实测</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>entity R@1</td><td>≥ 13 条</td><td>≥ 55%</td><td>15/23</td><td>校准基线 15 条，允许退步 2 条</td></tr>
+<tr><td>entity R@5</td><td>≥ 20 条</td><td>≥ 80%</td><td>21/23</td><td>校准基线 21 条，允许退步 1 条</td></tr>
+<tr><td>colloquial R@5</td><td>≥ 3 条</td><td>≥ 70%</td><td>4/5</td><td>校准基线 4 条，允许退步 1 条</td></tr>
+<tr><td>colloquial R@1</td><td>≥ 3 条</td><td>≥ 60%</td><td>4/5</td><td>只在重排生效时检查</td></tr>
+<tr><td>chitchat 干净率</td><td>≥ 12 条</td><td>≥ 70%</td><td>14/15</td><td>只在重排生效时检查</td></tr>
+<tr><td>gap 干净率</td><td><span class="pill warn">不设门槛</span></td><td>—</td><td>29.4%</td><td>尚未解决，是目标不是门槛</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>校准纪律</b>：实测<b>真的变好</b>时把基线调上去；变差时先查原因，不要调门槛。样本集增长时必须重新校准基线 —— 这是加样本那个人的责任。</p>
+
+<p>两个口径都验证过有牙齿：把 entity R@1 的基线从 15 调到 20，门禁红；把百分比粗筛从 55% 调到 90%，门禁红。</p>
+
+<h2 id="fail">五、失败怎么办</h2>
+
+<ol>
+<li>先看 <code>.toolchain/verify/golden-detail.tsv</code> 的 <code>rank</code> 列，找出是哪几条样本失手。</li>
+<li>一次改动对应一条失败样本。说不清"哪一条因此变好了"的改动不进主干。</li>
+<li>不许靠放宽门槛变绿。门槛只在"纠正一个被高估的基准"时才下调，并且要把来由写进 <a href="../md/检索基线.md">检索基线.md</a>。</li>
+<li>环境问题在门禁模式下就是失败。没网、key 失效，去修环境，不要去改门槛。</li>
+</ol>
+
+<h2 id="where">六、在哪里被使用</h2>
+
+<ul>
+<li><code>scripts/preflight.sh</code> 的第 5 步跑的就是它，<code>--skip-golden</code> 可以跳过，但跳过意味着本次发布没有检索质量基线背书。</li>
+<li>必须跑的场景：改检索算法、改任何阈值、扩语料、换向量或重排模型、换检索骨架。</li>
+<li>不必跑的场景：与检索无关的前端、协议、后台改动 —— 那正是 <code>--skip-golden</code> 存在的原因。</li>
+</ul>
+
+<div class="footer">
+相关：<a href="../md/检索基线.md">检索基线.md</a> 记录指标与来由；<code>server/src/test/java/com/example/qqbot/kb/RetrievalGoldenTest.java</code> 是唯一的执行者；<code>scripts/golden-gate.sh</code> 是唯一的入口。
+</div>
+
+</main>
+</div>
+</body>
+</html>

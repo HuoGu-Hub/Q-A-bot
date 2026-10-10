@@ -20,7 +20,7 @@ import java.nio.file.Paths;
  *   实际：密码早就设了，只是进程没找到 .env；同时所有 API Key 也一起丢了
  * </pre>
  *
- * <p><b>做法</b>：从工作目录逐级向上找<b>工程标记</b>（{@code AGENTS.md} 或
+ * <p><b>做法</b>：从工作目录逐级向上找<b>工程标记</b>（{@code system.md} 或
  * {@code server/pom.xml}），找到的那一级就是工程根。
  * 找不到（说明进程根本不在工程里）返回 {@code null}，调用方退回旧的相对路径行为。
  *
@@ -33,8 +33,24 @@ public final class ProjectFiles {
 
     private static final Logger log = LoggerFactory.getLogger(ProjectFiles.class);
 
-    /** 工程根判据：这两个文件一定在仓库根目录 */
-    private static final String[] ROOT_MARKERS = {"AGENTS.md", "server/pom.xml"};
+    /**
+     * 强判据：<b>只可能出现在仓库根</b>。优先用它定位。
+     *
+     * <p>{@code server/pom.xml} 是根独有的 —— 隔离副本里是 {@code pom.xml}（根级），
+     * 不是 {@code server/pom.xml}，所以它不会误命中。
+     */
+    private static final String STRONG_MARKER = "server/pom.xml";
+
+    /**
+     * 弱判据：系统提示词文件。**它不是根独有的** —— 隔离构建
+     * （{@code scripts/build-server.sh}）会复制一份到 {@code .toolchain/system.md}，
+     * 于是从 {@code .toolchain/server-ci} 向上找时会在 {@code .toolchain} 提前命中。
+     * 所以它只在强判据全都找不到时才用来兜底。
+     */
+    private static final String PROMPT_MARKER = "system.md";
+
+    /** 判据清单（仅供日志展示，顺序不代表优先级，见 {@link #resolve()}） */
+    private static final String[] ROOT_MARKERS = {STRONG_MARKER, PROMPT_MARKER};
 
     private static final String ENV_FILE = ".env";
     /** 配置中心写入的覆盖层（当前规范位置） */
@@ -61,18 +77,53 @@ public final class ProjectFiles {
         return root;
     }
 
+    /**
+     * 定位工程根：<b>两轮查找</b>，先强判据后弱判据。
+     *
+     * <p><b>为什么不是"每层按顺序试每个判据"</b>：那样会在隔离构建里判错。
+     * {@code build-server.sh} 把提示词复制到 {@code .toolchain/system.md}，
+     * 从 {@code .toolchain/server-ci} 向上找时第一层就命中它，
+     * 于是 {@code .toolchain/} 被当成工程根 —— 之后 {@code .env} 与
+     * {@code overrides.yml} 全部找错地方，<b>而且不报错</b>，只是配置静默不生效。
+     *
+     * <p>两轮查找解决它：先沿着整条路径找根独有的 {@code server/pom.xml}，
+     * 找到了就是它；只有整条路径都没有，才退回用提示词文件兜底
+     * （生产环境只部署 {@code server/} 而没有仓库时走这一条）。
+     */
     private static Path resolve() {
-        Path dir = Paths.get(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
-        for (Path p = dir; p != null; p = p.getParent()) {
-            for (String marker : ROOT_MARKERS) {
-                if (Files.exists(p.resolve(marker))) {
-                    log.info("[CONFIG] 工程根目录：{}（依据 {}）", p, marker);
-                    return p;
-                }
-            }
+        return resolveFrom(Paths.get(System.getProperty("user.dir", ".")).toAbsolutePath().normalize());
+    }
+
+    /**
+     * 从指定目录开始定位工程根。
+     *
+     * <p>包级可见是为了让测试能直接造出隔离构建的目录形状
+     * （{@code .toolchain/system.md} 副本 + 真仓库根），
+     * 而不是去改全局的 {@code user.dir} 和那个静态缓存。
+     */
+    static Path resolveFrom(Path dir) {
+        Path byStrong = findByMarker(dir, STRONG_MARKER);
+        if (byStrong != null) {
+            return byStrong;
         }
+        Path byPrompt = findByMarker(dir, PROMPT_MARKER);
+        if (byPrompt != null) {
+            return byPrompt;
+        }
+
         log.warn("[CONFIG] 从 {} 向上没找到工程根（判据：{}）—— 退回相对路径查找配置",
                 dir, String.join(" / ", ROOT_MARKERS));
+        return null;
+    }
+
+    /** 从 {@code from} 向上逐层找某一个判据 */
+    private static Path findByMarker(Path from, String marker) {
+        for (Path p = from; p != null; p = p.getParent()) {
+            if (Files.exists(p.resolve(marker))) {
+                log.info("[CONFIG] 工程根目录：{}（依据 {}）", p, marker);
+                return p;
+            }
+        }
         return null;
     }
 

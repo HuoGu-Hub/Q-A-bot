@@ -85,3 +85,6 @@ descriptive	现在都有什么动物喂食槽	?	待人工标注
 descriptive	那个电法师头在哪拿来着	?	原标为 colloquial/archmage-hat，但重排给 0.0065 —— 标注不可信，退回待人工确认
 descriptive	最好的滑翔机在哪	?	原标为 colloquial/滑翔翼，但所有候选重排分 ≤0.008 —— 这是『哪个最好』的推荐式提问，不是名字查询
 descriptive	法师穿坦克胸甲有说法吗	?	原标为 entity/tank-chestplate；但它是**求搭配建议**不是查名字（重排把 archmage-chest 排第 1 也有道理）—— 标注不可信，退回待人工确认
+entity	力量有什么用	wiki-strength	2026-10-09 新增：wiki 导入的词条中文名曾经缺失，中文问句够不到它（见 Glossary.load 的注释）
+entity	智力怎么提升	wiki-intelligence	2026-10-09 新增：同上
+entity	瘴气是什么	wiki-shroud;wiki-shroud-2;wiki-shroud-3	2026-10-09 新增：同上

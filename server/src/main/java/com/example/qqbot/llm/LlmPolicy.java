@@ -31,12 +31,12 @@ public interface LlmPolicy {
     /** 降级链：默认 provider 失败后按顺序试 */
     List<String> getFallbackProviders();
 
-    /** 系统提示词文件（默认 AGENTS.md） */
+    /** 系统提示词文件（默认 system.md） */
     String getSystemPromptFile();
 
     /** provider 名 → 该厂商的接入参数 */
     Map<String, Provider> getProviders();
 
-    /** 回复风格（表现层约束，和 AGENTS.md 那份「安全底座」刻意分开） */
+    /** 回复风格（表现层约束，和 system.md 那份「安全底座」刻意分开） */
     ReplyStyle getReplyStyle();
 }

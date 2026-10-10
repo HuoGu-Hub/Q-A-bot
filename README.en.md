@@ -10,7 +10,7 @@ can try in a browser.
 |---|---|---|
 | Messaging platform | QQ, via NapCat / OneBot 11 | `onebot/` and `incoming/` |
 | Knowledge corpus | Enshrouded only | Import new material following the [format spec](docs/md/知识库文档格式规范.md) |
-| Bot persona | `AGENTS.md`, template `AGENTS.md.example` | Edit that one file, no rebuild |
+| Bot persona | `system.md`, template `system.md.example` | Edit that one file, no rebuild |
 | Chat model | opencode-go, DeepSeek as fallback | Admin Settings page, or `llm/` |
 
 [Quick start](#run-it-locally) · [Deployment](docs/md/公网部署指南.md) · [System manual](docs/md/系统说明书.md)
@@ -60,7 +60,7 @@ place allowed to refuse.
 - Database: `server/data/qa/qqbot.sqlite`. The path resolves against the process working directory, so always start from `server/`.
 - Precedence: command line and environment variables → `server/config/overrides.yml` → `application.yml`.
 - Secrets live in `.env` at the repository root; template is `.env.example`.
-- Not tracked: `.env`, `AGENTS.md`, `deploy/data/`, `server/data/`, `server/web-dist/`, `web/node_modules/`, self-hosted fonts.
+- Not tracked: `.env`, `system.md`, `deploy/data/`, `server/data/`, `server/web-dist/`, `web/node_modules/`, self-hosted fonts.
 
 ## Run it locally
 
