@@ -41,7 +41,7 @@ public class InboundWordStage implements GuardStage {
 
     @Override
     public GuardResult check(GuardContext ctx) {
-        if (!words.isEnabled() || !words.isEnabled()) {
+        if (!words.isEnabled()) {
             return GuardResult.pass();
         }
         return wordList.firstMatch(ctx.text())
