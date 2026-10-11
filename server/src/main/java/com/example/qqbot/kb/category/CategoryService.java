@@ -271,13 +271,13 @@ public class CategoryService {
                 continue;
             }
             if (!kw.isEmpty()) {
-                String hay = (nz(e.title()) + " " + nz(e.id()) + " " + nz(e.docId()) + " " + nz(e.text()))
+                String hay = (nz(e.title()) + " " + nz(e.id().value()) + " " + nz(e.docId()) + " " + nz(e.text()))
                         .toLowerCase();
                 if (!hay.contains(kw)) {
                     continue;
                 }
             }
-            hit.add(new EntryItem(e.id(), e.docId(), e.title(), e.url(), e.tags(),
+            hit.add(new EntryItem(e.id().value(), e.docId(), e.title(), e.url(), e.tags(),
                     e.curated(), e.contentAt(), snippet(e.text())));
         }
         hit.sort(Comparator.comparing(x -> nz(x.title())));

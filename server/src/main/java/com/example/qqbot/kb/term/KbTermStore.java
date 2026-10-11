@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 词条存储 —— 知识库「名字层」的唯一真源。
@@ -47,7 +48,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * （B 路退化成只认英文词），**绝不让机器人挂掉**。
  */
 @Component
-public class KbTermStore {
+public class KbTermStore implements com.example.qqbot.kb.TermSource {
 
     private static final Logger log = LoggerFactory.getLogger(KbTermStore.class);
 
@@ -86,6 +87,20 @@ public class KbTermStore {
 
     /** 一条词条。{@code status} 空串表示"还没有中文名/没收录"，见 {@link #STATUSES} */
     public record Entry(String en, String zh, String status) {
+    }
+
+    /**
+     * {@link com.example.qqbot.kb.TermSource} 的实现 —— 检索侧只认这个只读视图。
+     *
+     * <p>本类自己的 {@link Entry} 比它多带了核对状态的语义；这里只把消费方要的
+     * 三个字段递过去，<b>不让检索侧依赖本包的 Entry 类型</b>（那会把
+     * kb → kb.term 的依赖重新拉回来，见 TermSource 的类注释）。
+     */
+    @Override
+    public List<com.example.qqbot.kb.TermSource.Row> rows() {
+        return list().stream()
+                .map(e -> new com.example.qqbot.kb.TermSource.Row(EntryId.of(e.en()), e.zh(), e.status()))
+                .toList();
     }
 
     /** 批量改状态的结果：真改了几条 / 本来就是目标状态几条 / 没对上的英文名 */
@@ -186,7 +201,27 @@ public class KbTermStore {
      * @param knownBlockIds 现在库里有哪些块 id
      * @return 删掉几行
      */
-    public int deleteOrphans(java.util.Set<String> knownBlockIds) {
+    /**
+     * 清掉没有对应块的词条 —— 目录侧手里的块 id 已经是 {@link EntryId}。
+     *
+     * <p>⚠️ 字符串那份参数类型是 {@code Collection} 而不是 {@code Set}：
+     * 两个重载若都是 {@code Set}，泛型擦除后签名相同，编译器直接拒绝。
+     */
+    public int deleteOrphans(java.util.Set<EntryId> knownBlockIds) {
+        if (knownBlockIds == null || knownBlockIds.isEmpty()) {
+            return deleteOrphans(java.util.Set.<String>of());
+        }
+        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        for (EntryId id : knownBlockIds) {
+            if (id != null && !id.isBlank()) {
+                ids.add(id.value());
+            }
+        }
+        return deleteOrphans(ids);
+    }
+
+    /** 过渡用的字符串重载（参数放宽到 Collection，见上） */
+    public int deleteOrphans(java.util.Collection<String> knownBlockIds) {
         if (!available) {
             return 0;
         }
@@ -228,7 +263,8 @@ public class KbTermStore {
         try {
             for (com.example.qqbot.kb.KbCorpus.Entry e : corpus.entries()) {
                 // **一块一条**：词条的身份就是块 id，中文名就是块标题
-                String key = e.id() == null ? "" : e.id().trim();
+                com.example.qqbot.kb.EntryId entryId = e.id();
+                String key = entryId == null ? "" : entryId.value();
                 if (key.isEmpty()) {
                     continue;
                 }
@@ -244,39 +280,12 @@ public class KbTermStore {
     /**
      * 块标题 → 词条的中文名。
      *
-     * <p>实测语料里大量是「深渊之翼斧（Abyssal Wing Axe）」这种写法。把它拆成
-     * 「深渊之翼斧、Abyssal Wing Axe」：
-     * <b>短的中文名才是关键词路能命中的东西</b> —— 词表判定"命中"靠的是
-     * "这个名字出现在问句里"，而群友不会把整条带英文的长标题说出来。
-     *
-     * <p>括号不在结尾（比如「A（B）C」）就原样保留，不乱动。
-     * <p>⚠️ 切块标记要先去掉：超长页面会被切成多块，后续块标题是
-     * 「水（Water）（续 2）」。不去掉的话上面那个"末尾括号"正则会把
-     * <b>「续 2」当成英文名</b>，长出一批名为「水（Water）、续 2」的垃圾词条。
+     * <p>实现搬到了 {@link com.example.qqbot.kb.TermNames}：那是纯文本规则，
+     * 而块侧的导入器也要用它 —— 它不能依赖名字层，所以规则必须住核心包。
+     * 这里保留一个转发，是为了不动本包与测试里已有的调用点。
      */
-    /** 分块标记：{@code （续 2）} —— 它不属于名字，见 {@code KbTextChunker} */
-    private static final java.util.regex.Pattern CHUNK_MARK =
-            java.util.regex.Pattern.compile("\\s*[（(]续\\s*\\d+[）)]$");
-
     public static String termName(String title) {
-        String t = title == null ? "" : title.trim();
-        if (t.isEmpty()) {
-            return "";
-        }
-        t = CHUNK_MARK.matcher(t).replaceFirst("").trim();
-        if (t.isEmpty()) {
-            return "";
-        }
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("^(.*?)[（(]([^）)]+)[）)]$").matcher(t);
-        if (m.matches()) {
-            String zh = m.group(1).trim();
-            String en = m.group(2).trim();
-            if (!zh.isEmpty() && !en.isEmpty()) {
-                return zh + "、" + en;
-            }
-        }
-        return t;
+        return com.example.qqbot.kb.TermNames.termName(title);
     }
 
     // ==================== 读 ====================
@@ -341,6 +350,11 @@ public class KbTermStore {
         return out;
     }
 
+    /** 过渡用的类型重载 —— 身份来自领域侧（NameCandidate / 目录）时用它 */
+    public Entry get(EntryId en) {
+        return en == null ? null : get(en.value());
+    }
+
     public Entry get(String en) {
         if (!available || en == null || en.isBlank()) {
             return null;
@@ -373,6 +387,11 @@ public class KbTermStore {
      * <p>用 upsert 而不是 update：语料重建后可能出现表里还没有的页面，
      * 这时直接给它起个中文名也应该成立。
      */
+    /** 过渡用的类型重载 */
+    public boolean upsert(EntryId en, String zh, String status) {
+        return upsert(en == null ? null : en.value(), zh, status);
+    }
+
     public boolean upsert(String en, String zh, String status) {
         if (!available || en == null || en.isBlank()) {
             return false;
@@ -388,6 +407,11 @@ public class KbTermStore {
     }
 
     /** 只改状态（核对时最常用：draft → verified）。不存在返回 false */
+    /** 过渡用的类型重载 */
+    public boolean setStatus(EntryId en, String status) {
+        return setStatus(en == null ? null : en.value(), status);
+    }
+
     public boolean setStatus(String en, String status) {
         if (!available || en == null) {
             return false;
@@ -414,6 +438,20 @@ public class KbTermStore {
      * <p>失败时返回全 0（并记 warn）：事务已整体回滚，报告部分统计只会误导 ——
      * 那正是旧实现干的事（它把回滚前攒到的 {@code missing} 报了出去）。
      */
+    /** 过渡用的类型重载 —— 批量核对时身份可能来自目录侧 */
+    public BatchResult setStatusBatch(java.util.Collection<EntryId> ens, String status) {
+        if (ens == null) {
+            return setStatusBatch((List<String>) null, status);
+        }
+        List<String> raw = new java.util.ArrayList<>(ens.size());
+        for (EntryId id : ens) {
+            if (id != null && !id.isBlank()) {
+                raw.add(id.value());
+            }
+        }
+        return setStatusBatch(raw, status);
+    }
+
     public BatchResult setStatusBatch(List<String> ens, String status) {
         if (!available || ens == null || ens.isEmpty()) {
             return new BatchResult(0, 0, List.of());
@@ -437,6 +475,11 @@ public class KbTermStore {
      * <p><b>不是删行</b> —— 行代表「这个 Wiki 页面在词条表里有位置」，
      * 删掉它下次启动又会被 {@link #reconcile()} 补回来，徒增困惑。
      */
+    /** 过渡用的类型重载 */
+    public boolean clearName(EntryId en) {
+        return clearName(en == null ? null : en.value());
+    }
+
     public boolean clearName(String en) {
         if (!available || en == null) {
             return false;

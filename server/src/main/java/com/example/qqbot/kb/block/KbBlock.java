@@ -24,7 +24,7 @@ import java.util.List;
  * @param retired   是否已下架（下架后不参与检索，但**保留数据**，可以恢复）
  * @param updatedAt 最后一次写入时间（ISO8601）
  */
-public record KbBlock(String id,
+public record KbBlock(com.example.qqbot.kb.EntryId id,
                       String docId,
                       String title,
                       String body,
@@ -37,7 +37,7 @@ public record KbBlock(String id,
     /** 接口要求的身份方法 —— 块的 id 就是它的身份 */
     @Override
     public String key() {
-        return id;
+        return id.value();
     }
 
     /** 来源：文档导入 */

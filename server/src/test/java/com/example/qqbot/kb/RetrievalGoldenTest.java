@@ -33,6 +33,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 检索黄金集跑手 —— **回答质量的回归基线**。
@@ -75,7 +76,19 @@ class RetrievalGoldenTest {
     private QaStore qaStore;
     private SqliteDatabase sqlite;
 
-    /** 逐条明细（类别 / 最高余弦 / 命中数 / Top-1 / 问题），跑完写到 target/ 供分析 */
+    /**
+     * 逐条明细的列定义 —— <b>表头与数据行由同一份定义渲染</b>。
+     *
+     * <p>为什么必须同源：这份 tsv 被 {@code scripts/golden-gate.sh} 复制成
+     * {@code .toolchain/verify/golden-detail.tsv} 供人逐条分析，<b>列名就是它的契约</b>。
+     * 曾经在行中间插了一列却没改表头，于是"按列名取值"读到的是隔壁列 —— 静默错。
+     *
+     * <p>顺序即列序：新列一律<b>追加到末尾</b>，插在中间会让所有按位置消费的人错位。
+     */
+    private static final List<String> DETAIL_COLUMNS = List.of(
+            "category", "best_cosine_raw", "hits", "top1", "best_cosine", "question", "top1_score");
+
+    /** 逐条明细，列序见 {@link #DETAIL_COLUMNS}，跑完写到 target/ 供分析 */
     private final List<String> detail = new ArrayList<>();
 
     /** 重排是否**真的生效**了（可用 + 确实产出了 +rerank 来源）。失败时会 fail-open 回 RRF，不能按重排后的门槛卡 */
@@ -232,7 +245,7 @@ class RetrievalGoldenTest {
         try {
             Files.createDirectories(detailFile.getParent());
             List<String> head = new ArrayList<>();
-            head.add("category\tbest_cosine_raw\thits\ttop1\tbest_cosine\tquestion");
+            head.add(String.join("\t", DETAIL_COLUMNS));
             head.addAll(detail);
             Files.write(detailFile, head, StandardCharsets.UTF_8);
             System.out.println("逐条明细已写出：" + detailFile.toAbsolutePath());
@@ -370,12 +383,17 @@ class RetrievalGoldenTest {
                 rerankEffective = true;
             }
             cosines.add(ret.bestCosineRaw());
+            // 列序必须与 DETAIL_COLUMNS 一致；新列追加在末尾
             detail.add(String.join("\t", category,
                     String.format("%.4f", ret.bestCosineRaw()),
                     String.valueOf(hits.size()),
-                    hits.isEmpty() ? "-" : hits.get(0).entry().id(),
+                    hits.isEmpty() ? "-" : hits.get(0).entry().id().value(),
                     String.valueOf(ret.bestCosine()),
-                    it.question()));
+                    it.question(),
+                    // 末列 = top1 的分数。判定"这次到底有没有资料"用的就是它：
+                    // 重排开着时是重排分（闲聊 ≤0.002、真实问题 ≥0.04），
+                    // 关掉重排时是 RRF/双塔分 —— 所以列名刻意不叫 rerank
+                    hits.isEmpty() ? "-" : String.format("%.4f", hits.get(0).score())));
             n++;
             injected += hits.size();
             if (it.expectsAnswer()) {
@@ -414,7 +432,7 @@ class RetrievalGoldenTest {
     /** 第一条命中期望块的排名（1 起）；没命中返回 0 */
     private static int rankOf(List<KbRetriever.Hit> hits, Set<String> expected) {
         for (int i = 0; i < hits.size(); i++) {
-            if (expected.contains(hits.get(i).entry().id())) {
+            if (expected.contains(hits.get(i).entry().id().value())) {
                 return i + 1;
             }
         }
@@ -428,7 +446,7 @@ class RetrievalGoldenTest {
             if (i > 1) {
                 sb.append(" | ");
             }
-            sb.append(h.entry().id()).append('(').append(i++).append(')');
+            sb.append(h.entry().id().value()).append('(').append(i++).append(')');
         }
         return sb.toString();
     }

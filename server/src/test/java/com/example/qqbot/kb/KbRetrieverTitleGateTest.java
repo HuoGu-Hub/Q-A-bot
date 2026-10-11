@@ -15,6 +15,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * C 路（标题向量闸门 + 置顶）的验收测试。
@@ -66,7 +67,7 @@ class KbRetrieverTitleGateTest {
     }
 
     private static String id(KbRetriever.Hit h) {
-        return h.entry().id();
+        return h.entry().id().value();
     }
 
     @Test
@@ -139,7 +140,7 @@ class KbRetrieverTitleGateTest {
 
         List<KbRetriever.Hit> hits = retriever.retrieve("什么是酸蚀之咬").hits();
 
-        assertThat(hits.get(0).entry().id()).isEqualTo("eternal");
+        assertThat(hits.get(0).entry().id().value()).isEqualTo("eternal");
         assertThat(hits).noneMatch(h -> h.source().contains("title"));
     }
 
@@ -180,7 +181,7 @@ class KbRetrieverTitleGateTest {
         KbRetriever.Retrieval r = retriever.retrieve("什么是酸蚀之咬");
 
         assertThat(r.hits()).hasSize(1);
-        assertThat(r.hits().get(0).entry().id()).isEqualTo("acid-bite");
+        assertThat(r.hits().get(0).entry().id().value()).isEqualTo("acid-bite");
         assertThat(r.hits().get(0).source()).isEqualTo("title");
         assertThat(r.bestCosine())
                 .as("★ A 路的读数不被 C 路污染：调 min-score 看的就是它")

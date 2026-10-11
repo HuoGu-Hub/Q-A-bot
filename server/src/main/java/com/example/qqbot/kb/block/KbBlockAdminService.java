@@ -69,7 +69,7 @@ public class KbBlockAdminService {
                             List<String> tags, String source, boolean retired, String updatedAt) {
 
         static BlockView of(KbBlock b) {
-            return new BlockView(b.id(), b.docId(), b.title(), b.body(), b.url(),
+            return new BlockView(b.id().value(), b.docId(), b.title(), b.body(), b.url(),
                     b.tags(), b.source(), b.retired(), b.updatedAt());
         }
     }
@@ -166,7 +166,8 @@ public class KbBlockAdminService {
         if (store.get(bid) != null) {
             throw new IllegalArgumentException("id 已存在：" + bid + "（想改内容请用「保存这一块」）");
         }
-        KbBlock b = new KbBlock(bid, doc, title == null ? "" : title.trim(), body,
+        KbBlock b = new KbBlock(com.example.qqbot.kb.EntryId.of(bid), doc,
+                title == null ? "" : title.trim(), body,
                 url == null ? "" : url, tags == null ? List.of() : List.copyOf(tags),
                 KbBlock.SRC_MANUAL, false, Instant.now().toString());
         store.upsert(b, embed(body, bid));
@@ -214,7 +215,18 @@ public class KbBlockAdminService {
     }
 
     /** 真正导入（新增 / 覆盖，文件里没出现的块一个都不动） */
-    public KbDocImporter.Result importDoc(String documentText) {
+    /**
+     * 导入一份文档的**块**部分 —— 只落块、只提出名字建议，不登记名字。
+     *
+     * <p>名字登记挂在块 id 上，所以"落块 → 登记名字"是一条用例。
+     * 本方法只做前半段；把它接起来的是组合层
+     * （{@code kb.catalog.KbCatalog#importDocument}），
+     * 那也**是唯一对外暴露导入的入口**（{@code kb.catalog.KbImportController}）。
+     *
+     * <p>⚠️ 直接调本方法不会报错，但名字不会进词条表 —— 中文提问就够不到这些页。
+     * 需要完整导入时请走组合层。
+     */
+    public KbDocImporter.Result importBlocks(String documentText) {
         return importer.importDocument(documentText);
     }
 
@@ -255,7 +267,7 @@ public class KbBlockAdminService {
         List<KbBlock> todo = new ArrayList<>();
         int missing = 0;
         int stale = 0;
-        Map<String, KbBlockStore.TitleVector> have = store.allTitleVectors();
+        Map<com.example.qqbot.kb.EntryId, KbBlockStore.TitleVector> have = store.allTitleVectors();
         for (KbBlock b : store.all()) {
             if (b.title() == null || b.title().isBlank()) {
                 continue;   // 没标题的块没有"标题向量"可言
@@ -327,9 +339,9 @@ public class KbBlockAdminService {
         String prefix = base + "-";
         int max = -1;
         for (KbBlock b : store.all()) {
-            if (b.id().startsWith(prefix)) {
+            if (b.id().value().startsWith(prefix)) {
                 try {
-                    max = Math.max(max, Integer.parseInt(b.id().substring(prefix.length())));
+                    max = Math.max(max, Integer.parseInt(b.id().value().substring(prefix.length())));
                 } catch (NumberFormatException ignored) {
                     // 不是 "前缀+数字" 的块不参与编号
                 }

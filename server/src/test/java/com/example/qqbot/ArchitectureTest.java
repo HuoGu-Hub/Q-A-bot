@@ -24,9 +24,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * 和 <b>{@code @Disabled}（目标）</b>——后者是"当前代码确实违反、属于后续要还的债"，
  * 挂注解是为了不把已经红着的构建堵死。
  *
- * <p><b>现在 {@code @Disabled} 已经全部摘掉了</b>：四条铁律 + 8 条结构规则，
- * 共 <b>12 条</b>全部转正（债务 ①~⑦ 全还完，见
- * {@code docs/md/交付说明-渐进式重构与知识库改造.md} 第 7 节）。
+ * <p><b>现在 {@code @Disabled} 已经全部摘掉了</b>：四条铁律 + 10 条结构规则，
+ * 共 <b>14 条</b>全部转正。
  * 也就是说：<b>本类里任何一条变红，都说明你刚引入了一个越界依赖</b> ——
  * 没有"待还的债"这种解释了。
  *
@@ -159,6 +158,40 @@ class ArchitectureTest {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..kb.wiki..", "..kb.map..")
                 .should().dependOnClassesThat().haveSimpleName("KbTermStore");
+        rule.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("★ kb.block 与 kb.term 互不依赖 —— 两半的汇合只在组合层（2026-10-10 转正）")
+    void blockAndTermDoNotKnowEachOther() {
+        // 曾经的关系：导入器往词条表写名字（block → term），
+        // 而词条目录要读块来拼（term → block）—— 两条边都是真实需求，于是互指。
+        // 现在：块侧只**提出**名字建议（kb.NameCandidate），名字侧只**接**候选，
+        // 合起来的那一步在组合层 kb.catalog。两半从此没有理由认识对方。
+        //
+        // 迁移期间这里曾有、也只允许有一个例外（KbDocImporter）。例外已经消掉，
+        // 所以本规则不再留白名单：任何一边新增依赖都会立刻变红。
+        ArchRule blockToTerm = noClasses()
+                .that().resideInAPackage("..kb.block..")
+                .should().dependOnClassesThat().resideInAPackage("..kb.term..");
+        blockToTerm.check(CLASSES);
+
+        ArchRule termToBlock = noClasses()
+                .that().resideInAPackage("..kb.term..")
+                .should().dependOnClassesThat().resideInAPackage("..kb.block..");
+        termToBlock.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("★ kb 核心不得依赖任何上层包（block / term / catalog）")
+    void kbCoreDoesNotDependOnUpperLayers() {
+        // 核心（契约 + 检索）是这层结构的底：词条表由 TermSource 只读视图提供，
+        // 块表由 KbCorpus 提供，两半的汇合由 kb.catalog 负责。
+        // 核心一旦反向依赖任何一层，整个方向就重新变成"谁都能拉谁"。
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..kb")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("..kb.block..", "..kb.term..", "..kb.catalog..");
         rule.check(CLASSES);
     }
 

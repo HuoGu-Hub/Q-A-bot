@@ -26,6 +26,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 文档导入的端到端验收测试：**文档 → 块表 → 索引**。
@@ -66,8 +67,8 @@ class KbDocImporterTest {
         when(embedding.isAvailable()).thenReturn(true);
         when(embedding.embedOne(anyString())).thenAnswer(inv -> vecOf(inv.getArgument(0)));
 
-        importer = new KbDocImporter(store, embedding,
-                org.mockito.Mockito.mock(com.example.qqbot.kb.term.KbTermStore.class));
+        // 导入器不再认识名字层：它只落块并提名字建议
+        importer = new KbDocImporter(store, embedding);
     }
 
     /** 假向量：按文本算出确定性向量，不联网、不花钱 */
@@ -303,7 +304,7 @@ class KbDocImporterTest {
     private java.util.Map<String, KbBlock> library() {
         java.util.Map<String, KbBlock> lib = new java.util.LinkedHashMap<>();
         for (KbBlock b : store.all()) {
-            lib.put(b.id(), b);
+            lib.put(b.id().value(), b);
         }
         return lib;
     }

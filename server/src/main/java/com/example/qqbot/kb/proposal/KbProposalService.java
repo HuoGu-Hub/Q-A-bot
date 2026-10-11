@@ -370,7 +370,7 @@ public class KbProposalService {
                         return "知识库里没有词条「" + p.title() + "」，无法覆盖；请改成新增";
                     }
                     // 按**块 id** 写（走管理服务，会自动重算这一块的向量）
-                    blockAdmin.updateText(target.id(), p.proposedText());
+                    blockAdmin.updateText(target.id().value(), p.proposedText());
                 } else {
                     // 新增：直接写进块表。
                     // （2026-09-29 起不做"投递"了 —— 资料一律以符合格式的文档导入，

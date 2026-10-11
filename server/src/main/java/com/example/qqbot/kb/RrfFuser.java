@@ -17,7 +17,7 @@ import java.util.Map;
  * <p>键是<b>条目的 id</b>（不是行号）—— 换存储之后"同一个块"靠 id 认。
  */
 @Component
-public class RrfFuser implements KbFuser {
+public class RrfFuser {
 
     /**
      * RRF 融合参数。{@code score = Σ w / (K + rank)}。
@@ -48,7 +48,7 @@ public class RrfFuser implements KbFuser {
      */
     private static final double GATE_FUSED_SCORE = 1.0 / (RRF_K + 1);
 
-    @Override
+    /** 按排名融合两路候选，取前 {@code topK} 条 */
     public List<KbRetriever.Hit> fuse(List<KbRetriever.Hit> byVector, List<KbRetriever.Hit> byKeyword,
                                       int topK, List<String> terms) {
         Map<String, Double> scores = new HashMap<>();
@@ -56,13 +56,13 @@ public class RrfFuser implements KbFuser {
         Map<String, String> sources = new HashMap<>();
 
         for (int i = 0; i < byVector.size(); i++) {
-            String id = byVector.get(i).entry().id();
+            String id = byVector.get(i).entry().id().value();
             scores.merge(id, 1.0 / (RRF_K + i + 1), Double::sum);
             entries.put(id, byVector.get(i).entry());
             sources.merge(id, "vector", (a, b) -> a.equals(b) ? a : "both");
         }
         for (int i = 0; i < byKeyword.size(); i++) {
-            String id = byKeyword.get(i).entry().id();
+            String id = byKeyword.get(i).entry().id().value();
             scores.merge(id, KEYWORD_WEIGHT / (RRF_K + i + 1), Double::sum);
             entries.put(id, byKeyword.get(i).entry());
             sources.merge(id, "keyword", (a, b) -> a.equals(b) ? a : "both");
@@ -82,16 +82,25 @@ public class RrfFuser implements KbFuser {
                 .toList();
     }
 
-    @Override
+    /**
+     * 把闸门命中的那一条提到第 1 位。
+     *
+     * <p>其余条目的相对顺序保持不变（不做任何分数混合）：这样"多一路"带来的唯一变化
+     * 就是"这一条排最前"，口语提问即使被误触发，代价也只是首条换了。
+     * 它可能压根不在融合结果里 —— 那就补进来占第 1 位，并挤掉最后一个。
+     */
     public List<KbRetriever.Hit> pin(List<KbRetriever.Hit> fused, KbRetriever.TitleGate gate, int topK) {
         if (!gate.hit() || gate.entry() == null) {
             return fused;
         }
-        String id = gate.entry().id();
+        // ⚠️ 拿身份**类型**比较，不要取 value() 再去 equals：
+        //   EntryId.equals(String) 恒为 false，而编译器看不住 equals 的参数类型 ——
+        //   表现是置顶条重复出现（"已经有它"永远判不成立）。这是类型化时最容易踩的一脚。
+        com.example.qqbot.kb.EntryId id = gate.entry().id();
         List<KbRetriever.Hit> rest = new ArrayList<>();
         KbRetriever.Hit existing = null;
         for (KbRetriever.Hit h : fused) {
-            if (h.entry().id().equals(id)) {
+            if (id.equals(h.entry().id())) {
                 existing = h;
             } else {
                 rest.add(h);

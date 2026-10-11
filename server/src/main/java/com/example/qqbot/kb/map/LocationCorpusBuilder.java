@@ -173,7 +173,7 @@ public class LocationCorpusBuilder {
         String now = Instant.now().toString();
         for (Entry e : entries) {
             float[] vec = embedding.embedOne(e.title() + "\n" + e.body());
-            KbBlock block = new KbBlock(e.id(), DOC_ID, e.title(), e.body(), e.url(),
+            KbBlock block = new KbBlock(com.example.qqbot.kb.EntryId.of(e.id()), DOC_ID, e.title(), e.body(), e.url(),
                     e.tags(), SRC_MAP, false, now);
             if (blockStore.upsert(block, vec)) {
                 // C 路（标题向量）也要补：地点问题常常就是"名字提问"

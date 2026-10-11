@@ -18,7 +18,7 @@ import java.util.List;
  * <p><b>fail-open</b>：重排挂了就保持原顺序照常回答，绝不因为"锦上添花的一层"失败而不回答。
  */
 @Component
-public class CrossEncoderReranker implements KbReranker {
+public class CrossEncoderReranker {
 
     private static final Logger log = LoggerFactory.getLogger(CrossEncoderReranker.class);
 
@@ -32,12 +32,19 @@ public class CrossEncoderReranker implements KbReranker {
         this.rerankClient = rerankClient;
     }
 
-    @Override
+    /** 这一路现在能不能用（没配 key、被关掉都算不能） */
     public boolean isAvailable() {
         return rerankClient != null && rerankClient.isAvailable();
     }
 
-    @Override
+    /**
+     * 重排。
+     *
+     * @param fused   候选池，<b>必须多于最终要的条数</b>，否则重排没有翻盘空间
+     * @param gateHit C 路闸门是否命中。命中说明"用户就是在问这个实体名"，
+     *                此时不允许"一条都不给"
+     * @return 重排后的结果；判定"没有资料"时返回空列表
+     */
     public List<KbRetriever.Hit> rerank(String query, List<KbRetriever.Hit> fused, int topK, boolean gateHit) {
         if (fused.isEmpty()) {
             return fused;

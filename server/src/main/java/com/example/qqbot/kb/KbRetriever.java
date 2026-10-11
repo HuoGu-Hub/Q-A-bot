@@ -56,21 +56,13 @@ public class KbRetriever {
     private static final Logger log = LoggerFactory.getLogger(KbRetriever.class);
 
     /**
-     * 注入直通 —— 官方管线的注入那一格我们**不用**。
-     *
-     * <p>资料怎么拼进提示词由 agent 层决定（{@code <<<KNOWLEDGE>>>} 标记与两段出处，
-     * 系统提示词第九章的规则挂在上面），所以这里原样返回。
-     * 我们用 augment() 要的是"路由 + 检索 + 聚合"那一段，不是它的注入。
-     */
-    /**
      * 资料注入器：把聚合后的块渲染成 {@code <<<KNOWLEDGE>>>} 段，<b>在官方管线的最后一格完成</b>。
      *
      * <p>原来是直通，标记由 agent 层自己拼（{@code ChatService} 与 {@code FallbackService} 各拼一遍）。
      * 收进管线之后，"资料长什么样"只有一处决定 —— 换编排也不会漏掉标记，
      * 而标记漏了不会报错，只会让系统提示词第九章静默失效。
      *
-     * <p>{@code TwoSectionInjector} 是无状态纯函数，这里直接 new 一个实例；
-     * Spring 里那个 bean 是给 agent 层老路径用的。
+     * <p>{@code TwoSectionInjector} 是无状态纯函数，这里直接 new 一个实例。
      */
     private static final ContentInjector KNOWLEDGE_INJECTOR =
             new KbContentInjector(new TwoSectionInjector());
@@ -229,7 +221,7 @@ public class KbRetriever {
     /** 命中块 → 统计用的精简形状 */
     private static List<KbTrace.Hit> traceHitsOf(List<Hit> hits) {
         return hits.stream()
-                .map(h -> new KbTrace.Hit(h.entry().id(), h.entry().title(), h.entry().docId(),
+                .map(h -> new KbTrace.Hit(h.entry().id().value(), h.entry().title(), h.entry().docId(),
                         h.score(), h.source()))
                 .toList();
     }
@@ -265,43 +257,21 @@ public class KbRetriever {
      * 关键词路一击就能把它顶到第一。<b>两条路各有盲区，必须都跑。</b>
      */
     public Retrieval retrieve(String query) {
-        return retrieve(query, true);
+        return retrieve(query, RetrievalOptions.of(props.getTopK(), props.getMinScore()));
     }
 
     /**
-     * 检索（可选择是否走向量路）。
+     * 检索。
      *
-     * @param allowEmbedding 是否允许走向量路。向量路每次调用都要请求外部模型 API，
-     *        所以<b>公开接口不能直接用它</b> —— 要走
-     *        {@link com.example.qqbot.publicapi.PublicSearchService}，
-     *        那里有结果缓存和按天配额兜底。关掉后只用本地关键词路。
+     * <p>参数收成 {@link RetrievalOptions} —— 群内问答和公开站搜索的目标完全不同
+     * （群内是"给模型当依据"，宁缺毋滥；公开站是"按相关度排给人看"，要拿得多一点、
+     * 阈值松一点、且必须关掉重排），差别全在那几个值里，不在调用顺序里。
      */
-    public Retrieval retrieve(String query, boolean allowEmbedding) {
-        return retrieve(query, allowEmbedding, props.getTopK(), props.getMinScore());
-    }
-
-    /**
-     * 检索（显式指定条数与阈值）。
-     *
-     * <p><b>为什么需要这个重载</b>：群内问答和公开站搜索的目标完全不同 ——
-     * 群内是"给模型当依据"，宁缺毋滥（阈值 0.45、只要 5 条）；
-     * 公开站是"按相关度排给人看"，要拿得多一点、阈值松一点（见 {@link PublicSearch}）。
-     */
-    public Retrieval retrieve(String query, boolean allowEmbedding, int topK, double minScore) {
-        return retrieve(query, allowEmbedding, topK, minScore, true);
-    }
-
-    /**
-     * 检索（可选择是否重排）。
-     *
-     * @param allowRerank 是否允许送 cross-encoder 重排。公开站搜索会<b>明确关掉</b>它：
-     *        那里有按天配额与 LRU 缓存，多一次外部调用不划算。
-     */
-    public Retrieval retrieve(String query, boolean allowEmbedding, int topK, double minScore, boolean allowRerank) {
+    public Retrieval retrieve(String query, RetrievalOptions opts) {
         if (!props.isEnabled() || query == null || query.isBlank()) {
             return Retrieval.empty();
         }
-        int k = Math.max(1, topK);
+        int k = Math.max(1, opts.topK());
         // 每路的候选数：最终条数的 4 倍（最少 20）—— 留够余量给 RRF 融合和调用方去重
         int pool = Math.max(k * 4, 20);
 
@@ -309,7 +279,7 @@ public class KbRetriever {
         // 群内与公开站的阈值/条数不同，参数不同就是不同的问题，不能互相命中。
         long corpusVersion = safe(() -> corpus.version(), 0L, "读取语料版本");
         KbRetrievalCache.Key cacheKey = new KbRetrievalCache.Key(
-                corpusVersion, query, allowEmbedding, k, minScore, allowRerank);
+                corpusVersion, query, opts.allowEmbedding(), k, opts.minScore(), opts.allowRerank());
         Retrieval cached = cache.get(cacheKey);
         if (cached != null) {
             log.debug("[KB] 命中检索缓存（语料版本 {}）：{}", corpusVersion, query);
@@ -317,7 +287,7 @@ public class KbRetriever {
         }
 
         KbRetrievalDiagnostics diagnostics = new KbRetrievalDiagnostics();
-        KbRetrievalContext ctx = newContext(query, allowEmbedding, k, minScore, allowRerank, diagnostics);
+        KbRetrievalContext ctx = newContext(query, opts, diagnostics);
 
         try {
             augmentor.augment(new AugmentationRequest(UserMessage.from(query), ctx.toQuery().metadata()));
@@ -339,7 +309,7 @@ public class KbRetriever {
 
         if (byVec.isEmpty() && byKey.isEmpty() && !gate.hit()) {
             log.debug("[KB] 三路都没有命中（A 路最高相似度 {}，阈值 {}；标题路最高 {}，闸门 {}）",
-                    String.format("%.3f", bestCosineRaw), String.format("%.3f", minScore),
+                    String.format("%.3f", bestCosineRaw), String.format("%.3f", opts.minScore()),
                     String.format("%.3f", gate.cosine()), String.format("%.3f", props.getTitleGate()));
             Retrieval nothing = new Retrieval(List.of(), bestCosine, bestCosineRaw, 0, 0, List.of());
             cache.put(cacheKey, nothing);
@@ -375,10 +345,9 @@ public class KbRetriever {
      * {@link KbContextQueryTransformer} 要用同一套逻辑把上下文挂上去，
      * 所以"上下文怎么建"只能有一处。
      */
-    KbRetrievalContext newContext(String query, boolean allowEmbedding, int k, double minScore,
-                                  boolean allowRerank, KbRetrievalDiagnostics diagnostics) {
-        return KbContextFactory.build(query, allowEmbedding, k, minScore, allowRerank,
-                corpus, glossary, embedding, diagnostics);
+    KbRetrievalContext newContext(String query, RetrievalOptions opts, KbRetrievalDiagnostics diagnostics) {
+        return KbContextFactory.build(query, opts.allowEmbedding(), Math.max(1, opts.topK()),
+                opts.minScore(), opts.allowRerank(), corpus, glossary, embedding, diagnostics);
     }
 
     /**
@@ -386,7 +355,7 @@ public class KbRetriever {
      * {@link KbContextQueryTransformer} 调它。
      */
     public KbRetrievalContext defaultContext(String query) {
-        return newContext(query, true, Math.max(1, props.getTopK()), props.getMinScore(), true,
+        return newContext(query, RetrievalOptions.of(props.getTopK(), props.getMinScore()),
                 new KbRetrievalDiagnostics());
     }
 

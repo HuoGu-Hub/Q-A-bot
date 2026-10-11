@@ -197,7 +197,7 @@ class KbRetrieverTest {
         when(embedding.embedOne(anyString())).thenReturn(new float[]{1f, 0f});
         when(glossary.expand(anyString())).thenReturn(List.of("Scrap Cup"));
 
-        List<KbRetriever.Hit> hits = retriever.retrieve("废料杯", true, 2, 0.32).hits();
+        List<KbRetriever.Hit> hits = retriever.retrieve("废料杯", RetrievalOptions.of(2, 0.32)).hits();
 
         assertThat(hits).hasSize(2);
         assertThat(hits.get(0).entry().title())
@@ -218,8 +218,8 @@ class KbRetrieverTest {
         assertThat(retriever.retrieve("灵火祭坛").hits()).hasSize(1);
 
         // 公开站阈值 0.32 → 两块都要，且能指定只取 1 条
-        assertThat(retriever.retrieve("灵火祭坛", true, 5, 0.32).hits()).hasSize(2);
-        assertThat(retriever.retrieve("灵火祭坛", true, 1, 0.32).hits()).hasSize(1);
+        assertThat(retriever.retrieve("灵火祭坛", RetrievalOptions.of(5, 0.32)).hits()).hasSize(2);
+        assertThat(retriever.retrieve("灵火祭坛", RetrievalOptions.of(1, 0.32)).hits()).hasSize(1);
     }
 
     @Test
@@ -247,7 +247,7 @@ class KbRetrieverTest {
         when(embedding.embedOne(anyString())).thenReturn(new float[]{1f, 0f});
         when(glossary.expand(anyString())).thenReturn(List.of("酸性菌丝"));
 
-        List<KbRetriever.Hit> hits = retriever.retrieve("酸性菌丝有什么用", true, 2, 0.3).hits();
+        List<KbRetriever.Hit> hits = retriever.retrieve("酸性菌丝有什么用", RetrievalOptions.of(2, 0.3)).hits();
 
         assertThat(hits).isNotEmpty();
         assertThat(hits.get(0).entry().title())
@@ -268,7 +268,7 @@ class KbRetrieverTest {
         when(embedding.embedOne(anyString())).thenReturn(new float[]{1f, 0f});
         when(glossary.expand(anyString())).thenReturn(List.of("Acidic Mycelium"));
 
-        List<KbRetriever.Hit> hits = retriever.retrieve("Acidic Mycelium", true, 2, 0.3).hits();
+        List<KbRetriever.Hit> hits = retriever.retrieve("Acidic Mycelium", RetrievalOptions.of(2, 0.3)).hits();
 
         assertThat(hits.get(0).entry().title()).startsWith("酸性菌丝");
     }

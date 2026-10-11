@@ -9,6 +9,7 @@ import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.RerankClient;
+import com.example.qqbot.kb.RetrievalOptions;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.kb.term.KbTermStore;
@@ -142,7 +143,7 @@ class LocationCorpusE2ETest {
 
         // ③b 诊断：聚合型提问的完整排名 —— 地点块到底排第几、与第一名差多少分。
         //     这决定了 D8 该从语料侧修（让地点块自己赢）还是从排序侧修（显式提权）。
-        List<KbRetriever.Hit> deep = retriever.retrieve("空洞大厅有什么", true, 20, 0f, true).hits();
+        List<KbRetriever.Hit> deep = retriever.retrieve("空洞大厅有什么", RetrievalOptions.of(20, 0f)).hits();
         System.out.println("  ---- 「空洞大厅有什么」top20 诊断 ----");
         for (int i = 0; i < deep.size(); i++) {
             KbRetriever.Hit h = deep.get(i);

@@ -50,6 +50,22 @@ class KbContentInjectorTest {
     }
 
     @Test
+    @DisplayName("★ 注入器只管标记：渲染交给 KbKnowledgeInjector 这条缝")
+    void delegatesRenderingToTheSeam() {
+        // 替身渲染器：证明"渲染方式"确实可以整体替换，而不必碰标记逻辑。
+        // 这条测试存在的意义就是让那条缝**被真实使用过** ——
+        // 一个只有唯一实现的接口，若连测试替身都没有，就是纯开销。
+        KbContentInjector markerOnly = new KbContentInjector(hits -> "【替身渲染】");
+
+        String text = textOf(markerOnly.inject(
+                List.of(KbContents.of(hit("x", "标题", "正文", true, "2026-10-01"))),
+                UserMessage.from("问题")));
+
+        assertThat(text).contains("【替身渲染】");
+        assertThat(text).contains("<<<KNOWLEDGE").contains("KNOWLEDGE>>>");
+    }
+
+    @Test
     @DisplayName("没有资料时不加标记，用户原话原样返回")
     void noContentsMeansNoMarker() {
         ChatMessage in = UserMessage.from("你好");
@@ -64,7 +80,7 @@ class KbContentInjectorTest {
 
         KbRetriever.Hit back = KbContents.toHit(KbContents.of(original));
 
-        assertThat(back.entry().id()).isEqualTo("ours");
+        assertThat(back.entry().id().value()).isEqualTo("ours");
         assertThat(back.entry().title()).isEqualTo("灵火祭坛");
         assertThat(back.entry().text()).isEqualTo("正文");
         assertThat(back.entry().url()).isEqualTo("https://w/ours");

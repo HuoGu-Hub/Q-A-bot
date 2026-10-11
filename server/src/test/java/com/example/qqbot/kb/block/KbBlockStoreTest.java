@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 块存储的验收测试。
@@ -51,7 +52,7 @@ class KbBlockStoreTest {
     }
 
     private static KbBlock block(String id, String docId, String title, String body) {
-        return new KbBlock(id, docId, title, body, "https://w/" + id,
+        return new KbBlock(EntryId.of(id), docId, title, body, "https://w/" + id,
                 List.of("基础", "据点"), KbBlock.SRC_DOC, false, "");
     }
 
@@ -98,7 +99,7 @@ class KbBlockStoreTest {
     @DisplayName("不存在的 id → null（而不是报错）")
     void missingIdReturnsNull() {
         assertThat(store.get("不存在")).isNull();
-        assertThat(store.get(null)).isNull();
+        assertThat(store.get((String) null)).isNull();
         assertThat(store.get("  ")).isNull();
     }
 
@@ -140,7 +141,7 @@ class KbBlockStoreTest {
         store.upsert(block("b", "d", "t", "b"), vec(0, 1));
         store.upsert(block("c", "d", "t", "b2"), null);   // 还没算向量
 
-        assertThat(store.allVectors()).hasSize(2).containsKeys("a", "b");
+        assertThat(store.allVectors()).hasSize(2).containsKeys(EntryId.of("a"), EntryId.of("b"));
         assertThat(store.count()).as("块有 3 个，向量只有 2 个").isEqualTo(3);
         assertThat(store.countVectors()).isEqualTo(2);
     }
@@ -186,12 +187,12 @@ class KbBlockStoreTest {
         assertThat(store.setRetired("a", true)).isTrue();
 
         assertThat(store.all()).hasSize(2);
-        assertThat(store.allActive()).extracting(KbBlock::id).containsExactly("b");
+        assertThat(store.allActive()).extracting(KbBlock::id).containsExactly(EntryId.of("b"));
         assertThat(store.countRetired()).isEqualTo(1);
         assertThat(store.get("a").body()).as("正文还在，能恢复").isEqualTo("正文");
 
         store.setRetired("a", false);
-        assertThat(store.allActive()).extracting(KbBlock::id).containsExactly("a", "b");
+        assertThat(store.allActive()).extracting(KbBlock::id).containsExactly(EntryId.of("a"), EntryId.of("b"));
     }
 
     @Test
@@ -201,7 +202,7 @@ class KbBlockStoreTest {
         store.upsert(block("docA-1", "docA", "甲", "y"), vec(0, 1));
         store.upsert(block("docB-0", "docB", "乙", "z"), vec(1, 1));
 
-        assertThat(store.byDoc("docA")).extracting(KbBlock::id).containsExactly("docA-0", "docA-1");
+        assertThat(store.byDoc("docA")).extracting(KbBlock::id).containsExactly(EntryId.of("docA-0"), EntryId.of("docA-1"));
         assertThat(store.byDoc("docB")).hasSize(1);
         assertThat(store.byDoc("没有")).isEmpty();
     }
@@ -240,7 +241,7 @@ class KbBlockStoreTest {
         assertThat(store.titleVector("a").vec()).containsExactly(0.5f, 0.5f);
         assertThat(store.titleVector("a").title()).isEqualTo("酸蚀之咬（Acid Bite）");
         assertThat(store.countTitleVectors()).isEqualTo(1);
-        assertThat(store.allTitleVectors()).containsKey("a");
+        assertThat(store.allTitleVectors()).containsKey(EntryId.of("a"));
         assertThat(store.titleVector("没有这个")).isNull();
     }
 

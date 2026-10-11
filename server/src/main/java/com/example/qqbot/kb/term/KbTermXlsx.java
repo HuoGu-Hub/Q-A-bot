@@ -35,7 +35,11 @@ import java.util.List;
  *
  * <p>所以：导出 = {@code TSV → xlsx 字节}；导入 = {@code xlsx 字节 → TSV 文本 → 走原路径}。
  */
-final class KbTermXlsx {
+public final class KbTermXlsx {
+
+    // 注：本类对 kb.catalog 也是公开的 —— 组合层导出 xlsx 时用它把 TSV 文本转成 Excel。
+    // 那是同一件事的两端（本层的导入 / 组合层的导出），复制一份 POI 代码才是真的坏。
+
 
     private KbTermXlsx() {
     }
@@ -49,7 +53,7 @@ final class KbTermXlsx {
      * <p>注释行（以 {@code #} 开头）**丢掉** —— 表格里不该出现它们；
      * 取而代之的是真正的**表头行**，在 Excel/WPS 里看着才像张表。
      */
-    static byte[] write(String tsvText) {
+    public static byte[] write(String tsvText) {
         List<List<String>> rows = CsvTable.parse(tsvText == null ? "" : tsvText, '\t');
         try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("词条");
@@ -107,7 +111,7 @@ final class KbTermXlsx {
      * 导入侧只认第 1/2/5 列，多一行表头会被当成"英文名=英文名"的无效行跳过，
      * 不会写坏数据。
      */
-    static String read(byte[] bytes) {
+    public static String read(byte[] bytes) {
         if (bytes == null || bytes.length == 0) {
             return "";
         }

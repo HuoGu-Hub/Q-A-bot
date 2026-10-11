@@ -1,6 +1,5 @@
 package com.example.qqbot.kb;
 
-import com.example.qqbot.kb.term.KbTermStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -24,10 +23,11 @@ import java.util.regex.Pattern;
  * <h2>数据从哪来（2026-09-27 改造）</h2>
  * 以前本类自己去读 {@code data/kb/glossary/zh-en.tsv}，于是同一份数据被
  * 本类、{@code GlossaryStore}（后台写）、{@code KbTermService}（列表组装）
- * 各自解析一遍。现在只有一个来源：{@link KbTermStore}（SQLite 单表）。
+ * 各自解析一遍。现在只有一个来源：{@link com.example.qqbot.kb.term.KbTermStore}（SQLite 单表），
+ * 而本类只依赖 {@link TermSource} 这个只读视图。
  *
  * <h2>为什么不需要调用方记得刷新</h2>
- * 每次取用前比对 {@link KbTermStore#version()}：写入方一改，版本号就变，
+ * 每次取用前比对 {@link TermSource#version()}：写入方一改，版本号就变，
  * 本类下一次查询自动重载。旧实现靠每个写方法末尾手动 {@code glossary.reload()}，
  * 新增一个写入口就漏一个，漏了不报错 —— 只是后台改完词，机器人一直在用旧的。
  *
@@ -65,13 +65,14 @@ public class Glossary {
     /** 查询里出现的英文单词（长度 >= 3），用于用户直接打英文的场景 */
     private static final Pattern ASCII_WORD = Pattern.compile("[A-Za-z][A-Za-z'\\-]{2,}");
 
-    private final KbTermStore store;
+    /** 只读视图。**不依赖 {@code kb.term} 的具体实现** —— 词条表的写入口在那边，检索核心不该认识它们 */
+    private final TermSource store;
 
     private volatile boolean loaded;
     private volatile long loadedVersion = -1;
     private volatile List<Map.Entry<String, String>> entries = List.of();
 
-    public Glossary(KbTermStore store) {
+    public Glossary(TermSource store) {
         this.store = store;
     }
 
@@ -306,8 +307,8 @@ public class Glossary {
             return List.of();
         }
         Map<String, String> map = new LinkedHashMap<>();
-        for (KbTermStore.Entry e : store.list()) {
-            if (e.en().isEmpty() || "rejected".equalsIgnoreCase(e.status())) {
+        for (TermSource.Row e : store.rows()) {
+            if (e.en().isBlank() || "rejected".equalsIgnoreCase(e.status())) {
                 continue;
             }
             // 中文名可以写多个别名，用「、」或「/」分隔 —— 人工核对时很有用。
@@ -325,7 +326,7 @@ public class Glossary {
             //     · 物品类：zh = 「酸蚀之咬、Acid Bite」→ 取那截英文名
             //     · wiki 导入类：zh 直接就是英文名（"Intelligence"）→ 就是它本身
             //     · 只有中文名：退回 e.en()，此时靠中文别名自己匹配（中文语料/带中文名的标题）
-            String englishSide = e.en();
+            String englishSide = e.en().value();
             for (String alias : aliases) {
                 String a = alias.trim();
                 if (a.length() >= 2 && isAsciiName(a)) {

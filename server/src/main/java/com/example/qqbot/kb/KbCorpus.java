@@ -68,7 +68,7 @@ public interface KbCorpus {
      *                  所以正文向量对"名字提问"几乎无感（实测本体排第 7）。
      *                  没有这一路的条目照常参与检索，只是不吃 C 路的闸门。
      */
-    record Entry(String id,
+    record Entry(com.example.qqbot.kb.EntryId id,
                  /**
                   * 属于哪个「页面 / 文档」。用途：术语表按页补齐、分类统计按页聚合。
                   * 旧语料里页面就是标题；新语料里是文档 slug（如 {@code flame-altar}）。
@@ -91,7 +91,7 @@ public interface KbCorpus {
          */
         public Entry(String id, String title, String text, String url,
                      List<String> tags, boolean curated, String contentAt, float[] vector) {
-            this(id, title, title, text, url, tags, curated, contentAt, vector, null);
+            this(EntryId.of(id), title, title, text, url, tags, curated, contentAt, vector, null);
         }
 
         /**
@@ -102,7 +102,7 @@ public interface KbCorpus {
          */
         public Entry(String id, String docId, String title, String text, String url,
                      List<String> tags, boolean curated, String contentAt, float[] vector) {
-            this(id, docId, title, text, url, tags, curated, contentAt, vector, null);
+            this(EntryId.of(id), docId, title, text, url, tags, curated, contentAt, vector, null);
         }
 
         /** 同一条目，换一份标题向量 —— 存储层组装 / 测试造数据用 */

@@ -95,7 +95,7 @@ public final class KbRetrievalContext {
             Map<String, KbCorpus.Entry> built = new HashMap<>(entries.size() * 2);
             for (KbCorpus.Entry e : entries) {
                 if (e.id() != null) {
-                    built.put(e.id(), e);
+                    built.put(e.id().value(), e);
                 }
             }
             map = built;

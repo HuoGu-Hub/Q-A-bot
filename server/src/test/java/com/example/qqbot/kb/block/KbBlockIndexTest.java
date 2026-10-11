@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 块索引的**自动失效**验收（2026-10-06「激活协议」改造）。
@@ -60,7 +61,7 @@ class KbBlockIndexTest {
     }
 
     private static KbBlock block(String id, String body) {
-        return new KbBlock(id, "doc", id + " 标题", body, "https://w/" + id,
+        return new KbBlock(EntryId.of(id), "doc", id + " 标题", body, "https://w/" + id,
                 List.of("基础"), KbBlock.SRC_DOC, false, "");
     }
 

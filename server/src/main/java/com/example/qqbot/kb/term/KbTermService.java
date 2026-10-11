@@ -1,73 +1,31 @@
 package com.example.qqbot.kb.term;
 
-import com.example.qqbot.kb.EmbeddingClient;
-import com.example.qqbot.kb.category.CategoryService;
-import com.example.qqbot.kb.category.KbGroups;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.example.qqbot.kb.KnowledgeChangedEvent;
+import com.example.qqbot.kb.NameCandidate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 /**
- * 词条层 —— 把知识库整理成「分类 → 词条 → 文本块」三层来看。
+ * 名字层服务：改词条的中文名与核对状态。
  *
- * <h2>数据从哪来（都不是新造的）</h2>
- * <ul>
- *   <li><b>词条</b> = {@code chunks.jsonl} 的 {@code title}（Wiki 页面标题）
- *       <b>并上</b> {@link KbTermStore} 里那些没有正文的页面 ——
- *       {@code Equipment}、{@code Sets/*} 这类伞形词对 B 路检索有用
- *       （实测 Equipment 命中 44 块正文、Lore 命中 404 块），
- *       但它们没有正文，只从"有正文的块"出发根本看不见。</li>
- *   <li><b>中文名 / 核对状态</b> = {@link KbTermStore}，唯一真源。</li>
- *   <li><b>分类</b> = 每个块自带的 {@code cats[]} 经 {@link KbGroups#autoGroup} 映射到 9 个板块。</li>
- *   <li><b>文本块</b> = 块本身；<b>向量</b> = 块表里与块同 id 的那一条。</li>
- * </ul>
+ * <h2>为什么只剩这么点</h2>
+ * 目录读模型、筛选口径、导出格式原先都挤在这里，于是"改一个列宽"要在几百行里找。
+ * 它们现在各归其位：目录与导出去组合层 {@code kb.catalog}，
+ * 筛选口径在 {@code KbCatalogViews}，内容与向量在 {@code kb.block}。
+ * 本类只做一件事 —— 写名字。
  *
- * <h2>这个类现在只负责「改名字」</h2>
- * 中文名 / 核对状态 → 委托 {@link KbTermStore}，单行 UPDATE，
- * 不碰语料、不需要 embedding、零成本。
- *
- * <p><b>改内容</b>（文本块的增删改下架）已经搬到
- * {@link com.example.qqbot.kb.block.KbBlockAdminService}。本类仍持有
- * {@link com.example.qqbot.kb.block.KbBlockStore} 与 {@link EmbeddingClient}，
- * 但只用于只读展示（这一页有没有正文、有没有向量）。
- *
- * <p>当年把两者分开的理由仍然成立：内容与向量必须成对更新 ——
- * 只改一边不会报错，只会让机器人**静默地带着错资料回答**。
- * 所以改内容走最严的路径，改名字根本不进那条路径。
+ * <p><b>为什么写名字必须便宜</b>：它是"补术语表零成本"的技术依据。
+ * 单行 UPDATE，不碰语料、不调 embedding、不重建索引。
+ * 内容与向量必须成对更新（只改一边会静默用错资料），
+ * 而改名字根本不进那条路径 —— 这是两者分成两个真源的理由。
  */
 @Service
 public class KbTermService {
 
-    private static final Logger log = LoggerFactory.getLogger(KbTermService.class);
-
-    /** 没有中文名，所以谈不上核对状态 */
-    private static final String STATUS_NONE = "";
-
-    /** 块表 —— 词条列表就是由它来的（**一个块 = 一个词条**） */
-    private final com.example.qqbot.kb.block.KbBlockStore blockStore;
     private final KbTermStore termStore;
-    private final CategoryService categoryService;
-    private final EmbeddingClient embedding;
-    private final ObjectMapper mapper;
+
     /**
      * 发布"知识库变了"的事件。
      *
@@ -76,15 +34,8 @@ public class KbTermService {
      */
     private final ApplicationEventPublisher events;
 
-    public KbTermService(com.example.qqbot.kb.block.KbBlockStore blockStore, KbTermStore termStore,
-                         CategoryService categoryService, EmbeddingClient embedding,
-                         ObjectMapper mapper,
-                         ApplicationEventPublisher events) {
-        this.blockStore = blockStore;
+    public KbTermService(KbTermStore termStore, ApplicationEventPublisher events) {
         this.termStore = termStore;
-        this.categoryService = categoryService;
-        this.embedding = embedding;
-        this.mapper = mapper;
         this.events = events;
     }
 
@@ -98,377 +49,8 @@ public class KbTermService {
         events.publishEvent(new KnowledgeChangedEvent("词条变更"));
     }
 
-    // ==================== 视图模型 ====================
-
     /**
-     * 一条词条。
-     *
-     * @param en     英文名（= Wiki 页面标题 = 词条表的 key）
-     * @param zh     中文名（可能为空）
-     * @param aliases 中文别名（zh 用「、」等分隔）
-     * @param status draft / verified / rejected / ""（"" = 还没有中文名）
-     * @param board  所属板块 key；版本更新类页面归 {@code __hidden__}
-     * @param chunkCount 这个词条被切成了几块（0 = 没有正文）
-     * @param retired 该词条**全部**文本块都已下架
-     */
-    public record Term(String en, String zh, List<String> aliases, String status,
-                       String board, String boardLabel, List<String> cats,
-                       int chunkCount, int chars, String url, boolean retired) {
-    }
-
-    /**
-     * 一个词条的文本块列表。
-     *
-     * <p>刻意包一层对象而不是直接返回数组：裸数组没法带上 {@code title}，
-     * 前端在"抽屉打开的是哪一条"和"这批块属于哪一条"之间就没法对账 ——
-     * 快速连点两条词条时，先到的响应会把后一条的块填进去。
-     */
-    public record ChunksView(String title, List<ChunkView> chunks) {
-    }
-
-    /**
-     * 一个文本块。{@code i} 是它在 chunks.jsonl 里的行号，也是 index.bin 里的向量行号。
-     *
-     * @param retired 已下架。下架的块不参与任何检索，但仍留在文件里占位 ——
-     *                
-     */
-    public record ChunkView(String id, String text, String url, int chars, boolean retired) {
-    }
-
-    /** 一个板块的规模 */
-    public record BoardStat(String key, String label, String icon, String desc,
-                            int terms, int chunks) {
-    }
-
-    /**
-     * 全表读数。
-     *
-     * <p>刻意**不受搜索词/筛选影响** —— 它是"总共核了多少"的进度口径，
-     * 不是"当前这一页里有几条"。旧术语表接口就是这个语义，别改。
-     */
-    public record Counts(int all, int main, int withChunks, int noChunk,
-                         int draft, int verified, int rejected, int unnamed) {
-    }
-
-    /** 一页列表 */
-    public record Page(int total, List<Term> items, Counts counts,
-                       List<BoardStat> boards, boolean available) {
-    }
-
-    /** 视图预设。前端只传这一个参数，语义全在这里，省得每个筛选各写一遍 */
-    public static final List<String> VIEWS =
-            List.of("main", "all", "draft", "verified", "rejected", "unnamed", "nochunk");
-
-    // ==================== 读 ====================
-
-    /**
-     * 词条列表。
-     *
-     * @param q     按英文名/中文名/别名模糊匹配；空 = 不过滤
-     * @param view  见 {@link #VIEWS}；空 = main
-     * @param board 只看某个板块；空 = 全部
-     */
-    public Page page(String q, String view, String board, int limit, int offset) {
-        Map<String, Term> all = buildAll();
-        Counts counts = count(all);
-        List<BoardStat> boards = boardStats(all);
-        boolean available = termStore.isAvailable();
-
-        // 默认视图是 main；导出那边默认是 all —— 所以默认值由调用方给，这里只认传进来的
-        List<Term> filtered = filter(all, q, view == null || view.isBlank() ? "main" : view, board);
-
-        int from = Math.max(0, offset);
-        if (from >= filtered.size()) {
-            return new Page(filtered.size(), List.of(), counts, boards, available);
-        }
-        int to = Math.min(filtered.size(), from + Math.max(1, limit));
-        return new Page(filtered.size(), filtered.subList(from, to), counts, boards, available);
-    }
-
-    /**
-     * 列表与导出**共用**的筛选 —— 保证「**看到什么就导出什么**」。
-     *
-     * <p>以前导出是单独一份逻辑（只认 view），于是「在某个板块视图下点导出」
-     * 得到的是全表 —— 651 条待补译名混在 3416 行里，人得自己筛。
-     * 抽成一份之后，前端把当前的 {@code view / board / q} 原样传过来即可。
-     *
-     * @param view 已定好默认值（列表是 main、导出是 all），这里不再兜底
-     */
-    private List<Term> filter(Map<String, Term> all, String q, String view, String board) {
-        String needle = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
-        String v = view == null || view.isBlank() ? "all" : view.trim().toLowerCase(Locale.ROOT);
-        List<Term> out = new ArrayList<>();
-        for (Term t : all.values()) {
-            if (!matchesView(t, v)) {
-                continue;
-            }
-            if (board != null && !board.isEmpty() && !board.equals(t.board())) {
-                continue;
-            }
-            if (!needle.isEmpty() && !matchesQuery(t, needle)) {
-                continue;
-            }
-            out.add(t);
-        }
-        // 按英文名排序：列表要能翻页、导出要能对账，顺序必须稳定且可预期
-        out.sort(Comparator.comparing(Term::en, String.CASE_INSENSITIVE_ORDER));
-        return out;
-    }
-
-    private static boolean matchesView(Term t, String view) {
-        return switch (view) {
-            case "all" -> true;
-            // 默认视图：把「既没正文、又没中文名」的空页面挡在外面，
-            // 它们只该在「无正文」预设里被主动看到
-            case "main" -> t.chunkCount() > 0 || hasChinese(t.zh());
-            case "draft" -> "draft".equals(t.status());
-            case "verified" -> "verified".equals(t.status());
-            case "rejected" -> "rejected".equals(t.status());
-            // 「还没有中文名」= zh 里**一个中文字符都没有**（不是 isEmpty，理由见 hasChinese）
-            case "unnamed" -> !hasChinese(t.zh());
-            case "nochunk" -> t.chunkCount() == 0;
-            default -> true;
-        };
-    }
-
-    private static boolean matchesQuery(Term t, String needleLower) {
-        if (t.en().toLowerCase(Locale.ROOT).contains(needleLower)) {
-            return true;
-        }
-        if (t.zh().toLowerCase(Locale.ROOT).contains(needleLower)) {
-            return true;
-        }
-        return t.aliases().stream().anyMatch(a -> a.toLowerCase(Locale.ROOT).contains(needleLower));
-    }
-
-    /** 某个词条（= 一份文档）下的所有文本块。含已下架的（管理端要看得到） */
-    public List<ChunkView> chunks(String en) {
-        List<ChunkView> out = new ArrayList<>();
-        com.example.qqbot.kb.block.KbBlock b = blockStore.get(en);
-        if (b != null) {
-            String body = b.body() == null ? "" : b.body();
-            out.add(new ChunkView(b.id(), body, b.url(), body.length(), b.retired()));
-        }
-        return out;
-    }
-
-    /**
-     * 全表读数。批量改状态之后要回给前端刷新进度条 —— 增量更新数字容易算错，
-     * 直接重算一遍最省心，代价是一次 4k 块的遍历。
-     */
-    public Counts counts() {
-        return count(buildAll());
-    }
-
-    /** 词条是否存在（有没有正文都算） */
-    public boolean exists(String en) {
-        if (en == null || en.isBlank()) {
-            return false;
-        }
-        if (termStore.get(en) != null) {
-            return true;
-        }
-        return blockStore.get(en) != null;
-    }
-
-    // ==================== 组装 ====================
-
-    /**
-     * 把「有正文的页面」和「词条表里的页面」并成一份列表。
-     *
-     * <p>顺序是：先按 chunks 的 title 聚合（这样每个词条自带块数、分类、URL），
-     * 再补上词条表里有、但没有任何块的页面。
-     */
-    private Map<String, Term> buildAll() {
-        Map<String, KbTermStore.Entry> terms = termStore.map();
-        Map<String, String> rawToGroup = categoryService.rawToGroup();
-        Map<String, String> rawToLabel = categoryService.rawToLabel();
-
-        Map<String, Term> out = new LinkedHashMap<>();
-        // **一个块 = 一个词条**：词条身份就是块 id，中文名就是块标题。
-        // 于是"词条"列表就是**分块的目录** —— 一份文档有多少块，就多出多少条词条。
-        for (com.example.qqbot.kb.block.KbBlock b : blockStore.all()) {
-            String key = b.id();
-            String[] name = nameOf(terms.get(key));
-            String zh = name[0].isEmpty() ? safe(b.title()) : name[0];
-            String board = boardOf(b.tags(), rawToGroup);
-            String body = b.body() == null ? "" : b.body();
-            out.put(key, new Term(key, zh, splitAliases(zh), name[1],
-                    board, boardLabel(board, rawToLabel), b.tags(),
-                    1, body.length(), b.url(), b.retired()));
-        }
-
-        // 有名字或核对状态、但**没有正文**的页面（Equipment / Lore / Sets/* …）。
-        // 它们对 B 路是真有用的：B 路是"中文换英文再去正文里找"，
-        // 不要求那个英文词本身是某个块的标题。
-        for (KbTermStore.Entry e : terms.values()) {
-            if (out.containsKey(e.en())) {
-                continue;
-            }
-            String[] name = nameOf(e);
-            String board = KbGroups.DEFAULT_GROUP;
-            out.put(e.en(), new Term(e.en(), name[0], splitAliases(name[0]), name[1],
-                    board, boardLabel(board, rawToLabel), List.of(), 0, 0, "", false));
-        }
-        return out;
-    }
-
-    /**
-     * 词条表的一行 → {@code [中文名, 状态]}。
-     *
-     * <p>没有中文名时状态一律报 {@code ""} 而不是 {@code draft}：在旧模型里
-     * {@code ""} 的意思是"术语表里没有这条"，在新模型里对应的就是"还没起中文名"。
-     * 不然那 500 多个空页面会全部冒充「待核对」，进度条立刻失真。
-     */
-    private static String[] nameOf(KbTermStore.Entry e) {
-        if (e == null || e.zh().isBlank()) {
-            return new String[]{"", STATUS_NONE};
-        }
-        return new String[]{safe(e.zh()), safe(e.status())};
-    }
-
-    private static Counts count(Map<String, Term> all) {
-        int main = 0;
-        int withChunks = 0;
-        int noChunk = 0;
-        int draft = 0;
-        int verified = 0;
-        int rejected = 0;
-        int unnamed = 0;
-        for (Term t : all.values()) {
-            if (t.chunkCount() > 0) {
-                withChunks++;
-            } else {
-                noChunk++;
-            }
-            if (!hasChinese(t.zh())) {
-                unnamed++;
-            }
-            if (t.chunkCount() > 0 || hasChinese(t.zh())) {
-                main++;
-            }
-            switch (t.status()) {
-                case "verified" -> verified++;
-                case "rejected" -> rejected++;
-                case "draft" -> draft++;
-                default -> {
-                    // "" —— 还没中文名，不计入任何核对状态
-                }
-            }
-        }
-        return new Counts(all.size(), main, withChunks, noChunk, draft, verified, rejected, unnamed);
-    }
-
-    private static List<BoardStat> boardStats(Map<String, Term> all) {
-        Map<String, int[]> perBoard = new LinkedHashMap<>();
-        for (Term t : all.values()) {
-            int[] acc = perBoard.computeIfAbsent(t.board(), x -> new int[2]);
-            acc[0]++;
-            acc[1] += t.chunkCount();
-        }
-        List<BoardStat> boards = new ArrayList<>();
-        for (KbGroups.Group g : KbGroups.ALL) {
-            int[] acc = perBoard.getOrDefault(g.key(), new int[2]);
-            boards.add(new BoardStat(g.key(), g.label(), g.icon(), g.desc(), acc[0], acc[1]));
-        }
-        int[] hidden = perBoard.getOrDefault(KbGroups.HIDDEN, new int[2]);
-        boards.add(new BoardStat(KbGroups.HIDDEN, "版本更新（不对外展示）", "",
-                "更新日志、早期访问说明等，公开站隐藏", hidden[0], hidden[1]));
-        return boards;
-    }
-
-    /**
-     * 词条归属板块。
-     *
-     * <p>取<b>第一个非「版本更新类」的分类</b>。理由：2501 个块至少带一个隐藏分类，
-     * 416 个块是「纯隐藏」；如果按 {@code cats[0]} 取，归属就由 Wiki 的编辑顺序决定，
-     * 更新日志页会挤进玩家的分类里。没有任何可见分类时归 {@code __hidden__}；
-     * 连分类都没有（308 个块）归「其他」。
-     */
-    private static String boardOf(List<String> cats, Map<String, String> rawToGroup) {
-        if (cats == null || cats.isEmpty()) {
-            return KbGroups.DEFAULT_GROUP;
-        }
-        String firstAny = null;
-        for (String raw : cats) {
-            String g = rawToGroup.getOrDefault(raw, KbGroups.autoGroup(raw));
-            if (firstAny == null) {
-                firstAny = g;
-            }
-            if (!KbGroups.HIDDEN.equals(g)) {
-                return g;
-            }
-        }
-        return firstAny == null ? KbGroups.DEFAULT_GROUP : firstAny;
-    }
-
-    private static String boardLabel(String board, Map<String, String> rawToLabel) {
-        if (KbGroups.HIDDEN.equals(board)) {
-            return "版本更新（不对外展示）";
-        }
-        KbGroups.Group g = KbGroups.get(board);
-        return g == null ? board : g.label();
-    }
-
-    /** 中文名用「、」「/」「｜」「|」分隔多个别名（与 Glossary 的解析保持一致） */
-    /**
-     * 这个中文名里**有没有中文字符** —— 判定「还没有中文名」的唯一正确方式。
-     *
-     * <h2>⚠️ 为什么不能用 {@code isEmpty()}（2026-10-04 实测踩到）</h2>
-     * {@link #buildAll} 里有一句回退：{@code zh = name[0].isEmpty() ? b.title() : name[0]} ——
-     * **词条没中文名时会退回用块标题**。而自动导入的英文页（技能 / 机制 / 属性 / 收集品笔记）
-     * 标题就是英文，于是它们的 {@code zh} 是 {@code "Strength"} 这种**非空英文**。
-     *
-     * <p>结果：{@code case "unnamed" -> t.zh().isEmpty()} **恒为 false**，
-     * 「无中文名」筛选器**一条都抓不到**（实测 651 条该被抓的抓不到），
-     * 而 {@code main} 的「挡掉空页面」也同时失效 —— 两处都是同一个原因。
-     *
-     * <p>所以这里按「有没有汉字」判定：不依赖回退行为，也不会把
-     * {@code "Bamboo Ladder、Bamboo Ladder"} 这种「中文名和别名都是英文」的漏掉。
-     */
-    /** 按 RFC4180 转义一个 CSV 单元格：含分隔符/引号/换行时用双引号包住，内部引号翻倍 */
-    private static String cell(String v, char delim) {
-        String s = v == null ? "" : v;
-        if (s.indexOf(delim) < 0 && s.indexOf('"') < 0 && s.indexOf('\n') < 0 && s.indexOf('\r') < 0) {
-            return s;
-        }
-        return '"' + s.replace("\"", "\"\"") + '"';
-    }
-
-    private static boolean hasChinese(String s) {
-        if (s == null) {
-            return false;
-        }
-        for (int i = 0; i < s.length(); i++) {
-            if (Character.UnicodeScript.of(s.charAt(i)) == Character.UnicodeScript.HAN) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static List<String> splitAliases(String zh) {
-        if (zh.isEmpty()) {
-            return List.of();
-        }
-        List<String> out = new ArrayList<>();
-        for (String s : zh.split("[、/｜|]")) {
-            String t = s.trim();
-            if (!t.isEmpty()) {
-                out.add(t);
-            }
-        }
-        return out;
-    }
-
-    private static String safe(String s) {
-        return s == null ? "" : s.trim();
-    }
-
-    // ==================== 写：名字层（委托词条表）====================
-
-    /**
-     * 改名字/状态。
+     * 改名字 / 状态。
      *
      * <p>不碰语料、不调 embedding、不重建索引 —— 这是「补术语表零成本」的技术依据。
      */
@@ -480,13 +62,53 @@ public class KbTermService {
         return ok;
     }
 
-    /** 清掉中文名，状态回到 draft */
+    /** 清掉中文名，状态回到 draft。不删行 —— 行代表"这个页面在词条表里有位置" */
     public boolean clearName(String en) {
         boolean ok = termStore.clearName(en);
         if (ok) {
             clearSearchCache();
         }
         return ok;
+    }
+
+    /**
+     * 登记一批**候选名字** —— 导入文档时调用，由组合层编排。
+     *
+     * <h2>为什么策略在这一层</h2>
+     * 候选是块侧提出的（它只知道块 id 与标题），但"要不要落库、要不要覆盖"是
+     * **名字表自己的规矩**：名字可能被人核对或改过，重导一次文档就冲掉等于人工白做。
+     * 原先这条规矩写在块侧的导入器里 —— 数据在名字层，策略却在块层，是反的。
+     *
+     * <p>它同时补上一个原先漏掉的信号：登记成功也发 {@link KnowledgeChangedEvent}。
+     * 老路径直接写词条表，版本号变了（检索会重载），但**公开站的搜索缓存不会失效** ——
+     * 那种不一致不报错，只表现为"刚导完的页面在公开站搜不到"。
+     *
+     * @return 真正新建或补齐的条数（已有名字的跳过，不计入）
+     */
+    public int registerMissing(List<NameCandidate> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return 0;
+        }
+        int n = 0;
+        for (NameCandidate c : candidates) {
+            if (c.en() == null || c.en().isBlank() || c.name() == null || c.name().isEmpty()) {
+                continue;
+            }
+            KbTermStore.Entry existing = termStore.get(c.en());
+            // 已有名字的不覆盖 —— 名字可能被人核对/改过
+            if (existing != null && existing.zh() != null && !existing.zh().isBlank()) {
+                continue;
+            }
+            // 状态沿用已有的（可能已经是 verified），没有则默认 draft
+            String status = existing == null || existing.status().isBlank() ? "draft" : existing.status();
+            if (termStore.upsert(c.en(), c.name(), status)) {
+                n++;
+            }
+        }
+        if (n > 0) {
+            clearSearchCache();
+        }
+        return n;
     }
 
     /** 批量改核对状态；改完清一次公开站缓存 */
@@ -496,72 +118,5 @@ public class KbTermService {
             clearSearchCache();
         }
         return r;
-    }
-
-    // ==================== 写：查看/导出（给人看的格式）====================
-
-    /** 5 列 TSV 的表头。导入时只认第 1/2/5 列，中间两列是给人看的 */
-    private static final String TSV_HEADER = """
-            # 知识库词条表 —— 中文名与核对状态
-            # 列：英文名 <TAB> 中文名 <TAB> wiki页面 <TAB> 类别 <TAB> 状态
-            # 状态：draft = 机器初稿未核对 ｜ verified = 已人工核对 ｜ rejected = 不要用
-            # 中文名可以写多个别名，用「、」分隔
-            # ⚠️ 导入时只读第 1、2、5 列；中间两列是导出时算出来的派生信息，改了没用
-            """;
-
-    /** 导出全表 TSV（Excel 旁路）。中间两列由语料现算，不落库 */
-    public String exportTsv() {
-        return exportTsv("", "", "");
-    }
-
-    /**
-     * 按**当前视图所见**导出 TSV —— 让「导出待补译名的那批 → Excel 填 → 导回」这条路走得通。
-     *
-     * <h2>为什么需要它</h2>
-     * 自动导入的英文页有 **651 条**没有中文名（2026-10-04 实测）。
-     * 在网页上逐条点 651 次不现实，而 `POST /terms/import` 本来就收 TSV ——
-     * 所以导出必须能只导**当前筛出来的那批**，否则 651 行混在 3416 行里，人得自己筛。
-     *
-     * <p>筛选条件与 {@link #page} **完全共用一份**（{@link #filter}），
-     * 所以「看到什么就导出什么」，不会出现"列表 651 条、导出 3416 条"这种对不上。
-     *
-     * <h2>按板块分批</h2>
-     * 补译名没有优先级，但**按板块（{@code board}）分批**能让人一次只面对一小撮 ——
-     * 板块就是玩家视角的那 9 类（战斗装备 / 建造装饰 / 材料消耗 / 敌人生物 /
-     * 地点探索 / 任务剧情 / 系统机制 / 大佬攻略 / 其他）。
-     *
-     * @param q     搜索词；空 = 不按词筛
-     * @param view  见 {@link #VIEWS}；**空 = 全部**（保持老行为，注意与列表默认的 main 不同）
-     * @param board 板块 key；空 = 不限
-     */
-    public String exportTsv(String q, String view, String board) {
-        return export(q, view, board, '\t');
-    }
-
-    /**
-     * 导出 **xlsx 字节** —— 后台默认走这条（见 {@link KbTermXlsx} 里为什么弃用 CSV）。
-     *
-     * <p>先出 TSV 文本再转，**不重复实现一份导出规则**。
-     */
-    public byte[] exportXlsx(String q, String view, String board) {
-        return KbTermXlsx.write(export(q, view, board, '\t'));
-    }
-
-    private String export(String q, String view, String board, char delim) {
-        List<Term> sorted = filter(buildAll(), q, view, board);
-        StringBuilder sb = new StringBuilder(TSV_HEADER);
-        for (Term t : sorted) {
-            if (t.zh().isEmpty() && t.chunkCount() == 0) {
-                continue;   // 既没名字又没正文的空页面不进导出，免得淹掉有用的行
-            }
-            // ⚠️ 必须转义：中文名里本来就可能含逗号/引号（别名常用「、」和逗号分隔），
-            //    不转义的话 CSV 会被切错列，而且**不报错**
-            sb.append(cell(t.en(), delim)).append(delim)
-                    .append(cell(t.zh(), delim)).append(delim)
-                    .append(cell(t.en().replace(' ', '_'), delim)).append(delim)
-                    .append(cell(t.cats().isEmpty() ? "" : t.cats().get(0), delim)).append(delim)
-                    .append(cell(t.status().isEmpty() ? "draft" : t.status(), delim)).append('\n');
-        }
-        return sb.toString();
     }
 }

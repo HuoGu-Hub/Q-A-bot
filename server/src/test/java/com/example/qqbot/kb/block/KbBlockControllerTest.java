@@ -74,8 +74,7 @@ class KbBlockControllerTest {
             return out;
         });
 
-        service = new KbBlockAdminService(store, embedding, new KbDocImporter(store, embedding,
-                org.mockito.Mockito.mock(com.example.qqbot.kb.term.KbTermStore.class)));
+        service = new KbBlockAdminService(store, embedding, new KbDocImporter(store, embedding));
         controller = new KbBlockController(service);
     }
 
@@ -106,7 +105,7 @@ class KbBlockControllerTest {
         assertThat(controller.stats()).containsEntry("available", true)
                 .containsEntry("blocks", 0);
 
-        controller.importDoc(body("text", doc("flame-altar", "flame-altar-0", "灵火祭坛", "祭坛是复活点。")));
+        service.importBlocks(doc("flame-altar", "flame-altar-0", "灵火祭坛", "祭坛是复活点。"));
 
         assertThat(controller.stats()).containsEntry("blocks", 1).containsEntry("documents", 1);
         assertThat(controller.docs()).extracting("documents").asInstanceOf(
@@ -122,7 +121,7 @@ class KbBlockControllerTest {
     @Test
     @DisplayName("★ preview 只算不改，并把「会改多少条 + 哪些 id」回给界面")
     void previewShape() {
-        controller.importDoc(body("text", doc("flame-altar", "flame-altar-0", "灵火祭坛", "旧正文")));
+        service.importBlocks(doc("flame-altar", "flame-altar-0", "灵火祭坛", "旧正文"));
 
         ResponseEntity<Map<String, Object>> res = controller.preview(
                 body("text", doc("flame-altar", "flame-altar-0", "灵火祭坛", "新正文")));
@@ -136,33 +135,6 @@ class KbBlockControllerTest {
         assertThat(store.get("flame-altar-0").body()).as("预览不改数据").isEqualTo("旧正文");
     }
 
-    @Test
-    @DisplayName("★ import 按 id 覆盖 / 新增，没出现的块一个都不动")
-    void importShape() {
-        controller.importDoc(body("text", doc("d", "d-0", "甲", "甲正文")));
-        controller.importDoc(body("text", doc("d", "d-1", "乙", "乙正文")));
-
-        // 只给 d-1 的新正文
-        ResponseEntity<Map<String, Object>> res = controller.importDoc(
-                body("text", doc("d", "d-1", "乙", "乙新正文")));
-
-        Map<String, Object> out = res.getBody();
-        assertThat(out).containsEntry("added", 0).containsEntry("updated", 1).containsEntry("untouched", 1);
-        assertThat(store.get("d-0").body()).as("没出现的那块原样").isEqualTo("甲正文");
-        assertThat(store.get("d-1").body()).isEqualTo("乙新正文");
-    }
-
-    @Test
-    @DisplayName("格式坏的文档 → 400 并把逐条原因带回去（界面直接显示）")
-    void badDocumentGives400() {
-        ResponseEntity<Map<String, Object>> res = controller.importDoc(
-                body("text", doc("d", "中文id", "甲", "正文")));
-
-        assertThat(res.getStatusCode().value()).isEqualTo(400);
-        assertThat(String.valueOf(res.getBody().get("error"))).contains("id 只能由英文字母、数字和 - 组成");
-        assertThat(store.count()).isZero();
-    }
-
     // ==================== 写 ====================
 
     @Test
@@ -173,7 +145,7 @@ class KbBlockControllerTest {
         assertThat(controller.update(body("id", "没有这个", "text", "正文")).getStatusCode().value())
                 .isEqualTo(404);
 
-        controller.importDoc(body("text", doc("d", "d-0", "甲", "正文")));
+        service.importBlocks(doc("d", "d-0", "甲", "正文"));
         ResponseEntity<Map<String, Object>> empty = controller.update(body("id", "d-0", "text", "   "));
         assertThat(empty.getStatusCode().value()).isEqualTo(400);
         assertThat(String.valueOf(empty.getBody().get("error"))).contains("下架");
@@ -233,7 +205,7 @@ class KbBlockControllerTest {
     @Test
     @DisplayName("clear：清空全部块")
     void clear() {
-        controller.importDoc(body("text", doc("d", "d-0", "甲", "正文")));
+        service.importBlocks(doc("d", "d-0", "甲", "正文"));
         assertThat(controller.clear().getStatusCode().value()).isEqualTo(200);
         assertThat(store.count()).isZero();
     }
@@ -243,7 +215,7 @@ class KbBlockControllerTest {
     @Test
     @DisplayName("title-vectors/backfill：dryRun 只报数量不写库，真跑才补；再跑一遍报 0（界面就靠这个契约）")
     void backfillTitleVectorsShape() {
-        controller.importDoc(body("text", doc("d", "d-0", "酸蚀之咬（Acid Bite）", "魔法弹药。")));
+        service.importBlocks(doc("d", "d-0", "酸蚀之咬（Acid Bite）", "魔法弹药。"));
         // 手工把标题向量删掉，模拟"功能上线前就在库里的老数据"
         store.deleteTitleVector("d-0");
 

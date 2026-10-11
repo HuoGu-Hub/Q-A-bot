@@ -241,7 +241,7 @@ public class WikiArticleImporter {
                         String chunkTitle = i == 0 ? display : display + "（续 " + (i + 1) + "）";
                         // 中文名**每块都带**：块是独立检索单位，缺了它中文提问够不到后面的块
                         String text = zh != null ? zh + "。" + chunks.get(i) : chunks.get(i);
-                        KbBlock block = new KbBlock(id, docId, chunkTitle, text, url,
+                        KbBlock block = new KbBlock(com.example.qqbot.kb.EntryId.of(id), docId, chunkTitle, text, url,
                                 List.of("wiki", src.kind(), src.label()), SRC_WIKI, false, now);
                         if (blockStore.upsert(block, embedding.embedOne(name + "\n" + text))) {
                             // 标题向量一律用**干净的页面名**：C 路闸门问的是"这是哪一页"，

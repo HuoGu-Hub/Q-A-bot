@@ -41,7 +41,9 @@ public final class KbContents {
 
     static Metadata metadataOf(KbCorpus.Entry e, String source) {
         return new Metadata(Map.of(
-                META_ID, e.id() == null ? "" : e.id(),
+                // ⚠️ 元数据只认 String / 数字 / UUID —— EntryId 直接塞进去会抛异常。
+                //   那异常发生在"组装检索内容"这条热路径上，表现是**整批命中消失**而不是报错。
+                META_ID, e.id() == null ? "" : e.id().value(),
                 META_SOURCE, source == null ? "" : source,
                 META_DOC_ID, e.docId() == null ? "" : e.docId(),
                 META_TITLE, e.title() == null ? "" : e.title(),

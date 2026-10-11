@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 管理端块操作的验收测试（按 id，不再是行号）。
@@ -74,8 +75,7 @@ class KbBlockAdminServiceTest {
             return out;
         });
 
-        service = new KbBlockAdminService(store, embedding, new KbDocImporter(store, embedding,
-                org.mockito.Mockito.mock(com.example.qqbot.kb.term.KbTermStore.class)));
+        service = new KbBlockAdminService(store, embedding, new KbDocImporter(store, embedding));
     }
 
     private static float[] vecOf(String text) {
@@ -248,7 +248,7 @@ class KbBlockAdminServiceTest {
     /* ==================== 导入 / 清空 ==================== */
 
     @Test
-    @DisplayName("导入委托给 KbDocImporter：文档进库、预览只算不改")
+    @DisplayName("导入的**块**部分：文档进库、预览只算不改（名字登记在组合层，不在这里）")
     void importAndPreview() {
         String doc = String.join("\n",
                 "<!-- doc", "name: flame-altar", "url: https://w/F", "-->", "",
@@ -257,7 +257,7 @@ class KbBlockAdminServiceTest {
         assertThat(service.preview(doc).added()).hasSize(1);
         assertThat(store.count()).as("预览不改数据").isZero();
 
-        KbDocImporter.Result r = service.importDoc(doc);
+        KbDocImporter.Result r = service.importBlocks(doc);
         assertThat(r.added()).isEqualTo(1);
         assertThat(store.get("flame-altar-0").title()).isEqualTo("灵火祭坛");
     }
@@ -290,9 +290,9 @@ class KbBlockAdminServiceTest {
     @DisplayName("补建：缺的补齐、过期的重算、再跑一遍什么都不做（幂等）")
     void backfillFillsMissingAndStale() {
         // ① 用手工 upsert 造两个"没有标题向量"的块（模拟标题向量功能上线前的老数据）
-        store.upsert(new KbBlock("a", "d", "酸蚀之咬（Acid Bite）", "正文 A", "", java.util.List.of(),
+        store.upsert(new KbBlock(EntryId.of("a"), "d", "酸蚀之咬（Acid Bite）", "正文 A", "", java.util.List.of(),
                 KbBlock.SRC_DOC, false, ""), vecOf("正文 A"));
-        store.upsert(new KbBlock("b", "d", "酸蚀砍刀（Acid Cleaver）", "正文 B", "", java.util.List.of(),
+        store.upsert(new KbBlock(EntryId.of("b"), "d", "酸蚀砍刀（Acid Cleaver）", "正文 B", "", java.util.List.of(),
                 KbBlock.SRC_DOC, false, ""), vecOf("正文 B"));
 
         KbBlockAdminService.TitleBackfill preview = service.backfillTitleVectors(true);
@@ -314,13 +314,13 @@ class KbBlockAdminServiceTest {
     @Test
     @DisplayName("★ 标题改了 → 判为过期并重算（标题向量的输入变了，它就作废了）")
     void backfillDetectsStaleTitle() {
-        store.upsert(new KbBlock("a", "d", "旧标题", "正文", "", java.util.List.of(),
+        store.upsert(new KbBlock(EntryId.of("a"), "d", "旧标题", "正文", "", java.util.List.of(),
                 KbBlock.SRC_DOC, false, ""), vecOf("正文"));
         store.upsertTitleVector("a", "旧标题", vecOf("旧标题"));
         assertThat(store.countTitleVectors()).isEqualTo(1);
 
         // 只改标题（正文向量不动 —— 这是 upsert 的既有语义）
-        store.upsert(new KbBlock("a", "d", "新标题", "正文", "", java.util.List.of(),
+        store.upsert(new KbBlock(EntryId.of("a"), "d", "新标题", "正文", "", java.util.List.of(),
                 KbBlock.SRC_DOC, false, ""), null);
 
         KbBlockAdminService.TitleBackfill r = service.backfillTitleVectors(false);
@@ -333,7 +333,7 @@ class KbBlockAdminServiceTest {
     @Test
     @DisplayName("没标题的块不参与补建（没有「标题向量」可言，不该白花一次调用）")
     void backfillSkipsBlankTitle() {
-        store.upsert(new KbBlock("a", "d", "", "正文", "", java.util.List.of(),
+        store.upsert(new KbBlock(EntryId.of("a"), "d", "", "正文", "", java.util.List.of(),
                 KbBlock.SRC_DOC, false, ""), vecOf("正文"));
 
         KbBlockAdminService.TitleBackfill r = service.backfillTitleVectors(false);

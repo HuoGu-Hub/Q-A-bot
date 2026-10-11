@@ -15,7 +15,7 @@ import java.util.List;
  * 提到 0.80 则名字覆盖率掉到 95.5%。所以别随手调，调之前看日志里的余弦分布。
  */
 @Component
-public class TitleVectorGate implements KbTitleGateSource {
+public class TitleVectorGate {
 
     private static final Logger log = LoggerFactory.getLogger(TitleVectorGate.class);
 
@@ -25,7 +25,6 @@ public class TitleVectorGate implements KbTitleGateSource {
         this.corpus = corpus;
     }
 
-    @Override
     public KbRetriever.TitleGate check(KbRetrievalContext q, double threshold) {
         List<KbCorpus.Entry> entries = q.entries();
         float[] qv = q.queryVector();

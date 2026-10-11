@@ -1,4 +1,8 @@
-package com.example.qqbot.kb.term;
+package com.example.qqbot.kb.catalog;
+
+import com.example.qqbot.kb.term.KbTermService;
+import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.kb.term.KbTermXlsx;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +24,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * 词条层接口 —— 「知识库」页的「词条」二级目录用。
+ * 知识库目录接口 —— 「知识库」页的「词条」二级目录用。
+ *
+ * <p>它住在组合层：目录是块与名字两半合起来的样子，控制器因此也归这里。
+ * 写名字仍然交给名字层（{@link KbTermService} 与 {@link KbTermStore}），
+ * 本类只负责"把 HTTP 上的动作接到正确的层"。
  *
  * <p>它把原来两个割裂的页面合成一条链路：{@code 分类 → 词条 → 文本块 → 向量}。
  * 改造前「关键词」和「术语核对」是两个 tab、两套接口（{@code /kb/keywords*} 与
@@ -37,23 +45,23 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/admin/api/kb/terms")
-public class KbTermController {
+public class KbCatalogController {
 
-    private static final Logger log = LoggerFactory.getLogger(KbTermController.class);
+    private static final Logger log = LoggerFactory.getLogger(KbCatalogController.class);
 
     /** 一次批量最多改多少条 */
     private static final int BATCH_MAX = 500;
 
-    private final KbTermService service;
+    /** 组合层：目录读模型与导出 */
+    private final KbCatalog catalog;
+    /** 名字层：名字与核对状态的写 */
+    private final KbTermService termService;
     private final KbTermStore store;
-    /** 清理孤儿词条时要拿"现在有哪些块"来比 */
-    private final com.example.qqbot.kb.block.KbBlockStore blockStore;
 
-    public KbTermController(KbTermService service, KbTermStore store,
-                            com.example.qqbot.kb.block.KbBlockStore blockStore) {
-        this.service = service;
+    public KbCatalogController(KbCatalog catalog, KbTermService termService, KbTermStore store) {
+        this.catalog = catalog;
+        this.termService = termService;
         this.store = store;
-        this.blockStore = blockStore;
     }
 
     /**
@@ -67,11 +75,7 @@ public class KbTermController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "危险操作：请在 body 里带 confirm=true"));
         }
-        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
-        for (com.example.qqbot.kb.block.KbBlock b : blockStore.all()) {
-            ids.add(b.id());
-        }
-        int n = store.deleteOrphans(ids);
+        int n = catalog.deleteOrphanTerms();
         return ResponseEntity.ok(Map.of("ok", true, "deleted", n, "size", store.count()));
     }
 
@@ -93,13 +97,13 @@ public class KbTermController {
                                   @RequestParam(defaultValue = "100") int limit,
                                   @RequestParam(defaultValue = "0") int offset) {
         String v = view == null ? "" : view.trim().toLowerCase(Locale.ROOT);
-        if (!v.isEmpty() && !KbTermService.VIEWS.contains(v)) {
+        if (!v.isEmpty() && !KbCatalog.VIEWS.contains(v)) {
             // 静默降级会让人以为自己刚核过的条目又冒出来了 —— 和旧术语表接口同一取舍
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "view 只能是 " + String.join(" / ", KbTermService.VIEWS)));
+                    .body(Map.of("error", "view 只能是 " + String.join(" / ", KbCatalog.VIEWS)));
         }
         int lim = Math.min(Math.max(1, limit), 500);
-        return ResponseEntity.ok(service.page(q, v, board, lim, Math.max(0, offset)));
+        return ResponseEntity.ok(catalog.page(q, v, board, lim, Math.max(0, offset)));
     }
 
     /**
@@ -109,8 +113,8 @@ public class KbTermController {
      * "这批块属于抽屉里现在这一条"，否则快速连点两条词条时先到的响应会串台。
      */
     @GetMapping("/chunks")
-    public KbTermService.ChunksView chunks(@RequestParam String title) {
-        return new KbTermService.ChunksView(title, service.chunks(title));
+    public KbCatalog.ChunksView chunks(@RequestParam String title) {
+        return new KbCatalog.ChunksView(title, catalog.chunks(title));
     }
 
     // ==================== 写：名字 ====================
@@ -139,7 +143,7 @@ public class KbTermController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "status 只能是 " + String.join(" / ", KbTermStore.STATUSES)));
         }
-        if (!service.saveName(en, zh, status)) {
+        if (!termService.saveName(en, zh, status)) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "写入失败（词条存储不可用）"));
         }
@@ -184,7 +188,7 @@ public class KbTermController {
             return ResponseEntity.badRequest().body(Map.of("error", "items 里没有有效的英文名"));
         }
 
-        KbTermStore.BatchResult r = service.setStatusBatch(new ArrayList<>(targets), wanted);
+        KbTermStore.BatchResult r = termService.setStatusBatch(new ArrayList<>(targets), wanted);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
         out.put("updated", r.updated());
@@ -192,7 +196,7 @@ public class KbTermController {
         out.put("missing", r.missing());
         out.put("size", store.count());
         // 前端批量核对之后要刷新进度条。增量更新数字容易算错，直接把重算结果给它
-        out.put("counts", service.counts());
+        out.put("counts", catalog.counts());
         return ResponseEntity.ok(out);
     }
 
@@ -207,7 +211,7 @@ public class KbTermController {
         if (en == null || en.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "需要 en"));
         }
-        if (!service.clearName(en)) {
+        if (!termService.clearName(en)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条词条"));
         }
         return ResponseEntity.ok(Map.of("ok", true, "size", store.count()));
@@ -249,7 +253,7 @@ public class KbTermController {
      * 所以「列表里看到多少条，导出就是多少条」。
      *
      * @param q     搜索词，可选
-     * @param view  见 {@code KbTermService.VIEWS}，可选。例如
+     * @param view  见 {@code KbCatalog.VIEWS}，可选。例如
      *              {@code ?view=unnamed} 只导「还没有中文名」的那批（2026-10-04 实测 651 条）——
      *              在网页上逐条点不现实，导到 Excel 里填完再用 {@code /import} 导回。
      *              留空 = 导全部（保持老行为）。
@@ -274,7 +278,7 @@ public class KbTermController {
         }
         // ⚠️ 数行数前先剥 BOM：CSV 以 U+FEFF 开头，会让**第一行注释**不再以 '#' 开头，
         //    于是它被算成一条数据 → 报给用户的条数比实际多 1（2026-10-04 实测踩到）。
-        String tsv = service.exportTsv(q, view, board);
+        String tsv = catalog.exportTsv(q, view, board);
         long count = stripBom(tsv).lines()
                 .filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
 
@@ -288,7 +292,7 @@ public class KbTermController {
         } else {
             // xlsx 是二进制 —— 用 base64 塞进 JSON，前端照旧走 res.json()（见 client 的注释）
             out.put("xlsxBase64", java.util.Base64.getEncoder()
-                    .encodeToString(service.exportXlsx(q, view, board)));
+                    .encodeToString(catalog.exportXlsx(q, view, board)));
             out.put("format", "xlsx");
         }
         return out;

@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * wiki 文章导入的**端到端**验收：真拉 wiki → 真清洗 → 真向量化 → 真检索。
@@ -151,7 +152,7 @@ class WikiArticleImporterE2ETest {
         int retrieved = 0;
         for (String q : List.of("蜂箱熏制器任务", "战斗机制 抗性", "独眼巨人 怎么打", "怎么制作护甲")) {
             List<KbRetriever.Hit> hits = retriever.retrieve(q).hits();
-            boolean hasWiki = hits.stream().anyMatch(h -> h.entry().id().startsWith("wiki-"));
+            boolean hasWiki = hits.stream().anyMatch(h -> h.entry().id().value().startsWith("wiki-"));
             if (hasWiki) {
                 retrieved++;
             }

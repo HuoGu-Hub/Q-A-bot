@@ -21,19 +21,24 @@ import java.util.Map;
  * → 聚合意图提权 → 最后才截断。任何一步提前截断都会让后面的步骤失效
  * （「空洞大厅有什么」的地点块实测排第 7，截到 5 就没了）。
  *
- * <p>它把活分给三个已有的接缝：{@link KbFuser}、{@link KbTitleGateSource}、{@link KbReranker}，
+ * <p>它把活分给三个协作者：{@link RrfFuser}、{@link TitleVectorGate}、{@link CrossEncoderReranker}，
  * 自己只负责顺序与"官方 Content ↔ 内部 Hit"的转换。
+ *
+ * <p>这三个协作者曾经各配一个只有唯一实现的接口（KbFuser / KbTitleGateSource / KbReranker）。
+ * 接口没有带来可替换性 —— 没有第二个实现，也没有任何测试替身 ——
+ * 只多了一层跳转与两处签名维护，所以按 YAGNI 收敛成具体类；
+ * 各自的契约写在实现类的类注释里，那才是它真正被使用的地方。
  */
 @Component
 public class KbContentAggregator implements ContentAggregator {
 
     private final KbPolicy props;
-    private final KbFuser fuser;
-    private final KbTitleGateSource titleGateSource;
-    private final KbReranker reranker;
+    private final RrfFuser fuser;
+    private final TitleVectorGate titleGateSource;
+    private final CrossEncoderReranker reranker;
 
-    public KbContentAggregator(KbPolicy props, KbFuser fuser,
-                               KbTitleGateSource titleGateSource, KbReranker reranker) {
+    public KbContentAggregator(KbPolicy props, RrfFuser fuser,
+                               TitleVectorGate titleGateSource, CrossEncoderReranker reranker) {
         this.props = props;
         this.fuser = fuser;
         this.titleGateSource = titleGateSource;

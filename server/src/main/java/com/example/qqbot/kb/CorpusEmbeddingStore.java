@@ -105,7 +105,7 @@ public class CorpusEmbeddingStore implements EmbeddingStore<TextSegment> {
         // 而漂移的表现是"某一路的来源标不出来"，不报错。
         TextSegment segment = KbContents.segmentOf(e, "vector");
         EmbeddingMatch<TextSegment> match =
-                new EmbeddingMatch<>(s.score(), e.id(), Embedding.from(e.vector()), segment);
+                new EmbeddingMatch<>(s.score(), e.id().value(), Embedding.from(e.vector()), segment);
         return new Found(e, s.score(), match);
     }
 

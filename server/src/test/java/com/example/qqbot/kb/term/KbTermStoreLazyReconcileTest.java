@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 词条表的**自动补齐**验收（2026-10-08 第四步）。
@@ -58,7 +59,7 @@ class KbTermStoreLazyReconcileTest {
     }
 
     private static KbBlock block(String id, String title) {
-        return new KbBlock(id, "flame-altar", title, "正文", "https://w/" + id,
+        return new KbBlock(EntryId.of(id), "flame-altar", title, "正文", "https://w/" + id,
                 List.of("地点"), KbBlock.SRC_DOC, false, "t");
     }
 

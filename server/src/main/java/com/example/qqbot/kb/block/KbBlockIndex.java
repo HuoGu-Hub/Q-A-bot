@@ -36,10 +36,10 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
     /** 这份快照对应的语料版本；和 {@link KbBlockStore#version()} 对不上就是过期了 */
     private volatile long loadedVersion = -1L;
     private volatile List<KbBlock> blocks = List.of();
-    private volatile Map<String, float[]> vectors = Map.of();
+    private volatile Map<com.example.qqbot.kb.EntryId, float[]> vectors = Map.of();
     /** 标题向量 + 它的输入标题（缺这一路的块照常检索，只是不吃闸门） */
-    private volatile Map<String, KbBlockStore.TitleVector> titleVectors = Map.of();
-    private volatile Map<String, KbBlock> byId = Map.of();
+    private volatile Map<com.example.qqbot.kb.EntryId, KbBlockStore.TitleVector> titleVectors = Map.of();
+    private volatile Map<com.example.qqbot.kb.EntryId, KbBlock> byId = Map.of();
     /** 检索用的条目快照（块 + 向量成对，已排除下架） */
     private volatile List<com.example.qqbot.kb.KbCorpus.Entry> entries = List.of();
 
@@ -92,18 +92,32 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
         return entries;
     }
 
+    /** 过渡用的字符串重载 —— 新代码请传 {@link com.example.qqbot.kb.EntryId} */
     public KbBlock block(String id) {
+        return block(com.example.qqbot.kb.EntryId.of(id));
+    }
+
+    public KbBlock block(com.example.qqbot.kb.EntryId id) {
         ensureLoaded();
         return byId.get(id);
     }
 
+    /** 过渡用的字符串重载 */
     public float[] vector(String id) {
+        return vector(com.example.qqbot.kb.EntryId.of(id));
+    }
+
+    public float[] vector(com.example.qqbot.kb.EntryId id) {
         ensureLoaded();
         return vectors.get(id);
     }
 
     /** 标题向量；没有（还没补建 / 标题变了未重算）就返回 {@code null} */
     public float[] titleVector(String id) {
+        return titleVector(com.example.qqbot.kb.EntryId.of(id));
+    }
+
+    public float[] titleVector(com.example.qqbot.kb.EntryId id) {
         ensureLoaded();
         KbBlockStore.TitleVector tv = titleVectors.get(id);
         return tv == null ? null : tv.vec();
@@ -153,9 +167,9 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
             long versionAtLoad = store.version();
             try {
                 List<KbBlock> active = store.allActive();
-                Map<String, float[]> vecs = store.allVectors();
-                Map<String, KbBlockStore.TitleVector> tvecs = store.allTitleVectors();
-                Map<String, KbBlock> map = new LinkedHashMap<>();
+                Map<com.example.qqbot.kb.EntryId, float[]> vecs = store.allVectors();
+                Map<com.example.qqbot.kb.EntryId, KbBlockStore.TitleVector> tvecs = store.allTitleVectors();
+                Map<com.example.qqbot.kb.EntryId, KbBlock> map = new LinkedHashMap<>();
                 for (KbBlock b : active) {
                     map.put(b.id(), b);
                 }

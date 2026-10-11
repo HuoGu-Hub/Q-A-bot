@@ -153,21 +153,10 @@ public class KbBlockController {
         }
     }
 
-    /** 真正导入 */
-    @PostMapping("/import")
-    public ResponseEntity<Map<String, Object>> importDoc(@RequestBody Map<String, Object> body) {
-        try {
-            KbDocImporter.Result r = service.importDoc(str(body.get("text")));
-            return ResponseEntity.ok(Map.of("ok", true,
-                    "added", r.added(), "updated", r.updated(),
-                    "unchanged", r.unchanged(), "untouched", r.untouched(),
-                    // 导入一份文档 = 这个页面在词条表里占一行（词条是"按页定位分块"的入口）
-                    "terms", r.terms(),
-                    "warnings", r.warnings()));
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return bad(e.getMessage());
-        }
-    }
+    // ⚠️ 导入端点不在这里 —— 它住在组合层（{@code kb.catalog.KbImportController}）。
+    //    "导入一份文档"是跨两个真源的用例：落块（本层）之后必须接着登记名字（名字层），
+    //    而块层不认识名字层。只落块不登记名字不会报错，
+    //    只会让新页面的中文提问静默够不到 —— 所以这里刻意不提供这条捷径。
 
     /**
      * 补建 / 刷新**标题向量**（C 路）—— 幂等，只补"缺失"和"过期"的块。

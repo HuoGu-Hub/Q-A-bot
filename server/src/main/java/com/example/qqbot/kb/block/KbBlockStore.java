@@ -1,5 +1,6 @@
 package com.example.qqbot.kb.block;
 
+import com.example.qqbot.kb.EntryId;
 import com.example.qqbot.kb.doc.ChunkMarkup;
 import com.example.qqbot.persistence.KbBlockRepository;
 import jakarta.annotation.PostConstruct;
@@ -117,12 +118,17 @@ public class KbBlockStore {
         }
     }
 
+    /** 过渡用的字符串重载 —— 新代码请传 {@link EntryId}，让身份由编译器看住 */
     public KbBlock get(String id) {
+        return get(EntryId.of(id));
+    }
+
+    public KbBlock get(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return null;
         }
         try {
-            KbBlockRepository.Row r = repo.find(id);
+            KbBlockRepository.Row r = repo.find(id.value());
             return r == null ? null : toBlock(r);
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 读取块 {} 失败：{}", id, e.getMessage());
@@ -164,19 +170,24 @@ public class KbBlockStore {
 
     /** 列里的 tags 是 {@link ChunkMarkup} 的分隔格式，拆开是这边的事 */
     private static KbBlock toBlock(KbBlockRepository.Row r) {
-        return new KbBlock(r.id(), r.docId(), r.title(), r.body(), r.url(),
+        return new KbBlock(EntryId.of(r.id()), r.docId(), r.title(), r.body(), r.url(),
                 ChunkMarkup.splitTags(r.tagsLine()), r.source(), r.retired(), r.updatedAt());
     }
 
     // ==================== 向量 ====================
 
     /** 读一个块的向量；没有就返回 {@code null} */
+    /** 过渡用的字符串重载 */
     public float[] vector(String id) {
+        return vector(EntryId.of(id));
+    }
+
+    public float[] vector(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return null;
         }
         try {
-            return repo.vector(id);
+            return repo.vector(id.value());
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 读取向量 {} 失败：{}", id, e.getMessage());
             return null;
@@ -184,16 +195,19 @@ public class KbBlockStore {
     }
 
     /** 一次读出全部向量（检索要整批做暴力余弦，逐条查会慢） */
-    public Map<String, float[]> allVectors() {
+    public Map<EntryId, float[]> allVectors() {
+        Map<EntryId, float[]> out = new LinkedHashMap<>();
         if (!available) {
-            return new LinkedHashMap<>();
+            return out;
         }
         try {
-            return repo.allVectors();
+            for (Map.Entry<String, float[]> e : repo.allVectors().entrySet()) {
+                out.put(EntryId.of(e.getKey()), e.getValue());
+            }
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 批量读向量失败：{}", e.getMessage());
-            return new LinkedHashMap<>();
         }
+        return out;
     }
 
     /** 向量维度；一个都没有时返回 0 */
@@ -225,12 +239,17 @@ public class KbBlockStore {
     }
 
     /** 读一个块的标题向量；没有就返回 {@code null} */
+    /** 过渡用的字符串重载 */
     public TitleVector titleVector(String id) {
+        return titleVector(EntryId.of(id));
+    }
+
+    public TitleVector titleVector(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return null;
         }
         try {
-            KbBlockRepository.TitleVec t = repo.titleVector(id);
+            KbBlockRepository.TitleVec t = repo.titleVector(id.value());
             return t == null ? null : new TitleVector(t.title(), t.vec());
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 读取标题向量 {} 失败：{}", id, e.getMessage());
@@ -239,14 +258,14 @@ public class KbBlockStore {
     }
 
     /** 一次读出全部标题向量（检索时和正文向量一样整批进内存） */
-    public Map<String, TitleVector> allTitleVectors() {
-        Map<String, TitleVector> out = new LinkedHashMap<>();
+    public Map<EntryId, TitleVector> allTitleVectors() {
+        Map<EntryId, TitleVector> out = new LinkedHashMap<>();
         if (!available) {
             return out;
         }
         try {
             for (Map.Entry<String, KbBlockRepository.TitleVec> e : repo.allTitleVectors().entrySet()) {
-                out.put(e.getKey(), new TitleVector(e.getValue().title(), e.getValue().vec()));
+                out.put(EntryId.of(e.getKey()), new TitleVector(e.getValue().title(), e.getValue().vec()));
             }
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 批量读标题向量失败：{}", e.getMessage());
@@ -255,12 +274,17 @@ public class KbBlockStore {
     }
 
     /** 写入 / 覆盖一个块的标题向量。{@code title} 必须一起给（见 {@link TitleVector}） */
+    /** 过渡用的字符串重载 */
     public void upsertTitleVector(String id, String title, float[] vec) {
+        upsertTitleVector(EntryId.of(id), title, vec);
+    }
+
+    public void upsertTitleVector(EntryId id, String title, float[] vec) {
         if (!available || id == null || id.isBlank() || vec == null || vec.length == 0) {
             return;
         }
         try {
-            repo.upsertTitleVector(id, title, vec);
+            repo.upsertTitleVector(id.value(), title, vec);
             touch();
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 写入标题向量 {} 失败：{}", id, e.getMessage());
@@ -268,12 +292,17 @@ public class KbBlockStore {
     }
 
     /** 删掉一个块的标题向量（块本身还在时用，比如模型换了要整批重算） */
+    /** 过渡用的字符串重载 */
     public void deleteTitleVector(String id) {
+        deleteTitleVector(EntryId.of(id));
+    }
+
+    public void deleteTitleVector(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return;
         }
         try {
-            repo.deleteTitleVector(id);
+            repo.deleteTitleVector(id.value());
             touch();
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 删除标题向量 {} 失败：{}", id, e.getMessage());
@@ -302,7 +331,7 @@ public class KbBlockStore {
         }
         String now = b.updatedAt() == null || b.updatedAt().isBlank()
                 ? Instant.now().toString() : b.updatedAt();
-        KbBlockRepository.Row row = new KbBlockRepository.Row(b.id(), b.docId(), b.title(), b.body(),
+        KbBlockRepository.Row row = new KbBlockRepository.Row(b.id().value(), b.docId(), b.title(), b.body(),
                 b.url(), b.tagsLine(), b.source(), b.retired(), now);
         try {
             boolean added = repo.upsert(row, vec);
@@ -314,12 +343,17 @@ public class KbBlockStore {
     }
 
     /** 下架 / 恢复。**保留数据**，只改标记 —— 与旧的墓碑机制不同，这里可以真删也可以留着 */
+    /** 过渡用的字符串重载 */
     public boolean setRetired(String id, boolean retired) {
+        return setRetired(EntryId.of(id), retired);
+    }
+
+    public boolean setRetired(EntryId id, boolean retired) {
         if (!available) {
             return false;
         }
         try {
-            boolean changed = repo.setRetired(id, retired, Instant.now().toString());
+            boolean changed = repo.setRetired(id.value(), retired, Instant.now().toString());
             if (changed) {
                 touch();
             }
@@ -331,12 +365,17 @@ public class KbBlockStore {
     }
 
     /** 真删（块 + 向量）。旧设计做不到这件事，只能打墓碑 —— 这是 id 身份换来的自由 */
+    /** 过渡用的字符串重载 */
     public boolean delete(String id) {
+        return delete(EntryId.of(id));
+    }
+
+    public boolean delete(EntryId id) {
         if (!available) {
             return false;
         }
         try {
-            boolean deleted = repo.delete(id);
+            boolean deleted = repo.delete(id.value());
             if (deleted) {
                 touch();
             }
