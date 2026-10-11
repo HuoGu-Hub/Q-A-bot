@@ -127,10 +127,21 @@ class MessageRouterCommandTest {
         // 真的 OutboundSender（而不是 mock）：这个测试要断言"到底发出去了什么"，
         // 发送逻辑被 mock 掉就没得断了。它内部只用到下面这几个 mock。
         outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new Outbound(), outboundFilter);
+        // 指令那一路住在 CommandHandler 里 —— 这里装真的，测试才是在验真实的那条链
+        CommandHandler commandHandler = new CommandHandler(new CommandProperties(), commandMatcher,
+                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector, codec, identity);
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), new Access(),
-                mock(BlockNotifier.class), qaCollector, new CommandProperties(), commandMatcher,
-                commandRateLimiter, commandStore, variableRenderer, mock(FallbackService.class));
+                mock(BlockNotifier.class), qaCollector, commandHandler, mock(FallbackService.class));
+    }
+
+    private OneBotEvent privateEvent(String text) {
+        OneBotEvent event = mock(OneBotEvent.class);
+        when(event.isMessageEvent()).thenReturn(true);
+        when(event.isPrivateMessage()).thenReturn(true);
+        when(event.getUserId()).thenReturn(USER);
+        when(codec.extractPlainText(event)).thenReturn(text);
+        return event;
     }
 
     private OneBotEvent groupEvent(String text) {
@@ -255,6 +266,48 @@ class MessageRouterCommandTest {
         router.handle(groupEvent("/联网 某个问题"));
 
         verify(chatService, never()).reply(any(), anyString(), any(), any(), any(ReplyMode.class));
+        verify(apiClient, never()).sendGroupMsg(anyLong(), any());
+    }
+
+    // ==================== 准入：指令与普通消息同一份判定 ====================
+
+    @Test
+    @DisplayName("★ 私聊未开放时，话术指令也不响应 —— 准入判定与 Guard 同一份")
+    void templateCommandInClosedPrivateChatIsDropped() {
+        BotCommand ping = new BotCommand(8, "ping", "在的喵～", "看看我在不在",
+                "all", List.of(), "member", true, 8, true,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB);
+        matchCommand(ping, "");
+        when(variableRenderer.render(eq("在的喵～"), any(), anyBoolean(), anyString())).thenReturn("在的喵～");
+
+        // 默认 Access 的私聊策略是 off。指令必须在 Guard 之前跑，
+        // 但"之前"不等于"绕开准入" —— 否则私聊一关，话术指令还能照回。
+        router.handle(privateEvent("/ping"));
+
+        verify(apiClient, never()).sendGroupMsg(anyLong(), any());
+        verify(apiClient, never()).sendPrivateMsg(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ 用户在黑名单里：话术指令同样不响应")
+    void templateCommandFromBlacklistedUserIsDropped() {
+        Access blacklist = new Access();
+        blacklist.setUserBlacklist(List.of(USER));
+        // 换一个持黑名单的 router 实例：Access 是构造时注入的，改不了已有那个
+        CommandHandler handler = new CommandHandler(new CommandProperties(), commandMatcher,
+                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector, codec, identity);
+        MessageRouter blacklisted = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
+                outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), blacklist,
+                mock(BlockNotifier.class), qaCollector, handler, mock(FallbackService.class));
+
+        BotCommand ping = new BotCommand(9, "ping", "在的喵～", "看看我在不在",
+                "all", List.of(), "member", true, 9, true,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB);
+        matchCommand(ping, "");
+        when(variableRenderer.render(eq("在的喵～"), any(), anyBoolean(), anyString())).thenReturn("在的喵～");
+
+        blacklisted.handle(groupEvent("/ping"));
+
         verify(apiClient, never()).sendGroupMsg(anyLong(), any());
     }
 

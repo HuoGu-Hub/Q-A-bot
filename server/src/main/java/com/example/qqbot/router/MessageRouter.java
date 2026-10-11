@@ -13,12 +13,6 @@ import com.example.qqbot.onebot.outbound.OutboundSender;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
-import com.example.qqbot.command.BotCommand;
-import com.example.qqbot.command.CommandPolicy;
-import com.example.qqbot.command.CommandMatcher;
-import com.example.qqbot.command.CommandRateLimiter;
-import com.example.qqbot.command.CommandStore;
-import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.plaza.FallbackService;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.ImageRef;
@@ -65,11 +59,8 @@ public class MessageRouter {
     private final Access guardAccess;
     private final BlockNotifier blockNotifier;
     private final QaCollector qaCollector;
-    private final CommandPolicy commandProperties;
-    private final CommandMatcher commandMatcher;
-    private final CommandRateLimiter commandRateLimiter;
-    private final CommandStore commandStore;
-    private final VariableRenderer variableRenderer;
+    /** 指令那一路 —— 它自己的配置、匹配、限流、存储、渲染都在里面 */
+    private final CommandHandler commandHandler;
     private final FallbackService fallbackService;
 
     public MessageRouter(OneBotApiClient apiClient,
@@ -84,11 +75,7 @@ public class MessageRouter {
                          Access guardAccess,
                          BlockNotifier blockNotifier,
                          QaCollector qaCollector,
-                         CommandPolicy commandProperties,
-                         CommandMatcher commandMatcher,
-                         CommandRateLimiter commandRateLimiter,
-                         CommandStore commandStore,
-                         VariableRenderer variableRenderer,
+                         CommandHandler commandHandler,
                          FallbackService fallbackService) {
         this.apiClient = apiClient;
         this.codec = codec;
@@ -102,11 +89,7 @@ public class MessageRouter {
         this.guardAccess = guardAccess;
         this.blockNotifier = blockNotifier;
         this.qaCollector = qaCollector;
-        this.commandProperties = commandProperties;
-        this.commandMatcher = commandMatcher;
-        this.commandRateLimiter = commandRateLimiter;
-        this.commandStore = commandStore;
-        this.variableRenderer = variableRenderer;
+        this.commandHandler = commandHandler;
         this.fallbackService = fallbackService;
     }
 
@@ -155,125 +138,21 @@ public class MessageRouter {
     }
 
     /**
-     * 准入控制：只看黑名单，不看别的东西。
+     * 准入控制 —— <b>判定本身在 {@link Access#denial}</b>，与 Guard 的 access 阶段同一份实现。
      *
-     * <p>单独抽出来是因为**指令必须在 Guard 之前跑**，但又不能完全绕开黑名单 ——
-     * 被拉黑的人不该能触发指令。
+     * <p>单独抽出来是因为**指令必须在 Guard 之前跑**，但又不能绕开准入：
+     * 被拉黑的人不该能触发指令，私聊没开放时同样不该有指令响应。
+     * 以前这里自己读了那两张黑名单，于是同一条消息在两处能得出不同结论
+     * （私聊策略 off 时话术指令照回、普通消息被拦）—— 现在不会了。
      */
     private boolean accessAllowed(OneBotEvent event) {
-        Access access = guardAccess;
-        if (event.isGroupMessage()) {
-            long gid = event.getGroupId() == null ? 0 : event.getGroupId();
-            if (access.getGroupBlacklist() != null && access.getGroupBlacklist().contains(gid)) {
-                return false;
-            }
+        Optional<String> denial = guardAccess.denial(event);
+        if (denial.isPresent()) {
+            log.info("[ROUTER] 准入拒绝（{}），不响应：群 {} 用户 {}",
+                    denial.get(), event.getGroupId(), event.getUserId());
+            return false;
         }
-        long uid = event.getUserId() == null ? 0 : event.getUserId();
-        return access.getUserBlacklist() == null || !access.getUserBlacklist().contains(uid);
-    }
-
-    /**
-     * {@link #tryCommand} 的结果 —— 三种走向。
-     *
-     * <p><b>为什么不是 boolean</b>：智能问答类指令（agent）**不能**在这里回完就返回。
-     * 它会真的调模型，所以必须继续往下走 Guard 与成本预算 ——
-     * 原来那套"指令跑在 Guard 之前、绕过限流和预算"是为 {@code /help} 这种
-     * 零成本话术设计的，套到调模型的指令上等于开了一个不限量的免费额度。
-     */
-    private record CommandOutcome(boolean handled, ReplyMode mode, String question) {
-
-        /** 不是指令 */
-        static final CommandOutcome NOT_COMMAND = new CommandOutcome(false, ReplyMode.KB, null);
-        /** 已经在这里回完了 */
-        static final CommandOutcome HANDLED = new CommandOutcome(true, ReplyMode.KB, null);
-
-        /** agent 指令：带上回答模式与"问题"，继续走 Guard + 预算 */
-        static CommandOutcome agent(ReplyMode mode, String question) {
-            return new CommandOutcome(false, mode, question);
-        }
-    }
-
-    /**
-     * 尝试把消息当作指令处理。
-     *
-     * <p>两类走法完全不同：
-     * <ul>
-     *   <li>{@code template}（话术）—— 就地渲染回复、秒回，不调模型、不计费；</li>
-     *   <li>{@code agent}（智能问答）—— 只登记，返回"带着模式和问题继续往下走"。</li>
-     * </ul>
-     *
-     * @return 见 {@link CommandOutcome}
-     */
-    private CommandOutcome tryCommand(OneBotEvent event, String text, long t0) {
-        if (!commandProperties.isEnabled()) {
-            return CommandOutcome.NOT_COMMAND;
-        }
-        boolean inGroup = event.isGroupMessage();
-        long groupId = event.getGroupId() == null ? 0 : event.getGroupId();
-        long userId = event.getUserId() == null ? 0 : event.getUserId();
-
-        // 群里是否 @ 了机器人
-        boolean mentioned = !inGroup || codec.isMentioned(event, identity.getSelfId());
-
-        CommandMatcher.Match match = commandMatcher.match(text, mentioned, inGroup, groupId);
-
-        if (!match.hit()) {
-            // 看起来像指令但没匹配上 —— 记一笔，用来发现"该加哪些命令"
-            if (match.looksLike()) {
-                // 群里的统计只记 @ 过的（否则正常聊天里的斜杠也会被记进来）
-                if (!inGroup || mentioned) {
-                    commandStore.logUsage(match.rawTrigger(), groupId, userId, false);
-                }
-            }
-            return CommandOutcome.NOT_COMMAND;
-        }
-
-        BotCommand cmd = match.command();
-        String args = match.argsOrEmpty();
-
-        // 指令级限流（独立于问答限流）
-        String key = userId + "@" + groupId;
-        if (!commandRateLimiter.allow(key)) {
-            log.info("[CMD] 指令被限流：{} 触发 /{}", userId, cmd.trigger());
-            return CommandOutcome.HANDLED;   // 静默丢弃，不回复（避免"提示"本身变成刷屏）
-        }
-
-        // ---------- 智能问答类：登记后继续走 Guard + 预算，不在这里回 ----------
-        if (cmd.isAgent()) {
-            if (args.isEmpty()) {
-                // 没带参数：用配置的 reply 当"用法提示"秒回（不调模型、不计费）
-                String hint = variableRenderer.render(cmd.reply(), event, false, "");
-                if (hint.isBlank()) {
-                    hint = "用法：" + cmd.display();
-                }
-                outboundSender.send(event, hint);
-                commandStore.logUsage(cmd.trigger(), groupId, userId, true);
-                qaCollector.collect(event, text, null, 0, "command", hint,
-                        KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
-                return CommandOutcome.HANDLED;
-            }
-            log.info("[CMD] 智能问答指令 /{}（模式={}，参数 {} 字）→ 继续走 Guard + 成本预算",
-                    cmd.trigger(), cmd.modeName(), args.length());
-            commandStore.logUsage(cmd.trigger(), groupId, userId, true);
-            return CommandOutcome.agent(ReplyMode.from(cmd.modeName()), args);
-        }
-
-        // ---------- 话术类：渲染模板就地回 ----------
-        String reply = variableRenderer.render(cmd.reply(), event, false, args);
-        if (reply.isBlank()) {
-            log.warn("[CMD] 指令 /{} 渲染后为空，跳过", cmd.trigger());
-            return CommandOutcome.HANDLED;
-        }
-
-        log.info("[CMD] 触发指令 /{}（群 {} 用户 {}），回复 {} 字",
-                cmd.trigger(), groupId, userId, reply.length());
-        outboundSender.send(event, reply);
-        commandStore.logUsage(cmd.trigger(), groupId, userId, true);
-
-        // 指令不算问答检索，但记一笔便于统计"指令用了多少次"
-        qaCollector.collect(event, text, null, 0, "command", reply,
-                KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
-        return CommandOutcome.HANDLED;
+        return true;
     }
 
     /**
@@ -323,6 +202,27 @@ public class MessageRouter {
         }
     }
 
+    /**
+     * 一条消息在本次处理里的上下文 —— 在 {@link #handle} 的各步骤之间传递。
+     *
+     * <p>为什么要有它：拆成步骤之后，每一步都要 event / text / 图片 / 起始时间戳，
+     * 逐个当参数传就是 5~6 个参数的长签名；而问答记录那一笔又同时需要这几样。
+     * 收成一个记录，步骤方法只接一个参数。
+     */
+    private record RoutedRequest(OneBotEvent event, String text, List<ImageRef> ownImages,
+                                 int imageCount, boolean hasQuote, long t0) {
+
+        static RoutedRequest of(OneBotEvent event, String text, List<ImageRef> ownImages,
+                                boolean hasQuote, long t0) {
+            return new RoutedRequest(event, text, ownImages, ownImages.size(), hasQuote, t0);
+        }
+
+        /** 所有记录点都从这里算耗时 */
+        long elapsedMs() {
+            return System.currentTimeMillis() - t0;
+        }
+    }
+
     /** 同步处理逻辑，单独抽出来是为了方便写单元测试 */
     public void handle(OneBotEvent event) {
         if (!event.isMessageEvent()) {
@@ -336,14 +236,13 @@ public class MessageRouter {
         long t0 = System.currentTimeMillis();
         String text = codec.extractPlainText(event);
         List<ImageRef> ownImages = codec.extractImageRefs(event);
-        int imageCount = ownImages.size();
         boolean hasQuote = codec.extractReplyId(event).isPresent();
+        RoutedRequest req = RoutedRequest.of(event, text, ownImages, hasQuote, t0);
 
-        // ① 准入控制（黑名单）—— 唯一在指令之前跑的一层。
+        // ① 准入控制（黑名单 / 私聊策略）—— 唯一在指令之前跑的一层。
         //    被拉黑的人不该能触发指令，但除此之外指令不该受任何 Guard 限制。
         if (!accessAllowed(event)) {
-            qaCollector.collect(event, text, null, imageCount, "drop", null,
-                    KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
+            record(req, "drop", null);
             return;
         }
 
@@ -351,7 +250,7 @@ public class MessageRouter {
         //    · 话术类命中就秒回：不走限流、不走敏感词、不调模型。
         //      理由：/help 不该等模型 3 秒，也不该受"每分钟只能问一次"的限流。
         //    · 智能问答类**只登记**，继续往下走 Guard 与成本预算（它会真的调模型）。
-        CommandOutcome cmd = tryCommand(event, text, t0);
+        CommandHandler.Outcome cmd = commandHandler.tryCommand(event, text, t0);
         if (cmd.handled()) {
             return;
         }
@@ -366,61 +265,98 @@ public class MessageRouter {
             return;
         }
 
-        // ③ 其余 Guard 五层
-        GuardContext ctx = new GuardContext(event, text,
-                ownImages.stream().map(ImageRef::url).toList(), hasQuote);
+        // ③ Guard 五层 + 成本预算。顺序有硬约束，见 guardAndBudget 的注释。
+        if (guardAndBudget(req)) {
+            return;
+        }
+
+        // ④ 真正生成回复并发出
+        reply(req, question, replyMode);
+    }
+
+    /**
+     * Guard 五层 + 成本预算。
+     *
+     * <p>顺序是有约束的：
+     * <ul>
+     *   <li>Guard 在调模型之前 —— 攻击者不能用敏感内容或注入话术烧 token；</li>
+     *   <li>预算也在调模型之前 —— 预算的意义就是别把 token 花出去。</li>
+     * </ul>
+     *
+     * @return {@code true} = 本次到此为止（被拦、回了固定话术、或超预算），不要再调模型
+     */
+    private boolean guardAndBudget(RoutedRequest req) {
+        OneBotEvent event = req.event();
+
+        GuardContext ctx = new GuardContext(event, req.text(),
+                req.ownImages().stream().map(ImageRef::url).toList(), req.hasQuote());
         GuardResult result = guardPipeline.check(ctx);
         if (result instanceof GuardResult.Drop) {
             // 被 Guard 拦下的也记一笔 —— "多少消息被限流/拦下"本身就是运营数据
-            qaCollector.collect(event, text, null, imageCount, "drop", null,
-                    KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
-            return;
+            record(req, "drop", null);
+            return true;
         }
         if (result instanceof GuardResult.Reply reply) {
             log.info("走固定话术（stage 拦截）：{}", reply.reason());
             outboundSender.send(event, reply.text());
-            qaCollector.collect(event, text, null, imageCount, "fixed_reply", reply.text(),
-                    KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
-            return;
+            record(req, "fixed_reply", reply.text());
+            return true;
         }
 
-        // ③.5 成本预算（D6）：限流管「多快」，这里管「一天总共多少」。
-        //      必须放在调模型【之前】—— 预算的意义就是别把 token 花出去。
+        // 成本预算（D6）：限流管「多快」，这里管「一天总共多少」
         BudgetGuard.Decision budget = budgetGuard.check(event.getUserId(), event.getGroupId());
         if (budget.verdict() == BudgetGuard.Verdict.USER_LIMIT) {
             outboundSender.send(event, budget.text());
-            qaCollector.collect(event, text, null, imageCount, "fixed_reply", budget.text(),
-                    KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
-            return;
+            record(req, "fixed_reply", budget.text());
+            return true;
         }
         if (budget.verdict() != BudgetGuard.Verdict.OK) {
             // 群级超限 = 该群静默；全局熔断 = 谁都不回（BudgetGuard 里已经 ERROR 告警过）
             log.info("[BUDGET] 丢弃消息：verdict={} group={} user={}",
                     budget.verdict(), event.getGroupId(), event.getUserId());
-            qaCollector.collect(event, text, null, imageCount, "drop", null,
-                    KbTrace.disabled(), 0, System.currentTimeMillis() - t0);
-            return;
+            record(req, "drop", null);
+            return true;
         }
         budgetGuard.recordCall(event.getUserId(), event.getGroupId());
+        return false;
+    }
+
+    /**
+     * 生成回复并发出。
+     *
+     * <p>出站敏感词过滤在 {@link OutboundSender} 内部 —— 单一出口，任何发送路径都绕不过。
+     * （放在调用方就得靠每个人记得调，广场那条直接发送的路就漏掉过。）
+     * 用它的返回值而不是自己再过滤一遍：记录的就是<b>实际发出去的那段文本</b>。
+     */
+    private void reply(RoutedRequest req, String question, ReplyMode replyMode) {
+        OneBotEvent event = req.event();
 
         // 解析引用（QQ 的引用段只有 ID，正文和图片都要另外调 get_msg 取）
         QuotedContent quote = resolveQuote(event);
 
         // 消息自带的图片 + 被引用消息里的图片，一起交给模型
-        List<ImageRef> allImages = new ArrayList<>(ownImages);
+        List<ImageRef> allImages = new ArrayList<>(req.ownImages());
         allImages.addAll(quote.imageRefs());
 
-        ChatService.ReplyResult result2 = chatService.reply(event, question, quote.text(), allImages, replyMode);
-        // 出站敏感词过滤现在在 OutboundSender 内部 —— 单一出口，任何发送路径都绕不过。
-        // 放在这里的话，广场那条直接发送的路就漏掉了（实测漏洞）。
-        // 用返回值而不是自己再过滤一遍：记录的就是**实际发出去的那段文本**。
-        String safe = outboundSender.send(event, result2.text());
+        ChatService.ReplyResult result = chatService.reply(event, question, quote.text(), allImages, replyMode);
+        String safe = outboundSender.send(event, result.text());
 
         // 异步记一笔：不阻塞、不抛异常（记录系统挂了也要照常回答）
         // ⚠️ 记的是 question 不是 text：agent 指令的原始文本是 "/联网 …"，
         //    记进去会让「未命中·该补什么」里全是命令前缀。
-        qaCollector.collect(event, question, quote.text(), imageCount, "pass", safe,
-                result2.kb(), result2.llmMs(), System.currentTimeMillis() - t0);
+        qaCollector.collect(event, question, quote.text(), req.imageCount(), "pass", safe,
+                result.kb(), result.llmMs(), req.elapsedMs());
+    }
+
+    /**
+     * 问答记录的<b>唯一出口</b>。
+     *
+     * <p>以前 "drop" 写了三遍、"fixed_reply" 写了两遍，每一处都把同样的 9 个参数抄一次 ——
+     * 加一个统计字段要改五处，漏一处就是"某条路径没记账"。
+     */
+    private void record(RoutedRequest req, String kind, String replyText) {
+        qaCollector.collect(req.event(), req.text(), null, req.imageCount(), kind, replyText,
+                KbTrace.disabled(), 0, req.elapsedMs());
     }
 
     /** 取出被引用消息的文字和图片。失败不影响正常回复。 */
