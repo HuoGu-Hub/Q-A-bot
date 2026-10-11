@@ -230,10 +230,10 @@
       "label": "块正文",
       "classification": "幂等",
       "variant": "emphasis",
+      "labelDy": -24,
       "route": "straight",
       "fromSide": "right",
-      "toSide": "left",
-      "labelDy": -24
+      "toSide": "left"
     },
     {
       "from": "block",
@@ -260,7 +260,27 @@
       "to": "block",
       "label": "清洗后正文",
       "classification": "按段落切块",
-      "variant": "dashed"
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [
+        [
+          450,
+          242
+        ],
+        [
+          450,
+          110
+        ],
+        [
+          530,
+          110
+        ]
+      ],
+      "labelAt": [
+        400,
+        220
+      ]
     },
     {
       "from": "block",

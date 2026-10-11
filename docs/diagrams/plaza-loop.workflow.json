@@ -243,11 +243,20 @@
       "to": "help",
       "variant": "emphasis",
       "role": "main",
-      "route": "drop",
       "fromSide": "bottom",
-      "toSide": "bottom",
+      "toSide": "left",
       "label": "同一降级入口",
-      "labelDy": 14
+      "labelDy": 14,
+      "via": [
+        [
+          500,
+          119
+        ],
+        [
+          556,
+          119
+        ]
+      ]
     },
     {
       "from": "help",
