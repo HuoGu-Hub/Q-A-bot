@@ -3,6 +3,7 @@ package com.example.qqbot.publicapi;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.kb.RetrievalOptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,10 +11,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -58,11 +58,24 @@ class PublicSearchServiceTest {
     }
 
     private void answer(List<KbRetriever.Hit> hits) {
-        when(retriever.retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean()))
+        when(retriever.retrieve(anyString(), any(RetrievalOptions.class)))
                 .thenReturn(new KbRetriever.Retrieval(hits, 0.6, 0.6, hits.size(), 0, List.of()));
-        // 注意 5 个参数：最后一个是 allowRerank。公开站**明确传 false** ——
-        // 它有自己的按天配额与 LRU 缓存，"要不要给资料"的重排判断在这里没有意义，
-        // 多一次外部调用只是白花钱。下面几处 verify 都用 eq(false) 把这条锁住。
+    }
+
+    /**
+     * 公开站口径：候选拿得多、阈值松、<b>明确关掉重排</b>。
+     *
+     * <p>关重排是因为这里有自己的按天配额与 LRU 缓存，
+     * "要不要给资料"那套重排判断在这里没有意义，多一次外部调用只是白花钱。
+     * 下面几处 verify 都用它把这条锁住。
+     */
+    private static RetrievalOptions publicSiteOptions(boolean allowEmbedding) {
+        return argThat(o -> o.allowEmbedding() == allowEmbedding && !o.allowRerank());
+    }
+
+    /** 公开站一次都不该调检索 */
+    private void verifyNoRetrieval() {
+        verify(retriever, times(0)).retrieve(anyString(), any(RetrievalOptions.class));
     }
 
     @Test
@@ -77,7 +90,7 @@ class PublicSearchServiceTest {
 
         assertThat(out.hits()).hasSize(2);
         assertThat(out.hits().get(0).entry().url()).isEqualTo("https://w/Flame_Altar");
-        assertThat(out.hits().get(0).entry().id()).as("留的是分高的那块").isEqualTo("altar-0");
+        assertThat(out.hits().get(0).entry().id().value()).as("留的是分高的那块").isEqualTo("altar-0");
         assertThat(out.hits().get(1).entry().title()).isEqualTo("Scrap Cup");
     }
 
@@ -89,7 +102,7 @@ class PublicSearchServiceTest {
         PublicSearchService.Outcome out = service.search("废料杯", 20);
 
         assertThat(out.mode()).isEqualTo(PublicSearchService.MODE_SEMANTIC);
-        verify(retriever).retrieve(eq("废料杯"), eq(true), anyInt(), anyDouble(), eq(false));
+        verify(retriever).retrieve(eq("废料杯"), publicSiteOptions(true));
     }
 
     @Test
@@ -100,7 +113,7 @@ class PublicSearchServiceTest {
         service.search("废料杯怎么合成", 20);
         service.search("废料杯怎么合成", 20);
 
-        verify(retriever, times(1)).retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean());
+        verify(retriever, times(1)).retrieve(anyString(), any(RetrievalOptions.class));
     }
 
     @Test
@@ -113,7 +126,7 @@ class PublicSearchServiceTest {
 
         assertThat(out.mode()).isEqualTo(PublicSearchService.MODE_KEYWORD);
         assertThat(out.hits()).as("降级不等于没结果").hasSize(1);
-        verify(retriever).retrieve(eq("废料杯"), eq(false), anyInt(), anyDouble(), eq(false));
+        verify(retriever).retrieve(eq("废料杯"), publicSiteOptions(false));
     }
 
     @Test
@@ -125,14 +138,14 @@ class PublicSearchServiceTest {
         PublicSearchService.Outcome out = service.search("废料杯", 20);
 
         assertThat(out.mode()).isEqualTo(PublicSearchService.MODE_KEYWORD);
-        verify(retriever).retrieve(eq("废料杯"), eq(false), anyInt(), anyDouble(), eq(false));
+        verify(retriever).retrieve(eq("废料杯"), publicSiteOptions(false));
     }
 
     @Test
     @DisplayName("空查询直接返回空，不触发检索")
     void blankQueryIsFree() {
         assertThat(service.search("   ", 20).hits()).isEmpty();
-        verify(retriever, times(0)).retrieve(anyString(), anyBoolean(), anyInt(), anyDouble(), anyBoolean());
+        verifyNoRetrieval();
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.example.qqbot.kb.PublicSearch;
 import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.KbCorpus;
 import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.kb.RetrievalOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -103,7 +104,10 @@ public class PublicSearchService {
                 && takeQuota(cfg.getVectorDailyLimit());
 
         long t0 = System.currentTimeMillis();
-        KbRetriever.Retrieval r = retriever.retrieve(query, semantic, cfg.getCandidatePool(), cfg.getMinScore(), false);
+        // 公开站的口径与群内不同：候选拿得多、阈值松（按相关度排给人看），
+        // 且**明确关掉重排** —— 这里有按天配额，多一次外部调用不划算
+        KbRetriever.Retrieval r = retriever.retrieve(query, new RetrievalOptions(
+                cfg.getCandidatePool(), cfg.getMinScore(), semantic, false));
         String mode = semantic ? MODE_SEMANTIC : MODE_KEYWORD;
 
         if (semantic) {

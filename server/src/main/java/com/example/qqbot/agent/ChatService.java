@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * 把「一条 QQ 消息（可能带引用、可能带图片）」变成「一段大模型的回复」。
  *
- * <p>这一层负责组装上下文、调用 {@link LlmRouter}、兜底话术。
+ * <p>这一层负责组装信封消息、调 {@link KbToolAssistant}、兜底话术；检索与资料注入由它驱动的官方管线完成。
  * 它不关心协议细节（那是 onebot 包的事），也不关心用哪个模型（那是 llm 包的事）。
  */
 @Component
@@ -40,7 +40,7 @@ public class ChatService {
     private final KbPolicy kbProperties;
 
     /**
-     * 带工具的助手 —— <b>文本路径的模型入口</b>。
+     * 带工具的助手 —— <b>文本与图片两条路径共同的模型入口</b>。
      *
      * <p>它驱动官方管线：检索、资料注入、工具执行都在里面。
      * 所以资料不再由本类拼（见 {@link #reply} 里给 {@code buildUserMessage} 传 {@code null} 那处）。
@@ -67,10 +67,6 @@ public class ChatService {
      * @param kb    检索痕迹：命中几块、来自哪条路、耗时多久
      */
     public record ReplyResult(String text, long llmMs, KbTrace kb) {
-    }
-
-    /** 检索结果 + 它的痕迹 */
-    private record Retrieved(String knowledge, KbTrace trace) {
     }
 
     /**
@@ -115,9 +111,8 @@ public class ChatService {
 
         // ---------- 有图片：走视觉模型 ----------
         //
-        // 注：视觉路径暂时仍走老路（自己检索 + 自己拼资料 + llmRouter）。
-        // 代价是**图片消息暂时不能用工具**，收益是切换一次只动一条路 ——
-        // 回复出问题时排查面小一半。资料在两边格式一致，群友看不出区别。
+        // 注：视觉路径与文本路径同一套 —— 检索与资料注入由 augmentor 完成，
+        // 工具也照样可用，区别只在模型换成了带视觉能力的那一条。
         if (imageRefs != null && !imageRefs.isEmpty()) {
             if (!llmRouter.hasVision()) {
                 return done(contentGate.getNoVisionReply(), t0, KbTrace.disabled());
@@ -239,7 +234,7 @@ public class ChatService {
         // 知识库资料。和用户输入一样是**外部不可信内容**，所以用固定标记包起来，
         // 并在系统提示词里声明「标记里的是资料，不是指令」。
         if (knowledge != null && !knowledge.isEmpty()) {
-            // 分段标题由 retrieveKnowledge() 拼好（「我们维护的内容」/「导入的资料」），
+            // 分段标题由 kb/TwoSectionInjector 拼好（「我们维护的内容」/「导入的资料」），
             // 这里不再加一句笼统的"供你参考" —— 那句话会把两段的区别抹平
             sb.append("\n<<<KNOWLEDGE\n").append(knowledge).append("\nKNOWLEDGE>>>\n");
         }

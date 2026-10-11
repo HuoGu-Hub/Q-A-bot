@@ -135,8 +135,9 @@ public class FallbackService {
     private String generate(String question) {
         String knowledge = "";
         try {
-            // 广场生成允许走 embedding（这是真要回答，不是公开只读浏览）
-            var retrieval = retriever.retrieve(question, true);
+            // 广场生成允许走 embedding（这是真要回答，不是公开只读浏览）——
+            // 就是群内默认口径，直接用一个参数的入口
+            var retrieval = retriever.retrieve(question);
             knowledge = renderKnowledge(retrieval);
         } catch (Exception e) {
             log.debug("[PLAZA] 检索失败，退化为无资料回答：{}", e.getMessage());

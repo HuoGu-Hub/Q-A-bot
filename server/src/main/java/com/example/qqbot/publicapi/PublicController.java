@@ -356,7 +356,7 @@ public class PublicController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", "词条不存在"));
         }
-        matched.sort(Comparator.comparing(com.example.qqbot.kb.KbCorpus.Entry::id));
+        matched.sort(Comparator.comparing(e -> e.id().value()));
 
         StringBuilder sb = new StringBuilder();
         for (com.example.qqbot.kb.KbCorpus.Entry c : matched) {
