@@ -257,8 +257,8 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
               │  /admin/api/**  │ 需会话
               └────────────────┘
                       ▼
-              data/qa/qa.sqlite
-              data/kb/**（语料与索引）
+              data/qa/qqbot.sqlite
+              data/kb/（仅存放导出的文档）
 </code></pre>
 <hr>
 <h2 id="二服务器要求"><a class="anchor" href="#二服务器要求">二、服务器要求</a></h2>
@@ -273,12 +273,12 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 <tbody><tr>
 <td>内存</td>
 <td><strong>2 GB</strong></td>
-<td>索引常驻约 16 MB，Spring Boot 约占 400 MB</td>
+<td>块与向量启动时载入内存，当前 3,400 块约 27 MB；Spring Boot 约占 400 MB</td>
 </tr>
 <tr>
 <td>磁盘</td>
 <td>20 GB</td>
-<td>语料 + 索引约 20 MB，SQLite 长期几十 MB</td>
+<td>块与向量、词条、统计都在一个 SQLite 里，几十 MB；其余留给图片缓存与日志</td>
 </tr>
 <tr>
 <td>出网</td>
@@ -375,7 +375,7 @@ mvn -q clean package -DskipTests
 </code></pre>
 <p>想彻底和&quot;当前在哪个目录&quot;脱钩，就把这几个路径<strong>写成绝对路径</strong>放进 <code>EnvironmentFile</code>（实测有效）：</p>
 <pre><code class="language-bash"># 取消注释、填绝对路径；⚠️ 别写成 KEY= 空值（空值 ≠ 不写，会解析成空路径）
-APP_QA_DB=/opt/qqbot/data/qqbot.sqlite
+APP_PERSISTENCE_DB=/opt/qqbot/data/qqbot.sqlite
 APP_KB_DIR=/opt/qqbot/data/kb
 APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 </code></pre>
@@ -514,17 +514,20 @@ sudo journalctl -u qqbot | grep &quot;已加载系统提示词&quot;
 <pre><code class="language-text">[LLM] 已加载系统提示词：file:../system.md（外部文件，改完重启即生效）（3256 字）
 </code></pre>
 <blockquote>
-<p><strong>为什么用 <code>system.md</code> 这个名字</strong>：它是 Agent 生态的通行约定，
-将来迁移到正式 Agent 框架（Claude Code / Cursor 等）可以直接复用提示词，不用重写。</p>
+<p><strong>为什么文件名叫 <code>system.md</code> 而不是 <code>AGENTS.md</code></strong>：<code>AGENTS.md</code> 才是 Agent 生态的通行约定，
+但正是这个约定名会引发冲突 —— 各类 Agent 工具会把工作区里的 <code>AGENTS.md</code> 当作<strong>给 Agent 的指令</strong>加载。
+构建时 pom 要从仓库根取这份文件，隔离构建会把它复制到 <code>.toolchain/system.md</code>，
+于是每次构建都在工作区留下一份机器人人格文件，随后被读进开发工具的指令区。
+改用 <code>system.md</code> 后这层耦合消失。详见《系统说明书》§8.4。</p>
 </blockquote>
 <h3 id="看日志"><a class="anchor" href="#看日志">看日志</a></h3>
 <pre><code class="language-bash">sudo journalctl -u qqbot -f
 </code></pre>
 <h3 id="备份"><a class="anchor" href="#备份">备份</a></h3>
 <p><strong>要备份的就两样</strong>：</p>
-<pre><code class="language-bash"># ① 一个 sqlite 装下了全部&quot;人工成果&quot;：
-#    问答统计、词条表（中文名 + 核对状态）、分类映射、页面文案、轮播清单
-sqlite3 /opt/qqbot/server/data/qa/qa.sqlite &quot;.backup /backup/qa-$(date +%F).sqlite&quot;
+<pre><code class="language-bash"># ① 一个 sqlite 装下了全部人工成果与知识库：
+#    块与向量、词条表（中文名 + 核对状态）、分类映射、问答统计、页面文案、轮播清单
+sqlite3 /opt/qqbot/server/data/qa/qqbot.sqlite &quot;.backup /backup/qqbot-$(date +%F).sqlite&quot;
 
 # ② 首页轮播的图片（管理端上传的，丢了只能重新找图）
 cp -r /opt/qqbot/server/data/site-images /backup/
@@ -533,19 +536,36 @@ cp -r /opt/qqbot/server/data/site-images /backup/
 <p>⚠️ <strong>术语表已经不在 TSV 里了</strong>（2026-09-27 起搬进 ① 那个 sqlite 的 <code>kb_term</code> 表）。
 原来那个 <code>data/kb/glossary/zh-en.tsv</code> <strong>文件已经删掉</strong> —— 现在只在「导出 / 导入」时临时生成，
 <strong>不用再单独备份</strong>。备份好 ① 那个 sqlite 就够了。</p>
-<p>语料和索引<strong>不用备份</strong> —— 可以随时重建（<code>from-raw</code> 模式 18 秒；
-但<strong>改了清洗规则就必须连向量一起重建</strong>，约 4 分钟、按 embedding 计费，见下一节）。</p>
+<p>块与向量就在 ① 那个 sqlite 里 —— 备份它就等于备份了知识库。
+真丢了也不至于从头再来：<strong>重建 = 重新导入文档</strong>，见下一节。</p>
 <p>首页轮播的图片走<strong>管理端上传</strong>（<code>页面信息 → 首页轮播</code>），
 存放目录是 <code>app.site.carousel.dir</code>（默认 <code>./data/site-images</code>）。
 上传时 nginx 和 Spring 各有一道体积上限，见 <code>deploy/nginx/qqbot.conf</code> 里的 <code>client_max_body_size</code>。</p>
 </blockquote>
 <h3 id="重建语料游戏更新后"><a class="anchor" href="#重建语料游戏更新后">重建语料（游戏更新后）</a></h3>
+<p>块与向量都在 SQLite 里，重建就是重新导入。按依赖顺序跑，每一步加 <code>--app.kb.xxx.dry-run=true</code> 可以先空跑：</p>
 <pre><code class="language-bash">cd /opt/qqbot/server
+
+# ① 地图同步（地点 / NPC 的来源）—— 增量，只拉 revid 变过的页
 java -jar target/qqbot-server-*.jar \
-  --app.kb.build.enabled=true --spring.main.web-application-type=none
+  --app.kb.map-sync.sync-on-start=true --spring.main.web-application-type=none
+
+# ② 地点语料派生（由 marker 生成地点 / NPC 块）
 java -jar target/qqbot-server-*.jar \
-  --app.kb.index.enabled=true --spring.main.web-application-type=none
+  --app.kb.location-corpus.build-on-start=true --spring.main.web-application-type=none
+
+# ③ wiki 文章导入（任务 / 机制 / 世界观…）
+java -jar target/qqbot-server-*.jar \
+  --app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none
+
+# 导入只在进程内重载，跑完必须重启服务
+sudo systemctl restart qqbot
 </code></pre>
+<blockquote>
+<p>手写的攻略与更新摘要走管理后台「资料」页导入，不走上面三条命令。
+每一步都能单独回滚：<code>--app.kb.wiki-import.purge=true</code> 清全部 wiki 文章块，
+<code>--app.kb.location-corpus.purge=true</code> 清全部派生地点块；回滚完在后台点一次「清理孤儿词条」。</p>
+</blockquote>
 <h3 id="更新部署"><a class="anchor" href="#更新部署">更新部署</a></h3>
 <pre><code class="language-bash">cd /opt/qqbot
 git pull
@@ -596,7 +616,7 @@ sudo systemctl restart qqbot
 <tr>
 <td><strong>R7</strong></td>
 <td><strong>QQ 账号被风控</strong></td>
-<td>见 <code>docs/NapCat登录丢失排查与解决.md</code></td>
+<td>见 <code>docs/md/NapCat登录丢失排查与解决.md</code></td>
 </tr>
 <tr>
 <td><strong>R8</strong></td>

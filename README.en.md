@@ -25,8 +25,10 @@ Project documentation is written in Chinese.
 
 ## Features
 
-- Knowledge-base QA: body vectors, terminology keywords and a title-vector gate recall in parallel, fused with RRF,
-  reranked to the top 5. When the material is thin the bot says so instead of inventing answers.
+- Knowledge-base QA: body vectors and terminology keywords recall in parallel; a title-vector gate pins an exact name
+  match; RRF fusion then a cross-encoder rerank, top 5. When the material is thin the bot says so instead of inventing answers.
+- Tool calling: the model may call a read-only `lookup` tool against the knowledge base; the allow-list denies by default,
+  anonymous callers are refused, and the tool loop is capped at 3 rounds.
 - Commands: `/help`, `/ping` and friends reply instantly, bypassing rate limits and never calling a model.
 - Safety layer: five local stages, plus an outbound sensitive-word filter.
 - Cost budget: per-user, per-group and global daily quotas with a global token cap; over budget it degrades.

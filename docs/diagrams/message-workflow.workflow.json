@@ -133,7 +133,7 @@
       "lane": "qq",
       "col": 0,
       "type": "messagebus",
-      "height": 60,
+      "height": 50,
       "width": 96,
       "label": "群友 @提问",
       "sublabel": "文本 / 图片 / 引用"
@@ -143,7 +143,7 @@
       "lane": "qq",
       "col": 5,
       "type": "backend",
-      "height": 60,
+      "height": 50,
       "width": 108,
       "label": "出站发送",
       "sublabel": "分片 · 节奏 · 回到群聊"
@@ -153,7 +153,7 @@
       "lane": "qq",
       "col": 1,
       "type": "backend",
-      "height": 60,
+      "height": 58,
       "width": 52,
       "label": "事件接入",
       "sublabel": "去重 → 204",
@@ -164,7 +164,7 @@
       "lane": "qq",
       "col": 2,
       "type": "backend",
-      "height": 60,
+      "height": 50,
       "width": 52,
       "label": "指令匹配",
       "sublabel": "话术秒回"
@@ -174,7 +174,7 @@
       "lane": "qq",
       "col": 3,
       "type": "security",
-      "height": 60,
+      "height": 58,
       "width": 92,
       "label": "五层 Guard",
       "sublabel": "零成本拦截",
@@ -185,7 +185,7 @@
       "lane": "kb",
       "col": 3,
       "type": "security",
-      "height": 60,
+      "height": 50,
       "width": 56,
       "label": "固定话术",
       "sublabel": "拦截 / 超限"
@@ -195,7 +195,7 @@
       "lane": "agent",
       "col": 4,
       "type": "backend",
-      "height": 60,
+      "height": 58,
       "width": 124,
       "label": "KbToolAssistant",
       "sublabel": "AiServices 装配 · 工具循环",
@@ -206,7 +206,7 @@
       "lane": "agent",
       "col": 5,
       "type": "external",
-      "height": 60,
+      "height": 50,
       "width": 104,
       "label": "LlmRouter",
       "sublabel": "自动降级链"
@@ -216,7 +216,7 @@
       "lane": "kb",
       "col": 4,
       "type": "database",
-      "height": 60,
+      "height": 58,
       "width": 68,
       "label": "双路召回",
       "sublabel": "向量 · 关键词",
@@ -227,7 +227,7 @@
       "lane": "kb",
       "col": 5,
       "type": "database",
-      "height": 60,
+      "height": 50,
       "width": 104,
       "label": "聚合与注入",
       "sublabel": "RRF · 闸门 · 重排"
@@ -239,18 +239,8 @@
       "to": "ingress",
       "variant": "emphasis",
       "role": "main",
-      "fromSide": "bottom",
-      "toSide": "bottom",
-      "via": [
-        [
-          88,
-          166
-        ],
-        [
-          220,
-          166
-        ]
-      ]
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
       "from": "ingress",
@@ -265,15 +255,19 @@
       "variant": "emphasis",
       "role": "main",
       "fromSide": "bottom",
-      "toSide": "bottom",
+      "toSide": "left",
       "via": [
         [
           220,
           166
         ],
         [
-          430,
+          366,
           166
+        ],
+        [
+          366,
+          119
         ]
       ]
     },
@@ -282,9 +276,9 @@
       "to": "fixreply",
       "variant": "security",
       "role": "error",
-      "route": "straight",
       "fromSide": "bottom",
-      "toSide": "top"
+      "toSide": "top",
+      "route": "straight"
     },
     {
       "from": "guard",
@@ -292,21 +286,21 @@
       "label": "ChatService 组信封",
       "variant": "emphasis",
       "role": "main",
-      "fromSide": "bottom",
-      "toSide": "bottom",
+      "fromSide": "right",
+      "toSide": "top",
       "via": [
         [
-          430,
-          294
+          476,
+          170
         ],
         [
           500,
-          294
+          170
         ]
       ],
       "labelAt": [
-        486,
-        168
+        556,
+        190
       ]
     },
     {
@@ -314,9 +308,9 @@
       "to": "recall",
       "variant": "emphasis",
       "role": "main",
-      "route": "straight",
       "fromSide": "bottom",
-      "toSide": "top"
+      "toSide": "top",
+      "route": "straight"
     },
     {
       "from": "recall",
@@ -339,9 +333,9 @@
       "to": "outbound",
       "label": "回到群聊",
       "channelX": 700,
-      "route": "outside-right",
       "fromSide": "right",
-      "toSide": "right"
+      "toSide": "right",
+      "route": "outside-right"
     }
   ],
   "cards": [

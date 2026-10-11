@@ -148,9 +148,9 @@ tbody tr:last-child td { border-bottom:0; }
 <table>
 <thead><tr><th>槽位</th><th>官方实现</th><th>我们的等价物</th><th>处理</th></tr></thead>
 <tbody>
-<tr><td>QueryTransformer</td><td><code>DefaultQueryTransformer</code></td><td>无</td><td>可留空，后续补查询改写</td></tr>
-<tr><td>QueryRouter</td><td><code>DefaultQueryRouter</code></td><td>三路并行分发</td><td>换官方</td></tr>
-<tr><td>ContentRetriever</td><td><code>EmbeddingStoreContentRetriever</code></td><td>A 路正文向量</td><td>换官方</td></tr>
+<tr><td>QueryTransformer</td><td><code>DefaultQueryTransformer</code></td><td><code>KbContextQueryTransformer</code></td><td>已自研：从 <code>InvocationParameters</code> 取检索问题与开关</td></tr>
+<tr><td>QueryRouter</td><td><code>DefaultQueryRouter</code></td><td>两路并行分发（A / B）</td><td>换官方</td></tr>
+<tr><td>ContentRetriever</td><td><code>EmbeddingStoreContentRetriever</code></td><td>A 路正文向量（<code>VectorContentRetriever</code>）</td><td>自研 retriever，复用已算好的问题向量</td></tr>
 <tr><td>ContentRetriever</td><td>无对应物</td><td>B 路术语关键词</td><td>自研</td></tr>
 <tr><td>ContentAggregator</td><td><code>ReciprocalRankFuser</code>、<code>ReRankingContentAggregator</code></td><td>RRF 加标题加成、闸门置顶、重排、意图提权</td><td>组合式自研聚合器</td></tr>
 <tr><td>ContentInjector</td><td><code>DefaultContentInjector</code></td><td>两段出处注入</td><td>自研</td></tr>
@@ -178,7 +178,7 @@ tbody tr:last-child td { border-bottom:0; }
 <tr><td><code>_3_advanced/_04 Metadata</code></td><td>部分，<code>curated</code> 出处</td></tr>
 <tr><td><code>_3_advanced/_05 Metadata Filtering</code></td><td>部分，按 <code>docId</code> 过滤</td></tr>
 <tr><td><code>_3_advanced/_06 Skip Retrieval</code></td><td>有，<code>ReplyMode.NONE</code></td></tr>
-<tr><td><code>_3_advanced/_07 Multiple Retrievers</code></td><td>有，A / B / C 三路</td></tr>
+<tr><td><code>_3_advanced/_07 Multiple Retrievers</code></td><td>有，A / B 两路召回，另有 C 路标题闸门</td></tr>
 <tr><td><code>_3_advanced/_08 Web Search</code></td><td>没有，暂不需要</td></tr>
 <tr><td><code>_3_advanced/_09 Return Sources</code></td><td>有，注入时的编号与 url</td></tr>
 <tr><td><code>_3_advanced/_10 SQL Database Retriever</code></td><td>有，SQLite 语料</td></tr>
@@ -191,7 +191,7 @@ tbody tr:last-child td { border-bottom:0; }
 
 <h2 id="routes">四、两条接入路线</h2>
 
-<p>两者的差别取决于用到哪个 jar：<code>langchain4j-core</code> 已经在我们的 classpath 上，<code>AiServices</code> 在主包里，主包本地目前只有 1.19.0。</p>
+<p>两者的差别取决于用到哪个 jar：<code>langchain4j-core</code> 已经在我们的 classpath 上，<code>AiServices</code> 在主包里；主包已引入并升到 1.20.0，与 core 对齐。</p>
 
 <div class="table-wrap">
 <table>
@@ -213,7 +213,7 @@ tbody tr:last-child td { border-bottom:0; }
 <p><code>./scripts/golden-gate.sh</code> 一条命令，退出码就是结论。它把"测不了"从跳过改成失败，并接进 <code>preflight.sh</code> 第 5 步。手册见 <a href="检索回归门禁.html">检索回归门禁.html</a>。</p>
 
 <h3>第 1 步 接缝化 · 已完成</h3>
-<p>KbRetriever 从 781 行降到 381 行，只剩编排。算法各归其位，每个接缝一个接口加一个默认实现，默认实现就是重构前那段代码本身。</p>
+<p>KbRetriever 从 781 行降到 381 行，只剩编排；换官方骨架并补入缓存与诊断后为 451 行。算法各归其位，每个接缝一个接口加一个默认实现，默认实现就是重构前那段代码本身。</p>
 
 <div class="table-wrap">
 <table>
@@ -229,14 +229,16 @@ tbody tr:last-child td { border-bottom:0; }
 </table>
 </div>
 
+<p>两条召回器的接缝在第 2 步已由官方 <code>ContentRetriever</code> 承接：A 路 <code>VectorContentRetriever</code>、B 路 <code>KeywordContentRetriever</code>，<code>KbRecallPath</code> 那对接口与默认实现已随之下线。</p>
+
 <p>C 路单独一个接缝而不是并进召回器：闸门命中的块不参与 RRF 投票，伪装成一条召回路径就得让融合器靠 <code>source</code> 字符串去猜哪一条是闸门，那种隐式约定迟早会错。</p>
 
 <p><strong>验收</strong>：430 条单测通过，全量 Spring 上下文可启动；门禁实测在重构前后完全一致 —— entity 20 条 70.0% / 90.0%，colloquial 5 条 80.0% / 80.0%，chitchat 干净率 93.3%，gap 干净率 29.4%，注入块均值 4.5 / 5.0 / 3.5 / 0.3 全部相同。</p>
 
 <h3>第 2 步 换官方骨架 · 已完成</h3>
-<p><strong>A 路已完成</strong>：向量检索改走官方 <code>EmbeddingStore</code> 接口，实现在 <code>CorpusEmbeddingStore</code> —— 余弦、阈值、候选数仍是我们那套，但对外的形状是官方的，下一轮 <code>EmbeddingStoreContentRetriever</code> 要消费的正是它。</p>
+<p><strong>A 路已完成</strong>：向量检索改走官方 <code>EmbeddingStore</code> 接口，实现在 <code>CorpusEmbeddingStore</code> —— 余弦、阈值、候选数仍是我们那套，但对外的形状是官方的。</p>
 
-<p>官方 retriever 本身<b>没有</b>接受"已算好的问题向量"的入口，它必然自己调 <code>EmbeddingModel.embed()</code>。直接换会破坏"一次检索只调一次 embedding、A 与 C 共用同一个问题向量"这条钉死的验收，所以这一轮只换存储接口，retriever 与 EmbeddingModel 适配器留到与编排一起换。</p>
+<p>官方 retriever 本身<b>没有</b>接受"已算好的问题向量"的入口，它必然自己调 <code>EmbeddingModel.embed()</code>。直接换会破坏"一次检索只调一次 embedding、A 与 C 共用同一个问题向量"这条钉死的验收，所以这一轮只换存储接口，retriever 保持自研 —— 编排换成官方管线后，它仍是自研的 <code>VectorContentRetriever</code>，从上下文读已算好的向量。</p>
 
 <p><strong>顺带收窄了一条护栏</strong>：<code>ArchitectureTest</code> 原先禁止 <code>llm</code> 之外出现任何 <code>dev.langchain4j</code> 类型，与本方案直接冲突。现在改为：框架类型只许出现在 <code>llm</code> 与 <code>kb</code>；模型 SDK 仍然只有 <code>llm</code> 能用；<code>data.message</code> 仍然不许进 <code>kb</code>，那正是当初转正这条规则的原因。</p>
 
@@ -250,7 +252,7 @@ tbody tr:last-child td { border-bottom:0; }
 <tr><td><code>ContentRetriever</code> A 路</td><td><code>VectorContentRetriever</code>，向量检索走官方 <code>EmbeddingStore</code></td></tr>
 <tr><td><code>ContentRetriever</code> B 路</td><td><code>KeywordContentRetriever</code></td></tr>
 <tr><td><code>ContentAggregator</code></td><td><code>KbContentAggregator</code>：融合 → 置顶 → 重排 → 提权 → 截断</td></tr>
-<tr><td><code>ContentInjector</code></td><td>直通。资料仍由 agent 层拼，<code>KNOWLEDGE</code> 标记与两段出处的契约挂在系统提示词第九章上</td></tr>
+<tr><td><code>ContentInjector</code></td><td><code>KbContentInjector</code>：把聚合后的块渲染成 <code>KNOWLEDGE</code> 段，两段出处来自 <code>TwoSectionInjector</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -335,9 +337,9 @@ tbody tr:last-child td { border-bottom:0; }
 
 <h3>第 3 步 按需补能力</h3>
 <ul>
-<li>补 <code>QueryTransformer</code>，做查询改写，这是目前唯一空着的槽位。</li>
-<li>群聊路径补缓存与配额，与公开站拉齐。</li>
-<li><code>KbBlockIndex</code> 实现 <code>EmbeddingStore</code>，接入增量更新，去掉整份重载。</li>
+<li>补查询改写能力（在已有的 <code>KbContextQueryTransformer</code> 里加改写），查询变换槽位本身已不再是空的。</li>
+<li>群聊路径缓存已完成；按天配额明确不做。</li>
+<li><code>CorpusEmbeddingStore</code> 实现 <code>EmbeddingStore</code>；后续接入增量更新，去掉整份重载。</li>
 <li>用官方 observability 监听接口替换自制的 KbTrace。</li>
 </ul>
 
@@ -349,9 +351,7 @@ tbody tr:last-child td { border-bottom:0; }
 <li><strong>已完成</strong>：<code>LlmRouter.chatMessages(...)</code> —— 消息级入口，<b>不注入系统提示词</b>（AiServices 自己管系统消息）；<code>LlmRouterChatModel implements ChatModel</code> 把降级链包成官方模型，工具循环因此走的是我们的降级、能力过滤与预算累加。</li>
 <li><strong>已完成</strong>：第一个只读工具 <code>KbLookupTool</code>，以及 <code>KbToolAssistant</code>（AiServices + 轮次上限 3 + 授权钩子）。授权是<b>默认拒绝</b>的白名单：新增工具必须同时改白名单，否则模型调它会被当场拒绝并记日志 —— "能被触发"与"该被触发"是两件事。</li>
 <li><strong>已完成</strong>：工具循环与授权拒绝的端到端验证，用假模型跑，不碰网络。两条测试分别钉住：模型要工具时<b>工具真的被执行</b>（<code>verify(retriever).retrieve(...)</code>），以及白名单外的工具被拦下且<b>根本没有被执行</b>（<code>verify(retriever, never())</code>）。后者是安全边界，必须由测试钉住而不是靠注释。</li>
-<li><strong>未做</strong>：工具还没有生产入口 —— <code>KbToolAssistant</code> 目前只在测试里被调用。接入口是下一步。</li>
-<li>补工具能力标签，让降级链能过滤不支持工具调用的厂商。</li>
-<li>接入 <code>AiServices</code> 与 <code>tools</code>，每一轮工具调用都计入预算。</li>
+<li><strong>已完成</strong>：工具已有生产入口 —— 群聊文本与视觉两条路都走 <code>KbToolAssistant</code>，授权钩子按调用方身份放行。</li>
 <li>第一批只开放只读工具；敏感性操作不给群聊入口，授权依据是 <code>BeforeToolExecution</code> 里的调用方上下文。</li>
 </ul>
 
@@ -366,7 +366,7 @@ tbody tr:last-child td { border-bottom:0; }
 <li>连续两批语料扩充门槛无退化，即冻结本轮扩张。</li>
 </ul>
 
-<p>目标值待定：entity R@1 与 R@5 达标，gap 干净率显著高于当前的 31.6%。</p>
+<p>目标值待定：entity R@1 与 R@5 达标，gap 干净率显著高于当前的 29.4%。</p>
 
 <h2 id="risk">七、风险</h2>
 
@@ -389,7 +389,7 @@ tbody tr:last-child td { border-bottom:0; }
 </ol>
 
 <div class="footer">
-证据来源：GitHub API 抓取的仓库数据与 1.21.0 发布信息；langchain4j 官方文档 <code>docs/docs/tutorials/rag.md</code>、<code>testing-and-evaluation.md</code>、<code>observability.md</code>；<code>langchain4j-examples</code> 的 <code>rag-examples</code> 模块源码；本地 Maven 仓库的 core 1.20.0 与主包 1.19.0 jar 清单。抓取时间 2026-10-08。
+证据来源：GitHub API 抓取的仓库数据与 1.21.0 发布信息；langchain4j 官方文档 <code>docs/docs/tutorials/rag.md</code>、<code>testing-and-evaluation.md</code>、<code>observability.md</code>；<code>langchain4j-examples</code> 的 <code>rag-examples</code> 模块源码；本地 Maven 仓库的 core 1.20.0 与主包 1.20.0 jar 清单（撰写时主包为 1.19.0，落地时已对齐）。抓取时间 2026-10-08。
 </div>
 
 </main>

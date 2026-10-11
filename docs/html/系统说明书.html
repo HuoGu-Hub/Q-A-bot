@@ -348,7 +348,12 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </tr>
 <tr>
 <td>问答</td>
-<td>知识库检索增强（A 正文向量 + B 术语关键词 + C 标题向量闸门，RRF 融合）</td>
+<td>知识库检索增强（两路召回 + RRF 融合 + 标题闸门置顶 + 交叉编码器重排 → 注入资料段）</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>问答</td>
+<td>工具调用：<code>KbToolAssistant</code> 装配、只读 <code>KbLookupTool</code>；白名单只开 <code>lookup</code>，默认拒绝、无身份拒绝，轮次上限 3</td>
 <td>✅</td>
 </tr>
 <tr>
@@ -428,7 +433,7 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </tr>
 <tr>
 <td>未做</td>
-<td>运行时联网搜索（<code>ReplyMode.WEB</code>）、工具调用（function calling）</td>
+<td>运行时联网搜索（<code>ReplyMode.WEB</code>）</td>
 <td>❌ 预留</td>
 </tr>
 <tr>
@@ -447,23 +452,23 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </thead>
 <tbody><tr>
 <td>后端 Java</td>
-<td>198 个源文件 / 约 30,700 行</td>
+<td>222 个源文件 / 约 32,700 行</td>
 </tr>
 <tr>
 <td>后端测试</td>
-<td>58 个测试类 / 约 10,000 行</td>
+<td>68 个测试类 / 约 11,200 行</td>
 </tr>
 <tr>
 <td>前端 Vue+TS+CSS</td>
-<td>61 个文件 / 约 15,500 行</td>
+<td>61 个文件 / 约 15,600 行</td>
 </tr>
 <tr>
 <td>端到端与探针脚本</td>
 <td>42 个（Playwright + Node/Python 探针）</td>
 </tr>
 <tr>
-<td>知识库（线上实测，2026-10-08）</td>
-<td>3,439 个块全部有向量；标题向量 3,438 条；词条 3,439 条（2,772 条含中文名）</td>
+<td>知识库（线上实测，2026-10-10）</td>
+<td>3,439 个块全部有向量；标题向量 3,438 条；词条 3,439 条（2,789 条含中文名）</td>
 </tr>
 <tr>
 <td>wiki 语料状态（2026-10-08 重导后）</td>
@@ -493,12 +498,14 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
    │                                            │ │
    │  incoming → router → agent → llm           │ │
    │     │         │        │                   │ │
+   │     │         │        └─ ChatService → KbToolAssistant
+   │     │         │              → 官方检索管线（召回 → 聚合 → 注入）→ 大模型
    │     │         ├─ guard/  五层零成本拦截     │ │
    │     │         ├─ command/ 指令系统          │ │
-   │     │         ├─ kb/      A/B/C 三路检索 ───┼─┘ embedding
+   │     │         ├─ kb/      检索管线与工具    ┼─┘ embedding
    │     │         ├─ media/   图片缓存与清理    │   SiliconFlow
-   │     │         └─ qa/      异步记录          │   BAAI/bge-m3
-   │                                            │   （1024 维）
+   │     │         └─ qa/      异步记录          │   BAAI/bge-m3（1024 维）
+   │                                            │   重排：SiliconFlow cross-encoder
    │  onebot/  唯一与 NapCat 打交道的包          │
    └───────────────┬────────────────────────────┘
                    │ 同一个 SQLite 连接
@@ -538,12 +545,15 @@ MessageRouter.handle(event)
   ├─ ⑥ BudgetGuard 成本预算（每人/每群/全局每日 + 全局 token）
   ├─ ⑦ 解析引用消息（调 get_msg 取被引用的文字与图片）
   │
-  ├─ ⑧ ChatService
+  ├─ ⑧ ChatService（只做可用性兜底与组装信封）
   │      1. 模型不可用 → 固定话术
   │      2. 无文字/无引用/无图 → 兜底话术
-  │      3. 检索知识库（A/B/C 三路）→ 取 top-5，拼成 &lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;
-  │      4. 组装 user message（场景 / 发言者 / 引用 / 资料 / 用户输入）
-  │      5. 有图 → 视觉模型；纯文本 → 文本模型（走降级链）
+  │      3. 组装信封 user message（场景 / 发言者 / &lt;&lt;&lt;QUOTED_CONTENT&gt;&gt;&gt; / &lt;&lt;&lt;USER_CONTENT&gt;&gt;&gt;），资料参数恒传 null
+  │      4. 调 KbToolAssistant，文本与图片两条路都走它；模型入口 LlmRouterChatModel（降级链）
+  │      5. 检索管线在模型调用前跑完：KbContextQueryTransformer 挂上下文 → 两路召回
+  │         （正文向量 / 术语关键词）→ KbContentAggregator（RRF 融合 → 标题闸门置顶
+  │         → 交叉编码器重排 → 地点意图提权 → 截断 top-5）→ KbContentInjector 注入资料段
+  │      6. 工具循环：模型可回调只读 lookup，最多 3 轮
   │
   ├─ ⑨ OutboundFilter 出站敏感词过滤
   └─ ⑩ OutboundSender（间隔 + 抖动 + 分片 + 合并转发）→ OneBotApiClient
@@ -594,13 +604,13 @@ MessageRouter.handle(event)
 </tr>
 <tr>
 <td><code>agent/</code></td>
-<td>组装上下文 + 调模型</td>
+<td>组装信封 + 兜底</td>
 <td><code>ChatService</code> <code>ReplyMode</code></td>
 </tr>
 <tr>
 <td><code>llm/</code></td>
-<td>多厂商路由与降级</td>
-<td><code>LlmRouter</code> <code>ModelController</code></td>
+<td>多厂商路由与降级、助手装配</td>
+<td><code>LlmRouter</code> <code>LlmRouterChatModel</code> <code>KbToolAssistant</code> <code>ModelController</code></td>
 </tr>
 <tr>
 <td><code>guard/</code></td>
@@ -615,7 +625,7 @@ MessageRouter.handle(event)
 <tr>
 <td><code>kb/</code></td>
 <td>知识库：块 / 词条 / 分类 / 提案 / 检索</td>
-<td><code>KbRetriever</code> <code>KbBlockStore</code> <code>KbDocImporter</code> <code>Glossary</code> <code>EmbeddingClient</code></td>
+<td><code>KbRetriever</code> <code>KbContentAggregator</code> <code>VectorContentRetriever</code> <code>KeywordContentRetriever</code> <code>KbContentInjector</code> <code>KbContextQueryTransformer</code> <code>CrossEncoderReranker</code> <code>TitleVectorGate</code> <code>KbLookupTool</code> <code>KbBlockStore</code> <code>KbDocImporter</code> <code>Glossary</code></td>
 </tr>
 <tr>
 <td><code>media/</code></td>
@@ -737,6 +747,22 @@ MessageRouter.handle(event)
 <td>为什么公开站的阈值（0.32）比群内（0.45）低</td>
 <td>群内是&quot;给模型当依据&quot;宁缺毋滥；公开站是&quot;按相关度排给人看&quot;，阈值太高会一片空白</td>
 </tr>
+<tr>
+<td>为什么把编排交给 LangChain4j 官方骨架</td>
+<td>官方 <code>DefaultRetrievalAugmentor</code> 已把&quot;变换查询 → 路由检索器 → 聚合 → 注入&quot;拆成四个可替换槽位；自己再写一遍等于再造一个 KbRetriever，还接不上 AiServices 的工具循环</td>
+</tr>
+<tr>
+<td>为什么 A 路自己实现 <code>ContentRetriever</code></td>
+<td>官方 <code>EmbeddingStoreContentRetriever</code> 内部必然自己 embed，换它每轮就多一次外部调用；&quot;一次检索只算一次问题向量、A 路与标题闸门共用同一个向量&quot;是钉死的验收</td>
+</tr>
+<tr>
+<td>为什么融合、闸门、重排、提权必须在同一个聚合器里按固定顺序做完</td>
+<td>官方管线只有一个聚合器槽位，而这几步有先后依赖：先融合到重排候选数、闸门置顶、重排、意图提权，最后才截断；任何一步提前截断都会让后面的步骤失效</td>
+</tr>
+<tr>
+<td>为什么注入器自研，不用官方 <code>DefaultContentInjector</code></td>
+<td>系统提示词第九章整章挂在 <code>&lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;</code> 标记上；官方默认注入器有自己的拼法，会静默让那一章永远命不中</td>
+</tr>
 </tbody></table></div>
 <h3 id="36-安全设计零成本拦截优先纵深防御"><a class="anchor" href="#36-安全设计零成本拦截优先纵深防御">3.6 安全设计：零成本拦截优先，纵深防御</a></h3>
 <ul>
@@ -745,6 +771,7 @@ MessageRouter.handle(event)
 <li><strong>安全默认</strong>：<code>ADMIN_PASSWORD</code> 留空 = 整个 <code>/admin</code> 返回 503，绝不退化成&quot;无密码可访问&quot;；</li>
 <li><strong>纵深防御</strong>：Nginx 层限流 + IP 白名单 + 公开站域名下 <code>/admin/</code> 直接 404，应用层再有一道会话校验；</li>
 <li><strong>隐私最小化</strong>：公开接口用独立的 <code>PublicDtos</code> 显式拷贝，绝不复用管理接口返回值；投票只收前端随机 <code>clientId</code>，服务端哈希后存库，不关联到人；后台访问统计里 IP 只存哈希。</li>
+<li><strong>工具授权独立于提示词</strong>：系统提示词里写的约束是给模型的，<strong>不能当授权机制</strong>。<code>KbToolAssistant</code> 的 <code>beforeToolExecution</code> 钩子按工具名放行，白名单只开只读 <code>lookup</code>，未授权工具当场拒绝；没有调用方身份的调用一样拒绝，身份形如 <code>群:123/用户:456</code>。</li>
 </ul>
 <h3 id="37-前端双入口-自研组件-设计令牌"><a class="anchor" href="#37-前端双入口-自研组件-设计令牌">3.7 前端：双入口 + 自研组件 + 设计令牌</a></h3>
 <ul>
@@ -810,7 +837,7 @@ MessageRouter.handle(event)
 <tr>
 <td>测试</td>
 <td>spring-boot-starter-test（JUnit 5）+ Mockito + <strong>ArchUnit</strong></td>
-<td>58 个测试类</td>
+<td>68 个测试类</td>
 </tr>
 <tr>
 <td>构建</td>
@@ -882,8 +909,8 @@ MessageRouter.handle(event)
 <h4 id="511-问答主链"><a class="anchor" href="#511-问答主链">5.1.1 问答主链</a></h4>
 <ul>
 <li>群里<strong>必须 @ 机器人</strong>才响应（可在后台关闭，不建议）；</li>
-<li>一次回复 = 引用原文 + 知识库资料块 + 用户输入，交给模型一次调用；</li>
-<li><strong>没有工具调用、没有联网、没有多轮记忆</strong> —— 模型手里的信息只有&quot;自身知识 + 本次检索到的资料&quot;；</li>
+<li>一次回复 = 引用原文 + 知识库资料块 + 用户输入，交给模型一次调用；模型可以按需回调只读 <code>lookup</code>，工具循环最多 3 轮；</li>
+<li><strong>没有联网、没有多轮记忆</strong> —— 模型手里的信息只有&quot;自身知识 + 本次检索到的资料 + 工具回调取回的资料&quot;；</li>
 <li>资料块按来源<strong>分两段注入</strong>：<ul>
 <li><code>【我们维护的内容】</code> —— 自己写过/改过的块；</li>
 <li><code>【导入的资料 · 资料时间 YYYY-MM-DD】</code> —— 外部整理导入的块，<strong>可能已过期</strong>；
@@ -1227,7 +1254,7 @@ MessageRouter.handle(event)
 </tr>
 <tr>
 <td><strong>词条</strong></td>
-<td>块对应的名字：中文名 + 别名（用「、」分隔）、术语状态、板块；CSV/TSV 批量导入导出</td>
+<td>块对应的名字：中文名 + 别名（用「、」分隔）、术语状态、板块；xlsx / TSV 批量导入导出</td>
 <td>✅ B 路命脉</td>
 <td>保存即生效（按版本号自动感知）</td>
 </tr>
@@ -1244,20 +1271,29 @@ MessageRouter.handle(event)
 <td>确认后生效</td>
 </tr>
 </tbody></table></div>
-<h4 id="542-检索链路a-b-c-三路"><a class="anchor" href="#542-检索链路a-b-c-三路">5.4.2 检索链路（A / B / C 三路）</a></h4>
+<h4 id="542-检索链路四格管线召回-聚合-注入"><a class="anchor" href="#542-检索链路四格管线召回-聚合-注入">5.4.2 检索链路（四格管线：召回 → 聚合 → 注入）</a></h4>
 <pre><code class="language-text">                       用户问题
                            │
-        ┌──────────────────┼───────────────────┐
-        ▼                  ▼                   ▼
- 【A 路】正文向量    【B 路】术语关键词    【C 路】标题向量
- 余弦 ≥ 0.45          术语表展开 +        标题向量余弦
- 取前 pool 条         中文片段子串匹配     ≥ 0.70 闸门？
-        │                  │                   │（命中即置顶）
-        └────────┬─────────┘                   │
-                 ▼                             │
-          RRF 融合 top-5  ◀────────────────────┘
-                 ▼
-          拼进 &lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt; → 模型
+              KbContextQueryTransformer 挂上下文
+                           │
+        ┌──────────────────┴───────────────────┐
+        ▼                                      ▼
+ 【A 路】正文向量                        【B 路】术语关键词
+ VectorContentRetriever                 KeywordContentRetriever
+ 余弦 ≥ 0.45，取前 pool 条              术语表展开 + 标题 3 分 / 正文 1 分
+        └──────────────────┬───────────────────┘
+                           ▼
+        RRF 融合，权重 1.0 / 2.0，先融到 candidate-limit 20
+                           ▼
+        标题向量闸门 ≥ 0.70，命中即置顶，不参与 RRF 投票
+                           ▼
+        交叉编码器重排，min-score 0.02，送「标题 + 换行 + 正文」
+                           ▼
+        地点意图提权，"X 有什么"把地点块提到最前
+                           ▼
+                      截断 top-5
+                           ▼
+        KbContentInjector 追加 &lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt; 段 → 模型
 </code></pre>
 <div class="table-wrap"><table>
 <thead>
@@ -1286,11 +1322,18 @@ MessageRouter.handle(event)
 <td>RRF 权重 <strong>2.0</strong></td>
 <td><strong>不进 RRF，命中置顶</strong></td>
 </tr>
+<tr>
+<td>实现</td>
+<td><code>VectorContentRetriever</code></td>
+<td><code>KeywordContentRetriever</code></td>
+<td><code>TitleVectorGate</code>，经 <code>KbTitleGateSource</code> 接进聚合器</td>
+</tr>
 </tbody></table></div>
 <ul>
-<li><strong>RRF 公式</strong>：<code>score(块) = 1.0/(10 + 向量排名) + 2.0/(10 + 关键词排名)</code>；</li>
-<li><strong>标题加成</strong>：标题正好等于查询里的名词 → <strong>+0.5</strong>；标题包含该名词 → <strong>+0.15</strong>（并会剥掉结尾的「（English）」再比，否则「酸性菌丝（Acidic Mycelium）」的本体永远吃不到精确加成）；</li>
-<li><strong>B 路两种匹配</strong>：① 整条名字出现在问句里（靠人工写别名）；② 把问句切成 <strong>2~3 字中文片段</strong>去匹配名字（<strong>不需要人工写别名</strong>），命中名字太多的片段整段丢弃（&quot;便宜的停用词表，会跟着语料自己变&quot;）。实测稳态开销 0~2 ms；</li>
+<li><strong>RRF 公式</strong>：<code>score(块) = Σ w / (10 + rank)</code>，向量路 <code>w = 1.0</code>、关键词路 <code>w = 2.0</code>；</li>
+<li><strong>标题加成</strong>：标题正好等于查询里的名词 → <strong>+0.5</strong>；标题包含该名词 → <strong>+0.15</strong>（比较前会剥掉结尾的「（English）」，也能命中括号里的英文原名，否则「酸性菌丝（Acidic Mycelium）」的本体永远吃不到精确加成）；</li>
+<li><strong>B 路打分</strong>：术语表把问题里的中文名词展开成英文，命中标题 3 分、正文每出现一次 1 分（最多 3 次）；英文用词边界匹配，避免 Cat 命中 Category；</li>
+<li><strong>聚合顺序固定</strong>：RRF 融合 → 标题闸门置顶 → 交叉编码器重排 → 地点意图提权 → 最后截断 top-5。任何一步提前截断都会让后面的步骤失效；</li>
 <li><strong>硬性约定</strong>：检索链路<strong>绝不抛异常</strong>。任何一路挂了、embedding 超时、索引没建，机器人都照常回答，只是手里没有资料。</li>
 </ul>
 <h4 id="543-文档格式导入契约"><a class="anchor" href="#543-文档格式导入契约">5.4.3 文档格式（导入契约）</a></h4>
@@ -1914,7 +1957,7 @@ tags: 必需品, 制作台
 </thead>
 <tbody><tr>
 <td>单元测试</td>
-<td>58 个测试类、约 10k 行（<strong>431 个用例</strong>，其中 3 个联网 E2E 默认跳过）；覆盖 Guard、检索（含标题向量专测与黄金集）、
+<td>68 个测试类、约 11k 行（其中 3 个联网 E2E 默认跳过）；覆盖 Guard、检索（含标题向量专测与黄金集）、
 导入解析与增量计划、媒体清理与目录隔离、指令匹配与变量、广场、公开检索、后台鉴权，
 外加<strong>架构护栏</strong>（ArchUnit：依赖方向越界即构建失败）与知识库的&quot;写入即生效&quot;（索引自动失效 / 词条表自动补齐 / 失败页重试）</td>
 </tr>
@@ -1952,43 +1995,18 @@ tags: 必需品, 制作台
 </thead>
 <tbody><tr>
 <td>1</td>
-<td><code>server/README.md</code> 自述&quot;当前进度 M2.5&quot;</td>
-<td>实际已实现知识库、指令、后台、广场、公开站等大部分内容，README 落后</td>
-</tr>
-<tr>
-<td>2</td>
 <td>早期文档描述的&quot;wiki 抓取 → chunks.jsonl + index.bin&quot;链路</td>
 <td>那套<strong>文件式索引</strong>已删掉；<strong>wiki 摄入本身还在</strong> —— 2026-10 重建为&quot;抓取 → WikitextCleaner 清洗 → 分块 → SQLite 块表&quot;（离线批处理、默认关），与&quot;外部文档 → 管理端导入&quot;平级</td>
 </tr>
 <tr>
-<td>3</td>
+<td>2</td>
 <td>五个面板（分类/关键词/术语核对/资料/提案）与&quot;邀请码投稿&quot;</td>
-<td>现在是<strong>四个 tab</strong>（文档/词条/分类/提案）；<strong>投稿与邀请码功能已下线</strong>，但公开站资料库页仍有一句&quot;提交修订需要邀请码&quot;的旧文案</td>
+<td>现在是<strong>四个 tab</strong>（文档/词条/分类/提案）；<strong>投稿与邀请码功能已下线</strong></td>
 </tr>
 <tr>
-<td>4</td>
+<td>3</td>
 <td>术语表&quot;在 <code>glossary/zh-en.tsv</code>&quot;</td>
-<td>2026-09-27 起搬进 SQLite <code>kb_term</code> 表；TSV 只是导入导出用的中间格式</td>
-</tr>
-<tr>
-<td>5</td>
-<td>问答库文件名在文档里有 <code>qa.sqlite</code> / <code>qqbot.sqlite</code> 两种写法</td>
-<td>配置默认值是 <code>./data/qa/qqbot.sqlite</code></td>
-</tr>
-<tr>
-<td>6</td>
-<td>公网部署指南里的&quot;重建语料&quot;命令（<code>--app.kb.build.enabled</code>、<code>--app.kb.index.enabled</code>）</td>
-<td>随 wiki 抓取一起废弃；现在重建 = 重新导入文档</td>
-</tr>
-<tr>
-<td>7</td>
-<td><code>scripts/preflight.sh</code> 会检查 <code>server/data/kb/{index.bin,pages.jsonl}</code></td>
-<td>这两个文件已不存在，该检查项已过时</td>
-</tr>
-<tr>
-<td>8</td>
-<td>后台导航&quot;9 项&quot;（旧文档/部分设计稿）</td>
-<td>现在是 <strong>7 项</strong>（已合并大屏/看板、术语/关键词/分类、模型/日志、设置/指令）</td>
+<td>2026-09-27 起搬进 SQLite <code>kb_term</code> 表；导入导出现在以 xlsx 为主，CSV 已弃用，TSV 只是按列位置的中间格式</td>
 </tr>
 </tbody></table></div>
 <h3 id="112-已知技术债"><a class="anchor" href="#112-已知技术债">11.2 已知技术债</a></h3>
@@ -2050,7 +2068,7 @@ tags: 必需品, 制作台
 </tr>
 <tr>
 <td>高</td>
-<td>清理生产库里的测试残留；修 <code>preflight.sh</code> 的过时检查项</td>
+<td>清理生产库里的测试残留</td>
 </tr>
 <tr>
 <td>中</td>
@@ -2062,7 +2080,7 @@ tags: 必需品, 制作台
 </tr>
 <tr>
 <td>中</td>
-<td>工具调用（当前架构<strong>没有任何 function calling 能力</strong>，<code>LlmRouter</code> 的第二个参数是能力过滤，不是工具）</td>
+<td>工具扩展：只读 <code>lookup</code> 已通；写操作、发消息类工具要等按人授权策略落地后再开</td>
 </tr>
 <tr>
 <td>中</td>
@@ -2132,7 +2150,7 @@ node tests/manual/fake-onebot-server.mjs
 </tr>
 <tr>
 <td><strong>A / B / C 路</strong></td>
-<td>正文向量 / 术语关键词 / 标题向量闸门，三条召回通道</td>
+<td>正文向量 / 术语关键词两条召回通道，加标题向量闸门</td>
 </tr>
 <tr>
 <td><strong>RRF</strong></td>

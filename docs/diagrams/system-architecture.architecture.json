@@ -4,6 +4,10 @@
   "meta": {
     "title": "飘雪喵 QQ 机器人 · 系统架构",
     "quality_profile": "showcase",
+    "viewBox": [
+      2000,
+      860
+    ],
     "legend": {
       "entries": {
         "frontend": {
@@ -36,23 +40,25 @@
         "focus": [
           "qq_users",
           "napcat",
-          "bot",
+          "router",
           "guard",
-          "chat",
+          "assistant",
           "llm"
         ],
-        "note": "提问进来的那条线和回答出去的那条线方向相反，回路是闭合的。"
+        "note": "去程与回程方向相反，回路闭合。"
       },
       {
-        "id": "retrieval",
-        "label": "检索与重排",
+        "id": "official-pipeline",
+        "label": "官方检索管线",
         "focus": [
-          "chat",
-          "kb",
+          "assistant",
+          "recall",
+          "aggregator",
+          "inject",
           "model_api",
           "sqlite"
         ],
-        "note": "三路召回先出候选，再交 bge-reranker 重排，最后取 top-5 塞进提示词。"
+        "note": "AiServices 驱动官方骨架：召回 → 聚合 → 注入。"
       },
       {
         "id": "corpus",
@@ -60,9 +66,9 @@
         "focus": [
           "ingest",
           "sqlite",
-          "kb"
+          "recall"
         ],
-        "note": "文档导入 / wiki 抓取 / 地图同步都是平级的摄入来源，清洗分块后落进同一张块表。"
+        "note": "文档导入 / wiki 抓取 / 地图同步平级，清洗分块后落进同一张块表。"
       },
       {
         "id": "web-plane",
@@ -71,9 +77,9 @@
           "browsers",
           "nginx",
           "webapp",
-          "bot"
+          "router"
         ],
-        "note": "公开站与后台共用 Nginx 与同一个后端，接口前缀各自独立。"
+        "note": "公开站与后台共用 Nginx 与同一个 JVM，接口前缀各自独立。"
       }
     ]
   },
@@ -85,7 +91,7 @@
       "sublabel": "访客 / 管理员",
       "pos": [
         40,
-        110
+        80
       ],
       "size": [
         150,
@@ -99,7 +105,7 @@
       "sublabel": "TLS · 限流 · IP 白名单",
       "pos": [
         330,
-        106
+        76
       ],
       "size": [
         170,
@@ -111,10 +117,10 @@
       "id": "webapp",
       "type": "frontend",
       "label": "双端 Web 前端",
-      "sublabel": "公开站 / 管理后台",
+      "sublabel": "public.html / admin.html",
       "pos": [
         640,
-        110
+        80
       ],
       "size": [
         190,
@@ -129,7 +135,7 @@
       "sublabel": "@提问 / 图片 / 引用",
       "pos": [
         40,
-        420
+        340
       ],
       "size": [
         150,
@@ -143,7 +149,7 @@
       "sublabel": "OneBot 11 · 容器",
       "pos": [
         330,
-        416
+        336
       ],
       "size": [
         170,
@@ -152,27 +158,27 @@
       "tag": "127.0.0.1:3000"
     },
     {
-      "id": "bot",
+      "id": "router",
       "type": "backend",
       "label": "接入与路由",
-      "sublabel": "OneBot 事件 · REST · 去重 · 指令",
+      "sublabel": "去重 · 指令 · 预算 · 出站",
       "pos": [
         640,
-        406
+        328
       ],
       "size": [
         190,
-        80
+        88
       ]
     },
     {
       "id": "guard",
       "type": "security",
-      "label": "Guard 安全中间层",
-      "sublabel": "五层零成本拦截 · 成本预算",
+      "label": "Guard 五层拦截",
+      "sublabel": "零成本 · 跑完才调模型",
       "pos": [
         980,
-        410
+        336
       ],
       "size": [
         180,
@@ -181,17 +187,17 @@
       "tag": "唯一有权说不"
     },
     {
-      "id": "chat",
+      "id": "assistant",
       "type": "backend",
-      "label": "ChatService",
-      "sublabel": "上下文组装 · 图片理解",
+      "label": "KbToolAssistant",
+      "sublabel": "AiServices · 工具循环 · 授权钩子",
       "pos": [
         1310,
-        400
+        322
       ],
       "size": [
-        190,
-        80
+        210,
+        92
       ],
       "tag": "唯一调模型处"
     },
@@ -199,15 +205,60 @@
       "id": "llm",
       "type": "external",
       "label": "大模型服务",
-      "sublabel": "opencode-go → DeepSeek",
+      "sublabel": "opencode-go → deepseek",
       "pos": [
         1640,
-        400
+        336
       ],
       "size": [
         190,
         72
       ]
+    },
+    {
+      "id": "recall",
+      "type": "backend",
+      "label": "双路召回",
+      "sublabel": "A 正文向量 · B 术语关键词",
+      "pos": [
+        640,
+        520
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "tag": "官方骨架"
+    },
+    {
+      "id": "aggregator",
+      "type": "backend",
+      "label": "聚合：融合 · 闸门 · 重排",
+      "sublabel": "RRF → 标题闸门 → 交叉编码器",
+      "pos": [
+        980,
+        520
+      ],
+      "size": [
+        210,
+        70
+      ],
+      "tag": "官方骨架"
+    },
+    {
+      "id": "inject",
+      "type": "backend",
+      "label": "两段出处注入",
+      "sublabel": "<<<KNOWLEDGE>>> 契约",
+      "pos": [
+        1310,
+        520
+      ],
+      "size": [
+        180,
+        70
+      ],
+      "tag": "官方骨架"
     },
     {
       "id": "ingest",
@@ -216,11 +267,11 @@
       "sublabel": "文档导入 · wiki 抓取 · 地图同步",
       "pos": [
         640,
-        660
+        700
       ],
       "size": [
         190,
-        76
+        70
       ],
       "tag": "离线批处理 · 默认关"
     },
@@ -228,10 +279,10 @@
       "id": "sqlite",
       "type": "database",
       "label": "SQLite 单文件",
-      "sublabel": "块 · 向量 · 统计 · 指令 · 投票",
+      "sublabel": "块+向量 · 词条 · 统计 · 指令 · 投票",
       "pos": [
         980,
-        660
+        700
       ],
       "size": [
         200,
@@ -240,27 +291,13 @@
       "tag": "data/qa/"
     },
     {
-      "id": "kb",
-      "type": "backend",
-      "label": "知识库检索",
-      "sublabel": "三路召回 · 重排 · 标题闸门",
-      "pos": [
-        1310,
-        660
-      ],
-      "size": [
-        190,
-        76
-      ]
-    },
-    {
       "id": "model_api",
       "type": "external",
-      "label": "模型 API · SiliconFlow",
+      "label": "SiliconFlow",
       "sublabel": "bge-m3 · bge-reranker-v2-m3",
       "pos": [
         1640,
-        660
+        680
       ],
       "size": [
         190,
@@ -279,15 +316,17 @@
     },
     {
       "kind": "security-group",
-      "label": "宿主机业务进程 · systemd（单 JVM）",
+      "label": "宿主机业务进程 · systemd（单 JVM :8080 · /onebot · /api/public · /admin/api）",
       "wraps": [
         "webapp",
-        "bot",
+        "router",
         "guard",
-        "chat",
-        "kb",
-        "sqlite",
-        "ingest"
+        "assistant",
+        "recall",
+        "aggregator",
+        "inject",
+        "ingest",
+        "sqlite"
       ],
       "pad": 18
     }
@@ -306,11 +345,10 @@
       "label": "静态资源"
     },
     {
-      "id": "e_rest",
-      "from": "webapp",
-      "to": "bot",
-      "label": "双端 REST 接口",
-      "labelDy": 24
+      "id": "e_proxy",
+      "from": "nginx",
+      "to": "router",
+      "label": "反代双端 API"
     },
     {
       "id": "e_ask_in",
@@ -322,26 +360,27 @@
     {
       "id": "e_report",
       "from": "napcat",
-      "to": "bot",
+      "to": "router",
       "label": "POST /onebot/event",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "labelDy": 26
     },
     {
       "id": "e_action",
-      "from": "bot",
+      "from": "router",
       "to": "napcat",
       "label": "send_group_msg",
       "variant": "dashed",
-      "fromSide": "top",
-      "toSide": "top",
+      "fromSide": "bottom",
+      "toSide": "bottom",
       "via": [
         [
           735,
-          342
+          450
         ],
         [
           415,
-          342
+          450
         ]
       ]
     },
@@ -351,22 +390,22 @@
       "to": "qq_users",
       "label": "回复到群",
       "variant": "emphasis",
-      "fromSide": "bottom",
-      "toSide": "bottom",
+      "fromSide": "top",
+      "toSide": "top",
       "via": [
         [
           415,
-          522
+          280
         ],
         [
           115,
-          522
+          280
         ]
       ]
     },
     {
       "id": "e_guard",
-      "from": "bot",
+      "from": "router",
       "to": "guard",
       "label": "先过安全判定",
       "variant": "emphasis"
@@ -374,98 +413,119 @@
     {
       "id": "e_pass",
       "from": "guard",
-      "to": "chat",
+      "to": "assistant",
       "label": "Pass 放行",
       "variant": "emphasis"
     },
     {
-      "id": "e_llm",
-      "from": "chat",
+      "id": "e_pipeline",
+      "from": "assistant",
+      "to": "recall",
+      "label": "驱动官方管线",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [
+        [
+          1415,
+          480
+        ],
+        [
+          725,
+          480
+        ]
+      ]
+    },
+    {
+      "id": "e_candidates",
+      "from": "recall",
+      "to": "aggregator",
+      "label": "两路候选"
+    },
+    {
+      "id": "e_topk",
+      "from": "aggregator",
+      "to": "inject",
+      "label": "top-5"
+    },
+    {
+      "id": "e_inject",
+      "from": "inject",
       "to": "llm",
-      "label": "提问 + 资料块",
-      "variant": "emphasis"
+      "label": "资料 + 问题",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          1600,
+          555
+        ],
+        [
+          1600,
+          440
+        ],
+        [
+          1735,
+          440
+        ]
+      ]
     },
     {
       "id": "e_llm_back",
       "from": "llm",
-      "to": "chat",
+      "to": "assistant",
+      "label": "回答文本",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_answer",
+      "from": "assistant",
+      "to": "router",
       "label": "回答文本",
       "variant": "emphasis",
       "fromSide": "top",
       "toSide": "top",
       "via": [
         [
-          1735,
-          342
-        ],
-        [
-          1405,
-          342
-        ]
-      ]
-    },
-    {
-      "id": "e_answer",
-      "from": "chat",
-      "to": "bot",
-      "label": "回答文本",
-      "variant": "emphasis",
-      "fromSide": "bottom",
-      "toSide": "bottom",
-      "via": [
-        [
-          1405,
-          560
+          1415,
+          210
         ],
         [
           735,
-          560
+          210
         ]
       ]
     },
     {
-      "id": "e_retrieve",
-      "from": "chat",
-      "to": "kb",
-      "label": "检索 top-5",
-      "labelDx": 70,
-      "labelDy": 24
+      "id": "e_blocks",
+      "from": "recall",
+      "to": "sqlite",
+      "label": "块 + 向量"
+    },
+    {
+      "id": "e_rerank",
+      "from": "aggregator",
+      "to": "model_api",
+      "label": "候选 ⇄ 重排分",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "via": [
+        [
+          1085,
+          645
+        ],
+        [
+          1735,
+          645
+        ]
+      ]
     },
     {
       "id": "e_ingest",
       "from": "ingest",
       "to": "sqlite",
-      "label": "清洗分块后落库"
-    },
-    {
-      "id": "e_blocks",
-      "from": "kb",
-      "to": "sqlite",
-      "label": "块 + 统计"
-    },
-    {
-      "id": "e_embed",
-      "from": "kb",
-      "to": "model_api",
-      "label": "查询向量 / 候选"
-    },
-    {
-      "id": "e_embed_back",
-      "from": "model_api",
-      "to": "kb",
-      "label": "向量 / 重排分",
-      "fromSide": "bottom",
-      "toSide": "bottom",
-      "via": [
-        [
-          1735,
-          762
-        ],
-        [
-          1405,
-          762
-        ]
-      ]
+      "label": "清洗分块后落库",
+      "labelDy": 40
     }
   ],
   "cards": [
@@ -473,29 +533,30 @@
       "dot": "rose",
       "title": "一问一答，回路是闭合的",
       "items": [
-        "去程：QQ 群友 → NapCat → 接入与路由（POST /onebot/event）",
-        "判定：去重 → 黑名单 → 指令秒回 → Guard 五层 → 成本预算，全部跑完才轮到模型",
-        "模型侧：ChatService 组上下文 → 检索 top-5 → 大模型服务 → 回答文本",
+        "去程：QQ 群友 → NapCat → 接入与路由（POST /onebot/event，先回 204 再异步）",
+        "判定：去重 → 指令秒回 → Guard 五层 → 成本预算，全部跑完才轮到模型",
+        "模型侧：KbToolAssistant 驱动官方检索管线，资料注入后再调大模型",
         "回路：回答文本 → 接入与路由 → send_group_msg → NapCat → 回复到群"
       ]
     },
     {
       "dot": "cyan",
-      "title": "四条结构铁律（ArchUnit 守着）",
+      "title": "这次迭代换掉了检索编排",
       "items": [
-        "onebot/ 是唯一出现协议细节的包，OneBotApiClient 是唯一发消息出口",
-        "llm/ 是唯一知道用哪个模型的地方，业务包不得碰模型 SDK",
-        "guard/ 是唯一有权说不的地方，且不得依赖 kb / qa / llm",
-        "持久化层之外不得出现 java.sql，kb 不得依赖 qa / admin / settings"
+        "DefaultRetrievalAugmentor 接走「变换查询 → 路由召回 → 聚合 → 注入」四格，自研只剩算法",
+        "A 路自研 ContentRetriever：问题向量由编排层算一次，A 与 C 共用，省掉每轮多一次外部调用",
+        "聚合器里顺序固定：RRF 融合 → 标题闸门置顶 → 交叉编码器重排 → 地点提权 → 最后才截到 top-5",
+        "KbContentInjector 保住 <<<KNOWLEDGE>>> 两段出处契约，标记漏了不会报错、只会静默失效"
       ]
     },
     {
       "dot": "emerald",
-      "title": "三个入口，一份 SQLite",
+      "title": "工具能调之后，授权立起来了",
       "items": [
-        "QQ 走 /onebot/** 上报，公开站走 /api/public/**，后台走 /admin/api/** —— 同一个 JVM",
-        "语料三条来路（后台文档导入 / wiki 抓取 / 地图同步）都先清洗分块，再落进同一张块表",
-        "问答记录异步落库、不占回答线程；库写坏了只记日志，机器人照常回答"
+        "KbToolAssistant 用官方 AiServices 装配，工具白名单默认拒绝，只开只读的 lookup",
+        "beforeToolExecution 钩子：没有调用方身份一律拒绝，将来按人授权才有落脚点",
+        "maxToolCallingRoundTrips=3 防死循环；系统提示词仍来自唯一那份 system.md",
+        "模型 SDK 只在 llm 包、框架词汇只在 llm 与 kb；ArchUnit 14 条规则守住这些边界"
       ]
     }
   ]

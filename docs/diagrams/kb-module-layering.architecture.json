@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "知识库模块分层",
+    "output": "kb-module-layering.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "write-path",
+        "label": "写入路径",
+        "focus": [
+          "admin",
+          "catalog",
+          "block",
+          "term"
+        ],
+        "note": "导入与改名都从组合层进来；两个真源互不认识。"
+      },
+      {
+        "id": "read-path",
+        "label": "检索路径",
+        "focus": [
+          "group",
+          "public",
+          "core"
+        ],
+        "note": "检索只走 kb 核心的只读契约，不经过组合层。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "admin",
+      "type": "frontend",
+      "label": "管理后台",
+      "sublabel": "词条页 / 文档页",
+      "pos": [
+        425,
+        40
+      ],
+      "size": [
+        150,
+        62
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "backend",
+      "label": "kb.catalog",
+      "sublabel": "目录读模型 + 导入编排",
+      "pos": [
+        420,
+        170
+      ],
+      "size": [
+        160,
+        62
+      ]
+    },
+    {
+      "id": "block",
+      "type": "database",
+      "label": "kb.block",
+      "sublabel": "内容 + 向量 · 唯一真源",
+      "pos": [
+        190,
+        300
+      ],
+      "size": [
+        170,
+        62
+      ]
+    },
+    {
+      "id": "term",
+      "type": "database",
+      "label": "kb.term",
+      "sublabel": "名字 + 核对状态 · 唯一真源",
+      "pos": [
+        660,
+        300
+      ],
+      "size": [
+        170,
+        62
+      ]
+    },
+    {
+      "id": "group",
+      "type": "external",
+      "label": "群聊问答",
+      "pos": [
+        20,
+        430
+      ],
+      "size": [
+        140,
+        56
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "kb 核心",
+      "sublabel": "只读契约 + 检索",
+      "pos": [
+        440,
+        430
+      ],
+      "size": [
+        140,
+        62
+      ]
+    },
+    {
+      "id": "public",
+      "type": "external",
+      "label": "公开站搜索",
+      "pos": [
+        860,
+        430
+      ],
+      "size": [
+        140,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "组合层：唯一同时拥有两半的地方",
+      "wraps": [
+        "catalog"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "两个真源：同层之间没有箭头",
+      "wraps": [
+        "block",
+        "term"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "admin-catalog",
+      "from": "admin",
+      "to": "catalog",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "catalog-block",
+      "from": "catalog",
+      "to": "block",
+      "label": "读写块",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "catalog-term",
+      "from": "catalog",
+      "to": "term",
+      "label": "登记名字",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "block-core",
+      "from": "block",
+      "to": "core",
+      "variant": "dashed"
+    },
+    {
+      "id": "term-core",
+      "from": "term",
+      "to": "core",
+      "variant": "dashed"
+    },
+    {
+      "id": "group-core",
+      "from": "group",
+      "to": "core",
+      "label": "检索",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "public-core",
+      "from": "public",
+      "to": "core",
+      "label": "检索",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "为什么是两个真源",
+      "items": [
+        "改名字零成本：单行 UPDATE，不碰语料与向量",
+        "改内容必须成对更新向量：只改一边会静默用错资料",
+        "变化原因不同，所以是两块，不是一个模型的两个字段"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "环为什么不在了",
+      "items": [
+        "唯一同时拥有两半的是组合层",
+        "导入登记由组合层编排，块层不再调名字层",
+        "依赖方向只剩自上而下一条规则"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "共享身份 EntryId",
+      "items": [
+        "块 id 与词条 en 是同一个身份，由类型看住",
+        "创建点只有两处：导入落库、词条行读库",
+        "字符串只在三层边界：SQL / HTTP / 模型元数据"
+      ]
+    }
+  ]
+}

@@ -110,6 +110,10 @@ tbody tr:last-child td { border-bottom:0; }
 
 <h1>路线 B 影响评估：AiServices 接管之后</h1>
 
+<blockquote class="warn">
+<p><strong>历史决策记录。</strong>本文写于选型阶段，<strong>路线 B 已经落地</strong>；正文里的「现在由谁做」「迁移前」都是当时的快照，不代表今天的实现。下面的结论与权衡仍然有效，实现细节请以最新代码为准 —— 入口是 <code>KbToolAssistant</code>，注入是 <code>KbContentInjector</code>，检索上下文经 <code>KbContextQueryTransformer</code> 传入。</p>
+</blockquote>
+
 <blockquote>
 <p><strong>B 不是多写一行配置。</strong>它会把三处现在由我们掌控的边界交给框架：系统提示词的所有权、模型选择的时机、提示词与资料的拼装方式。收益是官方的护栏与工具链；代价是这三处都要重新证明一遍。</p>
 <p>本文所有结论都来自本地 jar 的方法签名与常量池，以及仓库源码，不是推测。</p>
@@ -126,9 +130,9 @@ tbody tr:last-child td { border-bottom:0; }
 <table>
 <thead><tr><th>步骤</th><th>现在由谁做</th><th>B 之后由谁做</th><th>影响</th></tr></thead>
 <tbody>
-<tr><td>系统消息</td><td><a href="../../server/src/main/java/com/example/qqbot/llm/LlmRouter.java#L368">LlmRouter.java:368</a> 读 system.md 并追加风格</td><td><code>systemMessageProvider</code></td><td><span class="pill mid">中</span></td></tr>
-<tr><td>检索</td><td><a href="../../server/src/main/java/com/example/qqbot/agent/ChatService.java#L183">ChatService.java:183</a> 直接调 KbRetriever</td><td><code>RetrievalAugmentor</code></td><td><span class="pill lo">低</span></td></tr>
-<tr><td>资料拼装</td><td>ChatService 拼两段出处</td><td><code>ContentInjector</code></td><td><span class="pill hi">高</span></td></tr>
+<tr><td>系统消息</td><td>迁移前由 <a href="../../server/src/main/java/com/example/qqbot/llm/LlmRouter.java#L394">LlmRouter.java:394</a> 的 <code>systemPromptWithStyle()</code> 提供并注入 SystemMessage</td><td><code>systemMessageProvider</code></td><td><span class="pill mid">中</span></td></tr>
+<tr><td>检索</td><td>迁移前由 <a href="../../server/src/main/java/com/example/qqbot/agent/ChatService.java#L157">ChatService.java:157</a> 直接调 KbRetriever，现经 <code>KbToolAssistant</code> 驱动管线</td><td><code>RetrievalAugmentor</code></td><td><span class="pill lo">低</span></td></tr>
+<tr><td>资料拼装</td><td>迁移前由 ChatService 拼两段出处，现由 <code>KbContentInjector</code> 在管线末端拼</td><td><code>ContentInjector</code></td><td><span class="pill hi">高</span></td></tr>
 <tr><td>模型选择</td><td>LlmRouter 按降级链与能力过滤</td><td><code>chatModel</code> 绑定单一实例</td><td><span class="pill hi">高</span></td></tr>
 <tr><td>多轮记忆</td><td>没有，逐条无状态</td><td><code>chatMemory</code> 可配，默认无</td><td><span class="pill mid">中</span></td></tr>
 <tr><td>调用痕迹</td><td>返回值 <code>ReplyResult</code></td><td>事件监听</td><td><span class="pill mid">中</span></td></tr>
@@ -147,9 +151,9 @@ tbody tr:last-child td { border-bottom:0; }
 <pre><code>默认模板：{{userMessage}}\n\nAnswer using the following information:\n{{contents}}
 每条内容：content: %s\n%s
 metadata：逐行以「键: 值」追加</code></pre>
-<p>我们的契约是整块 <code>KNOWLEDGE</code> 标记，内含【我们维护的内容】与【导入的资料·时间】两段，并且位置在用户正文之前。系统提示词第九章的规则就挂在这些标记上。</p>
+<p>我们的契约是整块 <code>KNOWLEDGE</code> 标记，内含【我们维护的内容】与【导入的资料·时间】两段。落地后的自研注入器 <code>KbContentInjector</code> 把这段<b>追加在用户正文之后</b>，系统提示词第九章的规则就挂在这些标记上。</p>
 <blockquote class="warn">
-<p>用默认注入器会同时改变格式和顺序。顺序从"资料在前"变成"资料在后"，这会实打实改变模型行为，不是纯格式问题。<strong>B 必须配一个自研 ContentInjector</strong>。</p>
+<p>用默认注入器会同时改变格式和顺序。顺序从"资料在前"变成"资料在后"，这会实打实改变模型行为，不是纯格式问题。<strong>B 必须配一个自研 ContentInjector</strong> —— 落地时采用的正是自研注入器，位置为正文之后。</p>
 </blockquote>
 
 <h3>3. 模型选择从"每次挑"变成"构建时绑定"</h3>
@@ -169,8 +173,8 @@ metadata：逐行以「键: 值」追加</code></pre>
 <p>AiServices 只返回文本。检索痕迹要靠监听器或聚合器自己落到请求上下文，耗时要从事件时间戳推算。这块从"显式返回值"变成"回调写上下文"，是本路线里最容易漏数据的地方。</p>
 
 <h3>6. 每轮的模式开关要多绕一层</h3>
-<p><code>ReplyMode.NONE</code> 现在是最省的路径：连 augmentor 都不调，一个 embedding 都不发。</p>
-<p>官方 <code>_06 Skip Retrieval</code> 样例的做法是自定义 QueryRouter 返回空集合，意味着模式要通过 <code>Query.metadata</code> 传进管线。多一层元数据传递，而且"完全不发外部请求"这条约束要在路由层重新验证。</p>
+<p>迁移前 <code>ReplyMode.NONE</code> 是最省的路径：连 augmentor 都不调，一个 embedding 都不发。换 AiServices 后管线照走，只是喂一个空语料快照，同样不发 embedding。</p>
+<p>官方 <code>_06 Skip Retrieval</code> 样例的做法是自定义 QueryRouter 返回空集合。最终实现没有走这条路：模式经 <code>InvocationParameters</code> 的 <code>kb.enabled</code> 交给自研 <code>QueryTransformer</code>，关掉资料时给一个空语料快照 —— 编排只有一条，"不用资料"只是喂给它的数据不同。</p>
 
 <h2 id="gain">三、B 真正换来的东西</h2>
 
@@ -196,15 +200,15 @@ metadata：逐行以「键: 值」追加</code></pre>
 
 <ol>
 <li><strong>不能出现两条系统消息。</strong>迁移时要显式删掉 LlmRouter 里注入 SystemMessage 的那一步，并加一条测试盯住消息条数。</li>
-<li><strong>自研 ContentInjector 的顺序要在黄金集上验证。</strong>把"资料在前"改成官方的"资料在后"属于行为变更，不是重构，必须单独测一次。</li>
+<li><strong>自研 ContentInjector 的顺序要在黄金集上验证。</strong>资料位置从迁移前的"正文之前"变成落地后的"正文之后"，属于行为变更，不是重构，必须单独测一次。</li>
 <li><strong>显式不配 chatMemory。</strong>一旦配上，机器人从无状态变成有状态，成本和隐私边界都会变。建议加一条架构测试，禁止 <code>chatMemory*</code> 出现在装配代码里。</li>
-<li><strong>版本要一起对齐。</strong>现在 core 是 1.20.0、主包本地只有 1.19.0，混用两个版本有运行期风险。走 B 时应当把两者一起升到 1.21.0，并跑一次完整回归。</li>
+<li><strong>版本要一起对齐。</strong>当时 core 是 1.20.0、主包本地只有 1.19.0，混用两个版本有运行期风险。落地时主包已引入并升到与 core 一致的 1.20.0；继续升 1.21.0 仍需一次完整回归。</li>
 </ol>
 
 <h2 id="migrate">五、迁移与回滚</h2>
 
 <ul>
-<li><strong>开关粒度</strong>：在 ChatService 里保留两个实现，配置切换。AiServices 路径失败时可以立刻切回现在的路径。</li>
+<li><strong>开关粒度</strong>：在 ChatService 里保留两个实现，配置切换。AiServices 路径失败时可以立刻切回现在的路径。<b>该迁移方式未采用</b> —— 最终只有 <code>KbToolAssistant</code> 一条路径。</li>
 <li><strong>验收</strong>：黄金集门槛不退化；问答记录里的注入块数、来源分布与迁移前同量级；两条系统消息的检查通过。</li>
 <li><strong>回滚成本低</strong>：B 不改数据库、不改语料、不改索引，回滚只是切换实现。</li>
 </ul>
@@ -248,10 +252,10 @@ metadata：逐行以「键: 值」追加</code></pre>
 
 <h3>代价仍然是那四条</h3>
 
-<p>第四节列的四件事不会因为选 B 而消失：不能出现两条系统消息、必须自研 ContentInjector、显式不配 chatMemory、core 与主包一起升到 1.21.0。<strong>它们要从建议升级为"上 B 之前必须先有的测试"。</strong></p>
+<p>第四节列的四件事不会因为选 B 而消失：不能出现两条系统消息、必须自研 ContentInjector、显式不配 chatMemory、主包与 core 版本对齐。<strong>它们要从建议升级为"上 B 之前必须先有的测试" —— 落地时这四项已按此执行。</strong></p>
 
 <div class="footer">
-证据来源：本地 <code>langchain4j-core-1.20.0</code> 与 <code>langchain4j-1.19.0</code> 的类清单与方法签名；<code>DefaultContentInjector</code> 反编译常量池；官方 <code>docs/docs/tutorials/rag.md</code>、<code>observability.md</code>；<code>rag-examples</code> 的 <code>_06 Skip Retrieval</code> 与 <code>_07 Multiple Retrievers</code> 源码；仓库内 LlmRouter、ChatService、MessageRouter。抓取与核对时间 2026-10-08。
+证据来源：本地 <code>langchain4j-core-1.20.0</code> 与 <code>langchain4j-1.20.0</code>（撰写时主包为 1.19.0，落地时已对齐）的类清单与方法签名；<code>DefaultContentInjector</code> 反编译常量池；官方 <code>docs/docs/tutorials/rag.md</code>、<code>observability.md</code>；<code>rag-examples</code> 的 <code>_06 Skip Retrieval</code> 与 <code>_07 Multiple Retrievers</code> 源码；仓库内 LlmRouter、ChatService、MessageRouter。抓取与核对时间 2026-10-08。
 </div>
 
 </main>

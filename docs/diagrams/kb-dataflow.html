@@ -4840,7 +4840,7 @@
       </div>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[{"id":"ingest-chain","label":"两条入库路径","focus":["author","import","wikipage","cleaner","block"],"note":"日常走管理端文档导入；wiki 抓取是默认关闭的运维入口，同样落到块表。"},{"id":"recall-chain","label":"三路召回","focus":["block","term","titlevec","retriever"],"note":"A 正文向量、B 术语关键词、C 标题闸门，按排名融合而不是分数相加。"},{"id":"answer-chain","label":"注入与作答","focus":["retriever","inject","model","reply"],"note":"检索结果拼进上下文 → 模型作答 → 回答回到群里，同时异步落库。"}]</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"ingest-chain","label":"两条入库路径","focus":["author","import","wikipage","cleaner","block"],"note":"日常走管理端文档导入；wiki 抓取是默认关闭的运维入口，同样落到块表。"},{"id":"recall-chain","label":"召回与融合","focus":["block","titlevec","vec","agg","kw"],"note":"A 路正文向量与 B 路术语关键词各实现官方 ContentRetriever；标题向量交给聚合器里的 TitleVectorGate 做闸门与置顶。"},{"id":"answer-chain","label":"注入与作答","focus":["agg","inject","model","reply"],"note":"聚合器截到 top-k，注入器拼出 \u003c\u003c\u003cKNOWLEDGE\u003e\u003e\u003e，模型作答后回到群里。"}]</script>
 
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>
@@ -4919,7 +4919,7 @@
         <text x="530" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">03 / 落盘与索引</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="3" x="661" y="46" width="168" height="380" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / 三路召回</text>
+        <text x="745" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">04 / 召回与融合</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="stage" data-composition-frame-id="4" x="876" y="46" width="168" height="380" rx="10" class="c-lane" stroke-width="1"/>
         <text x="960" y="68" class="t-dim" font-size="9" font-weight="600" text-anchor="middle">05 / 注入作答</text>
@@ -4930,14 +4930,16 @@
         <path data-edge-from="import" data-edge-to="block" data-edge-label="块正文" data-edge-key="2" data-composition-points="371,157;474,157" d="M 371 157 L 474 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="block" data-edge-to="titlevec" data-edge-label="标题向量" data-edge-key="3" data-composition-points="530,186;530,186;530,242;530,242" d="M 530 186 L 530 186 L 530 242 L 530 242" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="termedit" data-edge-to="term" data-edge-label="词条写入" data-edge-key="4" data-composition-points="371,385;474,385" d="M 371 385 L 474 385" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="block" data-edge-to="retriever" data-edge-label="候选块" data-edge-key="5" data-composition-points="586,157;745,157;745,242" d="M 586 157 L 745 157 L 745 242" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="titlevec" data-edge-to="retriever" data-edge-label="标题闸门" data-edge-key="6" data-composition-points="586,271;689,271" d="M 586 271 L 689 271" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="term" data-edge-to="retriever" data-edge-label="术语命中" data-edge-key="7" data-composition-points="586,385;745,385;745,300" d="M 586 385 L 745 385 L 745 300" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="retriever" data-edge-to="inject" data-edge-label="top-5 资料" data-edge-key="8" data-composition-points="801,271;852.5,271;852.5,157;904,157" d="M 801 271 L 852.5 271 L 852.5 157 L 904 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="inject" data-edge-to="model" data-edge-label="拼进上下文" data-edge-key="9" data-composition-points="960,186;960,186;960,242;960,242" d="M 960 186 L 960 186 L 960 242 L 960 242" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="model" data-edge-to="reply" data-edge-label="回答文本" data-edge-key="10" data-composition-points="960,300;960,300;960,356;960,356" d="M 960 300 L 960 300 L 960 356 L 960 356" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="wikipage" data-edge-to="cleaner" data-edge-label="原始 wikitext" data-edge-key="11" data-composition-points="156,271;259,271" d="M 156 271 L 259 271" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="cleaner" data-edge-to="block" data-edge-label="清洗后正文" data-edge-key="12" data-composition-points="371,271;422.5,271;422.5,157;474,157" d="M 371 271 L 422.5 271 L 422.5 157 L 474 157" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="wikipage" data-edge-to="cleaner" data-edge-label="原始 wikitext" data-edge-key="5" data-composition-points="156,271;259,271" d="M 156 271 L 259 271" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="cleaner" data-edge-to="block" data-edge-label="清洗后正文" data-edge-key="6" data-composition-points="371,271;422.5,271;422.5,157;474,157" d="M 371 271 L 422.5 271 L 422.5 157 L 474 157" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="block" data-edge-to="vec" data-edge-label="候选块" data-edge-key="7" data-composition-points="586,157;689,157" d="M 586 157 L 689 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="term" data-edge-to="kw" data-edge-label="术语命中" data-edge-key="8" data-composition-points="586,385;689,385" d="M 586 385 L 689 385" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="titlevec" data-edge-to="agg" data-edge-label="标题闸门" data-edge-key="9" data-composition-points="586,271;689,271" d="M 586 271 L 689 271" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="vec" data-edge-to="agg" data-edge-label="A 路候选" data-edge-key="10" data-composition-points="745,186;745,186;745,242;745,242" d="M 745 186 L 745 186 L 745 242 L 745 242" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="kw" data-edge-to="agg" data-edge-label="B 路候选" data-edge-key="11" data-composition-points="745,356;745,356;745,300;745,300" d="M 745 356 L 745 356 L 745 300 L 745 300" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agg" data-edge-to="inject" data-edge-label="top-5 资料" data-edge-key="12" data-composition-points="801,271;852.5,271;852.5,157;904,157" d="M 801 271 L 852.5 271 L 852.5 157 L 904 157" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="inject" data-edge-to="model" data-edge-label="拼进上下文" data-edge-key="13" data-composition-points="960,186;960,186;960,242;960,242" d="M 960 186 L 960 186 L 960 242 L 960 242" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="model" data-edge-to="reply" data-edge-label="回答文本" data-edge-key="14" data-composition-points="960,300;960,300;960,356;960,356" d="M 960 300 L 960 300 L 960 356 L 960 356" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
 
         <!-- Nodes -->
         <g id="node-author" data-node-id="author" data-node-label="外部 AI / 人" tabindex="0" role="button" aria-label="Focus 外部 AI / 人, 按格式写中文, 01 / 产出与抓取" aria-pressed="false" data-node-kind="external" data-node-sublabel="按格式写中文" data-node-tag="系统外" data-node-context="01 / 产出与抓取">
@@ -4953,8 +4955,21 @@
         <text data-detail="fine" x="100" y="175" class="t-external" font-size="7" text-anchor="middle">系统外</text>
         </g>
 
-        <g id="node-admin" data-node-id="admin" data-node-label="管理员" tabindex="0" role="button" aria-label="Focus 管理员, 文档/词条/分类/提案, 01 / 产出与抓取" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="文档/词条/分类/提案" data-node-context="01 / 产出与抓取">
-          <title>管理员 · 文档/词条/分类/提案 · 01 / 产出与抓取</title>
+        <g id="node-wikipage" data-node-id="wikipage" data-node-label="Wiki 页面" tabindex="0" role="button" aria-label="Focus Wiki 页面, wiki.gg API, 01 / 产出与抓取" aria-pressed="false" data-node-kind="external" data-node-sublabel="wiki.gg API" data-node-tag="运维入口" data-node-context="01 / 产出与抓取">
+          <title>Wiki 页面 · wiki.gg API · 01 / 产出与抓取 · 运维入口</title>
+          <rect x="44" y="242" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="44" y="242" width="112" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(50 248) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-detail-anchor x="100" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Wiki 页面</text>
+          <text data-detail="context" x="100" y="279" class="t-muted" font-size="7" text-anchor="middle">wiki.gg API</text>
+        <text data-detail="fine" x="100" y="289" class="t-external" font-size="7" text-anchor="middle">运维入口</text>
+        </g>
+
+        <g id="node-admin" data-node-id="admin" data-node-label="管理员" tabindex="0" role="button" aria-label="Focus 管理员, 文档 / 词条 / 分类, 01 / 产出与抓取" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="文档 / 词条 / 分类" data-node-context="01 / 产出与抓取">
+          <title>管理员 · 文档 / 词条 / 分类 · 01 / 产出与抓取</title>
           <rect x="44" y="356" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="44" y="356" width="112" height="58" rx="6" class="c-frontend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(50 362) scale(0.6875)">
@@ -4964,7 +4979,7 @@
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
           <text data-detail-anchor x="100" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">管理员</text>
-          <text data-detail="context" x="100" y="393" class="t-muted" font-size="7" text-anchor="middle">文档/词条/分类/提案</text>
+          <text data-detail="context" x="100" y="393" class="t-muted" font-size="7" text-anchor="middle">文档 / 词条 / 分类</text>
         </g>
 
         <g id="node-import" data-node-id="import" data-node-label="文档导入" tabindex="0" role="button" aria-label="Focus 文档导入, 校验 → 预览 → 确认, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="校验 → 预览 → 确认" data-node-tag="只为变更块重算" data-node-context="02 / 导入与清洗">
@@ -4979,15 +4994,28 @@
         <text data-detail="fine" x="315" y="175" class="t-backend" font-size="7" text-anchor="middle">只为变更块重算</text>
         </g>
 
-        <g id="node-termedit" data-node-id="termedit" data-node-label="词条维护" tabindex="0" role="button" aria-label="Focus 词条维护, CSV / TSV 批量, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="CSV / TSV 批量" data-node-context="02 / 导入与清洗">
-          <title>词条维护 · CSV / TSV 批量 · 02 / 导入与清洗</title>
+        <g id="node-cleaner" data-node-id="cleaner" data-node-label="语料清洗与切块" tabindex="0" role="button" aria-label="Focus 语料清洗与切块, WikitextCleaner, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="WikitextCleaner" data-node-tag="默认关" data-node-context="02 / 导入与清洗">
+          <title>语料清洗与切块 · WikitextCleaner · 02 / 导入与清洗 · 默认关</title>
+          <rect x="259" y="242" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="259" y="242" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(265 248) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="315" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">语料清洗与切块</text>
+          <text data-detail="context" x="315" y="279" class="t-muted" font-size="7" text-anchor="middle">WikitextCleaner</text>
+        <text data-detail="fine" x="315" y="289" class="t-backend" font-size="7" text-anchor="middle">默认关</text>
+        </g>
+
+        <g id="node-termedit" data-node-id="termedit" data-node-label="词条维护" tabindex="0" role="button" aria-label="Focus 词条维护, xlsx 导入导出, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="xlsx 导入导出" data-node-tag="CSV 已弃用" data-node-context="02 / 导入与清洗">
+          <title>词条维护 · xlsx 导入导出 · 02 / 导入与清洗 · CSV 已弃用</title>
           <rect x="259" y="356" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="259" y="356" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(265 362) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-detail-anchor x="315" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">词条维护</text>
-          <text data-detail="context" x="315" y="393" class="t-muted" font-size="7" text-anchor="middle">CSV / TSV 批量</text>
+          <text data-detail="context" x="315" y="393" class="t-muted" font-size="7" text-anchor="middle">xlsx 导入导出</text>
+        <text data-detail="fine" x="315" y="403" class="t-backend" font-size="7" text-anchor="middle">CSV 已弃用</text>
         </g>
 
         <g id="node-block" data-node-id="block" data-node-label="块 + 正文向量" tabindex="0" role="button" aria-label="Focus 块 + 正文向量, 稳定 id · 可覆盖, 03 / 落盘与索引" aria-pressed="false" data-node-kind="database" data-node-sublabel="稳定 id · 可覆盖" data-node-context="03 / 落盘与索引">
@@ -5002,8 +5030,8 @@
           <text data-detail="context" x="530" y="165" class="t-muted" font-size="7" text-anchor="middle">稳定 id · 可覆盖</text>
         </g>
 
-        <g id="node-titlevec" data-node-id="titlevec" data-node-label="标题向量" tabindex="0" role="button" aria-label="Focus 标题向量, C 路闸门专用, 03 / 落盘与索引" aria-pressed="false" data-node-kind="database" data-node-sublabel="C 路闸门专用" data-node-context="03 / 落盘与索引">
-          <title>标题向量 · C 路闸门专用 · 03 / 落盘与索引</title>
+        <g id="node-titlevec" data-node-id="titlevec" data-node-label="标题向量" tabindex="0" role="button" aria-label="Focus 标题向量, 闸门专用, 03 / 落盘与索引" aria-pressed="false" data-node-kind="database" data-node-sublabel="闸门专用" data-node-context="03 / 落盘与索引">
+          <title>标题向量 · 闸门专用 · 03 / 落盘与索引</title>
           <rect x="474" y="242" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="474" y="242" width="112" height="58" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(480 248) scale(0.6875)">
@@ -5011,7 +5039,7 @@
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-detail-anchor x="530" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">标题向量</text>
-          <text data-detail="context" x="530" y="279" class="t-muted" font-size="7" text-anchor="middle">C 路闸门专用</text>
+          <text data-detail="context" x="530" y="279" class="t-muted" font-size="7" text-anchor="middle">闸门专用</text>
         </g>
 
         <g id="node-term" data-node-id="term" data-node-label="词条" tabindex="0" role="button" aria-label="Focus 词条, 中文名 + 别名, 03 / 落盘与索引" aria-pressed="false" data-node-kind="database" data-node-sublabel="中文名 + 别名" data-node-context="03 / 落盘与索引">
@@ -5026,27 +5054,51 @@
           <text data-detail="context" x="530" y="393" class="t-muted" font-size="7" text-anchor="middle">中文名 + 别名</text>
         </g>
 
-        <g id="node-retriever" data-node-id="retriever" data-node-label="三路召回" tabindex="0" role="button" aria-label="Focus 三路召回, A 向量 + B 词条, 04 / 三路召回" aria-pressed="false" data-node-kind="backend" data-node-sublabel="A 向量 + B 词条" data-node-tag="绝不抛异常" data-node-context="04 / 三路召回">
-          <title>三路召回 · A 向量 + B 词条 · 04 / 三路召回 · 绝不抛异常</title>
+        <g id="node-vec" data-node-id="vec" data-node-label="A 路 正文向量" tabindex="0" role="button" aria-label="Focus A 路 正文向量, VectorContentRetriever, 04 / 召回与融合" aria-pressed="false" data-node-kind="backend" data-node-sublabel="VectorContentRetriever" data-node-tag="共用问题向量" data-node-context="04 / 召回与融合">
+          <title>A 路 正文向量 · VectorContentRetriever · 04 / 召回与融合 · 共用问题向量</title>
+          <rect x="689" y="128" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="689" y="128" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(695 134) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="745" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">A 路 正文向量</text>
+          <text data-detail="context" x="745" y="165" class="t-muted" font-size="7" text-anchor="middle">VectorContentRetriever</text>
+        <text data-detail="fine" x="745" y="175" class="t-backend" font-size="7" text-anchor="middle">共用问题向量</text>
+        </g>
+
+        <g id="node-agg" data-node-id="agg" data-node-label="聚合与截断" tabindex="0" role="button" aria-label="Focus 聚合与截断, KbContentAggregator, 04 / 召回与融合" aria-pressed="false" data-node-kind="backend" data-node-sublabel="KbContentAggregator" data-node-tag="top-k 5" data-node-context="04 / 召回与融合">
+          <title>聚合与截断 · KbContentAggregator · 04 / 召回与融合 · top-k 5</title>
           <rect x="689" y="242" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="689" y="242" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(695 248) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="745" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">三路召回</text>
-          <text data-detail="context" x="745" y="279" class="t-muted" font-size="7" text-anchor="middle">A 向量 + B 词条</text>
-        <text data-detail="fine" x="745" y="289" class="t-backend" font-size="7" text-anchor="middle">绝不抛异常</text>
+          <text data-detail-anchor x="745" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">聚合与截断</text>
+          <text data-detail="context" x="745" y="279" class="t-muted" font-size="7" text-anchor="middle">KbContentAggregator</text>
+        <text data-detail="fine" x="745" y="289" class="t-backend" font-size="7" text-anchor="middle">top-k 5</text>
         </g>
 
-        <g id="node-inject" data-node-id="inject" data-node-label="资料块注入" tabindex="0" role="button" aria-label="Focus 资料块注入, 两段：维护/导入, 05 / 注入作答" aria-pressed="false" data-node-kind="backend" data-node-sublabel="两段：维护/导入" data-node-context="05 / 注入作答">
-          <title>资料块注入 · 两段：维护/导入 · 05 / 注入作答</title>
+        <g id="node-kw" data-node-id="kw" data-node-label="B 路 术语关键词" tabindex="0" role="button" aria-label="Focus B 路 术语关键词, KeywordContentRetriever, 04 / 召回与融合" aria-pressed="false" data-node-kind="backend" data-node-sublabel="KeywordContentRetriever" data-node-context="04 / 召回与融合">
+          <title>B 路 术语关键词 · KeywordContentRetriever · 04 / 召回与融合</title>
+          <rect x="689" y="356" width="112" height="58" rx="6" class="c-mask"/>
+          <rect x="689" y="356" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(695 362) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="745" y="377" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">B 路 术语关键词</text>
+          <text data-detail="context" x="745" y="393" class="t-muted" font-size="7" text-anchor="middle">KeywordContentRetriever</text>
+        </g>
+
+        <g id="node-inject" data-node-id="inject" data-node-label="资料块注入" tabindex="0" role="button" aria-label="Focus 资料块注入, KbContentInjector, 05 / 注入作答" aria-pressed="false" data-node-kind="backend" data-node-sublabel="KbContentInjector" data-node-tag="两段出处" data-node-context="05 / 注入作答">
+          <title>资料块注入 · KbContentInjector · 05 / 注入作答 · 两段出处</title>
           <rect x="904" y="128" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="904" y="128" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(910 134) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-detail-anchor x="960" y="149" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">资料块注入</text>
-          <text data-detail="context" x="960" y="165" class="t-muted" font-size="7" text-anchor="middle">两段：维护/导入</text>
+          <text data-detail="context" x="960" y="165" class="t-muted" font-size="7" text-anchor="middle">KbContentInjector</text>
+        <text data-detail="fine" x="960" y="175" class="t-backend" font-size="7" text-anchor="middle">两段出处</text>
         </g>
 
         <g id="node-model" data-node-id="model" data-node-label="大模型" tabindex="0" role="button" aria-label="Focus 大模型, 组织成人话, 05 / 注入作答" aria-pressed="false" data-node-kind="external" data-node-sublabel="组织成人话" data-node-context="05 / 注入作答">
@@ -5076,31 +5128,6 @@
         <text data-detail="fine" x="960" y="403" class="t-messagebus" font-size="7" text-anchor="middle">异步落库</text>
         </g>
 
-        <g id="node-wikipage" data-node-id="wikipage" data-node-label="Wiki 页面" tabindex="0" role="button" aria-label="Focus Wiki 页面, wiki.gg API, 01 / 产出与抓取" aria-pressed="false" data-node-kind="external" data-node-sublabel="wiki.gg API" data-node-tag="运维入口" data-node-context="01 / 产出与抓取">
-          <title>Wiki 页面 · wiki.gg API · 01 / 产出与抓取 · 运维入口</title>
-          <rect x="44" y="242" width="112" height="58" rx="6" class="c-mask"/>
-          <rect x="44" y="242" width="112" height="58" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(50 248) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-detail-anchor x="100" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Wiki 页面</text>
-          <text data-detail="context" x="100" y="279" class="t-muted" font-size="7" text-anchor="middle">wiki.gg API</text>
-        <text data-detail="fine" x="100" y="289" class="t-external" font-size="7" text-anchor="middle">运维入口</text>
-        </g>
-
-        <g id="node-cleaner" data-node-id="cleaner" data-node-label="语料清洗与切块" tabindex="0" role="button" aria-label="Focus 语料清洗与切块, WikitextCleaner, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="WikitextCleaner" data-node-tag="默认关" data-node-context="02 / 导入与清洗">
-          <title>语料清洗与切块 · WikitextCleaner · 02 / 导入与清洗 · 默认关</title>
-          <rect x="259" y="242" width="112" height="58" rx="6" class="c-mask"/>
-          <rect x="259" y="242" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(265 248) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="315" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">语料清洗与切块</text>
-          <text data-detail="context" x="315" y="279" class="t-muted" font-size="7" text-anchor="middle">WikitextCleaner</text>
-        <text data-detail="fine" x="315" y="289" class="t-backend" font-size="7" text-anchor="middle">默认关</text>
-        </g>
-
         <!-- Flow labels -->
         <g data-detail="context" data-edge-from="author" data-edge-to="import" data-edge-label="中文文档" data-edge-key="0">
           <rect x="167.2" y="136" width="80.6" height="27" rx="4" class="c-mask"/>
@@ -5127,45 +5154,53 @@
           <text x="422.5" y="375" class="t-muted" font-size="8" text-anchor="middle">词条写入</text>
         <text data-detail="fine" x="422.5" y="386" class="t-dim" font-size="7" text-anchor="middle">保存即生效</text>
         </g>
-        <g data-detail="context" data-edge-from="block" data-edge-to="retriever" data-edge-label="候选块" data-edge-key="5">
-          <rect x="724.3" y="178.5" width="41.4" height="27" rx="4" class="c-mask"/>
-          <text x="745" y="189.5" class="t-backend" font-size="8" text-anchor="middle">候选块</text>
-        <text data-detail="fine" x="745" y="200.5" class="t-dim" font-size="7" text-anchor="middle">≥ 0.45</text>
-        </g>
-        <g data-detail="context" data-edge-from="titlevec" data-edge-to="retriever" data-edge-label="标题闸门" data-edge-key="6">
-          <rect x="611.9" y="250" width="51.2" height="27" rx="4" class="c-mask"/>
-          <text x="637.5" y="261" class="t-muted" font-size="8" text-anchor="middle">标题闸门</text>
-        <text data-detail="fine" x="637.5" y="272" class="t-dim" font-size="7" text-anchor="middle">≥ 0.70</text>
-        </g>
-        <g data-detail="context" data-edge-from="term" data-edge-to="retriever" data-edge-label="术语命中" data-edge-key="7">
-          <rect x="719.4" y="321.5" width="51.2" height="27" rx="4" class="c-mask"/>
-          <text x="745" y="332.5" class="t-muted" font-size="8" text-anchor="middle">术语命中</text>
-        <text data-detail="fine" x="745" y="343.5" class="t-dim" font-size="7" text-anchor="middle">字面匹配</text>
-        </g>
-        <g data-detail="context" data-edge-from="retriever" data-edge-to="inject" data-edge-label="top-5 资料" data-edge-key="8">
-          <rect x="822" y="193" width="61" height="27" rx="4" class="c-mask"/>
-          <text x="852.5" y="204" class="t-backend" font-size="8" text-anchor="middle">top-5 资料</text>
-        <text data-detail="fine" x="852.5" y="215" class="t-dim" font-size="7" text-anchor="middle">RRF 融合</text>
-        </g>
-        <g data-detail="context" data-edge-from="inject" data-edge-to="model" data-edge-label="拼进上下文" data-edge-key="9">
-          <rect x="927.05" y="193" width="65.9" height="27" rx="4" class="c-mask"/>
-          <text x="960" y="204" class="t-backend" font-size="8" text-anchor="middle">拼进上下文</text>
-        <text data-detail="fine" x="960" y="215" class="t-dim" font-size="7" text-anchor="middle">资料 + 提问</text>
-        </g>
-        <g data-detail="context" data-edge-from="model" data-edge-to="reply" data-edge-label="回答文本" data-edge-key="10">
-          <rect x="929.5" y="307" width="61" height="27" rx="4" class="c-mask"/>
-          <text x="960" y="318" class="t-backend" font-size="8" text-anchor="middle">回答文本</text>
-        <text data-detail="fine" x="960" y="329" class="t-dim" font-size="7" text-anchor="middle">回答与指标</text>
-        </g>
-        <g data-detail="context" data-edge-from="wikipage" data-edge-to="cleaner" data-edge-label="原始 wikitext" data-edge-key="11">
+        <g data-detail="context" data-edge-from="wikipage" data-edge-to="cleaner" data-edge-label="原始 wikitext" data-edge-key="5">
           <rect x="169.65" y="250" width="75.7" height="27" rx="4" class="c-mask"/>
           <text x="207.5" y="261" class="t-messagebus" font-size="8" text-anchor="middle">原始 wikitext</text>
         <text data-detail="fine" x="207.5" y="272" class="t-dim" font-size="7" text-anchor="middle">含模板 / 链接</text>
         </g>
-        <g data-detail="context" data-edge-from="cleaner" data-edge-to="block" data-edge-label="清洗后正文" data-edge-key="12">
+        <g data-detail="context" data-edge-from="cleaner" data-edge-to="block" data-edge-label="清洗后正文" data-edge-key="6">
           <rect x="392" y="193" width="61" height="27" rx="4" class="c-mask"/>
           <text x="422.5" y="204" class="t-messagebus" font-size="8" text-anchor="middle">清洗后正文</text>
         <text data-detail="fine" x="422.5" y="215" class="t-dim" font-size="7" text-anchor="middle">按段落切块</text>
+        </g>
+        <g data-detail="context" data-edge-from="block" data-edge-to="vec" data-edge-label="候选块" data-edge-key="7">
+          <rect x="604.55" y="136" width="65.9" height="27" rx="4" class="c-mask"/>
+          <text x="637.5" y="147" class="t-backend" font-size="8" text-anchor="middle">候选块</text>
+        <text data-detail="fine" x="637.5" y="158" class="t-dim" font-size="7" text-anchor="middle">余弦 ≥ 0.45</text>
+        </g>
+        <g data-detail="context" data-edge-from="term" data-edge-to="kw" data-edge-label="术语命中" data-edge-key="8">
+          <rect x="611.9" y="364" width="51.2" height="27" rx="4" class="c-mask"/>
+          <text x="637.5" y="375" class="t-muted" font-size="8" text-anchor="middle">术语命中</text>
+        <text data-detail="fine" x="637.5" y="386" class="t-dim" font-size="7" text-anchor="middle">字面匹配</text>
+        </g>
+        <g data-detail="context" data-edge-from="titlevec" data-edge-to="agg" data-edge-label="标题闸门" data-edge-key="9">
+          <rect x="611.9" y="250" width="51.2" height="27" rx="4" class="c-mask"/>
+          <text x="637.5" y="261" class="t-muted" font-size="8" text-anchor="middle">标题闸门</text>
+        <text data-detail="fine" x="637.5" y="272" class="t-dim" font-size="7" text-anchor="middle">≥ 0.70</text>
+        </g>
+        <g data-detail="context" data-edge-from="vec" data-edge-to="agg" data-edge-label="A 路候选" data-edge-key="10">
+          <rect x="719.4" y="193" width="51.2" height="16" rx="4" class="c-mask"/>
+          <text x="745" y="204" class="t-backend" font-size="8" text-anchor="middle">A 路候选</text>
+        </g>
+        <g data-detail="context" data-edge-from="kw" data-edge-to="agg" data-edge-label="B 路候选" data-edge-key="11">
+          <rect x="719.4" y="307" width="51.2" height="16" rx="4" class="c-mask"/>
+          <text x="745" y="318" class="t-muted" font-size="8" text-anchor="middle">B 路候选</text>
+        </g>
+        <g data-detail="context" data-edge-from="agg" data-edge-to="inject" data-edge-label="top-5 资料" data-edge-key="12">
+          <rect x="804.85" y="193" width="95.3" height="27" rx="4" class="c-mask"/>
+          <text x="852.5" y="204" class="t-backend" font-size="8" text-anchor="middle">top-5 资料</text>
+        <text data-detail="fine" x="852.5" y="215" class="t-dim" font-size="7" text-anchor="middle">RRF → 重排 → 提权</text>
+        </g>
+        <g data-detail="context" data-edge-from="inject" data-edge-to="model" data-edge-label="拼进上下文" data-edge-key="13">
+          <rect x="927.05" y="193" width="65.9" height="27" rx="4" class="c-mask"/>
+          <text x="960" y="204" class="t-backend" font-size="8" text-anchor="middle">拼进上下文</text>
+        <text data-detail="fine" x="960" y="215" class="t-dim" font-size="7" text-anchor="middle">资料 + 提问</text>
+        </g>
+        <g data-detail="context" data-edge-from="model" data-edge-to="reply" data-edge-label="回答文本" data-edge-key="14">
+          <rect x="929.5" y="307" width="61" height="27" rx="4" class="c-mask"/>
+          <text x="960" y="318" class="t-backend" font-size="8" text-anchor="middle">回答文本</text>
+        <text data-detail="fine" x="960" y="329" class="t-dim" font-size="7" text-anchor="middle">回答与指标</text>
         </g>
 
         <!-- Legend -->
@@ -5389,21 +5424,22 @@
           <h3>两条入库路径，别混用</h3>
         </div>
         <ul>
-          <li>&bull; 文档面板：外部产出 → 格式校验 → 预览 → 确认，只有它重算向量</li>
+          <li>&bull; 文档面板：格式校验 → 预览 → 确认，只为新增/覆盖的块重算向量</li>
           <li>&bull; Wiki 导入：WikitextCleaner 清洗 → KbTextChunker 切块 → 增量写块，默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发</li>
-          <li>&bull; 只改文本不重算向量，检索仍按旧正文匹配，等于没改；换向量模型必须整库重建</li>
+          <li>&bull; 词条表人机交界用 xlsx，机机用 TSV，CSV 导出已删；换向量模型必须整库重建</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>回答要真的发出去，也要记下来</h3>
+          <h3>召回与注入都走官方管线</h3>
         </div>
         <ul>
-          <li>&bull; 检索到的块拼成 &lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt; 一段，和场景/发言者/引用/用户输入一起进上下文</li>
-          <li>&bull; 模型返回后走出站过滤与节奏控制，再由 NapCat 发回群；记录的是实际发出的文本</li>
-          <li>&bull; 落库异步且不阻塞回答；库写坏了只记日志，机器人照常回答</li>
+          <li>&bull; 两路召回各实现官方 ContentRetriever：A 读算好的问题向量，B 走术语表字面匹配</li>
+          <li>&bull; 标题向量不是第三路：TitleVectorGate 跑在聚合器里，命中就把那条置顶</li>
+          <li>&bull; 聚合器顺序固定：RRF 融合 → 闸门置顶 → 交叉编码器重排 → 地点意图提权 → 截断 top-k</li>
+          <li>&bull; 注入器按出处分两段渲染 &lt;&lt;&lt;KNOWLEDGE&gt;&gt;&gt;：我们维护的内容 / 导入的资料</li>
         </ul>
       </div>
     </div>

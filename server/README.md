@@ -7,11 +7,13 @@ QQ 用户 ─▶ NapCat(Docker) ──HTTP上报──▶ 本工程 ──HTTP�
                           /onebot/event      /send_group_msg
                                 │
                                 ├─▶ GuardPipeline（安全中间层，零成本五层）
-                                └─▶ ChatService ─▶ LlmRouter ─▶ 大模型
-                                                   （多厂商 + 降级链）
+                                └─▶ ChatService ─▶ KbToolAssistant ─▶ 官方检索管线
+                                                     │                   （召回 → 聚合 → 注入）
+                                                     └─▶ LlmRouterChatModel ─▶ LlmRouter ─▶ 大模型
+                                                                               （多厂商 + 降级链）
 ```
 
-**当前进度：M2.5 —— 大模型已接通（多厂商 + 降级链），安全中间层已装上。**
+**当前进度：核心能力已全部上线** —— 多厂商模型与降级链、视觉理解、安全中间层、指令系统、知识库检索（LangChain4j 官方管线 + 工具调用）、问答记录与统计、公开站与管理后台。
 
 ---
 
@@ -24,7 +26,7 @@ QQ 用户 ─▶ NapCat(Docker) ──HTTP上报──▶ 本工程 ──HTTP�
 | 真正调用大模型 | 回复由模型生成 |
 | 多厂商可插拔 | 加厂商只要改 yml，**不用动一行 Java** |
 | 自动降级链 | 主模型挂了/超时/额度用完，自动切下一个（已实测） |
-| 人格独立成文件 | `resources/prompts/system.md`，改完重启即可，不用重新编译 |
+| 人格独立成文件 | 仓库根 `system.md`，构建时拷进 jar；改完重启即可，不用重新编译 |
 
 ### 安全中间层
 
@@ -33,7 +35,7 @@ QQ 用户 ─▶ NapCat(Docker) ──HTTP上报──▶ 本工程 ──HTTP�
 ```
 1. access         谁有资格（私聊关闭、群/用户黑名单）
 2. mention        群里必须 @ 我
-3. rate-limit     每群 10 条/分钟，每人 1 次/分钟
+3. rate-limit     每群 10 条/分钟，每人在群内 1 次/20 秒
 4. content-gate   纯表情/图片无文字 → 回兜底词，不调模型
 5. inbound-words  命中敏感词 → 回拒绝话术，不调模型
 ---------------- 到这里都还没花一分钱 ----------------
@@ -131,12 +133,12 @@ curl https://opencode.ai/zen/go/v1/models
 启动成功的标志：
 
 ```
-[LLM] provider 就绪：opencode-go  model=mimo-v2.5  baseUrl=https://opencode.ai/zen/go/v1
+[LLM] provider 就绪：opencode-go  model=deepseek-v4.1-flash  baseUrl=https://opencode.ai/zen/go/v1
 [LLM] 降级链：opencode-go -> deepseek
 [GUARD] 安全中间层已启用
 [GUARD]   顺序        ：access -> mention -> rate-limit -> content-gate -> inbound-words
 [GUARD]   私聊策略    ：off
-[GUARD]   限流        ：每群 10 条/分钟，每人 1 次/分钟，超限处理=silent
+[GUARD]   限流        ：每群 10 条/分钟，每人在群内 1 次/20 秒，超限处理=notify-once
 协议层连通 ✓  机器人：示例助手（QQ 100000003）
 ```
 
@@ -175,7 +177,7 @@ node tests/manual/fake-onebot-server.mjs
 3. C 群@ 提示注入        → 拒绝话术，不调模型         ✅
 4. D 群里没 @            → 忽略                       ✅
 5. E 私聊                → 忽略（私聊已关闭）          ✅
-6. A 一分钟内再 @        → 被「每人每分钟 1 次」拦下   ✅
+6. A 20 秒内再 @         → 被「每人在群内 1 次/20 秒」拦下 ✅
 7. 机器人自己发的消息     → 忽略                       ✅
 8. 另一个群 11 人刷纯表情 → 只回 10 条，第 11 被群限流  ✅
 ```
@@ -206,8 +208,9 @@ node tests/manual/fake-onebot-server.mjs
 | `guard.access.group-blacklist` | `[]` | 群黑名单 |
 | `guard.access.user-blacklist` | `[]` | 用户黑名单 |
 | `guard.rate-limit.per-group-per-minute` | `10` | 每群每分钟最多几条 |
-| `guard.rate-limit.per-user-per-minute` | `1` | 每人每分钟最多几次 |
-| `guard.rate-limit.on-limit` | `silent` | silent / notify-once |
+| `guard.rate-limit.per-user-per-minute` | `1` | 每人在同一个群里几次 |
+| `guard.rate-limit.per-user-window-seconds` | `20` | 上面那次数的窗口长度，两项合起来是「每 20 秒最多 1 次」 |
+| `guard.rate-limit.on-limit` | `notify-once` | silent / notify-once |
 | `guard.content-gate.no-text-reply` | — | 纯表情/图片时的兜底话术 |
 | `guard.words.inbound-file` | `classpath:words/inbound.txt` | 入站词表位置 |
 | `guard.words.outbound-file` | `classpath:words/outbound.txt` | 出站词表位置 |
@@ -306,22 +309,27 @@ ADMIN_PASSWORD=你的密码
 - **没配密码 = 后台完全关闭**（503），不会退化成"无密码可访问"
 - 密码比对用**常量时间比较**（先各自 SHA-256 再比），不泄露长度/前缀
 - 会话是内存 token + HttpOnly cookie，重启即失效
-- 后台**只读**：所有 API 都是 GET，不能改任何数据
+- 后台是**受鉴权的写入口**：能改的是业务配置（设置、指令、文案、轮播）与知识库内容（块、词条、分类、提案），改不动服务器与代码
 - 访问统计里 IP **只存哈希**
 
-**页面**：`login.html`（登录）、`index.html`（看板）、`glossary.html`（术语表管理）——
-单文件 + 原生 fetch，零构建链。
+**页面**：与公开站同源的 Vue 3 双端产物（源码在 `web/src/admin/`），后台共 7 个页面，
+由后端托管 `server/web-dist/`。
 
 **API**：
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/admin/api/overview` `keywords` `misses` `cosine` `sources` `records` `visits` `session` | 只读统计 |
+| GET | `/admin/api/overview` `keywords` `misses` `cosine` `sources` `records` `visits` `session` | 只读统计与会话 |
 | POST | `/admin/api/annotate` | 给记录打标（good / bad / no_source / hallucination） |
-| GET | `/admin/api/glossary` | 读术语表（支持 `?q=` 搜索） |
-| POST | `/admin/api/glossary` | 新增/更新术语，**立即热重载** |
-| POST | `/admin/api/glossary/status` | 只改状态（draft / verified / rejected） |
-| POST | `/admin/api/glossary/delete` | 删除术语 |
+| GET/POST | `/admin/api/settings` | 配置中心白名单项，热生效 |
+| GET/POST | `/admin/api/commands` | 指令维护与变量预览 |
+| GET/POST | `/admin/api/kb/terms` | 词条维护，xlsx 导入导出 |
+| GET/POST | `/admin/api/kb/blocks` | 文档导入、按块改正文、补标题向量 |
+| GET/POST | `/admin/api/kb/categories` `/admin/api/kb/proposals` | 分类映射与改进提案 |
+| GET/POST | `/admin/api/pages` `/admin/api/carousel` | 公开站文案与轮播图 |
+| GET | `/admin/api/logs` `/admin/api/guard` | 实时日志与拦截统计 |
+| GET/POST | `/admin/api/models` | 模型热切换 |
+| GET/POST | `/admin/api/plaza` | 问答广场管理 |
 
 ### 闭环：发现问题 → 修 → 验证
 
@@ -400,7 +408,7 @@ ADMIN_PASSWORD=你的密码
 
 | 项 | 说明 |
 |---|---|
-| 触发格式 | 群里 **@ + /命令 + 完全相等**；私聊只用 `/` |
+| 触发格式 | 群里 **@ + /命令**，首词精确匹配、余下作为参数；私聊只用 `/` |
 | 处理位置 | **准入之后、Guard 之前** —— 命令秒回、不受限流、不走模型 |
 | 内置命令 | `/help` `/list` `/ping` `/stats`（不可删，可改回复） |
 | `{cmd.list}` | 渲染所有指令 —— `/help` 就是用它实现的（**不写死**） |
@@ -562,7 +570,7 @@ src/main/java/com/example/qqbot/
 │  └─ client/OneBotApiClient.java  ★ 全工程唯一发消息的出口
 ├─ incoming/                     事件入口 (HTTP Controller)
 ├─ router/MessageRouter.java     编排：Guard → 模型 → 出站过滤 → 发送
-├─ agent/ChatService.java        组装上下文 + 调模型 + 兜底话术
+├─ agent/ChatService.java        组装信封消息 + 调 KbToolAssistant + 兜底话术
 ├─ media/                     ★  图片文件的目录与生命周期
 │  ├─ MediaStorageGuard.java      启动校验：临时/知识库目录必须物理隔离，配错拒绝启动
 │  ├─ ImageCache.java             图片缓存：按内容 MD5 复用，命中零下载；LRU 控制总量
@@ -573,9 +581,26 @@ src/main/java/com/example/qqbot/
 │  ├─ QaRecorder.java             异步单线程队列（有界、丢弃计数、吞异常）
 │  ├─ QaCollector.java            组装记录：抽关键词、序列化检索结果
 │  └─ QaCleaner.java              到期清理（只删原文，不动统计）
-├─ llm/                       ★  多厂商路由
+├─ llm/                       ★  多厂商路由与模型入口
 │  ├─ LlmRouter.java               建模型 / 降级 / 日志
+│  ├─ LlmRouterChatModel.java      把降级链包成官方 ChatModel
+│  ├─ KbToolAssistant.java         AiServices 装配：官方管线 + 工具 + 授权
 │  └─ LlmException.java
+├─ kb/                        ★  知识库：检索管线 / 块 / 词条 / 摄入
+│  ├─ KbRetriever.java             装配 DefaultRetrievalAugmentor
+│  ├─ KbContextQueryTransformer.java  入口适配：kb.query / kb.diagnostics / kb.enabled
+│  ├─ VectorContentRetriever.java     A 路：正文向量
+│  ├─ KeywordContentRetriever.java    B 路：术语关键词
+│  ├─ KbContentAggregator.java        RRF → 标题闸门 → 重排 → 意图提权 → top-k
+│  ├─ KbContentInjector.java          两段出处 <<<KNOWLEDGE>>>
+│  ├─ KbLookupTool.java               模型可调的只读工具
+│  ├─ catalog/                        组合层：目录读模型 + 导入编排 + 导出
+│  └─ block/ term/ category/ proposal/ wiki/ map/ doc/   块 / 词条 / 分类 / 提案 / 摄入
+├─ persistence/               ★  SQLite 仓储，java.sql 只许出现在这里
+├─ command/                      指令系统：匹配、变量渲染、存储
+├─ admin/ settings/              后台鉴权与配置中心
+├─ publicapi/ site/ plaza/       公开站接口、站点文案与轮播、问答广场
+├─ logs/ files/ trace/ time/     实时日志与脱敏、工作区文件、中性痕迹、时钟
 └─ guard/                     ★  安全中间层
    ├─ GuardPipeline.java           按顺序跑完所有 stage
    ├─ GuardStage.java              接口（name + check）
@@ -595,7 +620,7 @@ src/main/java/com/example/qqbot/
 
 src/main/resources/
 ├─ application.yml
-├─ prompts/system.md             人格与边界（改这个不用重新编译）
+├─ system.md                     人格与边界（构建时从仓库根拷入，改这个不用重新编译）
 └─ words/
    ├─ inbound.txt                入站词表
    └─ outbound.txt               出站词表
@@ -608,6 +633,32 @@ src/main/resources/
 3. **`llm/` 包是唯一知道「用哪个模型」的地方**
 4. **`guard/` 包是唯一有权说「不」的地方**
 
+### 知识库的层次（2026-10-10 落地）
+
+`kb/` 不是平的：它按**变化原因**分层，箭头只能自上而下。
+
+| 层 | 包 | 职责 | 不许依赖 |
+|----|----|------|---------|
+| 组合层 | `kb.catalog` | 目录读模型、导入编排、导出格式 | — |
+| 真源 | `kb.block` / `kb.term` | 内容+向量 / 名字+核对状态 | **互不认识** |
+| 核心 | `kb` | 只读契约（`KbCorpus` / `TermSource` / `NameCandidate`）、共享身份 `EntryId` 与检索 | 任何上层 |
+| 底座 | `persistence` | SQL 与 `java.sql` 只在这里 | — |
+
+为什么非要分出组合层：**块 id 就是词条表的 en**，两半共享同一个身份，
+而「导入一份文档」= 落块 + 登记名字，跨两个真源 —— 只有组合层同时看得到两边。
+
+对应的护栏在 `ArchitectureTest`：`blockAndTermDoNotKnowEachOther`、
+`kbCoreDoesNotDependOnUpperLayers`、`ingestSourcesDoNotTouchTermTable`。
+任何一条变红，都说明你刚引入了一个越界依赖。
+
+共享身份是类型而不是约定：`KbBlock.id()` 与词条表的 `en` 都是 `EntryId`，
+身份的创建点只有两处 —— 导入落库、词条行读库；字符串只出现在三层边界上
+（SQLite 仓储、HTTP 响应对象、LangChain4j 元数据）。两个存储保留 String 过渡重载，
+新代码请直接传 `EntryId`。
+
+名字登记的**策略**住在名字层（`KbTermService.registerMissing`：已有名字不覆盖），
+块侧只**提出候选**（`NameCandidate`）；导入的 HTTP 入口只有组合层那一个，
+块层刻意不提供“只落块”的接口 —— 绕过登记不会报错，只会让中文提问够不到那些页。
 ### ⚠️ PathGuard 的使用契约
 
 `PathGuard` 是一个**策略组件，它自己拦不住任何东西**。
@@ -623,10 +674,10 @@ src/main/resources/
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| **M3** | 联网搜索 / 工具调用（走 OpenCode Go） | 待办 |
-| **M4** | 知识库检索（RAG） | 待办 |
-| **M5** | 图片理解 | `capabilities: [vision]` 已预留 |
-| **M6** | 定时消息推送 | 不受 @ 限制，走独立通道 |
-| **待设计** | **多用户并发 @ 的处理**（串行化 / 排队 / 合并） | 未定方案 |
+| **M3** | 工具调用（KbLookupTool + 授权钩子，走 AiServices） | ✅ 已上线；联网搜索仍未做 |
+| **M4** | 知识库检索（RAG，LangChain4j 官方管线） | ✅ 已上线 |
+| **M5** | 图片理解 | ✅ 已上线，走 `capabilities: [vision]` 的模型 |
+| **M6** | 定时消息推送 | 待办 |
+| **待设计** | **多用户并发 @ 的处理**（串行化 / 排队 / 合并） | 已有事件线程池与排队超时丢弃，串行化方案未定 |
 
-> 明确**不做**的：多轮上下文记忆（按当前使用场景不需要）、成本预算。
+> 明确**不做**的：多轮上下文记忆（按当前使用场景不需要）。

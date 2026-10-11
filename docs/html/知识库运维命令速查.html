@@ -212,9 +212,12 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </blockquote>
 <hr>
 <h2 id="一体检改完语料有没有变好"><a class="anchor" href="#一体检改完语料有没有变好">一、体检：改完语料有没有变好</a></h2>
-<pre><code class="language-bash">mvn test -Dqqbot.golden.rerank=on -Dtest=RetrievalGoldenTest
+<pre><code class="language-bash"># 门禁：测不了（缺 key / 向量路不通）也算失败
+./scripts/golden-gate.sh
+# 对比用：关掉重排
+./scripts/golden-gate.sh --rerank off
 </code></pre>
-<p>跑的是 <strong>67 条黄金集</strong>（真实提问），用<strong>生产库的副本</strong>，不碰真库；逐条明细写到 <code>target/golden-detail.tsv</code>。</p>
+<p>跑的是 <strong>69 条黄金集</strong>（真实提问），用<strong>生产库的副本</strong>，不碰真库；逐条明细写到 <code>.toolchain/verify/golden-detail.tsv</code>。</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -224,26 +227,30 @@ li.task-list-item input { position: absolute; left: 0; top: .55em; width: 1em; h
 </thead>
 <tbody><tr>
 <td>entity R@1</td>
-<td>≥ 65%</td>
+<td>≥ 13 条，且 ≥ 55%</td>
 </tr>
 <tr>
 <td>entity R@5</td>
-<td>≥ 90%</td>
+<td>≥ 20 条，且 ≥ 80%</td>
 </tr>
 <tr>
 <td>colloquial R@5</td>
-<td>≥ 80%</td>
+<td>≥ 3 条，且 ≥ 70%</td>
 </tr>
 <tr>
-<td>gap clean</td>
-<td>≥ 25%</td>
+<td>colloquial R@1</td>
+<td>≥ 3 条，且 ≥ 60%</td>
 </tr>
 <tr>
-<td>chitchat clean</td>
-<td>≥ 80%</td>
+<td>chitchat 干净率</td>
+<td>≥ 12 条，且 ≥ 70%</td>
+</tr>
+<tr>
+<td>gap 干净率</td>
+<td>暂无门槛，当前 0%</td>
 </tr>
 </tbody></table></div>
-<p>门槛是<strong>实测定的，不是拍的</strong>。完整基线（重排开/关两张表、盲区分析）在《检索基线》。</p>
+<p>门槛是<strong>实测定的，不是拍的</strong>；条数门槛是校准基线留 1~2 条退步空间后的底线。完整基线（重排开/关两张表、盲区分析）在《检索基线》。</p>
 <blockquote>
 <p>⚠️ 需要 <code>.env</code> 里有 <code>SILICONFLOW_API_KEY</code>（真实调用 API，约 30 秒）。
 <strong>任何语料改动前后都跑一次</strong> —— 不跑就是闭着眼睛改检索质量。</p>
@@ -471,7 +478,7 @@ xlsx 内部就是 UTF-8 的 XML，<strong>没有编码这回事</strong>。</p>
 
 <h3 id="②-黄金集"><a class="anchor" href="#②-黄金集">② 黄金集</a></h3>
 <ul>
-<li><code>tests/golden/retrieval-golden.tsv</code>（7.2 KB，<strong>进版本控制</strong>）</li>
+<li><code>tests/golden/retrieval-golden.tsv</code>（7.4 KB，<strong>进版本控制</strong>）</li>
 <li>格式：<code>类别 ⇥ 问题 ⇥ 期望块 id ⇥ 备注</code></li>
 <li><strong>不走 WPS、没有&quot;另存为&quot;这一步</strong> → 纯文本 UTF-8 两端一致，<strong>没有编码风险</strong></li>
 <li>这也是它<strong>不需要</strong>改成 xlsx 的原因：它是版本控制里的测试数据，纯文本能 diff</li>

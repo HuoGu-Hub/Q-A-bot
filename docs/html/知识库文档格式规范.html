@@ -281,13 +281,20 @@ key: value
 <td>来源标记（如 <code>wiki</code> / <code>manual</code> / <code>forum</code>）</td>
 </tr>
 <tr>
+<td><code>aliases</code></td>
+<td>可选</td>
+<td>别名，逗号或顿号分隔。<strong>当前版本不读它</strong>，写进去不影响导入</td>
+</tr>
+<tr>
 <td>其他</td>
 <td>可选</td>
-<td>自定义字段原样保留，不会被丢</td>
+<td>自定义字段会原样收进文档头，但<strong>导入流程不消费它们</strong>，写错也不报错</td>
 </tr>
 </tbody></table></div>
 <blockquote>
-<p>文档头里<strong>不需要</strong>写标题或别名 —— 命名看的是<strong>块标题</strong>（见下一节）。</p>
+<p>文档头里<strong>不需要</strong>写标题或别名 —— 命名看的是<strong>块标题</strong>（见下一节）。
+「知识库 → 词条」页里的别名就是块标题末尾那个 <code>（English）</code> 拆出来的，
+与文档头的字段无关。</p>
 </blockquote>
 <h3 id="导入之后自动发生的事一个块-一个词条"><a class="anchor" href="#导入之后自动发生的事一个块-一个词条">导入之后自动发生的事：<strong>一个块 = 一个词条</strong></a></h3>
 <p>导入时，<strong>每个块</strong>都会在词条表里占一行（所以不用再单独导术语表）：</p>
@@ -517,7 +524,12 @@ chance to generate 1 mana for each health point lost. Unlock cost: 3.
 <td>改掉其中一个</td>
 </tr>
 <tr>
-<td>忘了写 <code>--&gt;</code></td>
+<td>忘了写 <code>--&gt;</code>（正文里也没有 <code>--&gt;</code>）</td>
+<td><code>第 N 行：文档头没有闭合（缺少 --&gt;）</code></td>
+<td>补上闭合</td>
+</tr>
+<tr>
+<td>忘了写 <code>--&gt;</code>（正文里有 <code>--&gt;</code>）</td>
 <td><code>文档头里有不是「key: value」格式的内容…</code></td>
 <td>补上闭合</td>
 </tr>
