@@ -1,10 +1,38 @@
 <script setup lang="ts">
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { onBeforeUnmount, ref } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { renderInline } from './renderInline'
 import { t } from './useSiteText'
 import Icon from '@shared/ui/Icon.vue'
 
 const route = useRoute()
+const router = useRouter()
+
+/**
+ * 路由正在换页 —— 顶部那条细进度条的开关。
+ *
+ * <p><b>为什么必须有</b>：视图是懒加载的，点一个链接之后浏览器要先下载
+ * 该页的模块、再执行、再渲染，这中间**界面完全没有变化**。
+ * 本机是几十毫秒，感觉不出来；但站点经内网穿透开放到公网时，
+ * 一个来回都是几百毫秒起，这段窗口会变成好几秒的"点了没反应" ——
+ * 用户会以为按钮坏了，于是反复点。
+ *
+ * <p>这里只解决"有没有反馈"，不解决"快不快"（快不快要靠图变小、靠生产构建）。
+ */
+const navBusy = ref(false)
+
+/** 兜底：万一 afterEach 因为异常没跑到，进度条不该永远挂着 */
+let busyTimer: number | undefined
+function setBusy(on: boolean) {
+  if (busyTimer !== undefined) { window.clearTimeout(busyTimer); busyTimer = undefined }
+  navBusy.value = on
+  if (on) busyTimer = window.setTimeout(() => { navBusy.value = false }, 15000)
+}
+
+router.beforeEach(() => { setBusy(true) })
+router.afterEach(() => { setBusy(false) })
+router.onError(() => { setBusy(false) })
+onBeforeUnmount(() => { if (busyTimer !== undefined) window.clearTimeout(busyTimer) })
 
 /**
  * 导航项。
@@ -48,7 +76,21 @@ const isActive = (to: string) =>
       </div>
     </header>
 
-    <main id="main" class="main">
+    <!--
+      换页进度条：贴在页头下沿的一条 2px 微光。
+      它是"点完立刻有动静"的唯一来源，所以刻意做成常驻 DOM、只切透明度 ——
+      临时插入元素会晚一帧，而这一帧正是要补上的那一帧。
+    -->
+    <div
+      class="nav-progress"
+      :class="{ on: navBusy }"
+      role="progressbar"
+      aria-label="页面载入中"
+      :aria-hidden="navBusy ? undefined : 'true'"
+    ><span /></div>
+    <p class="sr-only" role="status" aria-live="polite">{{ navBusy ? '页面载入中' : '' }}</p>
+
+    <main id="main" class="main" :aria-busy="navBusy ? 'true' : undefined">
       <RouterView v-slot="{ Component }">
         <component :is="Component" />
       </RouterView>
@@ -114,6 +156,47 @@ const isActive = (to: string) =>
   transition: transform var(--dur) var(--ease);
 }
 .skip:focus { transform: none; color: var(--ember-hot); }
+
+/* ==================== 换页进度条 ====================
+   贴在页头正下方（页头是 sticky，所以用 fixed + --header-h 对齐它的下沿）。
+   常驻 DOM、只切透明度：临时插入元素会晚一帧，而这一帧正是要补上的那一帧。
+   ⚠️ 不吃事件：它横在整页最上方，能点的东西不能被它挡住。 */
+.nav-progress {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: var(--z-sticky);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms linear;
+}
+.nav-progress.on { opacity: 1; }
+
+/* 一道从左往右来回的微光。用 --ember 主色，和站点里"唯一被点亮的东西"是一套语言 */
+.nav-progress span {
+  display: block;
+  height: 100%;
+  width: 34%;
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  background: linear-gradient(90deg, transparent, var(--ember), var(--ember-hot));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ember) 55%, transparent);
+  animation: nav-sweep 1.1s cubic-bezier(.45, .05, .35, 1) infinite;
+}
+@keyframes nav-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(394%); }
+}
+/* reduced-motion：光别扫，改成"亮着不动" —— 依然明确告诉人"在等" */
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress span {
+    width: 100%;
+    animation: none;
+    border-radius: 0;
+    opacity: .75;
+  }
+}
 
 /* ==================== 顶栏 ====================
    半透明 + 背景模糊：滚动时内容从它下面透过去，而不是被一条实心条切断。

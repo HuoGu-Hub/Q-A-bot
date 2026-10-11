@@ -114,6 +114,37 @@ const frameRatio = computed(() => {
 
 const altOf = (it: CarouselItem) => it.caption || '站点配图'
 
+/**
+ * 向服务端要哪几档宽度。
+ *
+ * <p>服务端的 {@code ?w=} 会缩放并缓存，不传就是原图。轮播在首屏最大也就六百多 CSS 像素宽，
+ * 乘上两倍屏大约一千三 —— 所以 640 / 1280 / 1920 三档足够覆盖，浏览器按屏幕密度和布局自己挑。
+ *
+ * <p>用 srcset 而不是写死一个宽度：手机是 390 宽的窄栏，桌面是六百多的宽栏，
+ * 写死任何一边另一边都会浪费。
+ */
+const IMAGE_WIDTHS = [640, 1280, 1920]
+
+/**
+ * 环境光那一层要的宽度。
+ *
+ * <p>它整层糊掉再放大铺在画面背后，本身没有任何细节可看，几百分辨率完全够。
+ * 让它跟主图共用 1280 档当然也行、还能省一个请求，但那样就得把缩放后的整张图
+ * 再糊一遍；这里宁可多一个 20 KB 的小请求，也别让一张 1280 的图白占一份解码内存。
+ */
+const AMBIENT_WIDTH = 320
+
+/** 在 imageUrl 上追加 ?w=。省不省带宽就取决于这里有没有传 */
+function sized(it: CarouselItem, w: number) {
+  const url = it.imageUrl
+  return url + (url.includes('?') ? '&' : '?') + 'w=' + w
+}
+
+/** srcset 候选串 */
+function srcsetOf(it: CarouselItem) {
+  return IMAGE_WIDTHS.map((w) => sized(it, w) + ' ' + w + 'w').join(', ')
+}
+
 // ==================== 自动播放 ====================
 const hovered = ref(false)
 /** 组件是否在视口里（首页很长，滚下去之后没必要还在转） */
@@ -124,15 +155,91 @@ const pageVisible = ref(true)
 /** prefers-reduced-motion: reduce */
 const reduceMotion = ref(false)
 
+/**
+ * 允许挂 src 的下标。
+ *
+ * <p><b>为什么要管这个</b>：后端是**原样落盘**的，一张 2560×1440 实测 6.27 MB，
+ * 六张加起来 16.86 MB —— 而首屏上这块只显示到大约 600×340，
+ * 等于按 1/4 尺寸在传原图。
+ * 这里以前对六张无条件 decode()，等于主动把 16.86 MB 全催下来；
+ * 弱网下（内网穿透 / 移动网络）整条链路被图片占满，
+ * 点导航那 200 KB 排在后面 —— 表现就是"点了半天没反应"。
+ *
+ * <p>现在只给「当前 / 下一张 / 上一张」挂 src：
+ * <ul>
+ *   <li>当前：马上就要画出来；</li>
+ *   <li>下一张：自动轮播和「›」都要用它，必须提前备好；</li>
+ *   <li>上一张：往回翻同理。</li>
+ * </ul>
+ * 其余下标不挂 src，浏览器**一个字节都不会请求**；等轮播真的转到它，
+ * 它自己就变成了"下一张"。总流量没减少，但首屏只拉必须的那几张，
+ * 剩下的摊到后续轮次里，不再和导航抢带宽。
+ */
+/**
+ * ⚠️ 按**图片 id** 记账，不按数组下标。
+ *
+ * <p>{@code items} 是 props，列表换一批之后同一个下标指向的是另一张图 ——
+ * 而"这张图已经就绪"说的是某一张具体的图。按下标记账会让新列表继承旧列表的状态：
+ * 旧下标上的 true 会让 {@link nextReady} 立刻放行，自动轮播翻到一张还没解码的图上。
+ */
+const loaded = ref<Set<string>>(new Set())
+
+/** 图片的唯一身份。用 id 而不是下标，见 loaded 的注释 */
+function idOf(it: CarouselItem): string {
+  return String(it.id)
+}
+
+/** 当前需要挂 src 的图片 id */
+const wanted = computed(() => {
+  const n = count.value
+  const s = new Set<string>()
+  if (n <= 0) return s
+  const add = (i: number) => {
+    const it = props.items[(i + n) % n]
+    if (it) s.add(idOf(it))
+  }
+  add(idx.value)
+  if (n > 1) {
+    add(idx.value + 1)
+    add(idx.value - 1)
+  }
+  return s
+})
+
+/**
+ * 图片真的到齐了没。load 和 error 都算"有结论了" ——
+ * 挂掉的那张也必须有结论，否则自动轮播会永远停在原地等它。
+ */
+const arrived = ref<Set<string>>(new Set())
+
+function markArrived(it: CarouselItem) {
+  const id = idOf(it)
+  if (arrived.value.has(id)) return
+  arrived.value = new Set(arrived.value).add(id)
+}
+
+/**
+ * 下一张到齐了才允许自动翻页。
+ * 弱网下宁可停在这一张，也不要翻过去露一片空白 ——
+ * 自动翻页本来就没人催，等图到了再走是唯一体面的做法。
+ */
+const nextReady = computed(() => {
+  const n = count.value
+  if (n <= 1) return true
+  const next = props.items[(idx.value + 1) % n]
+  return !next || arrived.value.has(idOf(next))
+})
+
 /** 会自己轮换吗（只有一张 / 间隔 <= 0 时"下一张"这件事不存在，也就不该有进度条） */
 const auto = computed(() => multi.value && interval.value > 0)
 
 /**
- * 再叠三道刹车：悬停 / 滚出视口 / 页面切到后台。
+ * 再叠四道刹车：悬停 / 滚出视口 / 页面切到后台 / 下一张还没下下来。
  * ⚠️ reduced-motion 不在其中 —— 它只管过渡，不管轮换（见文件头 ⑥）。
  */
 const canAuto = computed(() =>
-  auto.value && !userPaused.value && !hovered.value && onScreen.value && pageVisible.value)
+  auto.value && !userPaused.value && !hovered.value && onScreen.value && pageVisible.value
+  && nextReady.value)
 
 let timer: number | undefined
 let media: MediaQueryList | null = null
@@ -249,6 +356,19 @@ watch(canAuto, (on) => { if (on) thawTimer(); else freezeTimer() })
 watch(count, () => { if (idx.value >= count.value) idx.value = 0 })
 watch(root, attachObserver)
 
+/**
+ * 列表换了一批（id 变了）就把状态里已经不在列表中的 id 丢掉。
+ *
+ * <p>按 id 记账之后，新列表天然不会继承旧列表的「已就绪」；这一步只防状态无限长大。
+ * 用 id 串做 watch 依据：items 是数组，直接 watch 会在每次重渲染时触发。
+ */
+watch(() => props.items.map(idOf).join('|'), () => {
+  const alive = new Set(props.items.map(idOf))
+  const prune = (s: Set<string>) => new Set([...s].filter((id) => alive.has(id)))
+  loaded.value = prune(loaded.value)
+  arrived.value = prune(arrived.value)
+})
+
 onMounted(() => {
   media = window.matchMedia('(prefers-reduced-motion: reduce)')
   reduceMotion.value = media.matches
@@ -259,56 +379,25 @@ onMounted(() => {
 
   attachObserver()
   restartTimer()
-  scheduleWarm()
 })
 
-// 图是异步来的（items 后到），到货之后重新排一次预热
-watch(count, () => { if (count.value > 0) scheduleWarm() })
-
 /**
- * 预热后面几张图。
- *
- * <p>实测：刚打开页面就点「下一张」，遮罩要 **220ms** 才开始动 ——
- * 那一下不是在等 CSS，是在等第二张图解码完、上传成纹理才能画。
- * 提前 decode() 之后降到 **79ms**：点击到画面开始变化的间隔从 0.22s 收到 0.08s，
- * 也就是"点了没反应"那一下没有了。
- *
- * <p><b>为什么不直接把 loading 改成 eager</b>：后台允许单张图到 12MB，
- * 一上来就并发拉满会把首屏的带宽抢掉 —— 而首屏真正必需的只有第一张。
- * 所以放到**首屏稳定之后的空闲时间**再解码：用户点第一下（通常在 1s 之后）时
- * 图已经就位，首屏该多快还是多快。
- *
- * <p>decode() 会连带触发懒加载；失败也无所谓，真要显示时浏览器还会再试一次。
+ * 把新进入"可能要显示"的图片并进 loaded。
+ * ⚠️ 只增不减：一旦挂过 src，撤掉它会让浏览器丢掉已解码的图，
+ * 下次再挂就是一次新的请求。轮播转完一圈之后全部就位，也就回到"随便点都不空"的状态。
  */
-function warmImages() {
-  const imgs = root.value?.querySelectorAll<HTMLImageElement>('.img')
-  if (!imgs) return
-  for (const im of imgs) void im.decode?.().catch(() => { /* 预热失败不是错误 */ })
-}
+watch(wanted, (w) => {
+  if (!w.size) return
+  const next = new Set(loaded.value)
+  let changed = false
+  for (const id of w) {
+    if (!next.has(id)) { next.add(id); changed = true }
+  }
+  if (changed) loaded.value = next
+}, { immediate: true })
 
-/** 空闲时预热。没有 requestIdleCallback 的浏览器退回一个短延时 */
-let warmHandle: number | undefined
-let warmIsIdle = false
-function scheduleWarm() {
-  cancelWarm()
-  const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback
-  if (typeof idle === 'function') {
-    warmIsIdle = true
-    warmHandle = idle(warmImages, { timeout: 1500 })
-  } else {
-    warmIsIdle = false
-    warmHandle = window.setTimeout(warmImages, 800)
-  }
-}
-function cancelWarm() {
-  if (warmHandle === undefined) return
-  if (warmIsIdle) {
-    (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback?.(warmHandle)
-  } else {
-    window.clearTimeout(warmHandle)
-  }
-  warmHandle = undefined
-}
+/** 下一张到齐（或下挂了）就重新放行自动轮播 —— 见 canAuto 里那道 nextReady 刹车 */
+watch(nextReady, (ok) => { if (ok && canAuto.value) thawTimer() })
 
 /**
  * 挂视口观察。
@@ -331,7 +420,6 @@ function attachObserver() {
 
 onBeforeUnmount(() => {
   stopTimer()
-  cancelWarm()
   io?.disconnect()
   io = null
   media?.removeEventListener('change', onReduceChange)
@@ -367,12 +455,19 @@ onBeforeUnmount(() => {
         z-index:-1 让它落在画面**下面**，同时仍留在 .stage 这个层叠上下文里。
       -->
       <div class="ambient" aria-hidden="true">
+        <!--
+          ⚠️ 这里必须和 <img> 用**同一套**门控（loaded）。
+          漏掉过一次：<img> 那边限制得好好的，这一层却对每张都设了 background-image，
+          于是六张图照样全被请求 —— 门控写在了一处，漏在另一处，等于没写。
+          用 loaded 而不是"只给当前那张"：换图时光晕是交叉淡入的，
+          进来的那张必须**在过渡开始前**就备好底图，否则光会先灭再亮。
+        -->
         <span
           v-for="(it, i) in items"
           :key="'halo-' + it.id"
           class="halo"
           :class="{ on: i === idx }"
-          :style="{ backgroundImage: 'url(' + it.imageUrl + ')' }"
+          :style="loaded.has(idOf(it)) ? { backgroundImage: 'url(' + sized(it, AMBIENT_WIDTH) + ')' } : undefined"
         />
       </div>
 
@@ -401,12 +496,17 @@ onBeforeUnmount(() => {
           -->
           <img
             class="img"
-            :src="it.imageUrl"
+            :src="loaded.has(idOf(it)) ? sized(it, 1280) : undefined"
+            :srcset="loaded.has(idOf(it)) ? srcsetOf(it) : undefined"
+            sizes="(max-width: 1000px) 92vw, 600px"
             :alt="altOf(it)"
             :width="it.width || undefined"
             :height="it.height || undefined"
-            :loading="i === 0 ? 'eager' : 'lazy'"
+            :loading="i === idx ? 'eager' : 'lazy'"
+            :fetchpriority="i === idx ? 'high' : 'low'"
             decoding="async"
+            @load="markArrived(it)"
+            @error="markArrived(it)"
           >
           <span v-if="it.caption" class="cap">{{ it.caption }}</span>
         </component>
