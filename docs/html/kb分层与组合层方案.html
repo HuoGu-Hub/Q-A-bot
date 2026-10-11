@@ -48,7 +48,7 @@ ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
 <li><b>Step 3 固化方向</b>：新增 <code>kbCoreDoesNotDependOnUpperLayers</code> 与 <code>blockAndTermDoNotKnowEachOther</code>。</li>
 <li><b>顺带修掉一处静默缺陷</b>：老路径直接写词条表、不发 <code>KnowledgeChangedEvent</code>，于是导入后公开站的搜索缓存不失效 —— 表现是"刚导完的页在公开站搜不到"。现在登记成功会发事件，并有断言钉住。</li>
 <li><b>EntryId 身份类型化</b>（原计划里标为可选、最后做）：新增 <code>kb.EntryId</code>，<code>KbBlock.id()</code>、<code>KbCorpus.Entry.id</code>、<code>TermSource.Row.en</code>、<code>NameCandidate.en</code> 全部改成它。身份的创建点只有两处 —— 导入落库与词条行读库；字符串只留在三层边界上（SQLite 仓储、HTTP 响应对象、LangChain4j 元数据）。</li>
-<li><b>过渡重载按方案保留</b>：两个存储的 id 方法同时留了 String 版本，所以既有调用点绝大多数不用改。真正需要显式转换的只有两类：直接构造块，以及读<code>allVectors()</code>这类按身份索引的 map。</li>
+<li><b>过渡重载已删干净</b>：这一步分两次做 —— 先按方案保留 String 版本，测试全绿之后再把它们删掉，让编译器强制覆盖全部调用点。删除时改了主代码 7 个文件、测试 9 个文件共约 150 处；<code>EntryId</code> 现在是唯一入口。</li>
 </ul>
 <p>结构图已同步为"当前结构"：<a href="../diagrams/kb-module-layering.html">kb-module-layering.html</a></p>
 <h3>验收实测（生产语料，3439 块）</h3>
@@ -114,7 +114,8 @@ int registerMissing(List&lt;NameCandidate&gt; candidates);
 <h3>3.3 身份类型化：<code>EntryId</code></h3>
 <p><b>已落地。</b>落地时补了一条边界约定：类型只用在领域内，字符串只出现在三层边界上。这样转换点可以一眼数清，也不会为了类型化去改 SQL 与前端协议。</p>
 <p>把"块 id 等于词条 en"从注释与约定升级成类型：<code>KbBlock.id()</code> 与名字表的 en 都用 <code>EntryId</code>。</p>
-<p>共享身份由编译器看住之后，跨包契约不再靠 grep 发现。这一步面最广，放在最后做，并且允许逐步替换：新代码先用力，旧的 String 重载暂时保留。</p>
+<p>共享身份由编译器看住之后，跨包契约不再靠 grep 发现。这一步面最广，放在最后做，并且允许逐步替换：先让新代码用类型，旧的 String 重载留到测试全绿之后再删。</p>
+<p><b>已落地。</b>过渡重载已删除，两个存储只收 <code>EntryId</code>；删除时暴露出一处真问题 —— 置顶逻辑里 <code>EntryId.equals(String)</code> 恒为 false，导致同一条块在结果里出现两次。</p>
 
 <h2>四、为什么不是"合并成一个包"</h2>
 <p>合并也能消掉环，代价是把最重要的那条区分藏起来。</p>

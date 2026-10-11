@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 块管理接口的契约测试。
@@ -132,7 +133,7 @@ class KbBlockControllerTest {
                 .containsEntry("unchanged", 0)
                 .containsEntry("untouchedExisting", 0);
         assertThat(out.get("updatedIds")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).containsExactly("flame-altar-0");
-        assertThat(store.get("flame-altar-0").body()).as("预览不改数据").isEqualTo("旧正文");
+        assertThat(store.get(EntryId.of("flame-altar-0")).body()).as("预览不改数据").isEqualTo("旧正文");
     }
 
     // ==================== 写 ====================
@@ -163,7 +164,7 @@ class KbBlockControllerTest {
                 "docId", "kiln", "id", "kiln-1", "title", "熔炉2", "text", "正文",
                 "tags", "制作, 基础"));
         assertThat(viaString.getStatusCode().value()).isEqualTo(200);
-        assertThat(store.get("kiln-1").tags()).containsExactly("制作", "基础");
+        assertThat(store.get(EntryId.of("kiln-1")).tags()).containsExactly("制作", "基础");
 
         ResponseEntity<Map<String, Object>> bad = controller.add(body(
                 "docId", "灵火祭坛", "title", "灵火祭坛", "text", "正文"));
@@ -177,11 +178,11 @@ class KbBlockControllerTest {
         controller.add(body("docId", "d", "id", "d-0", "title", "甲", "text", "正文"));
 
         assertThat(controller.retire(body("id", "d-0")).getStatusCode().value()).isEqualTo(200);
-        assertThat(store.get("d-0").retired()).isTrue();
+        assertThat(store.get(EntryId.of("d-0")).retired()).isTrue();
 
         assertThat(controller.retire(body("id", "d-0", "retired", false)).getStatusCode().value())
                 .isEqualTo(200);
-        assertThat(store.get("d-0").retired()).isFalse();
+        assertThat(store.get(EntryId.of("d-0")).retired()).isFalse();
 
         assertThat(controller.retire(body("id", "没有")).getStatusCode().value()).isEqualTo(404);
         assertThat(controller.delete(body("id", "没有")).getStatusCode().value()).isEqualTo(404);
@@ -199,7 +200,7 @@ class KbBlockControllerTest {
         ResponseEntity<Map<String, Object>> res = controller.retireDoc(body("doc", "d", "retired", true));
 
         assertThat(res.getBody()).containsEntry("affected", 2);
-        assertThat(store.get("e-0").retired()).as("别的文档不受影响").isFalse();
+        assertThat(store.get(EntryId.of("e-0")).retired()).as("别的文档不受影响").isFalse();
     }
 
     @Test
@@ -217,7 +218,7 @@ class KbBlockControllerTest {
     void backfillTitleVectorsShape() {
         service.importBlocks(doc("d", "d-0", "酸蚀之咬（Acid Bite）", "魔法弹药。"));
         // 手工把标题向量删掉，模拟"功能上线前就在库里的老数据"
-        store.deleteTitleVector("d-0");
+        store.deleteTitleVector(EntryId.of("d-0"));
 
         Map<String, Object> dry = controller.backfillTitleVectors(body("dryRun", true)).getBody();
         assertThat(dry).containsEntry("dryRun", true).containsEntry("pending", 1)

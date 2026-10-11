@@ -201,33 +201,19 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
      * @param knownBlockIds 现在库里有哪些块 id
      * @return 删掉几行
      */
-    /**
-     * 清掉没有对应块的词条 —— 目录侧手里的块 id 已经是 {@link EntryId}。
-     *
-     * <p>⚠️ 字符串那份参数类型是 {@code Collection} 而不是 {@code Set}：
-     * 两个重载若都是 {@code Set}，泛型擦除后签名相同，编译器直接拒绝。
-     */
     public int deleteOrphans(java.util.Set<EntryId> knownBlockIds) {
-        if (knownBlockIds == null || knownBlockIds.isEmpty()) {
-            return deleteOrphans(java.util.Set.<String>of());
+        if (!available || knownBlockIds == null || knownBlockIds.isEmpty()) {
+            return 0;
         }
-        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        java.util.Set<String> known = new java.util.LinkedHashSet<>();
         for (EntryId id : knownBlockIds) {
             if (id != null && !id.isBlank()) {
-                ids.add(id.value());
+                known.add(id.value());
             }
-        }
-        return deleteOrphans(ids);
-    }
-
-    /** 过渡用的字符串重载（参数放宽到 Collection，见上） */
-    public int deleteOrphans(java.util.Collection<String> knownBlockIds) {
-        if (!available) {
-            return 0;
         }
         List<String> orphans = new ArrayList<>();
         for (Entry e : list()) {
-            if (!knownBlockIds.contains(e.en())) {
+            if (!known.contains(e.en())) {
                 orphans.add(e.en());
             }
         }
@@ -350,17 +336,13 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
         return out;
     }
 
-    /** 过渡用的类型重载 —— 身份来自领域侧（NameCandidate / 目录）时用它 */
+    /** 查一条。身份是类型，字符串只在仓储边界上出现 */
     public Entry get(EntryId en) {
-        return en == null ? null : get(en.value());
-    }
-
-    public Entry get(String en) {
         if (!available || en == null || en.isBlank()) {
             return null;
         }
         try {
-            KbTermRepository.Row r = repo.find(en);
+            KbTermRepository.Row r = repo.find(en.value());
             return r == null ? null : new Entry(r.en(), r.zh(), normalizeStatus(r.status()));
         } catch (Exception e) {
             log.warn("[KB-TERM] 查询失败：{}", e.getMessage());
@@ -387,17 +369,12 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
      * <p>用 upsert 而不是 update：语料重建后可能出现表里还没有的页面，
      * 这时直接给它起个中文名也应该成立。
      */
-    /** 过渡用的类型重载 */
     public boolean upsert(EntryId en, String zh, String status) {
-        return upsert(en == null ? null : en.value(), zh, status);
-    }
-
-    public boolean upsert(String en, String zh, String status) {
         if (!available || en == null || en.isBlank()) {
             return false;
         }
         try {
-            repo.upsert(en.trim(), zh == null ? "" : zh.trim(), status, Instant.now().toString());
+            repo.upsert(en.value(), zh == null ? "" : zh.trim(), status, Instant.now().toString());
         } catch (Exception e) {
             log.warn("[KB-TERM] 保存失败：{}", e.getMessage());
             return false;
@@ -407,18 +384,13 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
     }
 
     /** 只改状态（核对时最常用：draft → verified）。不存在返回 false */
-    /** 过渡用的类型重载 */
     public boolean setStatus(EntryId en, String status) {
-        return setStatus(en == null ? null : en.value(), status);
-    }
-
-    public boolean setStatus(String en, String status) {
-        if (!available || en == null) {
+        if (!available || en == null || en.isBlank()) {
             return false;
         }
         boolean ok;
         try {
-            ok = repo.updateStatus(en, status, Instant.now().toString());
+            ok = repo.updateStatus(en.value(), status, Instant.now().toString());
         } catch (Exception e) {
             log.warn("[KB-TERM] 改状态失败：{}", e.getMessage());
             return false;
@@ -438,10 +410,9 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
      * <p>失败时返回全 0（并记 warn）：事务已整体回滚，报告部分统计只会误导 ——
      * 那正是旧实现干的事（它把回滚前攒到的 {@code missing} 报了出去）。
      */
-    /** 过渡用的类型重载 —— 批量核对时身份可能来自目录侧 */
     public BatchResult setStatusBatch(java.util.Collection<EntryId> ens, String status) {
-        if (ens == null) {
-            return setStatusBatch((List<String>) null, status);
+        if (!available || ens == null || ens.isEmpty()) {
+            return new BatchResult(0, 0, List.of());
         }
         List<String> raw = new java.util.ArrayList<>(ens.size());
         for (EntryId id : ens) {
@@ -449,16 +420,12 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
                 raw.add(id.value());
             }
         }
-        return setStatusBatch(raw, status);
-    }
-
-    public BatchResult setStatusBatch(List<String> ens, String status) {
-        if (!available || ens == null || ens.isEmpty()) {
+        if (raw.isEmpty()) {
             return new BatchResult(0, 0, List.of());
         }
         KbTermRepository.StatusOutcome out;
         try {
-            out = repo.setStatusBatch(ens, status, Instant.now().toString());
+            out = repo.setStatusBatch(raw, status, Instant.now().toString());
         } catch (Exception e) {
             log.warn("[KB-TERM] 批量改状态失败：{}", e.getMessage());
             return new BatchResult(0, 0, List.of());
@@ -475,18 +442,13 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
      * <p><b>不是删行</b> —— 行代表「这个 Wiki 页面在词条表里有位置」，
      * 删掉它下次启动又会被 {@link #reconcile()} 补回来，徒增困惑。
      */
-    /** 过渡用的类型重载 */
     public boolean clearName(EntryId en) {
-        return clearName(en == null ? null : en.value());
-    }
-
-    public boolean clearName(String en) {
-        if (!available || en == null) {
+        if (!available || en == null || en.isBlank()) {
             return false;
         }
         boolean ok;
         try {
-            ok = repo.clearName(en, Instant.now().toString());
+            ok = repo.clearName(en.value(), Instant.now().toString());
         } catch (Exception e) {
             log.warn("[KB-TERM] 清除失败：{}", e.getMessage());
             return false;

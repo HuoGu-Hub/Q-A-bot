@@ -87,7 +87,7 @@ class KbTermStoreLazyReconcileTest {
     @Test
     @DisplayName("补齐只补缺的：人工起过的中文名不许被覆盖")
     void keepsManualNames() {
-        terms.upsert("flame-altar-0", "焰火祭坛", "verified");
+        terms.upsert(EntryId.of("flame-altar-0"), "焰火祭坛", "verified");
         blocks.upsert(block("flame-altar-0", "焰火祭坛（Flame Altar）"), new float[]{1f, 0f, 0f});
         blocks.upsert(block("flame-altar-1", "第二块"), new float[]{0f, 1f, 0f});
 

@@ -231,8 +231,8 @@ public class WikiArticleImporter {
                     // 先清掉上一次多切出来的块：页面在 wiki 上被**改短**时不清就是永久孤儿块
                     for (int i = store.blockCount(title); i > chunks.size(); i--) {
                         String stale = chunkId(baseId, i);
-                        blockStore.deleteTitleVector(stale);
-                        blockStore.delete(stale);
+                        blockStore.deleteTitleVector(com.example.qqbot.kb.EntryId.of(stale));
+                        blockStore.delete(com.example.qqbot.kb.EntryId.of(stale));
                     }
                     for (int i = 0; i < chunks.size(); i++) {
                         String id = chunkId(baseId, i + 1);
@@ -246,7 +246,7 @@ public class WikiArticleImporter {
                         if (blockStore.upsert(block, embedding.embedOne(name + "\n" + text))) {
                             // 标题向量一律用**干净的页面名**：C 路闸门问的是"这是哪一页"，
                             // 同一页的每一块都该同样命中；并列时按 id 顺序取到第 1 块（导语段）
-                            blockStore.upsertTitleVector(id, chunkTitle, embedding.embedOne(name));
+                            blockStore.upsertTitleVector(com.example.qqbot.kb.EntryId.of(id), chunkTitle, embedding.embedOne(name));
                             imported++;
                         }
                     }
@@ -292,8 +292,8 @@ public class WikiArticleImporter {
             // 一页可能多块（切块）——blockCount 为 0 的老行只删基础 id
             for (int i = Math.max(1, p.blockCount()); i >= 1; i--) {
                 String bid = chunkId(id, i);
-                blockStore.deleteTitleVector(bid);
-                if (blockStore.delete(bid)) {
+                blockStore.deleteTitleVector(com.example.qqbot.kb.EntryId.of(bid));
+                if (blockStore.delete(com.example.qqbot.kb.EntryId.of(bid))) {
                     n++;
                 }
             }

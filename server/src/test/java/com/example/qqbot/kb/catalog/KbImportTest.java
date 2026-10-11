@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * **导入 = 落块 + 登记名字** —— 一条跨两个真源的用例的验收测试。
@@ -133,10 +134,10 @@ class KbImportTest {
 
         assertThat(out.terms()).as("返回里带上了登记条数").isEqualTo(3);
         assertThat(termStore.count()).as("★ 三个块 → 三个词条").isEqualTo(3);
-        assertThat(termStore.get("scrap-cup").zh()).isEqualTo("废料杯");
-        assertThat(termStore.get("flame-altar").zh()).isEqualTo("灵火祭坛");
-        assertThat(termStore.get("kiln").zh()).isEqualTo("熔炉");
-        assertThat(termStore.get("scrap-cup").status()).isEqualTo("draft");
+        assertThat(termStore.get(EntryId.of("scrap-cup")).zh()).isEqualTo("废料杯");
+        assertThat(termStore.get(EntryId.of("flame-altar")).zh()).isEqualTo("灵火祭坛");
+        assertThat(termStore.get(EntryId.of("kiln")).zh()).isEqualTo("熔炉");
+        assertThat(termStore.get(EntryId.of("scrap-cup")).status()).isEqualTo("draft");
     }
 
     @Test
@@ -145,7 +146,7 @@ class KbImportTest {
         catalog.importDocument(doc("物品图鉴·双手武器",
                 "深渊之翼斧（Abyssal Wing Axe）", "abyssal-wing-axe"));
 
-        assertThat(termStore.get("abyssal-wing-axe").zh())
+        assertThat(termStore.get(EntryId.of("abyssal-wing-axe")).zh())
                 .isEqualTo("深渊之翼斧、Abyssal Wing Axe");
     }
 
@@ -154,18 +155,18 @@ class KbImportTest {
     void parensInMiddleKeptAsIs() {
         catalog.importDocument(doc("d", "前缀（说明）后缀", "weird-0"));
 
-        assertThat(termStore.get("weird-0").zh()).isEqualTo("前缀（说明）后缀");
+        assertThat(termStore.get(EntryId.of("weird-0")).zh()).isEqualTo("前缀（说明）后缀");
     }
 
     @Test
     @DisplayName("★ 已经有人工改过的名字 → 再导一次**不覆盖**（人工成果不能被冲掉）")
     void doesNotClobberHumanEditedName() {
         catalog.importDocument(doc("d", "灵火祭坛", "flame-altar"));
-        termStore.upsert("flame-altar", "灵火圣坛", "verified");
+        termStore.upsert(EntryId.of("flame-altar"), "灵火圣坛", "verified");
 
         KbCatalog.ImportOutcome out = catalog.importDocument(doc("d", "灵火祭坛改名了", "flame-altar"));
 
-        KbTermStore.Entry t = termStore.get("flame-altar");
+        KbTermStore.Entry t = termStore.get(EntryId.of("flame-altar"));
         assertThat(t.zh()).as("★ 人工改过的名字没被冲掉").isEqualTo("灵火圣坛");
         assertThat(t.status()).isEqualTo("verified");
         assertThat(out.terms()).as("没有新建/补齐").isZero();
@@ -174,10 +175,10 @@ class KbImportTest {
     @Test
     @DisplayName("词条存在但中文名是空的 → 补齐（只补空，不算覆盖）")
     void fillsBlankName() {
-        termStore.upsert("flame-altar", "", "draft");
+        termStore.upsert(EntryId.of("flame-altar"), "", "draft");
         KbCatalog.ImportOutcome out = catalog.importDocument(doc("d", "灵火祭坛", "flame-altar"));
 
-        assertThat(termStore.get("flame-altar").zh()).isEqualTo("灵火祭坛");
+        assertThat(termStore.get(EntryId.of("flame-altar")).zh()).isEqualTo("灵火祭坛");
         assertThat(out.terms()).isEqualTo(1);
     }
 
@@ -200,7 +201,7 @@ class KbImportTest {
 
         catalog.importDocument(text);
 
-        assertThat(termStore.get("无名块")).as("没 id → 词条身份用标题").isNotNull();
+        assertThat(termStore.get(EntryId.of("无名块"))).as("没 id → 词条身份用标题").isNotNull();
     }
 
     @Test
@@ -225,8 +226,8 @@ class KbImportTest {
 
         Map<String, Object> out = res.getBody();
         assertThat(out).containsEntry("added", 0).containsEntry("updated", 1).containsEntry("untouched", 1);
-        assertThat(blocks.get("d-0").body()).as("没出现的那块原样").isEqualTo("甲正文");
-        assertThat(blocks.get("d-1").body()).isEqualTo("乙新正文");
+        assertThat(blocks.get(EntryId.of("d-0")).body()).as("没出现的那块原样").isEqualTo("甲正文");
+        assertThat(blocks.get(EntryId.of("d-1")).body()).isEqualTo("乙新正文");
     }
 
     @Test

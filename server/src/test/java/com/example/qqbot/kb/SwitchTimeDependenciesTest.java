@@ -24,6 +24,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 「切换时刻」的依赖测试。
@@ -111,18 +112,18 @@ class SwitchTimeDependenciesTest {
         // 先放一条人工成果，reconcile 不能把它冲掉（这条是术语表最容易出事的地方）
         KbTermStore seed = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpus);
         seed.init();
-        seed.upsert("flame-altar", "灵火祭坛", "verified");
+        seed.upsert(EntryId.of("flame-altar"), "灵火祭坛", "verified");
 
         KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpus);
         store.init();
-        assertThat(store.get("flame-altar").zh()).as("★ 人工成果不能被语料重建冲掉").isEqualTo("灵火祭坛");
-        assertThat(store.get("flame-altar").status()).isEqualTo("verified");
+        assertThat(store.get(EntryId.of("flame-altar")).zh()).as("★ 人工成果不能被语料重建冲掉").isEqualTo("灵火祭坛");
+        assertThat(store.get(EntryId.of("flame-altar")).status()).isEqualTo("verified");
 
         assertThat(store.isAvailable()).isTrue();
         assertThat(store.count()).as("两个块各一条 + 那条人工成果").isEqualTo(3);
-        assertThat(store.get("flame-altar")).as("人工成果还在").isNotNull();
-        assertThat(store.get("flame-altar").zh()).isEqualTo("灵火祭坛");
-        assertThat(store.get("kiln-0").zh()).as("★ 补齐的名字 = 块标题").isEqualTo("标题kiln-0");
+        assertThat(store.get(EntryId.of("flame-altar"))).as("人工成果还在").isNotNull();
+        assertThat(store.get(EntryId.of("flame-altar")).zh()).isEqualTo("灵火祭坛");
+        assertThat(store.get(EntryId.of("kiln-0")).zh()).as("★ 补齐的名字 = 块标题").isEqualTo("标题kiln-0");
         db.close();
     }
 
@@ -147,9 +148,9 @@ class SwitchTimeDependenciesTest {
         store.init();
 
         assertThat(store.count()).as("★ 同一份文档的两个块 → 两条词条").isEqualTo(2);
-        assertThat(store.get("abyssal-wing-axe")).isNotNull();
-        assertThat(store.get("acid-bite")).isNotNull();
-        assertThat(store.get("abyssal-wing-axe").zh())
+        assertThat(store.get(EntryId.of("abyssal-wing-axe"))).isNotNull();
+        assertThat(store.get(EntryId.of("acid-bite"))).isNotNull();
+        assertThat(store.get(EntryId.of("abyssal-wing-axe")).zh())
                 .as("★ 补齐时也拆括号：短中文名才匹配得上")
                 .isEqualTo("深渊之翼斧、Abyssal Wing Axe");
         db.close();
@@ -168,15 +169,41 @@ class SwitchTimeDependenciesTest {
 
         KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpusOf());
         store.init();
-        store.upsert("has-block", "有正文的", "draft");
-        store.upsert("no-block", "早期版本留下的文档名", "draft");
+        store.upsert(EntryId.of("has-block"), "有正文的", "draft");
+        store.upsert(EntryId.of("no-block"), "早期版本留下的文档名", "draft");
 
-        int n = store.deleteOrphans(java.util.Set.of("has-block"));
+        int n = store.deleteOrphans(java.util.Set.of(EntryId.of("has-block")));
 
         assertThat(n).isEqualTo(1);
-        assertThat(store.get("has-block")).as("有块的不动").isNotNull();
-        assertThat(store.get("no-block")).as("孤儿的删掉").isNull();
+        assertThat(store.get(EntryId.of("has-block"))).as("有块的不动").isNotNull();
+        assertThat(store.get(EntryId.of("no-block"))).as("孤儿的删掉").isNull();
         assertThat(store.count()).isEqualTo(1);
+        db.close();
+    }
+
+    @Test
+    @DisplayName("★ 空集合不等于「全清」—— 手滑传空集不该把词条表整张清掉")
+    void emptyKnownSetDoesNotWipeTheTable() {
+        QaProperties qa = new QaProperties();
+        PersistenceProperties persist = new PersistenceProperties();
+        persist.setDb(base.resolve("qa-orphan-empty.sqlite").toString());
+        SqliteDatabase db = new SqliteDatabase(persist);
+        db.init();
+        QaStore qaStore = new QaStore(new QaStoreRepository(new Jdbc(db)), qa, new ObjectMapper());
+        qaStore.init();
+
+        KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), corpusOf());
+        store.init();
+        store.upsert(EntryId.of("a"), "甲", "draft");
+        store.upsert(EntryId.of("b"), "乙", "draft");
+
+        // 判据是"表里的行不在已知块集合里"。空集合意味着**每一行都是孤儿** ——
+        // 那正是"调用方不小心传了个空集"与"真要清空整表"唯一的区别点，
+        // 而后者有专门的 deleteAll()。所以这里守住：空集合什么都不做。
+        int n = store.deleteOrphans(java.util.Set.of());
+
+        assertThat(n).isZero();
+        assertThat(store.count()).as("整张表一条不少").isEqualTo(2);
         db.close();
     }
 

@@ -147,7 +147,8 @@ public class KbCatalog {
     /** 某个词条（= 一份文档）下的所有文本块。含已下架的（管理端要看得到） */
     public List<ChunkView> chunks(String en) {
         List<ChunkView> out = new ArrayList<>();
-        KbBlock b = blockStore.get(en);
+        com.example.qqbot.kb.EntryId id = com.example.qqbot.kb.EntryId.of(en);
+        KbBlock b = blockStore.get(id);
         if (b != null) {
             String body = b.body() == null ? "" : b.body();
             out.add(new ChunkView(b.id().value(), body, b.url(), body.length(), b.retired()));
@@ -168,10 +169,11 @@ public class KbCatalog {
         if (en == null || en.isBlank()) {
             return false;
         }
-        if (termStore.get(en) != null) {
+        com.example.qqbot.kb.EntryId id = com.example.qqbot.kb.EntryId.of(en);
+        if (termStore.get(id) != null) {
             return true;
         }
-        return blockStore.get(en) != null;
+        return blockStore.get(id) != null;
     }
 
     // ==================== 组装 ====================

@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 术语匹配逻辑测试（词形匹配，与存储无关）。
@@ -56,7 +57,7 @@ class GlossaryTest {
         KbTermStore store = new KbTermStore(new KbTermRepository(new Jdbc(db)), kCorpus());
         store.init();
         for (int i = 0; i + 2 < enZhStatus.length; i += 3) {
-            store.upsert(enZhStatus[i], enZhStatus[i + 1], enZhStatus[i + 2]);
+            store.upsert(EntryId.of(enZhStatus[i]), enZhStatus[i + 1], enZhStatus[i + 2]);
         }
         return new Glossary(store);
     }

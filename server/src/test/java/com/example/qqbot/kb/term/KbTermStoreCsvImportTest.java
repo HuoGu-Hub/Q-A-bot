@@ -19,6 +19,7 @@ import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 术语表导入（Excel → CSV）的验收测试。
@@ -71,9 +72,9 @@ class KbTermStoreCsvImportTest {
         KbTermStore.ImportResult r = store.importTable(csv);
 
         assertThat(r.created()).isEqualTo(2);
-        assertThat(store.get("Kiln").zh()).isEqualTo("熔炉、炉子");
-        assertThat(store.get("Flame Altar").zh()).isEqualTo("灵火祭坛、祭坛");
-        assertThat(store.get("Kiln").status()).isEqualTo("verified");
+        assertThat(store.get(EntryId.of("Kiln")).zh()).isEqualTo("熔炉、炉子");
+        assertThat(store.get(EntryId.of("Flame Altar")).zh()).isEqualTo("灵火祭坛、祭坛");
+        assertThat(store.get(EntryId.of("Kiln")).status()).isEqualTo("verified");
     }
 
     @Test
@@ -85,7 +86,7 @@ class KbTermStoreCsvImportTest {
 
         store.importTable(csv);
 
-        assertThat(store.get("Kiln").zh())
+        assertThat(store.get(EntryId.of("Kiln")).zh())
                 .as("一个别名里的逗号不能被当成列分隔符")
                 .isEqualTo("熔炉、炉子、窑");
     }
@@ -99,8 +100,8 @@ class KbTermStoreCsvImportTest {
                 "kiln,熔炉,,draft"));
 
         assertThat(store.count()).isEqualTo(2);
-        assertThat(store.get("flame-altar").zh()).isEqualTo("灵火祭坛、祭坛");
-        assertThat(store.get("kiln").zh()).as("没有别名就只用中文名").isEqualTo("熔炉");
+        assertThat(store.get(EntryId.of("flame-altar")).zh()).isEqualTo("灵火祭坛、祭坛");
+        assertThat(store.get(EntryId.of("kiln")).zh()).as("没有别名就只用中文名").isEqualTo("熔炉");
     }
 
     @Test
@@ -110,7 +111,7 @@ class KbTermStoreCsvImportTest {
                 "英文名,中文名,别名",
                 "Kiln,熔炉,熔炉/炉子"));
 
-        assertThat(store.get("Kiln").zh()).isEqualTo("熔炉、炉子");
+        assertThat(store.get(EntryId.of("Kiln")).zh()).isEqualTo("熔炉、炉子");
     }
 
     @Test
@@ -124,7 +125,7 @@ class KbTermStoreCsvImportTest {
                 ",缺英文名"));
 
         assertThat(store.count()).isEqualTo(1);
-        assertThat(store.get("Kiln").status()).isEqualTo("draft");
+        assertThat(store.get(EntryId.of("Kiln")).status()).isEqualTo("draft");
     }
 
     @Test
@@ -137,8 +138,8 @@ class KbTermStoreCsvImportTest {
         KbTermStore.ImportResult r = store.importTable(tsv);
 
         assertThat(r.created()).isEqualTo(2);
-        assertThat(store.get("Kiln").zh()).isEqualTo("熔炉");
-        assertThat(store.get("Kiln").status()).isEqualTo("verified");
+        assertThat(store.get(EntryId.of("Kiln")).zh()).isEqualTo("熔炉");
+        assertThat(store.get(EntryId.of("Kiln")).status()).isEqualTo("verified");
     }
 
     @Test
@@ -153,7 +154,7 @@ class KbTermStoreCsvImportTest {
         assertThat(store.count()).isEqualTo(1);
 
         store.importTable(String.join("\n", "英文名,中文名,状态", "Kiln,熔炼炉,verified"));
-        assertThat(store.get("Kiln").zh()).as("以最新导入为准").isEqualTo("熔炼炉");
+        assertThat(store.get(EntryId.of("Kiln")).zh()).as("以最新导入为准").isEqualTo("熔炼炉");
         assertThat(store.count()).isEqualTo(1);
     }
 

@@ -177,7 +177,7 @@ public class LocationCorpusBuilder {
                     e.tags(), SRC_MAP, false, now);
             if (blockStore.upsert(block, vec)) {
                 // C 路（标题向量）也要补：地点问题常常就是"名字提问"
-                blockStore.upsertTitleVector(e.id(), e.title(), embedding.embedOne(e.title()));
+                blockStore.upsertTitleVector(com.example.qqbot.kb.EntryId.of(e.id()), e.title(), embedding.embedOne(e.title()));
                 written++;
             }
         }

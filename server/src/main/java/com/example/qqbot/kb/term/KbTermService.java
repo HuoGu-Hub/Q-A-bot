@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.term;
 
 import com.example.qqbot.kb.KnowledgeChangedEvent;
+import com.example.qqbot.kb.EntryId;
 import com.example.qqbot.kb.NameCandidate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -54,7 +55,7 @@ public class KbTermService {
      *
      * <p>不碰语料、不调 embedding、不重建索引 —— 这是「补术语表零成本」的技术依据。
      */
-    public boolean saveName(String en, String zh, String status) {
+    public boolean saveName(EntryId en, String zh, String status) {
         boolean ok = termStore.upsert(en, zh, status);
         if (ok) {
             clearSearchCache();
@@ -63,7 +64,7 @@ public class KbTermService {
     }
 
     /** 清掉中文名，状态回到 draft。不删行 —— 行代表"这个页面在词条表里有位置" */
-    public boolean clearName(String en) {
+    public boolean clearName(EntryId en) {
         boolean ok = termStore.clearName(en);
         if (ok) {
             clearSearchCache();
@@ -112,7 +113,7 @@ public class KbTermService {
     }
 
     /** 批量改核对状态；改完清一次公开站缓存 */
-    public KbTermStore.BatchResult setStatusBatch(List<String> ens, String status) {
+    public KbTermStore.BatchResult setStatusBatch(java.util.Collection<EntryId> ens, String status) {
         KbTermStore.BatchResult r = termStore.setStatusBatch(ens, status);
         if (r.updated() > 0) {
             clearSearchCache();

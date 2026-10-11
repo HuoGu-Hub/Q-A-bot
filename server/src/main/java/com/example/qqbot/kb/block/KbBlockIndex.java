@@ -92,19 +92,9 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
         return entries;
     }
 
-    /** 过渡用的字符串重载 —— 新代码请传 {@link com.example.qqbot.kb.EntryId} */
-    public KbBlock block(String id) {
-        return block(com.example.qqbot.kb.EntryId.of(id));
-    }
-
     public KbBlock block(com.example.qqbot.kb.EntryId id) {
         ensureLoaded();
         return byId.get(id);
-    }
-
-    /** 过渡用的字符串重载 */
-    public float[] vector(String id) {
-        return vector(com.example.qqbot.kb.EntryId.of(id));
     }
 
     public float[] vector(com.example.qqbot.kb.EntryId id) {
@@ -113,10 +103,6 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
     }
 
     /** 标题向量；没有（还没补建 / 标题变了未重算）就返回 {@code null} */
-    public float[] titleVector(String id) {
-        return titleVector(com.example.qqbot.kb.EntryId.of(id));
-    }
-
     public float[] titleVector(com.example.qqbot.kb.EntryId id) {
         ensureLoaded();
         KbBlockStore.TitleVector tv = titleVectors.get(id);

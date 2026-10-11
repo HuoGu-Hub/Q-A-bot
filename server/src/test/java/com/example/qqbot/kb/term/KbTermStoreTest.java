@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.example.qqbot.kb.EntryId;
 
 /**
  * 词条存储的验收测试。
@@ -102,13 +103,13 @@ class KbTermStoreTest {
     void upsertAndNormalize() {
         assertThat(store.isAvailable()).isTrue();
 
-        store.upsert("Scrap Cup", "废料杯", "draft");
-        store.upsert("Flame Altar", "火焰祭坛", "VERIFIED");
-        store.upsert("X", "某某", "瞎写的");
+        store.upsert(EntryId.of("Scrap Cup"), "废料杯", "draft");
+        store.upsert(EntryId.of("Flame Altar"), "火焰祭坛", "VERIFIED");
+        store.upsert(EntryId.of("X"), "某某", "瞎写的");
 
-        assertThat(store.get("Scrap Cup").zh()).isEqualTo("废料杯");
-        assertThat(store.get("Flame Altar").status()).isEqualTo("verified");
-        assertThat(store.get("X").status()).as("认不出来的一律 draft").isEqualTo("draft");
+        assertThat(store.get(EntryId.of("Scrap Cup")).zh()).isEqualTo("废料杯");
+        assertThat(store.get(EntryId.of("Flame Altar")).status()).isEqualTo("verified");
+        assertThat(store.get(EntryId.of("X")).status()).as("认不出来的一律 draft").isEqualTo("draft");
         assertThat(store.list()).hasSize(3);
     }
 
@@ -117,7 +118,7 @@ class KbTermStoreTest {
     void writeTakesEffectWithoutManualReload() {
         assertThat(glossary.expand("灵火祭坛在哪")).as("新增前认不出来").doesNotContain("Flame Altar");
 
-        store.upsert("Flame Altar", "灵火祭坛、火焰祭坛", "verified");
+        store.upsert(EntryId.of("Flame Altar"), "灵火祭坛、火焰祭坛", "verified");
 
         assertThat(glossary.expand("灵火祭坛在哪")).as("★ 自动感知写入").contains("Flame Altar");
         assertThat(glossary.expand("火焰祭坛怎么升级")).contains("Flame Altar");
@@ -126,10 +127,10 @@ class KbTermStoreTest {
     @Test
     @DisplayName("★ 改成 rejected 后立即失效")
     void rejectedTakesEffect() {
-        store.upsert("Flame Altar", "火焰祭坛", "verified");
+        store.upsert(EntryId.of("Flame Altar"), "火焰祭坛", "verified");
         assertThat(glossary.expand("火焰祭坛")).contains("Flame Altar");
 
-        store.setStatus("Flame Altar", "rejected");
+        store.setStatus(EntryId.of("Flame Altar"), "rejected");
 
         assertThat(glossary.expand("火焰祭坛")).doesNotContain("Flame Altar");
     }
@@ -137,31 +138,31 @@ class KbTermStoreTest {
     @Test
     @DisplayName("清掉中文名后立即失效，但**行还在**（下次启动 reconcile 不会再补一遍）")
     void clearNameKeepsRow() {
-        store.upsert("Flame Altar", "火焰祭坛", "verified");
+        store.upsert(EntryId.of("Flame Altar"), "火焰祭坛", "verified");
         long before = store.count();
 
-        assertThat(store.clearName("Flame Altar")).isTrue();
+        assertThat(store.clearName(EntryId.of("Flame Altar"))).isTrue();
 
         assertThat(store.count()).as("行数不变").isEqualTo(before);
-        assertThat(store.get("Flame Altar").zh()).isEmpty();
-        assertThat(store.get("Flame Altar").status()).isEqualTo("draft");
+        assertThat(store.get(EntryId.of("Flame Altar")).zh()).isEmpty();
+        assertThat(store.get(EntryId.of("Flame Altar")).status()).isEqualTo("draft");
         assertThat(glossary.expand("火焰祭坛")).doesNotContain("Flame Altar");
     }
 
     @Test
     @DisplayName("批量改状态：分得清 真改了 / 本来就对 / 没这条")
     void batchStatus() {
-        store.upsert("A", "甲", "draft");
-        store.upsert("B", "乙", "verified");
-        store.upsert("C", "丙", "draft");
+        store.upsert(EntryId.of("A"), "甲", "draft");
+        store.upsert(EntryId.of("B"), "乙", "verified");
+        store.upsert(EntryId.of("C"), "丙", "draft");
 
-        KbTermStore.BatchResult r = store.setStatusBatch(List.of("A", "B", "C", "Nope"), "verified");
+        KbTermStore.BatchResult r = store.setStatusBatch(List.of(EntryId.of("A"), EntryId.of("B"), EntryId.of("C"), EntryId.of("Nope")), "verified");
 
         assertThat(r.updated()).as("A 和 C 需要改").isEqualTo(2);
         assertThat(r.unchanged()).as("B 本来就是 verified").isEqualTo(1);
         assertThat(r.missing()).containsExactly("Nope");
-        assertThat(store.get("A").status()).isEqualTo("verified");
-        assertThat(store.get("C").status()).isEqualTo("verified");
+        assertThat(store.get(EntryId.of("A")).status()).isEqualTo("verified");
+        assertThat(store.get(EntryId.of("C")).status()).isEqualTo("verified");
     }
 
     @Test
@@ -178,9 +179,9 @@ class KbTermStoreTest {
 
         assertThat(r.created()).isEqualTo(2);
         assertThat(r.skipped()).isEqualTo(1);
-        assertThat(store.get("Scrap Cup").zh()).isEqualTo("废料杯");
-        assertThat(store.get("Flame Altar").status()).as("缺状态列按 draft").isEqualTo("draft");
-        assertThat(store.get("Flame Altar").zh()).isEqualTo("火焰祭坛");
+        assertThat(store.get(EntryId.of("Scrap Cup")).zh()).isEqualTo("废料杯");
+        assertThat(store.get(EntryId.of("Flame Altar")).status()).as("缺状态列按 draft").isEqualTo("draft");
+        assertThat(store.get(EntryId.of("Flame Altar")).zh()).isEqualTo("火焰祭坛");
     }
 
     @Test
@@ -199,7 +200,7 @@ class KbTermStoreTest {
                 try {
                     start.await();
                     for (int i = 0; i < perThread; i++) {
-                        store.upsert("Term-" + tid + "-" + i, "词条" + tid + "-" + i, "draft");
+                        store.upsert(EntryId.of("Term-" + tid + "-" + i), "词条" + tid + "-" + i, "draft");
                     }
                 } catch (Exception e) {
                     failures.incrementAndGet();

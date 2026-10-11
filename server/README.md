@@ -653,8 +653,8 @@ src/main/resources/
 
 共享身份是类型而不是约定：`KbBlock.id()` 与词条表的 `en` 都是 `EntryId`，
 身份的创建点只有两处 —— 导入落库、词条行读库；字符串只出现在三层边界上
-（SQLite 仓储、HTTP 响应对象、LangChain4j 元数据）。两个存储保留 String 过渡重载，
-新代码请直接传 `EntryId`。
+（SQLite 仓储、HTTP 响应对象、LangChain4j 元数据）。两个存储只收 `EntryId`，
+字符串一律在边界那一侧转好再进来。
 
 名字登记的**策略**住在名字层（`KbTermService.registerMissing`：已有名字不覆盖），
 块侧只**提出候选**（`NameCandidate`）；导入的 HTTP 入口只有组合层那一个，

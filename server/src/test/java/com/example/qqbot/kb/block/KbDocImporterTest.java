@@ -130,7 +130,7 @@ class KbDocImporterTest {
         assertThat(r.updated()).isZero();
         assertThat(store.count()).isEqualTo(2);
 
-        KbBlock b = store.get("flame-altar-0");
+        KbBlock b = store.get(EntryId.of("flame-altar-0"));
         assertThat(b.title()).isEqualTo("灵火祭坛");
         assertThat(b.body()).isEqualTo("祭坛是复活点。");
         assertThat(b.url()).as("出处来自文档头 —— 回答时要给群友").isEqualTo("https://w/灵火祭坛");
@@ -139,7 +139,7 @@ class KbDocImporterTest {
 
         assertThat(index.isReady()).isTrue();
         assertThat(index.searchable()).hasSize(2);
-        assertThat(index.vector("flame-altar-0")).hasSize(DIM);
+        assertThat(index.vector(EntryId.of("flame-altar-0"))).hasSize(DIM);
     }
 
     /* ==================== ★ 文档级字段 source 也要能被改 ==================== */
@@ -151,7 +151,7 @@ class KbDocImporterTest {
         importer.importDocument(docWithSource("页面", "wiki",
                 "=== 甲 === <!-- id: p-0 -->", "正文甲",
                 "", "=== 乙 === <!-- id: p-1 -->", "正文乙"));
-        assertThat(store.get("p-0").source()).isEqualTo("wiki");
+        assertThat(store.get(EntryId.of("p-0")).source()).isEqualTo("wiki");
 
         // 再导同一份内容，**只把 source 改成 manual**
         String again = docWithSource("页面", "manual",
@@ -170,8 +170,8 @@ class KbDocImporterTest {
         assertThat(r.added()).isZero();
 
         // ③ 库里真的改了 —— 这正是"我们维护的内容"那一段能不能生效的关键
-        assertThat(store.get("p-0").source()).isEqualTo("manual");
-        assertThat(store.get("p-1").source()).isEqualTo("manual");
+        assertThat(store.get(EntryId.of("p-0")).source()).isEqualTo("manual");
+        assertThat(store.get(EntryId.of("p-1")).source()).isEqualTo("manual");
     }
 
     @Test
@@ -205,10 +205,10 @@ class KbDocImporterTest {
         assertThat(r.untouched()).as("甲和丙没被碰").isEqualTo(2);
         assertThat(store.count()).as("总块数不变").isEqualTo(3);
 
-        assertThat(store.get("p-1").body()).isEqualTo("新正文乙");
-        assertThat(store.get("p-0").body()).as("甲原样").isEqualTo("旧正文甲");
-        assertThat(store.get("p-2").body()).as("丙原样").isEqualTo("旧正文丙");
-        assertThat(index.block("p-1").body()).as("索引也跟着更新了").isEqualTo("新正文乙");
+        assertThat(store.get(EntryId.of("p-1")).body()).isEqualTo("新正文乙");
+        assertThat(store.get(EntryId.of("p-0")).body()).as("甲原样").isEqualTo("旧正文甲");
+        assertThat(store.get(EntryId.of("p-2")).body()).as("丙原样").isEqualTo("旧正文丙");
+        assertThat(index.block(EntryId.of("p-1")).body()).as("索引也跟着更新了").isEqualTo("新正文乙");
     }
 
     @Test
@@ -246,7 +246,7 @@ class KbDocImporterTest {
                 "=== 甲 === <!-- id: p-0 -->", "新正文")));
 
         assertThat(plan.updated()).hasSize(1);
-        assertThat(store.get("p-0").body()).as("预览不改数据").isEqualTo("旧正文");
+        assertThat(store.get(EntryId.of("p-0")).body()).as("预览不改数据").isEqualTo("旧正文");
     }
 
     /* ==================== 省 embedding ==================== */

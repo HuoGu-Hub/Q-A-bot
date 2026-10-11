@@ -117,7 +117,7 @@ public class KbBlockAdminService {
     }
 
     public BlockView get(String id) {
-        KbBlock b = store.get(id);
+        KbBlock b = store.get(com.example.qqbot.kb.EntryId.of(id));
         return b == null ? null : BlockView.of(b);
     }
 
@@ -130,7 +130,7 @@ public class KbBlockAdminService {
      * @throws IllegalArgumentException 正文为空（要下架请用 {@link #setRetired}）
      */
     public BlockView updateText(String id, String newText) {
-        KbBlock old = store.get(id);
+        KbBlock old = store.get(com.example.qqbot.kb.EntryId.of(id));
         if (old == null) {
             return null;
         }
@@ -164,7 +164,7 @@ public class KbBlockAdminService {
         if (!bid.matches("[" + "A-Za-z0-9-" + "]+")) {
             throw new IllegalArgumentException("id 只能由英文字母、数字和 - 组成：" + bid);
         }
-        if (store.get(bid) != null) {
+        if (store.get(com.example.qqbot.kb.EntryId.of(bid)) != null) {
             throw new IllegalArgumentException("id 已存在：" + bid + "（想改内容请用「保存这一块」）");
         }
         KbBlock b = new KbBlock(com.example.qqbot.kb.EntryId.of(bid), doc,
@@ -174,7 +174,7 @@ public class KbBlockAdminService {
         store.upsert(b, embed(body, bid));
         // 标题向量一起补上（C 路要它才能"名字直击"）；没标题的块就没有这一路
         if (!b.title().isBlank()) {
-            store.upsertTitleVector(bid, b.title(), embed(b.title(), bid));
+            store.upsertTitleVector(com.example.qqbot.kb.EntryId.of(bid), b.title(), embed(b.title(), bid));
         }
         log.info("[KB-BLOCK] 新增块 {}（文档 {}，{} 字）", bid, doc, body.length());
         return BlockView.of(b);
@@ -182,12 +182,12 @@ public class KbBlockAdminService {
 
     /** 下架 / 恢复一块（保留数据，随时能回来） */
     public boolean setRetired(String id, boolean retired) {
-        return store.setRetired(id, retired);
+        return store.setRetired(com.example.qqbot.kb.EntryId.of(id), retired);
     }
 
     /** **真删除**一块 —— 旧设计做不到（只能打墓碑），id 即身份之后才敢这么干 */
     public boolean delete(String id) {
-        boolean ok = store.delete(id);
+        boolean ok = store.delete(com.example.qqbot.kb.EntryId.of(id));
         if (ok) {
             log.warn("[KB-BLOCK] 块 {} 已真删除", id);
         }

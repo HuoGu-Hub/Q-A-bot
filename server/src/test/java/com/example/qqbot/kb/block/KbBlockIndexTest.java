@@ -77,8 +77,8 @@ class KbBlockIndexTest {
         store.upsert(block("a-0", "第一块正文"), vec(1f, 0f, 0f));
 
         assertThat(index.size()).isEqualTo(1);
-        assertThat(index.block("a-0")).isNotNull();
-        assertThat(index.block("a-0").body()).isEqualTo("第一块正文");
+        assertThat(index.block(EntryId.of("a-0"))).isNotNull();
+        assertThat(index.block(EntryId.of("a-0")).body()).isEqualTo("第一块正文");
         assertThat(index.entries()).hasSize(1);
         assertThat(index.isReady()).isTrue();
     }
@@ -87,12 +87,12 @@ class KbBlockIndexTest {
     @DisplayName("覆盖同一块：正文改了，索引里就是新正文 —— 不用重启也不用 reload")
     void overwriteInvalidates() {
         store.upsert(block("a-0", "旧正文"), vec(1f, 0f, 0f));
-        assertThat(index.block("a-0").body()).isEqualTo("旧正文");
+        assertThat(index.block(EntryId.of("a-0")).body()).isEqualTo("旧正文");
 
         store.upsert(block("a-0", "新正文"), vec(1f, 0f, 0f));
 
         assertThat(index.size()).isEqualTo(1);
-        assertThat(index.block("a-0").body()).isEqualTo("新正文");
+        assertThat(index.block(EntryId.of("a-0")).body()).isEqualTo("新正文");
     }
 
     @Test
@@ -103,7 +103,7 @@ class KbBlockIndexTest {
         assertThat(index.all()).hasSize(1);
 
         // 下架：立刻从索引里消失（索引只装未下架的块 —— 见 KbBlockStore.allActive 的 WHERE retired = 0）
-        store.setRetired("a-0", true);
+        store.setRetired(EntryId.of("a-0"), true);
         assertThat(index.entries()).isEmpty();
         assertThat(index.all()).isEmpty();
         // 行本身还在，只是 retired=1 —— 所以这是"下架"而不是"删除"
@@ -111,12 +111,12 @@ class KbBlockIndexTest {
         assertThat(store.all().get(0).retired()).isTrue();
 
         // 恢复
-        store.setRetired("a-0", false);
+        store.setRetired(EntryId.of("a-0"), false);
         assertThat(index.entries()).hasSize(1);
         assertThat(index.all()).hasSize(1);
 
         // 真删
-        store.delete("a-0");
+        store.delete(EntryId.of("a-0"));
         assertThat(index.all()).isEmpty();
         assertThat(index.entries()).isEmpty();
 
@@ -132,16 +132,16 @@ class KbBlockIndexTest {
     @DisplayName("标题向量也算一次写入 —— 补完索引立刻带上（C 路闸门靠它）")
     void titleVectorInvalidates() {
         store.upsert(block("a-0", "正文"), vec(1f, 0f, 0f));
-        assertThat(index.titleVector("a-0")).isNull();
+        assertThat(index.titleVector(EntryId.of("a-0"))).isNull();
         assertThat(index.titleVectorCount()).isZero();
 
-        store.upsertTitleVector("a-0", "a-0 标题", vec(0f, 1f, 0f));
+        store.upsertTitleVector(EntryId.of("a-0"), "a-0 标题", vec(0f, 1f, 0f));
 
-        assertThat(index.titleVector("a-0")).isNotNull();
+        assertThat(index.titleVector(EntryId.of("a-0"))).isNotNull();
         assertThat(index.titleVectorCount()).isEqualTo(1);
 
-        store.deleteTitleVector("a-0");
-        assertThat(index.titleVector("a-0")).isNull();
+        store.deleteTitleVector(EntryId.of("a-0"));
+        assertThat(index.titleVector(EntryId.of("a-0"))).isNull();
     }
 
     @Test
@@ -158,8 +158,8 @@ class KbBlockIndexTest {
 
         // 写失败（不存在的块做下架/删除）不该动版本
         long v1 = store.version();
-        assertThat(store.setRetired("no-such-block", true)).isFalse();
-        assertThat(store.delete("no-such-block")).isFalse();
+        assertThat(store.setRetired(EntryId.of("no-such-block"), true)).isFalse();
+        assertThat(store.delete(EntryId.of("no-such-block"))).isFalse();
         assertThat(store.version()).isEqualTo(v1);
 
         // 强制重载仍然可用（CLI / 测试逃生口）

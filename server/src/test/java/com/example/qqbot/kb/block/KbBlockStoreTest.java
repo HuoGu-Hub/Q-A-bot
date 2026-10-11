@@ -73,7 +73,7 @@ class KbBlockStoreTest {
         boolean isNew = store.upsert(block("flame-altar-0", "flame-altar", "灵火祭坛", "祭坛是复活点"), vec(1, 0, 0));
 
         assertThat(isNew).isTrue();
-        KbBlock b = store.get("flame-altar-0");
+        KbBlock b = store.get(EntryId.of("flame-altar-0"));
         assertThat(b).isNotNull();
         assertThat(b.docId()).isEqualTo("flame-altar");
         assertThat(b.title()).isEqualTo("灵火祭坛");
@@ -92,15 +92,15 @@ class KbBlockStoreTest {
 
         assertThat(isNew).as("已存在 → 不是新增").isFalse();
         assertThat(store.count()).isEqualTo(1);
-        assertThat(store.get("a").body()).isEqualTo("新正文");
+        assertThat(store.get(EntryId.of("a")).body()).isEqualTo("新正文");
     }
 
     @Test
     @DisplayName("不存在的 id → null（而不是报错）")
     void missingIdReturnsNull() {
-        assertThat(store.get("不存在")).isNull();
-        assertThat(store.get((String) null)).isNull();
-        assertThat(store.get("  ")).isNull();
+        assertThat(store.get(EntryId.of("不存在"))).isNull();
+        assertThat(store.get(EntryId.of((String) null))).isNull();
+        assertThat(store.get(EntryId.of("  "))).isNull();
     }
 
     @Test
@@ -118,10 +118,10 @@ class KbBlockStoreTest {
     void vectorRoundTrip() {
         store.upsert(block("a", "d", "t", "b"), vec(0.25f, -1.5f, 3f));
 
-        assertThat(store.vector("a")).containsExactly(0.25f, -1.5f, 3f);
+        assertThat(store.vector(EntryId.of("a"))).containsExactly(0.25f, -1.5f, 3f);
         assertThat(store.dimensions()).isEqualTo(3);
         assertThat(store.countVectors()).isEqualTo(1);
-        assertThat(store.vector("没有这个")).isNull();
+        assertThat(store.vector(EntryId.of("没有这个"))).isNull();
     }
 
     @Test
@@ -130,8 +130,8 @@ class KbBlockStoreTest {
         store.upsert(block("a", "d", "t", "旧"), vec(1, 2, 3));
         store.upsert(block("a", "d", "t", "只是改了标题"), null);
 
-        assertThat(store.get("a").body()).isEqualTo("只是改了标题");
-        assertThat(store.vector("a")).as("向量还在").containsExactly(1, 2, 3);
+        assertThat(store.get(EntryId.of("a")).body()).isEqualTo("只是改了标题");
+        assertThat(store.vector(EntryId.of("a"))).as("向量还在").containsExactly(1, 2, 3);
     }
 
     @Test
@@ -155,14 +155,14 @@ class KbBlockStoreTest {
         store.upsert(block("b", "d", "乙", "正文乙"), vec(0, 1));
         store.upsert(block("c", "d", "丙", "正文丙"), vec(0, 0, 1));
 
-        assertThat(store.delete("b")).isTrue();
+        assertThat(store.delete(EntryId.of("b"))).isTrue();
 
         assertThat(store.count()).isEqualTo(2);
-        assertThat(store.get("b")).isNull();
-        assertThat(store.vector("b")).isNull();
-        assertThat(store.get("a").body()).as("邻居一字未动").isEqualTo("正文甲");
-        assertThat(store.vector("c")).containsExactly(0f, 0f, 1f);
-        assertThat(store.delete("b")).as("再删一次返回 false").isFalse();
+        assertThat(store.get(EntryId.of("b"))).isNull();
+        assertThat(store.vector(EntryId.of("b"))).isNull();
+        assertThat(store.get(EntryId.of("a")).body()).as("邻居一字未动").isEqualTo("正文甲");
+        assertThat(store.vector(EntryId.of("c"))).containsExactly(0f, 0f, 1f);
+        assertThat(store.delete(EntryId.of("b"))).as("再删一次返回 false").isFalse();
     }
 
     @Test
@@ -172,8 +172,8 @@ class KbBlockStoreTest {
         store.upsert(block("new-id", "d", "标题", "正文"), vec(1, 0));
 
         assertThat(store.count()).isEqualTo(2);
-        assertThat(store.get("old-id")).isNotNull();
-        assertThat(store.get("new-id")).isNotNull();
+        assertThat(store.get(EntryId.of("old-id"))).isNotNull();
+        assertThat(store.get(EntryId.of("new-id"))).isNotNull();
     }
 
     /* ==================== 下架 / 分组 / 清空 / 持久化 ==================== */
@@ -184,14 +184,14 @@ class KbBlockStoreTest {
         store.upsert(block("a", "d", "甲", "正文"), vec(1, 0));
         store.upsert(block("b", "d", "乙", "正文"), vec(0, 1));
 
-        assertThat(store.setRetired("a", true)).isTrue();
+        assertThat(store.setRetired(EntryId.of("a"), true)).isTrue();
 
         assertThat(store.all()).hasSize(2);
         assertThat(store.allActive()).extracting(KbBlock::id).containsExactly(EntryId.of("b"));
         assertThat(store.countRetired()).isEqualTo(1);
-        assertThat(store.get("a").body()).as("正文还在，能恢复").isEqualTo("正文");
+        assertThat(store.get(EntryId.of("a")).body()).as("正文还在，能恢复").isEqualTo("正文");
 
-        store.setRetired("a", false);
+        store.setRetired(EntryId.of("a"), false);
         assertThat(store.allActive()).extracting(KbBlock::id).containsExactly(EntryId.of("a"), EntryId.of("b"));
     }
 
@@ -226,8 +226,8 @@ class KbBlockStoreTest {
         reopened.init();
 
         assertThat(reopened.count()).isEqualTo(1);
-        assertThat(reopened.get("a").body()).isEqualTo("正文");
-        assertThat(reopened.vector("a")).containsExactly(1, 2, 3);
+        assertThat(reopened.get(EntryId.of("a")).body()).isEqualTo("正文");
+        assertThat(reopened.vector(EntryId.of("a"))).containsExactly(1, 2, 3);
     }
 
     /* ==================== ★ 标题向量（C 路） ==================== */
@@ -236,38 +236,38 @@ class KbBlockStoreTest {
     @DisplayName("标题向量按 id 存取，并**记住它是对哪个标题算的**（过期判定全靠它）")
     void titleVectorRoundTrip() {
         store.upsert(block("a", "d", "酸蚀之咬（Acid Bite）", "魔法弹药"), vec(1, 0));
-        store.upsertTitleVector("a", "酸蚀之咬（Acid Bite）", vec(0.5f, 0.5f));
+        store.upsertTitleVector(EntryId.of("a"), "酸蚀之咬（Acid Bite）", vec(0.5f, 0.5f));
 
-        assertThat(store.titleVector("a").vec()).containsExactly(0.5f, 0.5f);
-        assertThat(store.titleVector("a").title()).isEqualTo("酸蚀之咬（Acid Bite）");
+        assertThat(store.titleVector(EntryId.of("a")).vec()).containsExactly(0.5f, 0.5f);
+        assertThat(store.titleVector(EntryId.of("a")).title()).isEqualTo("酸蚀之咬（Acid Bite）");
         assertThat(store.countTitleVectors()).isEqualTo(1);
         assertThat(store.allTitleVectors()).containsKey(EntryId.of("a"));
-        assertThat(store.titleVector("没有这个")).isNull();
+        assertThat(store.titleVector(EntryId.of("没有这个"))).isNull();
     }
 
     @Test
     @DisplayName("标题向量可以单独重写（正文不变、只换标题向量）")
     void titleVectorCanBeOverwritten() {
         store.upsert(block("a", "d", "旧标题", "正文"), vec(1, 0));
-        store.upsertTitleVector("a", "旧标题", vec(1, 0));
-        store.upsertTitleVector("a", "新标题", vec(0, 1));
+        store.upsertTitleVector(EntryId.of("a"), "旧标题", vec(1, 0));
+        store.upsertTitleVector(EntryId.of("a"), "新标题", vec(0, 1));
 
         assertThat(store.countTitleVectors()).as("还是 1 条，不是 2 条").isEqualTo(1);
-        assertThat(store.titleVector("a").title()).isEqualTo("新标题");
-        assertThat(store.titleVector("a").vec()).containsExactly(0f, 1f);
+        assertThat(store.titleVector(EntryId.of("a")).title()).isEqualTo("新标题");
+        assertThat(store.titleVector(EntryId.of("a")).vec()).containsExactly(0f, 1f);
     }
 
     @Test
     @DisplayName("★ 删块 / 清空时标题向量一起走（否则新建同 id 的块会捡到旧标题的向量）")
     void titleVectorFollowsBlockLifecycle() {
         store.upsert(block("a", "d", "甲", "正文"), vec(1, 0));
-        store.upsertTitleVector("a", "甲", vec(1, 0));
+        store.upsertTitleVector(EntryId.of("a"), "甲", vec(1, 0));
 
-        assertThat(store.delete("a")).isTrue();
+        assertThat(store.delete(EntryId.of("a"))).isTrue();
         assertThat(store.countTitleVectors()).isZero();
 
         store.upsert(block("b", "d", "乙", "正文"), vec(1, 0));
-        store.upsertTitleVector("b", "乙", vec(1, 0));
+        store.upsertTitleVector(EntryId.of("b"), "乙", vec(1, 0));
         store.clearAll();
         assertThat(store.countTitleVectors()).isZero();
     }

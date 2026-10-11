@@ -245,7 +245,7 @@ public class KbDocImporter {
         List<ChunkMarkup.Block> moved = new ArrayList<>();
         List<ChunkMarkup.Block> stay = new ArrayList<>();
         for (ChunkMarkup.Block b : raw.unchanged()) {
-            KbBlock cur = store.get(b.key());
+            KbBlock cur = store.get(com.example.qqbot.kb.EntryId.of(b.key()));
             if (cur != null && !source.equals(cur.source())) {
                 moved.add(b);
             } else {

@@ -102,8 +102,8 @@ class KbBlockAdminServiceTest {
 
         assertThat(v.id()).isEqualTo("flame-altar-0");
         assertThat(v.source()).isEqualTo("manual");
-        assertThat(store.vector("flame-altar-0")).containsExactly(vecOf("祭坛是复活点。"));
-        assertThat(index.block("flame-altar-0")).isNotNull();
+        assertThat(store.vector(EntryId.of("flame-altar-0"))).containsExactly(vecOf("祭坛是复活点。"));
+        assertThat(index.block(EntryId.of("flame-altar-0"))).isNotNull();
     }
 
     @Test
@@ -145,13 +145,13 @@ class KbBlockAdminServiceTest {
     @DisplayName("★ 改正文会重算向量 —— 否则保存成功但检索还按旧正文匹配")
     void updateTextRecomputesVector() {
         service.add("doc", "doc-0", "标题", "旧正文", "", null);
-        assertThat(store.vector("doc-0")).containsExactly(vecOf("旧正文"));
+        assertThat(store.vector(EntryId.of("doc-0"))).containsExactly(vecOf("旧正文"));
 
         KbBlockAdminService.BlockView v = service.updateText("doc-0", "全新的正文");
 
         assertThat(v.text()).isEqualTo("全新的正文");
-        assertThat(store.get("doc-0").body()).isEqualTo("全新的正文");
-        assertThat(store.vector("doc-0"))
+        assertThat(store.get(EntryId.of("doc-0")).body()).isEqualTo("全新的正文");
+        assertThat(store.vector(EntryId.of("doc-0")))
                 .as("★ 向量必须是按新正文算的")
                 .containsExactly(vecOf("全新的正文"))
                 .isNotEqualTo(vecOf("旧正文"));
@@ -183,10 +183,10 @@ class KbBlockAdminServiceTest {
 
         assertThat(service.setRetired("doc-0", true)).isTrue();
         assertThat(store.count()).as("下架不删数据").isEqualTo(2);
-        assertThat(index.block("doc-0")).as("但不再进检索索引").isNull();
+        assertThat(index.block(EntryId.of("doc-0"))).as("但不再进检索索引").isNull();
 
         assertThat(service.setRetired("doc-0", false)).isTrue();
-        assertThat(index.block("doc-0")).isNotNull();
+        assertThat(index.block(EntryId.of("doc-0"))).isNotNull();
 
         assertThat(service.delete("doc-1")).isTrue();
         assertThat(store.count()).isEqualTo(1);
@@ -203,12 +203,12 @@ class KbBlockAdminServiceTest {
         int n = service.setDocRetired("docA", true);
 
         assertThat(n).isEqualTo(2);
-        assertThat(store.get("docA-0").retired()).isTrue();
-        assertThat(store.get("docA-1").retired()).isTrue();
-        assertThat(store.get("docB-0").retired()).as("docB 不受影响").isFalse();
+        assertThat(store.get(EntryId.of("docA-0")).retired()).isTrue();
+        assertThat(store.get(EntryId.of("docA-1")).retired()).isTrue();
+        assertThat(store.get(EntryId.of("docB-0")).retired()).as("docB 不受影响").isFalse();
 
         assertThat(service.setDocRetired("docA", false)).isEqualTo(2);
-        assertThat(store.get("docA-0").retired()).isFalse();
+        assertThat(store.get(EntryId.of("docA-0")).retired()).isFalse();
     }
 
     /* ==================== 概览 ==================== */
@@ -259,7 +259,7 @@ class KbBlockAdminServiceTest {
 
         KbDocImporter.Result r = service.importBlocks(doc);
         assertThat(r.added()).isEqualTo(1);
-        assertThat(store.get("flame-altar-0").title()).isEqualTo("灵火祭坛");
+        assertThat(store.get(EntryId.of("flame-altar-0")).title()).isEqualTo("灵火祭坛");
     }
 
     @Test
@@ -280,10 +280,10 @@ class KbBlockAdminServiceTest {
     void addAlsoWritesTitleVector() {
         service.add("doc", "doc-0", "灵火祭坛（Flame Altar）", "祭坛是复活点。", "", null);
 
-        assertThat(store.titleVector("doc-0")).isNotNull();
-        assertThat(store.titleVector("doc-0").title()).isEqualTo("灵火祭坛（Flame Altar）");
-        assertThat(store.titleVector("doc-0").vec()).containsExactly(vecOf("灵火祭坛（Flame Altar）"));
-        assertThat(index.titleVector("doc-0")).as("索引里立刻可见，不用重启").isNotNull();
+        assertThat(store.titleVector(EntryId.of("doc-0"))).isNotNull();
+        assertThat(store.titleVector(EntryId.of("doc-0")).title()).isEqualTo("灵火祭坛（Flame Altar）");
+        assertThat(store.titleVector(EntryId.of("doc-0")).vec()).containsExactly(vecOf("灵火祭坛（Flame Altar）"));
+        assertThat(index.titleVector(EntryId.of("doc-0"))).as("索引里立刻可见，不用重启").isNotNull();
     }
 
     @Test
@@ -304,7 +304,7 @@ class KbBlockAdminServiceTest {
         assertThat(first.pending()).isEqualTo(2);
         assertThat(first.embedded()).isEqualTo(2);
         assertThat(store.countTitleVectors()).isEqualTo(2);
-        assertThat(index.titleVector("a")).as("补完自动 reload，不用重启").isNotNull();
+        assertThat(index.titleVector(EntryId.of("a"))).as("补完自动 reload，不用重启").isNotNull();
 
         KbBlockAdminService.TitleBackfill again = service.backfillTitleVectors(false);
         assertThat(again.pending()).as("幂等：再跑一遍没有要补的").isZero();
@@ -316,7 +316,7 @@ class KbBlockAdminServiceTest {
     void backfillDetectsStaleTitle() {
         store.upsert(new KbBlock(EntryId.of("a"), "d", "旧标题", "正文", "", java.util.List.of(),
                 KbBlock.SRC_DOC, false, ""), vecOf("正文"));
-        store.upsertTitleVector("a", "旧标题", vecOf("旧标题"));
+        store.upsertTitleVector(EntryId.of("a"), "旧标题", vecOf("旧标题"));
         assertThat(store.countTitleVectors()).isEqualTo(1);
 
         // 只改标题（正文向量不动 —— 这是 upsert 的既有语义）
@@ -326,8 +326,8 @@ class KbBlockAdminServiceTest {
         KbBlockAdminService.TitleBackfill r = service.backfillTitleVectors(false);
         assertThat(r.stale()).isEqualTo(1);
         assertThat(r.missing()).isZero();
-        assertThat(store.titleVector("a").title()).isEqualTo("新标题");
-        assertThat(store.titleVector("a").vec()).containsExactly(vecOf("新标题"));
+        assertThat(store.titleVector(EntryId.of("a")).title()).isEqualTo("新标题");
+        assertThat(store.titleVector(EntryId.of("a")).vec()).containsExactly(vecOf("新标题"));
     }
 
     @Test

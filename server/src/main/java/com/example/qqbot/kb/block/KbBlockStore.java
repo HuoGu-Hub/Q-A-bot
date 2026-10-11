@@ -118,11 +118,6 @@ public class KbBlockStore {
         }
     }
 
-    /** 过渡用的字符串重载 —— 新代码请传 {@link EntryId}，让身份由编译器看住 */
-    public KbBlock get(String id) {
-        return get(EntryId.of(id));
-    }
-
     public KbBlock get(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return null;
@@ -177,11 +172,6 @@ public class KbBlockStore {
     // ==================== 向量 ====================
 
     /** 读一个块的向量；没有就返回 {@code null} */
-    /** 过渡用的字符串重载 */
-    public float[] vector(String id) {
-        return vector(EntryId.of(id));
-    }
-
     public float[] vector(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return null;
@@ -239,11 +229,6 @@ public class KbBlockStore {
     }
 
     /** 读一个块的标题向量；没有就返回 {@code null} */
-    /** 过渡用的字符串重载 */
-    public TitleVector titleVector(String id) {
-        return titleVector(EntryId.of(id));
-    }
-
     public TitleVector titleVector(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return null;
@@ -274,11 +259,6 @@ public class KbBlockStore {
     }
 
     /** 写入 / 覆盖一个块的标题向量。{@code title} 必须一起给（见 {@link TitleVector}） */
-    /** 过渡用的字符串重载 */
-    public void upsertTitleVector(String id, String title, float[] vec) {
-        upsertTitleVector(EntryId.of(id), title, vec);
-    }
-
     public void upsertTitleVector(EntryId id, String title, float[] vec) {
         if (!available || id == null || id.isBlank() || vec == null || vec.length == 0) {
             return;
@@ -292,11 +272,6 @@ public class KbBlockStore {
     }
 
     /** 删掉一个块的标题向量（块本身还在时用，比如模型换了要整批重算） */
-    /** 过渡用的字符串重载 */
-    public void deleteTitleVector(String id) {
-        deleteTitleVector(EntryId.of(id));
-    }
-
     public void deleteTitleVector(EntryId id) {
         if (!available || id == null || id.isBlank()) {
             return;
@@ -343,11 +318,6 @@ public class KbBlockStore {
     }
 
     /** 下架 / 恢复。**保留数据**，只改标记 —— 与旧的墓碑机制不同，这里可以真删也可以留着 */
-    /** 过渡用的字符串重载 */
-    public boolean setRetired(String id, boolean retired) {
-        return setRetired(EntryId.of(id), retired);
-    }
-
     public boolean setRetired(EntryId id, boolean retired) {
         if (!available) {
             return false;
@@ -365,11 +335,6 @@ public class KbBlockStore {
     }
 
     /** 真删（块 + 向量）。旧设计做不到这件事，只能打墓碑 —— 这是 id 身份换来的自由 */
-    /** 过渡用的字符串重载 */
-    public boolean delete(String id) {
-        return delete(EntryId.of(id));
-    }
-
     public boolean delete(EntryId id) {
         if (!available) {
             return false;

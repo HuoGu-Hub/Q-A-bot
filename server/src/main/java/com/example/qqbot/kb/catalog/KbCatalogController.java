@@ -143,7 +143,7 @@ public class KbCatalogController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "status 只能是 " + String.join(" / ", KbTermStore.STATUSES)));
         }
-        if (!termService.saveName(en, zh, status)) {
+        if (!termService.saveName(com.example.qqbot.kb.EntryId.of(en), zh, status)) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "写入失败（词条存储不可用）"));
         }
@@ -188,7 +188,11 @@ public class KbCatalogController {
             return ResponseEntity.badRequest().body(Map.of("error", "items 里没有有效的英文名"));
         }
 
-        KbTermStore.BatchResult r = termService.setStatusBatch(new ArrayList<>(targets), wanted);
+        java.util.List<com.example.qqbot.kb.EntryId> ids = new ArrayList<>(targets.size());
+        for (String t : targets) {
+            ids.add(com.example.qqbot.kb.EntryId.of(t));
+        }
+        KbTermStore.BatchResult r = termService.setStatusBatch(ids, wanted);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
         out.put("updated", r.updated());
@@ -211,7 +215,7 @@ public class KbCatalogController {
         if (en == null || en.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "需要 en"));
         }
-        if (!termService.clearName(en)) {
+        if (!termService.clearName(com.example.qqbot.kb.EntryId.of(en))) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条词条"));
         }
         return ResponseEntity.ok(Map.of("ok", true, "size", store.count()));
