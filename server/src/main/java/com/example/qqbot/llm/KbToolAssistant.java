@@ -5,7 +5,6 @@ import com.example.qqbot.kb.KbLookupTool;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import dev.langchain4j.data.message.ImageContent;
-import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.service.UserMessage;
@@ -35,9 +34,10 @@ import java.util.Set;
  * 安全底座只有一份（{@code system.md}）。所以用 {@code systemMessageProvider}
  * 把 {@link LlmRouter#systemPromptWithStyle()} 交过去，而不是让它用默认的空提示词。
  *
- * <h2>入口还没切</h2>
- * 群聊链路目前仍走 {@code ChatService} 自己拼消息的老路。这个助手已经能跑，
- * 切换是一次小改动 —— 但那是独立一步，不混在装配里做。
+ * <h2>两条路都已接上</h2>
+ * 群聊的纯文本与带图两条路都走本类：文本走 {@link #chat}，图片走
+ * {@link #chatWithImages}。检索、资料注入与工具执行因此只有一份实现，
+ * 不存在「老路 + 新路」并存。
  */
 @Component
 public class KbToolAssistant {
@@ -70,10 +70,17 @@ public class KbToolAssistant {
         /**
          * 带图片的重载。
          *
-         * <p>注：{@code UserMessage} 有两个同名类 —— 注解在 {@code service} 包、
-         * 消息类型在 {@code data.message} 包，所以这里必须写全限定名。
+         * <p><b>图片必须作为独立的 Content 参数传，不能塞进一个 {@code UserMessage} 再传。</b>
+         * 框架只把带 {@code @UserMessage} 的参数当<b>模板</b>：非 Content 的参数会被
+         * {@code InternalReflectionVariableResolver.asString()} 取 {@code toString()}，
+         * 于是整条 {@code UserMessage} 被序列化成纯文本、{@code ImageContent} 一个都到不了模型
+         * —— 而且不抛异常，只是静默地按文本回答。
+         * 这条契约由 {@code KbToolAssistantTest.chatWithImagesKeepsImageContents} 钉住。
+         *
+         * <p>两个参数都带 {@code @UserMessage} 是官方支持的形状：
+         * 第一个提供信封文本，第二个把图片并回同一条消息。
          */
-        String chat(@UserMessage dev.langchain4j.data.message.UserMessage message,
+        String chat(@UserMessage String message, @UserMessage List<ImageContent> images,
                     InvocationParameters params);
     }
 
@@ -99,8 +106,8 @@ public class KbToolAssistant {
      * 调用前授权。放行记日志，不放行当场拒绝。
      *
      * <p>{@link BeforeToolExecution} 同时带着请求与 {@link dev.langchain4j.invocation.InvocationContext}，
-     * 后者能拿到调用方传进来的参数 —— 按"谁在调"决定放行是可行的，
-     * 那是接入群聊入口时要做的事（那时调用方才有身份）。
+     * 后者能拿到调用方传进来的参数。群聊入口已经按 {@code 群:xx/用户:xx} 把身份传进来
+     * （见 {@code ChatService.callerOf}），所以这条判据今天就生效，不是"以后再说"。
      */
     void authorize(BeforeToolExecution execution) {
         String name = execution.request().name();
@@ -189,17 +196,16 @@ public class KbToolAssistant {
      */
     public String chatWithImages(String message, List<VisionImage> images, String kbQuery,
                                  KbRetrievalDiagnostics sink, boolean kbEnabled, String caller) {
-        List<dev.langchain4j.data.message.Content> contents = new ArrayList<>();
-        contents.add(TextContent.from(message == null ? "" : message));
+        // ⚠️ 这里**不能**自己拼一条多内容 UserMessage 再传 —— 它会被框架当模板 toString 掉。
+        //    见 Assistant 的第二个重载：文本走 message，图片走 List<ImageContent> 参数。
+        List<ImageContent> contents = new ArrayList<>();
         if (images != null) {
             for (VisionImage img : images) {
                 contents.add(ImageContent.from(img.base64(), img.mimeType()));
             }
         }
-        dev.langchain4j.data.message.UserMessage full =
-                dev.langchain4j.data.message.UserMessage.from(
-                        contents.toArray(new dev.langchain4j.data.message.Content[0]));
-        return assistant.chat(full, params(kbQuery, sink, kbEnabled, caller));
+        return assistant.chat(message == null ? "" : message, contents,
+                params(kbQuery, sink, kbEnabled, caller));
     }
 
     private static InvocationParameters params(String kbQuery, KbRetrievalDiagnostics sink,

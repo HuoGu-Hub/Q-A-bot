@@ -14,6 +14,8 @@ import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.TwoSectionInjector;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -74,13 +76,18 @@ class KbToolAssistantTest {
             return ChatResponse.builder().aiMessage(AiMessage.from("最终答案")).build();
         }
 
-        /** 模型收到的最后一条用户消息的正文 */
-        String lastUserText() {
+        /** 模型收到的最后一条用户消息 —— 断言"到底送了什么"必须看整条，不能只看正文 */
+        UserMessage lastUserMessage() {
             return seen.get(seen.size() - 1).messages().stream()
                     .filter(m -> m instanceof UserMessage)
-                    .map(m -> ((UserMessage) m).singleText())
+                    .map(m -> (UserMessage) m)
                     .reduce((a, b) -> b)
-                    .orElse("");
+                    .orElseThrow(() -> new AssertionError("模型一条用户消息都没收到"));
+        }
+
+        /** 模型收到的最后一条用户消息的正文。只对"单条文本"的消息有意义，多内容会抛异常 */
+        String lastUserText() {
+            return lastUserMessage().singleText();
         }
     }
 
@@ -299,5 +306,30 @@ class KbToolAssistantTest {
         assertThat(received).as("用户原话必须还在").contains("灵火祭坛在哪");
         assertThat(received).contains("<<<KNOWLEDGE").contains("KNOWLEDGE>>>");
         assertThat(received).contains("【我们维护的内容】").contains("我们改过的正文");
+    }
+
+    @Test
+    @DisplayName("★ 视觉入口：图片以 ImageContent 到达模型，资料同时按契约注入")
+    void chatWithImagesKeepsImageContents() {
+        FakeChatModel model = new FakeChatModel(null);
+        KbRetriever.Hit h = hit("wiki-campfire", "营火、Campfire", "营火用来烹饪。", false, "2026-10-01");
+        KbToolAssistant a = assistant(model, kbWith(augmentorLikeProduction(List.of(h))));
+
+        KbRetrievalDiagnostics sink = new KbRetrievalDiagnostics();
+        a.chatWithImages("<<<USER_CONTENT\n这个怎么用\nUSER_CONTENT>>>",
+                List.of(new VisionImage("QUJD", "image/jpeg")),
+                "这个怎么用", sink, true, "群:1/用户:2");
+
+        UserMessage received = model.lastUserMessage();
+        assertThat(received.contents())
+                .as("图片必须以 ImageContent 到达模型 —— 塞进 UserMessage 参数会被框架 toString 成纯文本")
+                .anyMatch(ImageContent.class::isInstance);
+        assertThat(((TextContent) received.contents().get(0)).text())
+                .as("信封与资料仍在同一条消息的文本里")
+                .contains("<<<USER_CONTENT")
+                .contains("<<<KNOWLEDGE");
+        assertThat(received.contents())
+                .as("只有图片也算一条视觉消息，不应被拆成两条")
+                .hasSize(2);
     }
 }

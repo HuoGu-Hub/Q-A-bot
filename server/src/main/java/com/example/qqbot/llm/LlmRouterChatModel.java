@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
  * 而不是另起一条没有降级、没有计费的旁路。
  *
  * <p><b>它不注入系统提示词</b>：系统消息由 AiServices 提供。
- * 这一点与 {@code chat()/chatWithImages()} 不同 —— 那两条老路径自己拼系统消息。
+ * 这一点与 {@link LlmRouter#chat(String)} 不同 —— 那条入口自己拼系统消息，
+ * 现在只服务广场与提案两条旁路。
  */
 @Component
 public class LlmRouterChatModel implements ChatModel {

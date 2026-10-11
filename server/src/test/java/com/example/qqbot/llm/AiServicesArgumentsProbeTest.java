@@ -47,27 +47,77 @@ class AiServicesArgumentsProbeTest {
         }
     }
 
-    /** 视觉路径的探针：整条 UserMessage（含图片）能不能当参数 */
+    /**
+     * 记录"模型到底收到了什么"的模型。
+     *
+     * <p>探针只看返回值是不够的 —— 视觉路径出过一次静默事故：调用不抛异常、
+     * 返回值正常，但图片压根没到模型。所以这里必须能回看输入。
+     */
+    static final class RecordingModel implements ChatModel {
+        private ChatRequest last;
+
+        @Override
+        public ChatResponse doChat(ChatRequest request) {
+            this.last = request;
+            return ChatResponse.builder().aiMessage(AiMessage.from("好的")).build();
+        }
+
+        /** 模型收到的最后一条用户消息 */
+        dev.langchain4j.data.message.UserMessage lastUserMessage() {
+            return last.messages().stream()
+                    .filter(m -> m instanceof dev.langchain4j.data.message.UserMessage)
+                    .map(m -> (dev.langchain4j.data.message.UserMessage) m)
+                    .reduce((a, b) -> b)
+                    .orElseThrow(() -> new AssertionError("模型一条用户消息都没收到"));
+        }
+    }
+
+    /**
+     * 视觉路径的探针 —— <b>与生产同一个形状</b>：文本走 {@code @UserMessage String}，
+     * 图片走 {@code @UserMessage List<ImageContent>}。
+     *
+     * <p>两条硬约束：
+     * <ol>
+     *   <li>图片必须是独立的 Content 参数。塞进一条 {@code UserMessage} 再当参数传，
+     *       框架会取它的 {@code toString()} 当模板，图片变成正文里的 base64 文本；</li>
+     *   <li>probe 必须挂 {@code retrievalAugmentor}，生产就是挂着的 ——
+     *       上一版探针没挂，所以没暴露第一条。</li>
+     * </ol>
+     */
     interface VisionProbe {
-        // 注：UserMessage 有两个同名类 —— 注解在 service 包，消息类型在 data.message 包，
-        // 所以消息类型这里必须用全限定名
-        String chat(@UserMessage dev.langchain4j.data.message.UserMessage message,
+        String chat(@UserMessage String message,
+                    @UserMessage List<ImageContent> images,
                     InvocationParameters params);
     }
 
     @Test
-    @DisplayName("★ 带图片的 UserMessage 能当参数 —— 视觉路径切换的前提")
-    void userMessageWithImageAccepted() {
-        VisionProbe assistant = AiServices.builder(VisionProbe.class)
-                .chatModel(new EchoModel())
+    @DisplayName("★ 带图片的一问一答：ImageContent 真的到了模型，而不是被序列化成文本")
+    void userMessageWithImageReachesModel() {
+        RecordingModel model = new RecordingModel();
+        // ★ 必须挂 augmentor：生产挂着它，而正是它让"整条 UserMessage 当参数"那条路露馅
+        RetrievalAugmentor augmentor = DefaultRetrievalAugmentor.builder()
+                .queryRouter(new DefaultQueryRouter(q -> List.of()))
                 .build();
 
-        dev.langchain4j.data.message.UserMessage message =
-                dev.langchain4j.data.message.UserMessage.from(
-                        TextContent.from("发言者：小明"),
-                        ImageContent.from("QUJD", "image/jpeg"));
+        VisionProbe assistant = AiServices.builder(VisionProbe.class)
+                .chatModel(model)
+                .retrievalAugmentor(augmentor)
+                .build();
 
-        assertThat(assistant.chat(message, new InvocationParameters())).isEqualTo("好的");
+        List<ImageContent> images = List.of(ImageContent.from("QUJD", "image/jpeg"));
+        String reply = assistant.chat(
+                "发言者：小明\n<<<USER_CONTENT\n这是什么\nUSER_CONTENT>>>",
+                images, new InvocationParameters());
+
+        assertThat(reply).isEqualTo("好的");
+        assertThat(model.lastUserMessage().contents())
+                .as("图片必须以 ImageContent 到达模型。若这条红了，说明图片被当文本发了："
+                        + "contents 只剩一条 TextContent，正文里带着 base64")
+                .anyMatch(ImageContent.class::isInstance);
+        assertThat(((TextContent) model.lastUserMessage().contents().get(0)).text())
+                .as("正文是信封本身，不是 UserMessage{...} 的序列化结果")
+                .doesNotContain("UserMessage {")
+                .contains("这是什么");
     }
 
     /** 生产代码将来读的就是这两个键 */

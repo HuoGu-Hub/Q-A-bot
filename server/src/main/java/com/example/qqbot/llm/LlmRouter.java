@@ -455,8 +455,8 @@ public class LlmRouter {
      * 消息级入口：**原样把消息发出去，不注入系统提示词**。
      *
      * <p>AiServices 自己管系统消息，所以它需要一个"别替我加"的入口；
-     * 而 {@link #chat(String)} / {@link #chatWithImages} 那两条老路径仍然
-     * 走各自带系统提示词的组装，行为不变。
+     * 而 {@link #chat(String)} 仍然自己拼系统消息，现在只服务广场与提案两条旁路。
+     * {@link #chatWithImages} 自视觉路径改走 AiServices 后已无生产调用方。
      */
     public ChatResponse chatMessages(List<ChatMessage> messages) {
         return callWithFallbackResponse(messages, null);
