@@ -4,6 +4,10 @@
   "meta": {
     "title": "飘雪喵 QQ 机器人 · 一条群消息的业务流程",
     "quality_profile": "showcase",
+    "viewBox": [
+      863,
+      466
+    ],
     "views": [
       {
         "id": "round-trip",
@@ -12,9 +16,8 @@
           "event",
           "ingress",
           "guard",
-          "chat",
-          "send",
-          "reply"
+          "assistant",
+          "model"
         ],
         "note": "从群友提问到回答回到群里，完整闭环。"
       },
@@ -30,13 +33,25 @@
         "note": "准入、指令、限流、内容与敏感词，全部在调模型之前完成。"
       },
       {
-        "id": "retrieval",
-        "label": "三路召回与作答",
+        "id": "tool-auth",
+        "label": "工具授权与轮次",
         "focus": [
-          "retrieve",
-          "chat"
+          "guard",
+          "assistant",
+          "recall"
         ],
-        "note": "向量、词条、标题闸门三路召回，融合成资料块再交给模型。"
+        "note": "默认拒绝、无身份拒绝，工具轮次上限 3。"
+      },
+      {
+        "id": "retrieval",
+        "label": "官方检索管线",
+        "focus": [
+          "assistant",
+          "recall",
+          "rank",
+          "model"
+        ],
+        "note": "双路召回经融合、闸门、重排后注入资料块。"
       }
     ],
     "legend": {
@@ -48,19 +63,13 @@
           "label": "策略与闸门"
         },
         "messagebus": {
-          "label": "事件"
+          "label": "消息事件"
         },
         "database": {
-          "label": "数据与上下文"
+          "label": "检索与上下文"
         },
         "external": {
-          "label": "外部系统"
-        },
-        "frontend": {
-          "label": "前端"
-        },
-        "cloud": {
-          "label": "容器/云"
+          "label": "外部模型"
         }
       }
     }
@@ -68,36 +77,15 @@
   "lanes": [
     {
       "id": "qq",
-      "label": "QQ 群消息"
+      "label": "QQ 群与接入判定"
     },
     {
-      "id": "entry",
-      "label": "接入与路由"
-    },
-    {
-      "id": "command",
-      "label": "指令系统"
-    },
-    {
-      "id": "gate",
-      "label": "安全与成本闸门"
+      "id": "agent",
+      "label": "助手装配与模型"
     },
     {
       "id": "kb",
-      "label": "知识库检索"
-    },
-    {
-      "id": "llm",
-      "label": "模型作答"
-    },
-    {
-      "id": "out",
-      "label": "出站与记录"
-    },
-    {
-      "id": "exception",
-      "label": "兜底与异常",
-      "variant": "exception"
+      "label": "兜底与官方检索管线"
     }
   ],
   "phases": [
@@ -123,30 +111,21 @@
     },
     {
       "id": "deliver",
-      "label": "出站与记录",
+      "label": "出站与回复",
       "fromCol": 5,
       "toCol": 5,
       "variant": "dashed"
-    }
-  ],
-  "groups": [
-    {
-      "id": "exception_path",
-      "label": "拦截 / 超限 → 固定话术",
-      "lane": "exception",
-      "fromCol": 2,
-      "toCol": 5,
-      "variant": "security"
     }
   ],
   "mainPath": [
     "event",
     "ingress",
     "guard",
-    "retrieve",
-    "chat",
-    "send",
-    "record"
+    "assistant",
+    "recall",
+    "rank",
+    "model",
+    "outbound"
   ],
   "nodes": [
     {
@@ -154,184 +133,215 @@
       "lane": "qq",
       "col": 0,
       "type": "messagebus",
+      "height": 60,
+      "width": 96,
       "label": "群友 @提问",
       "sublabel": "文本 / 图片 / 引用"
     },
     {
+      "id": "outbound",
+      "lane": "qq",
+      "col": 5,
+      "type": "backend",
+      "height": 60,
+      "width": 108,
+      "label": "出站发送",
+      "sublabel": "分片 · 节奏 · 回到群聊"
+    },
+    {
       "id": "ingress",
-      "lane": "entry",
+      "lane": "qq",
       "col": 1,
       "type": "backend",
+      "height": 60,
+      "width": 52,
       "label": "事件接入",
-      "sublabel": "去重 → 立即 204",
+      "sublabel": "去重 → 204",
       "tag": "超 20s 丢弃"
     },
     {
       "id": "command",
-      "lane": "command",
-      "col": 1,
+      "lane": "qq",
+      "col": 2,
       "type": "backend",
+      "height": 60,
+      "width": 52,
       "label": "指令匹配",
-      "sublabel": "话术类秒回"
+      "sublabel": "话术秒回"
     },
     {
       "id": "guard",
-      "lane": "gate",
+      "lane": "qq",
       "col": 3,
       "type": "security",
+      "height": 60,
+      "width": 92,
       "label": "五层 Guard",
       "sublabel": "零成本拦截",
       "tag": "顺序固定"
     },
     {
-      "id": "retrieve",
-      "lane": "kb",
-      "col": 4,
-      "type": "database",
-      "label": "三路召回",
-      "sublabel": "向量 · 词条 · 标题"
-    },
-    {
-      "id": "chat",
-      "lane": "llm",
-      "col": 4,
-      "type": "external",
-      "label": "大模型作答",
-      "sublabel": "自动降级链"
-    },
-    {
-      "id": "send",
-      "lane": "out",
-      "col": 4,
-      "type": "backend",
-      "label": "出站与发送",
-      "sublabel": "分片 · 节奏"
-    },
-    {
-      "id": "record",
-      "lane": "out",
-      "col": 5,
-      "type": "database",
-      "label": "异步落库",
-      "sublabel": "统计与原文"
-    },
-    {
       "id": "fixreply",
-      "lane": "exception",
+      "lane": "kb",
       "col": 3,
       "type": "security",
-      "label": "固定话术回复",
+      "height": 60,
+      "width": 56,
+      "label": "固定话术",
       "sublabel": "拦截 / 超限"
     },
     {
-      "id": "reply",
-      "lane": "qq",
+      "id": "assistant",
+      "lane": "agent",
+      "col": 4,
+      "type": "backend",
+      "height": 60,
+      "width": 124,
+      "label": "KbToolAssistant",
+      "sublabel": "AiServices 装配 · 工具循环",
+      "tag": "轮次上限 3"
+    },
+    {
+      "id": "model",
+      "lane": "agent",
       "col": 5,
-      "type": "messagebus",
-      "label": "回复到群里",
-      "sublabel": "引用原文 + 回答"
+      "type": "external",
+      "height": 60,
+      "width": 104,
+      "label": "LlmRouter",
+      "sublabel": "自动降级链"
+    },
+    {
+      "id": "recall",
+      "lane": "kb",
+      "col": 4,
+      "type": "database",
+      "height": 60,
+      "width": 68,
+      "label": "双路召回",
+      "sublabel": "向量 · 关键词",
+      "tag": "共用一次向量"
+    },
+    {
+      "id": "rank",
+      "lane": "kb",
+      "col": 5,
+      "type": "database",
+      "height": 60,
+      "width": 104,
+      "label": "聚合与注入",
+      "sublabel": "RRF · 闸门 · 重排"
     }
   ],
   "edges": [
     {
       "from": "event",
       "to": "ingress",
-      "label": "上报",
       "variant": "emphasis",
       "role": "main",
-      "route": "drop",
       "fromSide": "bottom",
-      "toSide": "top"
+      "toSide": "bottom",
+      "via": [
+        [
+          88,
+          166
+        ],
+        [
+          220,
+          166
+        ]
+      ]
+    },
+    {
+      "from": "ingress",
+      "to": "command",
+      "role": "branch",
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
       "from": "ingress",
       "to": "guard",
       "variant": "emphasis",
       "role": "main",
-      "fromSide": "right",
-      "toSide": "top",
+      "fromSide": "bottom",
+      "toSide": "bottom",
       "via": [
         [
+          220,
+          166
+        ],
+        [
           430,
-          243
+          166
         ]
       ]
-    },
-    {
-      "from": "guard",
-      "to": "retrieve",
-      "variant": "emphasis",
-      "role": "main",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "from": "retrieve",
-      "to": "chat",
-      "variant": "emphasis",
-      "role": "main",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "from": "chat",
-      "to": "send",
-      "variant": "emphasis",
-      "role": "main",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "from": "send",
-      "to": "record",
-      "role": "async",
-      "variant": "dashed",
-      "route": "bottom-channel",
-      "fromSide": "bottom",
-      "toSide": "bottom"
-    },
-    {
-      "from": "ingress",
-      "to": "command",
-      "role": "branch",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top"
     },
     {
       "from": "guard",
       "to": "fixreply",
-      "role": "error",
       "variant": "security",
-      "route": "drop",
+      "role": "error",
+      "route": "straight",
       "fromSide": "bottom",
       "toSide": "top"
     },
     {
-      "from": "send",
-      "to": "reply",
-      "label": "回到群聊",
+      "from": "guard",
+      "to": "assistant",
+      "label": "ChatService 组信封",
       "variant": "emphasis",
-      "role": "return",
+      "role": "main",
       "fromSide": "bottom",
-      "toSide": "right",
+      "toSide": "bottom",
       "via": [
         [
+          430,
+          294
+        ],
+        [
           500,
-          786
-        ],
-        [
-          700,
-          786
-        ],
-        [
-          700,
-          119
+          294
         ]
+      ],
+      "labelAt": [
+        486,
+        168
       ]
+    },
+    {
+      "from": "assistant",
+      "to": "recall",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "recall",
+      "to": "rank",
+      "variant": "emphasis",
+      "role": "main",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "rank",
+      "to": "model",
+      "variant": "emphasis",
+      "role": "main",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "model",
+      "to": "outbound",
+      "label": "回到群聊",
+      "channelX": 700,
+      "route": "outside-right",
+      "fromSide": "right",
+      "toSide": "right"
     }
   ],
   "cards": [
@@ -345,21 +355,21 @@
       ]
     },
     {
-      "dot": "amber",
-      "title": "出站也要管",
+      "dot": "violet",
+      "title": "工具授权与轮次",
       "items": [
-        "出站敏感词过滤在 OutboundSender 内部，单一出口绕不过",
-        "同群两条消息最小间隔 800 ms ± 400 ms 抖动，长回复按句分片",
-        "切出 3 段以上打包成合并转发，协议端不支持时退回逐条发"
+        "ALLOWED_TOOLS = {\"lookup\"}，未授权工具名一律拒绝",
+        "beforeToolExecution 钩子校验工具名与调用方身份，无身份即拒绝",
+        "调用方身份形如 群:123/用户:456，工具轮次上限 3"
       ]
     },
     {
       "dot": "emerald",
-      "title": "记录不阻塞回答",
+      "title": "检索编排与注入",
       "items": [
-        "问答记录异步投递，绝不占用回答线程",
-        "队列有界，满了丢弃并计数；库坏只记日志",
-        "落库的是实际发出的那段文本，不是模型原始输出"
+        "向量与关键词两路并召回，问题向量一次检索只算一次",
+        "RRF 融合 → 闸门置顶 → 交叉编码器重排 → 截断 top-k 5",
+        "注入渲染 <<<KNOWLEDGE>>> 两段出处，模型只读资料块"
       ]
     }
   ]

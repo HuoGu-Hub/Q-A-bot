@@ -4,6 +4,10 @@
   "meta": {
     "title": "飘雪喵 · 问答广场的三级降级",
     "quality_profile": "showcase",
+    "viewBox": [
+      862,
+      466
+    ],
     "legend": {
       "entries": {
         "backend": {
@@ -38,7 +42,7 @@
           "answers",
           "vote"
         ],
-        "note": "只展示被点赞过的问答，投票只收随机 clientId。"
+        "note": "答案只展示被点赞过的；关键词榜赞过优先，不足用被问最多的补齐。投票只收随机 clientId。"
       },
       {
         "id": "level-two",
@@ -47,7 +51,7 @@
           "allbad",
           "asknew"
         ],
-        "note": "三条历史回答全被踩，才让模型重新生成一条。"
+        "note": "展示的回答全被踩到 2 次以上，或一条都没有时，才让模型重新生成。"
       },
       {
         "id": "level-three",
@@ -63,29 +67,16 @@
   },
   "lanes": [
     {
-      "id": "visitor",
-      "label": "公开站访客"
+      "id": "public",
+      "label": "公开站与广场"
     },
     {
-      "id": "plaza",
-      "label": "问答广场"
-    },
-    {
-      "id": "library",
-      "label": "问答库"
-    },
-    {
-      "id": "llm",
-      "label": "模型复答"
+      "id": "kb",
+      "label": "问答库与模型"
     },
     {
       "id": "group",
       "label": "QQ 群"
-    },
-    {
-      "id": "exception",
-      "label": "受限与拒绝",
-      "variant": "exception"
     }
   ],
   "phases": [
@@ -114,7 +105,7 @@
     {
       "id": "limit",
       "label": "每一级都有日限额",
-      "lane": "exception",
+      "lane": "kb",
       "fromCol": 3,
       "toCol": 4,
       "variant": "security"
@@ -132,52 +123,64 @@
   "nodes": [
     {
       "id": "hot",
-      "lane": "plaza",
+      "lane": "public",
       "col": 0,
       "type": "backend",
       "label": "关键词热榜",
-      "sublabel": "只展示被赞过"
+      "sublabel": "赞过优先",
+      "width": 92,
+      "height": 64
     },
     {
       "id": "answers",
-      "lane": "library",
+      "lane": "kb",
       "col": 1,
       "type": "database",
       "label": "历史回答",
-      "sublabel": "相似度去重"
+      "sublabel": "相似度去重",
+      "width": 100,
+      "height": 64
     },
     {
       "id": "vote",
-      "lane": "visitor",
+      "lane": "public",
       "col": 2,
       "type": "frontend",
       "label": "投票与匿名",
       "sublabel": "哈希后存库",
-      "tag": "不关联到人"
+      "tag": "不关联到人",
+      "width": 100,
+      "height": 72
     },
     {
       "id": "allbad",
-      "lane": "exception",
+      "lane": "public",
       "col": 3,
       "type": "security",
       "label": "全被踩",
-      "sublabel": "踩 > 赞"
+      "sublabel": "踩 ≥ 2 且多于赞",
+      "width": 100,
+      "height": 64
     },
     {
       "id": "asknew",
-      "lane": "llm",
+      "lane": "kb",
       "col": 4,
       "type": "external",
       "label": "问问新答案",
-      "sublabel": "模型重新生成"
+      "sublabel": "模型重新生成",
+      "width": 96,
+      "height": 54
     },
     {
       "id": "help",
-      "lane": "plaza",
+      "lane": "public",
       "col": 5,
       "type": "backend",
       "label": "生成求助文案",
-      "sublabel": "「求助：xxx」"
+      "sublabel": "「求助：xxx」",
+      "width": 106,
+      "height": 64
     },
     {
       "id": "confirm",
@@ -186,7 +189,9 @@
       "type": "messagebus",
       "label": "群里发布",
       "sublabel": "只发当前群",
-      "tag": "群号来自群聊"
+      "tag": "群号来自群聊",
+      "width": 106,
+      "height": 72
     }
   ],
   "edges": [
@@ -206,17 +211,21 @@
       "role": "main",
       "route": "drop",
       "fromSide": "bottom",
-      "toSide": "top"
+      "toSide": "bottom"
     },
     {
       "from": "vote",
       "to": "allbad",
       "variant": "security",
       "role": "main",
-      "route": "drop",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "label": "三条全被踩"
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "展示的全被踩",
+      "labelAt": [
+        365,
+        167
+      ]
     },
     {
       "from": "allbad",
@@ -226,7 +235,8 @@
       "route": "drop",
       "fromSide": "bottom",
       "toSide": "top",
-      "label": "二级降级"
+      "label": "二级降级",
+      "labelDy": 14
     },
     {
       "from": "asknew",
@@ -235,8 +245,9 @@
       "role": "main",
       "route": "drop",
       "fromSide": "bottom",
-      "toSide": "top",
-      "label": "再全被踩"
+      "toSide": "bottom",
+      "label": "同一降级入口",
+      "labelDy": 14
     },
     {
       "from": "help",
