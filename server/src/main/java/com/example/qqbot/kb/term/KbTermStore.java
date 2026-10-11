@@ -22,7 +22,7 @@ import com.example.qqbot.kb.EntryId;
  * <ul>
  *   <li>{@code Glossary} —— 运行时 B 路检索加载</li>
  *   <li>{@code GlossaryStore} —— 后台增删改（整表读改写 + 读写锁 + 临时文件 + 原子替换）</li>
- *   <li>{@code KbTermService.buildAll()} —— 组装词条列表时又读一遍</li>
+ *   <li>{@code kb.catalog.KbCatalog#buildAll()} —— 组装词条目录时又读一遍</li>
  * </ul>
  * 同一份数据三个解析点、两条写入路径：改一处行为要记得同步另外两处。现在收成一张表。
  *

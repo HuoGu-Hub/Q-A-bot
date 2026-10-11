@@ -537,7 +537,7 @@ public record KbChunk(
 </thead>
 <tbody><tr>
 <td><strong>检索融合</strong></td>
-<td><code>kb/RrfFuser</code>（接口 <code>kb/KbFuser</code>）现在只有&quot;向量权重 1.0 / 关键词 2.0 / 标题加成&quot;——加第 4 维：<code>CURATED</code> 加分、<code>WIKI</code> 且 <code>contentAt</code> 很旧则减分</td>
+<td><code>kb/RrfFuser</code> 现在只有&quot;向量权重 1.0 / 关键词 2.0 / 标题加成&quot;——加第 4 维：<code>CURATED</code> 加分、<code>WIKI</code> 且 <code>contentAt</code> 很旧则减分</td>
 </tr>
 <tr>
 <td><strong>资料块组装</strong></td>
@@ -730,7 +730,7 @@ public record KbChunk(
 </tr>
 <tr>
 <td>人工写入打 <code>curated</code> 标记</td>
-<td><code>KbTermService</code>（追加/编辑）+ <code>KbIndexIncrementalService</code>（投递审核）</td>
+<td><code>KbBlockAdminService</code>（新增 / 改正文）+ <code>KbProposalService</code>（提案审核）</td>
 </tr>
 <tr>
 <td><strong>资料分两段注入</strong>（已核对 / Wiki 快照带日期）</td>
@@ -796,7 +796,7 @@ public record KbChunk(
 </tr>
 </tbody></table></div>
 <p>用的是假 embedding（按文本哈希出确定性向量）+ 临时目录迷你语料：<strong>不联网、不花钱</strong>，
-但走的是生产代码本身（<code>KbTermService.updateChunkText</code> / <code>mergeChunkLines</code> /
+但走的是生产代码本身（当时叫 <code>KbTermService.updateChunkText</code>，今为 <code>KbBlockAdminService.updateText</code> / <code>mergeChunkLines</code> /
 <code>KbIndexBuilder.build()</code> / <code>KbIndex</code>）。为此把 <code>KbIndexBuilder.build()</code> 从 <code>private</code> 放宽到包级可见，
 并写了注释说明原因 —— 逻辑没有被测试专用代码污染。</p>
 <blockquote>

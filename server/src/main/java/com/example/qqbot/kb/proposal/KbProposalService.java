@@ -36,8 +36,8 @@ import java.util.Map;
  *
  * <p><b>两条写入路径都复用现有机制，不另造一套</b>：
  * <ul>
- *   <li>{@code overwrite} → 走 {@link KbTermService#updateChunkText} 的单块重嵌：
- *       只重算这一块的向量、原地改索引，1 次 embedding 请求，行号不变</li>
+ *   <li>{@code overwrite} → 走 {@link com.example.qqbot.kb.block.KbBlockAdminService#updateText} 的单块重嵌：
+ *       只重算这一块的向量、原地改这一行，1 次 embedding 请求</li>
  *   <li>{@code new} → 走 {@link KbBlockAdminService#add} 直接落地
  *       （2026-09-29 起不再绕「投递 → 审核 → 建索引」）</li>
  * </ul>

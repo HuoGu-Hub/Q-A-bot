@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  *
  * <h2>数据从哪来（2026-09-27 改造）</h2>
  * 以前本类自己去读 {@code data/kb/glossary/zh-en.tsv}，于是同一份数据被
- * 本类、{@code GlossaryStore}（后台写）、{@code KbTermService}（列表组装）
+ * 本类、{@code GlossaryStore}（后台写）、{@code KbTermService}（列表组装，现已搬到 {@code kb.catalog.KbCatalog}）
  * 各自解析一遍。现在只有一个来源：{@link com.example.qqbot.kb.term.KbTermStore}（SQLite 单表），
  * 而本类只依赖 {@link TermSource} 这个只读视图。
  *

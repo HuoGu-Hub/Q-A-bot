@@ -20,14 +20,12 @@
  *   ⑭ 提案（接口没变）：先改再采纳；「删除」用拒绝表达
  *   ⑮ 加载的是本工作区的新面板；全程 0 console error
  *
- * 宿主后端 8080 上跑的是改造前的旧代码，所以一律走 mock：用宿主 Vite dev
+ * 宿主后端 8080 是另一个进程，不保证与本工作区源码同步，所以一律走 mock：用宿主 Vite dev
  * （5173，服务的正是本工作区源码）把 /admin/api/** 全拦下来喂假数据。
  * 浏览器、Vue、DOM、样式、事件都是真的，只有数据是假的。
  *
- * ⚠️ mock 里 GET /kb/terms/chunks 返回的是 {title, chunks:[...]} —— 这是前端
- * （@shared/api/types 的 KbTermChunksResponse）与本次任务说明约定的形状。
- * 工作区里 KbTermController#chunks 目前仍直接返回裸数组，两者对不上；
- * 本脚本按**前端契约**喂数据（要验的是前端行为），后端那处不一致见回报。
+ * GET /kb/terms/chunks 返回 {title, chunks:[...]}（@shared/api/types 的 KbTermChunksResponse）。
+ * 后端已与之一致：kb.catalog.KbCatalogController#chunks 返回 ChunksView，不再是裸数组。
  *
  * 用法：
  *   node tests/verify-redesign-t11.js
