@@ -78,6 +78,7 @@ public class WikiArticleImporter {
     }
 
     public record ImportReport(int sources, int pages, int changed, int imported, int failed, int chars,
+                               int rendered,
                                List<String> errors, boolean dryRun, Map<String, Integer> bySource) {
     }
 
@@ -113,14 +114,14 @@ public class WikiArticleImporter {
     public ImportReport importAll(boolean dryRun, boolean force) {
         WikiImport cfg = props.getWikiImport();
         if (!cfg.isEnabled()) {
-            return new ImportReport(0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
+            return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
         }
         if (!store.isAvailable()) {
-            return new ImportReport(0, 0, 0, 0, 0, 0, List.of("文章状态存储不可用"), dryRun, Map.of());
+            return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("文章状态存储不可用"), dryRun, Map.of());
         }
         List<Source> sources = sources();
         if (sources.isEmpty()) {
-            return new ImportReport(0, 0, 0, 0, 0, 0, List.of("没有配置任何来源（categories / prefixes）"), dryRun, Map.of());
+            return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("没有配置任何来源（categories / prefixes）"), dryRun, Map.of());
         }
 
         // 建中英对照索引：让英文文章块能被中文提问检索到（见 NameZhIndex 类注释里的实测缺口）
@@ -130,6 +131,8 @@ public class WikiArticleImporter {
         int totalPages = 0;
         int totalChanged = 0;
         int imported = 0;
+        // 用渲染文本而不是 wikitext 正文的页数（渲染兜底命中数）
+        int renderedPages = 0;
         int failed = 0;
         int chars = 0;
         List<String> errors = new ArrayList<>();
@@ -226,6 +229,31 @@ public class WikiArticleImporter {
                 try {
                     // 带上页面标题：{{PAGENAME}} 要展开成它，否则会把主语清没
                     String body = WikitextCleaner.clean(rev.content(), title);
+                    // 渲染兜底：wikitext 里 {{Get|…}} 与 Cargo 数据查询只有调用没有值，
+                    // 只有渲染后的 HTML 里才有内容。**只在"明显更长"时采用** ——
+                    // 实测 27 篇样本里渲染更多的 11 篇、相当 14 篇、更少 2 篇，
+                    // 所以它是补差而不是替换，其余页面一个字不动。
+                    WikiImport.Render renderCfg = cfg.getRender();
+                    if (renderCfg.isEnabled()) {
+                        try {
+                            String renderedText = WikiHtmlCleaner.clean(client.fetchParsedHtml(title));
+                            if (!renderedText.isBlank()
+                                    && renderedText.length() >= body.length() * renderCfg.getPreferRatio()) {
+                                body = renderedText;
+                                renderedPages++;
+                            }
+                        } catch (Exception e) {
+                            // 兜底失败不许影响这一页：退回 wikitext 那份正文，但要留痕
+                            log.warn("[KB-WIKI] {} 渲染兜底失败：{}", title, e.getMessage());
+                        }
+                        if (renderCfg.getDelayMillis() > 0) {
+                            try {
+                                Thread.sleep(renderCfg.getDelayMillis());
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                    }
                     if (body.isBlank()) {
                         // 清洗后为空说明这页没有可读正文（纯模板页）——记状态但不建块
                         store.upsert(title, src.label(), rev.revid(), rev.timestamp(), 0, "", 0);
@@ -282,7 +310,7 @@ public class WikiArticleImporter {
         // "语料版本变了"并补齐 —— 见 KbTermStore.ensureReconciled()。这里以前显式调 reconcile()。
         log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字",
                 sources.size(), totalPages, totalChanged, imported, failed, chars);
-        return new ImportReport(sources.size(), totalPages, totalChanged, imported, failed, chars,
+        return new ImportReport(sources.size(), totalPages, totalChanged, imported, failed, chars, renderedPages,
                 errors, dryRun, bySource);
     }
 

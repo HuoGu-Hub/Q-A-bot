@@ -111,4 +111,58 @@ public class WikiImport {
     public void setImportOnStart(boolean importOnStart) {
         this.importOnStart = importOnStart;
     }
+
+    /** 渲染兜底：拿 {@code action=parse} 的 HTML 补数据层与数据表 */
+    private final Render render = new Render();
+
+    public Render getRender() {
+        return render;
+    }
+
+    /**
+     * 渲染兜底配置。
+     *
+     * <p>为什么只当"兜底"：实测 27 篇样本里，渲染文本更多的是 11 篇（数据表页），
+     * 相当 14 篇，更少 2 篇。所以**不是**全面改用渲染，而是取两份文本里更长的那份 ——
+     * 数据驱动的页面拿回被 {@code {{Get}}} 吞掉的内容，其余页面一个字不动。
+     */
+    public static class Render {
+
+        private boolean enabled = true;
+
+        /**
+         * 渲染文本要比清洗后的正文长这么多倍才采用。
+         *
+         * <p>1.2 的含义是"多出两成才值得换"：实测 1.0~1.2 的那些页只是排版差异，
+         * 换过去没有收益，反而让语料无谓波动。
+         */
+        private double preferRatio = 1.2;
+
+        /** 渲染请求之间的间隔（毫秒）。一页一次请求，别把对方服务器打疼 */
+        private int delayMillis = 200;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public double getPreferRatio() {
+            return preferRatio;
+        }
+
+        public void setPreferRatio(double preferRatio) {
+            this.preferRatio = preferRatio;
+        }
+
+        public int getDelayMillis() {
+            return delayMillis;
+        }
+
+        public void setDelayMillis(int delayMillis) {
+            this.delayMillis = delayMillis;
+        }
+    }
 }

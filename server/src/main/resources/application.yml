@@ -567,6 +567,17 @@ app:
         # 开了导入器一篇也拉不到，而且不报错 —— 纯噪音配置。
         # - Music
       max-pages-per-source: 300
+
+      # 渲染兜底：wikitext 里 {{Get|…}} 与 Cargo 数据查询只有调用没有值，
+      # action=parse 让服务器把数据填好后返回 HTML，我们再用 jsoup 取正文。
+      # 实测 27 篇样本：渲染更多 11 篇（数据表页，如 Fisher 281→1624 字）、
+      # 相当 14 篇、更少 2 篇 —— 所以只在"明显更长"时采用，否则保持原样。
+      render:
+        enabled: true
+        # 渲染文本要比清洗后的正文长这么多倍才采用（1.2 = 多两成）
+        prefer-ratio: 1.2
+        # 一页一次请求，间隔别太小
+        delay-millis: 200
       # 派生块归属 wiki·<来源>，purge 按它清
       doc-id-prefix: wiki
       # **单块**正文上限。任务页约 2KB、机制页约 11KB —— 太长会把 prompt 撑爆、也稀释语义。

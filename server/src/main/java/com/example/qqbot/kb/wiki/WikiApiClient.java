@@ -286,6 +286,21 @@ public class WikiApiClient {
         return out;
     }
 
+    /**
+     * 渲染后的 HTML（{@code action=parse&prop=text}）。
+     *
+     * <p>数据层模板与 Cargo 数据查询**只有这里有值** —— wikitext 里 {@code {{Get|description}}}
+     * 只是个调用，永远解不出内容。这个接口一次只能取一页，所以调用方按页调用、自己控节奏。
+     *
+     * <p>两件事交给调用方决定，这里不做：取不到时怎么办、拿到的文本要不要用。
+     */
+    public String fetchParsedHtml(String title) {
+        String url = props.getMapSync().getApiBase()
+                + "?action=parse&prop=text&format=json&formatversion=2&page="
+                + URLEncoder.encode(title, StandardCharsets.UTF_8);
+        return get(url).path("parse").path("text").asText("");
+    }
+
     private List<List<String>> batches(List<String> titles) {
         // 批间主动放慢：别把对方服务器打疼，也降低被限流的概率
         long delay = props.getMapSync().getBatchDelayMillis();

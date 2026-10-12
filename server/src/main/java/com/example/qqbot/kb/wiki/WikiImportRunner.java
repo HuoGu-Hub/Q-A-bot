@@ -76,6 +76,8 @@ public class WikiImportRunner implements ApplicationRunner {
                 System.out.printf("  版本变过      %d%n", r.changed());
                 System.out.printf("  已写入块      %d%s%n", r.imported(), r.dryRun() ? "（dryRun：只看数量）" : "");
                 System.out.printf("  正文字数      %d%n", r.chars());
+                System.out.printf("  渲染兜底      %d 页%s%n", r.rendered(),
+                        r.rendered() > 0 ? "（取了渲染文本）" : "");
                 System.out.printf("  失败          %d%n", r.failed());
                 if (!r.bySource().isEmpty()) {
                     System.out.println("  ---- 各来源页面数 ----");
