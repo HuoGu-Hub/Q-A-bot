@@ -4840,7 +4840,7 @@
       </div>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[{"id":"round-trip","label":"一问一答的往返","focus":["qq_users","napcat","router","guard","assistant","llm"],"note":"去程与回程方向相反，回路闭合。"},{"id":"official-pipeline","label":"官方检索管线","focus":["assistant","recall","aggregator","inject","model_api","sqlite"],"note":"AiServices 驱动官方骨架：召回 → 聚合 → 注入。"},{"id":"corpus","label":"语料怎么进来","focus":["ingest","sqlite","recall"],"note":"文档导入 / wiki 抓取 / 地图同步平级，清洗分块后落进同一张块表。"},{"id":"web-plane","label":"双端站点","focus":["browsers","nginx","webapp","router"],"note":"公开站与后台共用 Nginx 与同一个 JVM，接口前缀各自独立。"}]</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"round-trip","label":"一问一答的往返","focus":["qq_users","napcat","router","guard","assistant","llm"],"note":"去程与回程方向相反，回路闭合。"},{"id":"official-pipeline","label":"官方检索管线","focus":["assistant","recall","aggregator","inject","model_api","sqlite"],"note":"AiServices 驱动官方骨架：召回 → 聚合 → 注入。"},{"id":"corpus","label":"语料怎么进来","focus":["ingest","sqlite","recall"],"note":"文档导入 / wiki 抓取 / 地图同步平级，清洗（wikitext 默认保留，数据层再走渲染兜底）分块后落进同一张块表。"},{"id":"web-plane","label":"双端站点","focus":["browsers","nginx","webapp","router"],"note":"公开站与后台共用 Nginx 与同一个 JVM，接口前缀各自独立。"}]</script>
 
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>

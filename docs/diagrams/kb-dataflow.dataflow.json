@@ -119,7 +119,7 @@
       "id": "cleaner",
       "type": "backend",
       "label": "语料清洗与切块",
-      "sublabel": "WikitextCleaner",
+      "sublabel": "WikitextCleaner + 渲染兜底",
       "stage": 1,
       "row": 1,
       "tag": "默认关"
@@ -349,7 +349,7 @@
       "title": "两条入库路径，别混用",
       "items": [
         "文档面板：格式校验 → 预览 → 确认，只为新增/覆盖的块重算向量",
-        "Wiki 导入：WikitextCleaner 清洗 → KbTextChunker 切块 → 增量写块，默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发",
+        "Wiki 导入：WikitextCleaner 清洗（默认保留、只丢噪声）→ 数据层再取渲染 HTML → KbTextChunker 切块 → 增量写块；默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发，换清洗规则加 --app.kb.wiki-import.force=true 重洗",
         "词条表人机交界用 xlsx，机机用 TSV，CSV 导出已删；换向量模型必须整库重建"
       ]
     },

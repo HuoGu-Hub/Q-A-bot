@@ -4994,15 +4994,15 @@
         <text data-detail="fine" x="315" y="175" class="t-backend" font-size="7" text-anchor="middle">只为变更块重算</text>
         </g>
 
-        <g id="node-cleaner" data-node-id="cleaner" data-node-label="语料清洗与切块" tabindex="0" role="button" aria-label="Focus 语料清洗与切块, WikitextCleaner, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="WikitextCleaner" data-node-tag="默认关" data-node-context="02 / 导入与清洗">
-          <title>语料清洗与切块 · WikitextCleaner · 02 / 导入与清洗 · 默认关</title>
+        <g id="node-cleaner" data-node-id="cleaner" data-node-label="语料清洗与切块" tabindex="0" role="button" aria-label="Focus 语料清洗与切块, WikitextCleaner + 渲染兜底, 02 / 导入与清洗" aria-pressed="false" data-node-kind="backend" data-node-sublabel="WikitextCleaner + 渲染兜底" data-node-tag="默认关" data-node-context="02 / 导入与清洗">
+          <title>语料清洗与切块 · WikitextCleaner + 渲染兜底 · 02 / 导入与清洗 · 默认关</title>
           <rect x="259" y="242" width="112" height="58" rx="6" class="c-mask"/>
           <rect x="259" y="242" width="112" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(265 248) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-detail-anchor x="315" y="263" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">语料清洗与切块</text>
-          <text data-detail="context" x="315" y="279" class="t-muted" font-size="7" text-anchor="middle">WikitextCleaner</text>
+          <text data-detail="context" x="315" y="279" class="t-muted" font-size="6.6" text-anchor="middle">WikitextCleaner + 渲染兜底</text>
         <text data-detail="fine" x="315" y="289" class="t-backend" font-size="7" text-anchor="middle">默认关</text>
         </g>
 
@@ -5425,7 +5425,7 @@
         </div>
         <ul>
           <li>&bull; 文档面板：格式校验 → 预览 → 确认，只为新增/覆盖的块重算向量</li>
-          <li>&bull; Wiki 导入：WikitextCleaner 清洗 → KbTextChunker 切块 → 增量写块，默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发</li>
+          <li>&bull; Wiki 导入：WikitextCleaner 清洗（默认保留、只丢噪声）→ 数据层再取渲染 HTML → KbTextChunker 切块 → 增量写块；默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发，换清洗规则加 --app.kb.wiki-import.force=true 重洗</li>
           <li>&bull; 词条表人机交界用 xlsx，机机用 TSV，CSV 导出已删；换向量模型必须整库重建</li>
         </ul>
       </div>
