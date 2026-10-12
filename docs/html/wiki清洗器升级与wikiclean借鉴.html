@@ -48,7 +48,7 @@ ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
 </div>
 
 <div class="box ok">
-<p><b>已落地 · 2026-10-13。</b>清洗器的原则已经反转：从"白名单"改成<b>"默认保留，只丢明确噪声"</b>。整库重洗后，语料从 <span class="num">568,914</span> 字涨到 <span class="num">616,159</span> 字（<b>+8.3%</b>），<b>变多 580 篇不变变多、46 篇变少、9 篇</b>；清洗后不足 100 字的页从 <span class="num">66</span> 篇降到 <span class="num">6</span> 篇，不足 300 字的从 196 篇降到 161 篇。检索黄金集门禁 <b>PASS</b>，四项指标与改动前逐项一致。</p>
+<p><b>已落地 · 2026-10-13。</b>清洗器的原则已经反转：从"白名单"改成<b>"默认保留，只丢明确噪声"</b>。整库重洗后，语料从 <span class="num">568,914</span> 字涨到 <span class="num">651,793</span> 字（<b>+14.6%</b>），<b>变多 580 篇不变变多、46 篇变少、9 篇</b>；清洗后不足 100 字的页从 <span class="num">66</span> 篇降到 <span class="num">6</span> 篇，不足 300 字的从 196 篇降到 137 篇。检索黄金集门禁 <b>PASS</b>，四项指标与改动前逐项一致。</p>
 <ul>
 <li><b>递归</b>：外层模板不认识也先递归进去，内层表格式模板照样取值 —— 掉落表就是这么救回来的。</li>
 <li><b>参数值默认全留</b>：短值输出成 <code>Class: Ranger</code>，长值原样保留；只丢文件名、尺寸、样式、图标这类参数。</li>
@@ -60,7 +60,7 @@ ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
 <li><b>gallery 取标签</b>、<b>HTML 实体解码</b>、<b>表格一行一条记录</b>、<b>BOM 处理</b>一并完成。</li>
 <li><b>强制重洗入口</b>：<code>--app.kb.wiki-import.force=true</code>，补上"清洗器改了、老页不会自己重洗"这个洞。</li>
 </ul>
-<p>验收：497 项测试全绿；黄金集门禁 PASS。</p>
+<p>验收：501 项测试全绿；黄金集门禁 PASS。</p>
 </div>
 
 <h3>字段顺序：一个反直觉的坑</h3>
@@ -266,7 +266,35 @@ Stack Size 250 Level 13 Biomes Revelwood Goo is a crafting material in Enshroude
 <tr><td>2</td><td>白名单补 <code>item infobox</code>；清洗器加页面上下文以展开 <code>PAGENAME</code>；未闭合括号改为跳过该段继续扫</td><td>全量，收益集中在数据驱动页</td><td>逐页保留率对账，列出所有保留率下降的页</td></tr>
 <tr><td>3</td><td>渲染文本兜底路线</td><td>数据驱动页</td><td>先离线跑 20 页对比，再决定是否进导入链路</td></tr>
 </tbody></table>
-<p class="note">步骤 1、2 已完成，见上方"已落地"。第 3 步渲染兜底仍未做 —— 它针对的是 <code>{{Get}}</code> 这类离线解不出的数据层。</p>
+<h3>第 3 步：渲染兜底（已落地 2026-10-13）</h3>
+<p>清洗器再有原则，也解不出 <code>{{Get|description}}</code> —— 那是 wiki 的数据查询层，值只在服务器端存在。所以最后一步是：让服务器把页面**渲染**好，再取正文。</p>
+<table>
+<thead><tr><th>口径</th><th>Goo 这一页</th></tr></thead>
+<tbody>
+<tr><td>原始 wikitext</td><td class="num">704 字</td></tr>
+<tr><td>wikitext 清洗后</td><td class="num">99 字</td></tr>
+<tr><td><code>action=parse</code> 渲染 HTML</td><td class="num">68,633 字</td></tr>
+<tr><td>渲染提取后</td><td class="num">2387 字，且 <code>description</code> 已被填成真句子</td></tr>
+</tbody></table>
+<p>做法不是"全面改用渲染"，而是<b>取两份文本里更长的那份</b>：实测 27 篇样本里渲染更多 11 篇、相当 14 篇、更少 2 篇 —— 只有数据表页真的受益，其余页面一个字不动，检索基线因此没有被扰动。</p>
+<h4>噪声怎么处理的</h4>
+<ul>
+<li><b>丢</b>：<code>span.mw-editsection</code>（"visual editing" 那一串编辑入口）、<code>.ranger-navbox</code> 与 <code>.navigation-not-searchable</code>（Bestiary / Skills 导航 —— 实测 Counter Battery 上 2191 字，比这页正文还长）、目录、参考文献。</li>
+<li><b>留</b>：正文段落、<code>table.wikitable</code>、<code>.cargoDynamicTable</code> 数据表、<code>ul.gallery</code> 图注。</li>
+<li><b>字段行排到末尾</b>：信息框字段单独收集后附到文档末尾，与 wikitext 那条路一致。</li>
+<li><b>与正文重复的字段不重复放</b>：Counter Battery 的 <code>+15% damage…</code> 曾因此出现两次。</li>
+</ul>
+<p>效果最明显的是工匠页 —— <code>Fisher</code> 拿回了整张配方表：</p>
+<pre>Crafted Here
+Item | Ingredients | Craft Time | Crafting Stations
+Common Fishing Bait x10 | Fire Fly x2 Gold Coins x10 Capybara Bristles x2 ... | 3:30 | Fisher
+Diving Helmet x1 | Aquamarine x4 Steel Bars x6 Glass x4 Gold Bars x2 ... | Instant | Fisher</pre>
+<h4>代价与注意</h4>
+<ul>
+<li>依赖 <b>jsoup</b>（无传递依赖）。17~68KB 的机器生成 HTML 用手写正则处理太脆，结构与实体解码交给它。</li>
+<li>每页多一次请求，配置里有 <code>render.delay-millis: 200</code> 的间隔。</li>
+<li>新依赖要联网拉一次：<code>MAVEN_OFFLINE=0 ./scripts/golden-gate.sh</code>，之后离线构建才认它。</li>
+</ul>
 
 <h2>九、审计怎么做的</h2>
 <ol>
