@@ -45,6 +45,7 @@ import TermPanel from './kb/TermPanel.vue'
 import CategoryPanel from './kb/CategoryPanel.vue'
 import ProposalPanel from './kb/ProposalPanel.vue'
 import DocPanel from './kb/DocPanel.vue'
+import WikiPanel from './kb/WikiPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,6 +57,7 @@ const TABS = [
   { key: 'terms', label: '词条' },
   { key: 'category', label: '分类' },
   { key: 'proposals', label: '提案' },
+  { key: 'wiki', label: '抓取' },
 ]
 
 const valid = (k: unknown) => typeof k === 'string' && TABS.some(t => t.key === k)
@@ -214,6 +216,7 @@ const docLoading = computed(() => doc.value?.isLoading() ?? false)
       <TermPanel v-else-if="tab === 'terms'" ref="termRef" />
       <CategoryPanel v-else-if="tab === 'category'" ref="catRef" />
       <ProposalPanel v-else-if="tab === 'proposals'" ref="propRef" />
+      <WikiPanel v-else-if="tab === 'wiki'" />
     </KeepAlive>
   </AdminPage>
 </template>

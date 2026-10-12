@@ -53,8 +53,7 @@ public class WikiImport {
      */
     private int maxBodyChars = 1500;
 
-    /** 启动时自动导入一次。**默认关** —— 运维动作 */
-    private boolean importOnStart = false;
+
 
     public boolean isEnabled() {
         return enabled;
@@ -104,13 +103,6 @@ public class WikiImport {
         this.maxBodyChars = maxBodyChars;
     }
 
-    public boolean isImportOnStart() {
-        return importOnStart;
-    }
-
-    public void setImportOnStart(boolean importOnStart) {
-        this.importOnStart = importOnStart;
-    }
 
     /** 渲染兜底：拿 {@code action=parse} 的 HTML 补数据层与数据表 */
     private final Render render = new Render();

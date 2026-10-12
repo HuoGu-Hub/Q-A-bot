@@ -286,6 +286,22 @@ public class WikiApiClient {
         return out;
     }
 
+    /** wiki 上的分类名 + 成员数（{@code acprop=size}）。管理端"范围"页面用它列菜单 */
+    public List<CategoryInfo> listAllCategories() {
+        String url = props.getMapSync().getApiBase()
+                + "?action=query&list=allcategories&aclimit=500&acprop=size"
+                + "&format=json&formatversion=2";
+        List<CategoryInfo> out = new ArrayList<>();
+        for (JsonNode n : get(url).path("query").path("allcategories")) {
+            out.add(new CategoryInfo(n.path("category").asText(""), n.path("size").asInt(0)));
+        }
+        return out;
+    }
+
+    /** 一个分类：名字 + 成员数（含子分类与文件，只作参考） */
+    public record CategoryInfo(String name, int size) {
+    }
+
     /**
      * 渲染后的 HTML（{@code action=parse&prop=text}）。
      *

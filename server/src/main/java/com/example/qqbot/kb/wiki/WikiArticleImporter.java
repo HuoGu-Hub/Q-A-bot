@@ -59,15 +59,38 @@ public class WikiArticleImporter {
     private final KbWikiPageStore store;
     private final KbBlockStore blockStore;
     private final EmbeddingClient embedding;
+    /** 管理端页面上勾选的范围；表为空时回落到 yml 默认值 */
+    private final KbWikiSourceStore sourceStore;
 
     /* 既不持有块索引、也不持有词条表：写完索引自己失效、词条表自己补齐 */
     public WikiArticleImporter(KbPolicy props, WikiApiClient client, KbWikiPageStore store,
-                               KbBlockStore blockStore, EmbeddingClient embedding) {
+                               KbBlockStore blockStore, EmbeddingClient embedding,
+                               KbWikiSourceStore sourceStore) {
         this.props = props;
         this.client = client;
         this.store = store;
         this.blockStore = blockStore;
         this.embedding = embedding;
+        this.sourceStore = sourceStore;
+    }
+
+    /**
+     * 进度回调 —— 给管理端页面用。
+     *
+     * <p>导入一次要几分钟（635 页，每页还要多取一次渲染 HTML），页面上必须看得见走到哪了。
+     * 默认 {@link #NONE}：命令行与测试不受影响。
+     */
+    public interface Progress {
+
+        Progress NONE = (phase, done, total) -> {
+        };
+
+        /**
+         * @param phase 当前阶段（如"清洗 · Wildlife"）
+         * @param done  已处理页数
+         * @param total 本次要处理的页数
+         */
+        void on(String phase, int done, int total);
     }
 
     /** 一个导入来源：前缀（如 `Quests/`）或分类（如 `Gameplay`） */
@@ -84,6 +107,16 @@ public class WikiArticleImporter {
 
     /** 配置里声明的来源列表 */
     public List<Source> sources() {
+        // 管理端页面上保存过的范围优先；表里一行都没有（老部署没配过）才用 yml 默认值。
+        // 这样"勾选 → 保存 → 拉取"是一条闭环，不用任何人去碰 application.yml。
+        List<com.example.qqbot.persistence.KbWikiSourceRepository.Source> saved = sourceStore.enabled();
+        if (!saved.isEmpty()) {
+            List<Source> fromPage = new ArrayList<>();
+            for (com.example.qqbot.persistence.KbWikiSourceRepository.Source s : saved) {
+                fromPage.add(new Source(s.kind(), s.name()));
+            }
+            return fromPage;
+        }
         List<Source> out = new ArrayList<>();
         for (String p : props.getWikiImport().getPrefixes()) {
             if (p != null && !p.isBlank()) {
@@ -112,6 +145,11 @@ public class WikiArticleImporter {
      * 换规则时要先 {@code --force} 重洗一次。
      */
     public ImportReport importAll(boolean dryRun, boolean force) {
+        return importAll(dryRun, force, Progress.NONE);
+    }
+
+    /** 带进度回调的版本 —— 管理端页面走这条 */
+    public ImportReport importAll(boolean dryRun, boolean force, Progress progress) {
         WikiImport cfg = props.getWikiImport();
         if (!cfg.isEnabled()) {
             return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
@@ -135,6 +173,8 @@ public class WikiArticleImporter {
         int renderedPages = 0;
         int failed = 0;
         int chars = 0;
+        // 进度用：已经处理过的页数（含失败页，进度条不该倒着走）
+        int processed = 0;
         List<String> errors = new ArrayList<>();
         Map<String, Integer> bySource = new LinkedHashMap<>();
         // 块 id 占用登记：撞车时必须吵（否则一页的内容会静默覆盖另一页）
@@ -198,6 +238,7 @@ public class WikiArticleImporter {
                 }
             }
 
+            progress.on("列页 · " + src.label(), processed, totalPages);
             List<String> changed = new ArrayList<>();
             for (String title : titles) {
                 WikiApiClient.Meta m = meta.get(title);
@@ -230,6 +271,8 @@ public class WikiArticleImporter {
                     store.markError(title, src.label(), "API 没返回内容");
                     continue;
                 }
+                processed++;
+                progress.on("清洗 · " + src.label(), processed, Math.max(totalPages, processed));
                 try {
                     // 带上页面标题：{{PAGENAME}} 要展开成它，否则会把主语清没
                     String body = WikitextCleaner.clean(rev.content(), title);
@@ -312,7 +355,8 @@ public class WikiArticleImporter {
 
         // 词条表**不用管**：下次有人读词条（B 路检索 / 管理端）时，KbTermStore 会自己发现
         // "语料版本变了"并补齐 —— 见 KbTermStore.ensureReconciled()。这里以前显式调 reconcile()。
-        // ⚠️ 这一行是**机器可读的摘要**：脚本与运维都按它取数。
+        progress.on("完成", processed, Math.max(totalPages, processed));
+        // ⚠️ 这一行是**机器可读的摘要**：管理端页面与运维都按它取数。
         //    导入报告走 System.out，在 Windows 上跟随控制台代码页（GBK），
         //    和 SLF4J 的 UTF-8 混在一个日志里 —— 所以关键数字必须也出现在这一行。
         log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字 / 渲染兜底 {} 页",

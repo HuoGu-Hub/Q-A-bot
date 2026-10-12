@@ -53,12 +53,13 @@ class ApplicationYmlTest {
     }
 
     @Test
-    @DisplayName("★ 三个「启动时自动跑」的开关必须保持 false —— 它们是运维动作")
+    @DisplayName("★ 两个「启动时自动跑」的开关必须保持 false —— 它们是运维动作（wiki 导入已改为页面触发）")
     void autoRunSwitchesStayOff() throws Exception {
         Map<String, Object> root = load();
         assertThat(at(root, "app", "kb", "map-sync")).containsEntry("sync-on-start", false);
         assertThat(at(root, "app", "kb", "location-corpus")).containsEntry("build-on-start", false);
-        assertThat(at(root, "app", "kb", "wiki-import")).containsEntry("import-on-start", false);
+        // wiki 导入的 import-on-start 已删除：导入改由管理端「知识库 → 抓取」页触发，
+        // 所以它不再是"启动开关"，而是页面上的按钮（范围存 kb_wiki_source 表）。
     }
 
     @Test
