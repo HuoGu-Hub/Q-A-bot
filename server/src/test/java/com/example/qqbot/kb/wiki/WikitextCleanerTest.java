@@ -265,6 +265,32 @@ class WikitextCleanerTest {
     }
 
     @Test
+    @DisplayName("★ 长字段值也要带键名并排到末尾，不能孤零零留在开头")
+    void longFieldKeepsItsKey() {
+        String wiki = "{{NPC Infobox|Region=Springlands, Revelwood, Nomad Highlands, Kindlewastes, Albaneve Summits|Behavior=Hostile}}\n"
+                + "The bat is a creature.\n";
+        String out = WikitextCleaner.clean(wiki, "Bat");
+
+        assertThat(out).contains("Region: Springlands, Revelwood, Nomad Highlands");
+        assertThat(out).contains("Behavior: Hostile");
+        assertThat(out.indexOf("The bat is a creature")).isLessThan(out.indexOf("Region:"));
+    }
+
+    @Test
+    @DisplayName("★ 短的重复描述也要去重：32 字的描述同样会稀释打分")
+    void shortDuplicateIsDropped() {
+        String desc = "+15% damage to ranged enemies.";
+        String wiki = "{{Infobox/Skill|description=" + desc + "|Class=Ranger}}\n"
+                + "== Description ==\n" + desc + "\n";
+        String out = WikitextCleaner.clean(wiki, "Counter Battery");
+
+        int first = out.indexOf(desc);
+        assertThat(first).isGreaterThanOrEqualTo(0);
+        assertThat(out.indexOf(desc, first + 1)).as("同一句只许出现一次").isEqualTo(-1);
+        assertThat(out).contains("Class: Ranger");
+    }
+
+    @Test
     @DisplayName("空输入不炸")
     void empty() {
         assertThat(WikitextCleaner.clean(null)).isEmpty();

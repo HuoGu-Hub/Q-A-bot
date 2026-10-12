@@ -308,11 +308,13 @@ public final class WikitextCleaner {
         //    实测 Dark Arts 的 description 因此与正文重复保留，把向量相似度从 0.489 压到 0.451 ——
         //    正好压在 app.kb.min-score=0.45 上，那一块就被检索整块丢掉了。
         String probe = flat.replaceFirst("^[A-Za-z][A-Za-z0-9 _\\-]{0,29}:\\s*", "");
-        if (probe.length() < 40) {
+        // 阈值 25：Counter Battery 的 description 只有 32 字（"+15% damage to ranged enemies."），
+        // 正文里还有一遍；40 的阈值让它重复进文档，重复文本会稀释向量与重排打分
+        if (probe.length() < 25) {
             return false;
         }
         String head = squeeze(probe.substring(0, Math.min(50, probe.length())));
-        if (head.length() < 30) {
+        if (head.length() < 20) {
             return false;
         }
         return squeeze(rest).contains(head);
@@ -429,8 +431,10 @@ public final class WikitextCleaner {
             if ("title".equals(key) && pageTitle != null && value.equalsIgnoreCase(pageTitle.strip())) {
                 continue;
             }
+            // ⚠️ 带键名的参数一律带前缀，不按长度区别对待：否则长值（如 Region 列出五片区域）
+            //    既丢掉键名、又不匹配"字段行"，于是孤零零留在文档开头，和其余字段分家。
             boolean plumbing = key == null || PLUMBING_KEYS.contains(key);
-            if (plumbing || value.length() > 60) {
+            if (plumbing) {
                 out.add(value);
             } else {
                 out.add(humanize(keyShown) + ": " + value);
