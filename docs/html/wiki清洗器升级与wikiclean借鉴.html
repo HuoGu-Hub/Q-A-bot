@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>wiki 清洗器能力盘点与 wikiclean 借鉴</title>
+<style>
+:root{--bg:#0f1216;--panel:#161b22;--panel2:#1c232c;--line:#2b3440;--fg:#e6edf3;--dim:#9aa7b4;--acc:#e08a4a;--acc2:#f0b27a;--ok:#3fb950;--warn:#e3b341;--bad:#ff6b6b}
+@media (prefers-color-scheme:light){:root{--bg:#f7f5f2;--panel:#fff;--panel2:#f1eee9;--line:#ddd6cc;--fg:#1d2126;--dim:#5d6874;--acc:#b4560f;--ok:#2f7d32;--warn:#8a6100;--bad:#b3261e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+.wrap{max-width:1020px;margin:0 auto;padding:48px 24px 96px}
+h1{font-size:27px;margin:0 0 10px}
+h2{font-size:19px;margin:42px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:16px;margin:24px 0 8px}
+p{margin:9px 0}
+code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;font-family:ui-monospace,Consolas,monospace}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font-size:13px;line-height:1.6}
+.lead{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:10px;padding:16px 20px;margin:18px 0}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600}
+ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
+.box{border:1px solid var(--line);border-left-width:4px;border-radius:10px;background:var(--panel);padding:13px 18px;margin:14px 0}
+.box.ok{border-left-color:var(--ok)}.box.warn{border-left-color:var(--warn)}.box.bad{border-left-color:var(--bad)}
+.note{color:var(--dim);font-size:13px}
+.num{font-family:ui-monospace,Consolas,monospace}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>wiki 清洗器能力盘点与 wikiclean 借鉴</h1>
+<p class="note">对象：<code>WikitextCleaner</code> 与它前后的抓取链路。参考项目：<a href="https://github.com/lintool/wikiclean">lintool/wikiclean</a>，已 clone 到 <code>.toolchain/wikiclean</code> 逐文件读过。审计日期 2026-10-11，全部数字实测自生产库 <code>server/data/qa/qqbot.sqlite</code>。</p>
+
+<div class="lead">
+<p><b>一句话结论：</b>我们的清洗器在"保语义"这一侧已经比 wikiclean 走得更远，表格取单元格、模板取白名单参数是它没有的能力；<b>真正的缺口只有两处</b> —— <code>&lt;gallery&gt;</code> 整块没处理、HTML 实体没反转义，两者合计影响 <span class="num">128</span> 块。</p>
+<p><b>但最大的杠杆不在 wikiclean 里：</b>实测这个 wiki 的 <code>action=parse</code> 能返回<b>数据层已填好</b>的渲染文本。同一页 <code>Goo</code> 现在是 <span class="num">704</span> 字原文清成 <span class="num">99</span> 字，走渲染能拿到 <span class="num">2387</span> 字可用文本。</p>
+</div>
+
+<div class="box bad">
+<p><b>更正 · 2026-10-11。</b>本文原先用 <code>Fool's Demise</code> 与 <code>Goo</code> 举例说明白名单缺口。复查发现这两页在 <code>kb_wiki_page</code> 里<b>没有记录</b>，库里那两块是更早的导入留下的旧块，<b>不属于当前导入链路</b>。结论方向不变，但证据要换成导入集内的页面，而且实测范围更大：</p>
+<ul>
+<li><code>Bat</code>（Wildlife）：原文 366 字 → 清洗后 <b>11 字</b>，只剩 "A Bat" 与章节名 "Drops"。掉落物、Behavior、Faction、Region 全丢。</li>
+<li><code>Counter Battery</code>（Ranger Skills）：原文 327 字 → 清洗后 <b>68 字</b>，且首句是 " is a skill in Enshrouded."，主语 <code>{{PAGENAME}}</code> 被丢。</li>
+<li>范围：<b>635 页里 196 页（31%）清洗后不足 300 字</b>，其中技能 142 页、野生动物 27 页。</li>
+</ul>
+<p>也就是说，文档质量的主要问题不是"标记没清干净"，而是<b>内容根本没能留下来</b>。</p>
+</div>
+
+<div class="box ok">
+<p><b>已落地 · 2026-10-13。</b>清洗器的原则已经反转：从"白名单"改成<b>"默认保留，只丢明确噪声"</b>。整库重洗后，语料从 <span class="num">568,914</span> 字涨到 <span class="num">619,447</span> 字（<b>+8.9%</b>），<b>588 篇变多</b>、36 篇变少、11 篇不变；清洗后不足 100 字的页从 <span class="num">66</span> 篇降到 <span class="num">6</span> 篇，不足 300 字的从 196 篇降到 163 篇。检索黄金集门禁 <b>PASS</b>，四项指标与改动前逐项一致。</p>
+<ul>
+<li><b>递归</b>：外层模板不认识也先递归进去，内层表格式模板照样取值 —— 掉落表就是这么救回来的。</li>
+<li><b>参数值默认全留</b>：短值输出成 <code>Class: Ranger</code>，长值原样保留；只丢文件名、尺寸、样式、图标这类参数。</li>
+<li><b>表格式模板一行一条</b>：<code>Fell Cyclops Head × 1 (Materials, Drop)</code>。</li>
+<li><b>页面上下文</b>：签名扩成 <code>clean(wikitext, title)</code>，<code>{{PAGENAME}}</code> 就地展开 —— " is a skill in Enshrouded" 这种缺主语的句子没有了。</li>
+<li><b>逐行去重</b>：infobox 的长描述与正文重复时只留一份，避免同一段话变成两个块互相稀释。</li>
+<li><b>字段行排在正文之后</b>：见下方"字段顺序"那条，这是保住检索排名的关键。</li>
+<li><b>gallery 取标签</b>、<b>HTML 实体解码</b>、<b>表格一行一条记录</b>、<b>BOM 处理</b>一并完成。</li>
+<li><b>强制重洗入口</b>：<code>--app.kb.wiki-import.force=true</code>，补上"清洗器改了、老页不会自己重洗"这个洞。</li>
+</ul>
+<p>验收：495 项测试全绿；黄金集门禁 PASS。</p>
+</div>
+
+<h3>字段顺序：一个反直觉的坑</h3>
+<div class="box warn">
+<p>把模板参数留下来之后，文档开头变成了 <code>Title: … / Class: Ranger / Unlock Cost: 3</code> 这样的元数据，正文被挤到后面。结果黄金集里两条口语问题的期望块掉出了 top-5。</p>
+<p>用重排模型直接打分才看清：问题「黑魔法是什么」对同一块的三种形态打分是 —— <b>字段排末尾 0.9691</b>、<b>旧文本 0.8314</b>、<b>字段排前面 0.4807</b>。「还是不能召唤空荡独眼巨人」同样以排末尾最高。</p>
+<p>所以现在的规则是：<b>"键: 值"这类字段统一移到文档末尾，长文本留在原处</b>。内容一个字没少，排名回到基线，门禁 PASS。这条也有单测钉住。</p>
+</div>
+
+<h3>实现中踩到的坑</h3>
+<p class="note">这三个都是"看起来对、实测丢内容"的类型，写在这里免得下次再犯。</p>
+<table>
+<thead><tr><th>坑</th><th>症状</th><th>修法</th></tr></thead>
+<tbody>
+<tr><td>把"参数值"当成"模板体"处理</td><td>纯文本值被当成一个同名模板，全部返回空 —— <b>所有带参数的模板一起清成空白</b>，测试直接暴露</td><td>拆成两个函数：模板体走 <code>resolveTemplate</code>，参数值走 <code>resolveValue</code>，后者只递归处理里面的嵌套模板</td></tr>
+<tr><td>把 <code>Class</code> 当成 CSS 的 <code>class=</code></td><td><code>Class=Ranger</code> 被当样式丢掉，"这个技能属于哪个职业"没了</td><td>噪声键里去掉 <code>class</code> 与 <code>caption</code></td></tr>
+<tr><td>字段行挡在正文前面</td><td>检索排名下滑：重排模型看重开头，「黑魔法是什么」那块的重排分 0.83 → 0.48，掉出 top-5</td><td>字段行统一挪到文档末尾，长文本留在原处</td></tr>
+<tr><td>把纯数字当成尺寸</td><td><code>Unlock Cost=3</code> 与掉落数量 <code>1</code> 被丢</td><td>尺寸判断必须带单位（<code>px</code>/<code>em</code>/<code>%</code>）才算噪声</td></tr>
+</tbody></table>
+
+<h2>一、我们的清洗器现在能到什么程度</h2>
+
+<h3>1.1 能力清单</h3>
+<table>
+<thead><tr><th>构造</th><th>我们的处理</th><th>语义保留度</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;!-- --&gt;</code> 注释</td><td>整段删</td><td>—</td></tr>
+<tr><td><code>{{模板}}</code></td><td>配对扫描处理嵌套，按白名单取参数，其余整块丢</td><td><b>高</b>：任务页的前置任务名、奖励物品、NPC 描述都能留下</td></tr>
+<tr><td><code>{| 表格 |}</code></td><td>取单元格内容，冗余样式剥离</td><td><b>高</b>：任务页的"目标/地点/描述"全在表里</td></tr>
+<tr><td><code>[[A|B]]</code> / 文件链接</td><td>取显示名，文件与分类链接整条丢</td><td>中</td></tr>
+<tr><td><code>&lt;ref&gt;</code>、<code>&lt;br&gt;</code>、其它标签</td><td>ref 删、br 转换行、标签剥掉但留内部文字</td><td>中</td></tr>
+<tr><td>粗体斜体、列表符号、章节标题</td><td>去标记留文字</td><td>高</td></tr>
+<tr><td>空白与连续换行</td><td>折叠</td><td>—</td></tr>
+<tr><td><b><code>&lt;gallery&gt;</code> 整块</b></td><td><b>只删标签本身，里面的行全部漏出</b></td><td class="num">缺陷</td></tr>
+<tr><td><b>HTML 实体</b></td><td><b>不处理</b></td><td class="num">缺陷</td></tr>
+<tr><td><code>&lt;math&gt;</code>、<code>&lt;gallery&gt;</code> 之外的扩展标签</td><td>不特殊处理</td><td>—</td></tr>
+</tbody></table>
+
+<h3>1.2 语料现状与缺口实测</h3>
+<p>生产库 <code>source='wiki'</code> 的块：<b>3367 块 / 798,982 字</b>。逐块正则扫描清洗**产物**：</p>
+<table>
+<thead><tr><th>检查项</th><th>命中块</th><th>占比</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td><code>File:</code>/<code>Image:</code> 残留</td><td class="num">124</td><td class="num">3.7%</td><td><b>真缺陷</b>，全部来自 gallery 正文</td></tr>
+<tr><td>HTML 实体 <code>&amp;nbsp;</code> 等</td><td class="num">4</td><td class="num">0.1%</td><td><b>真缺陷</b>，单页最多 118 处</td></tr>
+<tr><td>残留 <code>{{</code> / <code>}}</code></td><td class="num">1</td><td class="num">0.0%</td><td>另查，见 §7.2</td></tr>
+<tr><td>残留 <code>&lt;tag&gt;</code></td><td class="num">2</td><td class="num">0.1%</td><td>陈旧块，见 §7.1</td></tr>
+<tr><td><code>[[</code> / <code>]]</code>、<code>{|</code>、<code>|}</code>、表头行</td><td class="num">0</td><td>—</td><td>已清干净</td></tr>
+<tr><td>末尾章节 参见 / 参考 / 外部链接</td><td class="num">0</td><td>—</td><td>我们这类页面没有维基百科式尾部</td></tr>
+<tr><td>空括号、空方括号</td><td class="num">0</td><td>—</td><td>—</td></tr>
+</tbody></table>
+<p class="note">扫描时踩过两个正则误伤，记在这里免得后人重复：<code>|-</code> 命中 305 块，实为剧情页正文里的分隔符 <code>|-|</code>；<code>ipa</code> 命中 3 块，实为 <code>anticipated</code> 这类词里的子串。这两项<b>不是</b>缺陷。</p>
+
+<h3>1.3 用当前清洗器重跑原文，看保留率</h3>
+<p>从 wiki API 抓 5 页原文，过一遍现在的 <code>WikitextCleaner</code>：</p>
+<table>
+<thead><tr><th>页面</th><th>原文</th><th>清洗后</th><th>保留</th><th>观察</th></tr></thead>
+<tbody>
+<tr><td><code>Comfort</code></td><td class="num">3863</td><td class="num">2119</td><td class="num">55%</td><td>正文干净，尾部 9 行 gallery 噪声</td></tr>
+<tr><td><code>Decorations</code></td><td class="num">3636</td><td class="num">2508</td><td class="num">69%</td><td><b>整页只剩 36 行 <code>File:X.png|link=…</code></b></td></tr>
+<tr><td><code>Survivors</code></td><td class="num">15150</td><td class="num">5102</td><td class="num">34%</td><td>118 处 <code>&amp;nbsp;</code></td></tr>
+<tr><td><code>Goo</code></td><td class="num">704</td><td class="num">99</td><td class="num">14%</td><td>数据驱动的页，见 §6</td></tr>
+<tr><td><code>Fool's Demise</code></td><td class="num">832</td><td class="num">51</td><td class="num">6%</td><td>白名单缺口，见 §4.3</td></tr>
+</tbody></table>
+
+<h3>1.4 已有的护栏</h3>
+<ul>
+<li><code>WikitextCleanerTest</code> 12 个用例，夹具是<b>真实抓下来的原文</b>，放在 <code>server/src/test/resources/wiki/</code>，5 篇覆盖任务页 / 机制页 / 怪物页 / 制作页。</li>
+<li>每一条"曾经踩过的坑"都有对应用例：嵌套模板、白名单取参、表格 <code>&lt;br&gt;</code> 折行、NPC Infobox 描述。</li>
+<li>流程侧有一份缺陷清单，记录了 6 条已修缺陷、两轮重导实操、以及一条硬规矩：<b>清洗器一改，老页不会自己重洗</b>。</li>
+</ul>
+
+<h2>二、wikiclean 是怎么做的</h2>
+<p>它解决的是"维基百科 XML dump → 纯文本"，主类 <code>WikiClean</code> 507 行，管线固定 16 步：</p>
+<pre>getWikiMarkup  ← 从 &lt;text xml:space="preserve"&gt; 里切出标记
+removeFooter        （可选，按语言正则砍掉尾部章节直到文末）
+removeRefs          （先删 &lt;br&gt;，再删两种 ref 形态 —— 顺序有注释说明）
+removeInterWikiLinks（[[wikt:x|y]] 与 [[en:…]] 的区分靠有没有竖线）
+removeParentheticals（IPA 模板带走它外面的括号，避免留下空 ()）
+fixUnitConversion   （{{convert|100|km}} → 100 km）
+ImageCaptionsRemover（手写状态机，处理 caption 里嵌套的 [[ ]]，整条图注删掉）
+DoubleBracesRemover （手写状态机，<b>所有模板整块删</b>）
+removeHtmlComments / removeEmphasis / removeHeadings / removeCategoryLinks
+removeLinks（可选保留）
+removeMath / removeGallery / removeNoToc / removeIndentation
+TableRemover        （手写状态机，<b>整张表删</b>）
+unescapeHtml4 ×2    （注释：有些实体被双重编码）
+removeHtmlTags / compressMultipleNewlines</pre>
+
+<h3>2.1 两个决定性的取舍</h3>
+<ul>
+<li><b>模板一律删、表格整张删。</b>它的目标是"纯正文散文"，为维基百科条目服务；信息框与表格在那边确实是噪声。<b>我们的语料正好相反</b> —— 任务页的答案就在表格和模板参数里，所以这一条不能学。</li>
+<li><b>语言做成一等公民。</b><code>Language</code> 抽象只要求两样东西：尾部章节正则、分类链接正则。<code>Chinese</code> 只有 3 条尾部正则（参见 / 参考书目 / 参考网址），其余靠基类。</li>
+</ul>
+
+<h3>2.2 细节里值得抄的几处</h3>
+<ul>
+<li><b>顺序是有原因的，而且写在注释里。</b><code>removeRefs</code> 先删 <code>&lt;br&gt;</code> 的理由是"否则 ref 正则配不上"，同样的话我们在 <code>stripTables</code> 与 <code>stripTags</code> 的顺序上也写过一次。</li>
+<li><b>双重反转义。</b>它连续调两次 <code>unescapeHtml4</code>，注释只说"有些实体是双重编码的"。我们连一次都没做。</li>
+<li><b>空壳处理。</b>IPA 模板删掉后会留下 <code>()</code>，它用一条正则把"括号 + 模板"一起吃掉，而不是事后清理空括号。</li>
+<li><b>测试按语言分文件</b>，每个语种一个测试类，另有 <code>WikiCleanBasicTest</code> 管通用行为。</li>
+<li><b>未闭合括号时截断剩余全文</b>，三种手写状态机都是这个行为。我们也是 <code>break</code>，同样会丢后半页，见 §4.4。</li>
+</ul>
+
+<h2>三、逐条对比</h2>
+<table>
+<thead><tr><th>能力</th><th>我们</th><th>wikiclean</th><th>谁更合适</th></tr></thead>
+<tbody>
+<tr><td>模板</td><td>白名单取参，保语义</td><td>全部删</td><td><b>我们</b></td></tr>
+<tr><td>表格</td><td>取单元格</td><td>整张删</td><td><b>我们</b></td></tr>
+<tr><td>嵌套处理</td><td>配对扫描</td><td>手写状态机</td><td>我们，代码短一半</td></tr>
+<tr><td>图注 / gallery</td><td>无</td><td>整块删</td><td><b>它</b></td></tr>
+<tr><td>HTML 实体</td><td>无</td><td>双重反转义</td><td><b>它</b></td></tr>
+<tr><td>扩展标签 math / nowiki / NOTOC</td><td>无</td><td>有</td><td>它，但我们实测 0 命中</td></tr>
+<tr><td>单位换算这类高频模板</td><td>白名单一条条加</td><td><code>fixUnitConversion</code> 专门处理</td><td>思路互相借鉴</td></tr>
+<tr><td>尾部章节裁剪</td><td>无</td><td>按语言正则</td><td>它，但我们实测 0 命中</td></tr>
+<tr><td>输入形态</td><td>API 取单页 wikitext</td><td>读 XML dump</td><td>各自场景</td></tr>
+<tr><td>依赖</td><td>零依赖</td><td>ant + commons-io + commons-lang3</td><td><b>我们</b></td></tr>
+</tbody></table>
+
+<h2>四、值得借鉴的四条</h2>
+
+<h3>4.1 <code>&lt;gallery&gt;</code> 整块处理 —— 124 块</h3>
+<p><b>证据。</b><code>Decorations</code> 原文 3636 字里，全部内容就是一段 <code>&lt;gallery&gt;</code>：</p>
+<pre>&lt;gallery widths=100px&gt;
+File:Iron Door.png|link=Decorations/Doors|[[Decorations/Doors|Doors]]
+File:Secret Stone Door.png|link=Decorations/Secret Doors|[[Decorations/Secret Doors|Secret Doors]]</pre>
+<p>我们的 <code>stripTags</code> 只吃掉 <code>&lt;gallery …&gt;</code> 这个标签本身（<code>&lt;[^&gt;]+&gt;</code>），里面每行没有 <code>[[ ]]</code> 包着 <code>File:</code>，所以 <code>stripLinks</code> 也放它过去，最后留下 36 行 <code>File:X.png|link=…</code>。这类页面在库里是 <code>wiki-decorations</code> 与 <code>wiki-decorations-2</code> 两块，全是噪声。</p>
+<div class="box warn">
+<p><b>但不要照抄"整块删"。</b>照抄的话 <code>Decorations</code> 会清成空页 —— 而它每一行都带一个可读标签：<code>Doors</code>、<code>Secret Doors</code>、<code>Windows</code>。这个页面本身就是一张目录。</p>
+<p><b>建议：</b>先按行取标签（<code>[[X|Y]]</code> 取 <code>Y</code>，没有就取 <code>link=</code> 后面那段），去重后压成一行物品清单；取不到标签的行才丢。这样"整页图片目录"变成"这一页包含哪些东西"，与我们"宁可少留，不要留错"的原则一致。</p>
+</div>
+
+<h3>4.2 HTML 实体反转义 —— 4 块 / 单页 118 处</h3>
+<p><b>证据。</b><code>Survivors</code> 清洗后仍有 118 处 <code>&amp;nbsp;&amp;nbsp;</code> 开头的行：<code>&amp;nbsp;&amp;nbsp;Charcoal Kiln</code>。库里 <code>wiki-survivors-2</code> 那块 1303 字，几乎每一行都带实体。</p>
+<p><b>建议：</b>在空白折叠之前加一步实体反转义，至少覆盖 <code>&amp;nbsp;</code>、<code>&amp;amp;</code>、<code>&amp;lt;</code>、<code>&amp;gt;</code>、<code>&amp;quot;</code>、<code>&amp;#NNN;</code>。wikiclean 的"调两次"提示同一份文本里可能双重编码，可以照做 —— 代价是一次全串扫描，可忽略。</p>
+
+<h3>4.3 高频模板要"专门处理"，而不是靠白名单碰运气 —— 这条是我们自己的缺口</h3>
+<p>这条不是从 wikiclean 抄的规则，而是它的 <code>fixUnitConversion</code> 提醒的<b>做法</b>：<code>{{convert}}</code> 在维基百科里太常见，与其等白名单，不如给它一条专门规则。我们的高频模板是谁？实测答案是 <code>{{Item Infobox}}</code>。</p>
+<p><b>证据。</b><code>Fool's Demise</code> 原文 832 字，当前清洗后只剩 <b>51 字</b>，保留率 6%。因为该页正文全部在 <code>{{Item Infobox|description=…}}</code> 里，而白名单只收了 <code>npc infobox</code>、没收 <code>item infobox</code>，于是整块丢。库里现存的那一行是 <b>365 字</b> —— 它来自更早的清洗器版本。</p>
+<div class="box warn">
+<p>这同时说明一件事：<b>白名单收窄是一种会静默丢内容的改动。</b>缺陷清单里 §2 修的是 <code>npc infobox</code>，但同类问题在 <code>item infobox</code> 上仍在，而当时的对账用的是"页数"与"失败数"，看不出正文变短。</p>
+</div>
+<p><b>建议：</b>把 <code>item infobox</code> 也收进 <code>KEYED_TEMPLATES</code>，键同样只取 <code>description</code>；并在缺陷清单的对账口径里加一条<b>页级保留率</b>，掉到某条线以下就报警，而不是只看"有没有变成 0"。</p>
+
+<h3>4.4 未闭合括号的行为要一致</h3>
+<p>两边都会在括号配不上时丢弃剩余内容：它 <code>return s.substring(0, i)</code>，我们 <code>break</code> 之后 <code>out</code> 里是前半段。这个行为在整页层面是对的 —— 半截 <code>{{</code> 进了语料比缺内容更糟。但两处可以做得更好：<b>丢掉这一段，继续从下一个 <code>{{</code> 扫</b>，而不是放弃整页。实测语料里 <code>Goo</code> 这类数据驱动页面就有大量未闭合形态的模板，值得先统计再决定。</p>
+
+<h2>五、明确不借鉴的</h2>
+<ul>
+<li><b>整表删除、整模板删除。</b>方向相反，会毁掉我们最好的那批页面。</li>
+<li><b>手写状态机。</b>我们用一个 <code>matchClose</code> 配对扫描就解决了同样的嵌套问题，它那三段状态机每段 50 行且更难读。</li>
+<li><b>17 种语言 + 尾部章节层。</b>实测我们语料里尾部章节 0 命中，暂时不需要。但"按来源配策略"这个形状值得留着 —— 将来再加第三个 wiki 时用得上。</li>
+<li><b>引入依赖。</b>它依赖 ant、commons-io、commons-lang3；我们保持零依赖，规则抄思路就够。</li>
+<li><b>XML dump 解析、<code>withTitle</code>。</b>我们是 API 取单页，标题另有归属。</li>
+</ul>
+
+<h2>六、比 wikiclean 更值得做的一件事：渲染文本</h2>
+<p>这是本轮实测最有价值的发现，wikiclean 给不了，因为它读的是离线 dump。</p>
+<table>
+<thead><tr><th>口径</th><th><code>Goo</code> 这一页</th></tr></thead>
+<tbody>
+<tr><td>原始 wikitext</td><td class="num">704 字</td></tr>
+<tr><td>当前清洗器输出</td><td class="num">99 字，开头还是 <code>is a crafting material…</code>，主语 <code>{{PAGENAME}}</code> 被丢了</td></tr>
+<tr><td><code>action=parse</code> 渲染 HTML</td><td class="num">68,633 字</td></tr>
+<tr><td>渲染 HTML 粗暴去标签</td><td class="num">2387 字</td></tr>
+</tbody></table>
+<p>关键差别：渲染文本里<b>数据层已经填好</b>。同一页原文写的是 <code>{{Get|description}}</code>，渲染后是：</p>
+<pre>Goo A sticky paste used to bind chemical substances. Info Type Materials Rarity Common
+Stack Size 250 Level 13 Biomes Revelwood Goo is a crafting material in Enshrouded.</pre>
+<p><code>{{Get}}</code> 是这个 wiki 的数据查询层，离线永远解不出来 —— 我们现在的做法是整块丢掉，于是这页什么都没剩下。</p>
+<table>
+<thead><tr><th>路子</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td><code>prop=extracts&amp;explaintext=1</code> TextExtracts 扩展</td><td><b>不可用</b>，三页 extract 全为空，说明该扩展没装</td></tr>
+<tr><td><code>action=parse&amp;prop=text</code></td><td><b>可用</b>，但 <code>mw-parser-output</code> 容器不存在，wiki.gg 的皮肤结构不同，需要另找内容边界</td></tr>
+</tbody></table>
+<div class="box">
+<p><b>建议做成混合策略，而不是全面替换：</b></p>
+<ol>
+<li>默认仍走原文明文清洗 —— 便宜、纯函数、可离线单测，多数散文型页面它已经够好。</li>
+<li>对"清洗后字数 / 原文字数低于某条线"或"原文含 <code>{{Get|</code>"的页，回退到渲染文本提取。</li>
+<li>渲染路线的成本要如实计入：单页 68KB、需要 HTML 解析与内容区选择、UI 噪声要清（<code>[ visual editing | edit source ]</code> 这类）。</li>
+</ol>
+</div>
+
+<h2>七、顺带发现的两个问题</h2>
+
+<h3>7.1 陈旧块会让"改清洗器"这件事看起来没生效</h3>
+<p>库里 <code>fools-demise</code> 是 365 字，而现在重洗同一页只有 51 字（§4.3）。也就是说：<b>清洗器改了、老页没重洗</b>这件事已经在语料里留下了可观测的分层 —— 同一个 wiki，一部分块是旧规则产物、一部分是新规则产物。缺陷清单把它列为流程风险，现在有了具体样本。</p>
+<p>建议在重洗脚本的验收里加一条对账：<b>逐页比较"库里正文"与"当前清洗器重跑结果"</b>，列出差异页数。这正是本轮用的方法，可以固化成脚本。</p>
+
+<h3>7.2 清洗器是纯函数，拿不到页面上下文</h3>
+<p><code>clean(String)</code> 只收原文，于是 <code>{{PAGENAME}}</code>、<code>{{SUBPAGENAME}}</code> 这类"需要知道自己是谁"的模板只能被丢掉，<code>Goo</code> 的正文首句就是这样变成 <code> is a crafting material…</code> 的。基线里另有 1 块残留 <code>{{Get</code>，同属这一类。</p>
+<p>建议把签名扩成带上下文的形式，例如 <code>clean(String wikitext, PageContext ctx)</code>，<code>ctx</code> 里先只放页面标题与来源；这样 <code>{{PAGENAME}}</code> 能就地展开，也不破坏纯函数性质 —— 上下文是入参，不是全局状态。</p>
+<p class="note">基线里另有一块残留 <code>{{Get</code>，id 为 <code>goo</code>，内容是中文与全角竖线（<code>制作：耗时：{{Get｜产出：{{Get</code>）。当前清洗器对 <code>Goo</code> 原文的输出里没有这个形态，所以它更像是旧版本或另一来源留下的<b>陈旧块</b>，不宜直接归到本条名下 —— 需要单独查一次它的来路。</p>
+
+<h2>八、建议的实施顺序</h2>
+<table>
+<thead><tr><th>步</th><th>动作</th><th>影响面</th><th>验收</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>gallery 按行取标签 + HTML 实体反转义</td><td>124 + 4 块</td><td>补清洗器单测；重跑 <code>Decorations</code> / <code>Survivors</code> 两页人工核对；黄金集门禁不退化</td></tr>
+<tr><td>2</td><td>白名单补 <code>item infobox</code>；清洗器加页面上下文以展开 <code>PAGENAME</code>；未闭合括号改为跳过该段继续扫</td><td>全量，收益集中在数据驱动页</td><td>逐页保留率对账，列出所有保留率下降的页</td></tr>
+<tr><td>3</td><td>渲染文本兜底路线</td><td>数据驱动页</td><td>先离线跑 20 页对比，再决定是否进导入链路</td></tr>
+</tbody></table>
+<p class="note">步骤 1、2 已完成，见上方"已落地"。第 3 步渲染兜底仍未做 —— 它针对的是 <code>{{Get}}</code> 这类离线解不出的数据层。</p>
+
+<h2>九、审计怎么做的</h2>
+<ol>
+<li><b>读源码。</b><code>git clone --depth 1 https://github.com/lintool/wikiclean.git</code> 到 <code>.toolchain/wikiclean</code>，逐文件读了 <code>WikiClean</code> / <code>Language</code> / <code>Chinese</code> / 测试。</li>
+<li><b>量产物。</b>把生产库复制到 <code>.toolchain/wiki-audit.sqlite</code>，用 Python 对 3367 条 <code>source='wiki'</code> 的块做正则扫描，逐项计数并抽样本。</li>
+<li><b>重跑。</b>从 wiki API 抓 5 页原文到 <code>.toolchain/raw/</code>，用一个临时的同包测试调**真清洗器**重跑，和库里已存的块逐一对照。</li>
+<li><b>探路。</b>对同一批页面依次试 <code>prop=extracts</code>、<code>action=parse</code>，确认哪条路可用。</li>
+</ol>
+<p class="note">注意：wiki API 对没有自定义 <code>User-Agent</code> 的请求返回 403，抓取要带上 <code>app.kb.map-sync.user-agent</code> 里那个值。</p>
+
+<div class="box ok">
+<p><b>总结：</b>清洗器本身的底子是好的 —— 保语义这条路线比 wikiclean 更适合我们的语料，缺的只是两处边角规则。真正值得投入的是另外两件：<b>把"高频模板"当成一等公民</b>而不是白名单碰运气，以及<b>给数据驱动的页面一条渲染兜底</b>。wikiclean 在这两件上都帮不上，但它提醒了两个我们没做的动作：实体反转义与空壳清理。</p>
+</div>
+
+</div></body></html>

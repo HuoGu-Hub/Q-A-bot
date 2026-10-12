@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JWPL 可用性评估：能不能用来重做 wiki 清洗器</title>
+<style>
+:root{--bg:#0f1216;--panel:#161b22;--panel2:#1c232c;--line:#2b3440;--fg:#e6edf3;--dim:#9aa7b4;--acc:#e08a4a;--acc2:#f0b27a;--ok:#3fb950;--warn:#e3b341;--bad:#ff6b6b}
+@media (prefers-color-scheme:light){:root{--bg:#f7f5f2;--panel:#fff;--panel2:#f1eee9;--line:#ddd6cc;--fg:#1d2126;--dim:#5d6874;--acc:#b4560f;--ok:#2f7d32;--warn:#8a6100;--bad:#b3261e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+.wrap{max-width:1020px;margin:0 auto;padding:48px 24px 96px}
+h1{font-size:27px;margin:0 0 10px}
+h2{font-size:19px;margin:42px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:16px;margin:24px 0 8px}
+p{margin:9px 0}
+code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;font-family:ui-monospace,Consolas,monospace}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font-size:13px;line-height:1.6}
+.lead{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:10px;padding:16px 20px;margin:18px 0}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600}
+ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
+.box{border:1px solid var(--line);border-left-width:4px;border-radius:10px;background:var(--panel);padding:13px 18px;margin:14px 0}
+.box.ok{border-left-color:var(--ok)}.box.warn{border-left-color:var(--warn)}.box.bad{border-left-color:var(--bad)}
+.note{color:var(--dim);font-size:13px}
+.num{font-family:ui-monospace,Consolas,monospace}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>JWPL 可用性评估</h1>
+<p class="note">对象：<code>org.dkpro.jwpl:dkpro-jwpl-parser:2.0.0</code>。全部结论来自在本机跑的四个实验，脚本与结果留在 <code>.toolchain/jwpl-spike/</code>。日期 2026-10-11。</p>
+
+<div class="lead">
+<p><b>结论：能用，但不该拿来当清洗器的替代品。</b>它的解析器在我们真实页面上很稳 —— 5 页 0 异常、单页 0~13 ms，能给出我们现在没有的两样东西：<b>表格网格</b>与<b>任意模板的具名参数</b>。</p>
+<p>但它的<b>文本输出质量并不比我们现在的清洗器高</b>，实测在三处明显更差：分类链接泄漏、HTML 标签留在正文、实体不解码。它<b>也没有解决</b>我们最大的两个缺口 —— gallery 噪声与 <code>{{Get}}</code> 数据层，实测零改善。</p>
+<p>如果目标是"最终质量"，真正的杠杆是<b>渲染文本</b>：同一页 <code>Goo</code> 现在清出 99 字，走 <code>action=parse</code> 能拿到 2387 字且数据层已填。</p>
+</div>
+
+<h2>一、我跑了什么</h2>
+<table>
+<thead><tr><th>实验</th><th>做什么</th><th>结果文件</th></tr></thead>
+<tbody>
+<tr><td>Spike1</td><td>JWPL 默认配置，直接看它给的结构与文本</td><td><code>jwpl-spike-result.txt</code></td></tr>
+<tr><td>Spike2</td><td>JWPL 当结构前端 + 我们自己一层策略，模板用 <code>FlushTemplates</code> 冲掉</td><td><code>jwpl-spike2-result.txt</code></td></tr>
+<tr><td>Spike3</td><td>同上，但保留默认模板处理，自己剥占位符、自己取 infobox 参数</td><td><code>jwpl-spike3-result.txt</code></td></tr>
+<tr><td>接入实验</td><td>把 JWPL 挂到工程副本的 pom 上，看依赖解析与 Spring 上下文</td><td><code>.toolchain/verify/jwpl-context2.log</code></td></tr>
+</tbody></table>
+<p>样本是 5 篇真实页面：<code>Comfort</code>、<code>Decorations</code>、<code>Fool's Demise</code>、<code>Goo</code>、<code>Survivors</code>。</p>
+
+<div class="box warn">
+<p><b>关于样本的一处更正 · 2026-10-11。</b>本文的对比样本用了 <code>Goo</code> 与 <code>Fool's Demise</code>，复查发现这两页不在当前导入集里，库里那两块是旧块。结论不受影响，因为对比的是"同一份原文分别过三条路径"，与它是否在库里无关。若要看导入集内的真实收益：<code>Bat</code> 原文 366 字、当前清洗器 11 字、渲染后文本 1793 字；<code>Counter Battery</code> 原文 327 字、当前 68 字、渲染后 2442 字。</p>
+</div>
+
+<h2>二、它到底给什么</h2>
+<h3>2.1 结构层：比我们的正则强</h3>
+<pre>Comfort     解析 13 ms   节 3 / 段 7 / 表 1 / 单元格 46 / 模板 3 / 内链 62
+Survivors   解析  6 ms   节 4 / 段 8 / 表 3 / 单元格 121 / 模板 83 / 内链 126
+Decorations 解析  2 ms   节 1 / 段 3 / 表 0 / 单元格 0 / 模板 0 / 内链 146
+Fool's Demise 解析 0 ms  节 2 / 段 6 / 表 0 / 模板 9 / 内链 3</pre>
+<ul>
+<li><b>表格是真网格</b>：<code>TableElement.getRow()</code> / <code>getCol()</code>，能按行列取单元格。我们现在把表格压成一串文本行。</li>
+<li><b>模板参数按名可取</b>：<code>Template.getName()</code> + <code>getParameters()</code>。实测 <code>Fool's Demise</code> 的 <code>{{Item Infobox}}</code> 里 <code>description=…</code> 被完整取到 —— 这一段正是我们现在<b>整块丢掉</b>的剧情正文。</li>
+<li><b>链接有显示名</b>：<code>Link.getText()</code>，<code>Decorations</code> 的 146 个内链能拿到 <code>Doors</code>、<code>Secret Doors</code> 这类标签。</li>
+<li><b>源偏移</b>：每个对象带 <code>Span</code>，可以定位到原文位置，排障时比"第几步丢的"更精确。</li>
+</ul>
+
+<h3>2.2 文本层：三处比我们差</h3>
+<table>
+<thead><tr><th>页面</th><th>我们的清洗器</th><th>JWPL 默认文本</th><th>JWPL + 我们的策略层</th></tr></thead>
+<tbody>
+<tr><td><code>Comfort</code></td><td class="num">2119 字</td><td class="num">3224 字，含 <code>TEMPLATE[...]</code></td><td class="num">2530 字，0 泄漏</td></tr>
+<tr><td><code>Decorations</code></td><td class="num">2508 字，全是 <code>File:…</code> 噪声</td><td class="num">3089 字，形态是 <code>link=X|Y</code></td><td class="num">972 字，标签清单</td></tr>
+<tr><td><code>Fool's Demise</code></td><td class="num">51 字</td><td class="num">1243 字</td><td class="num">107 字 + description 可取到</td></tr>
+<tr><td><code>Goo</code></td><td class="num">99 字</td><td class="num">822 字</td><td class="num">183 字</td></tr>
+<tr><td><code>Survivors</code></td><td class="num">5102 字，118 处实体</td><td class="num">10418 字</td><td class="num">4944 字，0 泄漏</td></tr>
+</tbody></table>
+<p>三处它做不到而我们做到了：</p>
+<ul>
+<li><b>分类链接</b>：<code>Goo</code> 输出里留下 <code>Category:Crafting Materials Category:Early Access Launch</code>；<code>Fool's Demise</code> 留下 <code>C:Two-handed Greatswords</code>。我们的 <code>stripLinks</code> 会把这类整条丢掉。</li>
+<li><b>HTML 标签</b>：<code>Fool's Demise</code> 的正文里 <code>&lt;i&gt;"King of fools…"</code> 原样留在文本中。JWPL 只解析 wiki 语法，不认识 HTML。</li>
+<li><b>HTML 实体</b>：<code>Survivors</code> 进 JWPL 后仍有 121 处 <code>&amp;nbsp;</code>，和我们现在的处境一样。</li>
+</ul>
+<p>而它<b>同样解决不了</b>的两处：<code>Decorations</code> 的 gallery 在它的文本里是 <code>100px / link=Decorations/Doors|Doors</code>，照样是噪声；<code>Goo</code> 的 <code>description</code> 它取到的是字面量 <code>(TEMPLATE)</code> —— 因为值是 <code>{{Get|description}}</code>，离线谁都解不出来。</p>
+
+<div class="box warn">
+<p><b>还有一个配置陷阱。</b>用 <code>FlushTemplates</code> 把模板冲掉之后，<code>getTemplates()</code> 也就拿不到参数了 —— Spike2 里 <code>Fool's Demise</code> 的 description 因此又丢了。也就是说这两件事在 JWPL 里是互斥的：<b>要么正文里留占位符、要么参数不可取。</b>想两者都要，就得选默认配置再自己剥占位符，这正是 Spike3 做的事，也意味着策略层得我们自己写。</p>
+</div>
+
+<h2>三、依赖账单</h2>
+<p><code>dkpro-jwpl-parser</code> 只是看起来轻。实测在**我们的工程**上解析出的传递依赖：</p>
+<pre>org.dkpro.jwpl:dkpro-jwpl-parser:2.0.0
+ +- org.dkpro.jwpl:dkpro-jwpl-api:2.0.0          → 拖进 ORM
+ |   +- org.hibernate.orm:hibernate-core:6.6.53.Final   ← Spring Boot 管理的版本
+ |   +- jakarta.persistence:jakarta.persistence-api:3.1.0
+ |   +- org.jgrapht:jgrapht-core:1.5.2            图算法
+ +- org.dkpro.jwpl:dkpro-jwpl-swc-engine-shade:2.0.0   ← Sweble 引擎被 shade 进来
+ +- org.antlr:antlr4-runtime / jaxb / byte-buddy …
+共 34 条传递依赖</pre>
+<p><b>实测结论：不会炸，但很重。</b>把 JWPL 挂上去之后跑 <code>SpringWiringTest</code> 与 <code>ApplicationStartsTest</code>，<b>5 项全绿</b>，上下文照常启动，没有触发 JPA 自动配置。真正的代价是三点：</p>
+<ol>
+<li>一个只做文本清洗的项目，classpath 上多出一整套 Hibernate ORM 与图算法库；</li>
+<li><code>jwpl-api</code> 是按 Hibernate 6.1 编的，在我们这里被 Boot 的 BOM 拉成 6.6.53 —— 只要不碰它的 DB 路径就没事，属于潜在错配；</li>
+<li>供应链与扫描面变大，而它带来的收益（表格网格、模板参数）只在"要结构化字段"时才用得上。</li>
+</ol>
+<p class="note">顺带一个有价值的发现：<code>dkpro-jwpl-swc-engine-shade</code> 说明 JWPL 2.0 已经把 Sweble 的引擎打了进来。也就是说它那套 AST 的主力其实是 Sweble。若真要结构化解析，直接上 Sweble 可以绕开 api 与 ORM 那一坨 —— 这条路我还没实测，可以照同样方法验证。</p>
+
+<h2>四、逐项能力对比</h2>
+<table>
+<thead><tr><th>能力</th><th>我们的清洗器</th><th>JWPL + 策略层</th><th>谁更好</th></tr></thead>
+<tbody>
+<tr><td>表格</td><td>扁平取单元格</td><td><b>真网格</b>，可按行列</td><td>JWPL</td></tr>
+<tr><td>模板参数</td><td>硬编码白名单</td><td><b>任意模板按名取</b></td><td>JWPL</td></tr>
+<tr><td>嵌套处理</td><td>配对扫描</td><td>完整解析器</td><td>JWPL</td></tr>
+<tr><td>源位置诊断</td><td>无</td><td><code>Span</code> 偏移</td><td>JWPL</td></tr>
+<tr><td>分类链接 / <code>C:</code></td><td>整条丢</td><td>泄漏</td><td><b>我们</b></td></tr>
+<tr><td>HTML 标签</td><td>剥掉留文字</td><td>留在正文里</td><td><b>我们</b></td></tr>
+<tr><td>gallery</td><td>漏出 <code>File:</code> 噪声</td><td>漏出 <code>link=</code> 噪声</td><td>平手，都要另写</td></tr>
+<tr><td>HTML 实体</td><td>不解码</td><td>不解码</td><td>平手，都要另写</td></tr>
+<tr><td><code>{{Get}}</code> 数据层</td><td>整块丢</td><td>取到字面量 <code>(TEMPLATE)</code></td><td>平手，只有渲染能解</td></tr>
+<tr><td>依赖</td><td>0</td><td>34 条，含 Hibernate</td><td><b>我们</b></td></tr>
+<tr><td>速度</td><td>毫秒级</td><td>0~13 ms 每页</td><td>都够</td></tr>
+</tbody></table>
+
+<h2>五、那"全部推倒重构"该往哪走</h2>
+<p data-note>实测数据指向的不是 JWPL，而是渲染。</p>
+<table>
+<thead><tr><th>口径</th><th><code>Goo</code></th></tr></thead>
+<tbody>
+<tr><td>原始 wikitext</td><td class="num">704 字</td></tr>
+<tr><td>我们现在的清洗器</td><td class="num">99 字</td></tr>
+<tr><td>JWPL 默认文本</td><td class="num">822 字，但 <code>description=(TEMPLATE)</code></td></tr>
+<tr><td><code>action=parse</code> 渲染后去标签</td><td class="num">2387 字，<code>description</code> 已填成 "A sticky paste used to bind chemical substances."</td></tr>
+</tbody></table>
+<p>差的不只是字数，而是<b>那一页的核心内容到底在不在</b>：原文里 <code>{{Get|description}}</code>、<code>{{Get|stackSize}}</code> 这些是 wiki 的数据查询层，离线解析器永远只能告诉我们"这里有个模板"。渲染让服务器把数据填好，我们只做 HTML 提取。</p>
+
+<div class="box ok">
+<p><b>如果决定重构，我建议的形状：</b></p>
+<ol>
+<li><b>抓取层</b>：默认仍取 wikitext，同时对"清洗后过短 / 含 <code>{{Get|</code> / 是图鉴类"的页面加取一份 <code>action=parse</code> 渲染 HTML。两路并存，互不阻塞。</li>
+<li><b>解析层</b>：渲染路用 <b>jsoup</b> 取内容区、按语义标签切块；wikitext 路继续用我们自己的配对扫描，或换成 Sweble 的 AST。</li>
+<li><b>策略层</b>：按<b>页面类型</b>声明抽取规则 —— 攻略页要正文与章节、图鉴页要 infobox 字段、目录页要 gallery 标签。每类一个策略类，输出<b>结构化片段</b>而不是一坨文本。</li>
+<li><b>分块与入库</b>：<code>KbTextChunker</code> 与导入链路不动。</li>
+<li><b>验收</b>：现有 5 篇夹具扩到覆盖每种页面类型；加一条"逐页保留率对账"；黄金集门禁不退化。</li>
+</ol>
+<p>这个形状下 JWPL 的位置很清楚：<b>如果第 3 步要做"从 wikitext 抽结构化字段"，它值得用；如果只要更好的正文，它帮不上忙。</b></p>
+</div>
+
+<h2>六、不引依赖也能拿的三点</h2>
+<ul>
+<li><b>可配置的白名单。</b>JWPL 用 <code>addDeleteTemplate</code> / <code>addParseTemplate</code> 加 <code>SelectiveAccessHandler</code> 的 XML 配置来表达"哪些模板留、哪些丢"。我们的白名单是三个 <code>Set.of(...)</code> 常量 —— 上次收窄就静默丢了内容。把它变成一份可评审的配置，是这个思路能立刻拿来用的部分。</li>
+<li><b>空结构清理。</b>它有 <code>EmptyStructureRemover</code>，专门删"模板删完之后剩下的空壳"。我们的空缺就是 <code>&lt;i&gt;</code> 这类删了一半的残留。</li>
+<li><b>源偏移做诊断。</b>它的 <code>Span</code> 让"这段内容是哪一步丢的"可以直接指出来，比我们现在的逐级长度 bisect 更省事。</li>
+</ul>
+
+<h2>七、建议</h2>
+<ol>
+<li><b>不要为了清洗质量引入 JWPL。</b>实测文本质量没有提升，反而在分类与标签两处退步，还多 34 条依赖。</li>
+<li><b>先把上一份文档里的三步做掉</b>：gallery 按行取标签、实体反转义、白名单补 <code>item infobox</code>。这三条覆盖了我们实测到的全部 128 块缺口，成本很小。</li>
+<li><b>把"渲染兜底"单独立项</b>，它才是质量上限所在。先离线跑 20 页做对比，再决定是否进导入链路。</li>
+<li><b>若确实要做结构化抽取</b>，我可以照本轮的同一套方法（真实页面 + 可复现脚本）实测 <b>Sweble</b> —— 它就是 JWPL 内部用的那个引擎，但不用拖 Hibernate。要不要我做这一步，取决于你是否打算把"任务奖励 / 地点 / 图鉴字段"做成结构化数据。</li>
+</ol>
+
+<h2>八、怎么复现</h2>
+<pre># JWPL 解析实验（独立小工程，不碰主 pom）
+cd .toolchain/jwpl-spike
+mvn -q compile exec:java -Dexec.mainClass=Spike     # 默认配置，看结构与文本
+mvn -q compile exec:java -Dexec.mainClass=Spike2    # FlushTemplates + 我们的策略层
+mvn -q compile exec:java -Dexec.mainClass=Spike3    # 默认模板处理 + 剥占位符 + 取 infobox 参数
+
+# 接入实验：在工程副本上加依赖，验证依赖解析与 Spring 上下文
+mvn -f .toolchain/server-ci/pom.xml test -Dtest=SpringWiringTest,ApplicationStartsTest</pre>
+<p class="note">样本与结果分别在 <code>.toolchain/raw/</code> 与 <code>.toolchain/jwpl-spike*-result.txt</code>。这些都在 gitignore 的 <code>.toolchain/</code> 下，不会进仓库。</p>
+
+</div></body></html>
