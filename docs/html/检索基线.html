@@ -469,6 +469,7 @@ descriptive 9），语料 <strong>3,439 块</strong>。最新实测（重排生�
 复查后才是真实的 29.4%。</p>
 </blockquote>
 <h4 id="同时暴露的语料质量问题"><a class="anchor" href="#同时暴露的语料质量问题">⚠️ 同时暴露的语料质量问题</a></h4>
+<div class="note" style="border-left:3px solid #e3b341;padding:8px 14px;margin:12px 0"><b>2026-10-13 更新</b>：下面这两条已经修掉了 —— 主语不再丢（<code>{{PAGENAME}}</code> 就地展开成页面标题）、模板残渣不复存在（实体解码、gallery 取标签、表格一行一条记录），数据层页面还额外走了渲染兜底。这一节保留为当时的基线快照。</div>
 <p>自动导入的块<strong>正文是英文</strong>，且清洗后有模板残渣：</p>
 <pre><code>[wiki-abyss] Abyss
     is a skill in Enshrouded.            ← 开头没有主语（模板被剥掉留下的）

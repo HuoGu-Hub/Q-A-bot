@@ -269,6 +269,11 @@ mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 --app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none&quot;
 </code></pre>
+<pre><code># ④ 清洗规则变了：忽略 revid 强制重洗（老页不会自己重洗）
+mvn spring-boot:run -Dspring-boot.run.arguments="\
+--app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.force=true \
+--spring.main.web-application-type=none&quot;
+</code></pre>
 <p><strong>每一步都能先空跑</strong>（加 <code>--app.kb.xxx.dry-run=true</code>），也都能单独回滚。</p>
 <blockquote>
 <p>⚠️ <strong>导入之后必须重启服务</strong> —— 索引只在进程内重载，没有定时刷新。
@@ -522,7 +527,7 @@ xlsx 内部就是 UTF-8 的 XML，<strong>没有编码这回事</strong>。</p>
 </tr>
 <tr>
 <td>自动导入正文是英文</td>
-<td>且有模板残渣（<code>[wiki-abyss] &quot;is a skill in Enshrouded.&quot;</code>）</td>
+<td>已修（2026-10-13）：主语由 <code>{{PAGENAME}}</code> 就地展开，实体解码、gallery 取标签、数据层走渲染兜底</td>
 <td>需要人工整理</td>
 </tr>
 </tbody></table></div>
