@@ -88,7 +88,7 @@ ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
 <thead><tr><th>构造</th><th>我们的处理</th><th>语义保留度</th></tr></thead>
 <tbody>
 <tr><td><code>&lt;!-- --&gt;</code> 注释</td><td>整段删</td><td>—</td></tr>
-<tr><td><code>{{模板}}</code></td><td>配对扫描处理嵌套，按白名单取参数，其余整块丢</td><td><b>高</b>：任务页的前置任务名、奖励物品、NPC 描述都能留下</td></tr>
+<tr><td><code>{{模板}}</code></td><td>配对扫描处理嵌套；<b>默认保留所有参数值</b>，只丢文件名/尺寸这类噪声</td><td><b>高</b>：任务页的前置任务名、奖励物品、NPC 描述都能留下</td></tr>
 <tr><td><code>{| 表格 |}</code></td><td>取单元格内容，冗余样式剥离</td><td><b>高</b>：任务页的"目标/地点/描述"全在表里</td></tr>
 <tr><td><code>[[A|B]]</code> / 文件链接</td><td>取显示名，文件与分类链接整条丢</td><td>中</td></tr>
 <tr><td><code>&lt;ref&gt;</code>、<code>&lt;br&gt;</code>、其它标签</td><td>ref 删、br 转换行、标签剥掉但留内部文字</td><td>中</td></tr>
@@ -191,7 +191,7 @@ File:Secret Stone Door.png|link=Decorations/Secret Doors|[[Decorations/Secret Do
 <p>我们的 <code>stripTags</code> 只吃掉 <code>&lt;gallery …&gt;</code> 这个标签本身（<code>&lt;[^&gt;]+&gt;</code>），里面每行没有 <code>[[ ]]</code> 包着 <code>File:</code>，所以 <code>stripLinks</code> 也放它过去，最后留下 36 行 <code>File:X.png|link=…</code>。这类页面在库里是 <code>wiki-decorations</code> 与 <code>wiki-decorations-2</code> 两块，全是噪声。</p>
 <div class="box warn">
 <p><b>但不要照抄"整块删"。</b>照抄的话 <code>Decorations</code> 会清成空页 —— 而它每一行都带一个可读标签：<code>Doors</code>、<code>Secret Doors</code>、<code>Windows</code>。这个页面本身就是一张目录。</p>
-<p><b>建议：</b>先按行取标签（<code>[[X|Y]]</code> 取 <code>Y</code>，没有就取 <code>link=</code> 后面那段），去重后压成一行物品清单；取不到标签的行才丢。这样"整页图片目录"变成"这一页包含哪些东西"，与我们"宁可少留，不要留错"的原则一致。</p>
+<p><b>建议：</b>先按行取标签（<code>[[X|Y]]</code> 取 <code>Y</code>，没有就取 <code>link=</code> 后面那段），去重后压成一行物品清单；取不到标签的行才丢。这样"整页图片目录"变成"这一页包含哪些东西"，与"默认保留"的原则一致。<b>已落地</b>。</p>
 </div>
 
 <h3>4.2 HTML 实体反转义 —— 4 块 / 单页 118 处</h3>
@@ -200,11 +200,12 @@ File:Secret Stone Door.png|link=Decorations/Secret Doors|[[Decorations/Secret Do
 
 <h3>4.3 高频模板要"专门处理"，而不是靠白名单碰运气 —— 这条是我们自己的缺口</h3>
 <p>这条不是从 wikiclean 抄的规则，而是它的 <code>fixUnitConversion</code> 提醒的<b>做法</b>：<code>{{convert}}</code> 在维基百科里太常见，与其等白名单，不如给它一条专门规则。我们的高频模板是谁？实测答案是 <code>{{Item Infobox}}</code>。</p>
-<p><b>证据。</b><code>Fool's Demise</code> 原文 832 字，当前清洗后只剩 <b>51 字</b>，保留率 6%。因为该页正文全部在 <code>{{Item Infobox|description=…}}</code> 里，而白名单只收了 <code>npc infobox</code>、没收 <code>item infobox</code>，于是整块丢。库里现存的那一行是 <b>365 字</b> —— 它来自更早的清洗器版本。</p>
+<p class="note">2026-10-11 实测（现已修复，保留为当时的证据）。</p>
+<p><b>证据。</b><code>Fool's Demise</code> 原文 832 字，当时清洗后只剩 <b>51 字</b>，保留率 6%。因为该页正文全部在 <code>{{Item Infobox|description=…}}</code> 里，而白名单只收了 <code>npc infobox</code>、没收 <code>item infobox</code>，于是整块丢。库里现存的那一行是 <b>365 字</b> —— 它来自更早的清洗器版本。</p>
 <div class="box warn">
 <p>这同时说明一件事：<b>白名单收窄是一种会静默丢内容的改动。</b>缺陷清单里 §2 修的是 <code>npc infobox</code>，但同类问题在 <code>item infobox</code> 上仍在，而当时的对账用的是"页数"与"失败数"，看不出正文变短。</p>
 </div>
-<p><b>建议：</b>把 <code>item infobox</code> 也收进 <code>KEYED_TEMPLATES</code>，键同样只取 <code>description</code>；并在缺陷清单的对账口径里加一条<b>页级保留率</b>，掉到某条线以下就报警，而不是只看"有没有变成 0"。</p>
+<p><b>建议（已落地，且修法被取代）：</b>现在不需要往白名单里加名字 —— 未知模板的参数值默认全部保留，<code>Item Infobox</code> 的 <code>description</code> 自然就进来了。当时写的建议是：把 <code>item infobox</code> 收进 <code>KEYED_TEMPLATES</code>，键只取 <code>description</code>；并在缺陷清单的对账口径里加一条<b>页级保留率</b>，掉到某条线以下就报警，而不是只看"有没有变成 0"。</p>
 
 <h3>4.4 未闭合括号的行为要一致</h3>
 <p>两边都会在括号配不上时丢弃剩余内容：它 <code>return s.substring(0, i)</code>，我们 <code>break</code> 之后 <code>out</code> 里是前半段。这个行为在整页层面是对的 —— 半截 <code>{{</code> 进了语料比缺内容更糟。但两处可以做得更好：<b>丢掉这一段，继续从下一个 <code>{{</code> 扫</b>，而不是放弃整页。实测语料里 <code>Goo</code> 这类数据驱动页面就有大量未闭合形态的模板，值得先统计再决定。</p>
@@ -231,7 +232,7 @@ File:Secret Stone Door.png|link=Decorations/Secret Doors|[[Decorations/Secret Do
 <p>关键差别：渲染文本里<b>数据层已经填好</b>。同一页原文写的是 <code>{{Get|description}}</code>，渲染后是：</p>
 <pre>Goo A sticky paste used to bind chemical substances. Info Type Materials Rarity Common
 Stack Size 250 Level 13 Biomes Revelwood Goo is a crafting material in Enshrouded.</pre>
-<p><code>{{Get}}</code> 是这个 wiki 的数据查询层，离线永远解不出来 —— 我们现在的做法是整块丢掉，于是这页什么都没剩下。</p>
+<p><code>{{Get}}</code> 是这个 wiki 的数据查询层，离线永远解不出来 —— <b>当时的做法</b>是整块丢掉，于是这页什么都没剩下。<b>2026-10-13 已由渲染兜底补上</b>，见下方第 3 步。</p>
 <table>
 <thead><tr><th>路子</th><th>结果</th></tr></thead>
 <tbody>
