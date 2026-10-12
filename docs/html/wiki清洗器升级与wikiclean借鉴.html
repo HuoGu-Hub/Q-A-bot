@@ -48,18 +48,19 @@ ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
 </div>
 
 <div class="box ok">
-<p><b>已落地 · 2026-10-13。</b>清洗器的原则已经反转：从"白名单"改成<b>"默认保留，只丢明确噪声"</b>。整库重洗后，语料从 <span class="num">568,914</span> 字涨到 <span class="num">619,447</span> 字（<b>+8.9%</b>），<b>588 篇变多</b>、36 篇变少、11 篇不变；清洗后不足 100 字的页从 <span class="num">66</span> 篇降到 <span class="num">6</span> 篇，不足 300 字的从 196 篇降到 163 篇。检索黄金集门禁 <b>PASS</b>，四项指标与改动前逐项一致。</p>
+<p><b>已落地 · 2026-10-13。</b>清洗器的原则已经反转：从"白名单"改成<b>"默认保留，只丢明确噪声"</b>。整库重洗后，语料从 <span class="num">568,914</span> 字涨到 <span class="num">616,159</span> 字（<b>+8.3%</b>），<b>变多 580 篇不变变多、46 篇变少、9 篇</b>；清洗后不足 100 字的页从 <span class="num">66</span> 篇降到 <span class="num">6</span> 篇，不足 300 字的从 196 篇降到 161 篇。检索黄金集门禁 <b>PASS</b>，四项指标与改动前逐项一致。</p>
 <ul>
 <li><b>递归</b>：外层模板不认识也先递归进去，内层表格式模板照样取值 —— 掉落表就是这么救回来的。</li>
 <li><b>参数值默认全留</b>：短值输出成 <code>Class: Ranger</code>，长值原样保留；只丢文件名、尺寸、样式、图标这类参数。</li>
 <li><b>表格式模板一行一条</b>：<code>Fell Cyclops Head × 1 (Materials, Drop)</code>。</li>
 <li><b>页面上下文</b>：签名扩成 <code>clean(wikitext, title)</code>，<code>{{PAGENAME}}</code> 就地展开 —— " is a skill in Enshrouded" 这种缺主语的句子没有了。</li>
-<li><b>逐行去重</b>：infobox 的长描述与正文重复时只留一份，避免同一段话变成两个块互相稀释。</li>
+<li><b>逐行去重</b>：infobox 的描述与正文重复时只留一份（阈值 25 字），避免同一段话变成两个块互相稀释。</li>
+<li><b>键值字段一律带键名</b>：长值（如列出五片区域的 Region）也不例外 —— 否则它既不匹配字段行、又丢了键名，孤零零留在开头。</li>
 <li><b>字段行排在正文之后</b>：见下方"字段顺序"那条，这是保住检索排名的关键。</li>
 <li><b>gallery 取标签</b>、<b>HTML 实体解码</b>、<b>表格一行一条记录</b>、<b>BOM 处理</b>一并完成。</li>
 <li><b>强制重洗入口</b>：<code>--app.kb.wiki-import.force=true</code>，补上"清洗器改了、老页不会自己重洗"这个洞。</li>
 </ul>
-<p>验收：495 项测试全绿；黄金集门禁 PASS。</p>
+<p>验收：497 项测试全绿；黄金集门禁 PASS。</p>
 </div>
 
 <h3>字段顺序：一个反直觉的坑</h3>
