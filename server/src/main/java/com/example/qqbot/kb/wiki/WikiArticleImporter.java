@@ -98,6 +98,19 @@ public class WikiArticleImporter {
     }
 
     public ImportReport importAll(boolean dryRun) {
+        return importAll(dryRun, false);
+    }
+
+    /**
+     * @param force 忽略 revid，**所有页都重洗一遍**。
+     *
+     * <p>为什么需要它：增量判据是"revid 变过吗"，而清洗器属于我们这边 ——
+     * 改了清洗规则，wiki 上的 revid 一个字都没变，于是老页永远保持旧规则的产物，
+     * 语料里就出现了"同一批页、两套规则"的分层。实测 {@code fools-demise} 那块
+     * 365 字、而用当前清洗器重跑同一页只剩几十字，就是这个洞留下的痕迹。
+     * 换规则时要先 {@code --force} 重洗一次。
+     */
+    public ImportReport importAll(boolean dryRun, boolean force) {
         WikiImport cfg = props.getWikiImport();
         if (!cfg.isEnabled()) {
             return new ImportReport(0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
@@ -185,7 +198,7 @@ public class WikiArticleImporter {
                     continue;
                 }
                 Long local = known.get(title);
-                if (local == null || local != m.revid() || pending.contains(title)) {
+                if (force || local == null || local != m.revid() || pending.contains(title)) {
                     changed.add(title);
                 }
             }

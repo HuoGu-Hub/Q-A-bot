@@ -17,6 +17,9 @@ import org.springframework.stereotype.Component;
  * # 真导入（增量：只处理 revid 变过的页）
  * mvn spring-boot:run -Dspring-boot.run.arguments="--app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none"
  *
+ * # 换了清洗规则：忽略 revid，全部重洗（老页不会自己重洗）
+ * mvn spring-boot:run -Dspring-boot.run.arguments="--app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.force=true --spring.main.web-application-type=none"
+ *
  * # 回滚：清掉全部 wiki 文章块（含切出来的续块）与导入状态
  * mvn spring-boot:run -Dspring-boot.run.arguments="--app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.purge=true --spring.main.web-application-type=none"
  * </pre>
@@ -49,6 +52,8 @@ public class WikiImportRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         boolean dryRun = args.containsOption("app.kb.wiki-import.dry-run");
         boolean purge = args.containsOption("app.kb.wiki-import.purge");
+        // 换了清洗规则要用它：revid 没变，不加这一条老页一篇都不会重洗
+        boolean force = args.containsOption("app.kb.wiki-import.force");
         try {
             if (purge) {
                 int n = importer.purge();
@@ -60,9 +65,12 @@ public class WikiImportRunner implements ApplicationRunner {
                 System.out.println("     去管理端「词条」面板点一次「清理孤儿词条」即可。");
                 System.out.println("==============================================");
             } else {
-                WikiArticleImporter.ImportReport r = importer.importAll(dryRun);
+                WikiArticleImporter.ImportReport r = importer.importAll(dryRun, force);
                 System.out.println();
                 System.out.println("================ wiki 文章导入（任务 / 机制）================");
+                if (force) {
+                    System.out.println("  ⚠️ force：忽略 revid，所有页重洗");
+                }
                 System.out.printf("  来源数        %d%n", r.sources());
                 System.out.printf("  页面总数      %d%n", r.pages());
                 System.out.printf("  版本变过      %d%n", r.changed());
