@@ -265,33 +265,24 @@ mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 --app.kb.location-corpus.build-on-start=true --spring.main.web-application-type=none&quot;
 
-# ③ wiki 文章导入（任务 / 机制 / 世界观…）
-mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
---app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none&quot;
-</code></pre>
-<pre><code># ④ 清洗规则变了：忽略 revid 强制重洗（老页不会自己重洗）
-mvn spring-boot:run -Dspring-boot.run.arguments="\
---app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.force=true \
---spring.main.web-application-type=none&quot;
-</code></pre>
+# ③ wiki 文章导入 —— 不在命令行，在管理端页面上点
+#    管理端 →「知识库」→「抓取」：勾范围 → 保存 → 点按钮（空跑 / 增量 / 强制重洗）
 <p><strong>每一步都能先空跑</strong>（加 <code>--app.kb.xxx.dry-run=true</code>），也都能单独回滚。</p>
 <blockquote>
 <p>⚠️ <strong>导入之后必须重启服务</strong> —— 索引只在进程内重载，没有定时刷新。
 不重启的话后台还是旧数据。</p>
 </blockquote>
-<h3>一条命令：<code>./scripts/wiki-import.sh</code></h3>
-<p>日常不用手敲上面那一长串参数：</p>
-<table>
-<thead><tr><th>命令</th><th>作用</th></tr></thead>
+<h3>页面上有什么（管理端 →「知识库」→「抓取」）</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>按钮</th><th>作用</th></tr></thead>
 <tbody>
-<tr><td><code>./scripts/wiki-import.sh --dry-run</code></td><td>只看数量、不写库、不花 embedding 的钱</td></tr>
-<tr><td><code>./scripts/wiki-import.sh</code></td><td>增量：只处理 revid 变过的页</td></tr>
-<tr><td><code>./scripts/wiki-import.sh --force</code></td><td>忽略 revid 全部重洗（<b>清洗规则变了用这条</b>）</td></tr>
-<tr><td><code>./scripts/wiki-import.sh --no-render</code></td><td>关掉渲染兜底（快，但拿不到 <code>{{Get}}</code> 与数据表）</td></tr>
-<tr><td><code>./scripts/wiki-import.sh --purge</code></td><td>清掉全部 wiki 文章块与导入状态（可重来）</td></tr>
-</tbody></table>
-<p>脚本自己做三件容易漏的事：隔离构建（<code>.toolchain/server-ci</code>）、把工作目录指到 <code>server/</code>（SQLite 的相对路径以它为准）、把 fork 出来的 JVM 的 stdout 指成 UTF-8（否则导入报告跟控制台代码页走，脚本与运维都抓不稳）。跑完它会挑出报告里的告警：顶到上限 / 块 id 撞车 / 渲染兜底失败。日志：<code>.toolchain/verify/wiki-import.log</code>。</p>
-<h3 id="抓什么往-appkbwiki-importcategories-里加分类名"><a class="anchor" href="#抓什么往-appkbwiki-importcategories-里加分类名">抓什么：往 <code>app.kb.wiki-import.categories</code> 里加分类名</a></h3>
+<tr><td>空跑</td><td>只看数量、不写库、不花 embedding 的钱</td></tr>
+<tr><td>增量导入</td><td>只处理 revid 变过的页</td></tr>
+<tr><td>强制重洗全部</td><td>忽略 revid 全部重洗（<b>清洗规则变了用这条</b>）</td></tr>
+<tr><td>回滚：清空 wiki 块</td><td>清掉全部 wiki 文章块与导入状态，可重新导入</td></tr>
+</tbody></table></div>
+<p>页面还会显示：当前范围（用的是页面保存的那份、还是 yml 默认值）、每来源上限、渲染兜底开关、实时进度、上一次的报告与告警（顶到上限 / 块 id 撞车）。导入在服务端后台跑，<b>关掉页面也会继续</b>。</p>
+<h3 id="抓什么往-appkbwiki-importcategories-里加分类名"><a class="anchor" href="#抓什么往-appkbwiki-importcategories-里加分类名">范围：在页面上勾选（yml 里的列表只是默认值）</a></h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -341,27 +332,23 @@ mvn spring-boot:run -Dspring-boot.run.arguments="\
 <td>❌ <strong>开了等于没开</strong>：正文命名空间 0 页（95 是含子分类/文件的计数）</td>
 </tr>
 </tbody></table></div>
-<h3 id="三个必须知道的坑"><a class="anchor" href="#三个必须知道的坑">三个必须知道的坑</a></h3>
+<h3 id="四个必须知道的坑"><a class="anchor" href="#四个必须知道的坑">四个必须知道的坑</a></h3>
 <ol>
 <li><strong><code>max-pages-per-source: 300</code> 是&quot;每个来源&quot;独立算的</strong>，超了会<strong>静默截断</strong>。
 <code>Lore</code> 264 刚好压线 —— 它再涨就会丢页。</li>
 <li><strong><code>max-body-chars: 1500</code> 现在是「单块上限」</strong>，超长页面会<strong>按段落切块</strong>（不再是截断）。
 调它只影响块的粒度，不影响&quot;有没有丢内容&quot;。</li>
 <li><strong>每个分类是一个独立来源</strong>，所以 <code>bySource</code> 的输出就是&quot;哪个分类贡献了多少页&quot;。</li>
+<li><strong>清洗规则改了必须点「强制重洗全部」</strong>：增量判据是 <code>revid</code>，而清洗规则改在我们这边，wiki 上 revid 一个字都没变 → 老页会永远保持旧规则的产物。另外导入时会<strong>按页取一份渲染 HTML</b> 来补数据层（<code>{{Get}}</code> 与 Cargo 数据表），比只拉 wikitext 慢一些；关掉就设 <code>app.kb.wiki-import.render.enabled=false</code>。</li>
 </ol>
 <hr>
 <h2 id="三回滚"><a class="anchor" href="#三回滚">三、回滚</a></h2>
-<pre><code class="language-bash"># 清掉全部 wiki 文章块（含切出来的续块）+ 导入状态
-mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
---app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.purge=true \
---spring.main.web-application-type=none&quot;
-
 # 清掉全部派生地点块
 mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 --app.kb.location-corpus.build-on-start=true --app.kb.location-corpus.purge=true \
 --spring.main.web-application-type=none&quot;
 </code></pre>
-<p>回滚是<strong>双向</strong>的（会连状态一起清），回滚后可以重新导入。
+<p>wiki 文章块的回滚在<b>页面上</b>：「抓取」页 →「回滚：清空 wiki 块」（两步确认）。回滚是<strong>双向</strong>的（会连状态一起清），回滚后可以重新导入。
 <strong>回滚完记得在后台点「清理孤儿词条」。</strong></p>
 <hr>
 <h2 id="四手写文档校验格式"><a class="anchor" href="#四手写文档校验格式">四、手写文档：校验格式</a></h2>

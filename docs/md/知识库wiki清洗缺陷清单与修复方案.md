@@ -20,8 +20,8 @@
 > | §3 列表不翻页 | 已修 |
 > | §4 分类成员不分类型 | 已修 |
 > | §5 重定向不解析 | 已修 |
-> | §6 清洗器一改老页不重洗 | 已修：`--app.kb.wiki-import.force=true` 强制重洗，2026-10-13 用它重洗了整库 |
-> | §9.3 改完清洗器的必做动作 | 用 `--force` 一条命令即可，不必 purge + 全量重导 |
+> | §6 清洗器一改老页不重洗 | 已修：管理端「知识库 → 抓取」页的「强制重洗全部」，2026-10-13 用它重洗了整库 |
+> | §9.3 改完清洗器的必做动作 | 页面上点「强制重洗全部」即可，不必 purge + 全量重导 |
 >
 > **本文的基线数字（637 页、保留 58.0%、11 个 0 产出页）是 2026-10-06 的快照，不要当现状用。**
 > 当前：635 页 / 清洗后 651,793 字 / 不足 100 字的页 6 篇 / 失败 0 页。
@@ -152,13 +152,9 @@
 
 **现状**：我逐页比对过，当前语料与当前清洗器**一致**（差异只有"中文名。"前缀和块边界的空白归一化）—— 所以现在没这个问题。
 
-**规矩**：**动 `WikitextCleaner` / `KbTextChunker` 之后，必须**
-```bash
-# 1) 回滚（连状态一起清，之后能重导）
-... --app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.purge=true --spring.main.web-application-type=none
-# 2) 重导（会重新 embedding，按量计费）
-... --app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none
-```
+**规矩**：**动 `WikitextCleaner` / `KbTextChunker` 之后，必须**在管理端「知识库 → 抓取」页
+点一次**「强制重洗全部」**（增量判据是 `revid`，规则改在我们这边，老页不会自己重洗），
+再跑 `./scripts/golden-gate.sh` 看检索有没有退化，最后重启服务（索引只在进程内重载）。
 这条要写进《知识库运营手册》。另：`purge` 后词条表会留孤儿词条，去管理端「词条」面板点一次**清理孤儿词条**。
 
 ---
@@ -227,13 +223,11 @@
 
 ### 9.3 改完清洗器之后的必做动作（本轮的收尾）
 
-```bash
-# ① 回滚（连状态一起清，否则下次导入会空转）
-mvn spring-boot:run -Dspring-boot.run.arguments="--app.kb.wiki-import.import-on-start=true --app.kb.wiki-import.purge=true --spring.main.web-application-type=none"
-# ② 重导（会重新 embedding，按量计费）
-mvn spring-boot:run -Dspring-boot.run.arguments="--app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none"
-# ③ 重启机器人进程（见 §9.2）
-# ④ 管理端「词条」面板点一次「清理孤儿词条」（purge 会留下孤儿词条）
+```text
+① 管理端「知识库 → 抓取」页点「强制重洗全部」（会重新 embedding，按量计费）
+② 跑 ./scripts/golden-gate.sh 看检索有没有退化
+③ 重启机器人进程（见 §9.2）
+④ 管理端「词条」面板点一次「清理孤儿词条」（只有走过 purge 才需要）
 ```
 
 ---

@@ -349,7 +349,7 @@
       "title": "两条入库路径，别混用",
       "items": [
         "文档面板：格式校验 → 预览 → 确认，只为新增/覆盖的块重算向量",
-        "Wiki 导入：WikitextCleaner 清洗（默认保留、只丢噪声）→ 数据层再取渲染 HTML → KbTextChunker 切块 → 增量写块；默认关闭，靠 --app.kb.wiki-import.import-on-start=true 手动触发，换清洗规则加 --app.kb.wiki-import.force=true 重洗",
+        "Wiki 导入：管理端「知识库 → 抓取」页触发（勾范围 → 保存 → 点按钮）；WikitextCleaner 清洗（默认保留、只丢噪声）→ 数据层再取渲染 HTML → KbTextChunker 切块 → 增量写块；换清洗规则用页面上的「强制重洗全部」",
         "词条表人机交界用 xlsx，机机用 TSV，CSV 导出已删；换向量模型必须整库重建"
       ]
     },

@@ -554,13 +554,11 @@ java -jar target/qqbot-server-*.jar \
 java -jar target/qqbot-server-*.jar \
   --app.kb.location-corpus.build-on-start=true --spring.main.web-application-type=none
 
-# ③ wiki 文章导入（任务 / 机制 / 世界观…）
-java -jar target/qqbot-server-*.jar \
-  --app.kb.wiki-import.import-on-start=true --spring.main.web-application-type=none
+# ③ wiki 文章导入 —— 在管理端页面上点，不是命令
+#    管理端 →「知识库」→「抓取」：勾范围 → 保存 → 点按钮（空跑 / 增量 / 强制重洗）
 </code></pre>
-<p class="note">清洗规则变更后要强制重洗（增量判据是 revid，规则改在我们这边）：
-<code>--app.kb.wiki-import.force=true</code>。另外导入时会按页取一份渲染 HTML 补数据层，
-比只拉 wikitext 慢一些。</p>
+<p class="note">清洗规则变更后用页面上的「强制重洗全部」（增量判据是 revid，规则改在我们这边）。
+另外导入时会按页取一份渲染 HTML 补数据层，比只拉 wikitext 慢一些。</p>
 <pre><code>
 # 导入只在进程内重载，跑完必须重启服务
 sudo systemctl restart qqbot
