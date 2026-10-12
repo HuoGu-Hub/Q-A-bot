@@ -86,6 +86,10 @@ public final class WikitextCleaner {
             Pattern.compile("(?i)^\\d+(\\.\\d+)?\\s*(px|em|rem|%|pt)$");
     // ⚠️ 单位是**必须**的：没有它，"Unlock Cost = 3" 与掉落数量 "1" 都会被当成尺寸丢掉。
     private static final Pattern HEX_COLOR = Pattern.compile("(?i)^#[0-9a-f]{3,8}$");
+    /** "键: 值"字段行：Title/Class/Behavior/Region 等，统一挪到文档末尾 */
+    private static final Pattern FIELD_LINE = Pattern.compile("^[A-Z][A-Za-z0-9 _\\-]{0,29}: ");
+    /** gallery 行里 {@code [[Z|标签]]} 的标签 */
+    private static final Pattern LINK_WITH_LABEL = Pattern.compile("\\[\\[[^\\]|]*\\|([^\\]]+)\\]\\]");
     /** 数字实体：{@code &#160;} 与 {@code &#xA0;} */
     private static final Pattern NUMERIC_ENTITY = Pattern.compile("&#(x?)([0-9A-Fa-f]+);");
     /** 像参数名的键：字母开头，不超过 30 字符，没有冒号斜杠（避免把 URL 当键值对） */
@@ -107,13 +111,18 @@ public final class WikitextCleaner {
         // ⚠️ 先去掉 BOM：它既不是空白也不可见，却会让 startsWith("{|") 这类判断失败 ——
         //    实测 Equipment 整页的表格标记就是这么漏进文档的。
         String s = wikitext.replace("\uFEFF", "");
+        // "键: 值"这类字段行先收集起来，等正文处理完附到**文档末尾**去。
+        // 为什么：实测把字段放在最前面会把重排分拉下来 —— Dark Arts 那一块
+        // 向量相似度 0.4885 → 0.4668、Hollow Cyclops 0.4661 → 0.4587，
+        // 两条口语问题的期望块就是这样掉出 top-5 的。正文留在前面，元数据跟在后面。
+        List<String> fields = new ArrayList<>();
         s = removeComments(s);
         // ⚠️ gallery 要在 stripTags 之前处理：等标签被剥掉之后，就只能看到一堆
         //    File:x.png|link=y 的残骸，分不出哪些行属于同一个图片列表。
         s = stripGalleries(s);
         // ⚠️ 表格要趁"一行还是一条记录"时先处理，理由同旧版：<br> 变换行之后
         //    单元格会折行，行边界就看不出来了。
-        s = stripTemplates(s, pageTitle);
+        s = stripTemplates(s, pageTitle, fields);
         s = stripTables(s);
         s = stripTags(s);
         s = stripLinks(s);
@@ -125,6 +134,10 @@ public final class WikitextCleaner {
         s = s.replaceAll("[ \\t]+", " ");
         s = s.replaceAll("(?m)^\\s+", "");
         s = s.replaceAll("\\n{3,}", "\n\n");
+        s = s.strip();
+        if (!fields.isEmpty()) {
+            s = s.isEmpty() ? String.join("\n", fields) : s + "\n\n" + String.join("\n", fields);
+        }
         return s.strip();
     }
 
@@ -164,25 +177,37 @@ public final class WikitextCleaner {
         }
     }
 
-    /** gallery 的一行 → 标签；取不到就返回空串 */
+    /**
+     * gallery 的一行 → 标签；取不到就返回空串。
+     *
+     * <p>三种形态都见过了：{@code File:X.png|link=Y|[[Z|标签]]}、{@code File:X.png|link= Y|Y}、
+     * 以及完全没有 {@code File:} 前缀的 {@code Preset 1.png|Preset 1} —— 最后一种在
+     * {@code Barber} 那一页有 25 行，只认 {@code File:} 前缀会整片漏掉。
+     */
     private static String galleryLabel(String line) {
         String t = line.strip();
-        if (t.isEmpty() || !t.toLowerCase().startsWith("file:")) {
+        if (t.isEmpty()) {
             return "";
         }
         // [[Z|标签]] 里的标签最可信
-        java.util.regex.Matcher m = Pattern.compile("\\[\\[[^\\]|]*\\|([^\\]]+)\\]\\]").matcher(t);
+        java.util.regex.Matcher m = LINK_WITH_LABEL.matcher(t);
         if (m.find()) {
             return m.group(1).strip();
         }
-        // 否则取最后一个竖线之后那段（形如 File:X.png|link=Y|标签）
         int bar = t.lastIndexOf('|');
         String last = bar >= 0 ? t.substring(bar + 1).strip() : "";
         last = last.replaceAll("^\\[\\[|\\]\\]$", "").strip();
-        if (last.isEmpty() || last.toLowerCase().startsWith("link=") || FILENAME.matcher(last).matches()) {
-            return "";
+        if (!last.isEmpty() && !last.toLowerCase().startsWith("link=") && !FILENAME.matcher(last).matches()) {
+            return last;
         }
-        return last;
+        if (bar < 0) {
+            // 没有竖线：整行就是纯标签才留，只剩文件名就丢
+            String lower = t.toLowerCase();
+            if (!lower.startsWith("file:") && !lower.startsWith("image:") && !FILENAME.matcher(t).matches()) {
+                return t;
+            }
+        }
+        return "";
     }
 
     private static int indexOfIgnoreCase(String haystack, String needle, int from) {
@@ -200,7 +225,12 @@ public final class WikitextCleaner {
 
     /** 模板处理（无页面上下文） */
     static String stripTemplates(String s) {
-        return stripTemplates(s, "");
+        return stripTemplates(s, "", null);
+    }
+
+    /** 模板处理（有上下文，不要字段收集） */
+    static String stripTemplates(String s, String pageTitle) {
+        return stripTemplates(s, pageTitle, null);
     }
 
     /**
@@ -208,7 +238,7 @@ public final class WikitextCleaner {
      *
      * <p>括号不配对时丢掉剩余内容：半截 {@code {{}} 进了语料比缺内容更糟。
      */
-    static String stripTemplates(String s, String pageTitle) {
+    static String stripTemplates(String s, String pageTitle, List<String> fields) {
         StringBuilder out = new StringBuilder();
         int i = 0;
         while (i < s.length()) {
@@ -224,9 +254,21 @@ public final class WikitextCleaner {
                 break;
             }
             String body = s.substring(open + 2, close);
-            String value = resolveTemplate(body, pageTitle);
+            String value = resolveTemplate(body, pageTitle, fields);
             if (!value.isEmpty()) {
                 value = dropDuplicatedLines(value, s.substring(close + 2));
+            }
+            // 字段行（键: 值）交出去，其余留在原位
+            if (fields != null && value.indexOf(':') >= 0) {
+                StringBuilder kept = new StringBuilder();
+                for (String line : value.split("\n", -1)) {
+                    if (FIELD_LINE.matcher(line.strip()).find()) {
+                        fields.add(line.strip());
+                    } else {
+                        kept.append(line).append('\n');
+                    }
+                }
+                value = kept.toString().strip();
             }
             out.append(value);
             i = close + 2;
@@ -262,10 +304,14 @@ public final class WikitextCleaner {
 
     private static boolean duplicatedInBody(String value, String rest) {
         String flat = value.replace("\n", " ").strip();
-        if (flat.length() < 80) {
+        // ⚠️ 比对前必须去掉 "键: " 前缀：正文里当然不会有这个前缀，带着它比对永远配不上，
+        //    实测 Dark Arts 的 description 因此与正文重复保留，把向量相似度从 0.489 压到 0.451 ——
+        //    正好压在 app.kb.min-score=0.45 上，那一块就被检索整块丢掉了。
+        String probe = flat.replaceFirst("^[A-Za-z][A-Za-z0-9 _\\-]{0,29}:\\s*", "");
+        if (probe.length() < 40) {
             return false;
         }
-        String head = squeeze(flat.substring(0, 50));
+        String head = squeeze(probe.substring(0, Math.min(50, probe.length())));
         if (head.length() < 30) {
             return false;
         }
@@ -302,11 +348,15 @@ public final class WikitextCleaner {
 
     /** 模板体（不含外层花括号），无上下文版本 */
     static String resolveTemplate(String body) {
-        return resolveTemplate(body, "");
+        return resolveTemplate(body, "", null);
+    }
+
+    static String resolveTemplate(String body, String pageTitle) {
+        return resolveTemplate(body, pageTitle, null);
     }
 
     /** 模板体（不含外层花括号）→ 保留的文本 */
-    static String resolveTemplate(String body, String pageTitle) {
+    static String resolveTemplate(String body, String pageTitle, List<String> fields) {
         List<String> args = splitTopLevel(body);
         if (args.isEmpty()) {
             return "";
@@ -327,12 +377,12 @@ public final class WikitextCleaner {
             return "";
         }
         if (MAP_TEMPLATES.contains(name)) {
-            return mapLabel(args, pageTitle);
+            return mapLabel(args, pageTitle, fields);
         }
         if (ROW_TEMPLATES.contains(name)) {
-            return rowLine(args, pageTitle);
+            return rowLine(args, pageTitle, fields);
         }
-        return keepParams(args, pageTitle);
+        return keepParams(args, pageTitle, fields);
     }
 
     /**
@@ -343,8 +393,8 @@ public final class WikitextCleaner {
      * 实测这让所有带参数的模板一起清成空白，掉的就是技能解锁条件与怪物抗性。
      * 参数值只需要处理**里面的嵌套模板**，其余原样留下。
      */
-    private static String resolveValue(String raw, String pageTitle) {
-        return stripTags(stripTemplates(raw, pageTitle)).strip();
+    private static String resolveValue(String raw, String pageTitle, List<String> fields) {
+        return stripTags(stripTemplates(raw, pageTitle, fields)).strip();
     }
 
     /** 模板名：第一段，剥掉嵌套模板、去掉空白、转小写 */
@@ -358,7 +408,7 @@ public final class WikitextCleaner {
      * <p>短值加上 {@code 键: } 前缀（"Class: Ranger" 比光一个 "Ranger" 可读）；
      * 长值不加前缀，它本身已经是句子。管道参数（{@code content=}）不加前缀。
      */
-    private static String keepParams(List<String> args, String pageTitle) {
+    private static String keepParams(List<String> args, String pageTitle, List<String> fields) {
         List<String> out = new ArrayList<>();
         for (int i = 1; i < args.size(); i++) {
             String arg = args.get(i);
@@ -371,8 +421,12 @@ public final class WikitextCleaner {
             if (key != null && NOISE_KEYS.contains(key)) {
                 continue;
             }
-            String value = resolveValue(raw, pageTitle);
+            String value = resolveValue(raw, pageTitle, fields);
             if (value.isEmpty() || looksLikeNoise(value)) {
+                continue;
+            }
+            // 与页面标题相同的 title 只是重复块标题；不同的是真信息（如 Fool's Demise 页的 title=Fool's Errand）
+            if ("title".equals(key) && pageTitle != null && value.equalsIgnoreCase(pageTitle.strip())) {
                 continue;
             }
             boolean plumbing = key == null || PLUMBING_KEYS.contains(key);
@@ -386,7 +440,7 @@ public final class WikitextCleaner {
     }
 
     /** 表格式模板 → 一行一条记录 */
-    private static String rowLine(List<String> args, String pageTitle) {
+    private static String rowLine(List<String> args, String pageTitle, List<String> fields) {
         List<String> values = new ArrayList<>();
         String item = null;
         String quantity = null;
@@ -400,7 +454,7 @@ public final class WikitextCleaner {
             if (key != null && NOISE_KEYS.contains(key)) {
                 continue;
             }
-            String value = resolveValue(raw, pageTitle);
+            String value = resolveValue(raw, pageTitle, fields);
             if (value.isEmpty() || looksLikeNoise(value)) {
                 continue;
             }
@@ -440,14 +494,14 @@ public final class WikitextCleaner {
     }
 
     /** MapLink：位置参数里有 marker id、图标名、尺寸；取"带引号的那个"，没有就取最后一个像名字的 */
-    private static String mapLabel(List<String> args, String pageTitle) {
+    private static String mapLabel(List<String> args, String pageTitle, List<String> fields) {
         List<String> positional = new ArrayList<>();
         for (int i = 1; i < args.size(); i++) {
             String arg = args.get(i);
             if (keyEnd(arg) >= 0) {
                 continue;
             }
-            String v = resolveValue(arg, pageTitle);
+            String v = resolveValue(arg, pageTitle, fields);
             if (!v.isEmpty()) {
                 positional.add(v);
             }

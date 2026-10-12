@@ -181,11 +181,13 @@ class WikitextCleanerTest {
         String wiki = "<gallery widths=100px>\n"
                 + "File:Iron Door.png|link=Decorations/Doors|[[Decorations/Doors|Doors]]\n"
                 + "File:Iron Fence.png|link=Decorations/Fences|[[Decorations/Fences|Fences]]\n"
+                + "Preset 1.png|Preset 1\n"
                 + "File:Orphan.png\n"
                 + "</gallery>\n";
         String out = WikitextCleaner.clean(wiki, "Decorations");
 
         assertThat(out).contains("Doors").contains("Fences");
+        assertThat(out).as("没有 File: 前缀的标签行也要取到").contains("Preset 1");
         assertThat(out).doesNotContain("File:").doesNotContain(".png").doesNotContain("link=")
                 .doesNotContain("100px").doesNotContain("Orphan");
     }
@@ -245,6 +247,21 @@ class WikitextCleanerTest {
                 .isEqualTo("A B & C <tag> A B");
         // 不换行空格也是空格
         assertThat(WikitextCleaner.clean("&nbsp;&nbsp;Charcoal Kiln", "x")).isEqualTo("Charcoal Kiln");
+    }
+
+    @Test
+    @DisplayName("★ 字段行必须排在正文之后：重排模型看重开头，元数据挡在正文前面会把它打下去")
+    void fieldLinesComeAfterTheProse() {
+        String wiki = "{{Infobox/Skill|Class=Mage|Unlock Cost=3|Behavior=Hostile}}\n"
+                + "'''{{PAGENAME}}''' is a skill in [[Enshrouded]].\n"
+                + "All Shrouded damage is increased.\n";
+        String out = WikitextCleaner.clean(wiki, "Dark Arts");
+
+        assertThat(out).contains("Dark Arts is a skill in Enshrouded.");
+        assertThat(out).contains("Class: Mage").contains("Unlock Cost: 3").contains("Behavior: Hostile");
+        assertThat(out.indexOf("Dark Arts is a skill"))
+                .as("正文要排在字段前面")
+                .isLessThan(out.indexOf("Class: Mage"));
     }
 
     @Test
