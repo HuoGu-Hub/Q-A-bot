@@ -189,6 +189,10 @@ public class WikiArticleImporter {
             for (String title : titles) {
                 String collideWith = registerBlockId(blockIdOwner, blockIdOf(title), title);
                 if (collideWith != null) {
+                    // 同时走日志：导入报告是 System.out（Windows 上是 GBK），脚本抓不稳；
+                    // 机器可读的那份以 UTF-8 的日志行为准。
+                    log.warn("[KB-WIKI] {} 块 id 与「{}」撞车（{}）—— 这一页正文进不了语料（缺陷清单 §10.2）",
+                            title, collideWith, blockIdOf(title));
                     errors.add(title + "：块 id 与「" + collideWith + "」撞车（" + blockIdOf(title)
                             + "）—— 这一页的正文进不了语料（已知问题，见缺陷清单 §10.2）");
                 }
@@ -308,8 +312,11 @@ public class WikiArticleImporter {
 
         // 词条表**不用管**：下次有人读词条（B 路检索 / 管理端）时，KbTermStore 会自己发现
         // "语料版本变了"并补齐 —— 见 KbTermStore.ensureReconciled()。这里以前显式调 reconcile()。
-        log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字",
-                sources.size(), totalPages, totalChanged, imported, failed, chars);
+        // ⚠️ 这一行是**机器可读的摘要**：脚本与运维都按它取数。
+        //    导入报告走 System.out，在 Windows 上跟随控制台代码页（GBK），
+        //    和 SLF4J 的 UTF-8 混在一个日志里 —— 所以关键数字必须也出现在这一行。
+        log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字 / 渲染兜底 {} 页",
+                sources.size(), totalPages, totalChanged, imported, failed, chars, renderedPages);
         return new ImportReport(sources.size(), totalPages, totalChanged, imported, failed, chars, renderedPages,
                 errors, dryRun, bySource);
     }
