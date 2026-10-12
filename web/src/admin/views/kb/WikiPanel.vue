@@ -33,6 +33,12 @@ interface CatalogRow {
   name: string
   size: number
   pages: number | null
+  /** 后端判定：content 内容类 / maintenance 维护清单 / update 更新日期 / index 索引类 */
+  klass: string
+  /** 中文建议，直接显示给运维看 */
+  advice: string
+  /** 前三个页名，让英文分类名一眼能看懂装的是什么 */
+  samples: string[]
 }
 
 interface SourcesResp {
@@ -86,6 +92,12 @@ const catalogTotal = ref(0)
 const catalogAt = ref('')
 
 const filter = ref('')
+/** 默认只看内容类：wiki 上 298 个分类里大多数是维护清单，不该混在可选列表里 */
+const klassFilter = ref('content')
+const KLASS_OPTIONS = [
+  { value: 'content', label: '只看内容类' },
+  { value: 'all', label: '全部分类' },
+]
 const pickCategory = ref('')
 const prefixInput = ref('')
 
@@ -112,9 +124,27 @@ const categoryOptions = computed(function () {
 /** 搜索过滤后的分类菜单 */
 const filteredCatalog = computed(function () {
   const kw = filter.value.trim().toLowerCase()
-  if (!kw) return catalog.value
-  return catalog.value.filter(function (c) { return c.name.toLowerCase().indexOf(kw) >= 0 })
+  return catalog.value.filter(function (c) {
+    if (klassFilter.value !== 'all' && c.klass !== klassFilter.value) return false
+    if (!kw) return true
+    // 英文分类名之外，也拿示例页名和中文建议一起搜 —— 不知道分类叫什么时用中文猜
+    return c.name.toLowerCase().indexOf(kw) >= 0
+      || c.advice.indexOf(kw) >= 0
+      || (c.samples || []).some(function (s) { return s.toLowerCase().indexOf(kw) >= 0 })
+  })
 })
+
+function klassLabel(k: string) {
+  if (k === 'maintenance') return '维护清单'
+  if (k === 'update') return '更新日期'
+  if (k === 'index') return '索引类'
+  return '内容类'
+}
+function klassTone(k: string) {
+  if (k === 'maintenance' || k === 'index') return 'bad'
+  if (k === 'update') return 'warn'
+  return 'good'
+}
 
 const scopeHint = computed(function () {
   return saved.value ? '页面保存的范围生效中' : '还没保存过，当前用 application.yml 里的默认来源'
@@ -190,6 +220,12 @@ function addPrefix() {
   prefixInput.value = ''
 }
 
+/** 菜单里直接选它 —— 省得去上面的下拉里再找一遍 */
+function pick(c: CatalogRow) {
+  if (!inScope(c.name)) items.value.push({ name: c.name, kind: 'category', enabled: true })
+  okMsg.value = '已加入范围：' + c.name + '，记得点「保存范围」'
+}
+
 function removeAt(i: number) {
   items.value.splice(i, 1)
 }
@@ -255,12 +291,30 @@ onUnmounted(function () {
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <Notice v-if="okMsg" tone="ok">{{ okMsg }}</Notice>
 
+    <Panel title="怎么用" hint="四步，不用改任何配置文件">
+      <ol class="flow">
+        <li><b>选范围</b>：在下面「wiki 上的分类」里勾。<b>分类名是 wiki 上的英文原名</b>，改不了，所以每行都给了中文说明和三个示例页名帮你判断。</li>
+        <li><b>保存范围</b>：选完点「保存范围」。保存后以页面为准，<code>application.yml</code> 里的列表只在没保存过时当默认值。</li>
+        <li><b>先空跑</b>：点「空跑」看这次会拉到多少页、清洗出多少字，<b>不写库、不花钱</b>。数字不对就回去调范围。</li>
+        <li><b>再导入</b>：点「增量导入」。跑完<b>重启服务</b>，索引才重载。</li>
+      </ol>
+      <p class="tip">
+        两个来源类型：<b>分类</b>是 wiki 的 Category，一个分类一页内容；<b>页名前缀</b>是按页名前缀圈范围，
+        比如 <code>Quests/</code> 就是所有以 Quests/ 开头的页。日常用分类就够了。
+      </p>
+    </Panel>
+
     <Panel title="拉取范围" :hint="scopeHint">
       <div class="meta-row">
-        <Tag :tone="saved ? 'good' : 'warn'">{{ saved ? '页面已保存' : 'yml 默认值' }}</Tag>
+        <Tag :tone="saved ? 'good' : 'warn'">{{ saved ? '范围：页面已保存' : '范围：yml 默认值' }}</Tag>
         <Tag tone="neutral">每来源上限 {{ maxPagesPerSource }} 页</Tag>
         <Tag :tone="renderEnabled ? 'good' : 'neutral'">渲染兜底 {{ renderEnabled ? '开' : '关' }}</Tag>
       </div>
+      <p class="tip">
+        <b>每来源上限</b>：一个来源最多拉这么多页，超出的页会漏掉且只发告警 —— 大分类要拆开或调大上限。
+        <b>渲染兜底</b>：配方、掉落这类页面的正文在 wiki 上只是查询语句，开启后每页多取一份渲染结果把数值填进去；
+        代价是慢一些，一页一次请求。两项都在 <code>application.yml</code> 里，是全局设置，不是每个来源单独配。
+      </p>
 
       <table v-if="items.length" class="tbl">
         <thead>
@@ -319,8 +373,18 @@ onUnmounted(function () {
         :value="status.done"
         :max="progressMax"
       />
+      <table class="tbl">
+        <thead><tr><th>什么时候点</th><th>点哪个</th><th>会不会写库</th></tr></thead>
+        <tbody>
+          <tr><td>刚改完范围，想先看数量</td><td>空跑</td><td>不写库、不算向量</td></tr>
+          <tr><td>日常更新，wiki 上有些页被改了</td><td>增量导入</td><td>只处理版本变过的页</td></tr>
+          <tr><td><b>改了清洗规则</b>，或怀疑老页是旧规则洗的</td><td>强制重洗全部</td><td>全部页重洗，重新算向量</td></tr>
+          <tr><td>语料乱了，想推倒重来</td><td>回滚：清空 wiki 块</td><td>删掉全部 wiki 块与导入状态</td></tr>
+        </tbody>
+      </table>
       <p class="faint tip">
-        增量只处理 wiki 上 revid 变过的页；<b>清洗规则改了要选「强制重洗全部」</b>，否则老页永远是旧规则的产物。
+        <b>为什么会有「强制重洗」</b>：增量判断依据是 wiki 上那页的版本号，而清洗规则改在我们这边 ——
+        wiki 的版本号一个字都没变，所以老页不会自己重洗，得手动强制一次。
         导入在服务端后台跑，关掉页面也会继续；<b>跑完要重启服务</b>，索引才重载。
       </p>
     </Panel>
@@ -334,6 +398,10 @@ onUnmounted(function () {
         <div class="stat"><span class="k">渲染兜底</span><span class="v num">{{ fmt(report.rendered) }} 页</span></div>
         <div class="stat"><span class="k">失败</span><span class="v num">{{ fmt(report.failed) }}</span></div>
       </div>
+      <p class="faint tip">
+        <b>版本变过</b>是 wiki 上内容真变了的页数（增量导入只处理这些）；<b>渲染兜底</b>是这次改用渲染结果、
+        拿回了配方/数值的页数；<b>写入块</b>是最终进语料库的段落数。
+      </p>
       <table v-if="report.bySource" class="tbl">
         <thead><tr><th>来源</th><th class="r">页数</th></tr></thead>
         <tbody>
@@ -345,21 +413,44 @@ onUnmounted(function () {
       </ul>
     </Panel>
 
-    <Panel title="wiki 上的分类" :count="catalog.length">
-      <Input v-model="filter" mono placeholder="搜索分类名（英文）…" aria-label="搜索分类名" />
+    <Panel title="wiki 上的分类" :count="filteredCatalog.length" hint="默认只看内容类；维护清单与索引类选了会把无关内容拉进语料">
+      <div class="filters">
+        <Input v-model="filter" mono placeholder="搜分类名、示例页名，或中文说明…" aria-label="搜索分类" />
+        <div class="filter-sel">
+          <Select v-model="klassFilter" :options="KLASS_OPTIONS" aria-label="按类别筛选" />
+        </div>
+      </div>
       <table class="tbl scroll">
         <thead>
-          <tr><th>分类</th><th class="r">成员数</th><th class="r">正文页数</th><th class="c">在范围</th></tr>
+          <tr>
+            <th>分类（wiki 上的原名）</th>
+            <th>说明</th>
+            <th class="r">正文页数</th>
+            <th class="c">在范围</th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="c in filteredCatalog" :key="nameOf(c)">
-            <td class="mono">{{ nameOf(c) }}</td>
-            <td class="r num faint">{{ sizeOf(c) }}</td>
+            <td>
+              <div class="mono">{{ nameOf(c) }}</div>
+              <div v-if="c.samples && c.samples.length" class="samples faint">
+                例：{{ c.samples.join('、') }}
+              </div>
+            </td>
+            <td>
+              <Tag :tone="klassTone(c.klass)">{{ klassLabel(c.klass) }}</Tag>
+              <div class="advice faint">{{ c.advice }}</div>
+            </td>
             <td class="r num">{{ pagesOf(c) }}</td>
-            <td class="c"><Tag v-if="inScope(nameOf(c))" tone="good">已选</Tag><span v-else class="faint">—</span></td>
+            <td class="c">
+              <Tag v-if="inScope(nameOf(c))" tone="good">已选</Tag>
+              <Button v-else-if="c.klass === 'content'" size="sm" @click="pick(c)">选它</Button>
+              <span v-else class="faint">—</span>
+            </td>
           </tr>
         </tbody>
       </table>
+      <Empty v-if="!filteredCatalog.length" text="没有匹配的分类" hint="换个关键词，或把筛选切到「全部分类」" />
     </Panel>
   </div>
 </template>
@@ -386,5 +477,11 @@ onUnmounted(function () {
 .stat .k { display: block; color: var(--ink-faint); font-size: var(--fs-meta); }
 .stat .v { display: block; color: var(--ink); font-size: var(--fs-lg); margin-top: 2px; }
 .warn-text { color: var(--flame-bright); font-size: var(--fs-meta); }
+.flow { margin: 0 0 var(--sp-3); padding-left: 20px; color: var(--ink-2); font-size: var(--fs-sm); line-height: 1.9; }
+.flow code, .tip code { font-family: var(--font-mono); color: var(--ink); }
+.filters { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
+.filter-sel { flex: 0 0 160px; }
+.samples { font-size: var(--fs-xs); margin-top: 2px; }
+.advice { font-size: var(--fs-xs); margin-top: 3px; line-height: 1.6; }
 .errs { margin: var(--sp-3) 0 0; padding-left: 18px; color: var(--ink-dim); font-size: var(--fs-meta); line-height: 1.7; }
 </style>

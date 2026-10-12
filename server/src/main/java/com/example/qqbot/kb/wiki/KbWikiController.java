@@ -122,12 +122,16 @@ public class KbWikiController {
         List<WikiApiClient.CategoryInfo> all = new ArrayList<>(client.listAllCategories());
         all.sort((a, b) -> Integer.compare(b.size(), a.size()));
         List<Map<String, Object>> rows = new ArrayList<>();
+        // 分类名 -> 前 3 个页名（顺手从数页数那次请求里取，不多发请求）
+        Map<String, List<String>> samples = new java.util.HashMap<>();
         int counted = 0;
         for (WikiApiClient.CategoryInfo c : all) {
             Integer pages = null;
             if (counted < CATALOG_COUNT_LIMIT) {
                 try {
-                    pages = client.listCategoryMembers(c.name(), 500).titles().size();
+                    List<String> titles = client.listCategoryMembers(c.name(), 500).titles();
+                    pages = titles.size();
+                    samples.put(c.name(), titles.subList(0, Math.min(3, titles.size())));
                 } catch (Exception e) {
                     log.warn("[KB-WIKI] 数分类 {} 的页数失败：{}", c.name(), e.getMessage());
                 }
@@ -137,6 +141,11 @@ public class KbWikiController {
             m.put("name", c.name());
             m.put("size", c.size());
             m.put("pages", pages);
+            m.put("klass", klassOf(c.name()));
+            m.put("advice", adviceOf(c.name()));
+            // 示例页名：让"Crafting Materials"这种英文分类名一眼能看懂装的是什么。
+            // 顺手就有 —— 数页数那次请求已经返回了标题，不多发请求。
+            m.put("samples", samples.getOrDefault(c.name(), List.of()));
             rows.add(m);
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -182,6 +191,38 @@ public class KbWikiController {
         m.put("report", st.report());
         m.put("errors", st.errors());
         return m;
+    }
+
+    /**
+     * 分类的类别 —— 决定页面上给什么建议。
+     *
+     * <p>wiki 上 298 个分类里，**大多数不是内容**：维护清单（Pages with… / Maintenance/…）、
+     * 模板清单、更新日期（Wake Of Water Update）、索引页（Item catalogs）。
+     * 名字是英文的，光看名字分不出来，所以由后端判定 + 给中文建议，
+     * 免得运维把几千页无关内容拉进语料。
+     */
+    private static String klassOf(String name) {
+        String n = name.toLowerCase(java.util.Locale.ROOT);
+        if (n.startsWith("pages with") || n.startsWith("pages using") || n.startsWith("maintenance/")
+                || n.startsWith("templates/") || n.startsWith("missing ") || n.contains("broken file links")) {
+            return "maintenance";
+        }
+        if (n.endsWith(" update") || n.equals("early access launch")) {
+            return "update";
+        }
+        if (n.contains("catalog") || n.equals("music")) {
+            return "index";
+        }
+        return "content";
+    }
+
+    private static String adviceOf(String name) {
+        return switch (klassOf(name)) {
+            case "maintenance" -> "维护清单：wiki 自己的记账页，装了模板的页都会被记进来。别选，会拉进几千页无关内容";
+            case "update" -> "更新日期类：一页会同时属于它的主题分类，选它会和已导入的内容重复";
+            case "index" -> "索引类：内容基本是链接与表格，清洗后会挤掉真正的物品块";
+            default -> "内容类：可以选";
+        };
     }
 
     private static Map<String, Object> row(String name, String kind, boolean enabled) {

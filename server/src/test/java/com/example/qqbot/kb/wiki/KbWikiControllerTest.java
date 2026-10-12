@@ -100,6 +100,29 @@ class KbWikiControllerTest {
     }
 
     @Test
+    @DisplayName("★ 垃圾分类必须被点名：英文名看不出性质，页面靠中文建议拦住它们")
+    void advisesAgainstJunkCategories() {
+        when(client.listAllCategories()).thenReturn(List.of(
+                new WikiApiClient.CategoryInfo("Pages with navboxes", 1860),
+                new WikiApiClient.CategoryInfo("Wake Of Water Update", 446),
+                new WikiApiClient.CategoryInfo("Item catalogs", 71),
+                new WikiApiClient.CategoryInfo("Music", 95)));
+        when(client.listCategoryMembers(anyString(), anyInt()))
+                .thenReturn(new WikiApiClient.Collected(List.of("X"), false, 1));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) controller.catalog().get("items");
+        Map<String, String> klass = new java.util.HashMap<>();
+        for (Map<String, Object> m : items) {
+            klass.put(String.valueOf(m.get("name")), String.valueOf(m.get("klass")));
+        }
+        assertThat(klass.get("Pages with navboxes")).as("维护清单").isEqualTo("maintenance");
+        assertThat(klass.get("Wake Of Water Update")).as("更新日期类").isEqualTo("update");
+        assertThat(klass.get("Item catalogs")).as("索引类").isEqualTo("index");
+        assertThat(klass.get("Music")).as("空类").isEqualTo("index");
+    }
+
+    @Test
     @DisplayName("★ 分类菜单带缓存：页面反复打开不能把 wiki 打疼")
     void catalogIsCached() {
         when(client.listAllCategories()).thenReturn(List.of(
@@ -113,6 +136,14 @@ class KbWikiControllerTest {
 
         assertThat(first.get("total")).isEqualTo(2);
         assertThat(second).isSameAs(first);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) first.get("items");
+        assertThat(items.get(0).get("name")).as("按成员数降序").isEqualTo("Lore");
+        assertThat(items.get(0).get("klass")).isEqualTo("content");
+        assertThat(items.get(0).get("advice")).isEqualTo("内容类：可以选");
+        @SuppressWarnings("unchecked")
+        List<String> samples = (List<String>) items.get(0).get("samples");
+        assertThat(samples).as("示例页名，让英文分类名能看懂").containsExactly("A", "B");
         verify(client, times(1)).listAllCategories();
         verify(client, times(2)).listCategoryMembers(anyString(), anyInt());
     }
