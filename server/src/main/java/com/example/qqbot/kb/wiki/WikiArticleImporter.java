@@ -211,7 +211,8 @@ public class WikiArticleImporter {
                     continue;
                 }
                 try {
-                    String body = WikitextCleaner.clean(rev.content());
+                    // 带上页面标题：{{PAGENAME}} 要展开成它，否则会把主语清没
+                    String body = WikitextCleaner.clean(rev.content(), title);
                     if (body.isBlank()) {
                         // 清洗后为空说明这页没有可读正文（纯模板页）——记状态但不建块
                         store.upsert(title, src.label(), rev.revid(), rev.timestamp(), 0, "", 0);

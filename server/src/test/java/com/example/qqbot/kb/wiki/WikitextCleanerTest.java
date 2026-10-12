@@ -15,6 +15,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * （{@code server/src/test/resources/wiki/}，5 篇覆盖：任务页 / 机制页 / 怪物页 / 制作页）。
  *
  * <p>不联网：清洗是纯函数。
+ *
+ * <h2>2026-10-11 原则反转</h2>
+ * 旧版是"白名单"：认识的模板取值，不认识的整块丢。实测丢掉三分之一的字，
+ * 而且丢的是攻略内容（技能解锁条件、怪物抗性与区域、掉落表、工匠位置）。
+ * 现在改成"<b>默认保留，只丢明确噪声</b>"，这组测试跟着改：原来断言
+ * "不认识的模板整块丢"，现在断言"它的参数值必须进文档"。
  */
 class WikitextCleanerTest {
 
@@ -26,57 +32,56 @@ class WikitextCleanerTest {
     }
 
     @Test
-    @DisplayName("★ 任务页：模板取出有用的参数，表格保留内容，标记清干净")
+    @DisplayName("★ 任务页：标记清干净，前置任务与奖励物品都在，表格内容不漏")
     void questPage() throws IOException {
-        String out = WikitextCleaner.clean(fixture("Quests_A_Beehive_Smoker.wiki"));
+        String out = WikitextCleaner.clean(fixture("Quests_A_Beehive_Smoker.wiki"), "Quests/A Beehive Smoker");
 
-        // 标记必须清干净 —— 留着这些标记等于把噪声喂给向量模型
         assertThat(out).doesNotContain("{{").doesNotContain("}}").doesNotContain("[[")
                 .doesNotContain("{|").doesNotContain("|-").doesNotContain("'''").doesNotContain("|}");
-        // 白名单模板的参数被保留下来（前置任务 / 奖励物品）
         assertThat(out).contains("In Need Of A Tanning Station");
         assertThat(out).contains("Beehive Smoker");
-        // 表格里的正文保留（否则任务的目标与描述全丢了）
         assertThat(out).contains("Investigate");
         assertThat(out).contains("Farmer");
-        // 正文里不该出现模板参数里的噪声（图标名、尺寸）
-        assertThat(out).doesNotContain("25px");
+        assertThat(out).as("图标尺寸不是内容").doesNotContain("25px");
     }
 
     @Test
     @DisplayName("机制页：纯正文 + 大量内链 + 表格")
     void mechanicsPage() throws IOException {
-        String out = WikitextCleaner.clean(fixture("Combat_Mechanics.wiki"));
+        String out = WikitextCleaner.clean(fixture("Combat_Mechanics.wiki"), "Combat Mechanics");
+
         assertThat(out).contains("Enemy Resistances").contains("Effective").contains("Resisted");
         assertThat(out).doesNotContain("[[").doesNotContain("]]").doesNotContain("{|");
         assertThat(out).doesNotContain("'''");
     }
 
     @Test
-    @DisplayName("怪物页：Infobox 的 description 取出来，其它参数与标记丢掉")
+    @DisplayName("★ 怪物页：description、行为、阵营、区域、抗性全部保留（旧版只留 description）")
     void bossPage() throws IOException {
-        String out = WikitextCleaner.clean(fixture("Cyclops.wiki"));
-        assertThat(out).contains("Cyclops");
-        assertThat(out).doesNotContain("{{").doesNotContain("NPC Infobox");
-        // ★ 2026-10-05：{{NPC Infobox}} 的 description 现在会被取出（原来整块丢，
-        //    9 个 Baby * 页 + Bees 因此清洗成 0 字）
+        String out = WikitextCleaner.clean(fixture("Cyclops.wiki"), "Cyclops");
+
         assertThat(out).contains("A Cyclops");
-        // 参数里的噪声不许混进来
-        assertThat(out).doesNotContain("Cyclops.png").doesNotContain("Hostile");
+        assertThat(out).doesNotContain("{{").doesNotContain("NPC Infobox").doesNotContain("Cyclops.png");
+        // ★ 新原则：这些原来被丢掉，现在必须留下 —— 它们就是"在哪打、怕什么"
+        assertThat(out).contains("Hostile");
+        assertThat(out).contains("Region");
     }
 
     @Test
     @DisplayName("制作页：含 HTML 标签与模板")
     void craftingPage() throws IOException {
-        String out = WikitextCleaner.clean(fixture("Crafting.wiki"));
-        assertThat(out).doesNotContain("{{").doesNotContain("<").doesNotContain("[[").doesNotContain("'''");
+        String out = WikitextCleaner.clean(fixture("Crafting.wiki"), "Crafting");
+
+        assertThat(out).doesNotContain("{{").doesNotContain("[[").doesNotContain("'''");
+        assertThat(out).doesNotContain("<br").doesNotContain("<ref").doesNotContain("</");
         assertThat(out.length()).isGreaterThan(200);
     }
 
     @Test
     @DisplayName("另一篇任务页也清得干净")
     void questPage2() throws IOException {
-        String out = WikitextCleaner.clean(fixture("Quests_Alchemic_Wisdom.wiki"));
+        String out = WikitextCleaner.clean(fixture("Quests_Alchemic_Wisdom.wiki"), "Quests/Alchemic Wisdom");
+
         assertThat(out).doesNotContain("{{").doesNotContain("[[").doesNotContain("'''");
         assertThat(out.length()).isGreaterThan(150);
     }
@@ -84,35 +89,114 @@ class WikitextCleanerTest {
     @Test
     @DisplayName("模板配对扫描能处理嵌套（{{Quest|{{SUBPAGENAME}}}}）")
     void nestedTemplates() {
-        // {{A|{{B}}}} 的下标是 0..10，外层 }} 落在 9
         assertThat(WikitextCleaner.matchClose("{{A|{{B}}}}", 0)).isEqualTo(9);
-        // 不配对时返回 -1（调用方选择整段丢掉，而不是留半截）
+        // 不配对时返回 -1（调用方丢掉剩余内容，而不是留半截）
         assertThat(WikitextCleaner.matchClose("{{A|{{B}}", 0)).isEqualTo(-1);
-        assertThat(WikitextCleaner.clean("x {{Quest|{{SUBPAGENAME}}}} y")).isEqualTo("x y");
+        assertThat(WikitextCleaner.clean("x {{Quest|{{SUBPAGENAME}}}} y", "Quests/Foo")).isEqualTo("x Foo y");
     }
 
     @Test
-    @DisplayName("白名单模板取对参数；不认识的模板整块丢掉（宁可少留，不要留错）")
-    void templateWhitelist() {
-        assertThat(WikitextCleaner.resolveTemplate("quest+icon|In Need Of A Tanning Station"))
-                .isEqualTo("In Need Of A Tanning Station");
-        assertThat(WikitextCleaner.resolveTemplate("item+iconright|Beehive Smoker"))
-                .isEqualTo("Beehive Smoker");
-        // MapLink：位置参数是 [图标名, markerId, 显示名] —— 要的是显示名，不是 markerId
+    @DisplayName("★ 默认保留：不认识的模板也要把参数值留下来（旧版整块丢）")
+    void unknownTemplatesKeepTheirValues() {
+        // 技能页的 infobox：Class / Unlock Cost 就是"怎么解锁、要多少点"
+        String skill = "{{Infobox/Skill|title=Kick|image=Kick.png|description=A kick.|Class=Ranger|Unlock Cost=3}}";
+        String out = WikitextCleaner.clean(skill, "Kick");
+        assertThat(out).contains("Class: Ranger").contains("Unlock Cost: 3").contains("A kick.");
+        assertThat(out).as("文件名不是内容").doesNotContain("Kick.png");
+
+        // 完全陌生的模板同样默认保留
+        assertThat(WikitextCleaner.clean("{{Whatever|name=Cyclops|health=100}}", "x"))
+                .contains("Name: Cyclops").contains("Health: 100");
+
+        // 没有上下文时 {{PAGENAME}} 展开为空，但整块不会崩
+        assertThat(WikitextCleaner.clean("{{SUBPAGENAME}}")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("★ 页面上下文：{{PAGENAME}} 必须展开，否则主语被清没")
+    void pageNameIsExpanded() {
+        assertThat(WikitextCleaner.clean("'''{{PAGENAME}}''' is a skill in [[Enshrouded]].", "Kick"))
+                .isEqualTo("Kick is a skill in Enshrouded.");
+        // 子页面：SUBPAGENAME 去掉前缀
+        assertThat(WikitextCleaner.clean("{{SUBPAGENAME}} is a quest", "Quests/A Glimmer Of Hope"))
+                .isEqualTo("A Glimmer Of Hope is a quest");
+    }
+
+    @Test
+    @DisplayName("★ 递归：外层模板不认识，内层的表格式模板照样取值（掉落表就是这么丢的）")
+    void recursionKeepsInnerTemplates() {
+        String wiki = "{{ItemsTableHeader\n|content=\n"
+                + "{{ItemsLine|image=Fell Cyclops Head.png|item=Fell Cyclops Head|quantity=1|type=Materials|source=Drop}}\n"
+                + "{{ItemsLine|image=Cyclops Eye.png|item=Enshrouded Cyclops Eye|quantity=2|type=Materials|source=Drop}}\n"
+                + "}}";
+        String out = WikitextCleaner.clean(wiki, "Fell Cyclops");
+
+        assertThat(out).contains("Fell Cyclops Head × 1 (Materials, Drop)");
+        assertThat(out).contains("Enshrouded Cyclops Eye × 2 (Materials, Drop)");
+        assertThat(out).doesNotContain("File:").doesNotContain(".png");
+    }
+
+    @Test
+    @DisplayName("★ MapLink 这类特殊形状：取给人看的名字，不取 marker id")
+    void knownShapes() {
         assertThat(WikitextCleaner.resolveTemplate(
                 "MapLink | icon= Camp | FarAwayFrayTavern | \"Far Away Fray\" Tavern | size= 25px"))
                 .isEqualTo("Far Away Fray Tavern");
-        // 不认识的模板一律丢
-        assertThat(WikitextCleaner.resolveTemplate("NPC Infobox|name=Cyclops|health=100")).isEmpty();
-        assertThat(WikitextCleaner.resolveTemplate("SUBPAGENAME")).isEmpty();
+        // 没有引号时：排除 marker id（字母+数字）与噪声，取最后一个像名字的
+        assertThat(WikitextCleaner.resolveTemplate("MapLink | ElixirWell15 | Elixir Well"))
+                .isEqualTo("Elixir Well");
+        // 表格式模板 → 一行一条
+        assertThat(WikitextCleaner.resolveTemplate("ItemsLine|item=Fur Patch|quantity=1-3|type=Materials|source=Drop"))
+                .isEqualTo("Fur Patch × 1-3 (Materials, Drop)");
     }
 
     @Test
-    @DisplayName("链接：带显示名取显示名，文件/分类链接整条丢")
+    @DisplayName("★ 噪声模板整块丢：导航、图标条没有一句是这一页的正文")
+    void noiseTemplatesAreDropped() {
+        assertThat(WikitextCleaner.clean("正文。\n{{Bestiary}}\n", "x")).isEqualTo("正文。");
+        assertThat(WikitextCleaner.clean("正文。\n{{Skills}}\n", "x")).isEqualTo("正文。");
+        // 但 update needed 这类"待核实"提示要留下 —— 它影响回答的可信度
+        assertThat(WikitextCleaner.clean("{{Update Needed|update=Wake of Water}}", "x")).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("★ 长文本不重复：infobox 的描述与正文是同一段时，只留一份")
+    void longTextIsNotDuplicated() {
+        String desc = "When equipped with a Melee weapon you can perform a Kick by attacking while blocking. "
+                + "Kick deals little damage but hits the target with massive force.";
+        String wiki = "{{Infobox/Skill|description=" + desc + "|Class=Ranger}}\n\n"
+                + "== Description ==\n" + desc + "\n";
+        String out = WikitextCleaner.clean(wiki, "Kick");
+
+        int first = out.indexOf("When equipped with a Melee weapon");
+        assertThat(first).as("这段描述必须在文档里").isGreaterThanOrEqualTo(0);
+        assertThat(out.indexOf("When equipped with a Melee weapon", first + 1))
+                .as("同一段描述只许出现一次，重复会让两个块互相稀释").isEqualTo(-1);
+        assertThat(out).contains("Class: Ranger");
+    }
+
+    @Test
+    @DisplayName("★ gallery：取标签拼成清单，不留文件名与 link= 噪声")
+    void galleryBecomesLabelList() {
+        String wiki = "<gallery widths=100px>\n"
+                + "File:Iron Door.png|link=Decorations/Doors|[[Decorations/Doors|Doors]]\n"
+                + "File:Iron Fence.png|link=Decorations/Fences|[[Decorations/Fences|Fences]]\n"
+                + "File:Orphan.png\n"
+                + "</gallery>\n";
+        String out = WikitextCleaner.clean(wiki, "Decorations");
+
+        assertThat(out).contains("Doors").contains("Fences");
+        assertThat(out).doesNotContain("File:").doesNotContain(".png").doesNotContain("link=")
+                .doesNotContain("100px").doesNotContain("Orphan");
+    }
+
+    @Test
+    @DisplayName("链接：带显示名取显示名，文件/分类/interwiki 链接整条丢")
     void links() {
         assertThat(WikitextCleaner.stripLinks("见 [[Enshrouded]] 与 [[Farmer|农夫]]")).isEqualTo("见 Enshrouded 与 农夫");
         assertThat(WikitextCleaner.stripLinks("x [[File:a.png|thumb|说明]] y")).isEqualTo("x  y");
         assertThat(WikitextCleaner.stripLinks("x [[Category:Quests]] y")).isEqualTo("x  y");
+        assertThat(WikitextCleaner.stripLinks("x [[C:Two-handed Greatswords]] y")).isEqualTo("x  y");
     }
 
     @Test
@@ -126,35 +210,41 @@ class WikitextCleanerTest {
     }
 
     @Test
-    @DisplayName("★ NPC Infobox：取 description；没有 description 仍然整块丢")
-    void npcInfobox() {
-        // 实测 Baby Capybara / Bees 这类页面的正文**只有**这一个模板
-        String wiki = "{{NPC Infobox\n| images = Baby Capybara.png\n"
-                + "| description = A tiny Capybara. It enjoys headpats.\n"
-                + "| Behavior = Fleeting\n| Tameable = No\n}}";
-        assertThat(WikitextCleaner.clean(wiki)).isEqualTo("A tiny Capybara. It enjoys headpats.");
-        // 缺 description → 整块丢（宁可少留，不要留错）
-        assertThat(WikitextCleaner.clean("{{NPC Infobox|name=Cyclops|health=100}}")).isEmpty();
-        // 单词类参数不许混进来（它们只会灌噪声）
-        assertThat(WikitextCleaner.clean(wiki))
-                .doesNotContain("Baby Capybara.png").doesNotContain("Fleeting").doesNotContain("No");
+    @DisplayName("★ 表格一行一条记录，而不是一格一行")
+    void tableRowStaysOneLine() {
+        String wiki = "{| class=\"wikitable\"\n! Region !! Location\n|-\n"
+                + "| [[Albaneve Summits]] || Elixir Well\n"
+                + "|}";
+        String out = WikitextCleaner.clean(wiki, "x");
+
+        assertThat(out.lines().toList()).as("表头一行、数据一行").hasSize(2);
+        assertThat(out).contains("Region | Location");
+        assertThat(out).contains("Albaneve Summits | Elixir Well");
     }
 
     @Test
     @DisplayName("★ 表格：单元格里 <br> 之后的内容、以及表格内的散行都不能丢")
     void tableKeepsEverything() {
-        // 实测形态：Equipment 整页就是一个"图片链接表格" —— 原来会清成 0 字
         String wiki = "{| class=\"wikitable\"\n|-\n"
                 + "| [[File:Knight Chestplate.png|100px|link=Armor/Melee]]<br>[[Armor/Melee|Melee Armor]]\n"
                 + "| [[File:Mystic Chest.png|100px|link=Armor/Magic]]<br>[[Armor/Magic|Magic Armor]]\n"
                 + "|}\n";
-        String out = WikitextCleaner.clean(wiki);
+        String out = WikitextCleaner.clean(wiki, "Equipment");
         assertThat(out).isNotEmpty();
         assertThat(out).contains("Melee Armor").contains("Magic Armor");
         assertThat(out).doesNotContain("File:").doesNotContain("Chestplate.png");
         // 单元格里的**真实换行**（不是 <br>）也要留住 —— 靠 stripTables 的兜底分支
-        assertThat(WikitextCleaner.clean("{|\n| 第一行\n第二行\n|}"))
+        assertThat(WikitextCleaner.clean("{|\n| 第一行\n第二行\n|}", "x"))
                 .contains("第一行").contains("第二行");
+    }
+
+    @Test
+    @DisplayName("★ HTML 实体要解码：&nbsp; 原样进语料就是噪声（实测 Survivors 单页 118 处）")
+    void entitiesAreDecoded() {
+        assertThat(WikitextCleaner.clean("A&nbsp;B &amp; C &lt;tag&gt; &#65; &#x42;", "x"))
+                .isEqualTo("A B & C <tag> A B");
+        // 不换行空格也是空格
+        assertThat(WikitextCleaner.clean("&nbsp;&nbsp;Charcoal Kiln", "x")).isEqualTo("Charcoal Kiln");
     }
 
     @Test
