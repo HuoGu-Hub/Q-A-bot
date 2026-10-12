@@ -279,6 +279,18 @@ mvn spring-boot:run -Dspring-boot.run.arguments="\
 <p>⚠️ <strong>导入之后必须重启服务</strong> —— 索引只在进程内重载，没有定时刷新。
 不重启的话后台还是旧数据。</p>
 </blockquote>
+<h3>一条命令：<code>./scripts/wiki-import.sh</code></h3>
+<p>日常不用手敲上面那一长串参数：</p>
+<table>
+<thead><tr><th>命令</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>./scripts/wiki-import.sh --dry-run</code></td><td>只看数量、不写库、不花 embedding 的钱</td></tr>
+<tr><td><code>./scripts/wiki-import.sh</code></td><td>增量：只处理 revid 变过的页</td></tr>
+<tr><td><code>./scripts/wiki-import.sh --force</code></td><td>忽略 revid 全部重洗（<b>清洗规则变了用这条</b>）</td></tr>
+<tr><td><code>./scripts/wiki-import.sh --no-render</code></td><td>关掉渲染兜底（快，但拿不到 <code>{{Get}}</code> 与数据表）</td></tr>
+<tr><td><code>./scripts/wiki-import.sh --purge</code></td><td>清掉全部 wiki 文章块与导入状态（可重来）</td></tr>
+</tbody></table>
+<p>脚本自己做三件容易漏的事：隔离构建（<code>.toolchain/server-ci</code>）、把工作目录指到 <code>server/</code>（SQLite 的相对路径以它为准）、把 fork 出来的 JVM 的 stdout 指成 UTF-8（否则导入报告跟控制台代码页走，脚本与运维都抓不稳）。跑完它会挑出报告里的告警：顶到上限 / 块 id 撞车 / 渲染兜底失败。日志：<code>.toolchain/verify/wiki-import.log</code>。</p>
 <h3 id="抓什么往-appkbwiki-importcategories-里加分类名"><a class="anchor" href="#抓什么往-appkbwiki-importcategories-里加分类名">抓什么：往 <code>app.kb.wiki-import.categories</code> 里加分类名</a></h3>
 <div class="table-wrap"><table>
 <thead>
