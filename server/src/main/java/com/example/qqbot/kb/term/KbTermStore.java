@@ -77,6 +77,14 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
      */
     private final AtomicLong version = new AtomicLong();
 
+    /** 外部写入检测的间隔（毫秒）。测试里设成 0 就能立刻发现 */
+    private static final long EXTERNAL_CHECK_MILLIS =
+            Long.getLong("qqbot.term.external-check-millis", 5000L);
+
+    /** 上一次查库里指纹的时间与结果 —— 见 {@link #version()} */
+    private volatile long lastExternalCheck;
+    private volatile String lastExternalStamp = "";
+
     /** 上一次按语料补齐时，语料是哪个版本（{@code -1} = 还没补过）—— 见 {@link #ensureReconciled()} */
     private volatile long reconciledVersion = -1L;
 
@@ -115,7 +123,36 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
         return available;
     }
 
+    /**
+     * 让下一次 {@link #version()} 立刻比对库里的指纹，不等轮询间隔。
+     *
+     * <p>包内可见：给测试与现场排查用。轮询间隔默认 5 秒，
+     * 测"外部写入能不能被发现"时不该为此 sleep 5 秒。
+     */
+    void forceExternalCheck() {
+        lastExternalCheck = 0L;
+    }
+
     public long version() {
+        // ★ 除了本进程的写入，还要能发现**别的进程**改了库（离线工具、直接 SQL）。
+        //   内存计数器对它们无感 —— 而"后台补完别名、机器人一直用旧词表"这种问题
+        //   不报错，只表现为"怎么问都查不到"，最难查（2026-10-14 实测踩到）。
+        //   所以每 EXTERNAL_CHECK_MILLIS 轻量比对一次库里的指纹，变了就当作一次写入。
+        long now = System.currentTimeMillis();
+        if (now - lastExternalCheck >= EXTERNAL_CHECK_MILLIS) {
+            lastExternalCheck = now;
+            String stamp;
+            try {
+                stamp = repo.stamp();
+            } catch (Exception e) {
+                stamp = lastExternalStamp;   // 查不动就当没变，别把检索拖崩
+            }
+            if (!stamp.equals(lastExternalStamp)) {
+                lastExternalStamp = stamp;
+                version.incrementAndGet();
+                log.info("[KB-TERM] 检测到外部写入（{}），词表版本 +1", stamp);
+            }
+        }
         return version.get();
     }
 

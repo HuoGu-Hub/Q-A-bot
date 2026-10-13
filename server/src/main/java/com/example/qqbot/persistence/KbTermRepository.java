@@ -89,6 +89,18 @@ public class KbTermRepository {
                 r -> new Row(r.str("en"), nz(r.str("zh")), r.str("status")), en);
     }
 
+    /**
+     * 词条表的**指纹**：条数 + 最大更新时间。
+     *
+     * <p>用途：发现"别的进程改了库"。内存里的版本计数器只能感知**本进程**的写入，
+     * 离线工具直接改库时它一动不动 —— 检索侧就一直用旧词表，而且不报错。
+     * 这个查询只有一行、走主键与索引，够便宜，可以按秒级轮询。
+     */
+    public String stamp() {
+        return jdbc.queryOne("SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), '') AS t FROM kb_term",
+                r -> r.intOf("n") + "@" + r.str("t"));
+    }
+
     public long count() {
         return jdbc.count("SELECT COUNT(*) FROM kb_term");
     }
