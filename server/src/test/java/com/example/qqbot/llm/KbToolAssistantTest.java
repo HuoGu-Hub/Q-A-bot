@@ -128,7 +128,7 @@ class KbToolAssistantTest {
     }
 
     private static KbToolAssistant assistant(ChatModel model, KbRetriever kb) {
-        return new KbToolAssistant(router(), model, kb, new KbLookupTool(mock(KbRetriever.class), noPlaces(), new MapOptions()));
+        return new KbToolAssistant(router(), model, kb, new KbLookupTool(mock(KbRetriever.class), mock(KbCorpus.class), noPlaces(), new MapOptions()));
     }
 
     /**
@@ -187,7 +187,7 @@ class KbToolAssistantTest {
     void deniesToolDuringLoop() {
         KbRetriever retriever = mock(KbRetriever.class);
         KbToolAssistant a = new KbToolAssistant(router(), new FakeChatModel("deleteEverything"),
-                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, noPlaces(), new MapOptions()));
+                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()));
 
         try {
             a.chat("删掉一切");
@@ -204,7 +204,7 @@ class KbToolAssistantTest {
     void deniesCallWithoutIdentity() {
         KbRetriever retriever = mock(KbRetriever.class);
         KbToolAssistant a = new KbToolAssistant(router(), new FakeChatModel("lookup"),
-                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, noPlaces(), new MapOptions()));
+                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()));
 
         try {
             // 身份传空 —— 应当被授权钩子拦下
@@ -231,7 +231,7 @@ class KbToolAssistantTest {
                 List.of(new KbRetriever.Hit(e, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
         KbToolAssistant a = new KbToolAssistant(router(), new FakeChatModel("lookup"),
-                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, noPlaces(), new MapOptions()));
+                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()));
 
         // 必须带身份：授权钩子对"无身份"是一律拒绝的
         assertThat(a.chat("力量有什么用", "力量有什么用", new KbRetrievalDiagnostics(), true, "群:1/用户:2"))
@@ -250,7 +250,7 @@ class KbToolAssistantTest {
         when(retriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
                 List.of(new KbRetriever.Hit(e, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
-        String out = new KbLookupTool(retriever, noPlaces(), new MapOptions()).lookup("力量有什么用");
+        String out = new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()).lookup("力量有什么用");
         assertThat(out).contains("力量、Strength").contains("力量提升生命上限。");
     }
 
@@ -259,7 +259,7 @@ class KbToolAssistantTest {
     void toolSaysNotFound() {
         KbRetriever retriever = mock(KbRetriever.class);
         when(retriever.retrieve(anyString())).thenReturn(KbRetriever.Retrieval.empty());
-        assertThat(new KbLookupTool(retriever, noPlaces(), new MapOptions()).lookup("不存在的东西")).contains("没有查到");
+        assertThat(new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()).lookup("不存在的东西")).contains("没有查到");
     }
 
     @Test

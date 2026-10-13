@@ -121,13 +121,75 @@ public final class NameZhIndex {
                     i++;
                 }
                 prefix = prefix.substring(0, i);
-                if (prefix.length() < 2) {
-                    return null;
-                }
             }
-            return prefix.length() >= 2 ? prefix : null;
+            // ⚠️ 前缀太短（同一个头词下的物品译名不一致，如 Fell 系有「邪煞/迸裂/堕落」）
+            //    时**不能直接 return null** —— 那会把下面的 ③ 短路掉，
+            //    而 ③ 正是为这种不一致准备的（去掉物品修饰词后取多数票）。
+            if (prefix.length() >= 2) {
+                return prefix;
+            }
+        }
+        // ③ 派生条目兜底（2026-10-13 补）
+        //
+        //    实体页自己往往没有中文名，但它的**派生物品**有：
+        //    `Fell Sicklescythe` 查不到，而 `Fell Sicklescythe Trophy` /
+        //    `Fell Sicklescythe Head` / `Mist of a Fell Sicklescythe` 都有。
+        //
+        //    实测难点：同一个怪的不同物品**译名会不一致**
+        //    （战利品叫「堕落镰刃兽战利品」、头颅叫「堕落镰刀魔的头颅」），
+        //    所以不能用公共前缀 —— 去掉物品类前后缀之后取**多数票**：
+        //    堕落镰刃兽 出现 4 次、堕落镰刀魔 出现 1 次 → 取前者。
+        String derived = resolveByDerived(base);
+        if (derived != null) {
+            return derived;
         }
         return null;
+    }
+
+    /**
+     * 从「派生条目」反推实体中文名。
+     *
+     * <p>命中的是英文名里包含本页标题的那些条目（前缀、后缀、中间都算，
+     * 覆盖 `X Trophy` / `X Head` / `Mist of a X` 三种常见形态）。
+     * 去掉物品类修饰词后取多数票，票数不足 2 的不要 —— 宁可留英文，也不编。
+     */
+    private String resolveByDerived(String base) {
+        String key = base.toLowerCase(Locale.ROOT);
+        Map<String, Integer> votes = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : enToZh.entrySet()) {
+            String en = e.getKey();
+            boolean related = en.startsWith(key + " ") || en.endsWith(" " + key) || en.contains(" " + key + " ");
+            if (!related) {
+                continue;
+            }
+            String zh = stripItemAffix(e.getValue());
+            if (zh.length() >= 2) {
+                votes.merge(zh, 1, Integer::sum);
+            }
+        }
+        return votes.entrySet().stream()
+                .filter(v -> v.getValue() >= 2)
+                .max(java.util.Comparator.comparingInt(Map.Entry::getValue))
+                .map(Map.Entry::getKey)
+                .orElse(null);
+    }
+
+    /** 去掉物品类的修饰词：前缀（材质）与后缀（战利品/头颅…），留下实体名 */
+    static String stripItemAffix(String zh) {
+        String v = zh == null ? "" : zh.trim();
+        for (String pre : new String[]{"青铜", "白银", "金色", "铁制", "木制", "铜制", "石制", "银制"}) {
+            if (v.startsWith(pre) && v.length() > pre.length() + 1) {
+                v = v.substring(pre.length());
+                break;
+            }
+        }
+        for (String suf : new String[]{"战利品", "的头颅", "头颅", "的头", "之雾", "碎片", "残骸", "的角", "之翼"}) {
+            if (v.endsWith(suf) && v.length() > suf.length() + 1) {
+                v = v.substring(0, v.length() - suf.length());
+                break;
+            }
+        }
+        return v.trim();
     }
 
     /** 去掉开头的冠词 —— `A Beehive Smoker` → `Beehive Smoker` */
