@@ -70,6 +70,36 @@ public class KbMapStore {
                          String description, String article, double x, double y, String image) {
     }
 
+    /**
+     * 一张画布（落库/读出一致）。
+     *
+     * <p>与 {@link KbMapParser.Meta} 字段几乎相同，但**不能直接复用**：
+     * Meta 是"某个页面解析出来的东西"，而这里是"库里存着的底图"。
+     * 合并会让持久层与解析器产生依赖，也会让"以后改用别的底图来源"变成改解析器。
+     */
+    public record Canvas(String map, String page, String schema, String fragment,
+                         boolean hasCrs, double[] topLeft, double[] bottomRight,
+                         double[] tileAt, double[] tileSize, String tilesJson,
+                         String backgroundImage, String backdrop, double zoomMin, double zoomMax,
+                         String syncedAt) {
+
+        /** 画布的世界宽高（crs 单位） */
+        public double[] extent() {
+            if (topLeft == null || bottomRight == null) {
+                return new double[]{0, 0};
+            }
+            return new double[]{Math.abs(bottomRight[0] - topLeft[0]),
+                    Math.abs(topLeft[1] - bottomRight[1])};
+        }
+
+        /** 有坐标系且有底图 —— 只有这种能被渲染 */
+        public boolean renderable() {
+            boolean tiles = tilesJson != null && !tilesJson.isBlank();
+            boolean whole = backgroundImage != null && !backgroundImage.isBlank();
+            return hasCrs && (tiles || whole);
+        }
+    }
+
     @PostConstruct
     public void init() {
         if (!repo.isAvailable()) {
@@ -146,11 +176,77 @@ public class KbMapStore {
                         m.name(), m.description(), m.article(), m.x(), m.y(), m.image()))
                 .toList();
         try {
-            return repo.replacePage(page, map, revid, pageUpdatedAt, groupRows, markerRows, syncedAt);
+            return repo.replacePage(page, map, revid, pageUpdatedAt, groupRows, markerRows,
+                    canvasRow(page, map, meta, syncedAt), syncedAt);
         } catch (Exception e) {
             log.warn("[KB-MAP] 写入页 {} 失败，已回滚：{}", page, e.getMessage());
             return 0;
         }
+    }
+
+    /**
+     * 从解析结果摊出一行画布。**该不该存**在这里判：
+     *
+     * <ul>
+     *   <li>有 crs → 存（哪怕没有底图，查看器也要靠它把 marker 的 x/y 换算成像素）；</li>
+     *   <li>只有底图没有 crs → 存（管理端能看见，且以后补 crs 不用重新解析）；</li>
+     *   <li>两者都没有（{@code Groups} / {@code Lore-Groups} 这类纯分组页）→ 不存，
+     *       存了只会让"有哪些画布"这个问题多出几十条噪声。</li>
+     * </ul>
+     */
+    private static KbMapRepository.CanvasRow canvasRow(String page, String map,
+                                                      KbMapParser.Meta meta, String syncedAt) {
+        if (meta == null) {
+            return null;
+        }
+        boolean hasBg = (meta.tilesJson() != null && !meta.tilesJson().isBlank())
+                || (meta.backgroundImage() != null && !meta.backgroundImage().isBlank());
+        if (!meta.hasCrs() && !hasBg) {
+            return null;
+        }
+        return new KbMapRepository.CanvasRow(map, page, meta.schema(), meta.fragment(),
+                meta.hasCrs(), meta.topLeft(), meta.bottomRight(),
+                meta.tileAt(), meta.tileSize(),
+                meta.tilesJson() == null ? "" : meta.tilesJson(),
+                meta.backgroundImage() == null ? "" : meta.backgroundImage(),
+                meta.backdrop() == null ? "" : meta.backdrop(),
+                meta.zoomMin(), meta.zoomMax(), syncedAt);
+    }
+
+    /** 全部画布（含画不出来的）—— 管理端排查用 */
+    public List<Canvas> canvases() {
+        if (!available) {
+            return List.of();
+        }
+        try {
+            return canvases(repo.canvases());
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读画布失败：{}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 能画出来的画布 —— 查看器只认这些 */
+    public List<Canvas> renderableCanvases() {
+        if (!available) {
+            return List.of();
+        }
+        try {
+            return canvases(repo.renderableCanvases());
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读画布失败：{}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private static List<Canvas> canvases(List<KbMapRepository.CanvasRow> rows) {
+        List<Canvas> out = new ArrayList<>(rows.size());
+        for (KbMapRepository.CanvasRow c : rows) {
+            out.add(new Canvas(c.map(), c.page(), c.schemaVer(), c.fragment(), c.hasCrs(),
+                    c.topLeft(), c.bottomRight(), c.tileAt(), c.tileSize(), c.tilesJson(),
+                    c.backgroundImage(), c.backdrop(), c.zoomMin(), c.zoomMax(), c.syncedAt()));
+        }
+        return out;
     }
 
     /** 记录一页同步失败（不让一页坏掉整次同步，但要在库里能看见） */
@@ -218,6 +314,27 @@ public class KbMapStore {
         return out;
     }
 
+    /** 一个分组定义（落库/读出一致） */
+    public record Group(String map, String key, String name, String icon, boolean collectible) {
+    }
+
+    /** 一张地图的分组定义 —— 查看器的图层开关要用它拿显示名与图标 */
+    public List<Group> groups(String map) {
+        if (!available) {
+            return List.of();
+        }
+        try {
+            List<Group> out = new ArrayList<>();
+            for (KbMapRepository.GroupDef g : repo.groups(map)) {
+                out.add(new Group(g.map(), g.key(), g.name(), g.icon(), g.collectible()));
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读分组失败：{}", e.getMessage());
+            return List.of();
+        }
+    }
+
     /** 每个分组有多少 marker —— 语料扩维时按这个决定先做哪类 */
     public Map<String, Integer> countsByGroup(String map) {
         Map<String, Integer> out = new LinkedHashMap<>();
@@ -232,6 +349,23 @@ public class KbMapStore {
             log.warn("[KB-MAP] 分组统计失败：{}", e.getMessage());
         }
         return out;
+    }
+
+    /** 有哪些地图（只要名字）—— 遍历分组、拼目录时用 */
+    public List<String> mapNames() {
+        if (!available) {
+            return List.of();
+        }
+        try {
+            List<String> out = new ArrayList<>();
+            for (KbMapRepository.MapCount m : repo.mapCounts()) {
+                out.add(m.map());
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读地图名失败：{}", e.getMessage());
+            return List.of();
+        }
     }
 
     /** 有哪些地图 —— 形如 {@code Embervale(1234)}，给人看的一行 */

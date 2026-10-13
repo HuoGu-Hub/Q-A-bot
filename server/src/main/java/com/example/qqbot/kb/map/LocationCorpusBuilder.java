@@ -110,12 +110,27 @@ public class LocationCorpusBuilder {
         NAME_ZH.put("collector", "收藏家");
     }
 
+    /**
+     * 词条的**已核对**中文名；没有核对过返回 {@code null}。
+     *
+     * <p>开放给同包的 {@link WikiPlaceDirectory}：地点目录拼显示名时要用同一张表，
+     * 否则会出现"语料里叫火焰神龛、地图上叫 Flame Shrine"这种同一份数据两个名字的情况。
+     * 表本身仍归本类所有 —— 它是在这里核对出来的，注释与证据也留在这里。
+     */
+    static String zhName(String article) {
+        return article == null ? null : NAME_ZH.get(article.toLowerCase(Locale.ROOT));
+    }
+
     /** 服务型 NPC —— 实测他们以 marker 的 article 形式出现（Blacksmith 在 Ancient Vault 里） */
     private static final Set<String> NPCS = Set.of(
             "blacksmith", "alchemist", "hunter", "carpenter", "farmer", "bard", "barber", "fisher", "collector");
 
     /** POI 类型的门槛：marker 数达到它才算"一类地标"，否则按具名地点处理 */
     private static final int POI_MIN_MARKERS = 5;
+
+    /** 描述里的 {@code in the <Region>} —— 预编译，理由见 {@link #regionOf} */
+    private static final java.util.regex.Pattern IN_THE_REGION =
+            java.util.regex.Pattern.compile("\\bin (?:the )?([A-Z][A-Za-z' ]{2,30})");
 
     private final KbMapStore mapStore;
     private final KbBlockStore blockStore;
@@ -345,8 +360,9 @@ public class LocationCorpusBuilder {
             return REGION_ZH.get(art.toLowerCase(Locale.ROOT));
         }
         String desc = m.description() == null ? "" : m.description();
-        java.util.regex.Matcher mm = java.util.regex.Pattern
-                .compile("\\bin (?:the )?([A-Z][A-Za-z' ]{2,30})").matcher(desc);
+        // ⚠️ 这个 Pattern 曾经写在方法里 —— 每调用一次就重新编译一遍。
+        // 地点目录要为上千个 marker 各算一次区域，等于每次提问编译上千个正则。
+        java.util.regex.Matcher mm = IN_THE_REGION.matcher(desc);
         if (mm.find()) {
             String name = mm.group(1).trim().replaceAll("[,\\s]+$", "");
             String zh = REGION_ZH.get(name.toLowerCase(Locale.ROOT));

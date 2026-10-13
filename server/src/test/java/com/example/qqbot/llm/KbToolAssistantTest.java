@@ -11,6 +11,9 @@ import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.kb.KbRetrievalContext;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.kb.MapOptions;
+import com.example.qqbot.kb.PlaceDirectory;
+import com.example.qqbot.kb.PlacePoint;
 import com.example.qqbot.kb.TwoSectionInjector;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -32,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -124,7 +128,7 @@ class KbToolAssistantTest {
     }
 
     private static KbToolAssistant assistant(ChatModel model, KbRetriever kb) {
-        return new KbToolAssistant(router(), model, kb, new KbLookupTool(mock(KbRetriever.class)));
+        return new KbToolAssistant(router(), model, kb, new KbLookupTool(mock(KbRetriever.class), noPlaces(), new MapOptions()));
     }
 
     /**
@@ -172,6 +176,7 @@ class KbToolAssistantTest {
     @DisplayName("★ 默认拒绝：白名单外的工具一律不放行")
     void deniesUnknownTools() {
         assertThat(KbToolAssistant.isAllowed("lookup")).isTrue();
+        assertThat(KbToolAssistant.isAllowed("locate")).isTrue();
         assertThat(KbToolAssistant.isAllowed("deleteEverything")).isFalse();
         assertThat(KbToolAssistant.isAllowed(null)).isFalse();
         assertThat(KbToolAssistant.isAllowed("")).isFalse();
@@ -182,7 +187,7 @@ class KbToolAssistantTest {
     void deniesToolDuringLoop() {
         KbRetriever retriever = mock(KbRetriever.class);
         KbToolAssistant a = new KbToolAssistant(router(), new FakeChatModel("deleteEverything"),
-                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever));
+                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, noPlaces(), new MapOptions()));
 
         try {
             a.chat("删掉一切");
@@ -199,7 +204,7 @@ class KbToolAssistantTest {
     void deniesCallWithoutIdentity() {
         KbRetriever retriever = mock(KbRetriever.class);
         KbToolAssistant a = new KbToolAssistant(router(), new FakeChatModel("lookup"),
-                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever));
+                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, noPlaces(), new MapOptions()));
 
         try {
             // 身份传空 —— 应当被授权钩子拦下
@@ -226,7 +231,7 @@ class KbToolAssistantTest {
                 List.of(new KbRetriever.Hit(e, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
         KbToolAssistant a = new KbToolAssistant(router(), new FakeChatModel("lookup"),
-                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever));
+                kbWith(augmentorReturning(List.of())), new KbLookupTool(retriever, noPlaces(), new MapOptions()));
 
         // 必须带身份：授权钩子对"无身份"是一律拒绝的
         assertThat(a.chat("力量有什么用", "力量有什么用", new KbRetrievalDiagnostics(), true, "群:1/用户:2"))
@@ -245,7 +250,7 @@ class KbToolAssistantTest {
         when(retriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
                 List.of(new KbRetriever.Hit(e, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
-        String out = new KbLookupTool(retriever).lookup("力量有什么用");
+        String out = new KbLookupTool(retriever, noPlaces(), new MapOptions()).lookup("力量有什么用");
         assertThat(out).contains("力量、Strength").contains("力量提升生命上限。");
     }
 
@@ -254,7 +259,7 @@ class KbToolAssistantTest {
     void toolSaysNotFound() {
         KbRetriever retriever = mock(KbRetriever.class);
         when(retriever.retrieve(anyString())).thenReturn(KbRetriever.Retrieval.empty());
-        assertThat(new KbLookupTool(retriever).lookup("不存在的东西")).contains("没有查到");
+        assertThat(new KbLookupTool(retriever, noPlaces(), new MapOptions()).lookup("不存在的东西")).contains("没有查到");
     }
 
     @Test
@@ -331,5 +336,33 @@ class KbToolAssistantTest {
         assertThat(received.contents())
                 .as("只有图片也算一条视觉消息，不应被拆成两条")
                 .hasSize(2);
+    }
+
+    /**
+     * 空地点目录 —— 这些用例只关心问答工具与授权循环，
+     * 地图点位的行为由 {@code PlaceAnswerTest} / {@code RelativeLocationTest} 单独钉。
+     */
+    private static PlaceDirectory noPlaces() {
+        return new PlaceDirectory() {
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public List<PlacePoint> all() {
+                return List.of();
+            }
+
+            @Override
+            public List<PlacePoint> find(String term, int limit) {
+                return List.of();
+            }
+
+            @Override
+            public Map<String, double[]> worldSizes() {
+                return Map.of();
+            }
+        };
     }
 }

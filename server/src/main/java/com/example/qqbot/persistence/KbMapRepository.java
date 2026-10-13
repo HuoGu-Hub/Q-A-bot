@@ -54,8 +54,30 @@ public class KbMapRepository {
     public record GroupRow(String key, String name, String icon, boolean collectible) {
     }
 
+    /**
+     * 一张**画布**：底图与坐标系。
+     *
+     * <p>为什么画布要按 {@code (map, page)} 存，而不是一张地图一条：
+     * 实测同名地图的不同页面坐标系不同 —— {@code Map:Embervale/Main} 是
+     * {@code topLeft=(0,10240)}，而 {@code Map:Embervale/Collectibles} 是
+     * {@code topLeft=(-3695,-9045)}。按地图存只能留一个，另一个的点位会整体错位。
+     *
+     * <p>{@code tilesJson} 直接存 wiki 给的瓦片数组原文，本地不重排版；
+     * {@code hasCrs} 才是"能不能用来换算像素"的判据 —— 没有 crs 的画布存了也没法画。
+     */
+    public record CanvasRow(String map, String page, String schemaVer, String fragment,
+                            boolean hasCrs, double[] topLeft, double[] bottomRight,
+                            double[] tileAt, double[] tileSize, String tilesJson,
+                            String backgroundImage, String backdrop,
+                            double zoomMin, double zoomMax, String syncedAt) {
+    }
+
     /** 某个分组有多少 marker */
     public record GroupCount(String group, long count) {
+    }
+
+    /** 一个分组定义（带地图名，因为分组表是按地图隔离的） */
+    public record GroupDef(String map, String key, String name, String icon, boolean collectible) {
     }
 
     /** 某张地图有多少 marker */
@@ -76,6 +98,35 @@ public class KbMapRepository {
 
     private static final String INSERT_MARKER =
             "INSERT INTO kb_map_marker (" + MARKER_COLUMNS + ") VALUES (?,?,?,?,?,?,?,?,?,?)";
+
+    /** 画布列清单 —— 读与写共用一份，避免两边列序漂移 */
+    private static final String CANVAS_COLUMNS =
+            "map, page, schema_ver, fragment, has_crs, top_left_x, top_left_y, bottom_right_x,"
+                    + " bottom_right_y, tile_at_x, tile_at_y, tile_w, tile_h, tiles_json,"
+                    + " background_image, backdrop, zoom_min, zoom_max, synced_at";
+
+    private static final Jdbc.RowMapper<CanvasRow> CANVAS = r -> new CanvasRow(
+            r.str("map"), r.str("page"), r.str("schema_ver"), r.str("fragment"),
+            r.intOf("has_crs") != 0,
+            new double[]{r.dbl("top_left_x"), r.dbl("top_left_y")},
+            new double[]{r.dbl("bottom_right_x"), r.dbl("bottom_right_y")},
+            new double[]{r.dbl("tile_at_x"), r.dbl("tile_at_y")},
+            new double[]{r.dbl("tile_w"), r.dbl("tile_h")},
+            r.str("tiles_json"), r.str("background_image"), r.str("backdrop"),
+            r.dbl("zoom_min"), r.dbl("zoom_max"), r.str("synced_at"));
+
+    private static final String UPSERT_CANVAS =
+            "INSERT INTO kb_map_canvas (" + CANVAS_COLUMNS + ")"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                    + " ON CONFLICT(map, page) DO UPDATE SET schema_ver=excluded.schema_ver,"
+                    + " fragment=excluded.fragment, has_crs=excluded.has_crs,"
+                    + " top_left_x=excluded.top_left_x, top_left_y=excluded.top_left_y,"
+                    + " bottom_right_x=excluded.bottom_right_x, bottom_right_y=excluded.bottom_right_y,"
+                    + " tile_at_x=excluded.tile_at_x, tile_at_y=excluded.tile_at_y,"
+                    + " tile_w=excluded.tile_w, tile_h=excluded.tile_h,"
+                    + " tiles_json=excluded.tiles_json, background_image=excluded.background_image,"
+                    + " backdrop=excluded.backdrop, zoom_min=excluded.zoom_min,"
+                    + " zoom_max=excluded.zoom_max, synced_at=excluded.synced_at";
 
     private static final String UPSERT_PAGE =
             "INSERT INTO kb_map_page (page, map, revid, page_updated_at, synced_at, marker_count, parse_error)"
@@ -124,6 +175,31 @@ public class KbMapRepository {
                 + " y           REAL NOT NULL DEFAULT 0,"
                 + " image       TEXT NOT NULL DEFAULT '',"
                 + " PRIMARY KEY (map, page, marker_id))");
+        // 画布：先于 marker 存在也无妨，同步时 was 一页一页 upsert。
+        // ⚠️ 全部是 ADDITIVE DDL（IF NOT EXISTS / 默认值），不删列不重建表 ——
+        //    生产库是 40 MB 的活库，任何重建都是风险。
+        jdbc.execute("CREATE TABLE IF NOT EXISTS kb_map_canvas ("
+                + " map              TEXT NOT NULL,"
+                + " page             TEXT NOT NULL,"
+                + " schema_ver       TEXT NOT NULL DEFAULT '',"
+                + " fragment         TEXT NOT NULL DEFAULT '',"
+                + " has_crs          INTEGER NOT NULL DEFAULT 0,"
+                + " top_left_x       REAL NOT NULL DEFAULT 0,"
+                + " top_left_y       REAL NOT NULL DEFAULT 0,"
+                + " bottom_right_x   REAL NOT NULL DEFAULT 0,"
+                + " bottom_right_y   REAL NOT NULL DEFAULT 0,"
+                + " tile_at_x        REAL NOT NULL DEFAULT 0,"
+                + " tile_at_y        REAL NOT NULL DEFAULT 0,"
+                + " tile_w           REAL NOT NULL DEFAULT 0,"
+                + " tile_h           REAL NOT NULL DEFAULT 0,"
+                + " tiles_json       TEXT NOT NULL DEFAULT '',"
+                + " background_image TEXT NOT NULL DEFAULT '',"
+                + " backdrop         TEXT NOT NULL DEFAULT '',"
+                + " zoom_min         REAL NOT NULL DEFAULT 0,"
+                + " zoom_max         REAL NOT NULL DEFAULT 0,"
+                + " synced_at        TEXT NOT NULL DEFAULT '',"
+                + " PRIMARY KEY (map, page))");
+
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_marker_article ON kb_map_marker(article)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_marker_grp ON kb_map_marker(map, grp)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_marker_name ON kb_map_marker(name)");
@@ -154,9 +230,24 @@ public class KbMapRepository {
      * @return 写入的 marker 条数
      */
     public int replacePage(String page, String map, long revid, String pageUpdatedAt,
-                           List<GroupRow> groups, List<MarkerRow> markers, String syncedAt) {
+                           List<GroupRow> groups, List<MarkerRow> markers, CanvasRow canvas,
+                           String syncedAt) {
         return jdbc.transaction(() -> {
             jdbc.update("DELETE FROM kb_map_marker WHERE page = ?", page);
+
+            // 画布与 marker 同一个事务：底图和它的点位必须一起生效、一起回滚。
+            // 分开写会出现"底图更新了但点位还是旧的"这种半页状态，看起来就是整张图错位。
+            if (canvas != null) {
+                jdbc.update(UPSERT_CANVAS,
+                        canvas.map(), canvas.page(), nz(canvas.schemaVer()), nz(canvas.fragment()),
+                        canvas.hasCrs() ? 1 : 0,
+                        at(canvas.topLeft(), 0), at(canvas.topLeft(), 1),
+                        at(canvas.bottomRight(), 0), at(canvas.bottomRight(), 1),
+                        at(canvas.tileAt(), 0), at(canvas.tileAt(), 1),
+                        at(canvas.tileSize(), 0), at(canvas.tileSize(), 1),
+                        nz(canvas.tilesJson()), nz(canvas.backgroundImage()), nz(canvas.backdrop()),
+                        canvas.zoomMin(), canvas.zoomMax(), nz(canvas.syncedAt()));
+            }
 
             jdbc.batch(UPSERT_GROUP, groups.stream()
                     .map(g -> new Object[]{map, g.key(), nz(g.name()), nz(g.icon()), g.collectible()})
@@ -206,6 +297,32 @@ public class KbMapRepository {
                 MARKER, keyword, limit);
     }
 
+    /**
+     * 全部画布（**含画不出来的**）—— 管理端排查用。
+     *
+     * <p>{@code Map:Embervale/Groups} 这类页面没有 crs 也没有底图，但它确实是一页，
+     * 在管理端看得见才有意义（否则会以为"这页没同步"）。
+     */
+    public List<CanvasRow> canvases() {
+        return jdbc.query("SELECT " + CANVAS_COLUMNS + " FROM kb_map_canvas ORDER BY map, page", CANVAS);
+    }
+
+    /**
+     * **能画出来的**画布 —— 查看器只认这些：有坐标系，且底图非空。
+     *
+     * <p>过滤放在 SQL 里而不是调用方：这是数据本身的属性，不是某个页面的偏好。
+     */
+    public List<CanvasRow> renderableCanvases() {
+        return jdbc.query("SELECT " + CANVAS_COLUMNS + " FROM kb_map_canvas"
+                + " WHERE has_crs = 1 AND (tiles_json <> '' OR background_image <> '')"
+                + " ORDER BY map, page", CANVAS);
+    }
+
+    /** 每页同步时顺手写下的画布数 */
+    public long canvasCount() {
+        return jdbc.count("SELECT COUNT(*) FROM kb_map_canvas");
+    }
+
     /** 每个分组有多少 marker —— 语料扩维时按这个决定先做哪类；{@code map} 空 = 全部地图 */
     public List<GroupCount> countsByGroup(String map) {
         boolean filtered = map != null && !map.isBlank();
@@ -215,6 +332,21 @@ public class KbMapRepository {
         return filtered
                 ? jdbc.query(sql, r -> new GroupCount(r.str("grp"), r.longOf("n")), map)
                 : jdbc.query(sql, r -> new GroupCount(r.str("grp"), r.longOf("n")));
+    }
+
+    /**
+     * 一张地图的分组定义（显示名 / 图标 / 是否收集品）。
+     *
+     * <p>为什么要单独取：查看器的图层开关要显示"火焰神龛"这种名字和它的图标 ——
+     * 这些只存在分组表里，marker 行上只有分组的 key。
+     */
+    public List<GroupDef> groups(String map) {
+        return jdbc.query("SELECT map, key, name, icon, collectible FROM kb_map_group"
+                + (map == null || map.isBlank() ? "" : " WHERE map = ?")
+                + " ORDER BY key",
+                r -> new GroupDef(r.str("map"), r.str("key"), r.str("name"), r.str("icon"),
+                        r.intOf("collectible") != 0),
+                map == null || map.isBlank() ? new Object[0] : new Object[]{map});
     }
 
     /** 有哪些地图，各自多少 marker */
@@ -237,5 +369,10 @@ public class KbMapRepository {
 
     private static String nz(String s) {
         return s == null ? "" : s;
+    }
+
+    /** 取数组里的第 i 项；数组缺失或太短一律给 0 —— 画布允许"只有一半信息" */
+    private static double at(double[] arr, int i) {
+        return arr != null && arr.length > i ? arr[i] : 0;
     }
 }

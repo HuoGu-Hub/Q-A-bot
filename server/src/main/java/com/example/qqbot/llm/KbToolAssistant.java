@@ -51,7 +51,7 @@ public class KbToolAssistant {
      * 这条设计是刻意的：工具一旦注册进 {@code AiServices} 就能被模型触发，
      * 而"能不能被触发"与"该不该被触发"是两件事。
      */
-    static final Set<String> ALLOWED_TOOLS = Set.of("lookup");
+    static final Set<String> ALLOWED_TOOLS = Set.of("lookup", "locate");
 
     /** 调用方身份 —— 授权钩子靠它判断"这是替谁在调工具" */
     public static final String KEY_CALLER = "tool.caller";

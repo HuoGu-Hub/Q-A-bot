@@ -53,7 +53,38 @@ public final class KbMapParser {
      */
     public record Meta(String page, String map, String schema, String fragment,
                        double[] topLeft, double[] bottomRight, double[] tileSize, String backdrop,
-                       String backgroundImage, int tileCount) {
+                       String backgroundImage, int tileCount,
+                       double[] tileAt, double zoomMin, double zoomMax, String tilesJson,
+                       boolean hasCrs) {
+
+        /**
+         * 底图瓦片的排版原点（crs 坐标）。瓦片网格从这里往**右上**铺。
+         *
+         * <p>实测 {@code Map:Embervale/Background} 的 at 是 (0,0)、crs 是 (0,10240)→(10240,0)，
+         * 而 {@code Map:Embervale/Collectibles} 的 at 是 (-3695,-9045) —— 后者并不是同一个原点。
+         * 所以 at 必须跟着画布一起存，不能拿 crs 的 topLeft 顶替。
+         */
+        public double[] tileAtOrDefault() {
+            return tileAt != null ? tileAt : topLeft;
+        }
+
+        /**
+         * 这张画布**能不能被画出来** —— 要有坐标系，还要有底图（瓦片集或整图）。
+         *
+         * <p>为什么把它做成方法而不是让每个调用方自己判断：判断条件有两处
+         * （后端算缩放级别、前端决定是否渲染底图），写两遍迟早会不一致。
+         */
+        public boolean renderable() {
+            return hasCrs && (tileCount > 0 || (backgroundImage != null && !backgroundImage.isBlank()));
+        }
+
+        /** 画布的世界宽高（crs 单位）。缺 crs 时返回 {0,0}，由调用方看 {@link #hasCrs()} */
+        public double[] extent() {
+            if (topLeft == null || bottomRight == null) {
+                return new double[]{0, 0};
+            }
+            return new double[]{Math.abs(bottomRight[0] - topLeft[0]), Math.abs(topLeft[1] - bottomRight[1])};
+        }
     }
 
     /** 一个 marker 分组（图标 / 显示名 / 是否收集品） */
@@ -106,13 +137,23 @@ public final class KbMapParser {
         String bgImage = bg.isTextual() ? blankToNull(bg.asText())
                 : blankToNull(text(bg, "image"));
         int tileCount = bg.path("tiles").isArray() ? bg.path("tiles").size() : 0;
+        // 瓦片清单**原样存 JSON**：排版规则是 wiki 扩展的契约，我们只搬运不改写。
+        // 自己重新拼一遍（比如只留 image/position）等于把对方的 schema 复制一份到本地 ——
+        // 对方加字段我们就悄悄丢了。
+        String tilesJson = bg.path("tiles").isArray() ? json(bg.path("tiles")) : "";
+        JsonNode crs = root.path("crs");
+        JsonNode zoom = root.path("settings").path("zoom");
         Meta meta = new Meta(page, map,
                 text(root, "$schema"), text(root, "$fragment"),
-                pair(root.path("crs").path("topLeft")),
-                pair(root.path("crs").path("bottomRight")),
+                pair(crs.path("topLeft")),
+                pair(crs.path("bottomRight")),
                 pair(bg.path("tileSize")),
                 blankToNull(text(root.path("settings").path("backdropColor"))),
-                bgImage, tileCount);
+                bgImage, tileCount,
+                // 有些页没有 background.at（整图形态），退回 crs.topLeft —— 见 tileAtOrDefault 的注释
+                pair(bg.path("at")),
+                num(zoom.path("min"), 0), num(zoom.path("max"), 0),
+                tilesJson, crs.isObject());
 
         List<Group> groups = new ArrayList<>();
         JsonNode gs = root.path("groups");
@@ -171,6 +212,20 @@ public final class KbMapParser {
 
     private static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s;
+    }
+
+    /** 数值字段；缺失或不是数字时给默认值 —— 不抛异常，坐标范围只影响显示精度 */
+    private static double num(JsonNode node, double dflt) {
+        return node.isNumber() ? node.asDouble() : dflt;
+    }
+
+    /** 把一段 JSON 原样序列化回去；失败返回空串（画布元信息不该让整页同步失败） */
+    private static String json(JsonNode node) {
+        try {
+            return MAPPER.writeValueAsString(node);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static double[] pair(JsonNode node) {
