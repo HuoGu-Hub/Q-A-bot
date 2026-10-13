@@ -137,7 +137,9 @@ public class Glossary {
         // 只给英文名的话，切到中文语料后关键词路会**静默失配** —— 拿 "Kiln" 去中文正文里
         // 找，一条也匹配不到，而向量路照常返回结果，所以谁都不会发现。
         for (Term t : matchChinese(query)) {
-            terms.add(t.en());
+            if (!t.en().isBlank()) {
+                terms.add(t.en());
+            }
             for (String raw : t.zh().split("[、/｜|]")) {
                 String name = raw.trim();
                 // 单字别名在中文里是子串匹配，噪声太大（"火" 能匹配一大片），不收
@@ -243,6 +245,11 @@ public class Glossary {
     }
 
     /** 是否纯 ASCII 名字 —— 用来从 zh 里认出"英文那一侧"（见 load()） */
+    /** slug 形态的身份 id（wiki-xxx / acid-bite-2）：含连字符，永远不会出现在标题或正文里 */
+    private static boolean isSlug(String s) {
+        return s != null && s.matches("[a-z0-9]+(-[a-z0-9]+)+");
+    }
+
     private static boolean isAsciiName(String s) {
         for (int i = 0; i < s.length(); i++) {
             if (s.charAt(i) > 127) {
@@ -333,6 +340,12 @@ public class Glossary {
                     englishSide = a;
                     break;
                 }
+            }
+            // ⚠️ 兜底：englishSide 是 slug 时**不能当关键词** —— 它永远不会出现在标题或正文里，
+            //    拿它去扫一遍必然 0 命中，只是静默浪费一路召回（2026-10-13 实测到）。
+            //    留空即可：中文名照样进表（中文语料有用），英文侧交给写入方补（见 KbTermStore.withEnglishSide）。
+            if (isSlug(englishSide)) {
+                englishSide = "";
             }
 
             for (String alias : aliases) {

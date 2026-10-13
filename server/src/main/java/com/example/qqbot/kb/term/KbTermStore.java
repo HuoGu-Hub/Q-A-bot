@@ -374,13 +374,68 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
             return false;
         }
         try {
-            repo.upsert(en.value(), zh == null ? "" : zh.trim(), status, Instant.now().toString());
+            repo.upsert(en.value(), withEnglishSide(en, zh), status, Instant.now().toString());
         } catch (Exception e) {
             log.warn("[KB-TERM] 保存失败：{}", e.getMessage());
             return false;
         }
         version.incrementAndGet();
         return true;
+    }
+
+    /**
+     * 保证中文名里带上「英文那一侧」—— 关键词路唯一的燃料。
+     *
+     * <h2>为什么必须在写入时补（2026-10-13 实测）</h2>
+     * {@code en} 是**身份 id（slug）**，如 {@code wiki-fell-critter-queen}：
+     * slug 只出现在块的 id 里，**永远不会出现在标题或正文**，检索侧拿它去关键词路
+     * 匹配必然一条都命中不到 —— 而且不报错，只是**静默少一路召回**
+     * （见 {@link com.example.qqbot.kb.Glossary} 的 load 注释）。
+     *
+     * <p>实测：给 {@code wiki-fell-critter-queen} 手动加别名「堕落生物女王」时，
+     * 人只会写中文，把原来的英文标题顶掉了 → 关键词候选从 1 变 0，只剩向量路在干活。
+     * 所以写入时统一把块标题补回去。
+     */
+    private String withEnglishSide(EntryId en, String zh) {
+        String value = zh == null ? "" : zh.trim();
+        for (String part : value.split("[、/｜|]")) {
+            String p = part.trim();
+            if (p.length() >= 2 && isPlainName(p)) {
+                return value;
+            }
+        }
+        String title = titleOf(en);
+        if (title.isEmpty()) {
+            return value;
+        }
+        return value.isEmpty() ? title : value + "、" + title;
+    }
+
+    /** 从语料里取这条词条对应的块标题；切块的「（第 N 块）」后缀要剥掉 */
+    private String titleOf(EntryId en) {
+        try {
+            for (com.example.qqbot.kb.KbCorpus.Entry e : corpus.entries()) {
+                if (e.id() != null && en.value().equals(e.id().toString()) && e.title() != null) {
+                    return e.title().replaceAll("（第 \\d+ 块）$", "").trim();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[KB-TERM] 取块标题失败：{}", e.getMessage());
+        }
+        return "";
+    }
+
+    /**
+     * 纯 ASCII 且不是 slug。
+     *
+     * <p>「Fell Critter Queen」算英文名；「wiki-fell-critter-queen」是身份 id ——
+     * 带连字符的多段小写串一律当 slug，不能拿来当关键词。
+     */
+    private static boolean isPlainName(String s) {
+        if (!s.chars().allMatch(c -> c < 128)) {
+            return false;
+        }
+        return !s.matches("[a-z0-9]+(-[a-z0-9]+)+");
     }
 
     /** 只改状态（核对时最常用：draft → verified）。不存在返回 false */
