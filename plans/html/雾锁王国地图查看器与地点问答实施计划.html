@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雾锁王国地图查看器与地点问答 · 实施计划</title>
+<style>
+:root{--bg:#fff;--soft:#f7f8fa;--code:#f4f6f8;--fg:#1f2328;--fg2:#57606a;--fg3:#8b949e;
+--bd:#d8dee4;--bd2:#e6eaef;--ac:#2563eb;--acs:#eff4ff;--wn:#b45309;--wnb:#fffbeb;--ok:#15803d;
+--r:10px;--content:880px}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--soft:#161b22;--code:#161b22;--fg:#e6edf3;
+--fg2:#9198a1;--fg3:#6e7681;--bd:#30363d;--bd2:#21262d;--ac:#6ea8fe;--acs:#16233a;--wn:#f0b429;
+--wnb:#2a2109;--ok:#4ade80}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font-size:16px;line-height:1.8;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif}
+.wrap{max-width:var(--content);margin:0 auto;padding:56px 24px 96px}
+h1{font-size:2rem;line-height:1.3;margin:0 0 6px}
+h2{font-size:1.3rem;margin:48px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--bd2)}
+h3{font-size:1.05rem;margin:28px 0 10px}
+p,li{color:var(--fg)}
+.lede{color:var(--fg2);font-size:1.02rem;margin:0 0 8px}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font-size:.88em;
+font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+pre{background:var(--code);border:1px solid var(--bd2);border-radius:var(--r);padding:14px 16px;
+overflow:auto;font-size:.85rem;line-height:1.6}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.93rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--bd2);vertical-align:top}
+th{background:var(--soft);font-weight:600}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--acs);border-left:3px solid var(--ac);border-radius:0 var(--r) var(--r) 0}
+blockquote p{margin:0}
+.warn{background:var(--wnb);border-left-color:var(--wn);padding:12px 18px;border-radius:0 var(--r) var(--r) 0;margin:16px 0}
+.warn p{margin:0}
+.meta{color:var(--fg3);font-size:.88rem}
+.tag{display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:999px;background:var(--acs);
+color:var(--ac);margin-right:6px;vertical-align:middle}
+ol,ul{padding-left:1.4em}
+li{margin:4px 0}
+.flow{background:var(--soft);border:1px solid var(--bd2);border-radius:var(--r);padding:18px 20px;margin:18px 0;font-size:.9rem;line-height:2}
+.flow b{color:var(--ac)}
+hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>雾锁王国地图查看器与地点问答</h1>
+<p class="lede">实施计划 · 公开站地图查看器 + 管理端地图标注 + 相对位置描述问答</p>
+<p class="meta">项目：飘雪喵问答机器人（E:\Project\agentWs\qqbot）　｜　语料与地图来源：enshrouded.wiki.gg（CC BY-NC-SA 3.0）</p>
+
+<h2>一、目标与验收标准</h2>
+<table>
+<tr><th>#</th><th>目标</th><th>验收标准</th></tr>
+<tr><td>1</td><td>公开站地图查看器</td><td>访问 <code>/map</code> 能看到与 wiki 同源的底图与点位；拖拽/缩放稳定在 60fps 量级（1440×900、点位全开）；可按键组筛选、搜索、点开点位详情</td></tr>
+<tr><td>2</td><td>管理端地图标注</td><td>管理员在 <code>/admin/map</code> 点地图任意位置即可新增地点，填名称/分类/备注/是否地标/是否公开；可编辑、删除、搜索、导出</td></tr>
+<tr><td>3</td><td>相对位置描述</td><td>问「哪里有铁矿」时，系统能落出附近点位并给出「在『远古尖塔·春之原野』东北方向（地图右上）约 N 坐标单位」这类描述，并交给大模型组织成回答</td></tr>
+</table>
+
+<h2>二、现状：地基已经在了</h2>
+<p>地图数据这条线<strong>不是从零开始</strong>。仓库里已有一期、二期成果：</p>
+<table>
+<tr><th>已有</th><th>位置</th><th>能力</th></tr>
+<tr><td>DataMaps JSON 解析器</td><td><code>kb/map/KbMapParser.java</code></td><td>解析 crs / background / groups / markers / include，容忍四种页面形态</td></tr>
+<tr><td>地图存储</td><td><code>kb/map/KbMapStore.java</code> + <code>persistence/KbMapRepository.java</code></td><td><code>kb_map_page</code> / <code>kb_map_group</code> / <code>kb_map_marker</code> 三表，按页原子替换</td></tr>
+<tr><td>增量同步</td><td><code>kb/map/KbMapSyncService.java</code></td><td>按 revid 只拉变过的页，按页隔离失败</td></tr>
+<tr><td>地点语料派生</td><td><code>kb/map/LocationCorpusBuilder.java</code></td><td>按 article 聚合，产出区域 / POI / 具名地点 / NPC 块，可 purge 回滚</td></tr>
+<tr><td>聚合意图纠偏</td><td><code>kb/PlaceIntent.java</code></td><td>「X 有什么」这类提问把地点块提到最前</td></tr>
+</table>
+
+<h3>实测数据（本次调研，已从 wiki 公开 API 取回）</h3>
+<table>
+<tr><th>地图</th><th>画布</th><th>底图</th><th>点位</th></tr>
+<tr><td>Embervale（余烬谷）</td><td>10240 × 10240，crs 左上 (0,10240) 右下 (10240,0)</td><td>64 张 1280×1280 瓦片，约 400 KB/张</td><td>Main 505 + Lore 448 + Collectibles 46 + Quests 1</td></tr>
+<tr><td>Blackmire（黑沼）</td><td>1485 × 1267</td><td>单张 <code>Map-Blackmire.jpg</code></td><td>11</td></tr>
+<tr><td>EarlyAccess / FrozenFrontier / Update4</td><td>各自独立</td><td>各自独立</td><td>待清点</td></tr>
+</table>
+
+<div class="warn"><p><b>关键实测：同名的「一张地图」内部存在多套坐标系。</b>
+<code>Map:Embervale/Collectibles</code> 的 crs 是 <code>topLeft=[-3695,-9045]</code>，与
+<code>Map:Embervale/Main</code> 的 <code>[0,10240]</code> 不同，且它的 marker 出现负坐标。
+所以「一个 map 一个画布」是错的假设 —— <b>画布必须按页面记录，渲染时按页面归属分组</b>。</p></div>
+
+<h3>当前缺口</h3>
+<ul>
+<li>地图数据表在本地库是<b>空的</b>（<code>kb_map_marker</code> 0 行），本地从未跑过同步；需要真实同步一次。</li>
+<li>没有<b>画布元信息</b>的落库：crs 与瓦片清单解析后丢掉了，看图的人无从知道怎么铺底图。</li>
+<li>没有任何地图<b>控制器</b>：既没有公开读取接口，也没有管理端写入接口。</li>
+<li>没有<b>管理员自定义点位</b>的存储层 —— 而「wiki 上点位不多、没有常见地名」正是本次要补的。</li>
+<li>没有<b>相对位置</b>算法，地点语料只写了「地图坐标示例：(x, y)」，玩家读了不知道在哪。</li>
+</ul>
+
+<h2>三、总体架构</h2>
+<div class="flow">
+<b>摄入</b>（kb/map）　wiki DataMaps JSON　→　解析　→　定点表<br>
+　　　　　　　　　　wiki 瓦片图 / 图标　→　本地缓存　→　按需缩略<br>
+<b>领域</b>（kb 核心）　点位目录契约 <code>PlaceDirectory</code>　+　相对位置算法 <code>RelativeLocation</code><br>
+<b>出口</b>　公开站 <code>/api/public/map/**</code>　｜　管理端 <code>/admin/api/map/**</code>　｜　大模型只读工具 <code>locate</code>
+</div>
+
+<h3>为什么要摆一个接口在核心</h3>
+<p><code>ArchitectureTest</code> 有一条已经转正的规则：<b>kb 核心不得依赖任何摄入来源（wiki / map）</b>。
+而任务 3 的调用方 —— 大模型工具 <code>KbLookupTool</code> —— 住在 kb 核心。若核心直接 import <code>kb.map</code>，构建会红。</p>
+<p>因此按仓库既有做法（<code>TermSource</code> / <code>KbCorpus</code> 同一套路）：
+<b>契约由消费方定义，实现由生产者提供</b>。核心只认自己包里的 <code>PlaceDirectory</code>，
+Spring 把 <code>kb.map.WikiPlaceDirectory</code> 注进去。方向保持单向：生产者 → 核心。</p>
+
+<pre><code>kb/PlaceDirectory.java      （契约，核心）   —— 点位只读视图
+kb/PlacePoint.java          （值对象，核心） —— 名字/别名/坐标/分类/备注/是否地标/优先级
+kb/RelativeLocation.java    （纯算法，核心） —— 方向、距离、最近地标、成句
+kb/PlaceAnswer.java         （组装，核心）   —— 提问 → 候选点位 → 相对位置描述
+kb/map/WikiPlaceDirectory.java （实现，生产者）—— 合并 wiki marker + 管理员点位 + 备注</code></pre>
+
+<h2>四、数据模型</h2>
+<p>现有三张 wiki 表保持不变。新增三张，<b>都在 <code>kb_map_</code> 前缀下</b>：</p>
+
+<h3>4.1 <code>kb_map_canvas</code>　画布元信息</h3>
+<p>回答「这张图怎么铺」。按 <code>(map, page)</code> 记录，因为同一地图的多个页面坐标系可能不同。</p>
+<table>
+<tr><th>列</th><th>说明</th></tr>
+<tr><td><code>map</code>, <code>page</code></td><td>联合主键</td></tr>
+<tr><td><code>top_left_x/y</code>, <code>bottom_right_x/y</code></td><td>crs 四至，决定坐标 → 像素的线性映射</td></tr>
+<tr><td><code>tiles_json</code></td><td>瓦片清单 <code>[{image,position}]</code> 原样存；<code>at</code> / <code>tile_size</code> 单列存</td></tr>
+<tr><td><code>background_image</code></td><td>旧 schema 的单张整图</td></tr>
+<tr><td><code>backdrop</code>, <code>zoom_min</code>, <code>zoom_max</code></td><td>观感与缩放范围</td></tr>
+</table>
+
+<h3>4.2 <code>kb_map_place</code>　管理员自定义点位</h3>
+<table>
+<tr><th>列</th><th>说明</th></tr>
+<tr><td><code>id</code></td><td>自增主键</td></tr>
+<tr><td><code>map</code>, <code>page</code>, <code>x</code>, <code>y</code></td><td>归属画布与坐标</td></tr>
+<tr><td><code>name</code>, <code>aliases</code></td><td>中文主名 + 别名（逗号分隔，检索用）</td></tr>
+<tr><td><code>category</code></td><td>分类键：<code>resource</code> / <code>poi</code> / <code>npc</code> / <code>boss</code> / <code>landmark</code> / <code>custom</code></td></tr>
+<tr><td><code>note</code></td><td>备注正文，进检索与相对描述</td></tr>
+<tr><td><code>icon</code>, <code>color</code></td><td>显示用</td></tr>
+<tr><td><code>landmark</code>, <code>priority</code></td><td>能否当地标锚点；优先级越高越容易被选作锚点</td></tr>
+<tr><td><code>visible</code></td><td>是否出现在公开站</td></tr>
+<tr><td><code>created_at</code>, <code>updated_at</code></td><td>审计</td></tr>
+</table>
+<p><b>为什么不复用 <code>kb_map_marker</code></b>：那张表是「某一页的镜像」，同步时按页先删后插。
+管理员数据混进去会被下一次同步静默清掉。<b>写入方不同的数据必须分表。</b></p>
+
+<h3>4.3 <code>kb_map_marker_note</code>　给 wiki 点位加备注</h3>
+<p>主键 <code>(map, page, marker_id)</code> —— 与 <code>kb_map_marker</code> 主键同形，所以同步幂等替换不会丢备注。</p>
+<table>
+<tr><th>列</th><th>说明</th></tr>
+<tr><td><code>alias</code></td><td>中文别名，比如给 <code>Ancient Spire</code> 补「远古尖塔」</td></tr>
+<tr><td><code>note</code></td><td>备注正文</td></tr>
+<tr><td><code>landmark</code>, <code>priority</code></td><td>提升为地标锚点</td></tr>
+<tr><td><code>hidden</code></td><td>该点不进公开站</td></tr>
+</table>
+
+<h2>五、接口设计</h2>
+<h3>5.1 公开只读（<code>/api/public</code>，按 IP 限流）</h3>
+<table>
+<tr><th>方法</th><th>路径</th><th>用途</th></tr>
+<tr><td>GET</td><td><code>/map/list</code></td><td>可用地图 + 画布元信息 + 分组定义</td></tr>
+<tr><td>GET</td><td><code>/map/markers?map=</code></td><td>点位数组（压缩后约 100 KB 级），浏览器强缓存</td></tr>
+<tr><td>GET</td><td><code>/map/places?map=</code></td><td>公开的自定义点位</td></tr>
+<tr><td>GET</td><td><code>/map/search?q=</code></td><td>名称/别名/备注/分组模糊搜索</td></tr>
+<tr><td>GET</td><td><code>/map/tile/{map}/{page}/{name}</code></td><td>瓦片字节，磁盘缓存 + immutable 长缓存</td></tr>
+<tr><td>GET</td><td><code>/map/overview/{map}/{page}</code></td><td>服务端合成的总览图，低倍缩放用</td></tr>
+<tr><td>GET</td><td><code>/map/locate?q=</code></td><td><b>相对位置描述</b>：点位 + 最近地标 + 方位 + 距离</td></tr>
+</table>
+<h3>5.2 管理端（<code>/admin/api/map</code>，走既有会话闸门）</h3>
+<table>
+<tr><th>方法</th><th>路径</th><th>用途</th></tr>
+<tr><td>GET / POST</td><td><code>/places</code></td><td>列出全部（含隐藏） / 新增</td></tr>
+<tr><td>PUT / DELETE</td><td><code>/places/{id}</code></td><td>修改 / 删除</td></tr>
+<tr><td>GET / POST</td><td><code>/notes</code></td><td>列出 / 写入 wiki 点位备注</td></tr>
+<tr><td>GET</td><td><code>/status</code></td><td>同步状态、各页 marker 数、画布是否就绪</td></tr>
+<tr><td>POST</td><td><code>/sync</code></td><td>触发一次 wiki 同步（把 CLI 搬进界面）</td></tr>
+<tr><td>POST</td><td><code>/corpus</code></td><td>重建 / 清除地点语料并回灌检索</td></tr>
+</table>
+
+<h2>六、前端查看器：卡顿从哪来，怎么治</h2>
+<p>wiki 那份卡，主要是三件事叠在一起。逐条对症：</p>
+<table>
+<tr><th>症状根因</th><th>治法</th></tr>
+<tr><td>1700+ 个 marker 是 DOM 节点，每帧拖拽都触发 1700 次样式重算与绘制</td><td><b>改 canvas 打点</b>。DOM 只留一个 <code>&lt;canvas&gt;</code>，帧内一次画完</td></tr>
+<tr><td>指针事件里直接改 transform，一帧改几十次</td><td><b>rAF 合帧</b>：指针只写目标值，<code>requestAnimationFrame</code> 里统一提交一次</td></tr>
+<tr><td>一次性把 64 张 1280px 瓦片和全量图标塞进视野</td><td><b>只画视口内的点</b>（裁剪）+ 缩小时画圆点不画图标（LOD）+ 瓦片按需加载</td></tr>
+<tr><td>缩到最小时仍要铺满 10240×10240 的瓦片</td><td>服务端<b>合成一张总览图</b>，低倍走总览、高倍才走瓦片</td></tr>
+<tr><td>图标每次都从网络取</td><td>图标走本地缓存 + 浏览器 immutable 长缓存；解码后的 <code>Image</code> 常驻内存</td></tr>
+</table>
+<h3>坐标映射</h3>
+<pre><code>// crs: topLeft(x0, y0)、bottomRight(x1, y1)，其中 y0 &gt; y1（y 轴向上）
+px = (x - x0) / (x1 - x0) * canvasW
+py = (y0 - y) / (y0 - y1) * canvasH</code></pre>
+<h3>组件切分</h3>
+<pre><code>web/src/shared/map/MapCanvas.vue     画布：底图 + canvas 打点 + 指针交互
+web/src/shared/map/useMapTransform.ts 纯数学：屏幕 ↔ 地图坐标、缩放锚点、夹取
+web/src/shared/map/types.ts           两端共用的类型
+web/src/public/views/MapView.vue      公开查看器（浏览模式）
+web/src/admin/views/MapAdminView.vue  管理端（编辑模式）</code></pre>
+<p>两端复用同一个画布组件，差别只在 <code>mode</code>：浏览模式点击弹详情，编辑模式点击落点。</p>
+
+<h2>七、相对位置算法</h2>
+<h3>7.1 方向</h3>
+<p>地图正北朝上，所以屏幕坐标与罗盘方位一致：</p>
+<pre><code>bearing = atan2(dx, dy)        // dx = 目标x - 地标x，dy = 目标y - 地标y（y 向上）
+扇区   = round(bearing / 45°) mod 8
+八个方向：正北 / 东北 / 正东 / 东南 / 正南 / 西南 / 正西 / 西北</code></pre>
+<p>同时给出<b>玩家直觉说法</b>：东北 = 右上、西南 = 左下……因为群友问的时候想的是「在地图上往哪边看」。</p>
+<h3>7.2 距离</h3>
+<div class="warn"><p><b>米数不做默认假设。</b>wiki 的 x/y 是游戏坐标系，本次调研无法从公开资料确证 1 单位等于多少米。
+凭空写「约 800 米」会被大模型当成事实转述给群友 —— 这比不给距离更糟。
+所以默认输出<b>坐标单位</b>与<b>相对量级</b>（很近 / 不远 / 较远 / 很远，按地图对角线归一），
+米制转写留一个配置开关 <code>app.kb.map.units-per-meter</code>，默认 0 = 不输出米。确证比例后改一个数字即可。</p></div>
+<h3>7.3 选哪个地标</h3>
+<p>按「够近 + 够有名」联合排序，取第一名：</p>
+<pre><code>score = 距离分 + 名望分
+  距离分：归一化到地图对角线，越近越高
+  名望分：管理员手工优先级 &gt; landmark 分类 &gt; 远古尖塔/火焰神龛一类高频 POI &gt; 普通具名地点
+只考虑同画布、半径阈值内的点；半径内没有地标则退化为「区域 + 坐标」描述</code></pre>
+<h3>7.4 成句样例</h3>
+<pre><code>铁矿（3 处）
+· 在「远古尖塔·春之原野」东北方向（地图右上），约 320 坐标单位，很近。
+  坐标 (3720, 2210)
+· 在「火焰神龛·启示林」正南方向（地图正下），约 1150 坐标单位，较远。
+  坐标 (5610, 3300)</code></pre>
+
+<h2>八、与知识库 / 大模型的衔接</h2>
+<ol>
+<li><b>只读工具</b>：<code>KbLookupTool</code> 增加 <code>locate</code>，入参是地点/物产名，出参就是上面的成句文本。
+模型问「哪里有铁矿」时自己调，拿到的是算好的事实而不是它的猜测。</li>
+<li><b>派生语料</b>：<code>LocationCorpusBuilder</code> 每个地点块追加一行相对位置摘要（挑最知名的 1~2 个锚点），
+纯 RAG 路径也能答出方位，不依赖模型是否想到调工具。</li>
+<li><b>公开站</b>：<code>/map/locate</code> 给查看器做「搜一下就定位」的体验，同时是这条链路的可观测入口。</li>
+</ol>
+
+<h2>九、风险与取舍</h2>
+<table>
+<tr><th>风险</th><th>取舍</th></tr>
+<tr><td>首次拉全量瓦片约 26 MB，会给 wiki 添流量</td><td>懒加载：只取当前视野需要的瓦片，落盘缓存；带来源 UA，遵守对方礼仪</td></tr>
+<tr><td>wiki 改版 / 瓦片改名</td><td>画布元信息来自同步，改版后重跑一次同步即可；渲染层不写死文件名</td></tr>
+<tr><td>多套坐标系</td><td>按页面记录画布，界面按画布分组切换，不硬做跨画布叠加</td></tr>
+<tr><td>管理员误标</td><td>全部可编辑可删；公开站只显示 <code>visible</code>；改动写审计时间</td></tr>
+<tr><td>坐标单位无法确证</td><td>不输出米，只给坐标单位与相对量级，比例做成配置</td></tr>
+</table>
+
+<h2>十、分阶段实施</h2>
+<table>
+<tr><th>阶段</th><th>内容</th><th>验收</th></tr>
+<tr><td>P0</td><td>拉通数据：跑一次 wiki 同步，确认 <code>kb_map_marker</code> 有真实行</td><td>同步报告点位总数 &gt; 1000</td></tr>
+<tr><td>P1</td><td>画布表 + 点位表 + 备注表 + 仓储</td><td>单测覆盖 upsert / 幂等 / 同步不丢备注</td></tr>
+<tr><td>P2</td><td>瓦片与总览图缓存服务</td><td>首次请求落盘，二次请求命中；总览图可生成</td></tr>
+<tr><td>P3</td><td>相对位置算法 + 地点问答组装 + 工具接入</td><td>纯函数单测：八方向、距离分桶、地标选择、成句</td></tr>
+<tr><td>P4</td><td>公开 API + 管理端 API</td><td>控制器测试：只读约束、公开字段不泄露、鉴权</td></tr>
+<tr><td>P5</td><td>前端画布组件 + 公开查看器 + 管理端标注</td><td>Playwright：拖动、缩放、筛选、落点、保存</td></tr>
+<tr><td>P6</td><td>文档 + 提交</td><td>设计文档与 README 同步；每阶段一次中文提交</td></tr>
+</table>
+
+<h2>十一、已知未决</h2>
+<ul>
+<li><b>坐标 → 米</b>的比例：需要一次游戏内实测（打开地图读两个已知点位的坐标与格子距离），拿到后填 <code>units-per-meter</code>。</li>
+<li>EarlyAccess / FrozenFrontier / Update4 三张图是否也要展示：先按通用实现支持，界面按数据是否存在决定是否列出。</li>
+<li>是否要「点位纠错」的群友提案通道：现有 <code>kb_proposal</code> 是问答提案，地图点位是否复用需单独定。</li>
+</ul>
+
+<hr>
+<p class="meta">本文档为实施计划，落地过程中的结构变更与取舍记录在 <code>docs/</code> 下的设计说明里。</p>
+
+</div>
+</body>
+</html>
