@@ -156,8 +156,10 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <!-- 测试 JVM 同样固定 UTF-8，否则中文日志在测试输出里会变成 ??? -->
-          <argLine>-Dfile.encoding=UTF-8</argLine>
+          <!-- 测试 JVM 同样固定 UTF-8，否则中文日志在测试输出里会变成 ???。
+               stdout/stderr 要单独指定：Java 18+ 起它们跟控制台代码页走，
+               只设 file.encoding 的话日志文件仍然是 GBK，读的人得猜编码。 -->
+          <argLine>-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</argLine>
         </configuration>
       </plugin>
     </plugins>
