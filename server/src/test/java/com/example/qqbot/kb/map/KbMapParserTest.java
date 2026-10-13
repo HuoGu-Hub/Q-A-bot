@@ -108,6 +108,43 @@ class KbMapParserTest {
     }
 
     @Test
+    @DisplayName("★ 画布元信息要能落库：瓦片清单原样保留，四至与缩放范围都取出来")
+    void canvasMetadataIsCaptured() throws IOException {
+        KbMapParser.Parsed p = parse("Map_Embervale_Background.json", "Map:Embervale/Background");
+
+        assertThat(p.meta().hasCrs()).isTrue();
+        // 瓦片的排版原点是 at，不是 crs.topLeft —— 实测 Collectibles 那页两者不同
+        assertThat(p.meta().tileAt()).containsExactly(0, 0);
+        // 清单**原样**存 JSON：本地不重排版，对方加字段也不会被我们丢掉
+        assertThat(p.meta().tilesJson()).contains("\"image\":\"0_0.jpg\"").contains("\"position\"");
+        // 缩放范围来自 settings.zoom，前端算初始视图要用
+        assertThat(p.meta().zoomMin()).isEqualTo(5);
+        assertThat(p.meta().zoomMax()).isEqualTo(8);
+        assertThat(p.meta().renderable()).isTrue();
+        assertThat(p.meta().extent()).containsExactly(10240, 10240);
+    }
+
+    @Test
+    @DisplayName("没有 crs 的分组页不能被当成画布 —— 存了也没法把坐标换算成像素")
+    void groupPageIsNotRenderable() throws IOException {
+        KbMapParser.Parsed p = parse("Map_Embervale_Groups.json", "Map:Embervale/Groups");
+
+        assertThat(p.meta().hasCrs()).isFalse();
+        assertThat(p.meta().renderable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("旧 schema 的单张整图同样是可渲染画布，只是瓦片清单为空")
+    void legacySingleImageCanvas() throws IOException {
+        KbMapParser.Parsed p = parse("Map_Blackmire_Main.json", "Map:Blackmire/Main");
+
+        assertThat(p.meta().hasCrs()).isTrue();
+        assertThat(p.meta().renderable()).isTrue();
+        assertThat(p.meta().tilesJson()).isEmpty();
+        assertThat(p.meta().extent()).containsExactly(1485, 1267);
+    }
+
+    @Test
     @DisplayName("mapOf：从页面名取地图名")
     void mapName() {
         assertThat(KbMapParser.mapOf("Map:Embervale/Lore")).isEqualTo("Embervale");
