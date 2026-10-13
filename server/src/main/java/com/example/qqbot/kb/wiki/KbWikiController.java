@@ -77,6 +77,8 @@ public class KbWikiController {
         out.put("defaults", defaults);
         out.put("saved", !saved.isEmpty());
         out.put("maxPagesPerSource", props.getWikiImport().getMaxPagesPerSource());
+        // 页面上的"点开看"链接用：api-base 去掉 /api.php 就是站点根
+        out.put("wikiBase", props.getMapSync().getApiBase().replace("/api.php", ""));
         out.put("renderEnabled", props.getWikiImport().getRender().isEnabled());
         return out;
     }

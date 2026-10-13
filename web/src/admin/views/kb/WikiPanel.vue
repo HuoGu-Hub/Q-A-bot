@@ -47,6 +47,8 @@ interface SourcesResp {
   saved: boolean
   maxPagesPerSource: number
   renderEnabled: boolean
+  /** wiki 站点根，如 https://enshrouded.wiki.gg —— 拼"点开看"的链接 */
+  wikiBase: string
 }
 
 interface CatalogResp {
@@ -85,6 +87,7 @@ const busy = ref(false)
 const items = ref<SourceRow[]>([])
 const saved = ref(false)
 const maxPagesPerSource = ref(0)
+const wikiBase = ref('')
 const renderEnabled = ref(true)
 
 const catalog = ref<CatalogRow[]>([])
@@ -150,6 +153,20 @@ const scopeHint = computed(function () {
   return saved.value ? '页面保存的范围生效中' : '还没保存过，当前用 application.yml 里的默认来源'
 })
 
+/**
+ * 这些英文名不是 URL，是 wiki 上的名字：
+ *   分类  → wiki 的 Category 页，如 /wiki/Category:Gameplay
+ *   前缀  → Special:PrefixIndex 列出以它开头的全部页，如 /wiki/Special:PrefixIndex?prefix=Quests/
+ * 页面上给链接就是为了让人能点开看一眼，不用凭英文名猜。
+ */
+function wikiUrl(kind: string, name: string) {
+  if (!wikiBase.value) return ''
+  if (kind === 'prefix') {
+    return wikiBase.value + '/index.php?title=Special:PrefixIndex&prefix=' + encodeURIComponent(name)
+  }
+  return wikiBase.value + '/wiki/Category:' + encodeURIComponent(name.replace(/ /g, '_'))
+}
+
 function nameOf(c: CatalogRow) { return c.name }
 function pagesOf(c: CatalogRow) { return c.pages === null ? '—' : String(c.pages) }
 function sizeOf(c: CatalogRow) { return String(c.size) }
@@ -177,6 +194,7 @@ async function loadSources() {
   })
   saved.value = r.saved
   maxPagesPerSource.value = r.maxPagesPerSource
+  wikiBase.value = r.wikiBase || ''
   renderEnabled.value = r.renderEnabled
 }
 
@@ -322,7 +340,10 @@ onUnmounted(function () {
         </thead>
         <tbody>
           <tr v-for="(s, i) in items" :key="s.kind + ':' + s.name">
-            <td class="mono">{{ s.name }}</td>
+            <td class="mono">
+              <a v-if="wikiUrl(s.kind, s.name)" :href="wikiUrl(s.kind, s.name)" target="_blank" rel="noopener">{{ s.name }}</a>
+              <span v-else>{{ s.name }}</span>
+            </td>
             <td class="faint">{{ s.kind === 'prefix' ? '页名前缀' : '分类' }}</td>
             <td class="c"><Switch v-model="s.enabled" :aria-label="'启用 ' + s.name" /></td>
             <td class="r"><Button size="sm" variant="ghost" @click="removeAt(i)">移除</Button></td>
@@ -432,7 +453,10 @@ onUnmounted(function () {
         <tbody>
           <tr v-for="c in filteredCatalog" :key="nameOf(c)">
             <td>
-              <div class="mono">{{ nameOf(c) }}</div>
+              <div class="mono">
+                <a v-if="wikiUrl('category', c.name)" :href="wikiUrl('category', c.name)" target="_blank" rel="noopener">{{ nameOf(c) }} ↗</a>
+                <span v-else>{{ nameOf(c) }}</span>
+              </div>
               <div v-if="c.samples && c.samples.length" class="samples faint">
                 例：{{ c.samples.join('、') }}
               </div>
@@ -482,6 +506,8 @@ onUnmounted(function () {
 .filters { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
 .filter-sel { flex: 0 0 160px; }
 .samples { font-size: var(--fs-xs); margin-top: 2px; }
+.tbl a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--edge); }
+.tbl a:hover { color: var(--flame-bright); border-bottom-color: var(--flame-bright); }
 .advice { font-size: var(--fs-xs); margin-top: 3px; line-height: 1.6; }
 .errs { margin: var(--sp-3) 0 0; padding-left: 18px; color: var(--ink-dim); font-size: var(--fs-meta); line-height: 1.7; }
 </style>

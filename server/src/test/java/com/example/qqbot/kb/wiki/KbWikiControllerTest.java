@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.wiki;
 
 import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.MapSync;
 import com.example.qqbot.kb.WikiImport;
 import com.example.qqbot.persistence.KbWikiSourceRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,10 @@ class KbWikiControllerTest {
         cfg.setCategories(List.of("Gameplay", "Lore"));
         KbPolicy props = mock(KbPolicy.class);
         when(props.getWikiImport()).thenReturn(cfg);
+        // 页面上的"点开看"链接要用站点地址（api-base 去掉 /api.php）
+        MapSync mapSync = new MapSync();
+        mapSync.setApiBase("https://enshrouded.wiki.gg/api.php");
+        when(props.getMapSync()).thenReturn(mapSync);
 
         WikiImportService.Status idle = new WikiImportService.Status(
                 "idle", "", 0, 0, "", "", Map.of(), List.of());
@@ -66,6 +71,7 @@ class KbWikiControllerTest {
         assertThat(defaults).extracting(m -> m.get("name"))
                 .containsExactly("Quests/", "Gameplay", "Lore");
         assertThat(out.get("maxPagesPerSource")).isEqualTo(300);
+        assertThat(out.get("wikiBase")).as("页面用它拼'点开看'的链接").isEqualTo("https://enshrouded.wiki.gg");
     }
 
     @Test
