@@ -31,9 +31,14 @@ public final class PlaceAnswer {
      */
     public record Hit(PlacePoint place, RelativeLocation.Neighbour neighbour) {
 
-        /** 这一条的一行描述 */
+        /**
+         * 这一条的一行描述。
+         *
+         * <p><b>必须带上地点名</b>：检索词可能是别名（问「iron」命中的是「铁矿」），
+         * 只给方位的话，读的人不知道这一条到底说的是哪个地方。
+         */
         public String line(double unitsPerMeter) {
-            StringBuilder sb = new StringBuilder("· ");
+            StringBuilder sb = new StringBuilder("· ").append(place.name()).append('：');
             if (neighbour != null) {
                 sb.append(neighbour.phrase(unitsPerMeter)).append('。');
             }

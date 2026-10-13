@@ -91,10 +91,23 @@ public class KbMapRepository {
             r.str("map"), r.str("page"), r.str("grp"), r.str("marker_id"), r.str("name"),
             r.str("description"), r.str("article"), r.dbl("x"), r.dbl("y"), r.str("image"));
 
+    /**
+     * 分组 upsert —— **空值不覆盖已有值**。
+     *
+     * <p>实测踩到的坑：{@code Map:Embervale/Groups} 给了 43 个分组的完整显示名与图标，
+     * 而 {@code Map:Embervale/Tabs/*}（tab 定义页）里同一批 key 只有图标、没有名字。
+     * Tabs 页按字典序排在后面，于是"最后写入者胜"把 29 个分组的名字清成了空串 ——
+     * 图层开关上只剩复选框和一个数字。
+     *
+     * <p>根因是"一个分组的完整信息分散在多页里"，所以正确语义是<b>合并</b>而不是覆盖：
+     * 新值非空才覆盖，{@code collectible} 取或（任一处说是收集品就是）。
+     */
     private static final String UPSERT_GROUP =
             "INSERT INTO kb_map_group (map, key, name, icon, collectible) VALUES (?,?,?,?,?) "
-                    + "ON CONFLICT(map, key) DO UPDATE SET name=excluded.name,"
-                    + " icon=excluded.icon, collectible=excluded.collectible";
+                    + "ON CONFLICT(map, key) DO UPDATE SET"
+                    + " name=CASE WHEN excluded.name <> '' THEN excluded.name ELSE kb_map_group.name END,"
+                    + " icon=CASE WHEN excluded.icon <> '' THEN excluded.icon ELSE kb_map_group.icon END,"
+                    + " collectible=MAX(kb_map_group.collectible, excluded.collectible)";
 
     private static final String INSERT_MARKER =
             "INSERT INTO kb_map_marker (" + MARKER_COLUMNS + ") VALUES (?,?,?,?,?,?,?,?,?,?)";

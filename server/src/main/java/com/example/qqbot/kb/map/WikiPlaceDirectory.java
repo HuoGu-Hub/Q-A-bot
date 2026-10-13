@@ -84,6 +84,10 @@ public class WikiPlaceDirectory implements PlaceDirectory {
         for (KbMapStore.Marker m : mapStore.all()) {
             wikiByMap.computeIfAbsent(nz(m.map()), k -> new ArrayList<>()).add(m);
         }
+        // 同一批点位会在多个页面里重复定义（实测 {@code Map:EarlyAccess/Main} 与
+        // {@code Landmark-markers} 的尖塔坐标一模一样）。不去重的话，
+        // 一个点可以拿它自己的副本当"最近的参照物"，算出"约 0 坐标单位"这种废话。
+        Set<String> seen = new LinkedHashSet<>();
         for (Map.Entry<String, List<KbMapStore.Marker>> e : wikiByMap.entrySet()) {
             String map = e.getKey();
             Map<String, MapNoteService.Note> mapNotes = notes.byMap(map);
@@ -94,7 +98,13 @@ public class WikiPlaceDirectory implements PlaceDirectory {
                     continue;
                 }
                 String canvas = canvasOfPage.getOrDefault(nz(m.page()), primaryOfMap.getOrDefault(map, ""));
-                out.add(toPoint(m, note, canvas));
+                PlacePoint point = toPoint(m, note, canvas);
+                // 去重键含名字：同一格子上放两个不同的东西是合法的，不该被合并
+                String dedupKey = nz(m.map()) + "|" + canvas + "|"
+                        + Math.round(m.x()) + "," + Math.round(m.y()) + "|" + point.name();
+                if (seen.add(dedupKey)) {
+                    out.add(point);
+                }
             }
         }
 
@@ -234,8 +244,16 @@ public class WikiPlaceDirectory implements PlaceDirectory {
     static Map<String, String> canvasIndex(List<KbMapStore.Canvas> canvases) {
         Map<String, String> withBackground = new LinkedHashMap<>();
         for (KbMapStore.Canvas c : canvases) {
-            if (c.hasCrs() && hasBackground(c)) {
-                withBackground.putIfAbsent(key(c.map(), c), c.page());
+            if (!c.hasCrs() || !hasBackground(c)) {
+                continue;
+            }
+            String k = key(c.map(), c);
+            String cur = withBackground.get(k);
+            // 同一套坐标系往往有好几个页面都带底图（{@code Tabs/*} 是 tab 定义页）。
+            // 只取第一个会按字典序选中 {@code Collectibles} 这种"没有点位"的页，
+            // 于是地图上的点全部挂到一个叫"收集品"的画布上 —— 底图一样，但名字是错的。
+            if (cur == null || canonicalRank(c.page()) > canonicalRank(cur)) {
+                withBackground.put(k, c.page());
             }
         }
         Map<String, String> out = new LinkedHashMap<>();
@@ -249,7 +267,14 @@ public class WikiPlaceDirectory implements PlaceDirectory {
         return out;
     }
 
-    /** 每张地图的"主画布"：面积最大、且带底图的那张 —— 没写 page 的自定义点位挂在它上面 */
+    /**
+     * 每张地图的"主画布" —— 没写 page 的自定义点位挂在它上面。
+     *
+     * <p>判据是"<b>规范底图页优先，再看面积</b>"，不是单纯比大小：
+     * 实测 {@code Map:EarlyAccess} 有 8 个页面都带同一张底图（{@code Tabs/*} 是 tab 定义页），
+     * 面积一样大 —— 只比面积会按字典序选中 {@code Collectibles}，
+     * 而它一个点位都没有。规范页是 {@code Main} / {@code Background}。
+     */
     static Map<String, String> primaryCanvasOf(List<KbMapStore.Canvas> canvases) {
         Map<String, KbMapStore.Canvas> best = new LinkedHashMap<>();
         for (KbMapStore.Canvas c : canvases) {
@@ -257,15 +282,36 @@ public class WikiPlaceDirectory implements PlaceDirectory {
                 continue;
             }
             KbMapStore.Canvas cur = best.get(c.map());
-            double[] a = c.extent();
-            double[] b = cur == null ? null : cur.extent();
-            if (cur == null || a[0] * a[1] > b[0] * b[1]) {
+            if (cur == null || betterPrimary(c, cur)) {
                 best.put(c.map(), c);
             }
         }
         Map<String, String> out = new LinkedHashMap<>();
         best.forEach((map, c) -> out.put(map, c.page()));
         return out;
+    }
+
+    private static boolean betterPrimary(KbMapStore.Canvas a, KbMapStore.Canvas b) {
+        int ra = canonicalRank(a.page());
+        int rb = canonicalRank(b.page());
+        if (ra != rb) {
+            return ra > rb;
+        }
+        double[] ea = a.extent();
+        double[] eb = b.extent();
+        return ea[0] * ea[1] > eb[0] * eb[1];
+    }
+
+    /** 规范底图页的名字 —— {@code Map:X/Main} 与 {@code Map:X/Background} 是 wiki 约定的两张主图 */
+    private static int canonicalRank(String page) {
+        String p = nz(page);
+        if (p.endsWith("/Background")) {
+            return 2;
+        }
+        if (p.endsWith("/Main")) {
+            return 1;
+        }
+        return 0;
     }
 
     private static boolean hasBackground(KbMapStore.Canvas c) {

@@ -55,15 +55,26 @@ export function worldOfMarker(canvas: CanvasSpec, m: Marker): [number, number] {
 }
 
 /**
- * 缩放下限：让整张画布**至少铺满视口**（cover），再往外的 0.6 倍留一点余量。
+ * 让整张画布**完整装进视口**的缩放。
  *
- * 为什么不是"完整装进视口"（contain）：那样画布外面会露一大片空白，
- * 看着像加载失败。铺满 + 允许再缩小一点，既有整体感又不会一拖就出界。
+ * 为什么初始视图用 contain 而不是 cover：cover 会把地图裁掉一部分，
+ * 用户第一眼看到的是"半张图"，得先缩一次才知道全貌。
+ * 看地图的第一件事是"我在哪、有多大"，所以先给全貌。
  */
-export function minScale(canvas: CanvasSpec, vw: number, vh: number): number {
+export function containScale(canvas: CanvasSpec, vw: number, vh: number): number {
   const [w, h] = extentOf(canvas)
   if (w <= 0 || h <= 0 || vw <= 0 || vh <= 0) return 0.05
-  return Math.max(vw / w, vh / h) * 0.6
+  return Math.min(vw / w, vh / h)
+}
+
+/**
+ * 缩放下限：略小于"完整装进视口"，再往外就只剩空白了。
+ *
+ * 留 0.9 的余量是为了让用户能把地图推离中心一点去对照边缘，
+ * 但不允许缩到整张图只剩一个小点。
+ */
+export function minScale(canvas: CanvasSpec, vw: number, vh: number): number {
+  return containScale(canvas, vw, vh) * 0.9
 }
 
 /** 缩放上限：world 像素放大到屏幕 8 倍已经远超原图分辨率（瓦片只有 1280） */
@@ -86,10 +97,17 @@ export function clampView(canvas: CanvasSpec, vw: number, vh: number, view: View
   const k = clampScale(canvas, vw, vh, view.k)
   const sw = w * k
   const sh = h * k
-  const slackX = vw * 0.85
-  const slackY = vh * 0.85
-  const tx = Math.min(vw - sw + slackX, Math.max(-slackX, view.tx))
-  const ty = Math.min(vh - sh + slackY, Math.max(-slackY, view.ty))
+  /**
+   * 每一边至少要留在视口里的**内容**宽度。
+   *
+   * 取 min 是因为"画布比视口还小"时必须换一套语义：那时不能让画布被推出视野，
+   * 只能让它贴左边或贴右边。
+   */
+  const keepX = Math.min(sw, vw * 0.85)
+  const keepY = Math.min(sh, vh * 0.85)
+  // 画布左边界 tx 的合法区间：右边缘至少 keepX 进视口，左边缘至少 keepX 离左边缘
+  const tx = Math.min(vw - keepX, Math.max(-sw + keepX, view.tx))
+  const ty = Math.min(vh - keepY, Math.max(-sh + keepY, view.ty))
   return { k, tx, ty }
 }
 
@@ -105,11 +123,11 @@ export function zoomAt(view: View, sx: number, sy: number, factor: number): View
   }
 }
 
-/** 让整张画布铺满视口并居中 —— 首次打开与"复位"用 */
+/** 让整张画布完整可见并居中 —— 首次打开与"复位"用 */
 export function fitView(canvas: CanvasSpec, vw: number, vh: number): View {
   const [w, h] = extentOf(canvas)
   if (w <= 0 || h <= 0) return { k: 1, tx: 0, ty: 0 }
-  const k = minScale(canvas, vw, vh)
+  const k = containScale(canvas, vw, vh)
   return {
     k,
     tx: (vw - w * k) / 2,

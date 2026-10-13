@@ -211,11 +211,45 @@ public class MapViewService {
         return out;
     }
 
-    /** 一张地图的可渲染画布 */
+    /**
+     * 一张地图**真正用得到**的可渲染画布。
+     *
+     * <p>为什么不是"所有能画的画布"：实测 {@code Map:EarlyAccess} 有 8 个页面带着同一张底图
+     * （{@code Tabs/All}、{@code Tabs/Areas} … 是 tab 定义页），全列出来界面会冒出八个
+     * 名字差不多的切换按钮，而其中七个一个点位都没有。
+     *
+     * <p>判据两条，取并集：<b>有点位落在它上面</b>，或者<b>它是这张地图的主画布</b>
+     * （地图还没有点位时也要能看到底图）。
+     */
+    /** 有哪些地图（只有名字）—— 后台任务遍历用 */
+    public List<String> maps() {
+        return mapStore.mapNames();
+    }
+
     public List<CanvasView> canvasesOf(String map) {
+        List<KbMapStore.Canvas> all = mapStore.renderableCanvases();
+        Map<String, String> canvasOfPage = WikiPlaceDirectory.canvasIndex(all);
+        Set<String> used = new LinkedHashSet<>();
+        for (KbMapStore.Marker m : mapStore.all()) {
+            if (map != null && !map.isBlank() && !map.equals(m.map())) {
+                continue;
+            }
+            String page = canvasOfPage.get(nz(m.page()));
+            if (page != null) {
+                used.add(page);
+            }
+        }
+        String primary = WikiPlaceDirectory.primaryCanvasOf(all).get(nz(map));
+        if (primary != null) {
+            used.add(primary);
+        }
+
         List<CanvasView> out = new ArrayList<>();
-        for (KbMapStore.Canvas c : mapStore.renderableCanvases()) {
+        for (KbMapStore.Canvas c : all) {
             if (map != null && !map.isBlank() && !map.equals(c.map())) {
+                continue;
+            }
+            if (!used.isEmpty() && !used.contains(c.page())) {
                 continue;
             }
             out.add(new CanvasView(c.page(), canvasLabel(c.page()),
@@ -234,6 +268,15 @@ public class MapViewService {
      * 用 {@code source} 区分来源，图层开关按 {@code group} / {@code category} 过滤。
      */
     public List<MarkerView> markers(String map) {
+        return markers(map, true);
+    }
+
+    /**
+     * @param onlyVisible 只给公开站要显示的点位。**默认必须是 true**：
+     *                    这个方法的调用方大多是公开接口，"忘了过滤"就等于把隐藏点位泄露出去，
+     *                    而"忘了显示"只是少几个点 —— 两种错误的代价完全不对称。
+     */
+    public List<MarkerView> markers(String map, boolean onlyVisible) {
         List<KbMapStore.Canvas> canvases = mapStore.canvases();
         Map<String, String> canvasOfPage = WikiPlaceDirectory.canvasIndex(canvases);
         Map<String, String> primaryOfMap = WikiPlaceDirectory.primaryCanvasOf(canvases);
@@ -266,7 +309,7 @@ public class MapViewService {
                     note == null ? "" : nz(note.note()), "wiki"));
         }
 
-        for (MapPlaceService.Place p : places.list(map, false)) {
+        for (MapPlaceService.Place p : places.list(map, onlyVisible)) {
             String canvas = p.page() == null || p.page().isBlank()
                     ? primaryOfMap.getOrDefault(nz(p.map()), "") : p.page();
             out.add(new MarkerView("place:" + p.id(), nz(p.map()), nz(p.page()), canvas,
