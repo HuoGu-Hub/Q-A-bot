@@ -270,6 +270,11 @@ async function runSync() {
     await adminApi.post('/map/sync')
     toast('同步已开始，稍后看状态')
     await pollStatus()
+    // 首次同步之前这一页是空的；同步完自动把地图目录拉回来，
+    // 省得管理员还要自己找「重新载入」——那正是他刚做完一件长任务之后最不想找的东西
+    if (!catalog.value || !catalog.value.maps.length) {
+      await boot()
+    }
   } catch (e) {
     toast(describeError(e), 'error')
   }
@@ -338,14 +343,22 @@ function fmt(n: number): string {
     <p v-if="error" class="alert" role="alert">{{ error }}</p>
     <p v-if="loading" class="muted">正在载入…</p>
 
-    <div v-else-if="!catalog || !catalog.maps.length" class="empty-state">
-      <h2>还没有地图数据</h2>
-      <p>到「同步与状态」页点一次「同步 wiki 地图」，之后点位与底图就有了。</p>
-    </div>
-
     <template v-else>
       <!-- ==================== 标注 ==================== -->
-      <div v-show="tab === 'mark'" class="board">
+      <div v-show="tab === 'mark'">
+        <!--
+          ⚠️ 空态**只挡住标注这一页**，不能挡住整个页面。
+          上一版把空态写成整页的 v-else，于是"还没有地图数据"时连「同步与状态」也一起消失 ——
+          而那个页正是唯一能把地图数据弄出来的地方。管理员看到的是一个死循环：
+          提示他去点同步，但同步按钮不见了。
+        -->
+        <div v-if="!catalog || !catalog.maps.length" class="empty-state">
+          <h2>还没有地图数据</h2>
+          <p>切到上面的「同步与状态」，点一次「同步 wiki 地图」。同步完成后这一页会自己刷新。</p>
+          <Button variant="primary" size="sm" @click="tab = 'status'">去同步</Button>
+        </div>
+
+        <div v-else class="board">
         <aside class="panel-col">
           <div class="card">
             <h2 class="card-title">地图</h2>
@@ -497,6 +510,7 @@ function fmt(n: number): string {
             @pick="onPick"
             @picked-point="onPickedPoint"
           />
+        </div>
         </div>
       </div>
 
