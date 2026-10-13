@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>地图查看器与地点问答 · 设计说明</title>
+<style>
+:root{--bg:#fff;--soft:#f7f8fa;--code:#f4f6f8;--fg:#1f2328;--fg2:#57606a;--fg3:#8b949e;
+--bd:#d8dee4;--bd2:#e6eaef;--ac:#2563eb;--acs:#eff4ff;--wn:#b45309;--wnb:#fffbeb;--ok:#15803d;
+--r:10px;--content:900px}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--soft:#161b22;--code:#161b22;--fg:#e6edf3;
+--fg2:#9198a1;--fg3:#6e7681;--bd:#30363d;--bd2:#21262d;--ac:#6ea8fe;--acs:#16233a;--wn:#f0b429;
+--wnb:#2a2109;--ok:#4ade80}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font-size:16px;line-height:1.8;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif}
+.wrap{max-width:var(--content);margin:0 auto;padding:56px 24px 96px}
+h1{font-size:2rem;line-height:1.3;margin:0 0 6px}
+h2{font-size:1.28rem;margin:46px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--bd2)}
+h3{font-size:1.04rem;margin:26px 0 10px}
+.lede{color:var(--fg2);margin:0 0 8px}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font-size:.88em;
+font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+pre{background:var(--code);border:1px solid var(--bd2);border-radius:var(--r);padding:14px 16px;
+overflow:auto;font-size:.85rem;line-height:1.6}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.93rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--bd2);vertical-align:top}
+th{background:var(--soft);font-weight:600}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--acs);border-left:3px solid var(--ac);border-radius:0 var(--r) var(--r) 0}
+blockquote p{margin:0}
+.warn{background:var(--wnb);border-left-color:var(--wn);padding:12px 18px;border-radius:0 var(--r) var(--r) 0;margin:16px 0}
+.warn p{margin:0}
+.meta{color:var(--fg3);font-size:.88rem}
+ol,ul{padding-left:1.4em}
+li{margin:4px 0}
+hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
+.flow{background:var(--soft);border:1px solid var(--bd2);border-radius:var(--r);padding:18px 20px;margin:18px 0;font-size:.9rem;line-height:2}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>地图查看器与地点问答</h1>
+<p class="lede">设计说明与运维手册 · 公开站 <code>/map</code> + 管理端 <code>/admin/map</code> + 大模型 <code>locate</code> 工具</p>
+<p class="meta">项目：飘雪喵问答机器人　｜　底图与点位来源：enshrouded.wiki.gg（CC BY-NC-SA 3.0）</p>
+
+<h2>一、这一版做了什么</h2>
+<table>
+<tr><th>能力</th><th>入口</th><th>说明</th></tr>
+<tr><td>全地图查看器</td><td>公开站 <code>/map</code></td><td>与 wiki 同源的底图与 1703 个点位；canvas 打点、CSS transform 平移缩放、缩略图分级</td></tr>
+<tr><td>找地方</td><td>公开站 <code>/map</code> 左侧搜索</td><td>输入「铁矿」，给出它相对最近地标的方位、距离、坐标，并在地图上画出方位线</td></tr>
+<tr><td>地图标注</td><td>管理端 <code>/admin/map</code></td><td>点地图空白处新增点位（名称/分类/备注/别名/是否地标/是否公开）；点 wiki 点位补中文名与说明</td></tr>
+<tr><td>大模型工具</td><td><code>locate</code></td><td>问「哪里有铁矿」时由模型调用，拿到**算好的**方位描述而不是让它自己猜</td></tr>
+<tr><td>运维入口</td><td>管理端「同步与状态」</td><td>触发 wiki 同步与地点语料派生；查看画布、页、缓存与任务状态</td></tr>
+</table>
+
+<h2>二、怎么用起来</h2>
+<pre><code># 1. 重启后端（新接口与新表要加载）
+# 2. 管理端 → 地图标注 → 同步与状态 → 「同步 wiki 地图」
+#    首次约 7 秒：32 页 / 1703 个点位 / 0 失败
+# 3. 打开公开站 /map
+# 4. 管理端 → 地图标注 → 在地图上点一下，起个名（例如「铁矿」），保存
+# 5. 回公开站搜「铁矿」，或在群里问「哪里有铁矿」</code></pre>
+<p>同步是增量的：只拉 <code>revid</code> 变过的页，常态下几乎瞬间完成。
+底图瓦片按需从 wiki 拉取并缓存在 <code>server/data/map-tiles/</code>，同一张只下一次。</p>
+
+<h2>三、数据模型</h2>
+<p>在原有的三张 wiki 镜像表之外，新增三张。全部是 <b>ADDITIVE DDL</b>（<code>CREATE TABLE IF NOT EXISTS</code>），不删列不重建 —— 生产库是活的。</p>
+
+<h3>3.1 <code>kb_map_canvas</code>　画布</h3>
+<p>回答「这张图怎么铺」。主键 <code>(map, page)</code>。</p>
+<div class="warn"><p><b>为什么画布按页面存，而不是一张地图一条。</b>
+实测同名地图内部存在多套坐标系：<code>Map:Embervale/Main</code> 的 crs 是 <code>(0,10240)→(10240,0)</code>，
+而 <code>Map:Embervale/Collectibles</code> 是 <code>(-3695,-9045)→(6545,1195)</code>。
+按地图只存一个，另一批点位会整体偏移上万像素。</p></div>
+<p>同步实测落库 30 张画布，其中 <code>Embervale</code> 恰好分成两组坐标系。</p>
+
+<h3>3.2 <code>kb_map_place</code>　管理员自定义点位</h3>
+<p>字段：<code>map / page / x / y / name / aliases / category / note / icon / color / landmark / priority / visible / created_at / updated_at</code>。</p>
+<p><b>为什么不复用 <code>kb_map_marker</code></b>：那张表是「wiki 某一页的镜像」，同步时按页先删后插。
+管理员辛苦标的地点会被下一次同步静默清掉。<b>写入方不同的数据必须分表。</b></p>
+
+<h3>3.3 <code>kb_map_marker_note</code>　wiki 点位备注</h3>
+<p>主键 <code>(map, page, marker_id)</code>，与 <code>kb_map_marker</code> 同形 —— 于是同步既不会丢备注，也不需要知道备注的存在。</p>
+<p>用途：给 <code>Ancient Spire</code> 补「远古尖塔」、写「离出生点最近的那个」、把它提升为方位参照、或整条隐藏。</p>
+
+<h2>四、后端结构</h2>
+<div class="flow">
+<b>摄入</b>（<code>kb/map</code>）　wiki JSON → 解析 → 三张镜像表 + 画布表<br>
+　　　　　　　　　　　wiki 图片 → <code>MapImageCache</code> 磁盘缓存（按需、分级缩略）<br>
+<b>领域</b>（<code>kb</code> 核心）　<code>PlaceDirectory</code> 契约 · <code>RelativeLocation</code> 算法 · <code>PlaceAnswer</code> 组装<br>
+<b>出口</b>　<code>/api/public/map/**</code>　｜　<code>/admin/api/map/**</code>　｜　工具 <code>locate</code>
+</div>
+
+<h3>为什么核心要摆一个接口</h3>
+<p><code>ArchitectureTest</code> 有一条转正规则：<b>kb 核心不得依赖摄入来源（wiki / map）</b>。
+而调用地点数据的工具住在核心 —— 直接 import <code>kb.map</code> 会让构建变红。
+所以照 <code>TermSource</code> / <code>KbCorpus</code> 的既有做法：<b>契约由消费方定义，实现由生产者提供</b>。
+<code>kb.PlaceDirectory</code> 是契约，<code>kb.map.WikiPlaceDirectory</code> 是唯一实现，Spring 负责注入。</p>
+
+<h3>相对位置算法（<code>RelativeLocation</code>）</h3>
+<ol>
+<li><b>方向</b>：<code>atan2(dx, dy)</code> 分八扇区。地图正北朝上，所以罗盘方位与屏幕方位天然对齐
+（东北 = 地图右上角）。两个说法都给 —— 玩家盯着地图想的是「右上角」。</li>
+<li><b>距离</b>：除以地图对角线归一化后分档（就在旁边 / 很近 / 不远 / 有点远 / 很远）。
+同样的 800 单位在黑沼是横跨半张图，在余烬谷只是隔壁。</li>
+<li><b>锚点</b>：先排掉自己、优先同画布、优先地标；打分是「距离比例 × 10 − 名望」，
+名望上限 1.0 —— <b>距离是主因，名望只在同级里做偏好</b>。</li>
+</ol>
+
+<div class="warn"><p><b>关于「米」：默认不输出。</b>
+wiki 的 x/y 是游戏坐标系，公开资料查不到 1 单位等于多少米。
+凭空写「约 800 米」会被大模型当成事实转述给群友 —— 那比不给距离更糟。
+所以默认只给坐标单位与相对量级；确证比例后改一个配置即可：
+<code>app.kb.map.units-per-meter</code>。</p></div>
+
+<h2>五、接口</h2>
+<h3>公开只读（按 IP 限流）</h3>
+<table>
+<tr><th>方法</th><th>路径</th><th>用途</th></tr>
+<tr><td>GET</td><td><code>/api/public/map/catalog</code></td><td>地图 + 画布 + 图层定义</td></tr>
+<tr><td>GET</td><td><code>/api/public/map/markers?map=</code></td><td>该地图全部点位（wiki + 本地，已合并为同一形状）</td></tr>
+<tr><td>GET</td><td><code>/api/public/map/search?q=</code></td><td>按名称 / 别名 / 备注搜</td></tr>
+<tr><td>GET</td><td><code>/api/public/map/locate?q=</code></td><td><b>相对位置描述</b>：方位、距离、参照物、成句文本</td></tr>
+<tr><td>GET</td><td><code>/api/public/map/tile?map=&amp;page=&amp;name=&amp;w=</code></td><td>图片字节（缓存 + 白名单）</td></tr>
+</table>
+<p>图片接口<b>不走限流</b>：一次打开地图就是几十个请求，走限流会让页面直接打不开。
+它靠<b>资源白名单</b>兜底 —— 只放行确实属于我们地图数据的文件名（画布瓦片、底图整图、分组图标），
+否则这台机器就成了 wiki 的免费图片代理。宽度同样有白名单，防止 <code>?w=</code> 任意值把缓存目录灌满。</p>
+
+<h3>管理端</h3>
+<table>
+<tr><th>方法</th><th>路径</th><th>用途</th></tr>
+<tr><td>GET</td><td><code>/admin/api/map/status</code></td><td>存储 / 画布 / 页 / 缓存 / 长任务</td></tr>
+<tr><td>GET</td><td><code>/admin/api/map/places</code></td><td>全部本地点位（含隐藏）</td></tr>
+<tr><td>POST / PUT / DELETE</td><td><code>/admin/api/map/places[/{id}]</code></td><td>新增 / 修改 / 删除</td></tr>
+<tr><td>GET / POST / DELETE</td><td><code>/admin/api/map/notes</code></td><td>wiki 点位备注</td></tr>
+<tr><td>POST</td><td><code>/admin/api/map/sync</code></td><td>触发同步（后台跑，立即返回）</td></tr>
+<tr><td>POST</td><td><code>/admin/api/map/corpus</code></td><td>派生 / 清除地点语料</td></tr>
+</table>
+<p>两个长任务<b>不在请求线程里跑</b>：首次同步几秒、语料派生要上百次向量调用，
+在 HTTP 里跑会被某一层超时掐断，而任务其实还在跑 —— 管理员会再点一次。
+现在立即返回，进度看 <code>/status</code> 的 <code>jobs</code>。</p>
+
+<h2>六、前端为什么比 wiki 那份流畅</h2>
+<table>
+<tr><th>wiki 卡顿的根因</th><th>这里的做法</th></tr>
+<tr><td>一千多个 marker 是 DOM 节点，每帧重算样式与重排</td><td>marker 画在<b>一张 canvas</b> 上；DOM 里只有底图容器与 canvas 两个节点</td></tr>
+<tr><td>每帧给几十个瓦片写 left/top，触发布局</td><td>瓦片放进<b>一个 transform 容器</b>，平移缩放只影响合成层，交给 GPU</td></tr>
+<tr><td>指针事件里直接改样式，一帧改上百次</td><td><b>rAF 合帧</b>：指针只写目标值，绘制与 transform 统一在下一帧提交</td></tr>
+<tr><td>一次性把整张图的瓦片与全部图标塞进视野</td><td><b>视口裁剪</b> + 缩小时画圆点不画图标（细节分级）</td></tr>
+<tr><td>缩到最小时仍拉 10240×10240 的原图</td><td><b>缩略图分级</b>：按瓦片在屏幕上的实际尺寸选 <code>?w=160/320/640/1280</code>，由 MediaWiki 自己缩</td></tr>
+</table>
+<p>另外，公开端与管理端<b>复用同一个画布组件</b>（<code>web/src/shared/map/MapCanvas.vue</code>），
+差别只在 <code>mode</code>：浏览模式点击弹详情，编辑模式点击落点。
+坐标换算抽成纯函数 <code>mapMath.ts</code>，两端不会算出两个位置。</p>
+
+<h2>七、刻意的取舍</h2>
+<table>
+<tr><th>决定</th><th>理由</th></tr>
+<tr><td>不输出米</td><td>比例查不到；编一个会被当成事实转述</td></tr>
+<tr><td>地点语料<b>不</b>追加相对位置行</td><td>改语料正文会改向量，进而动到既有检索黄金集的门槛。方位由 <code>locate</code> 工具确定性提供，不经过向量</td></tr>
+<tr><td>隐藏的点位也不参与问答</td><td>否则「藏起来」只是看不见，仍然会被说出来</td></tr>
+<tr><td>画布按页面存</td><td>同地图多套坐标系是实测事实</td></tr>
+<tr><td>截图与相对位置算法都是纯函数</td><td>能被单元测试钉死，而不是「跑一次看着对」</td></tr>
+</table>
+
+<h2>八、已知边界</h2>
+<ul>
+<li><b>坐标 → 米</b>的比例未确证。需要一次游戏内实测（读两个已知点位的坐标与格子距离），
+拿到后填 <code>app.kb.map.units-per-meter</code>。</li>
+<li><b>资源点要靠人工标</b>：wiki 上没有铁矿、树脂这类点位，正是「管理员在地图上点一下」要补的那部分。</li>
+<li><b>底图版权</b>：瓦片来自 Enshrouded Wiki（CC BY-NC-SA 3.0），页脚已保留署名；
+本站只做缓存，不重新分发为独立资源。</li>
+<li><b>点位的纠错通道</b>：目前只有管理员能改。群友提案（复用 <code>kb_proposal</code>）尚未接。</li>
+</ul>
+
+<h2>九、验证情况</h2>
+<table>
+<tr><th>项</th><th>结果</th></tr>
+<tr><td>wiki 同步（对数据库副本）</td><td>32 页 / 1703 个点位 / 0 失败 / 7.2 秒；落库 30 张画布、115 个分组</td></tr>
+<tr><td>画布分组</td><td>Embervale 正确分成两组坐标系，Collectibles 那 46 个点没有被错误叠加到主图上</td></tr>
+<tr><td>后端测试</td><td>全量用例通过，含架构规则与 Spring 装配</td></tr>
+<tr><td>前端</td><td><code>vue-tsc</code> 无错误，<code>vite build</code> 通过</td></tr>
+</table>
+
+<hr>
+<p class="meta">实施计划见 <code>plans/html/雾锁王国地图查看器与地点问答实施计划.html</code>。</p>
+
+</div>
+</body>
+</html>
