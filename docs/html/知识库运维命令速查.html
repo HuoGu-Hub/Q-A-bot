@@ -464,8 +464,9 @@ mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 </tbody></table></div>
 <h3 id="①-词条表-唯一的人机往返通道"><a class="anchor" href="#①-词条表-唯一的人机往返通道">① 词条表 —— 唯一的「人机往返」通道</a></h3>
 <blockquote>
-<p><b>改完不用重启</b>：词条写入后检索侧按版本号自动重载，下一问就用新词；离线工具直接改库也一样（30 秒内被发现，见 <code>KbTermStore.version()</code>），所以补完几百条别名不必重启服务。<br>
-<b>但块内容与清洗规则的改动仍要重启</b> —— 块索引是进程内缓存。</p>
+<p><b>内容改动都不用重启</b>：词条与块的写入会让检索侧自己发现（管理端改完下一问就生效；离线工具直接改库在 30 秒内被发现，见 <code>KbTermStore.version()</code> 与 <code>KbBlockStore.version()</code>）。<br>
+<b>要重启的是配置与代码</b>：<code>application.yml</code> 里的参数是启动时读的。<br>
+一个例外要注意：离线改<b>正文</b>时，向量得由改的人自己写对 —— 管理端与导入器都强制重算向量，直接 SQL 改正文不更新 <code>kb_block_vec</code> 的话，索引会加载到「新正文 + 旧向量」的组合。</p>
 </blockquote>
 <pre><code>GET  /admin/api/kb/terms/export?format=xlsx|tsv&amp;view=&amp;board=&amp;q=   # 默认 xlsx；format=csv 明确报错
 POST /admin/api/kb/terms/import     {xlsxBase64} / {csv} / {tsv}
