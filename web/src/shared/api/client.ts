@@ -53,11 +53,19 @@ export const publicApi = {
     request<T>(`/api/public${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
 }
 
-/** 管理接口：401 交给调用方处理（通常会跳登录页） */
+/**
+ * 管理接口：401 交给调用方处理（通常会跳登录页）。
+ *
+ * put / del 是地图标注加进来的：点位要能改与删，只用 post 表达不了。
+ * 保持同一套错误处理，所以走的还是上面那个 request。
+ */
 export const adminApi = {
   get: <T>(path: string) => request<T>(`/admin/api${path}`),
   post: <T>(path: string, body?: unknown) =>
     request<T>(`/admin/api${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(`/admin/api${path}`, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
+  del: <T>(path: string) => request<T>(`/admin/api${path}`, { method: 'DELETE' }),
 }
 
 /** 把后端抛的错误转成人话 */

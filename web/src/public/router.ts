@@ -11,6 +11,7 @@ export const router = createRouter({
     { path: '/', name: 'home', component: () => import('./views/HomeView.vue') },
     { path: '/library', name: 'library', component: () => import('./views/LibraryView.vue') },
     { path: '/entry/:title', name: 'entry', component: () => import('./views/EntryView.vue'), props: true },
+    { path: '/map', name: 'map', component: () => import('./views/MapView.vue') },
     { path: '/plaza', name: 'plaza', component: () => import('./views/PlazaView.vue') },
     { path: '/about', name: 'about', component: () => import('./views/AboutView.vue') },
     { path: '/:pathMatch(.*)*', name: 'notfound', component: () => import('./views/NotFoundView.vue') },

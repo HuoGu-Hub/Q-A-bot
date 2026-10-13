@@ -21,6 +21,7 @@ const nav = [
   { to: '/dashboard', label: '看板' },
   { to: '/records', label: '记录' },
   { to: '/kb', label: '知识库' },
+  { to: '/map', label: '地图标注' },
   { to: '/system', label: '系统' },
   { to: '/bot', label: 'Bot 配置' },
   { to: '/plaza', label: '广场' },

@@ -43,6 +43,7 @@ onBeforeUnmount(() => { if (busyTimer !== undefined) window.clearTimeout(busyTim
 const nav = [
   { to: '/', label: '首页', icon: 'home' },
   { to: '/library', label: '资料库', icon: 'book' },
+  { to: '/map', label: '地图', icon: 'map-pin' },
   { to: '/plaza', label: '问答广场', icon: 'chat' },
   { to: '/about', label: '关于', icon: 'info' },
 ]

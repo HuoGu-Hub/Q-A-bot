@@ -35,6 +35,8 @@ export const router = createRouter({
     { path: '/settings', redirect: { path: '/bot', query: { tab: 'settings' } } },
     { path: '/commands', redirect: { path: '/bot', query: { tab: 'commands' } } },
     { path: '/plaza', name: 'plaza', component: () => import('./views/PlazaAdminView.vue') },
+    // 地图标注：公开站地图的"管理员那一半"，点位与备注都在这里写
+    { path: '/map', name: 'map', component: () => import('./views/MapAdminView.vue') },
     // 公开站的固定文案（首页标语、关于页正文、页脚、404 等）
     { path: '/pages', name: 'pages', component: () => import('./views/PagesView.vue') },
   ],

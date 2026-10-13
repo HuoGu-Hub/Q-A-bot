@@ -1,0 +1,198 @@
+import type { CanvasSpec, Marker } from './types'
+
+/**
+ * 地图坐标 ↔ 屏幕坐标的**纯函数**。
+ *
+ * 为什么要单独一个文件：这套换算是拖拽、缩放、打点、命中检测、画罗盘线的共同地基，
+ * 混在组件里就没法单独测，也没法在公开端与管理端各用一份而保证行为一致
+ * （管理端点下去落的位置必须和查看器显示的是同一个点）。
+ *
+ * 三层坐标：
+ *   crs    —— wiki 给的 x/y（y 轴向上、原点在左下，数值可能是负数）
+ *   world  —— 画布像素，左上角为 (0,0)，尺寸 = 画布 extent
+ *   screen —— 视口像素，受 view 的平移与缩放影响
+ */
+
+export interface View {
+  /** 屏幕像素 / world 像素 */
+  k: number
+  /** world 原点在屏幕上的位置 */
+  tx: number
+  ty: number
+}
+
+/** 画布的世界尺寸 */
+export function extentOf(canvas: CanvasSpec): [number, number] {
+  return [
+    Math.abs(canvas.bottomRight[0] - canvas.topLeft[0]),
+    Math.abs(canvas.topLeft[1] - canvas.bottomRight[1]),
+  ]
+}
+
+/** crs → world */
+export function worldOf(canvas: CanvasSpec, x: number, y: number): [number, number] {
+  return [x - canvas.topLeft[0], canvas.topLeft[1] - y]
+}
+
+/** world → crs */
+export function crsOf(canvas: CanvasSpec, wx: number, wy: number): [number, number] {
+  return [wx + canvas.topLeft[0], canvas.topLeft[1] - wy]
+}
+
+/** world → screen */
+export function screenOf(view: View, wx: number, wy: number): [number, number] {
+  return [wx * view.k + view.tx, wy * view.k + view.ty]
+}
+
+/** screen → world */
+export function worldAt(view: View, sx: number, sy: number): [number, number] {
+  return [(sx - view.tx) / view.k, (sy - view.ty) / view.k]
+}
+
+/** 一个点位的 world 坐标 */
+export function worldOfMarker(canvas: CanvasSpec, m: Marker): [number, number] {
+  return worldOf(canvas, m.x, m.y)
+}
+
+/**
+ * 缩放下限：让整张画布**至少铺满视口**（cover），再往外的 0.6 倍留一点余量。
+ *
+ * 为什么不是"完整装进视口"（contain）：那样画布外面会露一大片空白，
+ * 看着像加载失败。铺满 + 允许再缩小一点，既有整体感又不会一拖就出界。
+ */
+export function minScale(canvas: CanvasSpec, vw: number, vh: number): number {
+  const [w, h] = extentOf(canvas)
+  if (w <= 0 || h <= 0 || vw <= 0 || vh <= 0) return 0.05
+  return Math.max(vw / w, vh / h) * 0.6
+}
+
+/** 缩放上限：world 像素放大到屏幕 8 倍已经远超原图分辨率（瓦片只有 1280） */
+export function maxScale(): number {
+  return 8
+}
+
+export function clampScale(canvas: CanvasSpec, vw: number, vh: number, k: number): number {
+  return Math.min(maxScale(), Math.max(minScale(canvas, vw, vh), k))
+}
+
+/**
+ * 把视图夹在合理范围：画布不能被拖到完全看不见。
+ *
+ * 规则是"每一边至少留 15% 的内容可见"——比"必须完整可见"宽松，
+ * 允许把边角挪到视野外去看相邻区域，但不允许拖走之后一片空白。
+ */
+export function clampView(canvas: CanvasSpec, vw: number, vh: number, view: View): View {
+  const [w, h] = extentOf(canvas)
+  const k = clampScale(canvas, vw, vh, view.k)
+  const sw = w * k
+  const sh = h * k
+  const slackX = vw * 0.85
+  const slackY = vh * 0.85
+  const tx = Math.min(vw - sw + slackX, Math.max(-slackX, view.tx))
+  const ty = Math.min(vh - sh + slackY, Math.max(-slackY, view.ty))
+  return { k, tx, ty }
+}
+
+/** 以屏幕上的某点为锚做缩放：该点下方的地图内容保持不动 */
+export function zoomAt(view: View, sx: number, sy: number, factor: number): View {
+  const k = view.k * factor
+  if (k <= 0) return view
+  const ratio = k / view.k
+  return {
+    k,
+    tx: sx - (sx - view.tx) * ratio,
+    ty: sy - (sy - view.ty) * ratio,
+  }
+}
+
+/** 让整张画布铺满视口并居中 —— 首次打开与"复位"用 */
+export function fitView(canvas: CanvasSpec, vw: number, vh: number): View {
+  const [w, h] = extentOf(canvas)
+  if (w <= 0 || h <= 0) return { k: 1, tx: 0, ty: 0 }
+  const k = minScale(canvas, vw, vh)
+  return {
+    k,
+    tx: (vw - w * k) / 2,
+    ty: (vh - h * k) / 2,
+  }
+}
+
+/** 把某个 world 点放到视口中心，保持当前缩放 */
+export function centerOn(view: View, wx: number, wy: number, vw: number, vh: number): View {
+  return { k: view.k, tx: vw / 2 - wx * view.k, ty: vh / 2 - wy * view.k }
+}
+
+/**
+ * 让两个点都进视野（定位结果里有"锚点 ↔ 目标"两个点时用）。
+ *
+ * 这是在"看得见两个点"与"别缩得太小"之间的取舍：先算包住两点的缩放，
+ * 再留 25% 边距，最后夹回允许范围。
+ */
+export function fitPoints(
+  canvas: CanvasSpec,
+  pts: [number, number][],
+  vw: number,
+  vh: number,
+): View {
+  if (pts.length === 0) return fitView(canvas, vw, vh)
+  const xs = pts.map((p) => p[0])
+  const ys = pts.map((p) => p[1])
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const spanX = Math.max(1, maxX - minX)
+  const spanY = Math.max(1, maxY - minY)
+  const k = clampScale(canvas, vw, vh, Math.min(vw / spanX, vh / spanY) * 0.75)
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  return clampView(canvas, vw, vh, { k, tx: vw / 2 - cx * k, ty: vh / 2 - cy * k })
+}
+
+/**
+ * 在该缩放下，"当前视口里"的点位。
+ *
+ * 视口裁剪是流畅度的关键：不裁剪的话每帧都要画上千个点，
+ * 而屏幕实际只有一两百个。
+ */
+export function visibleMarkers(
+  canvas: CanvasSpec,
+  markers: Marker[],
+  view: View,
+  vw: number,
+  vh: number,
+  pad = 64,
+): Marker[] {
+  const out: Marker[] = []
+  for (const m of markers) {
+    const [wx, wy] = worldOfMarker(canvas, m)
+    const sx = wx * view.k + view.tx
+    const sy = wy * view.k + view.ty
+    if (sx >= -pad && sx <= vw + pad && sy >= -pad && sy <= vh + pad) out.push(m)
+  }
+  return out
+}
+
+/** 命中检测：屏幕坐标附近最近的点位 */
+export function hitTest(
+  canvas: CanvasSpec,
+  markers: Marker[],
+  view: View,
+  sx: number,
+  sy: number,
+  radius = 14,
+): Marker | null {
+  let best: Marker | null = null
+  let bestD = radius * radius
+  for (const m of markers) {
+    const [wx, wy] = worldOfMarker(canvas, m)
+    const dx = wx * view.k + view.tx - sx
+    const dy = wy * view.k + view.ty - sy
+    const d = dx * dx + dy * dy
+    if (d <= bestD) {
+      bestD = d
+      best = m
+    }
+  }
+  return best
+}
