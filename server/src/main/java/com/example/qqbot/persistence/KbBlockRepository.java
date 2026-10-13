@@ -60,6 +60,18 @@ public class KbBlockRepository {
 
     private final Jdbc jdbc;
 
+    /**
+     * 块表的**指纹**：条数 + 最大更新时间。
+     *
+     * <p>用途与词条表那边一样：发现"别的进程改了库"。{@link com.example.qqbot.kb.block.KbBlockStore}
+     * 的版本号是**内存计数器**，离线工具直接改库时它一动不动 —— 索引就一直用旧语料、
+     * 而且不报错。这个查询只有一行，够便宜，可以低频轮询。
+     */
+    public String stamp() {
+        return jdbc.queryOne("SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), '') AS t FROM kb_block",
+                r -> r.intOf("n") + "@" + r.str("t"));
+    }
+
     public KbBlockRepository(Jdbc jdbc) {
         this.jdbc = jdbc;
     }

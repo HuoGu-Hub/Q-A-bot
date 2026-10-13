@@ -60,9 +60,43 @@ public class KbBlockStore {
         this.repo = repo;
     }
 
-    /** 当前语料版本 —— 内存快照用它对账（见上面字段说明） */
+    /** 外部写入检测的间隔（毫秒）。测试里设成 0 就能立刻发现 */
+    private static final long EXTERNAL_CHECK_MILLIS =
+            Long.getLong("qqbot.block.external-check-millis", 30000L);
+
+    /** 上一次查库里指纹的时间与结果 —— 见 {@link #version()} */
+    private volatile long lastExternalCheck;
+    private volatile String lastExternalStamp = "";
+
+    /**
+     * 当前语料版本 —— 内存快照用它对账（见上面字段说明）。
+     *
+     * <p>除了本进程的写入，还会低频比对库里的指纹，用来发现**别的进程**改了库
+     * （离线工具、直接 SQL）。内存计数器对它们无感，而症状是"检索一直用旧语料、
+     * 且不报错" —— 最难查的一类问题。
+     */
     public long version() {
+        long now = System.currentTimeMillis();
+        if (now - lastExternalCheck >= EXTERNAL_CHECK_MILLIS) {
+            lastExternalCheck = now;
+            String stamp;
+            try {
+                stamp = repo.stamp();
+            } catch (Exception e) {
+                stamp = lastExternalStamp;   // 查不动就当没变，别把检索拖崩
+            }
+            if (!stamp.equals(lastExternalStamp)) {
+                lastExternalStamp = stamp;
+                version.incrementAndGet();
+                log.info("[KB-BLOCK] 检测到外部写入（{}），语料版本 +1", stamp);
+            }
+        }
         return version.get();
+    }
+
+    /** 让下一次 {@link #version()} 立刻比对库里的指纹，不等轮询间隔。包内可见，给测试与排查用 */
+    void forceExternalCheck() {
+        lastExternalCheck = 0L;
     }
 
     /** 写成功之后 +1。只在**确实可能改变语料**的地方调 */
