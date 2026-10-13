@@ -275,6 +275,16 @@ async function runSync() {
   }
 }
 
+async function runWarm() {
+  try {
+    await adminApi.post('/map/warm')
+    toast('缓存预热已开始：首屏瓦片会一次性拉齐')
+    await pollStatus()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
+}
+
 async function runCorpus(purge: boolean) {
   try {
     await adminApi.post('/map/corpus?purge=' + (purge ? 'true' : 'false'))
@@ -546,12 +556,15 @@ function fmt(n: number): string {
             <Button variant="primary" size="sm" @click="runSync">
               <Icon name="refresh" :size="14" />同步 wiki 地图
             </Button>
+            <Button size="sm" @click="runWarm">预热底图缓存</Button>
             <Button size="sm" @click="runCorpus(false)">派生地点语料</Button>
             <Button size="sm" @click="runCorpus(true)">清除地点语料</Button>
           </div>
           <p class="hint">
             同步是增量的：只拉版本变过的页，常态下几秒完成。
-            地点语料要调向量接口，会慢一些，两件事都在后台跑，进度看上面。
+            底图预热要拉几百张瓦片，出站请求是节流的，第一次大约一两分钟 —— 做过一次之后
+            所有访客都命中本地缓存。地点语料要调向量接口，也慢。
+            三件事都在后台跑，进度看上面。
           </p>
         </div>
 

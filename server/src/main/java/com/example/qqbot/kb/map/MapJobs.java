@@ -34,6 +34,7 @@ public class MapJobs {
 
     public static final String SYNC = "sync";
     public static final String CORPUS = "corpus";
+    public static final String WARM = "warm";
 
     /** 一次任务的结果快照 */
     public record JobState(String name, String label, boolean running, boolean ok,
@@ -42,6 +43,8 @@ public class MapJobs {
 
     private final KbMapSyncService syncService;
     private final LocationCorpusBuilder corpusBuilder;
+    private final MapImageCache images;
+    private final MapViewService view;
 
     private final ExecutorService pool = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "map-jobs");
@@ -52,10 +55,14 @@ public class MapJobs {
     private final Map<String, JobState> states = new ConcurrentHashMap<>();
     private final AtomicBoolean syncRunning = new AtomicBoolean();
     private final AtomicBoolean corpusRunning = new AtomicBoolean();
+    private final AtomicBoolean warmRunning = new AtomicBoolean();
 
-    public MapJobs(KbMapSyncService syncService, LocationCorpusBuilder corpusBuilder) {
+    public MapJobs(KbMapSyncService syncService, LocationCorpusBuilder corpusBuilder,
+                   MapImageCache images, MapViewService view) {
         this.syncService = syncService;
         this.corpusBuilder = corpusBuilder;
+        this.images = images;
+        this.view = view;
     }
 
     /** 当前两个任务的状态（没跑过也返回一条"从未运行"） */
@@ -63,6 +70,7 @@ public class MapJobs {
         Map<String, JobState> out = new LinkedHashMap<>();
         out.put(SYNC, states.getOrDefault(SYNC, idle(SYNC, "wiki 地图同步")));
         out.put(CORPUS, states.getOrDefault(CORPUS, idle(CORPUS, "地点语料派生")));
+        out.put(WARM, states.getOrDefault(WARM, idle(WARM, "底图缓存预热")));
         return out;
     }
 
@@ -127,6 +135,64 @@ public class MapJobs {
             }
         });
         return true;
+    }
+
+    /**
+     * 预热底图缓存。
+     *
+     * <h2>为什么必须有它，而不是让第一个访客去承担</h2>
+     * 出站请求是**串行节流**的（wiki 会对并发回 429），拉满一张图的瓦片要二十来秒。
+     * 没有预热的话，第一个打开地图的人看到的是二三十秒里一块块慢慢补齐的地图 ——
+     * 而这件事只需要做一次，之后所有访客都命中本地缓存、一个字节都不再打扰 wiki。
+     *
+     * <p>只预热**查看器真正会用到的画布**：wiki 的 {@code Tabs/*} 定义页也带底图，
+     * 但界面里一个点位都没挂上去，预它们等于白拉几百个请求。
+     *
+     * @return false 表示已在运行
+     */
+    public boolean startWarm() {
+        if (!warmRunning.compareAndSet(false, true)) {
+            return false;
+        }
+        mark(WARM, "底图缓存预热", true, true, "已开始");
+        pool.submit(() -> {
+            try {
+                int n = warm();
+                mark(WARM, "底图缓存预热", false, true, "已缓存 " + n + " 张底图");
+            } catch (Exception e) {
+                log.warn("[MAP-JOB] 缓存预热失败：{}", e.getMessage());
+                mark(WARM, "底图缓存预热", false, false, "失败：" + e.getMessage());
+            } finally {
+                warmRunning.set(false);
+            }
+        });
+        return true;
+    }
+
+    /** 两档缩略图足够覆盖首屏；原图等用户真的放大时再按需取 */
+    private static final int[] WARM_WIDTHS = {160, 320};
+
+    private int warm() {
+        int done = 0;
+        for (String map : view.maps()) {
+            for (MapViewService.CanvasView c : view.canvasesOf(map)) {
+                for (MapViewService.TileView t : c.tiles()) {
+                    for (int w : WARM_WIDTHS) {
+                        if (images.get(map, c.page(), t.image(), w).isPresent()) {
+                            done++;
+                        }
+                    }
+                }
+                if (c.background() != null && !c.background().isBlank()) {
+                    for (int w : WARM_WIDTHS) {
+                        if (images.get(map, c.page(), c.background(), w).isPresent()) {
+                            done++;
+                        }
+                    }
+                }
+            }
+        }
+        return done;
     }
 
     @PreDestroy

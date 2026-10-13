@@ -116,6 +116,37 @@ public class AdminMapController {
         return out;
     }
 
+    /**
+     * 地图目录 —— 与公开端同一份数据。
+     *
+     * <p>为什么管理端不直接调公开接口：公开接口按 IP 限流，而管理端一次打开就要
+     * 目录 + 点位两份，反复调试时很容易撞到限流，看到的却是"地图坏了"。
+     * 鉴权已经由 {@link AdminAuthFilter} 拦在前面，这里复用视图层即可。
+     */
+    @GetMapping("/catalog")
+    public Map<String, Object> catalog() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("enabled", options.isEnabled());
+        out.put("unitsPerMeter", options.getUnitsPerMeter());
+        out.put("categories", MapViewService.categoryLabels());
+        out.put("maps", view.catalog());
+        return out;
+    }
+
+    /** 一张地图的**全部**点位（含隐藏的），标注页要能看到自己藏了什么 */
+    @GetMapping("/markers")
+    public ResponseEntity<?> markers(@RequestParam("map") String map) {
+        if (map == null || map.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "缺少 map 参数"));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("map", map.strip());
+        out.put("markers", view.markers(map.strip(), false));
+        return ResponseEntity.ok(out);
+    }
+
     /** 可供点位选用的图标（去重）—— 复用 wiki 已有的那套，不额外做图片上传 */
     @GetMapping("/icons")
     public Map<String, Object> icons() {
@@ -226,6 +257,21 @@ public class AdminMapController {
         if (!jobs.startSync(dryRun)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "同步已经在跑了"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "started", true));
+    }
+
+    /**
+     * 预热底图缓存。同样立即返回。
+     *
+     * <p>出站请求是串行节流的，拉满一张图要二十来秒 —— 这件事该由管理员点一次，
+     * 而不是让第一个打开地图的群友在空白里等。
+     */
+    @PostMapping("/warm")
+    public ResponseEntity<?> warm() {
+        if (!jobs.startWarm()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "预热已经在跑了"));
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
     }

@@ -33,6 +33,25 @@ public class WikiMapImageSource implements MapImageSource {
 
     private static final Logger log = LoggerFactory.getLogger(WikiMapImageSource.class);
 
+    /**
+     * 对上游的**串行闸门**。
+     *
+     * <p>实测：并发拉瓦片时 wiki 直接回 <b>429 Too Many Requests</b>，
+     * 而"打开一次地图"正好就是几十个并发请求 —— 不节流的话首屏会缺一大片瓦片，
+     * 用户看到的是"这地图是坏的"。
+     *
+     * <p>所以出站请求串行化，并保证两次之间有 {@link #MIN_GAP_MS} 的间隔。
+     * 代价是首次拉满一张图的瓦片要二十来秒，但那是一次性的 ——
+     * 之后所有访客都命中本地缓存，一个字节都不再打扰 wiki。
+     */
+    private final java.util.concurrent.Semaphore gate = new java.util.concurrent.Semaphore(1);
+
+    /** 两次出站请求之间的最小间隔。实测 3 次/秒不会再触发 429 */
+    private static final long MIN_GAP_MS = 300;
+
+    /** 只在闸门内读写 */
+    private long lastRequestAt;
+
     private final MapOptions options;
     private final HttpClient http;
 
@@ -45,9 +64,69 @@ public class WikiMapImageSource implements MapImageSource {
                 .build();
     }
 
+    /** 重试的等待时长。429 是"你太快了"，等得短了等于没等 */
+    private static final long[] RETRY_BACKOFF_MS = {900, 2500};
+
+    /**
+     * 取图，失败按 {@link #RETRY_BACKOFF_MS} 退避重试。
+     *
+     * <p>为什么要重试：即便节流了，实测仍会有个位数的请求撞上 429，
+     * 而失败的表现是"地图上缺一块"。重试的代价只在失败路径上。
+     */
     @Override
     public byte[] fetch(String fileName, int width) throws IOException {
-        String url = url(fileName, width);
+        IOException last = null;
+        for (int attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
+            try {
+                return fetchOnce(fileName, width);
+            } catch (IOException e) {
+                last = e;
+                if (attempt < RETRY_BACKOFF_MS.length) {
+                    sleep(RETRY_BACKOFF_MS[attempt]);
+                }
+            }
+        }
+        throw last == null ? new IOException("取图失败：" + fileName) : last;
+    }
+
+    private void sleep(long ms) throws IOException {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("等待重试被中断", e);
+        }
+    }
+
+    /** 进闸门并补齐间隔。**必须在 finally 里 {@link #leave()}** */
+    private void enter() throws IOException {
+        try {
+            gate.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("等待出站闸门被中断", e);
+        }
+        long wait = MIN_GAP_MS - (System.currentTimeMillis() - lastRequestAt);
+        if (wait > 0) {
+            sleep(wait);
+        }
+        lastRequestAt = System.currentTimeMillis();
+    }
+
+    private void leave() {
+        gate.release();
+    }
+
+    private byte[] fetchOnce(String fileName, int width) throws IOException {
+        enter();
+        try {
+            return send(url(fileName, width));
+        } finally {
+            leave();
+        }
+    }
+
+    private byte[] send(String url) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(Math.max(5, options.getTimeoutSeconds())))
                 .header("User-Agent", options.getUserAgent())

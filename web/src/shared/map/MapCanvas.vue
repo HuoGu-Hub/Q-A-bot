@@ -187,7 +187,9 @@ function iconFor(m: Marker): HTMLImageElement | null {
   if (cached) return cached.complete && cached.naturalWidth > 0 ? cached : null
   const img = new Image()
   img.decoding = 'async'
-  img.src = tileUrl(file, 48, false)
+  // 图标原图只有 56px，画到 22~26 CSS 像素本来就是缩小，不需要服务端再缩
+  //（48 也不在服务端的宽度白名单里，会被静默退回原图 —— 不如直接要原图）
+  img.src = tileUrl(file, 0, false)
   // 图标是异步到的：到一张就重绘一次，而不是等全部到齐
   img.onload = () => schedule()
   iconCache.set(file, img)
@@ -572,7 +574,12 @@ defineExpose({
     @wheel.prevent="onWheel"
     @dblclick="onDoubleClick"
   >
-    <div class="world" :style="worldStyle">
+    <!--
+      size 还没测出来时**不渲染瓦片**：那时 view 还是 k=1 的初值，
+      会按原图档位发起一整轮请求，而第一次 fit 之后这些请求全部作废。
+      实测这会让首屏白白多下十几兆。
+    -->
+    <div v-if="size.w > 0" class="world" :style="worldStyle">
       <!-- 新 schema：瓦片集 -->
       <img
         v-for="t in tiles"
