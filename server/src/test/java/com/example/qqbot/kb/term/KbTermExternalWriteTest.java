@@ -26,8 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 于是检索侧一直用旧词表：补完几百条别名，机器人还是"怎么问都查不到"，
  * 而且不报错。所以 {@link KbTermStore#version()} 会按秒级轮询库里的指纹。
  *
- * <p>测试把轮询间隔设成 0（{@code -Dqqbot.term.external-check-millis=0}），
- * 这样不必等 5 秒。
+ * <p>测试用 {@link KbTermStore#forceExternalCheck()} 要求立刻比对，
+ * 不必为验这个 sleep 一整个轮询间隔。
  */
 class KbTermExternalWriteTest {
 

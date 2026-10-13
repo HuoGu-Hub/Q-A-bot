@@ -79,7 +79,7 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
 
     /** 外部写入检测的间隔（毫秒）。测试里设成 0 就能立刻发现 */
     private static final long EXTERNAL_CHECK_MILLIS =
-            Long.getLong("qqbot.term.external-check-millis", 5000L);
+            Long.getLong("qqbot.term.external-check-millis", 30000L);
 
     /** 上一次查库里指纹的时间与结果 —— 见 {@link #version()} */
     private volatile long lastExternalCheck;
@@ -126,7 +126,7 @@ public class KbTermStore implements com.example.qqbot.kb.TermSource {
     /**
      * 让下一次 {@link #version()} 立刻比对库里的指纹，不等轮询间隔。
      *
-     * <p>包内可见：给测试与现场排查用。轮询间隔默认 5 秒，
+     * <p>包内可见：给测试与现场排查用。轮询间隔默认 30 秒，
      * 测"外部写入能不能被发现"时不该为此 sleep 5 秒。
      */
     void forceExternalCheck() {
