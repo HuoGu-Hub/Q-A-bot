@@ -149,9 +149,15 @@ public class MapViewService {
         }
     }
 
-    /** 一个图层（分组） */
+    /**
+     * 一个图层（分组）。
+     *
+     * <p>带上 {@code category}：前端要靠它决定"默认开哪些图层" ——
+     * 收集品（化石、乐谱、壁毯）有 550 多个，全开会让总览糊成一片，
+     * 而它们不是"资源在哪、敌营在哪"这类问题的答案。
+     */
     public record GroupView(String key, String name, String icon, boolean collectible,
-                            boolean landmark, int count) {
+                            boolean landmark, String category, int count) {
     }
 
     /** 一张地图的目录信息（不含点位） */
@@ -181,9 +187,10 @@ public class MapViewService {
                 if (n == 0) {
                     continue;
                 }
+                String category = WikiPlaceDirectory.categoryOf(g.key(), "");
                 groupViews.add(new GroupView(g.key(), groupLabel(g.name()),
                         g.icon() == null ? "" : g.icon(), g.collectible(),
-                        WikiPlaceDirectory.categoryOf(g.key(), "").equals(PlaceCategory.LANDMARK), n));
+                        PlaceCategory.LANDMARK.equals(category), category, n));
             }
             groupViews.sort((a, b) -> Integer.compare(b.count(), a.count()));
             out.add(new MapView(c.map(), labelOf(c.map()), (int) c.count(),
