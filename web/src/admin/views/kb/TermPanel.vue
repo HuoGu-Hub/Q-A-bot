@@ -476,13 +476,9 @@ defineExpose({
                       <Input
                         :id="aliasId(e.id)"
                         :model-value="editAlias"
-                        placeholder="多个用「、」分隔，例如：苗圃补给、苗圃物资"
+                        placeholder="多个用「、」分隔"
                         @update:model-value="(v: string) => (editAlias = v)"
                       />
-                      <p class="sheet-hint">
-                        别名是<b>追加</b>的叫法：标题（连同括号里的英文）始终在检索里，不会被这里替换。
-                        留空时列表里显示标题括号中的英文。
-                      </p>
                     </div>
                   </div>
 
@@ -504,10 +500,6 @@ defineExpose({
                         placeholder="这一块的正文"
                         @update:model-value="(v: string) => (editBody = v)"
                       />
-                      <p class="sheet-hint">
-                        从这里保存会<b>立刻重算</b>这一块的向量。若绕过它直接改库里的文本，检索仍按旧正文匹配
-                        —— 所以正文只从这里改。<span class="count num">{{ num(editBody.length) }}</span> 字
-                      </p>
                     </div>
                   </div>
 
@@ -655,9 +647,7 @@ defineExpose({
   letter-spacing: var(--tracking-label);
 }
 .sheet-ctrl { min-width: 0; }
-.sheet-hint { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--ink-3); line-height: 1.7; }
-.sheet-hint b { color: var(--ink-2); font-weight: var(--fw-medium); }
-.sheet-hint .count { color: var(--ink-2); }
+
 .loading { padding: 9px 0; font-size: var(--fs-base); }
 .load-failed { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 
