@@ -361,7 +361,7 @@ defineExpose({
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <Notice v-if="ok" tone="ok">{{ ok }}</Notice>
 
-    <Panel title="词条" :hint="ledgerText" :count="total">
+    <Panel>
       <div class="toolbar">
         <!-- 筛选控件顶替原来导入/导出按钮的位置，成为这一行的主角 -->
         <div class="tb-filters">
@@ -381,18 +381,21 @@ defineExpose({
               @update:model-value="(v: string) => { category = v; applyFilter() }"
             />
           </div>
-          <Input
-            :model-value="q"
-            class="f-kw"
-            placeholder="搜标题 / 别名 …"
-            aria-label="搜索词条"
-            @update:model-value="(v: string) => (q = v)"
-            @keyup.enter="applyFilter"
-          />
-          <Button size="sm" @click="applyFilter">搜索</Button>
+          <div class="search">
+            <Input
+              :model-value="q"
+              class="f-kw"
+              placeholder="搜标题 / 别名 …"
+              aria-label="搜索词条"
+              @update:model-value="(v: string) => (q = v)"
+              @keyup.enter="applyFilter"
+            />
+            <Button size="sm" class="search-go" @click="applyFilter">搜索</Button>
+          </div>
         </div>
         <div class="tb-group tb-right">
           <span class="faint page">{{ pageLabel }}</span>
+          <span class="faint ledger">{{ ledgerText }}</span>
           <Button size="sm" :disabled="!canPrev || loading" @click="goPage(-1)">上一页</Button>
           <Button size="sm" :disabled="!canNext || loading" @click="goPage(1)">下一页</Button>
         </div>
@@ -554,12 +557,27 @@ defineExpose({
 }
 /* 筛选控件是这一行的主角：占满左侧，翻页靠右 */
 .tb-filters { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; flex-wrap: wrap; }
-.f-view { flex: none; width: 150px; }
-.f-cat { flex: none; width: 220px; }
-.f-kw { flex: 1; min-width: 200px; }
+.f-view { flex: none; width: 140px; }
+.f-cat { flex: none; width: 176px; }
+/* 搜索框：宽度收窄，按钮内嵌在框里 —— 所以框要留出右侧的内边距 */
+.search { position: relative; flex: 0 1 300px; min-width: 190px; }
+.f-kw { width: 100%; }
+.search :deep(.inp) { padding-right: 66px; }
+/* 用负 margin 居中，不用 transform —— Button 的按下反馈会写 transform: translateY(1px)，
+   两者会互相覆盖，按钮一按就往下跳半格 */
+.search-go {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  margin-top: -15px;
+}
 .tb-group { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .tb-right { margin-left: auto; }
-.page { font-size: var(--fs-meta); }
+.page, .ledger { font-size: var(--fs-meta); }
+/* 窄屏时按钮的全局下限（38px）比输入框还高，会顶破框 —— 这里压回去 */
+@media (max-width: 760px) {
+  .search-go { min-height: 30px; padding: 5px 10px; font-size: var(--fs-sm); margin-top: -15px; }
+}
 .hidden-file { display: none; }
 
 /* ==================== 导出格式选择 ==================== */
@@ -680,7 +698,7 @@ defineExpose({
 }
 
 @media (max-width: 900px) {
-  .f-view, .f-cat, .f-kw { flex: 1 1 100%; width: auto; }
+  .f-view, .f-cat, .search { flex: 1 1 100%; width: auto; }
   .tb-right { margin-left: 0; }
   .panel-wrap :deep(th.c-alias), .panel-wrap :deep(td.c-alias),
   .panel-wrap :deep(th.c-cat), .panel-wrap :deep(td.c-cat),
