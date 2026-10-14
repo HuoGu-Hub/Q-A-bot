@@ -338,22 +338,6 @@ function fmt(n: number): string {
               <Icon name="close" :size="15" />
             </button>
           </div>
-        <!-- 一张地图有多个画布时才需要切换；地图本身不做切换入口 -->
-        <div v-if="(currentMap?.canvases.length ?? 0) > 1" class="block">
-          <h2 class="block-title">图层</h2>
-          <div class="chips">
-            <button
-              v-for="(c, i) in currentMap?.canvases"
-              :key="c.page"
-              type="button"
-              class="chip small"
-              :class="{ on: i === canvasIndex }"
-              :aria-pressed="i === canvasIndex"
-              @click="canvasIndex = i"
-            >{{ c.label }}</button>
-          </div>
-        </div>
-
         <div class="block">
           <h2 class="block-title">找地方</h2>
           <form class="find" @submit.prevent="locate">
