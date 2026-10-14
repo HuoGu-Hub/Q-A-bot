@@ -329,8 +329,16 @@ public class MapViewService {
         }
 
         for (MapPlaceService.Place p : places.list(map, onlyVisible)) {
-            String canvas = p.page() == null || p.page().isBlank()
-                    ? primaryOfMap.getOrDefault(nz(p.map()), "") : p.page();
+            /*
+             * 和 wiki 点位**走同一套映射**。
+             *
+             * 这里踩过一个很隐蔽的坑：自定义点位的 page 可能是 {@code Map:X/Main} 这类
+             * **不可渲染**的页（DataMaps 的配置页），而查看器显示的是 /Background 那种画布页。
+             * 直接把 page 当 canvas 用，前端按 canvas 一过滤就把它筛掉了 ——
+             * 表现出来是"管理端点好点位、公开站根本看不到"，而且没有任何报错。
+             */
+            String canvas = canvasOfPage.getOrDefault(nz(p.page()),
+                    primaryOfMap.getOrDefault(nz(p.map()), ""));
             out.add(new MarkerView("place:" + p.id(), nz(p.map()), nz(p.page()), canvas,
                     p.category(), p.name(), p.name(), p.note(), "", p.x(), p.y(), "",
                     p.landmark(), p.category(), p.priority(), nz(p.note()), "admin"));
