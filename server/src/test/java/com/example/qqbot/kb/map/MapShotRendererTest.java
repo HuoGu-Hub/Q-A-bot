@@ -85,6 +85,23 @@ class MapShotRendererTest {
     }
 
     @Test
+    @DisplayName("★ 一张缺就整张不出，但会把相交的瓦片全部试一遍 —— 调用方要靠它拿到完整缺口")
+    void missingTileStillTriesEveryTile() {
+        List<String> asked = new java.util.ArrayList<>();
+        MapShotRenderer.TileFetcher partial = (image, width) -> {
+            asked.add(image);
+            return image.equals("t01.png")
+                    ? Optional.empty()
+                    : Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+        };
+
+        assertThat(renderer.render(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
+                partial, System.currentTimeMillis() + 5000)).isEmpty();
+        assertThat(asked).containsExactlyInAnyOrder("t00.png", "t10.png", "t01.png", "t11.png");
+    }
+
+    @Test
     @DisplayName("★ 超出取图预算就放弃，不把出站路径拖住")
     void deadlineGivesUp() {
         assertThat(renderer.render(CANVAS, TILES, "",

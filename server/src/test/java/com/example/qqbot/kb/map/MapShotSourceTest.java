@@ -21,7 +21,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -36,10 +39,13 @@ class MapShotSourceTest {
     private static final String CANVAS_PAGE = "Map:Embervale/Background";
     private static final String REF = "Map:Embervale/Main#AncientSpire-Springlands";
 
+    private byte[] tilePng;
+
     private MapOptions options;
     private MapViewService view;
     private PlaceDirectory places;
     private MapImageCache images;
+    private MapShotWarmer warmer;
     private MapShotSource source;
 
     @BeforeEach
@@ -74,12 +80,13 @@ class MapShotSourceTest {
         when(places.all()).thenReturn(List.of(target, anchor));
         when(places.worldSizes()).thenReturn(java.util.Map.of(MAP, new double[]{2560, 2560}));
 
-        byte[] tile = solidPng();
+        tilePng = solidPng();
         images = mock(MapImageCache.class);
         when(images.get(any(), any(), any(), anyInt()))
-                .thenReturn(Optional.of(new MapImageCache.Image(tile, "image/png", true)));
+                .thenReturn(Optional.of(new MapImageCache.Image(tilePng, "image/png", true)));
 
-        source = new MapShotSource(view, places, images, new MapShotRenderer(options), options);
+        warmer = mock(MapShotWarmer.class);
+        source = new MapShotSource(view, places, images, new MapShotRenderer(options), warmer, options);
     }
 
     @Test
@@ -123,6 +130,26 @@ class MapShotSourceTest {
         when(view.canvasesOf(MAP)).thenReturn(List.of());
 
         assertThat(source.resolve(PlacePoint.keyOf(REF))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("★ 缺瓦片时把缺口交给按需预热 —— 下次问同一个点位就有图")
+    void handsMissingTilesToWarmer() {
+        when(images.get(any(), any(), any(), anyInt()))
+                .thenAnswer(inv -> "t01.png".equals(inv.getArgument(2))
+                        ? Optional.empty()
+                        : Optional.of(new MapImageCache.Image(tilePng, "image/png", true)));
+
+        assertThat(source.resolve(PlacePoint.keyOf(REF))).isEmpty();
+        verify(warmer).warmAsync(eq(MAP), eq(CANVAS_PAGE), eq(List.of("t01.png")), anyInt());
+    }
+
+    @Test
+    @DisplayName("出图成功时不该去打扰预热")
+    void noWarmWhenShotSucceeds() {
+        assertThat(source.resolve(PlacePoint.keyOf(REF))).isPresent();
+
+        verify(warmer, never()).warmAsync(any(), any(), any(), anyInt());
     }
 
     @Test

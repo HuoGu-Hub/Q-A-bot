@@ -168,9 +168,10 @@ hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
 <tr><td>P2</td><td><code>MapShotRenderer</code>：算视口、选档位、拼底图、画两个标记、编码 PNG</td><td>用本地已缓存的瓦片渲染出图；输出尺寸与标记像素位置可断言</td></tr>
 <tr><td>P3</td><td><code>MapShotSource</code> 接入 <code>ImageSource</code>，实现规范化 key 的反查索引、deadline 与降级</td><td>缓存命中出图；人为缺瓦片时只回文字且不拖慢</td></tr>
 <tr><td>P4</td><td><code>locate</code> 工具结果带上配图 key</td><td>问「X 在哪」时工具输出里出现可照抄的标记</td></tr>
-<tr><td>P5</td><td>结果缓存落盘 + 预热接入现有预热任务</td><td>同一个点位第二次问零渲染成本</td></tr>
+<tr><td>P5</td><td>按需预热 + 结果缓存落盘</td><td>缺瓦片时只补那几张，同一个点位第二次问就有图</td></tr>
 </table>
-<p class="meta">进度：P1 坐标换算与对照测试、P2 渲染器、P3 出图来源与降级、P4 工具结果带配图 key —— <b>均已完成</b>；P5 待做。</p>
+<p class="meta">进度：P1 坐标换算与对照测试、P2 渲染器、P3 出图来源与降级、P4 工具结果带配图 key —— <b>均已完成</b>；
+P5 的<b>按需预热已完成</b>（出图缺哪几张就后台补哪几张，不再等全量预热跑完），结果缓存落盘待做。</p>
 
 <h2>七、风险与对策</h2>
 <table>

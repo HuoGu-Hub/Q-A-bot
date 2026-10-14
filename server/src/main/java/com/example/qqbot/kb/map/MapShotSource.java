@@ -39,14 +39,16 @@ public class MapShotSource implements ImageSource {
     private final PlaceDirectory places;
     private final MapImageCache images;
     private final MapShotRenderer renderer;
+    private final MapShotWarmer warmer;
     private final MapOptions options;
 
     public MapShotSource(MapViewService view, PlaceDirectory places, MapImageCache images,
-                         MapShotRenderer renderer, MapOptions options) {
+                         MapShotRenderer renderer, MapShotWarmer warmer, MapOptions options) {
         this.view = view;
         this.places = places;
         this.images = images;
         this.renderer = renderer;
+        this.warmer = warmer;
         this.options = options;
     }
 
@@ -93,11 +95,25 @@ public class MapShotSource implements ImageSource {
         });
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
-        MapShotRenderer.TileFetcher fetcher =
-                (image, width) -> images.get(map, canvas.page(), image, width);
+        // 顺手记下缺口：渲染器会把相交的瓦片都试一遍，所以这里拿到的是**完整**的缺失清单
+        List<String> missing = new ArrayList<>();
+        int[] usedWidth = {0};
+        MapShotRenderer.TileFetcher fetcher = (image, width) -> {
+            usedWidth[0] = width;
+            Optional<MapImageCache.Image> got = images.get(map, canvas.page(), image, width);
+            if (got.isEmpty()) {
+                missing.add(image);
+            }
+            return got;
+        };
 
-        return renderer.render(geometry, canvas.tiles(), canvas.background(), marks, fetcher, deadline)
-                .map(bytes -> OutboundImage.ofBytes(bytes, "image/jpeg"));
+        Optional<byte[]> shot = renderer.render(geometry, canvas.tiles(), canvas.background(),
+                marks, fetcher, deadline);
+        if (shot.isEmpty() && !missing.isEmpty()) {
+            // 这次没图，但缺的那几张已经交给后台了 —— 同一个点位再问一次就有
+            warmer.warmAsync(map, canvas.page(), missing, usedWidth[0]);
+        }
+        return shot.map(bytes -> OutboundImage.ofBytes(bytes, "image/jpeg"));
     }
 
     /**

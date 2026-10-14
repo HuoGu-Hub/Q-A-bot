@@ -18,6 +18,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -115,24 +116,36 @@ public class MapShotRenderer {
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                     RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
+            List<BufferedImage> base = new ArrayList<>();
+            List<MapProjection.Box> baseBoxes = new ArrayList<>();
+            int wanted = 0;
             if (tiles != null && !tiles.isEmpty()) {
                 for (MapViewService.TileView tile : tiles) {
                     MapProjection.Box box = MapProjection.tileBox(canvas, tile.col(), tile.row());
                     if (!intersects(box, vp)) {
                         continue;
                     }
+                    wanted++;
                     if (System.currentTimeMillis() > deadlineAtMillis) {
-                        log.info("[MAP-SHOT] 取瓦片超预算，本次不出图（已画 {} 张）", used);
+                        log.info("[MAP-SHOT] 取瓦片超预算，本次不出图（已取 {}/{} 张）", base.size(), wanted);
                         return Optional.empty();
                     }
                     Optional<MapImageCache.Image> got = fetcher.get(tile.image(), tileWidth);
                     if (got.isEmpty()) {
-                        log.info("[MAP-SHOT] 缺瓦片 {}，本次不出图 —— 半张图比没有图更糟", tile.image());
-                        return Optional.empty();
+                        // ⚠️ 这里**不能立刻返回**：把剩下的也试一遍，调用方才能拿到完整的缺口清单，
+                        //    一次把缺的几张全交给按需预热。一缺就返回的话，每补一张才能前进一格。
+                        continue;
                     }
-                    if (drawTile(g, got.get().bytes(), box, vp, k)) {
-                        used++;
+                    BufferedImage tileImage = decode(got.get().bytes());
+                    if (tileImage != null) {
+                        base.add(tileImage);
+                        baseBoxes.add(box);
                     }
+                }
+                if (base.size() < wanted) {
+                    log.info("[MAP-SHOT] 底图缺瓦片（{}/{} 张），本次不出图 —— 半张图比没有图更糟",
+                            base.size(), wanted);
+                    return Optional.empty();
                 }
             } else if (background != null && !background.isBlank()) {
                 // 旧 schema 的画布没有瓦片，只有一整张底图
@@ -145,13 +158,20 @@ public class MapShotRenderer {
                     log.info("[MAP-SHOT] 缺底图 {}，本次不出图", background);
                     return Optional.empty();
                 }
-                MapProjection.Box whole = new MapProjection.Box(0, 0, canvas.width(), canvas.height());
-                if (drawTile(g, got.get().bytes(), whole, vp, k)) {
-                    used++;
+                BufferedImage wholeImage = decode(got.get().bytes());
+                if (wholeImage == null) {
+                    log.info("[MAP-SHOT] 底图解不开，本次不出图");
+                    return Optional.empty();
                 }
+                base.add(wholeImage);
+                baseBoxes.add(new MapProjection.Box(0, 0, canvas.width(), canvas.height()));
             } else {
                 log.info("[MAP-SHOT] 这张画布既没有瓦片也没有整图，画不出来");
                 return Optional.empty();
+            }
+            for (int i = 0; i < base.size(); i++) {
+                drawTile(g, base.get(i), baseBoxes.get(i), vp, k);
+                used++;
             }
             drawMarks(g, marks, vp, k, outW);
         } finally {
@@ -172,29 +192,29 @@ public class MapShotRenderer {
                 && box.top() < vp.top() + vp.height() && box.top() + box.height() > vp.top();
     }
 
+    /** 解码一张瓦片。解不开返回 null —— 半张底图会被当成"那里就是黑的" */
+    private static BufferedImage decode(byte[] bytes) {
+        try {
+            return ImageIO.read(new ByteArrayInputStream(bytes));
+        } catch (IOException e) {
+            log.warn("[MAP-SHOT] 瓦片解码失败：{}", e.getMessage());
+            return null;
+        }
+    }
+
     /**
      * 把一张瓦片画到输出图上。
      *
      * <p>尺寸用<b>两端点</b>算而不是直接乘：直接乘会因取整在瓦片之间留下 1 像素的缝，
      * 表现为底图上一道道细黑线。
      */
-    private static boolean drawTile(Graphics2D g, byte[] bytes, MapProjection.Box box,
-                                    MapProjection.Viewport vp, double k) {
-        try {
-            BufferedImage tile = ImageIO.read(new ByteArrayInputStream(bytes));
-            if (tile == null) {
-                return false;
-            }
-            int x0 = (int) Math.round((box.left() - vp.left()) * k);
-            int y0 = (int) Math.round((box.top() - vp.top()) * k);
-            int x1 = (int) Math.round((box.left() + box.width() - vp.left()) * k);
-            int y1 = (int) Math.round((box.top() + box.height() - vp.top()) * k);
-            g.drawImage(tile, x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), null);
-            return true;
-        } catch (IOException e) {
-            log.warn("[MAP-SHOT] 瓦片解码失败：{}", e.getMessage());
-            return false;
-        }
+    private static void drawTile(Graphics2D g, BufferedImage tile, MapProjection.Box box,
+                                 MapProjection.Viewport vp, double k) {
+        int x0 = (int) Math.round((box.left() - vp.left()) * k);
+        int y0 = (int) Math.round((box.top() - vp.top()) * k);
+        int x1 = (int) Math.round((box.left() + box.width() - vp.left()) * k);
+        int y1 = (int) Math.round((box.top() + box.height() - vp.top()) * k);
+        g.drawImage(tile, x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), null);
     }
 
     /**
