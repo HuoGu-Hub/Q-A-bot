@@ -19,7 +19,7 @@ import java.util.Map;
  * 每次写成功都会 +1 版本，这里对不上就自己重载。旧契约是"写完请调用方记得调
  * {@link #reload()}" —— 导入器 / 地图派生 / 管理端一共 12 处手工调用，
  * 新增一个写入口就漏一个，而漏了的症状是**检索一直用旧语料、且不报错**
- * （和 {@code KbTermStore.version} 是同一条教训）。
+ * （是一条踩过的教训）。
  * {@link #reload()} 保留给 CLI / 测试强制刷新用。
  *
  * <p>与旧设计的根本区别：**索引是"id → 块/向量"，不是"第 k 行 → 块/向量"**。
@@ -77,8 +77,7 @@ public class KbBlockIndex implements com.example.qqbot.kb.KbCorpus {
      * 语料版本 —— 直接转发给存储。
      *
      * <p>索引自己的快照也是按这个版本加载的（见 {@link #ensureLoaded()}），
-     * 所以它天然就是「这份语料的新旧程度」：词条表靠它判断要不要补齐
-     * （{@code KbTermStore.ensureReconciled()}），调用方不需要再手工调 reconcile()。
+     * 所以它天然就是「这份语料的新旧程度」：分类统计、词条视图等消费方也靠它判断要不要刷新。
      */
     @Override
     public long version() {

@@ -148,50 +148,15 @@ class ArchitectureTest {
     }
 
     @Test
-    @DisplayName("★ 摄入来源不许再碰词条表 —— 它自己看语料版本补齐（2026-10-08）")
-    void ingestSourcesDoNotTouchTermTable() {
-        // 迁移前：wiki 导入器 / 地图派生器写完之后各显式调一次 KbTermStore.reconcile()（共 4 处）。
-        // 现在 KbTermStore 在**读**词条时自己比对 KbCorpus.version() 并补齐（ensureReconciled），
-        // 所以生产者连 KbTermStore 都不该认识 —— 少一个"忘了调就静默少一批中文名"的入口。
-        //（kb.block.KbDocImporter 不在本规则范围内，且它用 KbTermStore 是合理的：
-        //  导文档时**逐块登记**名字，那是它的职责。）
-        ArchRule rule = noClasses()
-                .that().resideInAnyPackage("..kb.wiki..", "..kb.map..")
-                .should().dependOnClassesThat().haveSimpleName("KbTermStore");
-        rule.check(CLASSES);
-    }
-
-    @Test
-    @DisplayName("★ kb.block 与 kb.term 互不依赖 —— 两半的汇合只在组合层（2026-10-10 转正）")
-    void blockAndTermDoNotKnowEachOther() {
-        // 曾经的关系：导入器往词条表写名字（block → term），
-        // 而词条目录要读块来拼（term → block）—— 两条边都是真实需求，于是互指。
-        // 现在：块侧只**提出**名字建议（kb.NameCandidate），名字侧只**接**候选，
-        // 合起来的那一步在组合层 kb.catalog。两半从此没有理由认识对方。
-        //
-        // 迁移期间这里曾有、也只允许有一个例外（KbDocImporter）。例外已经消掉，
-        // 所以本规则不再留白名单：任何一边新增依赖都会立刻变红。
-        ArchRule blockToTerm = noClasses()
-                .that().resideInAPackage("..kb.block..")
-                .should().dependOnClassesThat().resideInAPackage("..kb.term..");
-        blockToTerm.check(CLASSES);
-
-        ArchRule termToBlock = noClasses()
-                .that().resideInAPackage("..kb.term..")
-                .should().dependOnClassesThat().resideInAPackage("..kb.block..");
-        termToBlock.check(CLASSES);
-    }
-
-    @Test
-    @DisplayName("★ kb 核心不得依赖任何上层包（block / term / catalog）")
+    @DisplayName("★ kb 核心不得依赖任何上层包（block / catalog）")
     void kbCoreDoesNotDependOnUpperLayers() {
-        // 核心（契约 + 检索）是这层结构的底：词条表由 TermSource 只读视图提供，
-        // 块表由 KbCorpus 提供，两半的汇合由 kb.catalog 负责。
+        // 核心（契约 + 检索）是这层结构的底：词条名字由 TermSource 只读视图提供
+        // （实现方是块存储），块表由 KbCorpus 提供，分类由 kb.category 提供。
         // 核心一旦反向依赖任何一层，整个方向就重新变成"谁都能拉谁"。
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..kb")
                 .should().dependOnClassesThat()
-                .resideInAnyPackage("..kb.block..", "..kb.term..", "..kb.catalog..");
+                .resideInAnyPackage("..kb.block..", "..kb.catalog..", "..kb.category..");
         rule.check(CLASSES);
     }
 

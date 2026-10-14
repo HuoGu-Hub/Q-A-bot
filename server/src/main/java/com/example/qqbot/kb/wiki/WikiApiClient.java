@@ -286,6 +286,43 @@ public class WikiApiClient {
         return out;
     }
 
+    /**
+     * 一批页面**各自的**分类名（{@code prop=categories}）。
+     *
+     * <p>wiki 清洗语料按"来源 + 页面分类"自动归类，所以导入时要顺带取一次。
+     * 取不到不影响导入 —— 调用方自己 try/catch，最坏是这一批页只有来源分类。
+     */
+    public Map<String, List<String>> fetchCategories(List<String> titles) {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        for (List<String> batch : batches(titles)) {
+            String url = props.getMapSync().getApiBase()
+                    + "?action=query&prop=categories&cllimit=max&clshow=!hidden"
+                    + "&format=json&formatversion=2&titles=" + join(batch);
+            JsonNode root = get(url);
+            for (JsonNode p : root.path("query").path("pages")) {
+                String title = p.path("title").asText("");
+                if (title.isBlank()) {
+                    continue;
+                }
+                List<String> cs = new ArrayList<>();
+                for (JsonNode c : p.path("categories")) {
+                    String name = c.path("title").asText("");
+                    // 形如 "Category:Gameplay" —— 只保留分类名
+                    int colon = name.indexOf(':');
+                    if (colon >= 0) {
+                        name = name.substring(colon + 1);
+                    }
+                    name = name.trim();
+                    if (!name.isBlank()) {
+                        cs.add(name);
+                    }
+                }
+                out.put(title, cs);
+            }
+        }
+        return out;
+    }
+
     /** wiki 上的分类名 + 成员数（{@code acprop=size}）。管理端"范围"页面用它列菜单 */
     public List<CategoryInfo> listAllCategories() {
         String url = props.getMapSync().getApiBase()

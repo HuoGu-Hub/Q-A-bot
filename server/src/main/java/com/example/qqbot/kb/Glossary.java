@@ -20,18 +20,16 @@ import java.util.regex.Pattern;
  * Crucible / Smelter 这类"同属合成语义"的页面排在前面，真正的 Scrap Cup 掉到第 4。
  * 有了「废料杯 → Scrap Cup」这张对照，就能直接把中文问题锚定到英文页面上。
  *
- * <h2>数据从哪来（2026-09-27 改造）</h2>
- * 以前本类自己去读 {@code data/kb/glossary/zh-en.tsv}，于是同一份数据被
- * 本类、{@code GlossaryStore}（后台写）、{@code KbTermService}（列表组装，现已搬到 {@code kb.catalog.KbCatalog}）
- * 各自解析一遍。现在只有一个来源：{@link com.example.qqbot.kb.term.KbTermStore}（SQLite 单表），
- * 而本类只依赖 {@link TermSource} 这个只读视图。
+ * <h2>数据从哪来</h2>
+ * 词条就是分块之后，名字源就是块表 —— 块存储实现了核心的 {@link TermSource} 只读视图。
+ * 本类只依赖那个接口，不认识块是怎么存、怎么写的。
  *
  * <h2>为什么不需要调用方记得刷新</h2>
- * 每次取用前比对 {@link TermSource#version()}：写入方一改，版本号就变，
+ * 每次取用前比对 {@link TermSource#version()}：语料一改，版本号就变，
  * 本类下一次查询自动重载。旧实现靠每个写方法末尾手动 {@code glossary.reload()}，
  * 新增一个写入口就漏一个，漏了不报错 —— 只是后台改完词，机器人一直在用旧的。
  *
- * <p>只加载状态不是 rejected 的行；没有可用数据时返回空（B 路退化成只认英文词）。
+ * <p>没有可用数据时返回空（B 路退化成只认英文词）。
  */
 @Component
 public class Glossary {
@@ -315,48 +313,32 @@ public class Glossary {
         }
         Map<String, String> map = new LinkedHashMap<>();
         for (TermSource.Row e : store.rows()) {
-            if (e.en().isBlank() || "rejected".equalsIgnoreCase(e.status())) {
+            if (e.id() == null || e.id().isBlank()) {
                 continue;
             }
-            // 中文名可以写多个别名，用「、」或「/」分隔 —— 人工核对时很有用。
-            // 例如 Flame Altar 的官方译名可能是「火焰祭坛」，但群友习惯叫「灵火祭坛」，
-            // 写「灵火祭坛、火焰祭坛」两个都能命中。
-            String[] aliases = e.zh().split("[、/｜|]");
+            // 一条词条的全部名字：标题整体 + 标题括号拆出的中文/英文两半 + 别名各部分。
+            // ⚠️ 不能拿 id（slug，如 wiki-strength / acid-bite）当关键词 —— 它只出现在块的 id 里，
+            //    永远不会出现在标题或正文，拿去扫必然 0 命中，只是静默浪费一路召回。
+            List<String> names = com.example.qqbot.kb.TermNames.namesOf(e.title(), e.aliases());
 
-            // ★ 这一条在关键词路上该用哪一侧的"英文"去匹配。
-            //
-            //   ⚠️ 不能直接用 e.en()：它是**身份 id（slug）**，如 wiki-strength / acid-bite。
-            //   slug 只出现在块的 id 里，**永远不会出现在标题或正文**，
-            //   拿它去关键词路找必然一条都匹配不到 —— 而且不报错，只是静默少一路召回。
-            //
-            //   实际语料里"英文那一侧"藏在 zh 里，有两种写法：
-            //     · 物品类：zh = 「酸蚀之咬、Acid Bite」→ 取那截英文名
-            //     · wiki 导入类：zh 直接就是英文名（"Intelligence"）→ 就是它本身
-            //     · 只有中文名：退回 e.en()，此时靠中文别名自己匹配（中文语料/带中文名的标题）
-            String englishSide = e.en().value();
-            for (String alias : aliases) {
-                String a = alias.trim();
-                if (a.length() >= 2 && isAsciiName(a)) {
-                    englishSide = a;
+            // 「英文那一侧」= 第一个纯 ASCII 且不是 slug 的名字（物品标题里的 Abyssal Wing Axe、
+            // wiki 英文页标题 Intelligence）；找不到就留空，靠中文名自己匹配中文语料。
+            String englishSide = "";
+            for (String n : names) {
+                if (n.length() >= 2 && isAsciiName(n) && !isSlug(n)) {
+                    englishSide = n;
                     break;
                 }
             }
-            // ⚠️ 兜底：englishSide 是 slug 时**不能当关键词** —— 它永远不会出现在标题或正文里，
-            //    拿它去扫一遍必然 0 命中，只是静默浪费一路召回（2026-10-13 实测到）。
-            //    留空即可：中文名照样进表（中文语料有用），英文侧交给写入方补（见 KbTermStore.withEnglishSide）。
-            if (isSlug(englishSide)) {
-                englishSide = "";
-            }
 
-            for (String alias : aliases) {
-                String name = alias.trim();
+            for (String name : names) {
                 // 中文至少要 2 个字才值得做子串匹配，否则「剑」「弓」这种单字会命中一大片
-                if (name.length() >= 2) {
+                if (name.length() >= 2 && !isSlug(name)) {
                     map.putIfAbsent(name, englishSide);
                 }
             }
         }
-        log.info("[KB] 术语表已加载：{} 条", map.size());
+        log.info("[KB] 词条名字已加载：{} 条", map.size());
         return new ArrayList<>(map.entrySet());
     }
 }

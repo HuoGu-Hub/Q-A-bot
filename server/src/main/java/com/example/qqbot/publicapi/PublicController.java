@@ -175,14 +175,11 @@ public class PublicController {
                 new PublicDtos.KbSearchResult(query, entries.size(), out.mode(), entries));
     }
 
-    /** 分类列表（用于「浏览资料库」） */
     /**
-     * 大类列表（资料库首页用）。
+     * 分类列表（资料库首页用）。
      *
-     * <p>返回的是玩家视角的 7 个大类，不是 Wiki 的 603 个原始英文分类 ——
-     * 原始分类给玩家看等于没有分类。
-     *
-     * <p>每个大类附带它下面最热门的几个原始标签（也翻译成中文了）。
+     * <p>分类是**人工维护的一份平铺清单**（可以新增 / 改名 / 删除），不再是
+     * "原始标签自动归到 9 个大类"。所以这里直接把清单给出去，附带各自的词条数。
      */
     @GetMapping("/kb/groups")
     public ResponseEntity<?> groups(HttpServletRequest request) {
@@ -192,61 +189,18 @@ public class PublicController {
         }
 
         List<Map<String, Object>> out = new ArrayList<>();
-        for (CategoryService.GroupStat g : categoryService.groupStats()) {
-            // 「其他」不展示给玩家 —— 那是给管理端看的兜底桶
-            if ("other".equals(g.key())) {
-                continue;
-            }
+        for (CategoryService.Stat s : categoryService.stats()) {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("key", g.key());
-            m.put("label", g.label());
-            m.put("icon", g.icon());
-            m.put("desc", g.desc());
-            m.put("entryCount", g.chunkCount());
-            m.put("tags", topTags(g.key(), 14));
+            m.put("key", s.name());
+            m.put("label", s.label());
+            m.put("icon", "");
+            m.put("desc", "");
+            m.put("entryCount", s.count());
+            // 平铺分类没有"细分标签"这一层；前端看到空数组就不渲染标签云
+            m.put("tags", List.of());
             out.add(m);
         }
         return ResponseEntity.ok(out);
-    }
-
-    /** 某大类下的热门标签（原始分类 + 中文名 + 条目数） */
-    private List<Map<String, Object>> topTags(String groupKey, int limit) {
-        Map<String, String> rawToGroup = categoryService.rawToGroup();
-        Map<String, String> labels = categoryService.rawToLabel();
-        Map<String, Integer> counts = categoryService.rawCounts();
-
-        // 按【显示名】合并 —— 不同原始分类可能译名相同（enemy / enemies 都叫「敌人」）
-        Map<String, Map<String, Object>> byLabel = new LinkedHashMap<>();
-        for (Map.Entry<String, String> e : rawToGroup.entrySet()) {
-            if (!groupKey.equals(e.getValue())) {
-                continue;
-            }
-            int n = counts.getOrDefault(e.getKey(), 0);
-            if (n < 2) {
-                continue;
-            }
-            // 没有中文名就【不展示】—— 绝不把 Wiki 的英文原始分类甩给玩家。
-            // 2026-09-26 实测：7 个大类里有 137 个原始分类查不到中文名（多为单页任务/信件名），
-            // 退回英文会让标签行变成中英混杂（「迷失于迷雾」旁边挂个 Lost In The Shroud）。
-            String label = labels.get(e.getKey());
-            if (label == null) {
-                continue;
-            }
-            Map<String, Object> t = byLabel.get(label);
-            if (t == null) {
-                t = new LinkedHashMap<>();
-                t.put("raw", e.getKey());
-                t.put("label", label);
-                t.put("count", n);
-                byLabel.put(label, t);
-            } else {
-                // 同名合并：条目数相加，raw 保留第一个（点进去看的是同一类东西）
-                t.put("count", (int) t.get("count") + n);
-            }
-        }
-        List<Map<String, Object>> tags = new ArrayList<>(byLabel.values());
-        tags.sort((a, b) -> Integer.compare((int) b.get("count"), (int) a.get("count")));
-        return tags.size() > limit ? tags.subList(0, limit) : tags;
     }
 
     /**
@@ -267,31 +221,23 @@ public class PublicController {
             return ResponseEntity.ok(Map.of("entries", List.of(), "total", 0, "page", 0));
         }
 
-        Map<String, String> rawToGroup = categoryService.rawToGroup();
-        Map<String, String> labels = categoryService.rawToLabel();
+        // 分类是平铺的：group 与 tag 都是分类名（保留两个参数只是为了兼容前端的两种入口）
+        String want = tag != null && !tag.isBlank() ? tag.trim()
+                : (group == null ? "" : group.trim());
 
         // 按标题去重 —— 一个页面会被切成多块
         Map<String, com.example.qqbot.kb.KbCorpus.Entry> matched = new LinkedHashMap<>();
-        for (com.example.qqbot.kb.KbCorpus.Entry chunk : kbCorpus.entries()) {
-            List<String> cats = chunk.tags();
-            if (cats == null || cats.isEmpty()) {
-                continue;
-            }
-            for (String c : cats) {
-                if (c == null || c.isBlank()) {
+        if (!want.isEmpty()) {
+            for (com.example.qqbot.kb.KbCorpus.Entry chunk : kbCorpus.entries()) {
+                List<String> cats = chunk.tags();
+                if (cats == null || cats.isEmpty()) {
                     continue;
                 }
-                boolean hit;
-                if (tag != null && !tag.isBlank()) {
-                    hit = tag.equals(c);
-                } else if (group != null && !group.isBlank()) {
-                    hit = group.equals(rawToGroup.get(c));
-                } else {
-                    hit = false;
-                }
-                if (hit) {
-                    matched.putIfAbsent(chunk.title(), chunk);
-                    break;
+                for (String c : cats) {
+                    if (want.equals(c == null ? null : c.trim())) {
+                        matched.putIfAbsent(chunk.title(), chunk);
+                        break;
+                    }
                 }
             }
         }
@@ -310,11 +256,10 @@ public class PublicController {
                 m.put("title", c.title());
                 m.put("url", c.url());
                 m.put("text", com.example.qqbot.kb.KbTextDisplay.excerpt(c.text(), 170));
+                // 展示分类的中文名（分类清单里人工维护的显示名）
                 List<String> shown = new ArrayList<>();
-                for (String cat : c.tags()) {
-                    // 同上：只有词典/后台给过中文名的才展示，不退回英文原名
-                    String lbl = labels.get(cat);
-                    if (lbl != null && !shown.contains(lbl)) {
+                for (String lbl : categoryService.displayNames(c.tags())) {
+                    if (!shown.contains(lbl)) {
                         shown.add(lbl);
                     }
                     if (shown.size() >= 3) {
@@ -423,18 +368,7 @@ public class PublicController {
      * 点进去变英文」又是一处前后不一致。
      */
     private List<String> shownCats(List<String> tags) {
-        if (tags == null || tags.isEmpty()) {
-            return List.of();
-        }
-        Map<String, String> labels = categoryService.rawToLabel();
-        List<String> out = new ArrayList<>();
-        for (String c : tags) {
-            String lbl = c == null ? null : labels.get(c);
-            if (lbl != null && !lbl.isBlank() && !out.contains(lbl)) {
-                out.add(lbl);
-            }
-        }
-        return out;
+        return categoryService.displayNames(tags);
     }
 
     private static String clip(String s) {

@@ -312,7 +312,7 @@ async function doImport() {
     preview.value = null
     okMsg.value = '导入完成：新增 ' + r.added + ' 条、覆盖 ' + r.updated
       + ' 条、无变化 ' + r.unchanged + ' 条；库里未被触及 ' + r.untouched + ' 条'
-      + (r.terms ? '；新建词条 ' + r.terms + ' 条' : '')
+      + '（每个块就是一个词条）'
     await load()
   } catch (e) {
     fail(e)
@@ -524,8 +524,7 @@ onMounted(load)
                 <span v-else-if="r.status === 'done'">
                   已导入：新增 {{ r.result ? r.result.added : 0 }} ·
                   覆盖 {{ r.result ? r.result.updated : 0 }} ·
-                  库里未触及 {{ r.result ? r.result.untouched : 0 }} ·
-                  词条 +{{ r.result ? r.result.terms : 0 }}
+                  库里未触及 {{ r.result ? r.result.untouched : 0 }}
                 </span>
                 <Tag v-else-if="r.preview && r.preview.warnings.length" tone="warn">
                   {{ r.preview.warnings[0] }}
@@ -588,9 +587,6 @@ onMounted(load)
           <Tag tone="warn">覆盖 {{ importResult.updated }}</Tag>
           <Tag tone="neutral">无变化 {{ importResult.unchanged }}</Tag>
           <span class="faint">库里未被触及 <b class="num">{{ importResult.untouched }}</b> 块</span>
-          <span v-if="importResult.terms" class="faint">
-            新建词条 <b class="num">{{ importResult.terms }}</b> 条
-          </span>
         </div>
         <p v-for="(w, i) in importResult.warnings" :key="i" class="pv-warn">{{ w }}</p>
       </div>

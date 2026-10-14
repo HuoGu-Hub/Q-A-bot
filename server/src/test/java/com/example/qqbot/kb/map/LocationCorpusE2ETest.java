@@ -12,11 +12,9 @@ import com.example.qqbot.kb.RerankClient;
 import com.example.qqbot.kb.RetrievalOptions;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbMapRepository;
-import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
@@ -115,9 +113,6 @@ class LocationCorpusE2ETest {
         assertThat(sr.failed()).isZero();
 
         // ② 派生地点语料
-        // 词条表要在派生之前就绪：它现在自己看语料版本补齐（KbTermStore.ensureReconciled）
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
-        terms.init();
         LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, embedding);
         LocationCorpusBuilder.BuildReport plan = builder.planOnly();
         System.out.printf("派生计划：%d 条（区域 %d / POI %d / 具名地点 %d / NPC %d），排除 Lore %d 条%n",
@@ -132,7 +127,7 @@ class LocationCorpusE2ETest {
         assertThat(blocks.count()).isGreaterThan(before);
 
         // ③ 真检索：地点类问题现在能不能拿到资料
-        KbRetriever retriever = new KbRetriever(kb, index, new Glossary(terms), embedding, rerank);
+        KbRetriever retriever = new KbRetriever(kb, index, new Glossary(blocks), embedding, rerank);
 
         for (String q : List.of("春之原野在哪", "灵火祭坛在哪", "铁匠在哪", "空洞大厅有什么")) {
             List<KbRetriever.Hit> hits = retriever.retrieve(q).hits();

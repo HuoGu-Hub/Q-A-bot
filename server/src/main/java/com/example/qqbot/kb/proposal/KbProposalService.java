@@ -69,6 +69,8 @@ public class KbProposalService {
     private final com.example.qqbot.kb.KbCorpus corpus;
     /** 提案落地要按块 id 写（会自动重算那一块的向量） */
     private final com.example.qqbot.kb.block.KbBlockAdminService blockAdmin;
+    /** 新增提案块时把「大佬攻略」分类登记进清单 */
+    private final com.example.qqbot.kb.category.CategoryService categoryService;
 
     private final LlmRouter router;
     private final ObjectMapper mapper;
@@ -83,10 +85,12 @@ public class KbProposalService {
     public KbProposalService(KbProposalRepository repo, com.example.qqbot.kb.KbCorpus corpus,
                              LlmRouter router,
                              ObjectMapper mapper,
-                             com.example.qqbot.kb.block.KbBlockAdminService blockAdmin) {
+                             com.example.qqbot.kb.block.KbBlockAdminService blockAdmin,
+                             com.example.qqbot.kb.category.CategoryService categoryService) {
         this.repo = repo;
         this.corpus = corpus;
         this.blockAdmin = blockAdmin;
+        this.categoryService = categoryService;
         this.router = router;
         this.mapper = mapper;
     }
@@ -376,10 +380,12 @@ public class KbProposalService {
                     // （2026-09-29 起不做"投递"了 —— 资料一律以符合格式的文档导入，
                     //   所以这里不再绕"投递 → 审核 → 建索引"，直接落地。）
                     // docId 用 proposal-<提案号>（英文，合法 id），块序自动补；
-                    // 标签归到「大佬攻略」：提案来自群友认可的回答，本质就是实战心得。
-                    blockAdmin.add("proposal-" + id, null, p.title(), p.proposedText(),
-                            "", java.util.List.of(
-                                    com.example.qqbot.kb.category.KbGroups.CONTRIB_TAG));
+                    // 分类归到「大佬攻略」：提案来自群友认可的回答，本质就是实战心得。
+                    // 先把它登记进分类清单，否则新块会落在「未分类」里。
+                    java.util.List<String> cats = java.util.List.of(
+                            com.example.qqbot.kb.category.CategoryService.CONTRIB);
+                    categoryService.ensure(cats);
+                    blockAdmin.add("proposal-" + id, null, p.title(), p.proposedText(), "", cats);
                 }
             } catch (Exception e) {
                 log.warn("[PROPOSAL] 落地提案 {} 失败：{}", id, e.getMessage());

@@ -9,8 +9,8 @@ package com.example.qqbot.kb;
  * <ul>
  *   <li>把 {@code docId}（文档名）当成块 id 传给 {@code store.get(...)} ——
  *       静默返回 null，界面显示"没有这块"，日志里什么都没有；</li>
- *   <li>把标题、板块名之类的普通字符串塞进 {@code NameCandidate} ——
- *       在词条表里长出一行永远不会被命中的垃圾。</li>
+ *   <li>把标题当成块 id 传进来 ——
+ *       查不到、写不进，日志里什么都没有。</li>
  * </ul>
  * 类型化之后这两类错误在编译期就停住。
  *

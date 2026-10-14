@@ -196,7 +196,7 @@ public class LocationCorpusBuilder {
                 written++;
             }
         }
-        // 词条表不用管：下次读取时会自己发现语料版本变了并补齐（KbTermStore.ensureReconciled）
+        // 词条就是分块：派生块落库即成为词条，不需要额外的补齐步骤
         log.info("[KB-MAP] 地点语料派生完成：{} 条（区域 {} / POI {} / 具名 {} / NPC {}），跳过 Lore {} 条",
                 written, countKind(entries, "region"), countKind(entries, "poi"),
                 countKind(entries, "place"), countKind(entries, "npc"), skippedLore);
@@ -212,8 +212,7 @@ public class LocationCorpusBuilder {
                 n++;
             }
         }
-        // 词条表不用管：删块也会让语料版本前进，下次读取时自动补齐
-        // （孤儿词条仍然由管理端手动清，理由见 KbTermStore.deleteOrphans）
+        // 词条就是分块：删块即删词条，语料版本自动前进
         log.info("[KB-MAP] 已清除派生地点语料 {} 条", n);
         return n;
     }

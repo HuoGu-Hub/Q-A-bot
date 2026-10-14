@@ -22,8 +22,8 @@ import java.util.regex.Pattern;
  * 按字节偏移改向量（因为身份是行号）。这里全部换成 **id + 数据库**：
  * 改一块就是改两行，删一块就是删两行，不需要墓碑、不需要原子替换整个文件。
  *
- * <p>迁移已完成，三处各归其位：块操作在这里，名字写入在 {@code kb.term.KbTermService}，
- * 目录读模型与导入编排在 {@code kb.catalog.KbCatalog}。
+ * <p>迁移已完成，各归其位：块操作在这里，词条读模型与导入编排在 {@code kb.catalog.KbCatalog}；
+ * 名字（标题 + 别名）本来就在块上，没有独立的名字层了。
  *
  * <h2>一条硬规矩：改正文必须重算向量</h2>
  * 向量是按正文算的。只改正文不重算，检索会**按旧正文匹配** —— 表面上"保存成功"，
@@ -65,13 +65,14 @@ public class KbBlockAdminService {
     public record DocSummary(String docId, int blocks, int retired) {
     }
 
-    /** 给管理端看的块视图 */
+    /** 给管理端看的块视图（= 一条词条） */
     public record BlockView(String id, String docId, String title, String text, String url,
-                            List<String> tags, String source, boolean retired, String updatedAt) {
+                            List<String> tags, String source, boolean retired, String updatedAt,
+                            String alias) {
 
         static BlockView of(KbBlock b) {
             return new BlockView(b.id().value(), b.docId(), b.title(), b.body(), b.url(),
-                    b.tags(), b.source(), b.retired(), b.updatedAt());
+                    b.tags(), b.source(), b.retired(), b.updatedAt(), b.aliasOrEmpty());
         }
     }
 
@@ -139,7 +140,8 @@ public class KbBlockAdminService {
             throw new IllegalArgumentException("正文不能为空；要下架这一块请用「下架」");
         }
         KbBlock updated = new KbBlock(old.id(), old.docId(), old.title(), text, old.url(),
-                old.tags(), old.source(), old.retired(), Instant.now().toString());
+                old.tags(), old.source(), old.retired(), Instant.now().toString(),
+                old.aliasOrEmpty());
         store.upsert(updated, embed(text, id));
         log.info("[KB-BLOCK] 块 {} 正文已更新（{} 字，向量已重算）", id, text.length());
         return BlockView.of(updated);
@@ -178,6 +180,24 @@ public class KbBlockAdminService {
         }
         log.info("[KB-BLOCK] 新增块 {}（文档 {}，{} 字）", bid, doc, body.length());
         return BlockView.of(b);
+    }
+
+    /**
+     * 只改一条词条的别名 —— **不重算向量**（别名不是正文，改它零成本）。
+     *
+     * <p>空串表示"回到标题派生的别名"；别名不再有独立的核对状态。
+     */
+    public BlockView updateAlias(String id, String alias) {
+        KbBlock old = store.get(com.example.qqbot.kb.EntryId.of(id));
+        if (old == null) {
+            return null;
+        }
+        String value = alias == null ? "" : alias.trim();
+        if (!store.updateAlias(old.id(), value)) {
+            return null;
+        }
+        return BlockView.of(new KbBlock(old.id(), old.docId(), old.title(), old.body(), old.url(),
+                old.tags(), old.source(), old.retired(), old.updatedAt(), value));
     }
 
     /** 下架 / 恢复一块（保留数据，随时能回来） */

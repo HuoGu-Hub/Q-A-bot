@@ -90,7 +90,13 @@ class CorpusResetTool {
         }
         EmbeddingClient embedding = new EmbeddingClient(kb, mapper);
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pages, blocks, embedding, sources);
+        com.example.qqbot.kb.category.CategoryStore catStore = new com.example.qqbot.kb.category.CategoryStore(
+                new com.example.qqbot.persistence.KbCategoryRepository(jdbc));
+        catStore.init();
+        com.example.qqbot.kb.category.CategoryService categories =
+                new com.example.qqbot.kb.category.CategoryService(catStore, blocks);
+        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pages, blocks, embedding, sources,
+                categories);
 
         // ① 范围只留这一个来源
         sources.replace(List.of(new KbWikiSourceRepository.Source(source, kind, true, "")));

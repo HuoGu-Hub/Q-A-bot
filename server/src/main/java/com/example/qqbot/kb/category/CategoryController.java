@@ -15,177 +15,101 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 分类规划接口（管理后台）。
+ * 分类管理接口（管理后台）。
  *
- * <p>设计：一次返回全部原始分类（600 条左右，几十 KB），前端本地筛选 ——
- * 比每次搜索都发请求快得多，实现也简单。
+ * <p>分类 = **一份人工维护的清单**。词条的分块符号里带什么标签，它就归到什么分类；
+ * 标签不在清单里就归「未分类」。所以这里只有四个动作：看清单、新增、改名、删除，
+ * 外加一个"这个分类下有哪些词条"的穿透。没有自动归类、没有批量改归属。
  */
 @RestController
 @RequestMapping("/admin/api/kb/categories")
 public class CategoryController {
 
     private final CategoryService service;
-    private final CategoryStore store;
 
-    public CategoryController(CategoryService service, CategoryStore store) {
+    public CategoryController(CategoryService service) {
         this.service = service;
-        this.store = store;
     }
 
-    /** 全部原始分类 + 当前归属 + 大类统计 */
+    /** 分类清单 + 每个分类的词条数 + 未分类数 */
     @GetMapping("")
     public Map<String, Object> list() {
-        List<CategoryService.RawItem> items = service.listAll();
-
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (CategoryService.RawItem it : items) {
+        for (CategoryService.Stat s : service.stats()) {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("raw", it.raw());
-            m.put("count", it.count());
-            m.put("groupKey", it.groupKey());
-            m.put("groupLabel", it.groupLabel());
-            m.put("labelZh", it.labelZh());
-            m.put("custom", it.custom());
-            m.put("hidden", it.hidden());
+            m.put("name", s.name());
+            m.put("label", s.label());
+            m.put("count", s.count());
             rows.add(m);
         }
-
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("items", rows);
-        out.put("groups", KbGroups.ALL);
-        out.put("stats", service.groupStats());
-        out.put("customCount", store.count());
+        out.put("uncategorized", service.uncategorizedCount());
+        out.put("uncategorizedName", CategoryService.UNCATEGORIZED);
         out.put("total", rows.size());
+        out.put("available", service.isAvailable());
         return out;
     }
 
-    /**
-     * 设置一条分类的归属。
-     *
-     * <p>groupKey 传 {@code __hidden__} 表示隐藏（不给玩家看）。
-     * 传空字符串则是恢复自动规则（删掉手动覆盖）。
-     */
-    @PostMapping("/set")
-    public ResponseEntity<Map<String, Object>> set(@RequestBody Map<String, Object> body) {
-        String raw = str(body.get("raw"));
-        String groupKey = str(body.get("groupKey"));
-        String labelZh = body.get("labelZh") == null ? "" : String.valueOf(body.get("labelZh"));
-
-        if (raw == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 raw"));
+    /** 新增一个分类。名字就是分块符号里要写的标签值 */
+    @PostMapping("/add")
+    public ResponseEntity<Map<String, Object>> add(@RequestBody Map<String, Object> body) {
+        String name = str(body.get("name"));
+        String label = body.get("label") == null ? "" : String.valueOf(body.get("label"));
+        if (name == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "分类名不能为空"));
         }
-        if (groupKey == null || groupKey.isBlank()) {
-            boolean ok = store.remove(raw);
-            return ResponseEntity.ok(Map.of("ok", true, "reset", ok,
-                    "autoGroup", KbGroups.autoGroup(raw)));
+        if (CategoryService.UNCATEGORIZED.equals(name)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "「未分类」是系统保留名，不能新增"));
         }
-        if (!isValidGroup(groupKey)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "未知大类：" + groupKey));
+        if (!service.add(name, label)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "分类「" + name + "」已存在或存储不可用"));
         }
-        boolean ok = store.set(raw, groupKey, labelZh);
-        return ok
-                ? ResponseEntity.ok(Map.of("ok", true))
-                : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(Map.of("error", "保存失败"));
+        return ResponseEntity.ok(Map.of("ok", true, "name", name));
     }
 
-    /** 批量设置（选中多个分类一起改） */
-    @PostMapping("/batch")
-    public ResponseEntity<Map<String, Object>> batch(@RequestBody Map<String, Object> body) {
-        Object rawList = body.get("items");
-        String groupKey = str(body.get("groupKey"));
-        if (!(rawList instanceof List<?> list) || list.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 items 数组"));
+    /** 改分类的显示名（分类名本身是标签，不改） */
+    @PostMapping("/update")
+    public ResponseEntity<Map<String, Object>> update(@RequestBody Map<String, Object> body) {
+        String name = str(body.get("name"));
+        String label = body.get("label") == null ? "" : String.valueOf(body.get("label"));
+        if (name == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "需要 name"));
         }
-        if (groupKey == null || !isValidGroup(groupKey)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要有效的 groupKey"));
+        if (!service.rename(name, label)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个分类：" + name));
         }
-
-        // 用 setGroupBatch 而不是 setBatch：前端批量只给大类，中文标签是逐条人工填的，
-        // 走 setBatch 会把它一起覆盖成空字符串（静默清空，看不出来）。
-        List<String> raws = new ArrayList<>();
-        for (Object o : list) {
-            String raw = str(o);
-            if (raw != null) {
-                raws.add(raw);
-            }
-        }
-        int n = store.setGroupBatch(raws, groupKey);
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", n > 0);
-        out.put("count", n);
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 
-    /** 按自动规则批量归类（不动已有的手动设置） */
-    @PostMapping("/auto")
-    public ResponseEntity<Map<String, Object>> auto() {
-        List<CategoryService.RawItem> items = service.listAll();
-        List<CategoryStore.Mapping> ms = new ArrayList<>();
-        int skipped = 0;
-        for (CategoryService.RawItem it : items) {
-            if (it.custom()) {
-                skipped++;
-                continue;
-            }
-            String auto = KbGroups.autoGroup(it.raw());
-            if (!auto.equals(it.groupKey())) {
-                ms.add(new CategoryStore.Mapping(it.raw(), auto, ""));
-            }
+    /** 删除一个分类。词条不会消失，只是回到「未分类」 */
+    @PostMapping("/delete")
+    public ResponseEntity<Map<String, Object>> delete(@RequestBody Map<String, Object> body) {
+        String name = str(body.get("name"));
+        if (name == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "需要 name"));
         }
-        int n = store.setBatch(ms);
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("applied", n);
-        out.put("skipped", skipped);
-        out.put("message", "已归类 " + n + " 条（跳过 " + skipped + " 条手动设置的）");
-        return ResponseEntity.ok(out);
-    }
-
-    /** 全部恢复自动规则 */
-    @PostMapping("/reset")
-    public ResponseEntity<Map<String, Object>> reset() {
-        int n = store.clearAll();
-        return ResponseEntity.ok(Map.of("ok", true, "cleared", n,
-                "message", "已清空 " + n + " 条手动设置，全部回到自动规则"));
+        if (!service.remove(name)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "删除失败：" + name));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "name", name));
     }
 
     /**
-     * 分类穿透：点开一个分类，看它下面具体有哪些条目。
+     * 分类穿透：点开一个分类，看它下面有哪些词条。
      *
-     * <p>前端在分类列表里点「N 条目」，或点大类卡片上的「查看条目」时调这里。
-     * {@code raw} 与 {@code group} 二选一：给了 raw 就按原始分类精确匹配，
-     * 只给 group 就按大类（含它下面所有原始分类）匹配。
-     *
-     * <p>返回 {@code total}（命中总数）和 {@code items}（当前页）。默认一次给
-     * 200 条 —— 分类面板里绝大多数分类都在这个量级以内，够用；极端大的
-     * 分类靠 {@code q} 搜索缩小，而不是靠翻页。
+     * <p>{@code category} 不传 = 全部；传 {@code 未分类} = 只看没分类的。
      */
     @GetMapping("/entries")
-    public Map<String, Object> entries(@RequestParam(required = false) String raw,
-                                       @RequestParam(required = false) String group,
+    public Map<String, Object> entries(@RequestParam(required = false) String category,
                                        @RequestParam(required = false) String q,
                                        @RequestParam(defaultValue = "200") int limit,
                                        @RequestParam(defaultValue = "0") int offset) {
-        CategoryService.EntryPage page = service.entries(raw, group, q, limit, offset);
+        CategoryService.EntryPage page = service.entries(category, q, limit, offset);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("total", page.total());
         out.put("items", page.items());
         return out;
-    }
-
-    private static boolean isValidGroup(String key) {
-        if (KbGroups.HIDDEN.equals(key)) {
-            return true;
-        }
-        for (KbGroups.Group g : KbGroups.ALL) {
-            if (g.key().equals(key)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static String str(Object o) {

@@ -1,325 +1,313 @@
 package com.example.qqbot.kb.catalog;
 
+import com.example.qqbot.kb.CsvTable;
+import com.example.qqbot.kb.EntryId;
+import com.example.qqbot.kb.TermNames;
 import com.example.qqbot.kb.block.KbBlock;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.category.CategoryService;
-import com.example.qqbot.kb.category.KbGroups;
 import com.example.qqbot.kb.block.KbDocImporter;
-import com.example.qqbot.kb.term.KbTermService;
-import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.kb.category.CategoryService;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 
 /**
- * 知识库组合层：把「块」与「名字」两半合成一个目录读模型。
+ * 知识库词条的**读模型** —— 一个词条就是一个分块。
  *
- * <h2>为什么需要它</h2>
- * 块与名字各自是真源 —— 内容与向量必须成对更新，改名字零成本，
- * 两种变化原因不同，所以它们在两个包里。但这两半共享同一个身份：
- * <b>块 id 就是词条表的 en</b>。于是"合成"这件事没有主人：
- * 它原先塞在 {@code KbTermService} 里，靠一只伸进块包的手完成。
+ * <h2>为什么它这么薄</h2>
+ * 改造前这里要同时拼「块表」与「词条名字表」两半，所以需要一个组合层。
+ * 现在名字（标题 + 别名）就在块上，两半合成了一半：本类只负责
+ * 筛选、统计、导出/导入别名这几件事。
  *
- * <p>本类就是那个主人。它同时依赖 {@link KbBlockStore} 与 {@link KbTermStore}，
- * 是<b>唯一</b>同时拥有两半的地方。依赖方向因此只剩自上而下一条：
- * 两个真源互不认识，谁也不认识组合层的内部。
- *
- * <h2>它负责什么</h2>
- * <ul>
- *   <li>目录读模型：{@code 分类 → 词条 → 文本块} 三层视图，供列表与导出共用；</li>
- *   <li>按视图筛选与统计口径见 {@link KbCatalogViews}，导出格式见 {@link KbCatalogExport}；</li>
- *   <li>孤儿词条清理：拿"现在有哪些块"与词条表比对。</li>
- * </ul>
- *
- * <p><b>写名字不在这里</b> —— 那是名字层的事，见 {@code kb.term.KbTermService}。
- * 本类只读两个真源，唯二的写动作是"删孤儿词条"这类跨两半的清理。
+ * <h2>「词条」就是一个分块</h2>
+ * {@code id + 标题 + 别名 + 分类}，与从 wiki 清洗下来的语料同一个形状，
+ * 只是多了一个别名。别名里没单独写过的那部分由标题「（English）」派生。
  */
 @Component
 public class KbCatalog {
 
-    /** 没有中文名，所以谈不上核对状态 */
-    private static final String STATUS_NONE = "";
+    /** 视图预设。前端只传这一个参数，语义全在这里 */
+    public static final List<String> VIEWS = List.of("all", "aliased", "unaliased", "uncategorized");
 
-    /** 块表 —— 目录里"有正文的页面"由它来 */
     private final KbBlockStore blockStore;
-    /** 名字层 —— 中文名、核对状态、以及没有正文的页面 */
-    private final KbTermStore termStore;
     private final CategoryService categoryService;
-    /** 块侧的文档导入器 —— 只落块、只提名字建议 */
     private final KbDocImporter importer;
-    /** 名字层的写入口 —— 决定哪些建议真正落库 */
-    private final KbTermService termService;
 
-    public KbCatalog(KbBlockStore blockStore, KbTermStore termStore, CategoryService categoryService,
-                     KbDocImporter importer, KbTermService termService) {
+    public KbCatalog(KbBlockStore blockStore, CategoryService categoryService, KbDocImporter importer) {
         this.blockStore = blockStore;
-        this.termStore = termStore;
         this.categoryService = categoryService;
         this.importer = importer;
-        this.termService = termService;
     }
-
-    // ==================== 视图模型 ====================
 
     /**
      * 一条词条。
      *
-     * @param en         英文名（= Wiki 页面标题 = 词条表的 key）
-     * @param zh         中文名（可能为空）
-     * @param aliases    中文别名（zh 用「、」等分隔）
-     * @param status     draft / verified / rejected / ""（"" = 还没有中文名）
-     * @param board      所属板块 key；版本更新类页面归 {@code __hidden__}
-     * @param chunkCount 这个词条被切成了几块（0 = 没有正文）
-     * @param retired    该词条**全部**文本块都已下架
+     * @param alias        别名（存库那份为空时用标题派生兜底）
+     * @param categories   认得的分类名（空表 = 未分类）
+     * @param uncategorized 是不是未分类
      */
-    public record Term(String en, String zh, List<String> aliases, String status,
-                       String board, String boardLabel, List<String> cats,
-                       int chunkCount, int chars, String url, boolean retired) {
+    public record Entry(String id, String docId, String title, String alias, List<String> categories,
+                        String source, int chars, String url, boolean retired, boolean uncategorized) {
     }
 
-    /**
-     * 一个词条的文本块列表。
-     *
-     * <p>刻意包一层对象而不是直接返回数组：裸数组没法带上 {@code title}，
-     * 前端在"抽屉打开的是哪一条"和"这批块属于哪一条"之间就没法对账 ——
-     * 快速连点两条词条时，先到的响应会把后一条的块填进去。
-     */
-    public record ChunksView(String title, List<ChunkView> chunks) {
-    }
-
-    /** 一个文本块。{@code id} 是它在块表里的身份，也是检索时的单位 */
-    public record ChunkView(String id, String text, String url, int chars, boolean retired) {
-    }
-
-    /** 一个板块的规模 */
-    public record BoardStat(String key, String label, String icon, String desc,
-                            int terms, int chunks) {
-    }
-
-    /**
-     * 全表读数。
-     *
-     * <p>刻意**不受搜索词/筛选影响** —— 它是"总共核了多少"的进度口径，
-     * 不是"当前这一页里有几条"。旧术语表接口就是这个语义，别改。
-     */
-    public record Counts(int all, int main, int withChunks, int noChunk,
-                         int draft, int verified, int rejected, int unnamed) {
+    /** 全表读数。刻意不受搜索/筛选影响 —— 它是"全库有多少条"的口径 */
+    public record Counts(int all, int aliased, int unaliased, int uncategorized, int retired) {
     }
 
     /** 一页列表 */
-    public record Page(int total, List<Term> items, Counts counts,
-                       List<BoardStat> boards, boolean available) {
+    public record Page(int total, List<Entry> items, Counts counts,
+                       List<CategoryService.Stat> categories, int uncategorizedCount,
+                       boolean available) {
     }
 
-    /** 视图预设 —— 定义在 {@link KbCatalogViews}，这里只是留给调用方的公开别名 */
-    public static final List<String> VIEWS = KbCatalogViews.VIEWS;
+    /** 别名表导入结果 */
+    public record ImportResult(int updated, int skipped) {
+    }
 
     // ==================== 读 ====================
 
-    /**
-     * 词条列表。
-     *
-     * @param q     按英文名/中文名/别名模糊匹配；空 = 不过滤
-     * @param view  见 {@link #VIEWS}；空 = main
-     * @param board 只看某个板块；空 = 全部
-     */
-    public Page page(String q, String view, String board, int limit, int offset) {
-        Map<String, Term> all = buildAll();
-        Counts counts = KbCatalogViews.count(all);
-        List<BoardStat> boards = KbCatalogViews.boardStats(all);
-        boolean available = termStore.isAvailable();
-
-        // 默认视图是 main；导出那边默认是 all —— 所以默认值由调用方给，这里只认传进来的
-        List<Term> filtered = KbCatalogViews.filter(all, q,
-                view == null || view.isBlank() ? "main" : view, board);
-
+    public Page page(String q, String view, String category, int limit, int offset) {
+        List<Entry> all = filtered(q, view, category);
         int from = Math.max(0, offset);
-        if (from >= filtered.size()) {
-            return new Page(filtered.size(), List.of(), counts, boards, available);
-        }
-        int to = Math.min(filtered.size(), from + Math.max(1, limit));
-        return new Page(filtered.size(), filtered.subList(from, to), counts, boards, available);
+        List<Entry> items = from >= all.size()
+                ? List.of()
+                : new ArrayList<>(all.subList(from, Math.min(all.size(), from + Math.max(1, limit))));
+        return new Page(all.size(), items, counts(), categoryService.stats(),
+                categoryService.uncategorizedCount(), blockStore.isAvailable());
     }
 
-    /** 某个词条（= 一份文档）下的所有文本块。含已下架的（管理端要看得到） */
-    public List<ChunkView> chunks(String en) {
-        List<ChunkView> out = new ArrayList<>();
-        com.example.qqbot.kb.EntryId id = com.example.qqbot.kb.EntryId.of(en);
-        KbBlock b = blockStore.get(id);
-        if (b != null) {
-            String body = b.body() == null ? "" : b.body();
-            out.add(new ChunkView(b.id().value(), body, b.url(), body.length(), b.retired()));
-        }
-        return out;
-    }
-
-    /**
-     * 全表读数。批量改状态之后要回给前端刷新进度条 —— 增量更新数字容易算错，
-     * 直接重算一遍最省心，代价是一次全块遍历。
-     */
     public Counts counts() {
-        return KbCatalogViews.count(buildAll());
+        int aliased = 0;
+        int unaliased = 0;
+        int uncategorized = 0;
+        int retired = 0;
+        int all = 0;
+        for (KbBlock b : blockStore.all()) {
+            all++;
+            if (b.retired()) {
+                retired++;
+            }
+            if (TermNames.effectiveAlias(b.title(), b.aliasOrEmpty()).isBlank()) {
+                unaliased++;
+            } else {
+                aliased++;
+            }
+            if (categoryService.recognized(b.tags()).isEmpty()) {
+                uncategorized++;
+            }
+        }
+        return new Counts(all, aliased, unaliased, uncategorized, retired);
     }
 
-    /** 词条是否存在（有没有正文都算） */
-    public boolean exists(String en) {
-        if (en == null || en.isBlank()) {
-            return false;
-        }
-        com.example.qqbot.kb.EntryId id = com.example.qqbot.kb.EntryId.of(en);
-        if (termStore.get(id) != null) {
-            return true;
-        }
-        return blockStore.get(id) != null;
+    /** 按 id 取一条 */
+    public Entry get(String id) {
+        KbBlock b = blockStore.get(EntryId.of(id));
+        return b == null ? null : entryOf(b);
     }
 
-    // ==================== 组装 ====================
+    private Entry entryOf(KbBlock b) {
+        List<String> cats = categoryService.recognized(b.tags());
+        String body = b.body() == null ? "" : b.body();
+        return new Entry(b.id().value(), b.docId(), b.title(),
+                TermNames.effectiveAlias(b.title(), b.aliasOrEmpty()), cats,
+                b.source(), body.length(), b.url(), b.retired(), cats.isEmpty());
+    }
 
     /**
-     * 把「有正文的页面」和「词条表里的页面」并成一份列表。
+     * 列表与导出**共用**的筛选 —— 保证「看到什么就导出什么」。
      *
-     * <p>顺序是：先按块聚合（这样每个词条自带块数、分类、URL），
-     * 再补上词条表里有、但没有任何块的页面。
+     * @param view 见 {@link #VIEWS}；空 = all
+     * @param category 分类名；空 = 不限；{@link CategoryService#UNCATEGORIZED} = 只看未分类
      */
-    private Map<String, Term> buildAll() {
-        Map<String, KbTermStore.Entry> terms = termStore.map();
-        Map<String, String> rawToGroup = categoryService.rawToGroup();
-        Map<String, String> rawToLabel = categoryService.rawToLabel();
+    private List<Entry> filtered(String q, String view, String category) {
+        String needle = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
+        String v = view == null || view.isBlank() ? "all" : view.trim().toLowerCase(Locale.ROOT);
+        String cat = category == null ? "" : category.trim();
 
-        Map<String, Term> out = new LinkedHashMap<>();
-        // **一个块 = 一个词条**：词条身份就是块 id，中文名就是块标题。
-        // 于是"词条"列表就是**分块的目录** —— 一份文档有多少块，就多出多少条词条。
+        List<Entry> out = new ArrayList<>();
         for (KbBlock b : blockStore.all()) {
-            String key = b.id().value();
-            String[] name = nameOf(terms.get(key));
-            String zh = name[0].isEmpty() ? safe(b.title()) : name[0];
-            String board = KbCatalogViews.boardOf(b.tags(), rawToGroup);
-            String body = b.body() == null ? "" : b.body();
-            out.put(key, new Term(key, zh, KbCatalogViews.splitAliases(zh), name[1],
-                    board, KbCatalogViews.boardLabel(board, rawToLabel), b.tags(),
-                    1, body.length(), b.url(), b.retired()));
-        }
-
-        // 有名字或核对状态、但**没有正文**的页面（Equipment / Lore / Sets/* …）。
-        // 它们对 B 路是真有用的：B 路是"中文换英文再去正文里找"，
-        // 不要求那个英文词本身是某个块的标题。
-        for (KbTermStore.Entry e : terms.values()) {
-            if (out.containsKey(e.en())) {
+            Entry e = entryOf(b);
+            if ("aliased".equals(v) && e.alias().isBlank()) {
                 continue;
             }
-            String[] name = nameOf(e);
-            String board = KbGroups.DEFAULT_GROUP;
-            out.put(e.en(), new Term(e.en(), name[0], KbCatalogViews.splitAliases(name[0]), name[1],
-                    board, KbCatalogViews.boardLabel(board, rawToLabel), List.of(), 0, 0, "", false));
+            if ("unaliased".equals(v) && !e.alias().isBlank()) {
+                continue;
+            }
+            if ("uncategorized".equals(v) && !e.uncategorized()) {
+                continue;
+            }
+            if (!cat.isEmpty()) {
+                if (CategoryService.UNCATEGORIZED.equals(cat)) {
+                    if (!e.uncategorized()) {
+                        continue;
+                    }
+                } else if (!e.categories().contains(cat)) {
+                    continue;
+                }
+            }
+            if (!needle.isEmpty()) {
+                String hay = (nz(e.id()) + " " + nz(e.title()) + " " + nz(e.alias()) + " " + nz(e.docId()))
+                        .toLowerCase(Locale.ROOT);
+                if (!hay.contains(needle)) {
+                    continue;
+                }
+            }
+            out.add(e);
         }
+        // 按标题排序：列表要能翻页、导出要能对账，顺序必须稳定
+        out.sort(Comparator.comparing(Entry::title, Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)));
         return out;
     }
 
+    // ==================== 导入 ====================
+
     /**
-     * 词条表的一行 → {@code [中文名, 状态]}。
+     * 导入一份文档 —— 落块（**自动切割成一个个单独的词条**）。
      *
-     * <p>没有中文名时状态一律报 {@code ""} 而不是 {@code draft}：在旧模型里
-     * {@code ""} 的意思是"术语表里没有这条"，在新模型里对应的就是"还没起中文名"。
-     * 不然那几百个空页面会全部冒充「待核对」，进度条立刻失真。
+     * <p>别名不会被导入覆盖：那是人工成果。
      */
-    private static String[] nameOf(KbTermStore.Entry e) {
-        if (e == null || e.zh().isBlank()) {
-            return new String[]{"", STATUS_NONE};
-        }
-        return new String[]{safe(e.zh()), safe(e.status())};
+    public KbDocImporter.Result importDocument(String documentText) {
+        return importer.importDocument(documentText);
     }
 
-    private static String safe(String s) {
+    // ==================== 导出 / 导入别名表 ====================
+
+    /** 导出当前视图为 TSV（列：id / 标题 / 别名 / 分类） */
+    public String exportTsv(String q, String view, String category) {
+        StringBuilder sb = new StringBuilder(TSV_HEADER);
+        for (Entry e : filtered(q, view, category)) {
+            String cat = e.categories().isEmpty() ? CategoryService.UNCATEGORIZED : e.categories().get(0);
+            sb.append(cell(e.id())).append('\t')
+                    .append(cell(e.title())).append('\t')
+                    .append(cell(e.alias())).append('\t')
+                    .append(cell(cat)).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private static final String TSV_HEADER = """
+            # 知识库词条表 —— 标题与别名
+            # 列：id <TAB> 标题 <TAB> 别名 <TAB> 分类
+            # 别名可以写多个，用「、」分隔；标题与分类是导出时算出来的，改了没用
+            # 导入时只按 id 覆盖【别名】一列 —— 别名可以随便改，标题/分类不会被动
+            """;
+
+    /** 导出 xlsx 字节 —— 先出 TSV 文本再转，不重复实现一份规则 */
+    public byte[] exportXlsx(String q, String view, String category) {
+        return EntryXlsx.write(exportTsv(q, view, category));
+    }
+
+    /**
+     * 从 TSV / CSV / xlsx 导入别名表。
+     *
+     * <p>只认 {@code id} 与 {@code 别名} 两列；标题与分类是给人看的派生信息，一律忽略。
+     * 找不到对应块的 id 计入 {@code skipped}（不报错、不新建块 —— 词条只能由导入文档产生）。
+     */
+    public ImportResult importTable(String text) {
+        if (text == null || text.isBlank()) {
+            return new ImportResult(0, 0);
+        }
+        char delim = CsvTable.sniffDelimiter(text);
+        List<List<String>> rows = CsvTable.parse(text, delim);
+
+        int iId = -1;
+        int iAlias = -1;
+        int headerAt = -1;
+        for (int i = 0; i < Math.min(rows.size(), 5); i++) {
+            int a = col(rows.get(i), "id", "块id", "词条id", "en", "english");
+            int b = col(rows.get(i), "别名", "别称", "alias", "aliases", "其他译名");
+            if (a >= 0 && b >= 0) {
+                iId = a;
+                iAlias = b;
+                headerAt = i;
+                break;
+            }
+        }
+        if (headerAt < 0) {
+            return new ImportResult(0, 0);
+        }
+
+        int updated = 0;
+        int skipped = 0;
+        for (int i = headerAt + 1; i < rows.size(); i++) {
+            List<String> r = rows.get(i);
+            if (r.isEmpty() || (r.size() == 1 && r.get(0).isBlank())) {
+                continue;
+            }
+            if (cell(r, 0).startsWith("#")) {
+                continue;
+            }
+            String id = cell(r, iId);
+            if (id.isEmpty()) {
+                skipped++;
+                continue;
+            }
+            EntryId eid = EntryId.of(id);
+            if (blockStore.get(eid) == null) {
+                skipped++;
+                continue;
+            }
+            if (blockStore.updateAlias(eid, mergeAliases(cell(r, iAlias)))) {
+                updated++;
+            }
+        }
+        return new ImportResult(updated, skipped);
+    }
+
+    /** 别名统一成「、」分隔并去重 */
+    private static String mergeAliases(String alias) {
+        String extra = alias == null ? "" : alias.trim();
+        if (extra.isEmpty()) {
+            return "";
+        }
+        extra = extra.replace(',', '、').replace('，', '、')
+                .replace('/', '、').replace('|', '、').replace('｜', '、');
+        java.util.LinkedHashSet<String> parts = new java.util.LinkedHashSet<>();
+        for (String p : extra.split("、")) {
+            String t = p.trim();
+            if (!t.isEmpty()) {
+                parts.add(t);
+            }
+        }
+        return String.join("、", parts);
+    }
+
+    private static int col(List<String> header, String... names) {
+        if (header == null) {
+            return -1;
+        }
+        for (int i = 0; i < header.size(); i++) {
+            String h = header.get(i) == null ? "" : header.get(i).trim().toLowerCase(Locale.ROOT).replace(" ", "");
+            for (String n : names) {
+                if (h.equals(n)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static String cell(List<String> row, int idx) {
+        if (idx < 0 || idx >= row.size()) {
+            return "";
+        }
+        String s = row.get(idx);
         return s == null ? "" : s.trim();
     }
 
-    // ==================== 跨两半的用例：导入 ====================
-
-    /**
-     * 导入一份文档 —— **这是组合层存在的直接理由**。
-     *
-     * <p>它是一条跨两个真源的用例，顺序不可颠倒：
-     * <ol>
-     *   <li>块侧解析文档、落块、算向量，并**提出**这批块该登记哪些名字；</li>
-     *   <li>名字侧按自己的策略决定哪些真正落库（已有名字的不覆盖）。</li>
-     * </ol>
-     * 名字挂在块 id 上，所以必须先有块、再登记名字。
-     *
-     * <p>原先这两步都塞在块侧的导入器里，于是块层依赖名字层 —— 那就是被消掉的那条边。
-     * 外部入口现在只有 {@code kb.catalog.KbImportController}，
-     * 块层不再对外暴露"只落块"的导入接口，避免有人绕过名字登记
-     * （绕过不会报错，只会让中文提问够不到这些页）。
-     */
-    public ImportOutcome importDocument(String documentText) {
-        KbDocImporter.Result blocks = importer.importDocument(documentText);
-        int terms = termService.registerMissing(blocks.nameCandidates());
-        return new ImportOutcome(blocks, terms);
-    }
-
-    /**
-     * 导入结果：块侧的结果 + 名字侧登记了几条。
-     *
-     * <p>为什么分成两半：块层不知道名字登记的结果（它提的是建议），
-     * 名字层不知道块的结果。只有组合层同时看得到，所以由它把两半拼给调用方。
-     */
-    public record ImportOutcome(KbDocImporter.Result blocks, int terms) {
-    }
-
-    // ==================== 跨两半的清理 ====================
-
-    /**
-     * 清掉**没有对应块**的词条（孤儿行）。
-     *
-     * <p>这是少数必须同时看两半的动作：判据在块侧，被删的行在名字侧。
-     *
-     * @return 删掉的条数
-     */
-    public int deleteOrphanTerms() {
-        java.util.Set<com.example.qqbot.kb.EntryId> ids = new java.util.LinkedHashSet<>();
-        for (KbBlock b : blockStore.all()) {
-            ids.add(b.id());
+    /** RFC4180 转义：含分隔符/引号/换行时用双引号包住，内部引号翻倍 */
+    private static String cell(String v) {
+        String s = v == null ? "" : v;
+        if (s.indexOf('\t') < 0 && s.indexOf('"') < 0 && s.indexOf('\n') < 0 && s.indexOf('\r') < 0) {
+            return s;
         }
-        return termStore.deleteOrphans(ids);
+        return '"' + s.replace("\"", "\"\"") + '"';
     }
 
-    // ==================== 导出（给人看的格式）====================
-
-    /** 导出全表 TSV（Excel 旁路）。中间两列由语料现算，不落库 */
-    public String exportTsv() {
-        return exportTsv("", "", "");
-    }
-
-    /**
-     * 按**当前视图所见**导出 TSV —— 让「导出待补译名的那批 → Excel 填 → 导回」这条路走得通。
-     *
-     * <p>自动导入的英文页有几百条没有中文名，在网页上逐条点不现实，
-     * 而 {@code POST /terms/import} 本来就收 TSV —— 所以导出必须能只导**当前筛出来的那批**。
-     *
-     * <p>筛选条件与 {@link #page} 完全共用一份（{@link KbCatalogViews#filter}），
-     * 所以「看到什么就导出什么」，不会出现"列表 651 条、导出 3416 条"这种对不上。
-     *
-     * @param q     搜索词；空 = 不按词筛
-     * @param view  见 {@link #VIEWS}；**空 = 全部**（保持老行为，注意与列表默认的 main 不同）
-     * @param board 板块 key；空 = 不限
-     */
-    public String exportTsv(String q, String view, String board) {
-        return export(q, view, board, '\t');
-    }
-
-    /**
-     * 导出 **xlsx 字节** —— 后台默认走这条（见 {@code KbTermXlsx} 里为什么弃用 CSV）。
-     *
-     * <p>先出 TSV 文本再转，**不重复实现一份导出规则**。
-     */
-    public byte[] exportXlsx(String q, String view, String board) {
-        return com.example.qqbot.kb.term.KbTermXlsx.write(export(q, view, board, '\t'));
-    }
-
-    /** 列表与导出共用同一份筛选（{@link KbCatalogViews#filter}）与同一份格式（{@link KbCatalogExport}） */
-    private String export(String q, String view, String board, char delim) {
-        return KbCatalogExport.tsv(KbCatalogViews.filter(buildAll(), q, view, board), delim);
+    private static String nz(String s) {
+        return s == null ? "" : s;
     }
 }

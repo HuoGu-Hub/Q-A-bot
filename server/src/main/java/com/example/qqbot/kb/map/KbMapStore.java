@@ -30,7 +30,7 @@ import java.util.Map;
  * 带上 page 就不会丢数据；问答侧按 article/名字聚合时再自行去重。
  *
  * <h2>为什么复用问答库的连接</h2>
- * 与 {@code KbBlockStore} / {@code KbTermStore} 一致：两个连接开同一个 SQLite 文件
+ * 与 {@code KbBlockStore} 一致：两个连接开同一个 SQLite 文件
  * 会在 WAL 共享内存上冲突（实测 {@code SQLITE_IOERR_SHMOPEN}）。
  *
  * <h2>本类只剩「语义」</h2>

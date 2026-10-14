@@ -1,8 +1,6 @@
 package com.example.qqbot.kb.block;
 
 import com.example.qqbot.kb.EmbeddingClient;
-import com.example.qqbot.kb.NameCandidate;
-import com.example.qqbot.kb.TermNames;
 import com.example.qqbot.kb.doc.ChunkImportPlan;
 import com.example.qqbot.kb.doc.ChunkMarkup;
 import org.slf4j.Logger;
@@ -57,12 +55,10 @@ public class KbDocImporter {
     /**
      * 一次导入的结果。
      *
-     * @param nameCandidates 建议登记的名字，由**调用方**交给名字层。
-     *                       这里给的是"建议"：是否落库、要不要覆盖，名字层自己判。
-     *                       原先这个字段是一个 int，本类自己写库；那样块层就依赖了名字层
+     * <p>改造后块就是词条，导入时**不再需要单独登记名字** —— 所以这里只剩块侧的统计。
      */
     public record Result(int added, int updated, int unchanged, int untouched,
-                         List<NameCandidate> nameCandidates, List<String> warnings) {
+                         List<String> warnings) {
         public int changed() {
             return added + updated;
         }
@@ -131,7 +127,11 @@ public class KbDocImporter {
         int added = 0;
         int updated = 0;
         String now = Instant.now().toString();
+        // 别名是人工成果：导入**不覆盖**它，只把库里已经有的那份原样带过去
+        Map<String, KbBlock> existing = library();
         for (ChunkMarkup.Block b : todo) {
+            KbBlock old = existing.get(b.key());
+            String alias = old == null ? "" : old.aliasOrEmpty();
             KbBlock block = new KbBlock(
                     com.example.qqbot.kb.EntryId.of(b.key()),
                     docId,
@@ -141,7 +141,8 @@ public class KbDocImporter {
                     tags,
                     source,
                     false,
-                    now);
+                    now,
+                    alias);
             boolean isNew = store.upsert(block, fresh.get(b.key()));
             float[] tv = freshTitle.get(b.key());
             if (tv != null && tv.length > 0) {
@@ -153,43 +154,17 @@ public class KbDocImporter {
                 updated++;
             }
         }
-        // ★ 名字登记：**一个块 = 一个词条**（块标题就是它的中文名）。
-        //   这里只**提出建议**，不写库 —— 写库要经过名字层的策略（已有名字不覆盖）。
-        //   把两半接起来的是组合层，见 kb.catalog.KbCatalog#importDocument。
-        List<NameCandidate> names = nameCandidates(parsed);
+        // **一个块 = 一个词条**：块落库即词条成立，不再有独立的名字登记这一步。
         log.info("[KB-IMPORT] 文档「{}」：新增 {}、覆盖 {}、无变化 {}、未触及 {}（{} 块）",
                 docId, added, updated, plan.unchanged().size(), plan.untouchedExisting(), todo.size());
 
         return new Result(added, updated, plan.unchanged().size(), plan.untouchedExisting(),
-                names, plan.warnings());
+                plan.warnings());
     }
 
     /** 清空全部块（"首次导入中文语料前清空"用）—— 索引自己会失效，不用手工重载 */
     public void clearAll() {
         store.clearAll();
-    }
-
-    /**
-     * 这份文档会**建议登记**哪些名字 —— 纯函数，不碰任何存储。
-     *
-     * <p>"一个块 = 一个词条"：文档里有多少块，就提出多少条候选。
-     * 词条身份取块 id（没有 id 时 {@code ChunkMarkup} 已经用标题兜底），
-     * 名字取块标题经 {@link TermNames#termName} 规范化后的结果。
-     *
-     * <p>缺 id 或名字为空的块直接跳过：那种候选进不了词条表，提出来只会让调用方白跑一遍。
-     */
-    private static List<NameCandidate> nameCandidates(ChunkMarkup.Parsed parsed) {
-        List<NameCandidate> out = new ArrayList<>();
-        for (ChunkMarkup.Block b : parsed.blocks()) {
-            // 词条身份 = **块 id**（有 id 用 id，没有就用标题兜底）
-            String key = b.key();
-            String name = TermNames.termName(b.title());
-            if (key == null || key.isBlank() || name.isEmpty()) {
-                continue;
-            }
-            out.add(new NameCandidate(com.example.qqbot.kb.EntryId.of(key), name));
-        }
-        return out;
     }
 
     // ==================== 内部 ====================

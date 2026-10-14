@@ -9,10 +9,8 @@ import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.RerankClient;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
-import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.persistence.KbWikiPageRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
@@ -114,11 +112,15 @@ class WikiArticleImporterE2ETest {
                 new com.example.qqbot.persistence.KbWikiSourceRepository(new Jdbc(sqlite)));
         sourceStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        // 词条表要在导入之前就绪：它现在自己看语料版本补齐（KbTermStore.ensureReconciled），
-        // 这里先把实例建好，后面断言 B 路能查到为止
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), index);
-        terms.init();
-        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, embedding, sourceStore);
+        // 分类清单：wiki 导入按"来源名 + 页面分类"自动登记
+        com.example.qqbot.kb.category.CategoryStore catStore =
+                new com.example.qqbot.kb.category.CategoryStore(
+                        new com.example.qqbot.persistence.KbCategoryRepository(new Jdbc(sqlite)));
+        catStore.init();
+        com.example.qqbot.kb.category.CategoryService categoryService =
+                new com.example.qqbot.kb.category.CategoryService(catStore, blocks);
+        WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, embedding,
+                sourceStore, categoryService);
 
         // ① dryRun：只列页、比版本
         WikiArticleImporter.ImportReport dry = importer.importAll(true);
@@ -127,19 +129,17 @@ class WikiArticleImporterE2ETest {
         assertThat(dry.pages()).isGreaterThan(20);
 
         // ② 真导入
-        long termsBefore = terms.count();
         WikiArticleImporter.ImportReport r = importer.importAll(false);
         System.out.printf("导入：写入 %d 块 / 正文 %d 字 / 失败 %d%n", r.imported(), r.chars(), r.failed());
         r.errors().stream().limit(8).forEach(e -> System.out.println("   ! " + e));
         assertThat(r.failed()).as("失败：" + r.errors()).isZero();
         assertThat(r.imported()).isGreaterThan(20);
         assertThat(blocks.count()).isEqualTo(before + r.imported());
-        // ★ 本轮修的东西：新块必须**立刻**对 B 路（关键词）可见，不必等重启。
-        //   词条表只在 KbTermStore.init() 时 reconcile 一次；导入器写完块要再补一次，
-        //   否则运行期导入的块在下次重启前进不了词表 —— 中文提问走关键词路就永远找不到它。
-        assertThat(terms.count())
-                .as("导入后词条应当同步长出来（否则新块对 B 路不可见）")
-                .isEqualTo(termsBefore + r.imported());
+        // ★ 分类要**自动登记**进清单：wiki 来源名与页面分类都会成为分类，
+        //   否则这些块全部落到「未分类」。
+        assertThat(categoryService.catalogNames())
+                .as("来源名与页面分类都要登记进分类清单")
+                .contains("Quests/", "Gameplay", "Bosses");
 
         // ③ 增量：立刻再跑一次，revid 没变 → 应当一个块都不写
         WikiArticleImporter.ImportReport again = importer.importAll(false);
@@ -147,7 +147,7 @@ class WikiArticleImporterE2ETest {
         assertThat(again.imported()).isZero();
 
         // ④ 真检索：任务与机制类问题能不能拿到资料
-        KbRetriever retriever = new KbRetriever(kb, index, new Glossary(terms), embedding,
+        KbRetriever retriever = new KbRetriever(kb, index, new Glossary(blocks), embedding,
                 new RerankClient(kb, mapper));
 
         // ⚠️ 断言必须**明确要求命中导入的块**（id 以 wiki- 开头）。

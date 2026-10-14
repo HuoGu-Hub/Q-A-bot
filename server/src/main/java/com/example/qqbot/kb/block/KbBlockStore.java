@@ -35,7 +35,7 @@ import java.util.Map;
  * 以及 {@code vec == null} 时"不动已有向量"这条调用约定。
  */
 @Component
-public class KbBlockStore {
+public class KbBlockStore implements com.example.qqbot.kb.TermSource {
 
     private static final Logger log = LoggerFactory.getLogger(KbBlockStore.class);
 
@@ -47,7 +47,7 @@ public class KbBlockStore {
     /**
      * 语料版本：**每次写成功 +1**。
      *
-     * <p>存在的理由和 {@code KbTermStore.version} 一样 —— 让内存快照
+     * <p>存在的理由：让内存快照
      * （{@link KbBlockIndex}）自己判断"我缓存的那一份是不是旧的"。旧契约是
      * "写完请调用方记得调 {@link KbBlockIndex#reload()}"：全项目 12 处手工调用，
      * 新增一个写入口就漏一个，而漏了的症状是**检索一直用旧语料、且不报错**。
@@ -200,7 +200,25 @@ public class KbBlockStore {
     /** 列里的 tags 是 {@link ChunkMarkup} 的分隔格式，拆开是这边的事 */
     private static KbBlock toBlock(KbBlockRepository.Row r) {
         return new KbBlock(EntryId.of(r.id()), r.docId(), r.title(), r.body(), r.url(),
-                ChunkMarkup.splitTags(r.tagsLine()), r.source(), r.retired(), r.updatedAt());
+                ChunkMarkup.splitTags(r.tagsLine()), r.source(), r.retired(), r.updatedAt(),
+                r.alias() == null ? "" : r.alias());
+    }
+
+    // ==================== 名字视图（TermSource）====================
+
+    /**
+     * 检索侧要的名字行 —— **词条就是分块**，所以直接用块表当名字源。
+     *
+     * <p>只给 {@code id / 标题 / 别名}：标题里「（English）」那截由
+     * {@code TermNames} 在读时派生，存库那份别名只装人工写的东西。
+     */
+    @Override
+    public List<com.example.qqbot.kb.TermSource.Row> rows() {
+        List<com.example.qqbot.kb.TermSource.Row> out = new ArrayList<>();
+        for (KbBlock b : allActive()) {
+            out.add(new com.example.qqbot.kb.TermSource.Row(b.id(), b.title(), b.aliasOrEmpty()));
+        }
+        return out;
     }
 
     // ==================== 向量 ====================
@@ -341,13 +359,35 @@ public class KbBlockStore {
         String now = b.updatedAt() == null || b.updatedAt().isBlank()
                 ? Instant.now().toString() : b.updatedAt();
         KbBlockRepository.Row row = new KbBlockRepository.Row(b.id().value(), b.docId(), b.title(), b.body(),
-                b.url(), b.tagsLine(), b.source(), b.retired(), now);
+                b.url(), b.tagsLine(), b.source(), b.retired(), now, b.aliasOrEmpty());
         try {
             boolean added = repo.upsert(row, vec);
             touch();
             return added;
         } catch (Exception e) {
             throw new IllegalStateException("写入块失败：" + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 只改一条词条的别名 —— **不重算向量**（别名不是正文）。
+     *
+     * <p>导入器不覆盖别名，所以这是别名唯一的写入路径。
+     */
+    public boolean updateAlias(EntryId id, String alias) {
+        if (!available || id == null || id.isBlank()) {
+            return false;
+        }
+        try {
+            boolean changed = repo.updateAlias(id.value(), alias == null ? "" : alias.trim(),
+                    Instant.now().toString());
+            if (changed) {
+                touch();
+            }
+            return changed;
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 改别名 {} 失败：{}", id, e.getMessage());
+            return false;
         }
     }
 

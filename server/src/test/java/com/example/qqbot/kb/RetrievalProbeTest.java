@@ -5,10 +5,8 @@ import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.term.KbTermStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
-import com.example.qqbot.persistence.KbTermRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
@@ -80,9 +78,8 @@ class RetrievalProbeTest {
         }
         EmbeddingClient embedding = new EmbeddingClient(kb, mapper);
         RerankClient rerank = new RerankClient(kb, mapper);
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(sqlite)), corpus);
-        terms.init();
-        Glossary glossary = new Glossary(terms);
+        // 词条就是分块：名字源直接是块存储
+        Glossary glossary = new Glossary(blocks);
         KbRetriever retriever = new KbRetriever(kb, corpus, glossary, embedding, rerank);
 
         String expect = System.getProperty("qqbot.probe.expect", "");

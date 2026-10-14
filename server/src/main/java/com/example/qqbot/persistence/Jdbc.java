@@ -204,9 +204,9 @@ public class Jdbc {
      * **显式事务边界** —— 整段成功才提交，抛异常则回滚。
      *
      * <h2>为什么 batch() 不够</h2>
-     * {@link #batch} 只能表达"同一批语句一起写"。而 {@code KbTermStore.setStatusBatch}
-     * 这类操作是**读与写交替**：先 {@code SELECT status} 看旧值、再决定这条要不要
-     * {@code UPDATE}，循环若干条。那不是一批语句，是一段逻辑，必须整体原子。
+     * {@link #batch} 只能表达"同一批语句一起写"。而 {@code KbBlockRepository#upsert}
+     * 这类操作是**读与写交替**：先查这一行在不在、再决定算新增还是覆盖。
+     * 那不是一批语句，是一段逻辑，必须整体原子。
      *
      * <p>块内照常调用 {@link #update}/{@link #query}/{@link #batch}（同一把可重入锁，
      * 不会死锁，也不会各自提交 —— 它们用的是同一个连接与同一个事务）。

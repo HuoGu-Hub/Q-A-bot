@@ -44,7 +44,8 @@ public class KbBlockRepository {
      * 拆成 {@code List<String>} 是业务侧的事 —— 那需要 {@code kb.doc} 的类型。
      */
     public record Row(String id, String docId, String title, String body, String url,
-                      String tagsLine, String source, boolean retired, String updatedAt) {
+                      String tagsLine, String source, boolean retired, String updatedAt,
+                      String alias) {
     }
 
     /** 一个标题向量行。{@code title} 是这份向量的**输入** —— 输入变了它就是过期的 */
@@ -52,11 +53,12 @@ public class KbBlockRepository {
     }
 
     private static final String BLOCK_COLUMNS =
-            "id, doc_id, title, body, url, tags, source, retired, updated_at";
+            "id, doc_id, title, body, url, tags, source, retired, updated_at, alias";
 
     private static final Jdbc.RowMapper<Row> BLOCK = r -> new Row(
             r.str("id"), r.str("doc_id"), r.str("title"), r.str("body"), r.str("url"),
-            r.str("tags"), r.str("source"), r.intOf("retired") == 1, r.str("updated_at"));
+            r.str("tags"), r.str("source"), r.intOf("retired") == 1, r.str("updated_at"),
+            r.str("alias") == null ? "" : r.str("alias"));
 
     private final Jdbc jdbc;
 
@@ -96,7 +98,12 @@ public class KbBlockRepository {
                 + " tags       TEXT NOT NULL DEFAULT '',"
                 + " source     TEXT NOT NULL DEFAULT '" + defaultSource + "',"
                 + " retired    INTEGER NOT NULL DEFAULT 0,"
-                + " updated_at TEXT NOT NULL DEFAULT '')");
+                + " updated_at TEXT NOT NULL DEFAULT '',"
+                + " alias      TEXT NOT NULL DEFAULT '')");
+        // 老库没有 alias 列 —— 补一次（SQLite 的 ADD COLUMN 重复执行会报错，所以先查再补）
+        if (!hasColumn("kb_block", "alias")) {
+            jdbc.execute("ALTER TABLE kb_block ADD COLUMN alias TEXT NOT NULL DEFAULT ''");
+        }
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_block_doc ON kb_block(doc_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_block_retired ON kb_block(retired)");
 
@@ -111,6 +118,13 @@ public class KbBlockRepository {
                 + " title TEXT NOT NULL DEFAULT '',"
                 + " dim   INTEGER NOT NULL,"
                 + " vec   BLOB NOT NULL)");
+    }
+
+    /** 表里有没有这一列 —— 迁移用（SQLite 没有 IF NOT EXISTS 的 ADD COLUMN） */
+    private boolean hasColumn(String table, String column) {
+        return jdbc.query("PRAGMA table_info(" + table + ")",
+                        r -> r.str("name"), new Object[0])
+                .stream().anyMatch(column::equalsIgnoreCase);
     }
 
     // ==================== 读 ====================
@@ -220,14 +234,14 @@ public class KbBlockRepository {
     public boolean upsert(Row row, float[] vec) {
         return jdbc.transaction(() -> {
             boolean isNew = jdbc.count("SELECT COUNT(*) FROM kb_block WHERE id = ?", row.id()) == 0;
-            jdbc.update("INSERT INTO kb_block (id, doc_id, title, body, url, tags, source, retired, updated_at)"
-                            + " VALUES (?,?,?,?,?,?,?,?,?)"
+            jdbc.update("INSERT INTO kb_block (id, doc_id, title, body, url, tags, source, retired, updated_at, alias)"
+                            + " VALUES (?,?,?,?,?,?,?,?,?,?)"
                             + " ON CONFLICT(id) DO UPDATE SET"
                             + " doc_id=excluded.doc_id, title=excluded.title, body=excluded.body,"
                             + " url=excluded.url, tags=excluded.tags, source=excluded.source,"
-                            + " retired=excluded.retired, updated_at=excluded.updated_at",
+                            + " retired=excluded.retired, updated_at=excluded.updated_at, alias=excluded.alias",
                     row.id(), row.docId(), row.title(), row.body(), row.url(), row.tagsLine(),
-                    row.source(), row.retired(), row.updatedAt());
+                    row.source(), row.retired(), row.updatedAt(), row.alias() == null ? "" : row.alias());
             if (vec != null) {
                 jdbc.update("INSERT INTO kb_block_vec (id, dim, vec) VALUES (?,?,?)"
                                 + " ON CONFLICT(id) DO UPDATE SET dim=excluded.dim, vec=excluded.vec",
@@ -235,6 +249,16 @@ public class KbBlockRepository {
             }
             return isNew;
         });
+    }
+
+    /**
+     * 只改别名 —— 不碰正文，所以不需要重算向量。
+     *
+     * <p>别名是人工成果，导入不覆盖它；改它也走这一条独立的窄 UPDATE。
+     */
+    public boolean updateAlias(String id, String alias, String now) {
+        return jdbc.update("UPDATE kb_block SET alias = ?, updated_at = ? WHERE id = ?",
+                alias == null ? "" : alias, now, id) > 0;
     }
 
     /** 下架 / 恢复。**保留数据**，只改标记 */

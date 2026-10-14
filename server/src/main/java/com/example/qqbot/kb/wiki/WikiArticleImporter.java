@@ -61,17 +61,21 @@ public class WikiArticleImporter {
     private final EmbeddingClient embedding;
     /** 管理端页面上勾选的范围；表为空时回落到 yml 默认值 */
     private final KbWikiSourceStore sourceStore;
+    /** 分类清单 —— wiki 的来源名与页面分类要自动登记进去，否则全落「未分类」 */
+    private final com.example.qqbot.kb.category.CategoryService categoryService;
 
-    /* 既不持有块索引、也不持有词条表：写完索引自己失效、词条表自己补齐 */
+    /* 既不持有块索引、也不持有词条表：写完索引自己失效、分类自己读标签 */
     public WikiArticleImporter(KbPolicy props, WikiApiClient client, KbWikiPageStore store,
                                KbBlockStore blockStore, EmbeddingClient embedding,
-                               KbWikiSourceStore sourceStore) {
+                               KbWikiSourceStore sourceStore,
+                               com.example.qqbot.kb.category.CategoryService categoryService) {
         this.props = props;
         this.client = client;
         this.store = store;
         this.blockStore = blockStore;
         this.embedding = embedding;
         this.sourceStore = sourceStore;
+        this.categoryService = categoryService;
     }
 
     /**
@@ -165,6 +169,12 @@ public class WikiArticleImporter {
         // 建中英对照索引：让英文文章块能被中文提问检索到（见 NameZhIndex 类注释里的实测缺口）
         NameZhIndex nameIndex = NameZhIndex.fromBlocks(blockStore.allActive());
         log.info("[KB-WIKI] 中英对照索引：{} 条", nameIndex.size());
+
+        // 别名是人工成果：导入不覆盖它，先把库里已有的那份读进内存
+        Map<String, String> aliasById = new java.util.HashMap<>();
+        for (KbBlock b : blockStore.all()) {
+            aliasById.put(b.id().value(), b.aliasOrEmpty());
+        }
 
         int totalPages = 0;
         int totalChanged = 0;
@@ -263,6 +273,20 @@ public class WikiArticleImporter {
                 continue;
             }
 
+            // 页面自身的分类（来源名之外的第二路）—— 取不到只是少一路，不阻断导入
+            Map<String, List<String>> pageCats;
+            try {
+                pageCats = client.fetchCategories(changed);
+            } catch (Exception e) {
+                log.warn("[KB-WIKI] 取页面分类失败（不影响导入）：{}", e.getMessage());
+                pageCats = Map.of();
+            }
+            java.util.Set<String> usedCats = new java.util.LinkedHashSet<>();
+            usedCats.add(src.label());
+            for (List<String> cs : pageCats.values()) {
+                usedCats.addAll(cs);
+            }
+
             for (String title : changed) {
                 WikiApiClient.Revision rev = content.get(title);
                 if (rev == null) {
@@ -317,6 +341,14 @@ public class WikiArticleImporter {
                     String docId = cfg.getDocIdPrefix() + "·" + src.label();
                     String url = "https://enshrouded.wiki.gg/wiki/" + title.replace(' ', '_');
                     String now = Instant.now().toString();
+                    // 分类 = 来源名（如 Quests / Gameplay）+ 页面自身的 Category
+                    List<String> cats = new ArrayList<>();
+                    cats.add(src.label());
+                    for (String pc : pageCats.getOrDefault(title, List.of())) {
+                        if (!pc.isBlank() && !cats.contains(pc)) {
+                            cats.add(pc);
+                        }
+                    }
                     // 先清掉上一次多切出来的块：页面在 wiki 上被**改短**时不清就是永久孤儿块
                     for (int i = store.blockCount(title); i > chunks.size(); i--) {
                         String stale = chunkId(baseId, i);
@@ -331,7 +363,7 @@ public class WikiArticleImporter {
                         // 中文名**每块都带**：块是独立检索单位，缺了它中文提问够不到后面的块
                         String text = zh != null ? zh + "。" + chunks.get(i) : chunks.get(i);
                         KbBlock block = new KbBlock(com.example.qqbot.kb.EntryId.of(id), docId, chunkTitle, text, url,
-                                List.of("wiki", src.kind(), src.label()), SRC_WIKI, false, now);
+                                cats, SRC_WIKI, false, now, aliasById.getOrDefault(id, ""));
                         if (blockStore.upsert(block, embedding.embedOne(name + "\n" + text))) {
                             // 标题向量一律用**干净的页面名**：C 路闸门问的是"这是哪一页"，
                             // 同一页的每一块都该同样命中；并列时按 id 顺序取到第 1 块（导语段）
@@ -351,10 +383,10 @@ public class WikiArticleImporter {
                     store.markError(title, src.label(), e.getMessage());
                 }
             }
+            // 把本来源用到的分类登记进清单（已存在的跳过）—— 见 CategoryService.ensure
+            categoryService.ensure(usedCats);
         }
 
-        // 词条表**不用管**：下次有人读词条（B 路检索 / 管理端）时，KbTermStore 会自己发现
-        // "语料版本变了"并补齐 —— 见 KbTermStore.ensureReconciled()。这里以前显式调 reconcile()。
         progress.on("完成", processed, Math.max(totalPages, processed));
         // ⚠️ 这一行是**机器可读的摘要**：管理端页面与运维都按它取数。
         //    导入报告走 System.out，在 Windows 上跟随控制台代码页（GBK），
@@ -393,9 +425,8 @@ public class WikiArticleImporter {
         }
         // ★ 连状态一起清 —— 否则下一次导入会空转（见方法注释）
         int cleared = store.clear();
-        // 词条表不用管：删块同样让语料版本前进，下次读取时自动补齐。
-        // ⚠️ 但**孤儿词条不会自动清** —— 那是管理端的手动动作（deleteOrphans）：
-        //    "先起中文名、正文以后再导"的人工行也长得像孤儿，自动清会误伤。
+        // 分类清单由下次导入重新登记（ensure 幂等），不在这里清 ——
+        // 同一个分类可能还被别的来源/文档用着，清掉会让那些词条突然变未分类。
         log.info("[KB-WIKI] 已清除 wiki 文章块 {} 个、状态行 {} 条（前缀 {}）", n, cleared, cfg.getDocIdPrefix());
         return n;
     }

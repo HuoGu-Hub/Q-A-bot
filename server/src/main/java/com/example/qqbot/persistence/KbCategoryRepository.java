@@ -5,37 +5,22 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * 分类映射（{@code raw -> 大类 + 中文标签}）的**数据访问**。
+ * 分类目录（{@code kb_category}）的**数据访问**。
  *
- * <h2>两条 upsert 不能合并 —— 这是一个静默数据丢失的坑</h2>
- * <ul>
- *   <li>{@link #upsert}：会把 {@code label_zh} 一起覆盖成传进来的值。</li>
- *   <li>{@link #upsertGroupOnly}：**冲突时不写 label_zh**，已有中文标签原样留着。</li>
- * </ul>
- * 批量改归属时前端只知道大类（中文标签是逐条人工填的），
- * 若复用第一条 SQL，就等于把选中的几十条中文标签**一次性清空** ——
- * 而且看不出来：列表上没标签的行本来也长这样。
+ * <h2>改造后：分类不再是"原始标签 → 9 大类"的映射</h2>
+ * 原来这张表存的是 {@code raw -> group_key + label_zh}（智能归类的**手动覆盖**）。
+ * 现在分类就是一份**人工维护的清单**：分块符号里带什么标签，词条就归到什么分类，
+ * 标签不在清单里就归「未分类」。所以只有 {@code name / label / sort} 三列。
+ *
+ * <p>旧结构的表在 {@link #initSchema()} 里被识别并丢弃 —— 那些映射正是
+ * "智能分类"的产物，重构后不再需要；留着只会让人以为它还在起作用。
  */
 @Repository
 public class KbCategoryRepository {
 
-    /** 一行映射 */
-    public record Row(String raw, String groupKey, String labelZh) {
+    /** 一个分类：名字（= 分块符号里的标签值）与显示名 */
+    public record Row(String name, String label, int sort) {
     }
-
-    private static final String UPSERT =
-            "INSERT INTO kb_category (raw, group_key, label_zh, updated_at) VALUES (?,?,?,?) "
-                    + "ON CONFLICT(raw) DO UPDATE SET "
-                    + "group_key = excluded.group_key, "
-                    + "label_zh = excluded.label_zh, "
-                    + "updated_at = excluded.updated_at";
-
-    /** ⚠️ 冲突时**不动 label_zh** —— 见类注释 */
-    private static final String UPSERT_GROUP_ONLY =
-            "INSERT INTO kb_category (raw, group_key, label_zh, updated_at) VALUES (?,?,?,?) "
-                    + "ON CONFLICT(raw) DO UPDATE SET "
-                    + "group_key = excluded.group_key, "
-                    + "updated_at = excluded.updated_at";
 
     private final Jdbc jdbc;
 
@@ -48,45 +33,47 @@ public class KbCategoryRepository {
     }
 
     public void initSchema() {
+        // 旧表结构与新表不同名同义：检测到旧列就整体丢弃重建。
+        // 这是**有意的数据删除** —— 旧数据是智能分类的手动覆盖，重构后无意义。
+        if (hasColumn("kb_category", "raw") && !hasColumn("kb_category", "name")) {
+            jdbc.execute("DROP TABLE kb_category");
+        }
         jdbc.execute("CREATE TABLE IF NOT EXISTS kb_category ("
-                + " raw        TEXT PRIMARY KEY,"
-                + " group_key  TEXT NOT NULL DEFAULT '',"
-                + " label_zh   TEXT NOT NULL DEFAULT '',"
-                + " updated_at TEXT NOT NULL DEFAULT '')");
-        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_cat_group ON kb_category(group_key)");
+                + " name       TEXT PRIMARY KEY,"
+                + " label      TEXT NOT NULL DEFAULT '',"
+                + " sort       INTEGER NOT NULL DEFAULT 0,"
+                + " created_at TEXT NOT NULL DEFAULT '')");
+    }
+
+    /** 表里有没有这一列 —— 迁移用（SQLite 没有 IF NOT EXISTS 的 ADD COLUMN） */
+    private boolean hasColumn(String table, String column) {
+        try {
+            return jdbc.query("PRAGMA table_info(" + table + ")", r -> r.str("name"))
+                    .stream().anyMatch(column::equalsIgnoreCase);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public List<Row> all() {
-        return jdbc.query("SELECT raw, group_key, label_zh FROM kb_category",
-                r -> new Row(r.str("raw"), r.str("group_key"), r.str("label_zh")));
+        return jdbc.query("SELECT name, label, sort FROM kb_category ORDER BY sort, name",
+                r -> new Row(r.str("name"), r.str("label"), r.intOf("sort")));
     }
 
-    public void upsert(String raw, String groupKey, String labelZh, String updatedAt) {
-        jdbc.update(UPSERT, raw, groupKey, labelZh == null ? "" : labelZh, updatedAt);
+    public Row find(String name) {
+        return jdbc.queryOne("SELECT name, label, sort FROM kb_category WHERE name = ?",
+                r -> new Row(r.str("name"), r.str("label"), r.intOf("sort")), name);
     }
 
-    /** 批量只改大类、**保留已有中文标签**（一个事务） */
-    public int upsertGroupOnly(List<String> raws, String groupKey, String updatedAt) {
-        List<Object[]> rows = raws.stream()
-                .map(raw -> new Object[]{raw, groupKey, "", updatedAt})
-                .toList();
-        return jdbc.batch(UPSERT_GROUP_ONLY, rows);
+    /** 新增或更新一个分类（label 覆盖） */
+    public void upsert(String name, String label, int sort, String now) {
+        jdbc.update("INSERT INTO kb_category (name, label, sort, created_at) VALUES (?,?,?,?) "
+                        + "ON CONFLICT(name) DO UPDATE SET label = excluded.label, sort = excluded.sort",
+                name, label == null ? "" : label, sort, now);
     }
 
-    /** 批量 upsert（一个事务） */
-    public int upsertBatch(List<Row> items, String updatedAt) {
-        List<Object[]> rows = items.stream()
-                .map(m -> new Object[]{m.raw(), m.groupKey(), m.labelZh() == null ? "" : m.labelZh(), updatedAt})
-                .toList();
-        return jdbc.batch(UPSERT, rows);
-    }
-
-    public boolean delete(String raw) {
-        return jdbc.update("DELETE FROM kb_category WHERE raw = ?", raw) > 0;
-    }
-
-    public int clearAll() {
-        return jdbc.update("DELETE FROM kb_category");
+    public boolean delete(String name) {
+        return jdbc.update("DELETE FROM kb_category WHERE name = ?", name) > 0;
     }
 
     public long count() {

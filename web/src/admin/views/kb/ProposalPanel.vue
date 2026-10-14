@@ -2,7 +2,7 @@
 /**
  * 「知识库 → 提案」Tab 面板。
  *
- * 为什么是面板而不是页面：管理端把「关键词」「分类」「术语核对」「提案」「资料」
+ * 为什么是面板而不是页面：管理端把「文档」「词条」「分类」「提案」「抓取」
  * 并进同一个「知识库」页，页内用二级目录切换。页面级外壳（AdminPage / Tabs /
  * 页面标题 / 页面宽度）全部交给父页面 —— 所以这里不接收 props、不 emit 事件、
  * 不渲染 AdminPage，也不写 max-width：面板自己定宽会和父页面容器打架。
@@ -11,19 +11,19 @@
  *   问答记录里打「有帮助」 → 攒够阈值 → 手动点分析（调大模型） → 产出提案 → 采纳或拒绝。
  * 写入知识库只发生在「采纳」之后，所以列表按状态分档、逐条处理。
  *
- * <p><b>建议文本可先改再采纳</b>。落地方式（import { adminApi, describeError } from '@shared/api/client'）：
- * 前端不另造写入路径 —— 采纳仍走 {@code /kb/proposals/review}，但采纳前先按 kind 把
- * 用户改过的文本落到它真正会去的地方：
+ * <p><b>建议文本可先改再采纳</b>。前端不另造写入路径 —— 采纳仍走
+ * {@code /kb/proposals/review}，但采纳前先把用户改过的文本落到它真正会去的地方：
  * <ul>
- *   <li>{@code overwrite} → 先 {@code /kb/terms/chunk} 覆盖该词条的第一块
- *       （后端 approve 时也是覆盖同一块，所以两次写同一处，顺序上先手改后采纳）。</li>
- *   <li>{@code new} → 后端 approve 时会把词条名 + 文本投递进「资料」队列；
- *       先改没有对应的单条接口，所以这两种情况**明说不能改**，而不是假装能改。</li>
+ *   <li>{@code overwrite} → 先按标题查到那个分块，再用 {@code /kb/blocks/update}
+ *       覆盖它的正文（后端 approve 时也覆盖同一块，顺序上先手改后采纳）。</li>
+ *   <li>{@code new} → 后端 approve 时直接把新块写进知识库；
+ *       先改没有对应的单条接口，所以这一种**明说不能改**，而不是假装能改。</li>
  * </ul>
  * 不这么分开的话，编辑框在一个"改了也没用"的场景里照样可输入 —— 那才是骗人。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
+import type { KbEntryListResponse } from '@shared/api/types'
 import { num, shortTime } from '@shared/utils/format'
 import Panel from '@shared/ui/Panel.vue'
 import Tabs from '@shared/ui/Tabs.vue'
@@ -221,20 +221,20 @@ function onDraft(p: ProposalRow, v: string) {
 /**
  * 把改过的文本落到「采纳后它会去的地方」。
  *
- * overwrite 的提案，采纳时后端覆盖的是该词条的**第一块** —— 所以这里也写那一块：
- * 先取块列表找到块号，再调 /kb/terms/chunk。这样"改完再采纳"的结果
+ * overwrite 的提案，采纳时后端覆盖的是该词条对应的那个分块 —— 所以这里也写那一块：
+ * 先按标题查到词条 id，再调 /kb/blocks/update。这样"改完再采纳"的结果
  * 和"没改直接采纳"落在同一处，不会出现两套语义。
  */
 async function applyDraft(p: ProposalRow): Promise<string> {
   if (!isDirty(p)) return ''
   const text = drafts.value[p.id]
   if (!text.trim()) throw new Error('建议文本不能为空')
-  const r = await adminApi.get<{ chunks: Array<{ i: number }> }>(
-    '/kb/terms/chunks?title=' + encodeURIComponent(p.title))
-  const list = r.chunks ?? []
+  const r = await adminApi.get<KbEntryListResponse>(
+    '/kb/terms?q=' + encodeURIComponent(p.title) + '&limit=20')
+  const list = (r.items ?? []).filter(e => e.title === p.title)
   if (!list.length) throw new Error('知识库里没有词条「' + p.title + '」，改不了它的文本')
-  await adminApi.post('/kb/terms/chunk', { i: list[0].i, text })
-  return '已按改后的文本更新块 ' + list[0].i + '；'
+  await adminApi.post('/kb/blocks/update', { id: list[0].id, text })
+  return '已按改后的文本更新词条 ' + list[0].id + '；'
 }
 
 // ==================== 采纳 / 拒绝 ====================
@@ -247,8 +247,8 @@ async function review(p: ProposalRow, approve: boolean) {
         ? (edited
             ? '会先用你改后的文本覆盖知识库词条「' + p.title + '」，再标记这张提案。'
             : '采纳后会立刻覆盖知识库词条「' + p.title + '」的文本。')
-        : '采纳后「' + p.title + '」作为新资料进入投递队列，需要去「资料」tab 审核并建索引。'
-          + (edited ? '\n（新增提案的文本要改，请改提案本身；这里改不了它的投递内容。）' : ''))
+        : '采纳后会直接把「' + p.title + '」作为新词条写进知识库（自动重算向量、立即生效）。'
+          + (edited ? '\n（新增提案的文本要改，请改提案本身；这里改不了它的落地内容。）' : ''))
     : '拒绝只标记这条提案，知识库不会改动。'
   if (!window.confirm(
     (approve ? '采纳提案' : '拒绝提案') + ' #' + p.id + '？\n\n' + consequence

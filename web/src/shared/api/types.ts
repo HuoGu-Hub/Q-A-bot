@@ -175,113 +175,67 @@ export interface LogStatus {
   activeStreams: number
 }
 
-/* ==================== 词条（术语表并入 kb_term 之后） ====================
-   术语表原先是一个独立的 TSV 文件，和「关键词」各管一半同一批对象。
-   后端把它收成 kb_term 单表后，两边的接口合并成 /kb/terms*，
-   下面这套类型是它的唯一来源 —— 旧的 GlossaryXxx 已随面板一并删除。 */
+/* ==================== 词条（一个词条 = 一个分块） ====================
+   词条不再是独立的名字表：块本身就是词条，字段是 id / 标题 / 别名 / 分类。
+   核对状态与核对模式已经全部删掉。别名是唯一可写的字段。 */
 
-/**
- * 一条词条 = 一个 Wiki 页面。
- *
- * en 是主键（页面标题），正文块按它分组；zh / status 是原先术语表那部分。
- * aliases 由后端按 、/｜| 从 zh 拆好，前端不再各拆一遍（拆法不一致就是 bug）。
- */
-export interface KbTerm {
-  /** 英文名 = Wiki 页面标题，也是主键 */
-  en: string
-  /** 中文名（空字符串 = 还没中文名）；多别名用「、」分隔 */
-  zh: string
-  /** 中文名拆出来的别名 */
-  aliases: string[]
-  /** 'draft' | 'verified' | 'rejected'｜'' = 未收录中文名 */
-  status: string
-  board: string
-  boardLabel: string
-  cats: string[]
-  chunkCount: number
+/** 一条词条 = 一个分块。别名空串表示没单独写过（由标题「（English）」派生） */
+export interface KbEntryItem {
+  id: string
+  docId: string
+  title: string
+  /** 别名（存库那份为空时由标题派生兜底） */
+  alias: string
+  /** 认得的分类名（空数组 = 未分类） */
+  categories: string[]
+  /** 来源：doc / manual / wiki */
+  source: string
   chars: number
   url: string
-  /** 该词条的**全部**文本块都已下架 */
   retired: boolean
+  /** 是不是未分类（标签认不出，或压根没标签） */
+  uncategorized: boolean
 }
 
-/**
- * 各口径的词条数（预设筛选与进度条共用）。
- *
- * ⚠️ 与已删除的 GlossaryCounts 一样：**不受 q / 其它筛选影响** ——
- * 它表达的是「全库有多少条处于这个状态」，不是「当前搜索结果里有多少条」。
- * 否则筛一下数字就变，进度条会跟着跳。
- */
-export interface KbTermCounts {
+/** 全表读数（不受搜索/筛选影响） */
+export interface KbEntryCounts {
   all: number
-  /** 有正文 或 有中文名 —— 列表默认口径 */
-  main: number
-  withChunks: number
-  noChunk: number
-  draft: number
-  verified: number
-  rejected: number
-  unnamed: number
+  aliased: number
+  unaliased: number
+  uncategorized: number
+  retired: number
 }
 
-export interface KbTermBoard {
-  key: string
+/** 一个分类的规模 */
+export interface KbCategoryStat {
+  name: string
   label: string
-  icon: string
-  desc: string
-  terms: number
-  chunks: number
+  count: number
 }
 
-export interface KbTermListResponse {
+export interface KbEntryListResponse {
   total: number
-  items: KbTerm[]
-  counts: KbTermCounts
-  boards: KbTermBoard[]
-  /** 词条库（kb_term）是否就绪；false 时列表为空 */
+  items: KbEntryItem[]
+  counts: KbEntryCounts
+  categories: KbCategoryStat[]
+  uncategorizedCount: number
   available: boolean
 }
 
-/** 批量改状态的结果。missing 是没对上的英文名 —— 一条对不上不会连累其余的。 */
-export interface KbTermBatchResponse {
-  ok: boolean
-  updated: number
-  unchanged: number
-  missing: string[]
-  counts: KbTermCounts
-}
-
-export interface KbTermChunk {
-  /** 块 id（如 flame-altar-0）。原来是行号 —— 块身份改造之后改为 id */
-  id: string
-  text: string
-  url: string
-  chars: number
-  retired: boolean
-}
-
-/** 单条取块：title 可能带 /（如 Sets/Clothes），所以一律走 query 参数 */
-export interface KbTermChunksResponse {
-  title: string
-  chunks: KbTermChunk[]
-}
-
 /** Excel/WPS 旁路：导出拿到的是 JSON 包着的表格文本（client 永远走 res.json()） */
-export interface KbTermExportResponse {
+export interface KbEntryExportResponse {
   ok: boolean
-  /** 老字段名，值同 text —— 后端两个都给了 */
+  /** tsv 文本（format=tsv 时） */
   tsv: string
-  /** 按 ?format= 决定的文本：csv（带 UTF-8 BOM）或 tsv */
   text?: string
-  /** format=xlsx 时的文件字节（base64）—— 二进制塞不进 JSON 文本字段 */
+  /** format=xlsx 时的文件字节（base64） */
   xlsxBase64?: string
   format?: 'xlsx' | 'tsv'
   count: number
 }
 
-export interface KbTermImportResponse {
+export interface KbEntryImportResponse {
   ok: boolean
-  created: number
   updated: number
   skipped: number
 }
@@ -404,8 +358,6 @@ export interface KbImportResult {
   updated: number
   unchanged: number
   untouched: number
-  /** 这次登记/补齐的词条数（导入一份文档 = 它作为一个页面进词条表） */
-  terms: number
   warnings: string[]
 }
 
@@ -533,57 +485,26 @@ export interface PlazaHelpRequest {
 
 
 
-/* ==================== 分类规划 ==================== */
-
-export interface CategoryGroup {
-  key: string
-  label: string
-  icon: string
-  desc: string
-}
-
-export interface CategoryStat {
-  key: string
-  label: string
-  icon: string
-  desc: string
-  rawCount: number
-  chunkCount: number
-}
-
-export interface CategoryItem {
-  raw: string
-  count: number
-  groupKey: string
-  groupLabel: string
-  labelZh: string
-  /** 被手动改过（否则跟着自动规则走） */
-  custom: boolean
-  hidden: boolean
-}
+/* ==================== 分类（人工维护的平铺清单） ====================
+   分类只有一份人工清单：分块符号里带什么标签就归什么分类，认不出就是「未分类」。
+   没有"原始标签 → 9 大类"的智能归类。 */
 
 export interface CategoryList {
-  items: CategoryItem[]
-  groups: CategoryGroup[]
-  stats: CategoryStat[]
-  customCount: number
+  items: KbCategoryStat[]
+  uncategorized: number
+  uncategorizedName: string
   total: number
+  available: boolean
 }
 
-/**
- * 分类穿透里的一条：一个「条目」= 一个可检索块。
- *
- * 字段与后端 CategoryService.EntryItem 一一对应 —— 正文只给摘要（snippet），
- * 列表是用来「认人」的，不是用来通读的。
- */
+/** 分类穿透里的一条：一个条目 = 一个分块 */
 export interface CategoryEntry {
   id: string
   docId: string
   title: string
-  url: string
-  tags: string[]
-  curated: boolean
-  contentAt: string
+  alias: string
+  categories: string[]
+  source: string
   snippet: string
 }
 

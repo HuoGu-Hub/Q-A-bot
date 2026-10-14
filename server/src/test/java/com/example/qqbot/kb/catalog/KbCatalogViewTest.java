@@ -1,50 +1,39 @@
 package com.example.qqbot.kb.catalog;
 
 import com.example.qqbot.config.PersistenceProperties;
+import com.example.qqbot.kb.EntryId;
 import com.example.qqbot.kb.block.KbBlock;
-import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
-import com.example.qqbot.kb.EmbeddingClient;
 import com.example.qqbot.kb.block.KbDocImporter;
 import com.example.qqbot.kb.category.CategoryService;
-import com.example.qqbot.kb.term.KbTermService;
-import com.example.qqbot.kb.term.KbTermStore;
+import com.example.qqbot.kb.category.CategoryStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
-import com.example.qqbot.persistence.KbTermRepository;
+import com.example.qqbot.persistence.KbCategoryRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import com.example.qqbot.kb.EntryId;
 
 /**
- * 目录读模型的筛选与导出 —— 「无中文名」筛选器曾经**一条都抓不到**。
+ * 词条读模型的筛选、分类与导出。
  *
- * <h2>真实故障（2026-10-04 实测）</h2>
- * {@code matchesView} 里原来写的是 {@code case "unnamed" -> t.zh().isEmpty()}。
- * 但 {@link KbCatalog#buildAll} 有一句回退：
- * {@code zh = name[0].isEmpty() ? b.title() : name[0]} —— **词条没中文名时退回用块标题**。
- * 自动导入的英文页（技能/机制/属性/收集品笔记）标题就是英文，
- * 于是它们的 {@code zh} 是 {@code "Strength"} 这种**非空英文** → {@code isEmpty()} 恒为 false。
- *
- * <p>结果：生产库里几百条该被「无中文名」抓到的**一条都抓不到**，
- * 管理员在后台想补译名却找不到入口。{@code main} 视图的
- * 「挡掉既没正文又没中文名的空页面」也是同一个原因失效。
- *
- * <p>修法：按**有没有汉字**判定，不依赖回退行为，见 {@link KbCatalogViews}。
- *
- * <p>本测试原先叫 {@code KbTermServiceViewTest}：那时目录读模型住在名字层服务里。
- * 它现在归组合层，测试跟着搬 —— 断言对象没变，只是归属地变了。
+ * <h2>词条 = 分块</h2>
+ * 列表就是块表本身：{@code id / 标题 / 别名 / 分类}。视图预设：
+ * <ul>
+ *   <li>{@code all} 全部</li>
+ *   <li>{@code aliased} 有别名 / {@code unaliased} 没别名</li>
+ *   <li>{@code uncategorized} 未分类（标签认不出，或压根没标签）</li>
+ * </ul>
+ * 分类只认**清单里已有的名字** —— 标签不认识就归未分类，不做任何智能猜测。
  */
 class KbCatalogViewTest {
 
@@ -53,6 +42,7 @@ class KbCatalogViewTest {
 
     private SqliteDatabase db;
     private KbBlockStore blocks;
+    private CategoryService categories;
     private KbCatalog catalog;
 
     @BeforeEach
@@ -63,15 +53,15 @@ class KbCatalogViewTest {
         db.init();
         blocks = new KbBlockStore(new KbBlockRepository(new Jdbc(db)));
         blocks.init();
-        KbBlockIndex index = new KbBlockIndex(blocks);
-        index.reload();
-        KbTermStore terms = new KbTermStore(new KbTermRepository(new Jdbc(db)), index);
-        terms.init();
-        // 读模型测试用不到导入编排那两半，装上真的但空转的实例就好：
-        // 用 null 会掩盖"构造签名变了"，用 mock 拿不到真名的类型检查。
-        KbDocImporter importer = new KbDocImporter(blocks, mock(EmbeddingClient.class));
-        KbTermService termService = new KbTermService(terms, mock(ApplicationEventPublisher.class));
-        catalog = new KbCatalog(blocks, terms, mock(CategoryService.class), importer, termService);
+
+        CategoryStore catStore = new CategoryStore(new KbCategoryRepository(new Jdbc(db)));
+        catStore.init();
+        categories = new CategoryService(catStore, blocks);
+        categories.add("武器", "武器");
+        categories.add("家具", "家具");
+
+        KbDocImporter importer = new KbDocImporter(blocks, mock(com.example.qqbot.kb.EmbeddingClient.class));
+        catalog = new KbCatalog(blocks, categories, importer);
     }
 
     @AfterEach
@@ -79,102 +69,89 @@ class KbCatalogViewTest {
         db.close();
     }
 
-    private void block(String id, String title) {
-        blocks.upsert(new KbBlock(EntryId.of(id), "doc", title, "正文内容", "", List.of(),
-                KbBlock.SRC_DOC, false, "2026-10-04T00:00:00Z"), new float[]{0.1f, 0.2f, 0.3f});
+    private void block(String id, String title, String alias, String... tags) {
+        blocks.upsert(new KbBlock(EntryId.of(id), "doc", title, "正文内容", "",
+                List.of(tags), KbBlock.SRC_DOC, false, "2026-10-04T00:00:00Z", alias), null);
     }
 
     @Test
-    @DisplayName("★ 英文标题的块必须出现在「无中文名」里（原来一条都抓不到）")
-    void englishTitledBlockShowsUpAsUnnamed() {
-        block("wiki-strength", "Strength");
-        block("wiki-intelligence", "Intelligence");
-        block("灵火祭坛", "灵火祭坛（Flame Altar）");
+    @DisplayName("★ 「无别名」视图只抓没有别名的那些（标题括号派生出的别名算有别名）")
+    void unaliasedView() {
+        block("wiki-strength", "Strength", "");
+        block("wiki-intelligence", "Intelligence", "");
+        block("flame-altar", "灵火祭坛（Flame Altar）", "");
 
-        List<String> unnamed = catalog.page("", "unnamed", "", 500, 0)
-                .items().stream().map(KbCatalog.Term::en).toList();
+        List<String> unaliased = catalog.page("", "unaliased", "", 500, 0)
+                .items().stream().map(KbCatalog.Entry::id).toList();
 
-        assertThat(unnamed)
-                .as("英文标题的两条要在，中文标题的那条不能在")
+        assertThat(unaliased)
+                .as("标题里带（English）的那条自动有了别名，不算无别名")
                 .containsExactlyInAnyOrder("wiki-strength", "wiki-intelligence");
-        assertThat(catalog.page("", "unnamed", "", 500, 0).counts().unnamed()).isEqualTo(2);
+        assertThat(catalog.counts().unaliased()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("★ 中文名里只要有汉字，就不算「无中文名」（哪怕还带着英文别名）")
-    void anyHanCharacterCountsAsNamed() {
-        block("a", "力量（Strength）");
-        block("b", "Bamboo Ladder、Bamboo Ladder");   // 中文名和别名都是英文 → 仍算没名字
-        block("c", "灯（Lamp）");
+    @DisplayName("★ 有别名视图只抓真的写了别名的那些")
+    void aliasedView() {
+        block("a", "灵火祭坛", "灵火圣坛");
+        block("b", "熔炉", "");
 
-        List<String> unnamed = catalog.page("", "unnamed", "", 500, 0)
-                .items().stream().map(KbCatalog.Term::en).toList();
+        List<String> aliased = catalog.page("", "aliased", "", 500, 0)
+                .items().stream().map(KbCatalog.Entry::id).toList();
 
-        assertThat(unnamed).containsExactly("b");
+        assertThat(aliased).containsExactly("a");
+        assertThat(catalog.counts().aliased()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("main 视图也会把「既没正文又没中文名」的挡在外面（同一个根因）")
-    void mainViewAlsoUsesChineseDetection() {
-        block("wiki-strength", "Strength");
-        block("灵火祭坛", "灵火祭坛（Flame Altar）");
+    @DisplayName("★ 未分类 = 标签认不出（未登记）或压根没标签")
+    void uncategorizedView() {
+        block("a", "灵火祭坛", "", "武器");
+        block("b", "熔炉", "", "没登记过的标签");
+        block("c", "无名块", "");
 
-        // 两条都有正文 → 两条都该在 main 里
-        assertThat(catalog.page("", "main", "", 500, 0).items()).hasSize(2);
-        assertThat(catalog.page("", "", "", 500, 0).counts().main()).isEqualTo(2);
-        assertThat(catalog.page("", "", "", 500, 0).counts().unnamed()).isEqualTo(1);
+        List<String> uncategorized = catalog.page("", "uncategorized", "", 500, 0)
+                .items().stream().map(KbCatalog.Entry::id).toList();
+
+        assertThat(uncategorized).containsExactlyInAnyOrder("b", "c");
+        assertThat(catalog.counts().uncategorized()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("★ 导出可以只导「还没中文名」的那批（几百条在网页上点不现实，要走 Excel）")
-    void exportCanBeFilteredByView() {
-        block("wiki-strength", "Strength");
-        block("wiki-intelligence", "Intelligence");
-        block("灵火祭坛", "灵火祭坛（Flame Altar）");
+    @DisplayName("按分类筛选：只认清单里已有的分类名")
+    void filterByCategory() {
+        block("a", "剑", "", "武器");
+        block("b", "桌子", "", "家具");
+        block("c", "未知", "", "别的");
 
-        String only = catalog.exportTsv("", "unnamed", "");
-        assertThat(only).contains("wiki-strength").contains("wiki-intelligence");
-        assertThat(only).as("有中文名的那条不该出现在 unnamed 导出里").doesNotContain("灵火祭坛");
-
-        String all = catalog.exportTsv();
-        assertThat(all).contains("wiki-strength").contains("灵火祭坛");
-        assertThat(all.lines().count()).as("不带筛选时行为不变").isGreaterThan(only.lines().count());
+        assertThat(catalog.page("", "all", "武器", 500, 0).items())
+                .extracting(KbCatalog.Entry::id).containsExactly("a");
+        assertThat(catalog.page("", "all", CategoryService.UNCATEGORIZED, 500, 0).items())
+                .extracting(KbCatalog.Entry::id).containsExactly("c");
+        assertThat(categories.stats()).as("两个分类各自只有一条")
+                .extracting(CategoryService.Stat::count).containsExactly(1, 1);
     }
 
     @Test
     @DisplayName("★ 导出与列表**用同一套筛选** —— 列表里看到多少条，导出就是多少条")
     void exportAndListShareTheSameFilter() {
-        // 三个块给不同的 tags，让它们落进不同板块
-        blocks.upsert(new KbBlock(EntryId.of("a"), "d", "Sword", "x", "", List.of("武器"), KbBlock.SRC_DOC, false, "t"),
-                new float[]{0.1f, 0.2f, 0.3f});
-        blocks.upsert(new KbBlock(EntryId.of("b"), "d", "Table", "x", "", List.of("家具"), KbBlock.SRC_DOC, false, "t"),
-                new float[]{0.1f, 0.2f, 0.3f});
-        blocks.upsert(new KbBlock(EntryId.of("c"), "d", "剑（Sword）", "x", "", List.of("武器"), KbBlock.SRC_DOC, false, "t"),
-                new float[]{0.1f, 0.2f, 0.3f});
+        block("a", "Sword", "", "武器");
+        block("b", "Table", "", "家具");
+        block("c", "Shield", "", "武器");
 
-        // 列表（board=combat）与导出（同一 board）必须一致
-        int listTotal = catalog.page("", "all", "combat", 500, 0).total();
-        long exportRows = catalog.exportTsv("", "all", "combat").lines()
+        int listTotal = catalog.page("", "all", "武器", 500, 0).total();
+        long exportRows = catalog.exportTsv("", "all", "武器").lines()
                 .filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
         assertThat(exportRows).as("列表 %d 条，导出 %d 条 —— 必须相等", listTotal, exportRows)
                 .isEqualTo(listTotal);
-
-        // unnamed + board 叠加也要生效
-        // ⚠️ 只看**数据行**：表头里有 "rejected" 这种带字母 c 的说明文字，
-        //    直接对整段做 doesNotContain("c") 会假红（本测试第一次就是这么挂的）
-        String both = catalog.exportTsv("", "unnamed", "combat").lines()
-                .filter(l -> !l.isBlank() && l.charAt(0) != '#')
-                .collect(java.util.stream.Collectors.joining("\n"));
-        assertThat(both).contains("a").doesNotContain("c");
     }
 
     @Test
     @DisplayName("★ TSV 导出：无 BOM、含分隔符的字段被引号包住、行数与列表一致")
     void tsvExportIsWellFormed() {
-        block("a", "Strength");
+        block("a", "Strength", "");
         // 标题里故意放**制表符**（TSV 的分隔符）—— 不转义就会被切错列，而且不报错
-        blocks.upsert(new KbBlock(EntryId.of("b"), "d", "Tab\tInside", "x", "",
-                List.of("武器"), KbBlock.SRC_DOC, false, "t"), new float[]{0.1f, 0.2f, 0.3f});
+        block("b", "Tab\tInside", "", "武器");
 
         String tsv = catalog.exportTsv("", "all", "");
         assertThat(tsv.charAt(0)).as("TSV 不该带 BOM").isNotEqualTo('\uFEFF');
@@ -186,7 +163,20 @@ class KbCatalogViewTest {
         assertThat(rows)
                 .as("数据行数必须等于列表条数")
                 .isEqualTo(catalog.page("", "all", "", 500, 0).total());
-        // 解析侧的往返性质由 kb.term.CsvTableQuoteTest 守（它测的是同一个 RFC4180 解析器）。
-        // 这里只钉导出侧的格式：那是本层唯一会漏出去给人和 Excel 看的东西。
+    }
+
+    @Test
+    @DisplayName("别名表导入：只按 id 覆盖别名，找不到的 id 计入 skipped")
+    void importAliasTable() {
+        block("a", "灵火祭坛", "");
+
+        KbCatalog.ImportResult r = catalog.importTable(String.join("\n",
+                "id\t标题\t别名\t分类",
+                "a\t灵火祭坛\t灵火圣坛, 火焰祭坛\t武器",
+                "missing\t不存在\tx\t武器"));
+
+        assertThat(r.updated()).isEqualTo(1);
+        assertThat(r.skipped()).isEqualTo(1);
+        assertThat(catalog.get("a").alias()).as("逗号统一成顿号").isEqualTo("灵火圣坛、火焰祭坛");
     }
 }

@@ -4,7 +4,7 @@ package com.example.qqbot.kb;
  * 知识库内容变了 —— 关心它的人自己订阅。
  *
  * <h2>为什么要有这个事件，而不是直接调公开站</h2>
- * 原先 {@code kb.term.KbTermService} 持有一个
+ * 原先名字层服务持有一个
  * {@code ObjectProvider<PublicSearchService>}，写完之后直接调它的 {@code invalidate()}。
  * 这是**层次倒置**：知识库反过来知道"公开站有个检索缓存"这件事 ——
  * 而且 {@code ObjectProvider} 那个写法本身就是为绕开循环依赖打的补丁。
