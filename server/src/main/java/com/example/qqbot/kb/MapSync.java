@@ -1,5 +1,8 @@
 package com.example.qqbot.kb;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * wiki 地图数据同步配置。
  *
@@ -32,6 +35,27 @@ public class MapSync {
 
     /** {@code Map} 命名空间 id（实测 2900） */
     private int namespace = 2900;
+
+    /**
+     * 只同步这几张地图（按 {@code Map:<名字>/...} 的前缀）。**空 = 不过滤** ——
+     * 保持"命名空间里有什么就拉什么"的旧行为。
+     *
+     * <h2>为什么需要它</h2>
+     * wiki 的 {@code Map} 命名空间里躺着的不只是当前世界：实测有 6 族页面 ——
+     * Embervale（当前世界 1064 点）、EarlyAccess（**抢先体验版的旧世界图** 585 点）、
+     * Blackmire / FrozenFrontier（单个区域的局部图）、Update4、还有一个别人建的 Test 页。
+     * 不分青红皂白全拉进来会造成两个后果：
+     * <ol>
+     *   <li><b>界面上的假选择</b>：「默认显示」页会列出 5 张地图的切换 chip，
+     *       而实际上常用的只有一张；</li>
+     *   <li><b>语料被污染</b>：地点语料按 article 聚合，于是"远古尖塔"一条里
+     *       混进了 5 套互不相干的坐标系（Embervale 0..10240 / EarlyAccess 1478..8269 /
+     *       Blackmire 0..1485）—— 群友问出来的坐标可能来自旧世界。</li>
+     * </ol>
+     * 白名单是这套问题的**源头开关**：不进库就不会出现在界面、目录和语料里。
+     * 以后想看某张区域图，把名字加回来、点一次同步即可。
+     */
+    private List<String> maps = new ArrayList<>(List.of("Embervale"));
 
     /**
      * 一次请求取几页。MediaWiki 的 titles 上限是 50，
@@ -120,6 +144,31 @@ public class MapSync {
 
     public void setMaxPages(int maxPages) {
         this.maxPages = maxPages;
+    }
+
+    public List<String> getMaps() {
+        return maps;
+    }
+
+    /** 空列表 = 不过滤。空白项直接丢掉，免得 yml 里一个多余空格就把整张地图挡在外面 */
+    public void setMaps(List<String> maps) {
+        List<String> clean = new ArrayList<>();
+        if (maps != null) {
+            for (String m : maps) {
+                if (m != null && !m.isBlank()) {
+                    clean.add(m.strip());
+                }
+            }
+        }
+        this.maps = clean;
+    }
+
+    /** 这张地图要不要同步。白名单为空时一律放行（旧行为） */
+    public boolean allows(String map) {
+        if (maps == null || maps.isEmpty()) {
+            return true;
+        }
+        return map != null && maps.contains(map.strip());
     }
 
     public boolean isSyncOnStart() {

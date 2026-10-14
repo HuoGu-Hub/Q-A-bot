@@ -563,6 +563,18 @@ app:
       enabled: true
       api-base: https://enshrouded.wiki.gg/api.php
       namespace: 2900
+      # ---------- 只同步这几张地图 ----------
+      # Map 命名空间里躺着的不只是当前世界：实测 6 族页面 ——
+      #   Embervale      当前世界，1064 个点位（要的就是它）
+      #   EarlyAccess    抢先体验版的**旧世界图**，585 个点位
+      #   Blackmire      一个区域的局部图（1485×1267），24 个点位
+      #   FrozenFrontier 一个区域的局部图，28 个点位
+      #   Update4        某次更新的标注图，2 个点位
+      #   Test           别人建的测试页，0 个点位
+      # 全拉进来会造成两个后果：界面上冒出 5 张地图的切换选择，以及**地点语料被污染**
+      # （语料按 article 聚合成一条，于是"远古尖塔"混了 5 套互不相干的坐标系）。
+      # 空列表 = 不过滤（旧行为）。以后想看某张区域图，把名字加回来再点一次同步即可。
+      maps: [Embervale]
       # 一次请求取几页。MediaWiki titles 上限 50，但单页可达 100KB（Embervale/Main 实测 100,630 字符），
       # 取 8 是"少往返"与"单次响应别太大"的折中
       batch-size: 8

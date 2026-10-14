@@ -203,6 +203,22 @@ public class LocationCorpusBuilder {
         return report(entries, skippedLore, written, 0, false);
     }
 
+    /**
+     * 当前库里有多少条地图派生的地点语料。
+     *
+     * <p>清掉某张地图之后这些块就**过期了**（它们是拿那张图的坐标算出来的），
+     * 但重新派生要调向量接口、要花钱，不能在一个后台清理里顺手做 ——
+     * 所以 {@link MapResidueCleaner} 用它来判断"要不要喊人重新派生"。
+     */
+    public int derivedCount() {
+        try {
+            return blockStore.byDoc(DOC_ID).size();
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读地点语料条数失败：{}", e.getMessage());
+            return 0;
+        }
+    }
+
     /** 清掉全部派生块 —— 回滚用。返回删掉的条数 */
     public int purge() {
         int n = 0;

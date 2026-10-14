@@ -1,5 +1,7 @@
 package com.example.qqbot.kb.map;
 
+import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.MapSync;
 import com.example.qqbot.kb.wiki.WikiApiClient;
 
 import org.slf4j.Logger;
@@ -38,10 +40,16 @@ public class KbMapSyncService {
 
     private final WikiApiClient client;
     private final KbMapStore store;
+    private final MapSync cfg;
+    private final MapResidueCleaner cleaner;
 
-    public KbMapSyncService(WikiApiClient client, KbMapStore store) {
+    public KbMapSyncService(WikiApiClient client, KbMapStore store, KbPolicy policy,
+                            MapResidueCleaner cleaner) {
         this.client = client;
         this.store = store;
+        // 注入只读接口而不是 KbProperties：kb 包不认识 config 包（ArchitectureTest 有护栏）
+        this.cfg = policy.getMapSync();
+        this.cleaner = cleaner;
     }
 
     /**
@@ -55,17 +63,19 @@ public class KbMapSyncService {
      * @param dryRun  只比对版本、不取正文不落库
      */
     public record SyncReport(int pages, int changed, int parsed, int markers, int failed,
-                             List<String> errors, boolean dryRun, long elapsedMs, Map<String, Integer> byGroup) {
+                             int skipped, List<String> errors, boolean dryRun, long elapsedMs,
+                             Map<String, Integer> byGroup) {
     }
 
     public SyncReport sync(boolean dryRun) {
         long t0 = System.currentTimeMillis();
         if (!client.isEnabled()) {
-            return new SyncReport(0, 0, 0, 0, 0, List.of("地图同步未启用（app.kb.map-sync.enabled=false）"),
+            return new SyncReport(0, 0, 0, 0, 0, 0, List.of("地图同步未启用（app.kb.map-sync.enabled=false）"),
                     dryRun, 0, Map.of());
         }
         if (!store.isAvailable()) {
-            return new SyncReport(0, 0, 0, 0, 0, List.of("地图存储不可用（问答库没起来）"), dryRun, 0, Map.of());
+            return new SyncReport(0, 0, 0, 0, 0, 0, List.of("地图存储不可用（问答库没起来）"),
+                    dryRun, 0, Map.of());
         }
 
         WikiApiClient.Collected listed = client.listNamespacePages();
@@ -74,9 +84,34 @@ public class KbMapSyncService {
             log.warn("[KB-MAP] 命名空间页列表顶到上限（map-sync.max-pages），共 {} 页 —— 后面还有页没列",
                     pages.size());
         }
+        // 白名单之外的页**一个字节都不拉** —— 它们不是当前世界，
+        // 进了库只会污染界面上的地图选择、地点问答和地点语料（见 MapSync.maps）
+        List<String> allowed = new ArrayList<>();
+        int skipped = 0;
+        List<String> skippedMaps = new ArrayList<>();
+        for (String page : pages) {
+            String map = KbMapParser.mapOf(page);
+            if (cfg.allows(map)) {
+                allowed.add(page);
+            } else {
+                skipped++;
+                if (!skippedMaps.contains(map)) {
+                    skippedMaps.add(map);
+                }
+            }
+        }
+        if (skipped > 0) {
+            log.info("[KB-MAP] 跳过 {} 页（不在白名单 app.kb.map-sync.maps={} 里）：{}",
+                    skipped, cfg.getMaps(), String.join("、", skippedMaps));
+        }
+        pages = allowed;
+
         if (pages.isEmpty()) {
-            return new SyncReport(0, 0, 0, 0, 0, List.of("命名空间里没有页面"), dryRun,
-                    System.currentTimeMillis() - t0, Map.of());
+            return new SyncReport(0, 0, 0, 0, 0, skipped,
+                    List.of(skipped > 0
+                            ? "白名单里的地图在这个命名空间里一页都没有：app.kb.map-sync.maps=" + cfg.getMaps()
+                            : "命名空间里没有页面"),
+                    dryRun, System.currentTimeMillis() - t0, Map.of());
         }
 
         // ① 只取版本号（很轻），比出哪几页变了
@@ -96,7 +131,7 @@ public class KbMapSyncService {
         log.info("[KB-MAP] 共 {} 页，其中 {} 页版本变过（本地已知 {} 页）", pages.size(), changed.size(), known.size());
 
         if (dryRun) {
-            return new SyncReport(pages.size(), changed.size(), 0, 0, 0, List.of(), true,
+            return new SyncReport(pages.size(), changed.size(), 0, 0, 0, skipped, List.of(), true,
                     System.currentTimeMillis() - t0, store.countsByGroup(null));
         }
 
@@ -132,8 +167,13 @@ public class KbMapSyncService {
         long ms = System.currentTimeMillis() - t0;
         log.info("[KB-MAP] 同步完成：解析 {} 页 / 写入 {} 个 marker / 失败 {} 页，耗时 {} ms",
                 parsed, markers, failed, ms);
-        return new SyncReport(pages.size(), changed.size(), parsed, markers, failed, errors, false, ms,
-                store.countsByGroup(null));
+        // 库里可能还躺着上一次白名单之外的地图数据（改配置之前同步进来的）。
+        // 白名单只挡新写入，**已经进来的不会自己走** —— 顺手清一次，幂等且没东西时几乎零开销
+        if (!cleaner.clean().empty()) {
+            log.info("[KB-MAP] 本次同步顺带清理了白名单之外的地图残留，详见上面的 [MAP-CLEAN] 日志");
+        }
+        return new SyncReport(pages.size(), changed.size(), parsed, markers, failed, skipped,
+                errors, false, ms, store.countsByGroup(null));
     }
 
     /** 当前库里各分组的 marker 数（语料扩维时按它决定先做哪类） */

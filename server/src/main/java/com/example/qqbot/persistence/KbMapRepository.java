@@ -2,6 +2,8 @@ package com.example.qqbot.persistence;
 
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,19 @@ import java.util.Map;
  */
 @Repository
 public class KbMapRepository {
+
+    /**
+     * 一次清理删掉了什么。
+     *
+     * @param maps 被清掉的地图名（删完就查不出来了，所以要在删除**之前**记下来）
+     */
+    public record PurgeCounts(int pages, int canvases, int groups, int markers, int notes,
+                              int places, List<String> maps) {
+
+        public int total() {
+            return pages + canvases + groups + markers + notes + places;
+        }
+    }
 
     /** 一页的同步状态 */
     public record PageState(String page, String map, long revid, String pageUpdatedAt,
@@ -274,6 +289,89 @@ public class KbMapRepository {
             jdbc.update(UPSERT_PAGE, page, map, revid, nz(pageUpdatedAt), syncedAt, markers.size());
             return markers.size();
         });
+    }
+
+    /**
+     * 清掉**不在白名单里**的地图留下的全部数据 —— 页面状态、画布、分组、marker、备注、
+     * 默认图层、以及那几张地图上的自定义点位。
+     *
+     * <h2>为什么要它</h2>
+     * wiki 的 {@code Map} 命名空间里除了当前世界，还躺着抢先体验版的旧世界图、
+     * 几个区域小图和一个测试页（见 {@code MapSync.maps}）。白名单只管住了"以后不再写进来"，
+     * <b>已经躺在库里的不会自己走</b> —— 而它们照样会出现在目录、图层选择、地点问答和语料里。
+     *
+     * <p>做成幂等的"随时可跑"：没配白名单（空列表）时**什么都不做**，
+     * 保持"命名空间里有什么就有什么"的旧行为。
+     *
+     * @param keep 要保留的地图名；为空表示不做任何清理
+     */
+    public PurgeCounts purgeMapsNotIn(List<String> keep) {
+        if (keep == null || keep.isEmpty()) {
+            return new PurgeCounts(0, 0, 0, 0, 0, 0, List.of());
+        }
+        // 占位符的个数由白名单长度决定，**值仍然全部走参数** —— 表名是写死的常量
+        String holes = String.join(",", Collections.nCopies(keep.size(), "?"));
+        Object[] args = keep.toArray();
+        return jdbc.transaction(() -> {
+            List<String> present = new ArrayList<>();
+            for (String table : TABLES_WITH_MAP) {
+                if (tableExists(table)) {
+                    present.add(table);
+                }
+            }
+            List<String> gone = new ArrayList<>();
+            for (String table : present) {
+                for (String m : jdbc.query("SELECT DISTINCT map FROM " + table
+                        + " WHERE map NOT IN (" + holes + ")", r -> r.str("map"), args)) {
+                    if (m != null && !m.isBlank() && !gone.contains(m)) {
+                        gone.add(m);
+                    }
+                }
+            }
+            if (gone.isEmpty()) {
+                return new PurgeCounts(0, 0, 0, 0, 0, 0, List.of());
+            }
+            int pages = 0;
+            int canvases = 0;
+            int groups = 0;
+            int markers = 0;
+            int notes = 0;
+            int places = 0;
+            for (String table : present) {
+                int n = deleteMapsNotIn(table, holes, args);
+                switch (table) {
+                    case "kb_map_page" -> pages = n;
+                    case "kb_map_canvas" -> canvases = n;
+                    case "kb_map_group" -> groups = n;
+                    case "kb_map_marker" -> markers = n;
+                    case "kb_map_marker_note" -> notes = n;
+                    case "kb_map_place" -> places = n;
+                    default -> { }
+                }
+            }
+            return new PurgeCounts(pages, canvases, groups, markers, notes, places,
+                    List.copyOf(gone));
+        });
+    }
+
+    /** 带 {@code map} 列、需要跟着地图一起清的表。表名写死，不来自任何外部输入 */
+    private static final List<String> TABLES_WITH_MAP = List.of(
+            "kb_map_page", "kb_map_canvas", "kb_map_group", "kb_map_marker",
+            "kb_map_marker_note", "kb_map_layer_default", "kb_map_place");
+
+    private int deleteMapsNotIn(String table, String holes, Object[] keep) {
+        return jdbc.update("DELETE FROM " + table + " WHERE map NOT IN (" + holes + ")", keep);
+    }
+
+    /**
+     * 表存在吗。
+     *
+     * <p>这几张表分别由不同的仓储创建（备注表、图层默认表、自定义点位表都不归本类管），
+     * 少一张不该让整次清理失败 —— 那会导致**主要的三张表也清不掉**。
+     */
+    private boolean tableExists(String table) {
+        return jdbc.count("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
+                table) > 0;
     }
 
     /** 记录一页同步失败（不让一页坏掉整次同步，但要在库里能看见）—— **不动 revid**，见类注释 */

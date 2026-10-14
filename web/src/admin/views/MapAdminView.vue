@@ -883,7 +883,12 @@ async function saveLayers(keys: string[] | null) {
         <p v-if="layerLoading" class="muted">正在载入…</p>
 
         <template v-else-if="layerMaps.length">
-          <div class="chips">
+          <!--
+            只有一张地图时不渲染切换条：一颗孤零零的 chip 既点不动也占地方，
+            而它的存在只是因为"当年同步把 wiki 上 6 张地图全拉进来了"。
+            见 MapSync.maps（白名单）与 MapResidueCleaner（清存量）。
+          -->
+          <div v-if="layerMaps.length > 1" class="chips">
             <button
               v-for="m in layerMaps"
               :key="m.map"

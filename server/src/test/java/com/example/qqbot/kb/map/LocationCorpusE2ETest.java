@@ -32,6 +32,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 地点语料的**端到端**验收：真同步 → 真派生 → 真检索，看"地点类问题"到底能不能答。
@@ -107,7 +110,10 @@ class LocationCorpusE2ETest {
         KbMapStore mapStore = new KbMapStore(new KbMapRepository(new Jdbc(sqlite)));
         mapStore.init();
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        KbMapSyncService sync = new KbMapSyncService(client, mapStore);
+        MapImageCache images = mock(MapImageCache.class);
+        when(images.purgeMapsNotIn(any())).thenReturn(new MapImageCache.CachePurge(0, 0, List.of()));
+        KbMapSyncService sync = new KbMapSyncService(client, mapStore, kb,
+                new MapResidueCleaner(kb, mapStore, images, mock(LocationCorpusBuilder.class)));
         KbMapSyncService.SyncReport sr = sync.sync(false);
         System.out.printf("地图同步：%d 页 / %d 个 marker / 失败 %d%n", sr.parsed(), sr.markers(), sr.failed());
         assertThat(sr.failed()).isZero();
