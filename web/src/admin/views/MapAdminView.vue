@@ -31,7 +31,7 @@ import Tabs from '@shared/ui/Tabs.vue'
 import { toast } from '@shared/ui/toast'
 import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import type { AnchorReport, AnchorReview, Catalog, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
+import type { AnchorReport, AnchorReview, CanvasSpec, Catalog, JobState, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 
 /** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
@@ -119,6 +119,164 @@ const anchor = ref<AnchorReport | null>(null)
  * 这样 wiki 哪天换了新地图，它会自己出现在列表里等人决定 —— 而不是被静默跳过。
  */
 const mapList = ref<MapCandidates | null>(null)
+
+/* ==================== 同步与状态：这一页的叙事 ==================== */
+
+/**
+ * 报头里的"当前世界" —— 目录按点位数排序，取第一张。
+ *
+ * <p>这正是公开站实际显示的那张（{@code MapView.vue} 取 {@code maps[0]}），
+ * 而目录已经按启用范围过滤过，所以这里说的就是访客看到的东西。
+ */
+const primarySpec = computed(() => catalog.value?.maps?.[0] ?? null)
+
+/** 当前世界**最大**的那张画布 —— 报头那根刻度轴画的是它的取景窗 */
+const primaryCanvas = computed<CanvasSpec | null>(() => {
+  const list = primarySpec.value?.canvases ?? []
+  let best: CanvasSpec | null = null
+  let bestArea = -1
+  for (const c of list) {
+    const area = Math.abs((c.bottomRight[0] - c.topLeft[0]) * (c.bottomRight[1] - c.topLeft[1]))
+    if (area > bestArea) {
+      bestArea = area
+      best = c
+    }
+  }
+  return best
+})
+
+/**
+ * 取景窗刻度轴。
+ *
+ * <p>坐标系是这套系统的心脏，而 "10240 × 10240" 这一串数字看不出"有多大、被切成几块"。
+ * 轴上的**每一格就是一列底图瓦片** —— 它同时说明了世界范围与切图方式。
+ */
+const windowAxis = computed(() => {
+  const c = primaryCanvas.value
+  if (!c) {
+    return null
+  }
+  const w = Math.abs(c.bottomRight[0] - c.topLeft[0])
+  const h = Math.abs(c.topLeft[1] - c.bottomRight[1])
+  const tw = c.tileSize?.[0] ?? 0
+  const th = c.tileSize?.[1] ?? 0
+  const cols = tw > 0 ? Math.max(1, Math.round(w / tw)) : 0
+  const rows = th > 0 ? Math.max(1, Math.round(h / th)) : 0
+  const size = fmt(w) + ' × ' + fmt(h) + ' 世界单位'
+  return {
+    from: c.topLeft[0],
+    to: c.bottomRight[0],
+    cols: cols > 0 ? cols : 4,
+    caption: cols > 0 && rows > 0 ? size + ' · ' + cols + '×' + rows + ' 瓦片' : size + ' · 整图一张',
+  }
+})
+
+/**
+ * 长任务**按任务**组织，而不是按按钮。
+ *
+ * <p>上一版把任务状态放在卡片上半、把五个按钮放在下半，中间夹一段说明文章 ——
+ * 于是"这个按钮是干什么的、上次跑成什么样"要在屏幕上跳两次才连得起来。
+ * 一个任务的状态与它的触发方式必须待在一起。
+ */
+const jobRows = computed(() => {
+  const j = (status.value?.jobs ?? {}) as Record<string, JobState | undefined>
+  return [
+    { key: 'sync', label: '同步 wiki 地图', note: '增量 · 只拉版本变过的页，常态几秒', state: j.sync },
+    { key: 'warm', label: '底图缓存', note: '首屏档一两分钟；全量含原图，首次十几分钟', state: j.warm },
+    { key: 'corpus', label: '地点语料', note: '派生与清除都要调向量接口，较慢', state: j.corpus },
+  ]
+})
+
+interface Todo {
+  id: string
+  tone: 'warn' | 'bad'
+  text: string
+  detail: string
+  action: string
+}
+
+/**
+ * 待办 —— 这一页唯一配得上暖色的东西。
+ *
+ * <p>没有待办时整块不出现，整页就只剩灰阶：**"没有颜色"本身就是"没事"的信号**。
+ * 项目的设计令牌里写着"灵火一屏之内只给最该先看一眼的东西"，这里就是那句话的落点。
+ */
+const todos = computed<Todo[]>(() => {
+  const out: Todo[] = []
+  const s = status.value
+  if (!s) {
+    return out
+  }
+  if (!s.mapStoreAvailable || !s.placesAvailable || !s.notesAvailable) {
+    const down = [
+      !s.mapStoreAvailable ? '地图库' : '',
+      !s.placesAvailable ? '点位' : '',
+      !s.notesAvailable ? '备注' : '',
+    ].filter(Boolean).join('、')
+    out.push({ id: 'health', tone: 'bad', text: '存储不可用：' + down,
+      detail: '地图与地点问答都会缺东西', action: '看诊断' })
+  }
+  const failed = (s.pages ?? []).filter((p) => p.error)
+  if (failed.length) {
+    out.push({ id: 'pages', tone: 'bad', text: failed.length + ' 页同步失败',
+      detail: failed[0].page + (failed.length > 1 ? ' 等 ' + failed.length + ' 页' : ''),
+      action: '看错误' })
+  }
+  if (s.anchorPending > 0) {
+    out.push({ id: 'anchor', tone: 'warn', text: s.anchorPending + ' 个点位需要复核',
+      detail: anchor.value?.items?.[0]?.reason ?? '底图变过，落点可能偏了',
+      action: '去复核' })
+  }
+  // wiki 上出现了点数更多的地图而当前用的不是它 —— 这正是"改名换图"落地时的样子
+  const top = mapList.value?.candidates?.[0]
+  const active = mapList.value?.candidates?.find((c) => c.active)
+  if (top && !top.active && top.markers > (active?.markers ?? 0)) {
+    out.push({ id: 'maps', tone: 'warn', text: '有比当前更全的地图：' + top.map,
+      detail: fmt(top.markers) + ' 点位 · wiki 最后改动 ' + (top.lastChanged?.slice(0, 10) || '—'),
+      action: '去切换' })
+  }
+  return out
+})
+
+const mapsDetails = ref<HTMLDetailsElement | null>(null)
+const pagesDetails = ref<HTMLDetailsElement | null>(null)
+const healthDetails = ref<HTMLDetailsElement | null>(null)
+
+/** 展开一块诊断并把它滚进视野。长页面里瞬移会迷路，但动效要克制且尊重 reduced-motion */
+function reveal(el: HTMLDetailsElement | null) {
+  if (!el) {
+    return
+  }
+  el.open = true
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+}
+
+function todoAction(id: string) {
+  if (id === 'anchor') {
+    tab.value = 'places'
+    toast('在点位列表里点名字，就能跳到那一个')
+  } else if (id === 'pages') {
+    reveal(pagesDetails.value)
+  } else if (id === 'health') {
+    reveal(healthDetails.value)
+  } else if (id === 'maps') {
+    reveal(mapsDetails.value)
+  }
+}
+
+/** ISO 瞬时 → 本地 MM-DD HH:mm。管理端看的是"什么时候跑完的"，时区不该由读者换算 */
+function stamp(iso?: string): string {
+  if (!iso) {
+    return '—'
+  }
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) {
+    return iso.slice(0, 16).replace('T', ' ')
+  }
+  const p = (n: number) => String(n).padStart(2, '0')
+  return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes())
+}
 
 function blankForm(): PlaceInput & { id: number } {
   return {
@@ -496,6 +654,10 @@ async function runWarmFull() {
 }
 
 async function runCorpus(purge: boolean) {
+  // 清除不可撤销：派生块一删，地点问答立刻答不出来，只能重新调向量接口再派一遍
+  if (purge && !window.confirm('清除全部派生地点语料？这一步不可撤销，之后要重新派生一次（要调向量接口，较慢）。')) {
+    return
+  }
   try {
     await adminApi.post('/map/corpus?purge=' + (purge ? 'true' : 'false'))
     toast(purge ? '清除已开始' : '语料派生已开始')
@@ -986,43 +1148,83 @@ async function saveLayers(keys: string[] | null) {
       </Modal>
 
       <div v-show="tab === 'status'" class="status">
-        <div class="card">
-          <h2 class="card-title">数据</h2>
-          <p class="kv"><span>存储</span><code>{{ status?.directory }}</code></p>
-          <p class="kv"><span>地图库</span>{{ status?.mapStoreAvailable ? '可用' : '不可用' }}</p>
-          <p class="kv"><span>点位存储</span>{{ status?.placesAvailable ? '可用' : '不可用' }}</p>
-          <p class="kv"><span>备注存储</span>{{ status?.notesAvailable ? '可用' : '不可用' }}</p>
-          <!-- 底图变了导致点位可能偏移 —— 这个数必须是零，否则就是有活要干 -->
-          <p class="kv">
-            <span>待复核点位</span>
-            <span v-if="status && status.anchorPending > 0" class="anchor-bad">
-              {{ status.anchorPending }} / {{ status.placeTotal }} 条（底图变过）
-            </span>
-            <span v-else>无</span>
-          </p>
-          <p class="kv">
-            <span>瓦片缓存</span>
-            <template v-if="status">
-              {{ status.tileCache.enabled ? '启用' : '关闭' }} ·
-              {{ status.tileCache.files }} 个文件 · {{ fmtBytes(status.tileCache.bytes) }}
-            </template>
-          </p>
-          <p class="kv"><span>目录</span><code>{{ status?.tileCache.root }}</code></p>
-        </div>
 
-        <div class="card">
-          <h2 class="card-title">地图</h2>
+        <!-- ══════════ 报头 ══════════
+             这一页存在的理由是一句话：现在对外是哪张图、有没有活要干。
+             所以先给结论，不给一排并列的卡片。 -->
+        <header class="brief">
+          <div class="brief-main">
+            <p class="eyebrow">当前对外显示</p>
+            <template v-if="primarySpec">
+              <h2 class="brief-title">{{ primarySpec.label || primarySpec.map }}</h2>
+              <p class="brief-stats">
+                <span>{{ fmt(primarySpec.markerCount) }} 点位</span>
+                <i>·</i>
+                <span>{{ primarySpec.groups.length }} 图层</span>
+                <i>·</i>
+                <span class="mono">{{ primarySpec.map }}</span>
+              </p>
+              <p class="brief-meta">
+                wiki 最后改动
+                <b>{{ mapList?.candidates?.find((c) => c.map === primarySpec?.map)?.lastChanged?.slice(0, 10) || '—' }}</b>
+                <i>·</i>
+                上次同步 <b>{{ stamp(status?.jobs?.sync?.finishedAt) }}</b>
+              </p>
+            </template>
+            <p v-else class="brief-empty">库里还没有地图数据 —— 先同步一次。</p>
+          </div>
+
+          <!--
+            签名单品：把当前世界的取景窗画成一根刻度轴。
+            轴上**每一格就是一列底图瓦片** —— 世界范围与切图方式一眼同时看到，
+            而 "10240 × 10240" 那串数字两者都说不出来。
+          -->
+          <figure v-if="windowAxis" class="window">
+            <div class="axis">
+              <span class="axis-cap">{{ fmt(windowAxis.from) }}</span>
+              <span class="axis-rail"><i v-for="n in windowAxis.cols" :key="n" /></span>
+              <span class="axis-cap">{{ fmt(windowAxis.to) }}</span>
+            </div>
+            <figcaption>{{ windowAxis.caption }}</figcaption>
+          </figure>
+        </header>
+
+        <!-- ══════════ 待办 ══════════
+             只在该出现时出现。它是全页唯一配用暖色的东西 —— 没有它时整页是灰阶，
+             而"没有颜色"本身就是"没事"的信号。 -->
+        <section v-if="todos.length" class="todo">
+          <h3 class="sect">待办</h3>
+          <ul class="todo-list">
+            <li v-for="t in todos" :key="t.id" :class="'t-' + t.tone">
+              <Icon :name="t.tone === 'bad' ? 'alert' : 'map-pin'" :size="15" />
+              <span class="todo-text">{{ t.text }}</span>
+              <span class="todo-detail">{{ t.detail }}</span>
+              <Button size="sm" @click="todoAction(t.id)">{{ t.action }}</Button>
+            </li>
+          </ul>
+        </section>
+        <p v-else-if="status" class="todo-quiet">
+          <Icon name="check" :size="14" />
+          没有待办。
+        </p>
+
+        <!-- ══════════ 用哪几张地图 ══════════
+             只有一张候选时不出现：没有可决定的东西就不该占地方。
+             wiki 换了新图时，这一块会自己多出一行 —— 这是整套设计的落点。 -->
+        <details v-if="mapList && mapList.candidates.length > 1" ref="mapsDetails" class="diag">
+          <summary>
+            <Icon name="chevron-right" :size="14" class="caret" />
+            <span class="diag-name">候选地图</span>
+            <span class="diag-count">{{ mapList.candidates.length }}</span>
+            <span class="diag-note">wiki 上有这些；用哪几张你定</span>
+          </summary>
           <p class="hint">
-            同步会把 wiki 上 Map 命名空间里的地图<b>全部</b>拉进来，谁也不丢；
-            用哪几张在这里定。没启用的数据只是不露脸 —— 不渲染、不参与地点问答、不进地点语料，
-            点一下就能切回来。
+            同步把命名空间里的地图<b>全部</b>拉进来，谁也不丢。没启用只是不露脸 ——
+            不渲染、不参与地点问答、不进地点语料，点一下就能切回来。
+            正因如此，wiki 哪天另起一页新图，它会自己出现在这里等人决定，
+            而不是被白名单静默跳过。
           </p>
-          <p class="hint">
-            ⚠️ 这里<b>没有</b>写死的白名单：游戏更新后 wiki 往往会另起一页（名字也变），
-            白名单那时只会静默跳过新图、让旧图继续以「最新」的样子留着。
-            所以新地图会自己出现在下面等人决定。
-          </p>
-          <table v-if="mapList && mapList.candidates.length" class="tbl small">
+          <table class="tbl small">
             <thead>
               <tr>
                 <th>地图</th><th>点位</th><th>wiki 最后改动</th><th>状态</th><th></th>
@@ -1044,71 +1246,128 @@ async function saveLayers(keys: string[] | null) {
               </tr>
             </tbody>
           </table>
-          <p v-else class="muted">还没有地图数据（先同步一次）。</p>
-        </div>
+        </details>
 
-        <div class="card">
-          <h2 class="card-title">长任务</h2>
-          <div v-for="j in Object.values(status?.jobs ?? {})" :key="j.name" class="job">
-            <div class="job-head">
-              <strong>{{ j.label }}</strong>
-              <Tag :tone="j.running ? 'warn' : j.ok ? 'good' : 'bad'">
-                {{ j.running ? '运行中' : j.ok ? '成功' : '失败' }}
-              </Tag>
-            </div>
-            <p class="hint">{{ j.summary || '尚未运行过' }}</p>
-            <p v-if="j.finishedAt" class="hint mono">完成于 {{ j.finishedAt }}</p>
-          </div>
-          <div class="actions">
-            <Button variant="primary" size="sm" @click="runSync">
-              <Icon name="refresh" :size="14" />同步 wiki 地图
-            </Button>
-            <Button size="sm" @click="runWarm">预热底图缓存</Button>
-            <Button size="sm" @click="runWarmFull">全量预热</Button>
-            <Button size="sm" @click="runCorpus(false)">派生地点语料</Button>
-            <Button size="sm" @click="runCorpus(true)">清除地点语料</Button>
-          </div>
-          <p class="hint">
-            同步是增量的：只拉版本变过的页，常态下几秒完成。发现内容变化后会自动补一次首屏档预热。
-            底图预热要拉几百张瓦片，出站请求是节流的，第一次大约一两分钟 —— 做过一次之后
-            所有访客都命中本地缓存。全量预热会多拉原图档，第一次十几分钟，建议放在非高峰；
-            后端凌晨 4 点也会自动跑一次。地点语料要调向量接口，也慢。
-            这些都在后台跑，进度看上面。
-          </p>
-        </div>
+        <!-- ══════════ 长任务 ══════════
+             按**任务**组织：一个任务的状态与它的触发方式必须待在一起。 -->
+        <section class="ops">
+          <h3 class="sect">长任务</h3>
+          <ul class="op-list">
+            <li v-for="row in jobRows" :key="row.key" class="op">
+              <div class="op-main">
+                <div class="op-head">
+                  <span class="op-name">{{ row.label }}</span>
+                  <Tag :tone="row.state?.running ? 'warn' : !row.state ? 'neutral' : (row.state.ok ? 'good' : 'bad')">
+                    {{ row.state?.running ? '运行中' : !row.state ? '未运行' : (row.state.ok ? '成功' : '失败') }}
+                  </Tag>
+                </div>
+                <p class="op-result">
+                  {{ row.state?.summary || '尚未运行过' }}
+                  <span v-if="row.state?.finishedAt" class="op-when">· {{ stamp(row.state.finishedAt) }}</span>
+                </p>
+                <p class="op-note">{{ row.note }}</p>
+              </div>
+              <div class="op-actions">
+                <template v-if="row.key === 'sync'">
+                  <Button variant="primary" size="sm" @click="runSync">
+                    <Icon name="refresh" :size="14" />同步
+                  </Button>
+                </template>
+                <template v-else-if="row.key === 'warm'">
+                  <Button size="sm" @click="runWarm">预热首屏档</Button>
+                  <Button size="sm" @click="runWarmFull">全量预热</Button>
+                </template>
+                <template v-else>
+                  <Button size="sm" @click="runCorpus(false)">派生语料</Button>
+                  <Button variant="danger" size="sm" @click="runCorpus(true)">清除语料</Button>
+                </template>
+              </div>
+            </li>
+          </ul>
+        </section>
 
-        <div class="card">
-          <h2 class="card-title">画布</h2>
-          <table class="tbl small">
-            <thead><tr><th>地图</th><th>页面</th><th>底图</th><th>可渲染</th><th>尺寸</th><th>同步时间</th></tr></thead>
-            <tbody>
-              <tr v-for="c in status?.canvases ?? []" :key="c.page">
-                <td>{{ c.map }}</td>
-                <td class="mono">{{ c.page }}</td>
-                <td>{{ c.tiles ? c.tiles + ' 瓦片' : c.background || '—' }}</td>
-                <td>{{ c.renderable ? '是' : '否' }}</td>
-                <td class="mono">{{ fmt(c.extent[0]) }} × {{ fmt(c.extent[1]) }}</td>
-                <td class="mono">{{ c.syncedAt?.slice(0, 19) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <!-- ══════════ 诊断 ══════════
+             日常不用看。以前三块并排常驻展开，把页面后 2/3 变成两张几十行的表。 -->
+        <section class="diag-zone">
+          <h3 class="sect">诊断</h3>
 
-        <div class="card">
-          <h2 class="card-title">同步页</h2>
-          <table class="tbl small">
-            <thead><tr><th>页面</th><th>revid</th><th>点位</th><th>错误</th></tr></thead>
-            <tbody>
-              <tr v-for="p in status?.pages ?? []" :key="p.page">
-                <td class="mono">{{ p.page }}</td>
-                <td class="mono">{{ p.revid }}</td>
-                <td>{{ p.markerCount }}</td>
-                <td class="err">{{ p.error }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          <details ref="healthDetails" class="diag">
+            <summary>
+              <Icon name="chevron-right" :size="14" class="caret" />
+              <span class="diag-name">存储与路径</span>
+              <span class="diag-note">数据库、缓存、待复核</span>
+            </summary>
+            <dl class="facts">
+              <div><dt>问答库</dt><dd class="mono">{{ status?.directory }}</dd></div>
+              <div><dt>地图库</dt><dd>{{ status?.mapStoreAvailable ? '可用' : '不可用' }}</dd></div>
+              <div><dt>点位存储</dt><dd>{{ status?.placesAvailable ? '可用' : '不可用' }}</dd></div>
+              <div><dt>备注存储</dt><dd>{{ status?.notesAvailable ? '可用' : '不可用' }}</dd></div>
+              <div>
+                <dt>待复核点位</dt>
+                <dd :class="{ bad: (status?.anchorPending ?? 0) > 0 }">
+                  <template v-if="status && status.anchorPending > 0">
+                    {{ status.anchorPending }} / {{ status.placeTotal }} 条（底图变过）
+                  </template>
+                  <template v-else>无</template>
+                </dd>
+              </div>
+              <div>
+                <dt>瓦片缓存</dt>
+                <dd>
+                  <template v-if="status">
+                    {{ status.tileCache.enabled ? '启用' : '关闭' }} ·
+                    {{ status.tileCache.files }} 个文件 · {{ fmtBytes(status.tileCache.bytes) }}
+                  </template>
+                </dd>
+              </div>
+              <div><dt>缓存目录</dt><dd class="mono">{{ status?.tileCache.root }}</dd></div>
+            </dl>
+          </details>
+
+          <details ref="pagesDetails" class="diag">
+            <summary>
+              <Icon name="chevron-right" :size="14" class="caret" />
+              <span class="diag-name">同步页</span>
+              <span class="diag-count">{{ status?.pages?.length ?? 0 }}</span>
+              <span class="diag-note">每页的 revid、点位数与解析错误</span>
+            </summary>
+            <table class="tbl small">
+              <thead><tr><th>页面</th><th>revid</th><th>点位</th><th>错误</th></tr></thead>
+              <tbody>
+                <tr v-for="p in status?.pages ?? []" :key="p.page">
+                  <td class="mono">{{ p.page }}</td>
+                  <td class="mono">{{ p.revid }}</td>
+                  <td>{{ p.markerCount }}</td>
+                  <td class="err">{{ p.error }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
+
+          <details class="diag">
+            <summary>
+              <Icon name="chevron-right" :size="14" class="caret" />
+              <span class="diag-name">画布</span>
+              <span class="diag-count">{{ status?.canvases?.length ?? 0 }}</span>
+              <span class="diag-note">坐标系、底图、可渲染性</span>
+            </summary>
+            <table class="tbl small">
+              <thead><tr><th>地图</th><th>页面</th><th>底图</th><th>可渲染</th><th>尺寸</th><th>同步时间</th></tr></thead>
+              <tbody>
+                <tr v-for="c in status?.canvases ?? []" :key="c.page">
+                  <td>{{ c.map }}</td>
+                  <td class="mono">{{ c.page }}</td>
+                  <td>{{ c.tiles ? c.tiles + ' 瓦片' : c.background || '—' }}</td>
+                  <td>{{ c.renderable ? '是' : '否' }}</td>
+                  <td class="mono">{{ fmt(c.extent[0]) }} × {{ fmt(c.extent[1]) }}</td>
+                  <td class="mono">{{ stamp(c.syncedAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
+        </section>
       </div>
+
     </template>
   </AdminPage>
 </template>
@@ -1279,16 +1538,16 @@ async function saveLayers(keys: string[] | null) {
   margin-bottom: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-md);
-  background: var(--warn-bg, rgba(207, 163, 52, 0.12));
-  border: 1px solid var(--warn, #cfa334);
+  background: var(--warn-veil);
+  border: 1px solid var(--warn);
 }
 
 .anchor-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--warn, #cfa334);
-  margin-bottom: 4px;
+  gap: var(--sp-2);
+  color: var(--warn);
+  margin-bottom: var(--sp-1);
 }
 
 .anchor-list {
@@ -1316,7 +1575,7 @@ async function saveLayers(keys: string[] | null) {
   text-decoration: underline dotted;
 }
 
-.anchor-why { flex: 1; color: var(--ink-dim); font-size: 12px; }
+.anchor-why { flex: 1; color: var(--ink-3); font-size: var(--fs-xs); }
 
 .anchor-bad { color: var(--warn, #cfa334); }
 .tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
@@ -1328,7 +1587,207 @@ async function saveLayers(keys: string[] | null) {
 .note-cell { max-width: 360px; color: var(--ink-2); }
 .err { color: var(--blight-lift); }
 
-.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: var(--sp-4); align-items: start; }
+/* ══════════ 同步与状态 ══════════
+
+   这一页是**一张检修单，不是一排卡片**。
+
+   上一版是 auto-fit 网格：两行的键值列表和三四十行的表格被并排拼贴，
+   读一页要在屏幕上来回跳；而"待办"和"长任务状态"沉在两张同样大小的卡片里，
+   跟存储可用性长得一模一样 —— 于是没人知道该先看哪儿。
+
+   这一版的规矩：
+   ① 一列，宽度锁住。信息按「先结论 → 再待办 → 再动作 → 最后诊断」排；
+   ② **暖色只给待办**。没有待办时整页是灰阶，而"没有颜色"本身就是"没事"的信号
+      （设计令牌里写着：灵火一屏之内只给最该先看一眼的东西）；
+   ③ 状态与它的触发方式必须挨在一起。 */
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  max-width: 1120px;
+}
+
+/* 区块标签：中文小字 + 刻字间距。结构靠它分段，不靠再加一层框 */
+.sect {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tracking-ink);
+  color: var(--ink-3);
+}
+
+/* ---------- 报头 ---------- */
+.brief {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--stone-300);
+  box-shadow: var(--bevel-raised);
+}
+.brief-main { min-width: 0; }
+.eyebrow {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-ink);
+  color: var(--ink-3);
+}
+/* 全页唯一的大字。宋体只在标题上用 —— 沿用全站的字形分工 */
+.brief-title {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: .04em;
+  color: var(--ink);
+}
+.brief-stats,
+.brief-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+}
+.brief-stats { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.brief-meta { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
+.brief-stats i, .brief-meta i { font-style: normal; color: var(--ink-4); }
+.brief-meta b { font-weight: var(--fw-medium); color: var(--ink-2); }
+.brief-empty { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--ink-3); }
+
+/* 签名单品：取景窗刻度轴。轴上一格 = 一列底图瓦片 */
+.window { flex: none; margin: 0; text-align: right; }
+.axis { display: flex; align-items: center; gap: var(--sp-2); }
+.axis-cap {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.axis-rail {
+  display: flex;
+  width: 176px;
+  height: 14px;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  background: var(--stone-void);
+  /* 刻度轴是"量出来的"，所以是刻进石头里的槽，不是摆在上面的条 */
+  box-shadow: var(--bevel-inset);
+}
+.axis-rail i { flex: 1; border-right: 1px solid var(--hairline); }
+.axis-rail i:last-child { border-right: none; }
+.window figcaption {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 待办：全页唯一配用暖色的地方 ---------- */
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.todo-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid var(--warn);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--warn-veil);
+  color: var(--warn);
+}
+.todo-list li.t-bad {
+  border-left-color: var(--blight);
+  background: var(--blight-veil);
+  color: var(--blight-lift);
+}
+.todo-text { font-size: var(--fs-sm); font-weight: var(--fw-semi); color: var(--ink); }
+.todo-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-quiet { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-sm); color: var(--ink-3); }
+
+/* ---------- 长任务：一行一个任务，状态与按钮挨着 ---------- */
+.op-list { list-style: none; margin: 0; padding: 0; }
+.op { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) 0; border-top: 1px solid var(--hairline); }
+.op:first-child { border-top: none; padding-top: 0; }
+.op-main { flex: 1; min-width: 0; }
+.op-head { display: flex; align-items: center; gap: var(--sp-2); }
+.op-name { font-size: var(--fs-md); font-weight: var(--fw-medium); color: var(--ink); }
+/* 结果比说明亮：说明是静态的，结果是刚发生的事 */
+.op-result {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  word-break: break-word;
+}
+.op-when { color: var(--ink-4); }
+.op-note { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
+.op-actions { flex: none; display: flex; gap: var(--sp-2); }
+
+/* ---------- 诊断：默认折叠 ---------- */
+.diag-zone { display: flex; flex-direction: column; gap: var(--sp-2); }
+.diag { border-radius: var(--r-sm); background: var(--stone-300); box-shadow: var(--bevel-raised); }
+.diag > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.diag > summary::-webkit-details-marker { display: none; }
+.diag > summary:hover { background: var(--surface-hover); }
+.diag > summary:focus-visible { outline: 2px solid var(--ember); outline-offset: -2px; }
+.diag[open] > summary { border-bottom: 1px solid var(--hairline); }
+.diag-name { font-weight: var(--fw-medium); color: var(--ink); }
+.diag-count {
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  background: var(--stone-void);
+  box-shadow: var(--bevel-inset);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.diag-note { font-size: var(--fs-xs); color: var(--ink-3); }
+.caret { color: var(--ink-4); transition: transform .15s var(--ease); }
+.diag[open] > summary > .caret { transform: rotate(90deg); }
+.diag > .tbl, .diag > .hint, .diag > .facts { margin: var(--sp-3) var(--sp-4) var(--sp-4); }
+.diag > .tbl { width: calc(100% - var(--sp-4) * 2); }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-3); }
+.facts > div { display: flex; gap: var(--sp-3); align-items: baseline; min-width: 0; }
+.facts dt { flex: none; min-width: 78px; font-size: var(--fs-xs); color: var(--ink-3); }
+.facts dd { margin: 0; min-width: 0; font-size: var(--fs-xs); color: var(--ink-2); word-break: break-all; }
+.facts dd.bad { color: var(--warn); }
+
+@media (max-width: 760px) {
+  .brief { flex-direction: column; align-items: flex-start; }
+  .window { text-align: left; }
+  .op { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+  .op-actions { flex-wrap: wrap; }
+  .todo-list li { flex-wrap: wrap; }
+  .todo-detail { white-space: normal; }
+}
 
 /* ==================== 默认显示 ==================== */
 .defaults { max-width: 720px; }
@@ -1380,9 +1839,5 @@ async function saveLayers(keys: string[] | null) {
 .layer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .layer-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); }
-.kv { display: flex; gap: var(--sp-3); margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--ink-2); }
-.kv span { min-width: 84px; color: var(--ink-3); }
-.kv code { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-3); word-break: break-all; }
-.job + .job { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--edge-soft); }
-.job-head { display: flex; align-items: center; gap: var(--sp-2); }
+
 </style>
