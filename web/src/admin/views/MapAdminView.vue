@@ -466,26 +466,6 @@ async function saveLayers(keys: string[] | null) {
 
         <div v-else class="board">
         <aside class="panel-col">
-          <div class="card">
-            <h2 class="card-title">地图</h2>
-            <Select v-model="mapName" :options="catalog.maps.map((m) => ({ value: m.map, label: m.label + '（' + m.markerCount + ' 点）' }))" />
-            <div v-if="(currentMap?.canvases.length ?? 0) > 1" class="chips">
-              <button
-                v-for="(c, i) in currentMap?.canvases"
-                :key="c.page"
-                type="button"
-                class="chip"
-                :class="{ on: i === canvasIndex }"
-                @click="canvasIndex = i"
-              >{{ c.label }}</button>
-            </div>
-            <p class="hint">
-              {{ mode === 'edit'
-                ? '标注模式：点地图空白处新增点位；点已有图标查看或编辑。'
-                : '浏览模式：只在有点位的地方显示手型光标，方便看清底图。' }}
-            </p>
-          </div>
-
           <!-- 新建 / 编辑本地点位 -->
           <div class="card">
             <h2 class="card-title">
