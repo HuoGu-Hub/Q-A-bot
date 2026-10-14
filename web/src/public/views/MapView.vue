@@ -520,6 +520,15 @@ function fmt(n: number): string {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  /*
+   * 左右各留一道边。铺满整屏看着像"页面没渲染完"，留白才像一张地图；
+   * 用 clamp 而不是固定值：宽屏需要更宽的边距才压得住，窄屏则不能浪费横向空间。
+   */
+  padding: var(--sp-4) clamp(var(--sp-3), 2.4vw, var(--sp-6));
+}
+@media (max-width: 760px) {
+  /* 手机上横向一寸都不能浪费；底部留给底栏的空白由外壳那层负责 */
+  .map-page { padding: var(--sp-2); }
 }
 
 /* 空态 / 加载 / 报错都浮在地图之上，而不是把地图顶下去 */
@@ -576,10 +585,15 @@ function fmt(n: number): string {
   overflow-y: auto;
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-radius: var(--r-md);
-  /* 半透明 + 模糊：盖得住底下的点位，又看得出底下还是地图 */
-  background: color-mix(in srgb, var(--stone-300) 92%, transparent);
+  /*
+   * 半透明 + 模糊。**别调回 92%**：那个浓度下底图完全看不见，
+   * 面板就变成一块贴在页面上的石板，失去了"浮在地图上"的意义。
+   * 76% 是实测还能看清面板里文字、同时底图的地形与颜色明显透出来的位置；
+   * 模糊保留一点，是为了让透出来的底图不至于干扰读字。
+   */
+  background: color-mix(in srgb, var(--stone-300) 76%, transparent);
   box-shadow: var(--shadow-pop), var(--bevel-raised);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
   /* 面板自己滚到底时不要把页面一起带着滚 */
   overscroll-behavior: contain;
 }
@@ -592,7 +606,8 @@ function fmt(n: number): string {
   top: calc(var(--sp-3) * -1);
   margin: calc(var(--sp-3) * -1) calc(var(--sp-4) * -1) 0;
   padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
-  background: color-mix(in srgb, var(--stone-300) 96%, transparent);
+  /* 标题栏比面板主体实一点：它是吸顶的，下面滚过的内容不能透上来 */
+  background: color-mix(in srgb, var(--stone-300) 86%, transparent);
   border-bottom: 1px solid var(--edge-soft);
 }
 .rail-title {
@@ -733,6 +748,9 @@ function fmt(n: number): string {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  /* 四周留白之后它是一块"嵌在页面里的画面"，圆角与投影就是它的边框 */
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift), var(--bevel-shelf);
   background: var(--stone-void);
 }
 /* 缩放按钮放左下：左上留给控制栏，右下留给详情卡 */
