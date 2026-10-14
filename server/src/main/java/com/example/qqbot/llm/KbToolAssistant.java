@@ -4,6 +4,7 @@ import com.example.qqbot.kb.KbContextQueryTransformer;
 import com.example.qqbot.kb.KbLookupTool;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.kb.ToolBudget;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.model.chat.ChatModel;
@@ -86,7 +87,20 @@ public class KbToolAssistant {
 
     private final Assistant assistant;
 
+    /** 工具调用预算（时限与次数）—— 见 {@link ToolPolicy} */
+    private final ToolPolicy toolPolicy;
+
+    /** 不给策略时用默认预算（测试与老调用方） */
     public KbToolAssistant(LlmRouter router, ChatModel chatModel, KbRetriever kbRetriever, KbLookupTool tool) {
+        this(router, chatModel, kbRetriever, tool, null);
+    }
+
+    /** Spring 用这个：预算从 {@code app.llm.tool} 来 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public KbToolAssistant(LlmRouter router, ChatModel chatModel, KbRetriever kbRetriever, KbLookupTool tool,
+                           LlmPolicy policy) {
+        ToolPolicy tp = policy == null ? null : policy.getTool();
+        this.toolPolicy = tp == null ? new ToolPolicy() : tp;
         this.assistant = AiServices.builder(Assistant.class)
                 .chatModel(chatModel)
                 // 安全底座交给我们自己那份，不用官方默认的空提示词
@@ -94,8 +108,8 @@ public class KbToolAssistant {
                 // 检索与资料注入走我们的官方管线：ContentRetriever → ContentAggregator → ContentInjector
                 .retrievalAugmentor(kbRetriever.augmentor())
                 .tools(tool)
-                // 防死循环：模型可以反复要求调工具，必须有上限
-                .maxToolCallingRoundTrips(3)
+                // 防死循环：模型可以反复要求调工具，必须有上限（可配，见 app.llm.tool.max-round-trips）
+                .maxToolCallingRoundTrips(Math.max(1, this.toolPolicy.getMaxRoundTrips()))
                 // ★ 授权钩子。模型能调工具之后，"说一句话"就是触发面 ——
                 //   系统提示词里那些约束是写给模型的，**不能当授权机制**。
                 .beforeToolExecution(this::authorize)
@@ -147,9 +161,27 @@ public class KbToolAssistant {
         return toolName != null && ALLOWED_TOOLS.contains(toolName);
     }
 
+    /** 一次请求的预算 —— 时限与次数上限见 {@link ToolPolicy} */
+    private ToolBudget newBudget() {
+        return new ToolBudget(toolPolicy.getDeadlineSeconds(), toolPolicy.getMaxCalls());
+    }
+
+    /**
+     * 把本次请求的工具预算打进日志。
+     *
+     * <p>为什么一定要记：预算到底该给 30 秒还是 60 秒、3 次还是 5 次，
+     * 只能按真实分布调 —— 没有这行日志就是拍脑袋。
+     */
+    private void logBudget(ToolBudget b) {
+        log.info("[TOOL] 本次请求：工具调用 {}/{} 次，耗时 {} ms", b.used(), b.maxCalls(), b.elapsedMillis());
+    }
+
     /** 不带检索上下文的一问一答 —— 检索问题就取消息本身，诊断不回流 */
     public String chat(String question) {
-        return assistant.chat(question, new InvocationParameters());
+        ToolBudget budget = newBudget();
+        String out = assistant.chat(question, params(budget, question, null, true, ""));
+        logBudget(budget);
+        return out;
     }
 
     /**
@@ -184,7 +216,10 @@ public class KbToolAssistant {
      */
     public String chat(String message, String kbQuery, KbRetrievalDiagnostics sink, boolean kbEnabled,
                        String caller) {
-        return assistant.chat(message, params(kbQuery, sink, kbEnabled, caller));
+        ToolBudget budget = newBudget();
+        String out = assistant.chat(message, params(budget, kbQuery, sink, kbEnabled, caller));
+        logBudget(budget);
+        return out;
     }
 
     /**
@@ -204,15 +239,22 @@ public class KbToolAssistant {
                 contents.add(ImageContent.from(img.base64(), img.mimeType()));
             }
         }
-        return assistant.chat(message == null ? "" : message, contents,
-                params(kbQuery, sink, kbEnabled, caller));
+        ToolBudget budget = newBudget();
+        String out = assistant.chat(message == null ? "" : message, contents,
+                params(budget, kbQuery, sink, kbEnabled, caller));
+        logBudget(budget);
+        return out;
     }
 
-    private static InvocationParameters params(String kbQuery, KbRetrievalDiagnostics sink,
+    private static InvocationParameters params(ToolBudget budget, String kbQuery, KbRetrievalDiagnostics sink,
                                                boolean kbEnabled, String caller) {
         InvocationParameters params = new InvocationParameters();
-        params.put(KbContextQueryTransformer.KEY_QUERY, kbQuery);
-        params.put(KbContextQueryTransformer.KEY_SINK, sink);
+        // 工具侧靠它限时与限次（工具方法声明 InvocationContext 参数就能拿到）
+        params.put(ToolBudget.KEY, budget);
+        params.put(KbContextQueryTransformer.KEY_QUERY, kbQuery == null ? "" : kbQuery);
+        if (sink != null) {
+            params.put(KbContextQueryTransformer.KEY_SINK, sink);
+        }
         params.put(KbContextQueryTransformer.KEY_ENABLED, kbEnabled);
         params.put(KEY_CALLER, caller == null ? "" : caller);
         return params;

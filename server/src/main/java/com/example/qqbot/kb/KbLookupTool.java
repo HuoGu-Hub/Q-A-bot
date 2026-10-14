@@ -2,6 +2,7 @@ package com.example.qqbot.kb;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.invocation.InvocationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -43,10 +44,21 @@ public class KbLookupTool {
     /** 工具方法名即工具名：{@code lookup} —— 授权白名单里用的就是它 */
     @Tool("查询《雾锁王国》知识库，返回最相关的资料片段、相关度与是否命中标题。只读，不会改动任何数据。"
             + "知识库正文是英文的（来自英文 wiki）：中文关键词若结果不佳，请把关键词换成游戏内的英文名再查一次，"
-            + "最多重试两次；两次都查不到才说资料里没查到。")
-    public String lookup(@P("要查的词或问题") String query) {
+            + "最多重试两次；两次都查不到才说资料里没查到。"
+            + "另外：命中资料里若出现了对回答有帮助的材料、地点、技能（例如配方里的铁、布料），"
+            + "可以再查它们怎么获得，这样能给出更完整的答案；但要克制，只在明显有用时才查。")
+    public String lookup(@P("要查的词或问题") String query, InvocationContext ctx) {
         if (query == null || query.isBlank()) {
             return "没有提供要查的内容。";
+        }
+        // ★ 预算闸门：模型可以多轮检索，但不能无限查下去（时限 + 次数）。
+        //   超预算**返回一句提示**而不是抛错 —— 抛错模型看到的是"工具坏了"，
+        //   返回提示它才知道该收尾、用现有资料作答。
+        ToolBudget budget = ToolBudget.of(ctx);
+        if (budget != null && !budget.tryAcquire()) {
+            log.info("[TOOL] lookup 被预算拦下：{}（已用 {}/{}，{} ms）", budget.reason(), budget.used(),
+                    budget.maxCalls(), budget.elapsedMillis());
+            return "本次检索预算已用完（" + budget.reason() + "），请直接用已有资料作答，不要再调用工具。";
         }
         KbRetriever.Retrieval r = retriever.retrieve(query);
         if (r.hits().isEmpty()) {
@@ -91,9 +103,16 @@ public class KbLookupTool {
     @Tool("按英文关键词查知识库里的条目名（标题），返回匹配到的标题列表。只读。"
             + "当你不知道某个中文名对应的英文名时用它：先猜一个英文词（如 sickle、scythe、critter），"
             + "看返回的标题里有没有正确的那个，再用完整英文名去 lookup。")
-    public String searchTitles(@P("英文关键词，例如 sickle") String word) {
+    public String searchTitles(@P("英文关键词，例如 sickle") String word, InvocationContext ctx) {
         if (word == null || word.isBlank()) {
             return "没有提供关键词。";
+        }
+        // 与 lookup 同一道闸门 —— 两个工具都能发起检索，都要受限
+        ToolBudget budget = ToolBudget.of(ctx);
+        if (budget != null && !budget.tryAcquire()) {
+            log.info("[TOOL] search_titles 被预算拦下：{}（已用 {}/{}，{} ms）", budget.reason(), budget.used(),
+                    budget.maxCalls(), budget.elapsedMillis());
+            return "本次检索预算已用完（" + budget.reason() + "），请直接用已有资料作答，不要再调用工具。";
         }
         String w = word.strip().toLowerCase();
         Set<String> titles = new LinkedHashSet<>();

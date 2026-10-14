@@ -639,6 +639,18 @@ app:
       include-sources: false
       # 语气（自由文本）。例：轻松、简洁，像群友聊天。空 = 不指定
       tone: ""
+    # ---------- 工具调用预算 ----------
+    # 模型能多轮调用检索工具（比如查到配方里有铁与布料，再去查它们怎么获得），
+    # 但必须有时限与次数上限 —— 否则"为了答得更好"会一直查，响应时间不可控。
+    # 两道闸都要有：只卡次数，某次检索慢照样超时；只卡时间，快的时候它会问十几次。
+    tool:
+      # 单次请求总时限（秒）。到点后工具不再执行，模型改用已有资料作答
+      deadline-seconds: 30
+      # 单次请求最多调几次工具
+      max-calls: 3
+      # 最多几轮工具调用（交给 langchain4j 的 AiServices）
+      max-round-trips: 3
+
     providers:
       opencode-go:
         base-url: https://opencode.ai/zen/go/v1

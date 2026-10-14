@@ -39,4 +39,7 @@ public interface LlmPolicy {
 
     /** 回复风格（表现层约束，和 system.md 那份「安全底座」刻意分开） */
     ReplyStyle getReplyStyle();
+
+    /** 工具调用预算：时限与次数上限 —— 见 {@link ToolPolicy} */
+    ToolPolicy getTool();
 }

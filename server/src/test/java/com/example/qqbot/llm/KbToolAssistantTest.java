@@ -14,9 +14,12 @@ import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.kb.PlaceDirectory;
 import com.example.qqbot.kb.PlacePoint;
+import com.example.qqbot.kb.ToolBudget;
 import com.example.qqbot.kb.TwoSectionInjector;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.invocation.InvocationContext;
+import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
@@ -39,6 +42,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -250,8 +254,27 @@ class KbToolAssistantTest {
         when(retriever.retrieve(anyString())).thenReturn(new KbRetriever.Retrieval(
                 List.of(new KbRetriever.Hit(e, 0.9, "vector")), 0.9, 0.9, 1, 0, List.of()));
 
-        String out = new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()).lookup("力量有什么用");
+        String out = new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()).lookup("力量有什么用", null);
         assertThat(out).contains("力量、Strength").contains("力量提升生命上限。");
+    }
+
+    @Test
+    @DisplayName("★ 工具：预算用尽时返回提示且不再检索")
+    void toolRespectsBudget() {
+        KbRetriever retriever = mock(KbRetriever.class);
+        when(retriever.retrieve(anyString())).thenReturn(KbRetriever.Retrieval.empty());
+        InvocationContext ctx = mock(InvocationContext.class);
+        InvocationParameters params = new InvocationParameters();
+        params.put(ToolBudget.KEY, new ToolBudget(30, 1));
+        when(ctx.invocationParameters()).thenReturn(params);
+
+        KbLookupTool tool = new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions());
+        tool.lookup("第一次", ctx);
+        String out = tool.lookup("第二次", ctx);
+
+        assertThat(out).contains("预算已用完");
+        // 关键：被拦的那次**不该再检索** —— 否则闸门只是嘴上说说
+        verify(retriever, times(1)).retrieve(anyString());
     }
 
     @Test
@@ -259,7 +282,7 @@ class KbToolAssistantTest {
     void toolSaysNotFound() {
         KbRetriever retriever = mock(KbRetriever.class);
         when(retriever.retrieve(anyString())).thenReturn(KbRetriever.Retrieval.empty());
-        assertThat(new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()).lookup("不存在的东西")).contains("没有查到");
+        assertThat(new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()).lookup("不存在的东西", null)).contains("没有查到");
     }
 
     @Test

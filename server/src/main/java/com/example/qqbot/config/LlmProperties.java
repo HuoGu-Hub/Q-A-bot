@@ -3,6 +3,7 @@ package com.example.qqbot.config;
 import com.example.qqbot.llm.LlmPolicy;
 import com.example.qqbot.llm.Provider;
 import com.example.qqbot.llm.ReplyStyle;
+import com.example.qqbot.llm.ToolPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
@@ -55,6 +56,9 @@ public class LlmProperties implements LlmPolicy {
     /** 降级链：主 provider 失败时按顺序尝试 */
     private List<String> fallbackProviders = new ArrayList<>();
 
+    /** 工具调用预算：模型能多轮调工具，但必须有时限与次数上限，否则响应时间不可控 */
+    private ToolPolicy tool = new ToolPolicy();
+
     /**
      * 系统提示词文件路径，按**优先级**依次尝试（第一个读到的生效）：
      *
@@ -104,6 +108,15 @@ public class LlmProperties implements LlmPolicy {
     @Override
     public ReplyStyle getReplyStyle() {
         return replyStyle;
+    }
+
+    @Override
+    public ToolPolicy getTool() {
+        return tool;
+    }
+
+    public void setTool(ToolPolicy tool) {
+        this.tool = tool;
     }
 
     public void setReplyStyle(ReplyStyle replyStyle) {
