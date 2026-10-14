@@ -41,6 +41,8 @@ public final class KbRetrievalContext {
     private final int pool;
     private final double minScore;
     private final boolean allowRerank;
+    /** 命中一块时要不要把同一份资料的其它块也补进注入内容（群内问答开、公开站搜索关） */
+    private final boolean expandSiblings;
     private final KbRetrievalDiagnostics diagnostics;
 
     /** id → 条目。官方 Content 只带得动块 id，聚合器要靠它还原条目，所以按需建一次 */
@@ -49,6 +51,13 @@ public final class KbRetrievalContext {
     public KbRetrievalContext(String query, List<KbCorpus.Entry> entries, List<String> terms,
                               float[] queryVector, int topK, int pool, double minScore, boolean allowRerank,
                               KbRetrievalDiagnostics diagnostics) {
+        // 老签名默认补全：它服务的是群内问答那条路
+        this(query, entries, terms, queryVector, topK, pool, minScore, allowRerank, true, diagnostics);
+    }
+
+    public KbRetrievalContext(String query, List<KbCorpus.Entry> entries, List<String> terms,
+                              float[] queryVector, int topK, int pool, double minScore, boolean allowRerank,
+                              boolean expandSiblings, KbRetrievalDiagnostics diagnostics) {
         this.query = query;
         this.entries = entries == null ? List.of() : entries;
         this.terms = terms == null ? List.of() : terms;
@@ -57,6 +66,7 @@ public final class KbRetrievalContext {
         this.pool = pool;
         this.minScore = minScore;
         this.allowRerank = allowRerank;
+        this.expandSiblings = expandSiblings;
         this.diagnostics = diagnostics == null ? new KbRetrievalDiagnostics() : diagnostics;
     }
 
@@ -110,6 +120,11 @@ public final class KbRetrievalContext {
 
     public boolean allowRerank() {
         return allowRerank;
+    }
+
+    /** 命中一块时要不要把同一份资料的其它块也补进注入内容 */
+    public boolean expandSiblings() {
+        return expandSiblings;
     }
 
     public KbRetrievalDiagnostics diagnostics() {

@@ -96,8 +96,15 @@ public class KbContentAggregator implements ContentAggregator {
             fused = fused.subList(0, k);
         }
 
-        ctx.diagnostics().recordFinal(fused);
-        return fused.stream().map(KbContents::of).toList();
+        // ★ 同文档兄弟块补全：长资料被切成多块时，命中一块要把整份资料一起给模型。
+        //   补出来的块**追加在最后** —— 前 k 名的排名读数一点不动（黄金集口径不受影响）。
+        //   公开站搜索会把 expandSiblings 关掉：那里是按标题去重后给人看的清单。
+        List<KbRetriever.Hit> injected = ctx.expandSiblings()
+                ? KbSiblingExpander.expand(fused, ctx.entries(), props.getSibling())
+                : fused;
+
+        ctx.diagnostics().recordFinal(injected);
+        return injected.stream().map(KbContents::of).toList();
     }
 
     /** 官方 Content → 内部 Hit；没有 kb_id 的说明不是我们的内容，跳过 */

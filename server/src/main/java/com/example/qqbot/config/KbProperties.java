@@ -79,6 +79,9 @@ public class KbProperties implements KbPolicy {
 
     private PublicSearch publicSearch = new PublicSearch();
 
+    /** 同一份资料的兄弟块补全 —— 超长资料被切成多块时的完整性保障 */
+    private com.example.qqbot.kb.Sibling sibling = new com.example.qqbot.kb.Sibling();
+
         // ==================== getter / setter ====================
 
     @Override
@@ -180,6 +183,15 @@ public class KbProperties implements KbPolicy {
 
     public void setPublicSearch(PublicSearch publicSearch) {
         this.publicSearch = publicSearch;
+    }
+
+    @Override
+    public com.example.qqbot.kb.Sibling getSibling() {
+        return sibling;
+    }
+
+    public void setSibling(com.example.qqbot.kb.Sibling sibling) {
+        this.sibling = sibling;
     }
 
 

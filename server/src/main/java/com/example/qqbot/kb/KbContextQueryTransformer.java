@@ -102,7 +102,7 @@ public class KbContextQueryTransformer implements QueryTransformer {
         // 关掉资料时给一个空快照与空向量：两条检索路都无事可做，注入器也不会加标记。
         // 不跳过管线是有意的 —— 编排只有一条，"不用资料"是喂给它的数据不同，不是另一条路。
         KbRetrievalContext ctx = enabled
-                ? KbContextFactory.build(kbQuery, true, k, minScore, true,
+                ? KbContextFactory.build(kbQuery, true, k, minScore, true, true,
                         corpus, glossary, embedding, sink)
                 : new KbRetrievalContext(kbQuery, List.of(), List.of(), null, k,
                         Math.max(k * 4, 20), minScore, true, sink);

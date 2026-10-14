@@ -68,4 +68,7 @@ public interface KbPolicy {
 
     /** 公开站检索 */
     PublicSearch getPublicSearch();
+
+    /** 同一份资料的兄弟块补全（长资料被切块时别漏内容） */
+    Sibling getSibling();
 }

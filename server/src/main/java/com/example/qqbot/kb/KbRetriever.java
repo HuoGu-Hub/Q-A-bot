@@ -279,7 +279,8 @@ public class KbRetriever {
         // 群内与公开站的阈值/条数不同，参数不同就是不同的问题，不能互相命中。
         long corpusVersion = safe(() -> corpus.version(), 0L, "读取语料版本");
         KbRetrievalCache.Key cacheKey = new KbRetrievalCache.Key(
-                corpusVersion, query, opts.allowEmbedding(), k, opts.minScore(), opts.allowRerank());
+                corpusVersion, query, opts.allowEmbedding(), k, opts.minScore(), opts.allowRerank(),
+                opts.expandSiblings());
         Retrieval cached = cache.get(cacheKey);
         if (cached != null) {
             log.debug("[KB] 命中检索缓存（语料版本 {}）：{}", corpusVersion, query);
@@ -347,7 +348,8 @@ public class KbRetriever {
      */
     KbRetrievalContext newContext(String query, RetrievalOptions opts, KbRetrievalDiagnostics diagnostics) {
         return KbContextFactory.build(query, opts.allowEmbedding(), Math.max(1, opts.topK()),
-                opts.minScore(), opts.allowRerank(), corpus, glossary, embedding, diagnostics);
+                opts.minScore(), opts.allowRerank(), opts.expandSiblings(),
+                corpus, glossary, embedding, diagnostics);
     }
 
     /**

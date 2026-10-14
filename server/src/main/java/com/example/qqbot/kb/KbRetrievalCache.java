@@ -26,7 +26,7 @@ final class KbRetrievalCache {
     static final int DEFAULT_SIZE = 512;
 
     record Key(long corpusVersion, String query, boolean allowEmbedding,
-               int topK, double minScore, boolean allowRerank) {
+               int topK, double minScore, boolean allowRerank, boolean expandSiblings) {
     }
 
     private final int maxSize;

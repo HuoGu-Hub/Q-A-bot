@@ -32,8 +32,9 @@ final class KbContextFactory {
      * @param k 最终条数；每路候选数按它的 4 倍算（最少 20），留够余量给融合与去重
      */
     static KbRetrievalContext build(String query, boolean allowEmbedding, int k, double minScore,
-                                    boolean allowRerank, KbCorpus corpus, Glossary glossary,
-                                    EmbeddingClient embedding, KbRetrievalDiagnostics diagnostics) {
+                                    boolean allowRerank, boolean expandSiblings, KbCorpus corpus,
+                                    Glossary glossary, EmbeddingClient embedding,
+                                    KbRetrievalDiagnostics diagnostics) {
         int pool = Math.max(k * 4, 20);
         // 语料只取一次快照，交给两条路共用：一次检索内看到的世界必须是一致的（写入是另一个线程）
         List<KbCorpus.Entry> entries = tryGet(corpus::entries, List.of(), "读取语料");
@@ -42,7 +43,8 @@ final class KbContextFactory {
         // ★ 问题向量只算一次，A 路和 C 路共用：
         //   一次检索最多只该有一次外部 embedding 调用（省的是钱，也是 200~300ms 延迟）
         float[] qv = allowEmbedding ? safeVector(query, corpus, embedding) : null;
-        return new KbRetrievalContext(query, entries, terms, qv, k, pool, minScore, allowRerank, diagnostics);
+        return new KbRetrievalContext(query, entries, terms, qv, k, pool, minScore, allowRerank,
+                expandSiblings, diagnostics);
     }
 
     /**
