@@ -142,12 +142,19 @@ async function loadMarkers(map: string) {
   try {
     const r = await publicApi.get<{ markers: Marker[] }>('/map/markers?map=' + encodeURIComponent(map))
     markers.value = r.markers
-    // 默认图层：只开"找地方"用得上的。
-    // 收集品（化石、乐谱、壁毯）与世界观文本加起来五百多条，全开会让总览糊成一片，
-    // 而它们并不是"资源在哪、敌营在哪"这类问题的答案。想要的人自己在图层里打开。
     const groups = new Set<string>()
-    for (const g of currentMap.value?.groups ?? []) {
-      if (g.category !== 'collection') groups.add(g.key)
+    const picked = currentMap.value?.defaultGroups
+    if (picked) {
+      // 管理员在后台挑过：**完全按他的选择**，不再叠加经验值 ——
+      // 否则"我在后台关掉了收集品"这件事会在前端被悄悄推翻
+      for (const k of picked) groups.add(k)
+    } else {
+      // 还没配置过：用内置经验值兜底，别让新地图一上来是一片空白。
+      // 只开"找地方"用得上的 —— 收集品与世界观文本加起来五百多条，
+      // 全开会让总览糊成一片，而它们不是"资源在哪、敌营在哪"这类问题的答案。
+      for (const g of currentMap.value?.groups ?? []) {
+        if (g.category !== 'collection') groups.add(g.key)
+      }
     }
     visibleGroups.value = groups
     const cats = new Set<string>()

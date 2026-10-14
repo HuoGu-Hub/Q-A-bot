@@ -322,6 +322,111 @@ function fmtBytes(n: number): string {
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('zh-CN')
 }
+
+/* ==================== 默认显示的分组 ====================
+ *
+ * 公开地图页首屏开哪些分组，由这里决定。
+ * 为什么放在后台而不是写死在前端：余烬谷有 43 个分组、一千多个点位，
+ * 全开就是密密麻麻一片；该开哪几个是**审美与用途**的判断，
+ * 只有管理员说得准，而写死意味着改一次默认值就要重新发一版。
+ */
+
+interface LayerGroup {
+  key: string
+  name: string
+  icon: string
+  category: string
+  count: number
+  on: boolean
+}
+
+interface LayerMap {
+  map: string
+  label: string
+  markerCount: number
+  configured: boolean
+  groups: LayerGroup[]
+}
+
+const layerMaps = ref<LayerMap[]>([])
+const layerMap = ref('')
+const layerOn = ref<Set<string>>(new Set())
+const layerLoading = ref(false)
+const layerSaving = ref(false)
+
+const layerCurrent = computed(() => layerMaps.value.find((m) => m.map === layerMap.value) ?? null)
+
+/**
+ * 加载失败的图标。
+ *
+ * <p>图标要走 wiki 取，取不到时接口返回 404 —— 浏览器会画一个"破图"占位。
+ * 四十多个分组排下来就是一列破图框，比不显示图标难看得多，所以失败的直接不渲染。
+ */
+const layerIconFailed = ref<Set<string>>(new Set())
+
+function onLayerIconError(name: string) {
+  const next = new Set(layerIconFailed.value)
+  next.add(name)
+  layerIconFailed.value = next
+}
+
+/** 当前地图的图标地址。图标挂在 /api/public 下，管理端不需要额外鉴权 */
+function layerIconUrl(name: string): string {
+  return '/api/public/map/tile?map=' + encodeURIComponent(layerMap.value)
+    + '&name=' + encodeURIComponent(name)
+}
+
+/** 把已保存的选择读进勾选状态 */
+function syncLayerSelection() {
+  const cur = layerCurrent.value
+  layerOn.value = new Set(cur ? cur.groups.filter((g) => g.on).map((g) => g.key) : [])
+}
+
+async function loadLayers() {
+  layerLoading.value = true
+  try {
+    const r = await adminApi.get<{ maps: LayerMap[] }>('/map/layers')
+    layerMaps.value = r.maps
+    if (!r.maps.some((m) => m.map === layerMap.value)) {
+      layerMap.value = r.maps[0]?.map ?? ''
+    }
+    syncLayerSelection()
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    layerLoading.value = false
+  }
+}
+
+/** 切到这一页就重新拉一次：刚同步过的话，分组清单可能已经变了 */
+watch(tab, (t) => {
+  if (t === 'defaults') void loadLayers()
+})
+
+watch(layerMap, syncLayerSelection)
+
+function toggleLayer(key: string) {
+  const next = new Set(layerOn.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  layerOn.value = next
+}
+
+/** @param keys null = 恢复"未配置"，与"全关"是两件事 */
+async function saveLayers(keys: string[] | null) {
+  const cur = layerCurrent.value
+  if (!cur) return
+  layerSaving.value = true
+  try {
+    await adminApi.put('/map/layers', { map: cur.map, groups: keys })
+    toast(keys === null ? '已恢复为未配置' : '已保存，公开地图页下次打开就按这个显示')
+    await loadLayers()
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    layerSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -330,6 +435,7 @@ function fmt(n: number): string {
       <Tabs v-model="tab" :tabs="[
         { key: 'mark', label: '标注' },
         { key: 'places', label: '点位列表', count: localPlaces.length },
+        { key: 'defaults', label: '默认显示' },
         { key: 'status', label: '同步与状态' },
       ]" />
     </template>
@@ -538,6 +644,93 @@ function fmt(n: number): string {
       </div>
 
       <!-- ==================== 状态 ==================== -->
+      <!-- ==================== 默认显示 ==================== -->
+      <div v-show="tab === 'defaults'" class="defaults">
+        <p class="hint">
+          公开地图页首屏默认打开哪些分组。分组多的时候全开会密密麻麻一片，
+          所以只有在这里挑过的才会显示；新同步进来的分组默认是关着的，不会自己冒出来。
+        </p>
+
+        <p v-if="layerLoading" class="muted">正在载入…</p>
+
+        <template v-else-if="layerMaps.length">
+          <div class="chips">
+            <button
+              v-for="m in layerMaps"
+              :key="m.map"
+              type="button"
+              class="chip"
+              :class="{ on: m.map === layerMap }"
+              :aria-pressed="m.map === layerMap"
+              @click="layerMap = m.map"
+            >
+              {{ m.label }}
+              <span class="chip-n">{{ fmt(m.markerCount) }}</span>
+              <span v-if="!m.configured" class="chip-tag">未配置</span>
+            </button>
+          </div>
+
+          <div v-if="layerCurrent" class="card">
+            <div class="card-head">
+              <h2 class="card-title">默认显示的分组</h2>
+              <div class="mini-actions">
+                <button
+                  type="button"
+                  class="mini"
+                  @click="layerOn = new Set(layerCurrent.groups.map((g) => g.key))"
+                >全开</button>
+                <button type="button" class="mini" @click="layerOn = new Set()">全关</button>
+              </div>
+            </div>
+
+            <p class="hint">
+              选中 <b>{{ layerOn.size }}</b> / {{ layerCurrent.groups.length }} 个分组。
+              <template v-if="!layerCurrent.configured">
+                这张地图<strong>还没配置过</strong>，公开页当前用的是内置经验值（非收集品全开）。
+              </template>
+            </p>
+
+            <ul class="layer-list">
+              <li v-for="g in layerCurrent.groups" :key="g.key">
+                <label class="layer-row">
+                  <input
+                    type="checkbox"
+                    :checked="layerOn.has(g.key)"
+                    @change="toggleLayer(g.key)"
+                  />
+                  <img
+                    v-if="g.icon && !layerIconFailed.has(g.icon)"
+                    class="layer-icon"
+                    :src="layerIconUrl(g.icon)"
+                    alt=""
+                    @error="onLayerIconError(g.icon)"
+                  />
+                  <span class="layer-name">{{ g.name }}</span>
+                  <span class="layer-n">{{ fmt(g.count) }}</span>
+                </label>
+              </li>
+            </ul>
+
+            <div class="layer-actions">
+              <Button
+                variant="primary"
+                size="sm"
+                :disabled="layerSaving"
+                @click="saveLayers([...layerOn])"
+              >{{ layerSaving ? '保存中…' : '保存' }}</Button>
+              <Button size="sm" :disabled="layerSaving" @click="saveLayers(null)">
+                恢复未配置
+              </Button>
+            </div>
+          </div>
+        </template>
+
+        <div v-else class="empty-state">
+          <h2>还没有地图数据</h2>
+          <p>先到「同步与状态」同步一次 wiki 地图。</p>
+        </div>
+      </div>
+
       <div v-show="tab === 'status'" class="status">
         <div class="card">
           <h2 class="card-title">数据</h2>
@@ -708,6 +901,57 @@ function fmt(n: number): string {
 .err { color: var(--blight-lift); }
 
 .status { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: var(--sp-4); align-items: start; }
+
+/* ==================== 默认显示 ==================== */
+.defaults { max-width: 720px; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.chip-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.chip-tag {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--stone-500);
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+}
+.mini-actions { display: flex; gap: var(--sp-3); }
+.mini {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.mini:hover { color: var(--ember); }
+
+/*
+ * 分组清单：单列、每行一个开关。
+ * 用两列的话 43 个分组会横向跳着读，而"哪些开了"要能一眼扫完。
+ */
+.layer-list {
+  list-style: none;
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--edge-soft);
+}
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--edge-soft);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.layer-row:hover { background: var(--stone-400); }
+.layer-icon { width: 18px; height: 18px; object-fit: contain; }
+.layer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.layer-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); }
 .kv { display: flex; gap: var(--sp-3); margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--ink-2); }
 .kv span { min-width: 84px; color: var(--ink-3); }
 .kv code { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-3); word-break: break-all; }

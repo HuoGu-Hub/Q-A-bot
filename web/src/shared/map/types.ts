@@ -51,6 +51,12 @@ export interface MapSpec {
   adminCount: number
   canvases: CanvasSpec[]
   groups: GroupSpec[]
+  /**
+   * 管理员在后台挑好的"默认打开的分组"。
+   * null = 这张地图还没配置过，前端用内置经验值兜底；
+   * 空数组 = 配置过，就是要全关。两者不能合并。
+   */
+  defaultGroups: string[] | null
 }
 
 export interface Catalog {
