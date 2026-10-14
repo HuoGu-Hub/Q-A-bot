@@ -75,6 +75,12 @@ onBeforeUnmount(release)
       >
         <header class="head">
           <span class="title">{{ title }}</span>
+          <span class="head-spacer" />
+          <!--
+            头部动作区。放在标题栏而不是内容底部：内容长了要滚到底才点得到保存，
+            而"保存/取消"这类动作必须**永远在手边**。
+          -->
+          <div class="head-actions"><slot name="actions" /></div>
           <button type="button" class="x" aria-label="关闭" @click="emit('close')">
             <Icon name="close" :size="16" />
           </button>
