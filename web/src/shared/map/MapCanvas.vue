@@ -122,10 +122,50 @@ function tileBox(t: { left: number; top: number; w: number; h: number }) {
   }
 }
 
-function tileUrl(name: string, w: number, withPage = true): string {
+/**
+ * 图片加载失败后的重试次数上限。
+ *
+ * <p><b>为什么必须重试</b>：取图接口是异步的，队列满了会回 503，而上游确实可能
+ * 没有这张图会回 404。浏览器对 {@code <img>} 的失败**不会自己重发** ——
+ * 不重试的话那一格就一直空着，且 {@link iconCache} 里存的还是那张加载失败的对象，
+ * 要等组件重挂才会再试一次。
+ *
+ * <p><b>为什么有上限</b>：无脑重试对着真的不存在的图只会白刷日志。
+ * 三次之后放弃，让那一格保持缺失 —— 比一直转圈诚实。
+ */
+const MAX_RETRY = 3
+
+/**
+ * 重试版本号：key = 图层 + 文件名 + 档位，值 = 已经重试过几次。
+ *
+ * <p>它的作用是**换 URL**。src 不变的话浏览器会直接复用上次的失败结果，
+ * 根本不会再发一次请求，所以重试必须让 URL 变。
+ */
+const retryVersion = ref<Record<string, number>>({})
+
+function retryKey(name: string, w: number, withPage: boolean): string {
+  return (withPage ? 'p:' : 'n:') + name + '@' + w
+}
+
+/** 记一次失败并安排重试；到上限就不再折腾 */
+function scheduleTileRetry(name: string, w: number, withPage: boolean): void {
+  const key = retryKey(name, w, withPage)
+  const attempt = retryVersion.value[key] ?? 0
+  if (attempt >= MAX_RETRY) return
+  // 退避递增：队列满通常几秒内就缓解，一上来就密集重试只会让它更慢。
+  // ⚠️ 新值必须在定时器里**基于当时的 map** 算：同一时刻可能有别的瓦片也在失败，
+  //    提前算好的快照会把它刚写进去的次数覆盖掉
+  window.setTimeout(() => {
+    retryVersion.value = { ...retryVersion.value, [key]: attempt + 1 }
+  }, 600 * (attempt + 1))
+}
+
+function tileUrl(name: string, w: number, withPage = true, bust?: number): string {
   const q = new URLSearchParams({ map: props.mapName, name })
   if (withPage && props.canvas.page) q.set('page', props.canvas.page)
   if (w > 0) q.set('w', String(w))
+  const v = bust ?? retryVersion.value[retryKey(name, w, withPage)]
+  if (v) q.set('v', String(v))
   return '/api/public/map/tile?' + q.toString()
 }
 
@@ -217,13 +257,30 @@ function iconFor(m: Marker): HTMLImageElement | null {
   if (cached) return cached.complete && cached.naturalWidth > 0 ? cached : null
   const img = new Image()
   img.decoding = 'async'
-  // 图标原图只有 56px，画到 22~26 CSS 像素本来就是缩小，不需要服务端再缩
-  //（48 也不在服务端的宽度白名单里，会被静默退回原图 —— 不如直接要原图）
-  img.src = tileUrl(file, 0, false)
-  // 图标是异步到的：到一张就重绘一次，而不是等全部到齐
-  img.onload = () => schedule()
+  loadIcon(img, file, 0)
   iconCache.set(file, img)
   return null
+}
+
+/**
+ * 加载一张分组图标，失败就换 URL 重来。
+ *
+ * <p><b>为什么图标也要重试</b>：图标走的是 {@code <canvas>} 绘制，没有
+ * {@code <img @error>} 那条路，失败必须自己接住。而这张元素会被
+ * {@link iconCache} 记下来 —— 不重试就等于"这个分组从此没有图标"，
+ * 要等组件重挂才会再试。
+ */
+function loadIcon(img: HTMLImageElement, file: string, attempt: number): void {
+  // 图标原图只有 56px，画到 22~26 CSS 像素本来就是缩小，不需要服务端再缩
+  //（48 也不在服务端的宽度白名单里，会被静默退回原图 —— 不如直接要原图）
+  // attempt=0 时不带 v，正常路径的 URL 保持干净，浏览器缓存才有意义
+  img.src = tileUrl(file, 0, false, attempt)
+  // 图标是异步到的：到一张就重绘一次，而不是等全部到齐
+  img.onload = () => schedule()
+  img.onerror = () => {
+    if (attempt >= MAX_RETRY) return
+    window.setTimeout(() => loadIcon(img, file, attempt + 1), 600 * (attempt + 1))
+  }
 }
 
 /* ==================== 绘制 ==================== */
@@ -631,6 +688,7 @@ defineExpose({
           class="tile"
           :src="tileUrl(t.image, BASE_WIDTH)"
           :style="tileBox(t)"
+          @error="scheduleTileRetry(t.image, BASE_WIDTH, true)"
           alt=""
           draggable="false"
           decoding="async"
@@ -642,6 +700,7 @@ defineExpose({
             class="tile"
             :src="tileUrl(t.image, lod)"
             :style="tileBox(t)"
+            @error="scheduleTileRetry(t.image, lod, true)"
             alt=""
             draggable="false"
             decoding="async"
@@ -654,6 +713,7 @@ defineExpose({
           class="tile"
           :src="tileUrl(canvas.background, BASE_WIDTH, false)"
           :style="bgBoxStyle"
+          @error="scheduleTileRetry(canvas.background, BASE_WIDTH, false)"
           alt=""
           draggable="false"
           decoding="async"
@@ -663,6 +723,7 @@ defineExpose({
           class="tile"
           :src="tileUrl(canvas.background, lod, false)"
           :style="bgBoxStyle"
+          @error="scheduleTileRetry(canvas.background, lod, false)"
           alt=""
           draggable="false"
           decoding="async"
