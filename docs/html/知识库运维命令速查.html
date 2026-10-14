@@ -351,6 +351,17 @@ mvn spring-boot:run -Dspring-boot.run.arguments=&quot;\
 <p>wiki 文章块的回滚在<b>页面上</b>：「抓取」页 →「回滚：清空 wiki 块」（两步确认）。回滚是<strong>双向</strong>的（会连状态一起清），回滚后可以重新导入。
 <strong>回滚完记得在后台点「清理孤儿词条」。</strong></p>
 <hr>
+<hr>
+<h2 id="附工具调用预算"><a class="anchor" href="#附工具调用预算">附：工具调用预算</a></h2>
+<p>模型可以多轮调用检索工具（查到配方里有铁与布料，再查它们怎么获得），但必须有时限与次数上限 —— 否则&quot;为了答得更好&quot;会一直查，响应时间不可控。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>配置</th><th>默认</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>app.llm.tool.deadline-seconds</code></td><td>30</td><td>单次请求总时限。到点后工具不再执行，模型改用已有资料作答</td></tr>
+<tr><td><code>app.llm.tool.max-calls</code></td><td>3</td><td>单次请求最多调几次工具</td></tr>
+<tr><td><code>app.llm.tool.max-round-trips</code></td><td>3</td><td>最多几轮工具调用，交给 langchain4j 的 AiServices</td></tr>
+</tbody></table></div>
+<p>两道闸都要有：只卡次数，某次检索慢照样超时；只卡时间，快的时候它会问十几次。超预算时工具<b>返回一句提示</b>而不是抛错 —— 抛错模型看到的是「工具坏了」，返回提示它才知道该收尾。每次请求的「调用次数 + 耗时」都会打进日志，用来按真实分布调参。</p>
 <h2 id="四手写文档校验格式"><a class="anchor" href="#四手写文档校验格式">四、手写文档：校验格式</a></h2>
 <pre><code class="language-bash"># ① 校验格式（不启动 Spring、不碰数据库、不联网）
 ./scripts/validate-kb-doc.sh 你的文档.md
