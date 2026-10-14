@@ -119,14 +119,16 @@ public class MapViewService {
     private final MapPlaceService places;
     private final MapNoteService notes;
     private final PlaceDirectory directory;
+    private final MapLayerService layers;
     private final ObjectMapper mapper;
 
     public MapViewService(KbMapStore mapStore, MapPlaceService places, MapNoteService notes,
-                          PlaceDirectory directory, ObjectMapper mapper) {
+                          PlaceDirectory directory, MapLayerService layers, ObjectMapper mapper) {
         this.mapStore = mapStore;
         this.places = places;
         this.notes = notes;
         this.directory = directory;
+        this.layers = layers;
         this.mapper = mapper;
     }
 
@@ -160,9 +162,16 @@ public class MapViewService {
                             boolean landmark, String category, int count) {
     }
 
-    /** 一张地图的目录信息（不含点位） */
+    /**
+     * 一张地图的目录信息（不含点位）。
+     *
+     * @param defaultGroups 管理员在后台挑好的"默认打开的分组"。
+     *                      {@code null} 表示这张地图**还没配置过**，前端用内置经验值兜底；
+     *                      空列表表示"配置过，就是要全关"。两者不能合并。
+     */
     public record MapView(String map, String label, int markerCount, int adminCount,
-                          List<CanvasView> canvases, List<GroupView> groups) {
+                          List<CanvasView> canvases, List<GroupView> groups,
+                          List<String> defaultGroups) {
     }
 
     /** 一个点位。wiki 点与自定义点在这一层**长得一样**，前端只需一条渲染路径 */
@@ -176,6 +185,7 @@ public class MapViewService {
 
     /** 全部地图（含画布与分组），不含点位 —— 前端首屏只拉这一份 */
     public List<MapView> catalog() {
+        Map<String, Set<String>> configured = layers.configured();
         List<MapView> out = new ArrayList<>();
         for (KbMapRepositoryCount c : mapCounts()) {
             Map<String, Integer> byGroup = mapStore.countsByGroup(c.map());
@@ -193,8 +203,10 @@ public class MapViewService {
                         PlaceCategory.LANDMARK.equals(category), category, n));
             }
             groupViews.sort((a, b) -> Integer.compare(b.count(), a.count()));
+            Set<String> on = configured.get(c.map());
             out.add(new MapView(c.map(), labelOf(c.map()), (int) c.count(),
-                    places.list(c.map(), false).size(), canvasesOf(c.map()), groupViews));
+                    places.list(c.map(), false).size(), canvasesOf(c.map()), groupViews,
+                    on == null ? null : List.copyOf(on)));
         }
         // 地图按点位多少排序：余烬谷第一（它最大）
         out.sort((a, b) -> Integer.compare(b.markerCount(), a.markerCount()));

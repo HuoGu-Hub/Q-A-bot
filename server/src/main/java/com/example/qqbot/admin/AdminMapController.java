@@ -4,6 +4,7 @@ import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.kb.map.KbMapStore;
 import com.example.qqbot.kb.map.MapImageCache;
 import com.example.qqbot.kb.map.MapJobs;
+import com.example.qqbot.kb.map.MapLayerService;
 import com.example.qqbot.kb.map.MapNoteService;
 import com.example.qqbot.kb.map.MapPlaceService;
 import com.example.qqbot.kb.map.MapViewService;
@@ -48,10 +49,11 @@ public class AdminMapController {
     private final MapImageCache images;
     private final MapJobs jobs;
     private final MapOptions options;
+    private final MapLayerService layers;
 
     public AdminMapController(MapViewService view, MapPlaceService places, MapNoteService notes,
                               KbMapStore mapStore, MapImageCache images, MapJobs jobs,
-                              MapOptions options) {
+                              MapOptions options, MapLayerService layers) {
         this.view = view;
         this.places = places;
         this.notes = notes;
@@ -59,6 +61,7 @@ public class AdminMapController {
         this.images = images;
         this.jobs = jobs;
         this.options = options;
+        this.layers = layers;
     }
 
     /* ==================== 状态 ==================== */
@@ -149,6 +152,62 @@ public class AdminMapController {
     }
 
     /** 可供点位选用的图标（去重）—— 复用 wiki 已有的那套，不额外做图片上传 */
+    /* ==================== 默认图层 ==================== */
+
+    /**
+     * 每张地图的分组清单 + 当前默认。
+     *
+     * <p>把"可选的分组"和"当前选了什么"一起给出去，管理端不需要再拉一次目录 ——
+     * 两份数据来自同一次 {@code catalog()}，也就不会出现"界面上的分组和实际对不上"。
+     */
+    @GetMapping("/layers")
+    public Map<String, Object> layers() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("available", layers.isAvailable());
+        List<Map<String, Object>> maps = new ArrayList<>();
+        for (MapViewService.MapView m : view.catalog()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("map", m.map());
+            item.put("label", m.label());
+            item.put("markerCount", m.markerCount());
+            // configured 与"选中了几个"是两件事：前者决定前端要不要用经验值兜底
+            item.put("configured", m.defaultGroups() != null);
+            List<Map<String, Object>> groups = new ArrayList<>();
+            for (MapViewService.GroupView g : m.groups()) {
+                Map<String, Object> gi = new LinkedHashMap<>();
+                gi.put("key", g.key());
+                gi.put("name", g.name());
+                gi.put("icon", g.icon());
+                gi.put("category", g.category());
+                gi.put("count", g.count());
+                gi.put("on", m.defaultGroups() != null && m.defaultGroups().contains(g.key()));
+                groups.add(gi);
+            }
+            item.put("groups", groups);
+            maps.add(item);
+        }
+        out.put("maps", maps);
+        return out;
+    }
+
+    /** 保存请求。{@code groups} 为 null = 恢复"未配置" */
+    public record LayerRequest(String map, List<String> groups) {
+    }
+
+    @PutMapping("/layers")
+    public ResponseEntity<?> saveLayers(@RequestBody LayerRequest body) {
+        if (body == null || body.map() == null || body.map().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", "缺少 map"));
+        }
+        if (!layers.isAvailable()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("ok", false, "error", "数据库不可用，配置无法保存"));
+        }
+        layers.save(body.map(), body.groups());
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
     @GetMapping("/icons")
     public Map<String, Object> icons() {
         List<String> icons = new ArrayList<>(view.allIcons());
