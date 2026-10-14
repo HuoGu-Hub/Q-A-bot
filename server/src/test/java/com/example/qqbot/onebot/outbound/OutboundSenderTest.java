@@ -1,12 +1,16 @@
 package com.example.qqbot.onebot.outbound;
 
+import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
+import com.example.qqbot.media.ImageLibrary;
+import com.example.qqbot.media.ImageSource;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.onebot.model.OutboundImage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +18,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,10 +47,31 @@ class OutboundSenderTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** 假图库里唯一一张图：内容固定，方便断言 base64 */
+    private static final byte[] IMAGE_BYTES = "fake-image-bytes".getBytes();
+    private static final String IMAGE_KEY = "kb:demo";
+
+    /** 只认 {@code kb:demo} 的假供给方 */
+    private static final class FakeSource implements ImageSource {
+        @Override
+        public String scheme() {
+            return "kb";
+        }
+
+        @Override
+        public Optional<OutboundImage> resolve(String key) {
+            return "demo".equals(key)
+                    ? Optional.of(OutboundImage.ofBytes(IMAGE_BYTES, "image/png"))
+                    : Optional.empty();
+        }
+    }
+
     private OneBotApiClient api;
     private Outbound config;
     private BotIdentity identity;
     private OutboundFilter filter;
+    private MediaProperties media;
+    private ImageLibrary images;
     private OutboundSender sender;
 
     @BeforeEach
@@ -66,7 +93,11 @@ class OutboundSenderTest {
         filter = mock(OutboundFilter.class);
         when(filter.filter(anyString())).thenAnswer(inv -> inv.getArgument(0));
 
-        sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(config), identity, config, filter);
+        media = new MediaProperties();
+        images = new ImageLibrary(media, List.of(new FakeSource()));
+
+        sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(config), identity, config,
+                filter, images);
     }
 
     private OneBotEvent groupEvent() {
@@ -284,6 +315,86 @@ class OutboundSenderTest {
         when(filter.filter(anyString())).thenReturn("");
 
         assertThat(sender.sendToGroup(GROUP, "随便什么")).isEmpty();
+        verify(api, never()).sendGroupMsg(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ 图片标记：正文照发、标记摘掉，图以 base64 内联在同一个消息里")
+    void imageMarkerBecomesImageSegment() {
+        String sent = sender.send(groupEvent(), "它长这样 [[img:" + IMAGE_KEY + "]]");
+
+        assertThat(sent).as("返回的是实际发出的文本，标记必须已经被摘掉").isEqualTo("它长这样");
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendGroupMsg(eq(GROUP), msg.capture());
+
+        JsonNode array = msg.getValue();
+        assertThat(array).hasSize(3);   // at + text + image
+        assertThat(array.path(0).path("type").asText()).isEqualTo("at");
+        assertThat(array.path(1).path("data").path("text").asText()).isEqualTo(" 它长这样");
+        assertThat(array.path(2).path("type").asText()).isEqualTo("image");
+        assertThat(array.path(2).path("data").path("file").asText())
+                .isEqualTo("base64://" + Base64.getEncoder().encodeToString(IMAGE_BYTES));
+    }
+
+    @Test
+    @DisplayName("私聊带图：没有 at 段，只有 text + image")
+    void privateImageReply() {
+        sender.send(privateEvent(), "给你看 [[img:" + IMAGE_KEY + "]]");
+
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendPrivateMsg(eq(USER), msg.capture());
+
+        JsonNode array = msg.getValue();
+        assertThat(array).hasSize(2);
+        assertThat(array.path(0).path("type").asText()).isEqualTo("text");
+        assertThat(array.path(1).path("type").asText()).isEqualTo("image");
+    }
+
+    @Test
+    @DisplayName("★ 认不出的图片 key：图丢掉、正文照发，标记不出现在群里")
+    void unknownImageKeyIsDropped() {
+        String sent = sender.send(groupEvent(), "看看 [[img:kb:不存在]] 吧");
+
+        assertThat(sent).isEqualTo("看看 吧");
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendGroupMsg(eq(GROUP), msg.capture());
+        assertThat(msg.getValue().toString()).doesNotContain("img:").doesNotContain("\"image\"");
+    }
+
+    @Test
+    @DisplayName("★ 有图就不合并转发 —— 图片塞进「聊天记录」卡片得点开才看得见")
+    void imagesSkipForwardMerging() {
+        sender.send(groupEvent(), THREE_PARTS + "[[img:" + IMAGE_KEY + "]]");
+
+        verify(api, never()).sendGroupForwardMsg(anyLong(), any());
+        ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api, times(3)).sendGroupMsg(eq(GROUP), captor.capture());
+        // 图只挂在第一段上，后面几段是纯文本
+        assertThat(captor.getAllValues().get(0).toString()).contains("base64://");
+        assertThat(captor.getAllValues().get(1).toString()).doesNotContain("\"image\"");
+        assertThat(captor.getAllValues().get(2).toString()).doesNotContain("\"image\"");
+    }
+
+    @Test
+    @DisplayName("★ 只有图、没有正文：照旧发出去，而不是被当成空回复丢掉")
+    void imagesOnlyReplyStillSends() {
+        sender.send(groupEvent(), "[[img:" + IMAGE_KEY + "]]");
+
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendGroupMsg(eq(GROUP), msg.capture());
+        JsonNode array = msg.getValue();
+        assertThat(array).hasSize(2);   // at + image，没有空文本段
+        assertThat(array.path(1).path("type").asText()).isEqualTo("image");
+    }
+
+    @Test
+    @DisplayName("总开关关掉：标记被丢掉，一个字都不发")
+    void outboundImagesDisabled() {
+        media.getOutboundImages().setEnabled(false);
+
+        String sent = sender.send(groupEvent(), "[[img:" + IMAGE_KEY + "]]");
+
+        assertThat(sent).isEmpty();
         verify(api, never()).sendGroupMsg(anyLong(), any());
     }
 }

@@ -56,6 +56,14 @@ public class MediaStorageGuard {
             throw new IllegalStateException("[MEDIA] 配置错误：app.media.max-images-per-message 不能为负数，"
                     + "0 表示不限制");
         }
+        if (props.getOutboundImages().getMaxPerReply() < 0) {
+            throw new IllegalStateException("[MEDIA] 配置错误：app.media.outbound-images.max-per-reply 不能为负数，"
+                    + "0 表示不限制");
+        }
+        if (props.getOutboundImages().getMaxSizeKb() < 0) {
+            throw new IllegalStateException("[MEDIA] 配置错误：app.media.outbound-images.max-size-kb 不能为负数，"
+                    + "0 表示不限制");
+        }
 
         Path tmp = resolve("app.media.temp-images.dir", props.getTempImages().getDir());
         Path kb = resolve("app.media.kb-images.dir", props.getKbImages().getDir());
@@ -121,6 +129,16 @@ public class MediaStorageGuard {
         log.info("[MEDIA] 目录隔离已生效：临时={}  知识库={}", tmp, kb);
         log.info("[MEDIA] 单条消息图片上限：{}",
                 props.getMaxImagesPerMessage() > 0 ? props.getMaxImagesPerMessage() + " 张" : "不限制");
+        if (props.getOutboundImages().isEnabled()) {
+            log.info("[MEDIA] 出站图片：一条回复最多 {}，单张上限 {}",
+                    props.getOutboundImages().getMaxPerReply() > 0
+                            ? props.getOutboundImages().getMaxPerReply() + " 张" : "不限制",
+                    props.getOutboundImages().getMaxSizeKb() > 0
+                            ? props.getOutboundImages().getMaxSizeKb() + " KB" : "不限制");
+        } else {
+            log.info("[MEDIA] 出站图片已关闭（app.media.outbound-images.enabled=false），"
+                    + "回复里的图片标记会被丢弃");
+        }
         if (tempEnabled) {
             log.info("[MEDIA] 临时图片清理：每 {} 分钟跑一次，保留 {} 小时，单次最多删 {} 个，缓存上限 {}",
                     props.getTempImages().getCleanupIntervalMinutes(),

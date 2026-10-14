@@ -160,6 +160,12 @@ public class SettingsWhitelist {
                     "int", "单位小时", 24),
             new Item("app.media.temp-images.max-total-size-mb", "图片缓存上限", "媒体",
                     "int", "单位 MB，超出按最后使用时间淘汰", 200),
+            new Item("app.media.outbound-images.enabled", "允许回复带图", "媒体",
+                    "bool", "关掉后回复里的图片标记被当普通文本丢掉", true),
+            new Item("app.media.outbound-images.max-per-reply", "单条回复配图上限", "媒体",
+                    "int", "超出的只记日志不回话；0 = 不限制", 2),
+            new Item("app.media.outbound-images.max-size-kb", "配图大小上限", "媒体",
+                    "int", "单位 KB，只对 kb-images 里的本地图生效", 2048),
 
             // ---------- 知识库 ----------
             new Item("app.kb.top-k", "检索条数", "知识库",

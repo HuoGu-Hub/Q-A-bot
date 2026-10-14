@@ -3,10 +3,13 @@ package com.example.qqbot.onebot.outbound;
 import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
+import com.example.qqbot.media.ImageLibrary;
+import com.example.qqbot.media.ImageMarkers;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.onebot.model.OutboundImage;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +47,12 @@ import java.util.List;
  * <h2>失败怎么办</h2>
  * 合并转发是**锦上添花**，绝不能因此把回复弄丢：协议端不支持这个动作（老版本 NapCat / go-cqhttp）
  * 或调用报错时，自动退回逐条发送。提示语已经发出去了就不再 @ 一遍，免得对方收到两次 @。
+ *
+ * <h2>图片</h2>
+ * 回复里出现 {@link ImageMarkers} 那样的图片标记时，标记会被摘掉、换成真实的图片段，
+ * 挂在**第一条**消息上（连同 @ 一起）。见 {@link #dispatch} 里的三步顺序。
+ * 图片也会让"合并转发"这条路让开：图片塞进「聊天记录」卡片里得点开才看得见，
+ * 为了省一次发言把图藏起来不划算。
  */
 @Component
 public class OutboundSender {
@@ -56,19 +65,22 @@ public class OutboundSender {
     private final BotIdentity identity;
     private final Outbound config;
     private final OutboundFilter filter;
+    private final ImageLibrary images;
 
     public OutboundSender(OneBotApiClient apiClient,
                           MessageCodec codec,
                           OutboundPacer pacer,
                           BotIdentity identity,
                           Outbound outbound,
-                          OutboundFilter filter) {
+                          OutboundFilter filter,
+                          ImageLibrary images) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.pacer = pacer;
         this.identity = identity;
         this.config = outbound;
         this.filter = filter;
+        this.images = images;
     }
 
     /**
@@ -109,24 +121,42 @@ public class OutboundSender {
         return dispatch(new Target(true, groupId, 0), text);
     }
 
-    /** **唯一的出站实现** —— 所有发送都必须经过这里 */
+    /**
+     * **唯一的出站实现** —— 所有发送都必须经过这里。
+     *
+     * <p>顺序是有约束的，三步都不能换位置：
+     * <ol>
+     *   <li><b>先摘图片标记</b>：出站过滤是按词替换文本的，标记一旦被改写就再也匹配不上，
+     *       于是"这张图没了"且不报错；</li>
+     *   <li><b>再过滤文本</b>：过滤只看正文，图片是我们自己资产里的东西，没有可过滤的文字；</li>
+     *   <li><b>最后分片发送</b>：图片挂在第一段上。</li>
+     * </ol>
+     *
+     * @return **实际发出的文本**（已摘标记、已过滤）。图片不进这个返回值：
+     *         调用方要记的是"机器人说了什么"，而图片有它自己的日志。
+     */
     private String dispatch(Target target, String text) {
-        if (!StringUtils.hasText(text)) {
+        ImageMarkers.Parsed parsed = ImageMarkers.parse(text);
+        List<OutboundImage> attached = images.resolveAll(parsed.keys());
+        String body = parsed.text();
+
+        if (!StringUtils.hasText(body) && attached.isEmpty()) {
             log.warn("[OUT] 回复内容为空，跳过发送（避免发出空白消息）");
             return "";
         }
         // 出站敏感词过滤放在**发送器内部**，而不是各个调用方 ——
         // 放在调用方就得靠每个人记得调，实测广场那条路就漏了。
-        String safe = filter.filter(text);
-        if (!StringUtils.hasText(safe)) {
+        String safe = filter.filter(body);
+        if (!StringUtils.hasText(safe) && attached.isEmpty()) {
             log.warn("[OUT] 出站过滤后内容为空，跳过发送");
             return "";
         }
-        List<String> parts = pacer.split(safe);
-        if (shouldMerge(parts, safe) && sendMerged(target, parts)) {
+        List<String> parts = StringUtils.hasText(safe) ? pacer.split(safe) : List.of();
+        // 有图就不合并转发：图片塞进「聊天记录」卡片里得点开才看得见
+        if (attached.isEmpty() && shouldMerge(parts, safe) && sendMerged(target, parts)) {
             return safe;
         }
-        sendParts(target, parts, true);
+        sendParts(target, parts, true, attached);
         return safe;
     }
 
@@ -191,7 +221,8 @@ public class OutboundSender {
         } catch (Exception e) {
             log.warn("[OUT] 合并转发失败（{}），退回逐条发送 {} 段：{}",
                     e.getClass().getSimpleName(), parts.size(), e.getMessage());
-            sendParts(target, parts, !introSent);
+            // 这条路只在没有图片时才会走到（有图不合并），所以兜底也不带图
+            sendParts(target, parts, !introSent, List.of());
             return true;
         }
     }
@@ -200,25 +231,35 @@ public class OutboundSender {
      * 逐条发送（合并转发出现之前的老行为）。
      *
      * @param atFirst 第一段是否带 @ 提问者 —— 提示语已经发过时传 false，免得 @ 两次
+     * @param images  挂在**第一段**上的图片；空列表就是纯文本
      */
-    private void sendParts(Target target, List<String> parts, boolean atFirst) {
-        for (int i = 0; i < parts.size(); i++) {
-            String part = parts.get(i);
+    private void sendParts(Target target, List<String> parts, boolean atFirst, List<OutboundImage> images) {
+        // 没有正文、只有图片：包一个空段，下面照常走同一条发送路
+        List<String> out = parts.isEmpty() ? List.of("") : parts;
+        for (int i = 0; i < out.size(); i++) {
+            String part = out.get(i);
             boolean first = i == 0;
+            List<OutboundImage> attached = first ? images : List.of();
             if (target.group()) {
                 JsonNode message = first && atFirst && target.atUserId() > 0
-                        ? codec.atPlusText(target.atUserId(), part)
-                        : codec.textMessage(part);
+                        ? codec.atTextWithImages(target.atUserId(), part, attached)
+                        : codec.textWithImages(part, attached);
                 sleepQuietly(pacer.reserveGroupSlot(target.id()));
                 long messageId = apiClient.sendGroupMsg(target.id(), message);
-                log.info("[OUT] 已回复到群 {}，message_id={}（第 {}/{} 段）",
-                        target.id(), messageId, i + 1, parts.size());
+                log.info("[OUT] 已回复到群 {}，message_id={}（第 {}/{} 段{}）",
+                        target.id(), messageId, i + 1, out.size(), imageNote(attached));
             } else {
-                long messageId = apiClient.sendPrivateMsg(target.id(), codec.textMessage(part));
-                log.info("[OUT] 已回复给 {}，message_id={}（第 {}/{} 段）",
-                        target.id(), messageId, i + 1, parts.size());
+                long messageId = apiClient.sendPrivateMsg(target.id(),
+                        codec.textWithImages(part, attached));
+                log.info("[OUT] 已回复给 {}，message_id={}（第 {}/{} 段{}）",
+                        target.id(), messageId, i + 1, out.size(), imageNote(attached));
             }
         }
+    }
+
+    /** 日志尾巴：带了几张图。没图就什么都不加，免得每行日志都拖一个空括号 */
+    private static String imageNote(List<OutboundImage> images) {
+        return images == null || images.isEmpty() ? "" : "，含 " + images.size() + " 张图";
     }
 
     /** 节点署名：优先用协议端给的真实昵称（群里平时显示的就是它） */

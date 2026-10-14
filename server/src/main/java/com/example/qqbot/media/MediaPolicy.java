@@ -34,4 +34,12 @@ public interface MediaPolicy {
 
     /** 知识库图片（{@code kb-images}）：长期资产，永久保留 */
     KbImages getKbImages();
+
+    /**
+     * 出站图片（我们主动发给群友的图）的策略。
+     *
+     * <p>和 {@link #getMaxImagesPerMessage()} 是两个方向：那一个防别人用图打我们，
+     * 这一个管我们自己发多少、发多大。
+     */
+    OutboundImages getOutboundImages();
 }

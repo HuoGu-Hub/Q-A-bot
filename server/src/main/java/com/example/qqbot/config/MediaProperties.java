@@ -2,6 +2,7 @@ package com.example.qqbot.config;
 
 import com.example.qqbot.media.KbImages;
 import com.example.qqbot.media.MediaPolicy;
+import com.example.qqbot.media.OutboundImages;
 import com.example.qqbot.media.TempImages;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -48,6 +49,8 @@ public class MediaProperties implements MediaPolicy {
 
     private KbImages kbImages = new KbImages();
 
+    private OutboundImages outboundImages = new OutboundImages();
+
     // ==================== getter / setter ====================
 
     @Override
@@ -75,5 +78,14 @@ public class MediaProperties implements MediaPolicy {
 
     public void setKbImages(KbImages kbImages) {
         this.kbImages = kbImages;
+    }
+
+    @Override
+    public OutboundImages getOutboundImages() {
+        return outboundImages;
+    }
+
+    public void setOutboundImages(OutboundImages outboundImages) {
+        this.outboundImages = outboundImages;
     }
 }

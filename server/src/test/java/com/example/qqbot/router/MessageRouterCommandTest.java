@@ -9,6 +9,8 @@ import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.config.AsyncProperties;
 import com.example.qqbot.config.CommandProperties;
+import com.example.qqbot.config.MediaProperties;
+import com.example.qqbot.media.ImageLibrary;
 import com.example.qqbot.guard.Access;
 import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.RateLimit;
@@ -111,6 +113,11 @@ class MessageRouterCommandTest {
                 .thenAnswer(inv -> mapper.createObjectNode().put("text", (String) inv.getArgument(1)));
         when(codec.textMessage(anyString()))
                 .thenAnswer(inv -> mapper.createObjectNode().put("text", (String) inv.getArgument(0)));
+        // 出站发送现在走带图的两个重载（图片为空时行为与老的纯文本完全一致）
+        when(codec.textWithImages(anyString(), any()))
+                .thenAnswer(inv -> mapper.createObjectNode().put("text", (String) inv.getArgument(0)));
+        when(codec.atTextWithImages(anyLong(), anyString(), any()))
+                .thenAnswer(inv -> mapper.createObjectNode().put("text", (String) inv.getArgument(1)));
 
         when(outboundPacer.split(anyString()))
                 .thenAnswer(inv -> java.util.Collections.singletonList((String) inv.getArgument(0)));
@@ -126,7 +133,8 @@ class MessageRouterCommandTest {
 
         // 真的 OutboundSender（而不是 mock）：这个测试要断言"到底发出去了什么"，
         // 发送逻辑被 mock 掉就没得断了。它内部只用到下面这几个 mock。
-        outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new Outbound(), outboundFilter);
+        outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new Outbound(), outboundFilter,
+                new ImageLibrary(new MediaProperties(), List.of()));
         // 指令那一路住在 CommandHandler 里 —— 这里装真的，测试才是在验真实的那条链
         CommandHandler commandHandler = new CommandHandler(new CommandProperties(), commandMatcher,
                 commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector, codec, identity);

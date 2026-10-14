@@ -1,6 +1,7 @@
 package com.example.qqbot.onebot.codec;
 
 import com.example.qqbot.onebot.model.ImageRef;
+import com.example.qqbot.onebot.model.OutboundImage;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -230,6 +232,62 @@ public class MessageCodec {
         array.add(segment(TYPE_AT, Map.of("qq", String.valueOf(userId))));
         array.add(segment(TYPE_TEXT, Map.of("text", " " + text)));
         return array;
+    }
+
+    /**
+     * 构造「文本 + 图片」的消息。
+     *
+     * <p>顺序是**先文字后图**：群里读起来是"这是它长这样"后面跟着图，
+     * 比图片先冒出来再解释自然。
+     *
+     * @param images 可以为空，空时退化成一条纯文本消息
+     */
+    public JsonNode textWithImages(String text, List<OutboundImage> images) {
+        ArrayNode array = mapper.createArrayNode();
+        if (StringUtils.hasText(text)) {
+            array.add(segment(TYPE_TEXT, Map.of("text", text)));
+        }
+        for (OutboundImage image : safeImages(images)) {
+            array.add(imageSegment(image));
+        }
+        return array;
+    }
+
+    /**
+     * 构造「@某人 + 文本 + 图片」的消息 —— 群聊里带图回复走它。
+     *
+     * <p>为什么 @ 之后要补一个空格：QQ 客户端不会替 {@code at} 段和后面的文字之间留空，
+     * 「@某人图在下面」连在一起就成了"@某人图"。老方法 {@link #atPlusText} 里同款处理。
+     */
+    public JsonNode atTextWithImages(Long userId, String text, List<OutboundImage> images) {
+        ArrayNode array = mapper.createArrayNode();
+        array.add(segment(TYPE_AT, Map.of("qq", String.valueOf(userId))));
+        if (StringUtils.hasText(text)) {
+            array.add(segment(TYPE_TEXT, Map.of("text", " " + text)));
+        }
+        for (OutboundImage image : safeImages(images)) {
+            array.add(imageSegment(image));
+        }
+        return array;
+    }
+
+    /**
+     * 图片段。{@code file} 字段是 OneBot 唯一接受图片的地方，它认三种取值：
+     * 公网 URL、容器内路径、{@code base64://} 内联数据。
+     *
+     * <p><b>为什么本地图用 base64 而不是路径</b>：协议端跑在容器里，
+     * 宿主机的路径对它不存在 —— 给路径只会得到一张"文件已过期"的破图，
+     * 而 {@code base64://} 不依赖任何文件系统。
+     */
+    private ObjectNode imageSegment(OutboundImage image) {
+        String file = image.isUrl()
+                ? image.url()
+                : "base64://" + Base64.getEncoder().encodeToString(image.bytes());
+        return segment(TYPE_IMAGE, Map.of("file", file));
+    }
+
+    private static List<OutboundImage> safeImages(List<OutboundImage> images) {
+        return images == null ? List.of() : images;
     }
 
     /**

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>机器人回复图片消息 · 实施方案</title>
+<style>
+:root{--bg:#fff;--soft:#f7f8fa;--code:#f4f6f8;--fg:#1f2328;--fg2:#57606a;--fg3:#8b949e;
+--bd:#d8dee4;--bd2:#e6eaef;--ac:#2563eb;--acs:#eff4ff;--wn:#b45309;--wnb:#fffbeb;--ok:#15803d;
+--r:10px;--content:880px}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--soft:#161b22;--code:#161b22;--fg:#e6edf3;
+--fg2:#9198a1;--fg3:#6e7681;--bd:#30363d;--bd2:#21262d;--ac:#6ea8fe;--acs:#16233a;--wn:#f0b429;
+--wnb:#2a2109;--ok:#4ade80}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font-size:16px;line-height:1.8;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif}
+.wrap{max-width:var(--content);margin:0 auto;padding:56px 24px 96px}
+h1{font-size:2rem;line-height:1.3;margin:0 0 6px}
+h2{font-size:1.3rem;margin:48px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--bd2)}
+h3{font-size:1.05rem;margin:28px 0 10px}
+p,li{color:var(--fg)}
+.lede{color:var(--fg2);font-size:1.02rem;margin:0 0 8px}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font-size:.88em;
+font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+pre{background:var(--code);border:1px solid var(--bd2);border-radius:var(--r);padding:14px 16px;
+overflow:auto;font-size:.85rem;line-height:1.6}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.93rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--bd2);vertical-align:top}
+th{background:var(--soft);font-weight:600}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--acs);border-left:3px solid var(--ac);border-radius:0 var(--r) var(--r) 0}
+blockquote p{margin:0}
+.warn{background:var(--wnb);border-left-color:var(--wn);padding:12px 18px;border-radius:0 var(--r) var(--r) 0;margin:16px 0}
+.warn p{margin:0}
+.meta{color:var(--fg3);font-size:.88rem}
+.tag{display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:999px;background:var(--acs);
+color:var(--ac);margin-right:6px;vertical-align:middle}
+ol,ul{padding-left:1.4em}
+li{margin:4px 0}
+.flow{background:var(--soft);border:1px solid var(--bd2);border-radius:var(--r);padding:18px 20px;margin:18px 0;font-size:.9rem;line-height:2}
+.flow b{color:var(--ac)}
+hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>机器人回复图片消息</h1>
+<p class="lede">实施方案 · 出站图片通道 + 知识库配图来源 + 地图截图来源</p>
+<p class="meta">项目：飘雪喵问答机器人（E:\Project\agentWs\qqbot）　｜　阶段一已落地并通过全量测试　｜　阶段二见第七节</p>
+
+<h2>一、现状：确实回不了图</h2>
+<p>入站方向早就支持图片：群友发的图、被引用消息里的图都会下载下来交给视觉模型。但<b>出站方向只有文本</b>：</p>
+<table>
+<tr><th>环节</th><th>现状</th><th>证据</th></tr>
+<tr><td>入站图片</td><td>已支持，带缓存与 SSRF 防护，走视觉模型</td><td><code>media/ImageFetcher.java</code>、<code>agent/ChatService.java:116</code></td></tr>
+<tr><td>出站消息段</td><td>只能构造 <code>text</code> 与 <code>at</code> 两种段</td><td><code>onebot/codec/MessageCodec.java</code> 的构造区只有 <code>textMessage</code> / <code>atPlusText</code> / <code>forwardNodes</code></td></tr>
+<tr><td>出站发送</td><td>入参是裸字符串，没有承载图片的位置</td><td><code>onebot/outbound/OutboundSender.java</code> 的 <code>send(event, text)</code></td></tr>
+<tr><td>提示词</td><td>要求模型"需要图就给网址，不要下载"</td><td><code>system.md</code> 第八节</td></tr>
+</table>
+<p>所以群友看到的永远是一串网址，而不是一张图。网址在 QQ 里不会自动展开成图片。</p>
+
+<h2>二、方案总览</h2>
+<p>模型不能直接指定 URL，只能引用<b>我们自己登记的图片名字</b>；标记由出站层摘掉并换成图片段，和正文同一条消息发出。</p>
+<div class="flow">
+模型回复 <code>它长这样 [[img:kb:copper-vein]]</code><br>
+→ 出站层 <b>先摘标记</b>，得到正文与 key<br>
+→ <code>ImageLibrary</code> 按来源解析 key，过三道闸门<br>
+→ <code>MessageCodec</code> 拼出 <code>[text, image]</code> 段<br>
+→ <code>OneBotApiClient.sendGroupMsg</code> 发出，正文与图在同一条消息里
+</div>
+<p>为什么不是"模型直接给 URL"：模型编得出任意 URL，却编不出我们图库里的名字。名字必须来自资料块或工具结果，天然把"我们自己维护的资产"和"模型瞎编的外链"分开；未知 key 一律丢弃并记日志，绝不发给协议端。</p>
+
+<h2>三、标记协议</h2>
+<pre><code>参考图：[[img:kb:copper-vein]]       ← kb-images 目录里的 copper-vein.png
+位置如下：[[img:map:embervale/xxx]]   ← 阶段二：服务端合成的地图截图</code></pre>
+<table>
+<tr><th>规则</th><th>说明</th></tr>
+<tr><td>形状</td><td><code>[[img:来源:名字]]</code>，来源段只许字母数字下划线，名字段允许中文与 <code>/</code></td></tr>
+<tr><td>拦截</td><td>名字里不许出现空段、<code>.</code>、<code>..</code>、路径分隔符、控制字符 —— key 最终会拼成磁盘路径</td></tr>
+<tr><td>摘除</td><td>解析后标记一定从正文里消失，哪怕它不合法；群里永远不会出现 <code>[[img:...]]</code></td></tr>
+<tr><td>顺序</td><td><b>先摘标记再走出站过滤</b>。反过来的话敏感词替换可能改写标记内部，图会静默消失</td></tr>
+</table>
+
+<h2>四、三道闸门</h2>
+<table>
+<tr><th>闸门</th><th>配置</th><th>默认</th><th>失守时的行为</th></tr>
+<tr><td>总开关</td><td><code>app.media.outbound-images.enabled</code></td><td><code>true</code></td><td>标记当普通文本丢掉，一条消息都不多发</td></tr>
+<tr><td>张数</td><td><code>app.media.outbound-images.max-per-reply</code></td><td><code>2</code></td><td>超出的丢弃并记日志，不回话</td></tr>
+<tr><td>单张大小</td><td><code>app.media.outbound-images.max-size-kb</code></td><td><code>2048</code></td><td>超大的那张丢弃，其余照发</td></tr>
+</table>
+<p>闸门放在解析中心而不是发送器：它判断的是"这张图能不能发"，与"发到哪个群、要不要 @"无关。将来多一个发送入口也不会绕过限制。</p>
+
+<h2>五、两张图片形态</h2>
+<table>
+<tr><th>形态</th><th>什么时候用</th><th>怎么给协议端</th></tr>
+<tr><td>公网直链</td><td>图本来就在公网上，我们零下载零内存</td><td><code>data.file</code> 直接填 URL</td></tr>
+<tr><td>本地字节</td><td>图在我们磁盘上，例如知识库配图与合成的地图截图</td><td><code>data.file</code> 填 <code>base64://...</code></td></tr>
+</table>
+<blockquote><p>本地图必须走 base64：协议端跑在容器里，宿主机的路径对它不存在，给 <code>file://</code> 只会得到一张"文件已过期"的破图。</p></blockquote>
+
+<h2>六、改动清单</h2>
+<table>
+<tr><th>文件</th><th>作用</th></tr>
+<tr><td><code>onebot/model/OutboundImage.java</code><span class="tag">新增</span></td><td>出站图片值对象：公网直链或本地字节，两种来源恰好一种</td></tr>
+<tr><td><code>media/ImageMarkers.java</code><span class="tag">新增</span></td><td>标记协议的唯一定义与解析，纯函数</td></tr>
+<tr><td><code>media/ImageSource.java</code><span class="tag">新增</span></td><td>图片来源的供给方接口，一种来源一个实现</td></tr>
+<tr><td><code>media/ImageLibrary.java</code><span class="tag">新增</span></td><td>按 key 解析并守住三道闸门，未知 key 只丢一张图</td></tr>
+<tr><td><code>media/KbImageSource.java</code><span class="tag">新增</span></td><td><code>kb:</code> 来源，读 <code>data/kb-images</code>，文件名即 key</td></tr>
+<tr><td><code>media/OutboundImages.java</code><span class="tag">新增</span></td><td>出站图片策略的领域对象</td></tr>
+<tr><td><code>onebot/codec/MessageCodec.java</code></td><td>新增 <code>textWithImages</code> / <code>atTextWithImages</code> 与图片段构造</td></tr>
+<tr><td><code>onebot/outbound/OutboundSender.java</code></td><td>唯一的出站实现里摘标记、解析图片、把图挂在第一段上</td></tr>
+<tr><td><code>config/MediaProperties.java</code>、<code>media/MediaPolicy.java</code>、<code>MediaStorageGuard.java</code></td><td>绑定并校验新配置，启动日志打印生效值</td></tr>
+<tr><td><code>settings/SettingsWhitelist.java</code>、<code>application.yml</code></td><td>三个开关进配置中心</td></tr>
+<tr><td><code>system.md</code>、<code>system.md.example</code></td><td>告诉模型标记长什么样、最多带几个、没有标记就不要配图</td></tr>
+</table>
+
+<h2>七、怎么用</h2>
+<ol>
+<li>把图放进 <code>server/data/kb-images/</code>，文件名去掉扩展名就是 key。例如 <code>copper-vein.png</code> 对应 <code>kb:copper-vein</code>。</li>
+<li>让模型知道这个 key：资料块、工具结果、或指令话术里写上 <code>[[img:kb:copper-vein]]</code> 原样一串。</li>
+<li>模型照抄标记，出站层换成真图。抄错、图被删、超过上限都只表现为"少一张图"，正文照常发出。</li>
+</ol>
+<div class="warn"><p>目前还没有后台传图界面，配图靠往目录里放文件。目录本身就是唯一索引，因此不存在"索引与目录不一致"的悬案。</p></div>
+
+<h2>八、阶段二：地图截图</h2>
+<p>目标是让地点问答直接回一张带点位标记的地图图，key 形如 <code>map:画布/点位</code>。这一阶段还没动手，原因是要先确认三件事：点位坐标到画布像素的换算在后端有没有现成实现、瓦片拼图的尺寸从哪来、以及单次合成的耗时会不会拖慢出站。</p>
+<table>
+<tr><th>要新增</th><th>职责</th></tr>
+<tr><td><code>kb/map/MapShotSource</code></td><td>实现 <code>ImageSource</code>，scheme 为 <code>map</code></td></tr>
+<tr><td>瓦片合成器</td><td>按画布清单把瓦片画成一张底图，再画点位标记</td></tr>
+<tr><td>结果缓存</td><td>同一张图重复请求直接命中，避免每次问答都重画</td></tr>
+</table>
+<div class="warn"><p>风险集中在两处：坐标换算必须与前端完全一致，差一点标记就画错位置；拼图是 CPU 与内存密集动作，必须有大小上限与缓存，否则一次群里的连续提问就能把 2G 机器顶到危险区。</p></div>
+
+<h2>九、已知限制</h2>
+<ul>
+<li><b>带图不合并转发</b>：图片塞进「聊天记录」卡片得点开才看得见，所以带图的回复一律逐条发。</li>
+<li><b>图片挂在第一段</b>：长回复被切成多段时，图跟着第一段走，不跟着标记在原文里的位置。</li>
+<li><b>没有公网直链来源</b>：<code>ImageSource</code> 已经为它留好位置，但没有 <code>url:</code> 实现，避免模型直接把任意外链塞进消息。</li>
+<li><b>图片不过敏感词过滤</b>：过滤只看正文文本；图片来自我们自己登记的资产，不是模型生成的内容。</li>
+</ul>
+
+<hr>
+<p class="meta">本文档随实现更新。测试覆盖见 <code>media/ImageMarkersTest</code>、<code>ImageLibraryTest</code>、<code>KbImageSourceTest</code>、<code>onebot/outbound/OutboundSenderTest</code>。</p>
+
+</div>
+</body>
+</html>
