@@ -6,6 +6,7 @@ import com.example.qqbot.kb.PlacePoint;
 import com.example.qqbot.kb.PlaceAnswer;
 import com.example.qqbot.kb.RelativeLocation;
 import com.example.qqbot.kb.map.MapImageCache;
+import com.example.qqbot.kb.map.MapImageWorker;
 import com.example.qqbot.kb.map.MapViewService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -50,19 +52,30 @@ public class PublicMapController {
     private static final CacheControl IMAGE_CACHE =
             CacheControl.maxAge(Duration.ofDays(7)).cachePublic();
 
+    /**
+     * 一张图最多让用户等多久。
+     *
+     * <p>比上游的最坏情况留了余量：串行闸门 + 429 退避下，一张图可能耗二十几秒。
+     * 超时给 404，前端下次重新渲染时会再要一次 —— 比让请求永远挂着强。
+     */
+    private static final long TILE_TIMEOUT_MS = Duration.ofSeconds(90).toMillis();
+
     private final MapViewService view;
     private final MapImageCache images;
     private final MapOptions options;
     private final PlaceDirectory directory;
     private final PublicRateLimiter limiter;
+    private final MapImageWorker imageWorker;
 
     public PublicMapController(MapViewService view, MapImageCache images, MapOptions options,
-                               PlaceDirectory directory, PublicRateLimiter limiter) {
+                               PlaceDirectory directory, PublicRateLimiter limiter,
+                               MapImageWorker imageWorker) {
         this.view = view;
         this.images = images;
         this.options = options;
         this.directory = directory;
         this.limiter = limiter;
+        this.imageWorker = imageWorker;
     }
 
     /**
@@ -196,20 +209,52 @@ public class PublicMapController {
      * <p>{@code w} 是目标宽度：不传就是原图。可用宽度由
      * {@link MapOptions#getWidths()} 白名单限定，白名单外的值静默退回原图 ——
      * 这个参数只影响清晰度，为它报 400 不划算（与轮播图同一套约定）。
+     *
+     * <h2>⚠️ 为什么返回 {@link DeferredResult} 而不是直接返回字节</h2>
+     * 取图是**同步等上游**的（串行节流 + 重试），单张最坏二十几秒。同步返回就等于
+     * 一个瓦片占住一个 Tomcat 线程，而群消息的 {@code /onebot/event} 走的是**同一个**
+     * 线程池 —— 几十个瓦片就能把机器人拖到"@ 不活，连 /ping 都没反应"（2026-10-14 实测）。
+     * 所以这里立刻把 Tomcat 线程交还，真正取图的活交给 {@link MapImageWorker}。
      */
     @GetMapping("/tile")
-    public ResponseEntity<byte[]> tile(@RequestParam("map") String map,
-                                       @RequestParam(name = "page", required = false) String page,
-                                       @RequestParam("name") String name,
-                                       @RequestParam(name = "w", required = false) String w) {
+    public DeferredResult<ResponseEntity<byte[]>> tile(@RequestParam("map") String map,
+                                                       @RequestParam(name = "page", required = false) String page,
+                                                       @RequestParam("name") String name,
+                                                       @RequestParam(name = "w", required = false) String w) {
         if (!options.isEnabled()) {
-            return ResponseEntity.notFound().build();
+            return immediate(ResponseEntity.notFound().build());
         }
         if (map == null || name == null || !view.allowedAsset(map, page, name)) {
             log.debug("[MAP-IMG] 拒绝不在白名单里的资源：map={} page={} name={}", map, page, name);
-            return ResponseEntity.notFound().build();
+            return immediate(ResponseEntity.notFound().build());
         }
-        Optional<MapImageCache.Image> got = images.get(map, page, name, parseInt(w));
+
+        int width = parseInt(w);
+        // 超时兜底：worker 永远不回来的话，这里至少给用户一个明确的 404，
+        // 而不是让连接挂到容器超时
+        DeferredResult<ResponseEntity<byte[]>> pending = new DeferredResult<>(TILE_TIMEOUT_MS,
+                ResponseEntity.notFound().build());
+        boolean accepted = imageWorker.submit(() -> pending.setResult(loadTile(map, page, name, width)));
+        if (!accepted) {
+            // 上游是串行的，排下去只会让用户等几分钟才看到一张破图；
+            // 明确回 503 + Retry-After，前端重新渲染时会再要一次
+            log.warn("[MAP-IMG] 取图队列已满（在跑 {} / 排队 {}），快速失败：{}",
+                    imageWorker.inFlight(), imageWorker.queued(), name);
+            pending.setResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .header("Retry-After", "2")
+                    .build());
+        }
+        return pending;
+    }
+
+    /**
+     * 真正取图。
+     *
+     * <p>这一段跑在 {@link MapImageWorker} 的线程上，**不是** Tomcat 线程 ——
+     * 这正是"机器人 @ 不活"那个问题的修法：慢的是取图，不是网络入口。
+     */
+    private ResponseEntity<byte[]> loadTile(String map, String page, String name, int width) {
+        Optional<MapImageCache.Image> got = images.get(map, page, name, width);
         if (got.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -218,6 +263,13 @@ public class PublicMapController {
                 .cacheControl(IMAGE_CACHE)
                 .contentType(MediaType.parseMediaType(img.mime()))
                 .body(img.bytes());
+    }
+
+    /** 不需要异步派发的结果（功能关闭、白名单没过）直接给出去，不占取图线程 */
+    private static DeferredResult<ResponseEntity<byte[]>> immediate(ResponseEntity<byte[]> response) {
+        DeferredResult<ResponseEntity<byte[]>> done = new DeferredResult<>();
+        done.setResult(response);
+        return done;
     }
 
     /* ==================== 兜底 ==================== */
