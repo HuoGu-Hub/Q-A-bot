@@ -71,6 +71,18 @@ public class MapOptions {
     /** 一次地点问答最多列几处 */
     private int answerLimit = 5;
 
+    /**
+     * 地图同步发现内容变化后，自动补一次**首屏档**预热。
+     *
+     * <p>只补首屏档是有意的：同步是管理员随时可能点的，而全量预热要拉原图、跑十几分钟，
+     * 还会把出站间隔顶高、拖慢同时在线的访客 —— 那是非高峰才做的事。
+     *
+     * <p>注意另外两个键 {@code app.kb.map.warm-cron} 与 {@code warm-zone} **不在这里**：
+     * 它们是 {@code @Scheduled} 注解上的占位符，必须在编译期常量里读，
+     * 没法从本对象取。见 {@link com.example.qqbot.kb.map.MapWarmScheduler}。
+     */
+    private boolean warmAfterSync = true;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -150,5 +162,13 @@ public class MapOptions {
 
     public void setAnswerLimit(int answerLimit) {
         this.answerLimit = answerLimit;
+    }
+
+    public boolean isWarmAfterSync() {
+        return warmAfterSync;
+    }
+
+    public void setWarmAfterSync(boolean warmAfterSync) {
+        this.warmAfterSync = warmAfterSync;
     }
 }

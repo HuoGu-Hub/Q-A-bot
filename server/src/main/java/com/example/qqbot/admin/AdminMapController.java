@@ -336,6 +336,23 @@ public class AdminMapController {
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
     }
 
+    /**
+     * 全量预热（轻量档 + 原图档）。同样立即返回。
+     *
+     * <p>和上面那个的区别是**要不要提前把原图拉下来**：原图只在放大到 1 倍以上时用到，
+     * 那时视野里只有个位数张、按需取也就几秒。所以它划算与否取决于有没有人在看 ——
+     * 首次部署后点一次，或者交给 {@code MapWarmScheduler} 在非高峰自动跑；
+     * 高峰期点它等于拿访客的首屏去换一张没人立刻要的图。
+     */
+    @PostMapping("/warm-full")
+    public ResponseEntity<?> warmFull() {
+        if (!jobs.startFullWarm()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "预热已经在跑了"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "started", true));
+    }
+
     /** 派生或清除地点语料。同样立即返回 */
     @PostMapping("/corpus")
     public ResponseEntity<?> corpus(@RequestParam(name = "purge", defaultValue = "false") boolean purge,

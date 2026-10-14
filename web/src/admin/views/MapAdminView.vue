@@ -319,6 +319,18 @@ async function runWarm() {
   }
 }
 
+// 全量预热比轻量多拉原图档，第一次要十几分钟 —— 出站请求是串行节流的，
+// 建议放在非高峰点，或者交给后端凌晨那个定时任务
+async function runWarmFull() {
+  try {
+    await adminApi.post('/map/warm-full')
+    toast('全量预热已开始：含原图档，首次约十几分钟')
+    await pollStatus()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
+}
+
 async function runCorpus(purge: boolean) {
   try {
     await adminApi.post('/map/corpus?purge=' + (purge ? 'true' : 'false'))
@@ -787,14 +799,16 @@ async function saveLayers(keys: string[] | null) {
               <Icon name="refresh" :size="14" />同步 wiki 地图
             </Button>
             <Button size="sm" @click="runWarm">预热底图缓存</Button>
+            <Button size="sm" @click="runWarmFull">全量预热</Button>
             <Button size="sm" @click="runCorpus(false)">派生地点语料</Button>
             <Button size="sm" @click="runCorpus(true)">清除地点语料</Button>
           </div>
           <p class="hint">
-            同步是增量的：只拉版本变过的页，常态下几秒完成。
+            同步是增量的：只拉版本变过的页，常态下几秒完成。发现内容变化后会自动补一次首屏档预热。
             底图预热要拉几百张瓦片，出站请求是节流的，第一次大约一两分钟 —— 做过一次之后
-            所有访客都命中本地缓存。地点语料要调向量接口，也慢。
-            三件事都在后台跑，进度看上面。
+            所有访客都命中本地缓存。全量预热会多拉原图档，第一次十几分钟，建议放在非高峰；
+            后端凌晨 4 点也会自动跑一次。地点语料要调向量接口，也慢。
+            这些都在后台跑，进度看上面。
           </p>
         </div>
 
