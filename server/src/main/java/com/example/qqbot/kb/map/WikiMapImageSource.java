@@ -100,6 +100,9 @@ public class WikiMapImageSource implements MapImageSource {
         for (int attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
             try {
                 return fetchOnce(fileName, width);
+            } catch (MapImageSource.NotFound e) {
+                // 文件不存在，重试一百次也还是不存在 —— 直接往上抛，一次都不多问
+                throw e;
             } catch (IOException e) {
                 last = e;
                 // 429 是节流信号：把出站间隔翻倍，让整条链路慢下来；
@@ -165,6 +168,9 @@ public class WikiMapImageSource implements MapImageSource {
             HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() == 429) {
                 throw new RateLimited("上游限流（429）：" + url);
+            }
+            if (response.statusCode() == 404) {
+                throw new MapImageSource.NotFound("上游没有这个文件（404）：" + url);
             }
             if (response.statusCode() != 200) {
                 throw new IOException("上游返回 " + response.statusCode() + "：" + url);

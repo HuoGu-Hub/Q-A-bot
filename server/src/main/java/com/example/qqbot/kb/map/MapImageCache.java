@@ -9,8 +9,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -42,6 +45,21 @@ public class MapImageCache {
 
     /** 临时文件名后缀的序号 —— 避免同一毫秒内两次写同一个临时名 */
     private final AtomicLong seq = new AtomicLong();
+
+    /**
+     * 上游明确回答"没有这个文件"的缓存键，以及判定时刻。
+     *
+     * <p>为什么要记：wiki 上确实有页面声明了并不存在的底图
+     * （{@code Map:FrozenFrontier/Main} 写的是 {@code Map-FrozenFrontier.jpg}，而这张图没上传过）。
+     * 不记的话，每次打开地图、每换一档缩放都会重新去问一遍 ——
+     * 一档四次重试、四档十六次，全砸在被限流的出站额度上，日志也刷满。
+     *
+     * <p>为什么要过期：万一 wiki 后来补传了这张图，不能永远认定它不存在。
+     */
+    private final Map<String, Long> missing = new ConcurrentHashMap<>();
+
+    /** "文件不存在"的记住时长 */
+    private static final long MISSING_TTL_MS = Duration.ofHours(12).toMillis();
 
     public MapImageCache(MapOptions options, MapImageSource source) {
         this.options = options;
@@ -84,14 +102,34 @@ public class MapImageCache {
                 log.warn("[MAP-IMG] 缓存读取失败，改为重新下载：{} —— {}", target, e.getMessage());
             }
         }
+        // 键里**不带档位**：一个文件存不存在跟要多大宽度无关，
+        // 带上档位的话四档各问一次，正好把想省的那几次全问回来
+        String key = map + "|" + nz(page) + "|" + file;
+        Long gone = missing.get(key);
+        if (gone != null) {
+            if (System.currentTimeMillis() - gone < MISSING_TTL_MS) {
+                // 已知不存在：直接回 404，连一次出站都不发
+                return Optional.empty();
+            }
+            missing.remove(key);
+        }
         try {
             byte[] bytes = source.fetch(file, w);
             store(target, bytes);
             return Optional.of(new Image(bytes, mimeOf(file), false));
+        } catch (MapImageSource.NotFound e) {
+            // 只在这一刻记一次日志：之后每次请求都会在上面的分支被挡掉
+            log.warn("[MAP-IMG] 上游没有这张图，{} 小时内不再询问：{}", MISSING_TTL_MS / 3600000, file);
+            missing.put(key, System.currentTimeMillis());
+            return Optional.empty();
         } catch (Exception e) {
             log.warn("[MAP-IMG] 取图失败：{} —— {}", file, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
     }
 
     /** 缓存目录的规模 —— 管理端展示用，顺带证明缓存真的在长 */

@@ -23,4 +23,17 @@ public interface MapImageSource {
 
     /** 人话描述当前来源，供管理端展示与排障 */
     String describe();
+
+    /**
+     * 上游明确回答"这个文件不存在"。
+     *
+     * <p>单独一个类型，是因为它和网络抖动**必须区别对待**：
+     * 404 是永久性的，重试只是白白占用被限流的出站额度、把日志刷满；
+     * 而超时、429 重试是有意义的。上层拿到它会记住"这个文件没有"，不再重复去问。
+     */
+    class NotFound extends IOException {
+        public NotFound(String message) {
+            super(message);
+        }
+    }
 }
