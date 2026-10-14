@@ -1610,6 +1610,13 @@ async function saveLayers(keys: string[] | null) {
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
+  /*
+   * ⚠️ width 必须显式写。这一列是列向 flex 的项，而**交叉轴上的 auto 外边距会取消拉伸** ——
+   * 只写 max-width + margin:auto 时它的宽度是 fit-content：展开「候选地图」那张表，
+   * 表格的最大内容宽度就把它撑开，整列跟着变宽（表现为"点开宽度就变来变去"）。
+   * width:100% 把宽度定死成"容器宽，封顶 1120"，内容再宽也只影响表自己。
+   */
+  width: 100%;
   max-width: 1120px;
   margin-inline: auto;
 }
