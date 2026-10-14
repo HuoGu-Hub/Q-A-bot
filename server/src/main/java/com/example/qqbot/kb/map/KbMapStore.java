@@ -367,6 +367,19 @@ public class KbMapStore {
         return out;
     }
 
+    /**
+     * 清空同步进来的地图数据。
+     *
+     * <p>人建的点位、备注、图层配置与启用范围**一张表都不碰** —— 见
+     * {@link KbMapRepository#clearSynced()} 里对两类表的说明。
+     */
+    public KbMapRepository.ClearCounts clearSynced() {
+        if (!available) {
+            return new KbMapRepository.ClearCounts(0, 0, 0, 0);
+        }
+        return repo.clearSynced();
+    }
+
     /** 每张地图的页面在 wiki 上最后一次改动的时间 */
     public Map<String, String> latestPageUpdate() {
         if (!available) {

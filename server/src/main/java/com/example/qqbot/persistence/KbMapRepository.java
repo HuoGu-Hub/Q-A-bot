@@ -35,6 +35,41 @@ import java.util.Map;
 @Repository
 public class KbMapRepository {
 
+    /** 一次清空删掉了什么，逐表计数 —— 回执要能让管理员核对 */
+    public record ClearCounts(int pages, int canvases, int groups, int markers) {
+
+        public int total() {
+            return pages + canvases + groups + markers;
+        }
+    }
+
+    /**
+     * 清空**同步进来**的地图数据：页面状态、画布、分组、点位。
+     *
+     * <h2>为什么只删这四张表</h2>
+     * 地图库里的表分两类，这个区分就是这次操作的全部安全性所在：
+     * <ul>
+     *   <li><b>同步来的</b>（本方法删的）：{@code kb_map_page} 的 revid 与解析状态、
+     *       {@code kb_map_canvas} 的坐标系与底图、{@code kb_map_group} 的分组、
+     *       {@code kb_map_marker} 的点位。它们是 wiki 的投影，删掉之后重新同步就能原样回来；</li>
+     *   <li><b>人建的</b>（**一张都不碰**）：{@code kb_map_place} 自定义点位、
+     *       {@code kb_map_marker_note} 手写备注、{@code kb_map_layer_default} 每张图的图层配置、
+     *       {@code kb_map_active} 启用范围。这些删了就没了，而且没有任何地方能重新变出来。</li>
+     * </ul>
+     * 后三张表是按 {@code (map, page)} 与 {@code (map, page, markerId)} 挂的，而同步回来的
+     * page 与 markerId 与之前完全一致，所以人建的数据会**自动重新挂上** —— 这是保留它们的第二个理由。
+     *
+     * <p>删掉 {@code kb_map_page} 同时清掉了增量同步的 revid 状态，下一次同步会重拉全部页。
+     * 这正是"从头来一遍"该有的行为。
+     */
+    public ClearCounts clearSynced() {
+        return jdbc.transaction(() -> new ClearCounts(
+                jdbc.update("DELETE FROM kb_map_page"),
+                jdbc.update("DELETE FROM kb_map_canvas"),
+                jdbc.update("DELETE FROM kb_map_group"),
+                jdbc.update("DELETE FROM kb_map_marker")));
+    }
+
     /** 一页的同步状态 */
     public record PageState(String page, String map, long revid, String pageUpdatedAt,
                             String syncedAt, int markerCount, String parseError) {

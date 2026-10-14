@@ -90,7 +90,8 @@ class MapJobsWarmTest {
 
     /** 只用到预热这一条路，同步与语料那两个协作者传 null */
     private static MapJobs jobs(MapImageCache cache, MapOptions options) {
-        return new MapJobs(null, null, cache, catalogOf(), options);
+        // mapStore 只有"清空地图数据"才用得到，这个测试不碰它
+        return new MapJobs(null, null, cache, catalogOf(), options, null);
     }
 
     @Test

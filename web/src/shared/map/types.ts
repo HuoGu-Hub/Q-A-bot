@@ -241,9 +241,15 @@ export interface MapStatus {
   placeTotal: number
   tileCache: { enabled: boolean; root: string; files: number; bytes: number }
   jobs: Record<string, JobState>
+  /**
+   * 每张画布一行，**不过滤启用范围** —— 候选地图表要靠它显示"未启用那张能不能渲染"。
+   *
+   * <p>只留界面真的会读的字段。原来还带 page / hasCrs / extent / syncedAt，
+   * 那是给已经删掉的「画布」诊断表用的，留着只会让下一个人以为还有人在读。
+   */
   canvases: {
-    map: string; page: string; hasCrs: boolean; renderable: boolean
-    background: string; tiles: number; extent: [number, number]; syncedAt: string
+    map: string; renderable: boolean
+    background: string; tiles: number
   }[]
   pages: {
     page: string; map: string; revid: number; markerCount: number

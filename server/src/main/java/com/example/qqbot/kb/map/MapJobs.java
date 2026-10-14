@@ -1,12 +1,14 @@
 package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
+import com.example.qqbot.persistence.KbMapRepository;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,6 +39,7 @@ public class MapJobs {
     public static final String SYNC = "sync";
     public static final String CORPUS = "corpus";
     public static final String WARM = "warm";
+    public static final String RESET = "reset";
 
     /**
      * 轻量预热的档位 —— 首屏与常用缩放的细节层。
@@ -90,6 +93,7 @@ public class MapJobs {
     private final MapImageCache images;
     private final MapViewService view;
     private final MapOptions options;
+    private final KbMapStore mapStore;
 
     private final ExecutorService pool = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "map-jobs");
@@ -101,23 +105,87 @@ public class MapJobs {
     private final AtomicBoolean syncRunning = new AtomicBoolean();
     private final AtomicBoolean corpusRunning = new AtomicBoolean();
     private final AtomicBoolean warmRunning = new AtomicBoolean();
+    private final AtomicBoolean resetRunning = new AtomicBoolean();
 
     public MapJobs(KbMapSyncService syncService, LocationCorpusBuilder corpusBuilder,
-                   MapImageCache images, MapViewService view, MapOptions options) {
+                   MapImageCache images, MapViewService view, MapOptions options,
+                   KbMapStore mapStore) {
         this.syncService = syncService;
         this.corpusBuilder = corpusBuilder;
         this.images = images;
         this.view = view;
         this.options = options;
+        this.mapStore = mapStore;
     }
 
-    /** 当前三个任务的状态（没跑过也返回一条"从未运行"） */
+    /** 当前四个任务的状态（没跑过也返回一条"从未运行"） */
     public Map<String, JobState> states() {
         Map<String, JobState> out = new LinkedHashMap<>();
         out.put(SYNC, states.getOrDefault(SYNC, idle(SYNC, "wiki 地图同步")));
-        out.put(CORPUS, states.getOrDefault(CORPUS, idle(CORPUS, "地点语料派生")));
         out.put(WARM, states.getOrDefault(WARM, idle(WARM, "底图缓存预热")));
+        out.put(CORPUS, states.getOrDefault(CORPUS, idle(CORPUS, "地点语料派生")));
+        out.put(RESET, states.getOrDefault(RESET, idle(RESET, "地图数据清空")));
         return out;
+    }
+
+    /**
+     * 清空**同步进来**的地图数据，可选连瓦片缓存一起。
+     *
+     * <h2>为什么它也算长任务（它其实不慢）</h2>
+     * 不为耗时，为**回执**：删掉了多少页、多少点位、多少瓦片，必须有个地方说得出来。
+     * 顺手把"用这些数据派生的地点语料还没重新派生"一并报出来 —— 那是清空唯一的遗留影响。
+     *
+     * <h2>并发安全</h2>
+     * 它删的正是同步要写的那四张表。**单线程池**（{@link #pool}）保证了这两者不会交错：
+     * 后提交的那个只会等前一个跑完。所以这里不需要额外的互斥。
+     *
+     * @param tiles 连瓦片缓存一起删。删完要重新预热、第一次加载会慢，所以由调用方明确选择
+     * @return false 表示清空已在运行
+     */
+    public boolean startReset(boolean tiles) {
+        if (!resetRunning.compareAndSet(false, true)) {
+            return false;
+        }
+        mark(RESET, "地图数据清空", true, true, "已开始" + (tiles ? "（含瓦片缓存）" : ""));
+        pool.submit(() -> {
+            try {
+                KbMapRepository.ClearCounts c = mapStore.clearSynced();
+                StringBuilder sb = new StringBuilder("页 ").append(c.pages())
+                        .append(" / 画布 ").append(c.canvases())
+                        .append(" / 分组 ").append(c.groups())
+                        .append(" / 点位 ").append(c.markers());
+                if (tiles) {
+                    MapImageCache.PurgeAll p = images.purgeAll();
+                    sb.append("；瓦片 ").append(p.files()).append(" 个（")
+                            .append(human(p.bytes())).append("）");
+                }
+                int stale = corpusBuilder.derivedCount();
+                if (stale > 0) {
+                    sb.append("。⚠️ 地点语料 ").append(stale)
+                            .append(" 条是用这些数据派生的，需要重新派生一次");
+                }
+                sb.append("。人建的点位、备注、图层配置未受影响");
+                mark(RESET, "地图数据清空", false, true, sb.toString());
+                log.info("[MAP-JOB] 地图数据已清空：{}", sb);
+            } catch (Exception e) {
+                log.warn("[MAP-JOB] 清空地图数据失败：{}", e.getMessage());
+                mark(RESET, "地图数据清空", false, false, "失败：" + e.getMessage());
+            } finally {
+                resetRunning.set(false);
+            }
+        });
+        return true;
+    }
+
+    /** 给管理员看的字节数。任务摘要里报"删了多少"，不该只给一串原始数字 */
+    private static String human(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        if (bytes < 1024 * 1024) {
+            return (bytes / 1024) + " KB";
+        }
+        return String.format(Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0);
     }
 
     /**

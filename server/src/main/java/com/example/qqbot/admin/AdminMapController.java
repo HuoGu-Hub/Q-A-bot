@@ -96,17 +96,16 @@ public class AdminMapController {
 
         out.put("jobs", jobs.states());
 
+        // 只输出界面真正会读的四个字段。它原先还带 page / hasCrs / extent / syncedAt，
+        // 那些是给已经删掉的「画布」表用的 —— 没人读的字段留着只会让下一个人以为它在被用。
+        // 注意这里**不过滤启用范围**：候选地图表要靠它显示"未启用那张能不能渲染"
         List<Map<String, Object>> canvases = new ArrayList<>();
         for (KbMapStore.Canvas c : mapStore.canvases()) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("map", c.map());
-            m.put("page", c.page());
-            m.put("hasCrs", c.hasCrs());
             m.put("renderable", c.renderable());
             m.put("background", c.backgroundImage());
             m.put("tiles", view.tilesOf(c.tilesJson()).size());
-            m.put("extent", c.extent());
-            m.put("syncedAt", c.syncedAt());
             canvases.add(m);
         }
         out.put("canvases", canvases);
@@ -455,6 +454,25 @@ public class AdminMapController {
                     .body(Map.of("error", "预热已经在跑了"));
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
+    }
+
+    /**
+     * 清空**同步进来**的地图数据 —— "从头再同步一遍"。
+     *
+     * <p>⚠️ 它**不碰人建的东西**：自定义点位、手写备注、每张图的图层配置、启用范围。
+     * 后三张表按 {@code (map, page)} / {@code (map, page, markerId)} 挂，
+     * 同步回来的键与之前一致，所以它们会自己重新挂上。
+     * 见 {@link com.example.qqbot.persistence.KbMapRepository#clearSynced()}。
+     *
+     * @param tiles 连瓦片缓存一起删。删了要重新预热，所以默认 true 但要由调用方明说
+     */
+    @PostMapping("/reset")
+    public ResponseEntity<?> reset(@RequestParam(name = "tiles", defaultValue = "true") boolean tiles) {
+        if (!jobs.startReset(tiles)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "清空任务已经在跑了"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "started", true, "tiles", tiles));
     }
 
     /** 派生或清除地点语料。同样立即返回 */

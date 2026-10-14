@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -151,6 +152,52 @@ public class MapImageCache {
             }
         }
         return new Stats(isEnabled(), root.toString(), files, bytes);
+    }
+
+    /* ==================== 清空 ==================== */
+
+    /** 一次清空删掉的东西。字节数要留着 —— 调用方得能告诉管理员"接下来第一次加载会慢" */
+    public record PurgeAll(long files, long bytes) {
+    }
+
+    /**
+     * 清空整个瓦片缓存。
+     *
+     * <p>缓存是**派生物**，随时可以重新拉回来，所以这里删得干脆。真正要如实说出口的是代价：
+     * 删完到重新预热完之间，访客的每一次取图都要等上游（出站还是串行节流的）。
+     *
+     * <p>先统计再删 —— 删完就数不出来了。
+     */
+    public PurgeAll purgeAll() {
+        if (!isEnabled()) {
+            return new PurgeAll(0, 0);
+        }
+        Path root = root();
+        if (!Files.isDirectory(root)) {
+            return new PurgeAll(0, 0);
+        }
+        long files = 0;
+        long bytes = 0;
+        try (var walk = Files.walk(root)) {
+            for (Path p : walk.filter(Files::isRegularFile).toList()) {
+                files++;
+                bytes += Files.size(p);
+            }
+        } catch (IOException e) {
+            log.warn("[MAP-IMG] 统计瓦片缓存失败：{}", e.getMessage());
+        }
+        try (var walk = Files.walk(root)) {
+            // 反序：先删文件再删空目录，否则目录非空删不掉
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                if (!p.equals(root)) {
+                    Files.deleteIfExists(p);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("[MAP-IMG] 清空瓦片缓存失败：{}", e.getMessage());
+        }
+        log.info("[MAP-IMG] 瓦片缓存已清空：{} 个文件 / {} 字节", files, bytes);
+        return new PurgeAll(files, bytes);
     }
 
     /* ==================== 路径与校验 ==================== */

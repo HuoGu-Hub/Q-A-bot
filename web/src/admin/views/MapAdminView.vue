@@ -37,7 +37,14 @@ import type { AnchorReport, AnchorReview, Catalog, JobState, MapCandidate, MapCa
 type Mode = 'edit' | 'view'
 
 const tab = ref('mark')
-const mode = ref<Mode>('edit')
+/*
+ * 初始必须是 view。
+ *
+ * 写成 edit 的话，一进页面就已经是"新增点位模式"了 —— 而那个模式会关掉点位的点击，
+ * 于是刷新之后点任何图标都没反应，看起来像"编辑功能坏了"。
+ * 进这个模式只有一个入口：点右上角的「新增点位」。
+ */
+const mode = ref<Mode>('view')
 const loading = ref(true)
 const error = ref('')
 
@@ -169,8 +176,45 @@ const jobRows = computed(() => {
     { key: 'sync', label: '同步 wiki 地图', note: '增量 · 只拉版本变过的页，常态几秒', state: j.sync },
     { key: 'warm', label: '底图缓存', note: '首屏档一两分钟；全量含原图，首次十几分钟', state: j.warm },
     { key: 'corpus', label: '地点语料', note: '派生与清除都要调向量接口，较慢', state: j.corpus },
+    { key: 'reset', label: '地图数据', note: '清空 wiki 同步来的数据；自建点位、备注、图层配置不动', state: j.reset },
   ]
 })
+
+/**
+ * 清空同步进来的地图数据。
+ *
+ * <p>确认框里必须写清**删什么、不删什么、代价是什么**：这是一个点错了就恢复不了的动作，
+ * 而其中"不删你自己建的点位、备注、图层配置"才是让人敢按下去的那一句。
+ * 它和上面三个任务一样有回执 —— 删了多少页/点位/瓦片，看「地图数据」那一行。
+ */
+async function runReset() {
+  const st = status.value
+  const markers = (st?.pages ?? []).reduce((n, p) => n + p.markerCount, 0)
+  const cache = st?.tileCache
+  const parts = [
+    '清空地图数据？',
+    '',
+    '将删除 wiki 同步来的：页面状态、画布、分组、点位（约 ' + fmt(markers) + ' 个）',
+  ]
+  if (cache?.enabled) {
+    parts.push('以及瓦片缓存（' + cache.files + ' 个文件 · ' + fmtBytes(cache.bytes) + '）')
+  }
+  parts.push(
+    '',
+    '不会动：你自己建的点位、备注、每张图的图层配置。',
+    '之后同步一次即可恢复；瓦片要重新预热，在那之前访客取图会慢。'
+  )
+  if (!window.confirm(parts.join('\n'))) {
+    return
+  }
+  try {
+    await adminApi.post('/map/reset?tiles=true')
+    toast('清空已开始 —— 删了多少看「地图数据」那一行')
+    await pollStatus()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
+}
 
 interface Todo {
   id: string
@@ -1199,7 +1243,7 @@ async function saveLayers(keys: string[] | null) {
         <!-- ══════════ 长任务 ══════════
              按**任务**组织：一个任务的状态与它的触发方式必须待在一起。 -->
         <section class="ops">
-          <h3 class="sect">长任务</h3>
+          <h3 class="sect">任务</h3>
           <ul class="op-list">
             <li v-for="row in jobRows" :key="row.key" class="op">
               <div class="op-main">
@@ -1225,9 +1269,12 @@ async function saveLayers(keys: string[] | null) {
                   <Button size="sm" @click="runWarm">预热首屏档</Button>
                   <Button size="sm" @click="runWarmFull">全量预热</Button>
                 </template>
-                <template v-else>
+                <template v-else-if="row.key === 'corpus'">
                   <Button size="sm" @click="runCorpus(false)">派生语料</Button>
                   <Button variant="danger" size="sm" @click="runCorpus(true)">清除语料</Button>
+                </template>
+                <template v-else>
+                  <Button variant="danger" size="sm" @click="runReset">清空地图数据</Button>
                 </template>
               </div>
             </li>
