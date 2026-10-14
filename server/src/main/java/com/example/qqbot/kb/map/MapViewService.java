@@ -286,8 +286,11 @@ public class MapViewService {
             if (!used.isEmpty() && !used.contains(c.page())) {
                 continue;
             }
+            // 四至归一化成「左上 = 最小 x / 最大 y」再下发：wiki 记录的方向并不统一，
+            // 收集品画布是 y 轴向下的，不归一化的话前端渲染成空白、点位全在画布外。
+            double[][] corners = MapProjection.normalizeCorners(c.topLeft(), c.bottomRight());
             out.add(new CanvasView(c.page(), canvasLabel(c.page()),
-                    c.topLeft(), c.bottomRight(), c.tileAt(), c.tileSize(),
+                    corners[0], corners[1], c.tileAt(), c.tileSize(),
                     tilesOf(c.tilesJson()),
                     c.backgroundImage() == null ? "" : c.backgroundImage(),
                     c.backdrop() == null ? "" : c.backdrop(), c.zoomMin(), c.zoomMax()));

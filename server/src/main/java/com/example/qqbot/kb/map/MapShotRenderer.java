@@ -1,0 +1,303 @@
+package com.example.qqbot.kb.map;
+
+import com.example.qqbot.kb.MapOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 把地图裁一块、标上点，编码成一张可以直接发出去的图。
+ *
+ * <h2>只画视口那一块，绝不碰整张画布</h2>
+ * 余烬谷整图是 10240×10240，ARGB 约 400 MB —— 开一次就可能把 2G 的机器打死。
+ * 这里只按视口取相交的瓦片，输出固定成配置里的尺寸（默认 1280×800，约 4 MB），
+ * 而且每张瓦片是<b>解码一张、画一张</b>，不把整幅底图留在内存里。
+ *
+ * <h2>取瓦片有预算，到点就放弃</h2>
+ * 没缓存过的瓦片要去 wiki 取。出站路径不能被外部站点的抖动拖住，所以每取一张之前
+ * 都看一次剩余预算，到点直接返回"本次不出图"，由调用方触发后台预热。
+ *
+ * <h2>缺一张瓦片就整张不出</h2>
+ * 半张图比没有图更糟：底图上少一块会被当成"那里就是黑的"，而群友据此判断位置。
+ *
+ * <p>渲染器自己不碰缓存实现：取图通过 {@link TileFetcher} 注入，
+ * 于是它可以只靠内存里的假瓦片做单测。
+ */
+@Component
+public class MapShotRenderer {
+
+    private static final Logger log = LoggerFactory.getLogger(MapShotRenderer.class);
+
+    /** 底图没盖到的地方露出来的底色 —— 用深灰而不是纯黑，免得看着像"数据缺失" */
+    private static final Color BACKGROUND = new Color(24, 28, 34);
+    private static final Color PRIMARY = new Color(230, 40, 40);
+    private static final Color PRIMARY_HALO = Color.WHITE;
+    private static final Color SECONDARY = new Color(255, 196, 0);
+    private static final Color SECONDARY_HALO = new Color(70, 45, 0);
+
+    /**
+     * 取一张瓦片或整图。
+     *
+     * <p>由调用方绑定好"哪张地图、哪张画布"，渲染器不需要知道缓存在哪、怎么取。
+     *
+     * @param width 期望的缩略宽度，来自 {@link MapProjection#pickTileWidth}
+     */
+    @FunctionalInterface
+    public interface TileFetcher {
+        Optional<MapImageCache.Image> get(String image, int width);
+    }
+
+    /**
+     * 要画在图上的一点。
+     *
+     * @param x       画布像素坐标
+     * @param primary true = 目标点，画大标记；false = 地标，画小标记
+     */
+    public record Mark(double x, double y, boolean primary, String label) {
+    }
+
+    private final MapOptions options;
+
+    public MapShotRenderer(MapOptions options) {
+        this.options = options;
+    }
+
+    /**
+     * 渲染一张。
+     *
+     * @param tiles           画布的瓦片清单；为空时退回整图 {@code background}
+     * @param marks           至少要有目标点，否则调用方不该调它
+     * @param deadlineAtMillis 取瓦片的绝对截止时刻
+     * @return 图片字节；放弃出图时返回 empty
+     */
+    public Optional<byte[]> render(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                   String background, List<Mark> marks, TileFetcher fetcher,
+                                   long deadlineAtMillis) {
+        MapOptions.Shot cfg = options.getShot();
+        if (!cfg.isEnabled() || marks == null || marks.isEmpty()) {
+            return Optional.empty();
+        }
+        int outW = cfg.getWidth();
+        double aspect = (double) outW / cfg.getHeight();
+        List<MapProjection.Point> points = marks.stream()
+                .map(m -> new MapProjection.Point(m.x(), m.y()))
+                .toList();
+        MapProjection.Viewport vp = MapProjection.viewport(canvas, points, aspect,
+                cfg.getMinSpan(), cfg.getMaxSpan(), cfg.getPadding());
+        // 输出高度由输出宽度与长宽比算 —— 别拿视口宽度去除，那是坐标单位不是像素
+        int outH = Math.max(1, (int) Math.round(outW / aspect));
+        double k = outW / vp.width();
+        int tileWidth = MapProjection.pickTileWidth(vp.width(), outW, options.getWidths());
+
+        BufferedImage img = new BufferedImage(outW, outH, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        int used = 0;
+        try {
+            g.setColor(BACKGROUND);
+            g.fillRect(0, 0, outW, outH);
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+            if (tiles != null && !tiles.isEmpty()) {
+                for (MapViewService.TileView tile : tiles) {
+                    MapProjection.Box box = MapProjection.tileBox(canvas, tile.col(), tile.row());
+                    if (!intersects(box, vp)) {
+                        continue;
+                    }
+                    if (System.currentTimeMillis() > deadlineAtMillis) {
+                        log.info("[MAP-SHOT] 取瓦片超预算，本次不出图（已画 {} 张）", used);
+                        return Optional.empty();
+                    }
+                    Optional<MapImageCache.Image> got = fetcher.get(tile.image(), tileWidth);
+                    if (got.isEmpty()) {
+                        log.info("[MAP-SHOT] 缺瓦片 {}，本次不出图 —— 半张图比没有图更糟", tile.image());
+                        return Optional.empty();
+                    }
+                    if (drawTile(g, got.get().bytes(), box, vp, k)) {
+                        used++;
+                    }
+                }
+            } else if (background != null && !background.isBlank()) {
+                // 旧 schema 的画布没有瓦片，只有一整张底图
+                if (System.currentTimeMillis() > deadlineAtMillis) {
+                    log.info("[MAP-SHOT] 取底图超预算，本次不出图");
+                    return Optional.empty();
+                }
+                Optional<MapImageCache.Image> got = fetcher.get(background, tileWidth);
+                if (got.isEmpty()) {
+                    log.info("[MAP-SHOT] 缺底图 {}，本次不出图", background);
+                    return Optional.empty();
+                }
+                MapProjection.Box whole = new MapProjection.Box(0, 0, canvas.width(), canvas.height());
+                if (drawTile(g, got.get().bytes(), whole, vp, k)) {
+                    used++;
+                }
+            } else {
+                log.info("[MAP-SHOT] 这张画布既没有瓦片也没有整图，画不出来");
+                return Optional.empty();
+            }
+            drawMarks(g, marks, vp, k, outW);
+        } finally {
+            g.dispose();
+        }
+
+        // 计数要拷成 final 才能进 lambda —— 下面那句日志读的是最终值
+        final int usedTiles = used;
+        Optional<byte[]> out = encode(img, cfg);
+        out.ifPresent(bytes -> log.info("[MAP-SHOT] 出图 {}×{}，底图 {} 张（{} 档），{} KB",
+                outW, outH, usedTiles, tileWidth, bytes.length / 1024));
+        return out;
+    }
+
+    /** 瓦片矩形与视口有没有交集 —— 不相交的瓦片连取都不取 */
+    private static boolean intersects(MapProjection.Box box, MapProjection.Viewport vp) {
+        return box.left() < vp.left() + vp.width() && box.left() + box.width() > vp.left()
+                && box.top() < vp.top() + vp.height() && box.top() + box.height() > vp.top();
+    }
+
+    /**
+     * 把一张瓦片画到输出图上。
+     *
+     * <p>尺寸用<b>两端点</b>算而不是直接乘：直接乘会因取整在瓦片之间留下 1 像素的缝，
+     * 表现为底图上一道道细黑线。
+     */
+    private static boolean drawTile(Graphics2D g, byte[] bytes, MapProjection.Box box,
+                                    MapProjection.Viewport vp, double k) {
+        try {
+            BufferedImage tile = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (tile == null) {
+                return false;
+            }
+            int x0 = (int) Math.round((box.left() - vp.left()) * k);
+            int y0 = (int) Math.round((box.top() - vp.top()) * k);
+            int x1 = (int) Math.round((box.left() + box.width() - vp.left()) * k);
+            int y1 = (int) Math.round((box.top() + box.height() - vp.top()) * k);
+            g.drawImage(tile, x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), null);
+            return true;
+        } catch (IOException e) {
+            log.warn("[MAP-SHOT] 瓦片解码失败：{}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 画标记。
+     *
+     * <p>目标点是白圈打底 + 红圈 + 十字，地标是暗圈打底 + 黄圈。
+     * 为什么要打底：底图有浅色的雪原也有深色的林地，单色圈总有一半糊在里面看不见。
+     */
+    private static void drawMarks(Graphics2D g, List<Mark> marks, MapProjection.Viewport vp,
+                                  double k, int outW) {
+        int r = Math.max(7, outW / 90);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        for (Mark m : marks) {
+            double sx = (m.x() - vp.left()) * k;
+            double sy = (m.y() - vp.top()) * k;
+            if (m.primary()) {
+                ring(g, sx, sy, r, PRIMARY_HALO, 4.5f);
+                ring(g, sx, sy, r, PRIMARY, 2.5f);
+                g.setColor(PRIMARY);
+                g.setStroke(new BasicStroke(2.5f));
+                int arm = (int) Math.round(r * 1.9);
+                int gap = (int) Math.round(r * 0.7);
+                g.drawLine((int) sx - arm, (int) sy, (int) sx - gap, (int) sy);
+                g.drawLine((int) sx + gap, (int) sy, (int) sx + arm, (int) sy);
+                g.drawLine((int) sx, (int) sy - arm, (int) sx, (int) sy - gap);
+                g.drawLine((int) sx, (int) sy + gap, (int) sx, (int) sy + arm);
+            } else {
+                int small = Math.max(5, (int) Math.round(r * 0.65));
+                ring(g, sx, sy, small, SECONDARY_HALO, 4f);
+                ring(g, sx, sy, small, SECONDARY, 2f);
+            }
+        }
+    }
+
+    private static void ring(Graphics2D g, double x, double y, int r, Color color, float width) {
+        g.setColor(color);
+        g.setStroke(new BasicStroke(width));
+        g.drawOval((int) Math.round(x - r), (int) Math.round(y - r), r * 2, r * 2);
+    }
+
+    /**
+     * 编码。地图是照片类图像，PNG 会比 JPEG 大好几倍，所以默认走 JPEG。
+     *
+     * <p>超过字节上限时按 降质量 → 缩尺寸 的顺序退让：先牺牲一点画质，
+     * 实在不行才牺牲尺寸。都失败才放弃出图。
+     */
+    private static Optional<byte[]> encode(BufferedImage img, MapOptions.Shot cfg) {
+        int cap = cfg.getMaxKb() * 1024;
+        byte[] jpeg = jpeg(img, cfg.getJpegQuality());
+        if (jpeg.length == 0) {
+            return Optional.empty();
+        }
+        if (jpeg.length <= cap) {
+            return Optional.of(jpeg);
+        }
+        byte[] lower = jpeg(img, 60);
+        if (lower.length <= cap) {
+            return Optional.of(lower);
+        }
+        byte[] shrunk = jpeg(scale(img, 0.7), 60);
+        if (shrunk.length <= cap) {
+            return Optional.of(shrunk);
+        }
+        log.warn("[MAP-SHOT] 出图仍超过上限 {} KB（{} KB），放弃", cfg.getMaxKb(), shrunk.length / 1024);
+        return Optional.empty();
+    }
+
+    private static byte[] jpeg(BufferedImage img, int quality) {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+        if (!writers.hasNext()) {
+            return new byte[0];
+        }
+        ImageWriter writer = writers.next();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(Math.min(1f, Math.max(0.1f, quality / 100f)));
+            try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
+                writer.setOutput(ios);
+                writer.write(null, new IIOImage(img, null, null), param);
+            }
+        } catch (IOException e) {
+            log.warn("[MAP-SHOT] 编码失败：{}", e.getMessage());
+            return new byte[0];
+        } finally {
+            writer.dispose();
+        }
+        return out.toByteArray();
+    }
+
+    private static BufferedImage scale(BufferedImage src, double factor) {
+        int w = Math.max(1, (int) Math.round(src.getWidth() * factor));
+        int h = Math.max(1, (int) Math.round(src.getHeight() * factor));
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = out.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(src, 0, 0, w, h, null);
+        } finally {
+            g.dispose();
+        }
+        return out;
+    }
+}

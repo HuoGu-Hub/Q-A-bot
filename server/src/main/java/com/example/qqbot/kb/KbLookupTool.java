@@ -169,6 +169,12 @@ public class KbLookupTool {
         }
         PlaceAnswer.Answer answer = PlaceAnswer.answer(place.strip(), places,
                 options.getAnswerLimit(), options.getUnitsPerMeter());
-        return answer.text(options.getUnitsPerMeter());
+        String text = answer.text(options.getUnitsPerMeter());
+        if (!options.getShot().isEnabled() || !answer.found()) {
+            return text;
+        }
+        // 附上"取图凭据"：模型不认识坐标，也不该去猜身份 —— 它只需要把这行原样抄进回答。
+        // 只给最匹配的那一处：地图图比较大，一次回两张会刷屏。
+        return text + "\n配图：[[img:map:" + answer.hits().get(0).place().imageKey() + "]]";
     }
 }

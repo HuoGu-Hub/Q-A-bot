@@ -71,6 +71,9 @@ public class MapOptions {
     /** 一次地点问答最多列几处 */
     private int answerLimit = 5;
 
+    /** 地点问答的配图（把地图裁一块发给群友） */
+    private Shot shot = new Shot();
+
     /**
      * 地图同步发现内容变化后，自动补一次**首屏档**预热。
      *
@@ -170,5 +173,127 @@ public class MapOptions {
 
     public void setWarmAfterSync(boolean warmAfterSync) {
         this.warmAfterSync = warmAfterSync;
+    }
+
+    public Shot getShot() {
+        return shot;
+    }
+
+    public void setShot(Shot shot) {
+        this.shot = shot;
+    }
+
+    /**
+     * 地图截图的参数（{@code app.kb.map.shot.*}）。
+     *
+     * <h2>为什么这些值要可配</h2>
+     * 它们是"看得清"与"发得出去"之间的取舍：跨度太大点位挤成一团，太小就只剩一片地形纹理；
+     * 输出越大越清楚，但字节数、渲染内存、上传时间都跟着涨。
+     * 换一张地图、换一个群里的人数，合适的值就可能不一样，所以做成配置而不是常量。
+     *
+     * <h2>deadline 为什么是这里最要紧的一项</h2>
+     * 出图要读瓦片，而没缓存过的瓦片要去 wiki 取。这条预算决定了"取不到时群友等多久" ——
+     * 到点就放弃出图、只回文字，把外部依赖的抖动挡在回复路径之外。
+     */
+    public static class Shot {
+
+        /** 总开关。关掉后 {@code [[img:map:...]]} 一律不出图，只当普通文本丢掉 */
+        private boolean enabled = true;
+
+        /** 输出宽度（像素） */
+        private int width = 1280;
+
+        /** 输出高度（像素）。与宽度一起决定视口的长宽比，保证图不变形 */
+        private int height = 800;
+
+        /** 视口跨度下限（坐标单位）。太小会放大成一片马赛克 */
+        private double minSpan = 1200;
+
+        /** 视口跨度上限（坐标单位）。太大就只画目标点，不放地标 */
+        private double maxSpan = 6000;
+
+        /** 四周留白比例。0.15 表示各边留出跨度的 15% */
+        private double padding = 0.15;
+
+        /** 取瓦片的总预算（毫秒）。到点就放弃本次出图 */
+        private long deadlineMs = 2000;
+
+        /** 输出字节上限（KB）。超了先降 JPEG 质量，再缩一档 */
+        private int maxKb = 2048;
+
+        /** JPEG 质量。地图是照片类图像，PNG 会大好几倍 */
+        private int jpegQuality = 85;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getWidth() {
+            return width;
+        }
+
+        public void setWidth(int width) {
+            this.width = Math.max(160, width);
+        }
+
+        public int getHeight() {
+            return height;
+        }
+
+        public void setHeight(int height) {
+            this.height = Math.max(100, height);
+        }
+
+        public double getMinSpan() {
+            return minSpan;
+        }
+
+        public void setMinSpan(double minSpan) {
+            this.minSpan = Math.max(1, minSpan);
+        }
+
+        public double getMaxSpan() {
+            return maxSpan;
+        }
+
+        public void setMaxSpan(double maxSpan) {
+            this.maxSpan = Math.max(1, maxSpan);
+        }
+
+        public double getPadding() {
+            return padding;
+        }
+
+        public void setPadding(double padding) {
+            this.padding = Math.max(0, padding);
+        }
+
+        public long getDeadlineMs() {
+            return deadlineMs;
+        }
+
+        public void setDeadlineMs(long deadlineMs) {
+            this.deadlineMs = Math.max(1, deadlineMs);
+        }
+
+        public int getMaxKb() {
+            return maxKb;
+        }
+
+        public void setMaxKb(int maxKb) {
+            this.maxKb = Math.max(1, maxKb);
+        }
+
+        public int getJpegQuality() {
+            return jpegQuality;
+        }
+
+        public void setJpegQuality(int jpegQuality) {
+            this.jpegQuality = Math.min(100, Math.max(10, jpegQuality));
+        }
     }
 }

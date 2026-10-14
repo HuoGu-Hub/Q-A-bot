@@ -176,6 +176,10 @@ public class SettingsWhitelist {
                     "bool", "开=能搜到中文口语提问（每次调一次向量模型，费用极低）；关=只做本地关键词", true),
             new Item("app.kb.public-search.vector-daily-limit", "语义搜索每日上限", "知识库",
                     "int", "超过后当天自动降级为关键词搜索，不会报错", 800),
+            new Item("app.kb.map.shot.enabled", "地点问答配图", "知识库",
+                    "bool", "关掉后回复里的地图标记一律不出图，只当普通文本丢掉", true),
+            new Item("app.kb.map.shot.deadline-ms", "配图取图预算", "知识库",
+                    "int", "单位毫秒；到点放弃出图、只回文字，等下次预热好了再补", 2000),
 
             // ---------- 机器人身份 ----------
             // ⚠️ 只放**真的有人读**的项 —— 放进来却没人读的配置会变成

@@ -34,6 +34,26 @@ public record PlacePoint(String map, String canvas, String name, List<String> al
     }
 
     /**
+     * 把 {@code ref} 洗成图片标记里能用的**稳定身份**。
+     *
+     * <h2>为什么要洗</h2>
+     * 标记协议不收空白字符，而 wiki 的点位 id 里确实有空格（实测 {@code Tower Ruin}）；
+     * 另外 {@code ref} 里可能出现任何字符，标记一旦不合法就整条被丢掉，且不报错。
+     * 洗的规则是"白名单以外一律换成下划线"，结果对同一份数据是**确定的**。
+     *
+     * <p>反查时不靠字符串反推：{@code MapShotSource} 拿同一个函数洗候选身份再比对，
+     * 所以不存在"还原不回去"。
+     */
+    public static String keyOf(String ref) {
+        return ref == null ? "" : ref.replaceAll("[^A-Za-z0-9._#:/-]", "_");
+    }
+
+    /** 这个点位在图片标记里的身份，见 {@link #keyOf} */
+    public String imageKey() {
+        return keyOf(ref);
+    }
+
+    /**
      * 这个点位是否匹配检索词。**大小写不敏感的子串匹配**。
      *
      * <p>为什么不在这里做分词或模糊匹配：中文提问的切词属于检索层，
