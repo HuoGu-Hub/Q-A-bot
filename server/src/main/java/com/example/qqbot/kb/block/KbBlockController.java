@@ -104,6 +104,24 @@ public class KbBlockController {
         }
     }
 
+    /**
+     * 管理端「新增词条」—— 人只填标题 / 别名 / 正文 / 分类，id 与 docId 由服务层兜住。
+     *
+     * <p>与 {@code /add} 的区别：那条路要调用方自己给英文 id（脚本与导入用）；
+     * 这一条是给人在后台手写一条用的。
+     */
+    @PostMapping("/manual")
+    public ResponseEntity<Map<String, Object>> addManual(@RequestBody Map<String, Object> body) {
+        try {
+            KbBlockAdminService.BlockView view = service.addManual(
+                    str(body.get("title")), str(body.get("text")), str(body.get("alias")),
+                    tags(body.get("tags")));
+            return ResponseEntity.ok(Map.of("ok", true, "block", view));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return bad(e.getMessage());
+        }
+    }
+
     /** 下架 / 恢复一块（保留数据） */
     @PostMapping("/retire")
     public ResponseEntity<Map<String, Object>> retire(@RequestBody Map<String, Object> body) {

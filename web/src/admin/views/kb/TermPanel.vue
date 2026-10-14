@@ -344,12 +344,78 @@ async function chooseExport(format: 'xlsx' | 'tsv') {
   await exportTable(format)
 }
 
+// ==================== 新增词条 ====================
+
+/**
+ * 手写一条词条 —— 一个词条就是一个块。
+ *
+ * id 由后端生成、docId 留空（手写词条之间不是"同一份资料"），所以表单里
+ * 只有人真正知道的东西：标题、别名、分类、正文。
+ */
+const createOpen = ref(false)
+const createSaving = ref(false)
+const createError = ref('')
+const createTitle = ref('')
+const createAlias = ref('')
+const createCategory = ref('')
+const createBody = ref('')
+
+const createCategoryOptions = computed(() => [
+  { value: '', label: '不分类' },
+  ...categories.value.map(c => ({ value: c.name, label: c.label })),
+])
+
+function openCreate() {
+  createTitle.value = ''
+  createAlias.value = ''
+  createCategory.value = ''
+  createBody.value = ''
+  createError.value = ''
+  createOpen.value = true
+}
+function closeCreate() {
+  createOpen.value = false
+}
+
+async function saveCreate() {
+  if (!createTitle.value.trim()) {
+    createError.value = '标题不能为空'
+    return
+  }
+  if (!createBody.value.trim()) {
+    createError.value = '正文不能为空'
+    return
+  }
+  createSaving.value = true
+  createError.value = ''
+  try {
+    const tags = createCategory.value ? [createCategory.value] : []
+    await adminApi.post('/kb/blocks/manual', {
+      title: createTitle.value.trim(),
+      text: createBody.value,
+      alias: createAlias.value.trim(),
+      tags,
+    })
+    createOpen.value = false
+    ok.value = '已新增词条：' + createTitle.value.trim()
+    // 新词条按标题排序，未必落在第一页 —— 直接把搜索设成它，保证看得见
+    q.value = createTitle.value.trim()
+    offset.value = 0
+    await load()
+  } catch (e) {
+    createError.value = describeError(e)
+  } finally {
+    createSaving.value = false
+  }
+}
+
 onMounted(load)
 
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
   // 这几个按钮现在挂在页面顶栏（KbView），面板只保留动作
+  openCreate,
   openExport,
   pickImport,
   clearAllAliases,
@@ -539,6 +605,51 @@ defineExpose({
           <span class="opt-title">纯文本（.tsv）</span>
           <span class="opt-hint">给脚本或调试用：制表符分隔、不带 BOM</span>
         </button>
+      </div>
+    </Modal>
+
+    <Modal :open="createOpen" title="新增词条" width="640px" @close="closeCreate">
+      <Notice v-if="createError" tone="error">{{ createError }}</Notice>
+
+      <div class="sheet-field">
+        <label class="sheet-label" for="new-title">标题</label>
+        <div class="sheet-ctrl">
+          <Input id="new-title" v-model="createTitle" placeholder="例如：苗圃补给" />
+        </div>
+      </div>
+
+      <div class="sheet-field">
+        <label class="sheet-label" for="new-alias">别名</label>
+        <div class="sheet-ctrl">
+          <Input id="new-alias" v-model="createAlias" placeholder="多个用「、」分隔（可留空）" />
+        </div>
+      </div>
+
+      <div class="sheet-field">
+        <label class="sheet-label" for="new-cat">分类</label>
+        <div class="sheet-ctrl">
+          <Select
+            id="new-cat"
+            :model-value="createCategory"
+            :options="createCategoryOptions"
+            aria-label="新词条的分类"
+            @update:model-value="(v: string) => (createCategory = v)"
+          />
+        </div>
+      </div>
+
+      <div class="sheet-field">
+        <label class="sheet-label" for="new-body">正文</label>
+        <div class="sheet-ctrl">
+          <Input id="new-body" v-model="createBody" multiline :rows="10" mono placeholder="这一条词条的正文" />
+        </div>
+      </div>
+
+      <div class="sheet-actions">
+        <Button size="sm" :disabled="createSaving" @click="closeCreate">取消</Button>
+        <Button size="sm" variant="primary" :disabled="createSaving" @click="saveCreate">
+          {{ createSaving ? '新增中…' : '新增' }}
+        </Button>
       </div>
     </Modal>
   </div>

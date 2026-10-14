@@ -183,6 +183,38 @@ public class KbBlockAdminService {
     }
 
     /**
+     * 管理端「新增词条」—— 手写一条，id 由系统生成。
+     *
+     * <p><b>为什么 id 由系统生成</b>：中文标题转不出合法英文 id，而让人先想一个英文 id
+     * 是把内部约定推给使用者。这里生成 {@code manual-<token>}，唯一性当场校验。
+     *
+     * <p><b>为什么 docId 留空</b>：手写词条之间没有"同一份资料"的关系。
+     * 若给它们一个共同的 docId，兄弟块补全会把几条毫不相干的词条当成同一份资料拼进 prompt。
+     */
+    public BlockView addManual(String title, String text, String alias, List<String> tags) {
+        String id = freshManualId();
+        BlockView view = add("", id, title, text, "", tags);
+        if (alias != null && !alias.isBlank()) {
+            BlockView withAlias = updateAlias(id, alias);
+            if (withAlias != null) {
+                view = withAlias;
+            }
+        }
+        return view;
+    }
+
+    /** 生成一个没被占用的手写词条 id —— 只用英文字母、数字与短横线 */
+    private String freshManualId() {
+        for (int i = 0; i < 50; i++) {
+            String id = "manual-" + Long.toUnsignedString(System.nanoTime(), 36);
+            if (store.get(com.example.qqbot.kb.EntryId.of(id)) == null) {
+                return id;
+            }
+        }
+        throw new IllegalStateException("生成词条 id 失败，请重试");
+    }
+
+    /**
      * 只改一条词条的别名 —— **不重算向量**（别名不是正文，改它零成本）。
      *
      * <p>空串表示"回到标题派生的别名"；别名不再有独立的核对状态。

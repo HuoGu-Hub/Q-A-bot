@@ -82,6 +82,7 @@ const propTitle = computed(() => prop.value?.analyzeTitle() ?? '')
         导出收成一个入口，点了先选 xlsx / tsv —— 原来两个并排按钮只差一个后缀。
       -->
       <template v-if="tab === 'terms'">
+        <Button size="sm" variant="primary" :disabled="tmLoading" @click="tm?.openCreate()">新增词条</Button>
         <Button size="sm" :disabled="tmLoading" @click="tm?.openExport()">导出</Button>
         <Button size="sm" :disabled="tmLoading" @click="tm?.pickImport()">导入别名表</Button>
         <Button size="sm" variant="danger" :disabled="tmLoading" @click="tm?.clearAllAliases()">

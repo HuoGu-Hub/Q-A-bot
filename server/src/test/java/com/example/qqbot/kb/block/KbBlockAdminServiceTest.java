@@ -38,6 +38,22 @@ class KbBlockAdminServiceTest {
 
     private static final int DIM = 3;
 
+    @Test
+    @DisplayName("★ 新增词条：id 由系统生成、docId 留空、别名一并写入")
+    void addManualGeneratesIdAndKeepsDocEmpty() {
+        KbBlockAdminService.BlockView v = service.addManual("苗圃补给", "苗圃补给的正文。",
+                "苗圃物资", java.util.List.of("家具"));
+
+        assertThat(v.id()).startsWith("manual-");
+        assertThat(v.docId()).as("docId 留空 —— 手写词条不该被当成同一份资料").isEmpty();
+        assertThat(v.alias()).isEqualTo("苗圃物资");
+        assertThat(v.tags()).containsExactly("家具");
+        assertThat(store.get(EntryId.of(v.id()))).as("真的落库了").isNotNull();
+
+        KbBlockAdminService.BlockView v2 = service.addManual("另一条", "另一条正文。", "", java.util.List.of());
+        assertThat(v2.id()).as("两条手写词条的 id 不撞").isNotEqualTo(v.id());
+    }
+
     @TempDir
     Path base;
 
