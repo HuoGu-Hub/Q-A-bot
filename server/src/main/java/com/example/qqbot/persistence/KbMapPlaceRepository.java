@@ -15,6 +15,12 @@ import java.util.List;
  * <h2>坐标属于哪张画布</h2>
  * {@code page} 指向 {@code kb_map_canvas} 的一行。默认留空表示"用这张地图的主画布" ——
  * 管理员在界面上看到的是哪张底图，落点就该记在哪张画布上。
+ *
+ * <h2>{@code canvas_fp} 是什么</h2>
+ * 标记这个点位时抄下来的**底图几何指纹**（取景窗口 / 切图基准 / 底图身份 / wiki 规范版本）。
+ * 画布一变，同一个 x/y 就会落在底图的另一个地方 —— 而画布是从 wiki 同步来的，
+ * 对方什么时候换图我们不知道。存下指纹是为了让"点位指错地方"这件事**能被发现**，
+ * 详见 {@code kb.map.CanvasFingerprint}。
  */
 @Repository
 public class KbMapPlaceRepository {
@@ -28,27 +34,27 @@ public class KbMapPlaceRepository {
     public record PlaceRow(long id, String map, String page, double x, double y, String name,
                            String aliases, String category, String note, String icon, String color,
                            boolean landmark, int priority, boolean visible,
-                           String createdAt, String updatedAt) {
+                           String canvasFp, String createdAt, String updatedAt) {
     }
 
     private static final String COLUMNS = "id, map, page, x, y, name, aliases, category, note,"
-            + " icon, color, landmark, priority, visible, created_at, updated_at";
+            + " icon, color, landmark, priority, visible, canvas_fp, created_at, updated_at";
 
     private static final Jdbc.RowMapper<PlaceRow> PLACE = r -> new PlaceRow(
             r.longOf("id"), r.str("map"), r.str("page"), r.dbl("x"), r.dbl("y"), r.str("name"),
             r.str("aliases"), r.str("category"), r.str("note"), r.str("icon"), r.str("color"),
             r.intOf("landmark") != 0, r.intOf("priority"), r.intOf("visible") != 0,
-            r.str("created_at"), r.str("updated_at"));
+            r.str("canvas_fp"), r.str("created_at"), r.str("updated_at"));
 
     private static final String INSERT =
             "INSERT INTO kb_map_place (map, page, x, y, name, aliases, category, note, icon, color,"
-                    + " landmark, priority, visible, created_at, updated_at)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                    + " landmark, priority, visible, canvas_fp, created_at, updated_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     private static final String UPDATE =
             "UPDATE kb_map_place SET map=?, page=?, x=?, y=?, name=?, aliases=?, category=?,"
-                    + " note=?, icon=?, color=?, landmark=?, priority=?, visible=?, updated_at=?"
-                    + " WHERE id=?";
+                    + " note=?, icon=?, color=?, landmark=?, priority=?, visible=?, canvas_fp=?,"
+                    + " updated_at=? WHERE id=?";
 
     private final Jdbc jdbc;
 
@@ -76,18 +82,36 @@ public class KbMapPlaceRepository {
                 + " landmark    INTEGER NOT NULL DEFAULT 0,"
                 + " priority    INTEGER NOT NULL DEFAULT 0,"
                 + " visible     INTEGER NOT NULL DEFAULT 1,"
+                + " canvas_fp   TEXT NOT NULL DEFAULT '',"
                 + " created_at  TEXT NOT NULL DEFAULT '',"
                 + " updated_at  TEXT NOT NULL DEFAULT '')");
         // 按地图列点（查看器/管理端每次打开都要），按名字模糊搜（"哪里有铁矿"）
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_place_map ON kb_map_place(map)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_place_name ON kb_map_place(name)");
+        // 老库升级：CREATE TABLE IF NOT EXISTS 对已存在的表**不会补列**，
+        // 不加这一段的话线上库会以 "no such column: canvas_fp" 起步就炸
+        addColumnIfMissing("canvas_fp", "ALTER TABLE kb_map_place ADD COLUMN canvas_fp TEXT NOT NULL DEFAULT ''");
+    }
+
+    /**
+     * 缺列才补。
+     *
+     * <p>SQLite 没有 {@code ADD COLUMN IF NOT EXISTS}，只能先查 {@code PRAGMA table_info}。
+     * 表名与列名都是本类里写死的常量，不来自任何外部输入。
+     */
+    private void addColumnIfMissing(String column, String ddl) {
+        boolean exists = jdbc.query("PRAGMA table_info(kb_map_place)", r -> r.str("name")).stream()
+                .anyMatch(column::equalsIgnoreCase);
+        if (!exists) {
+            jdbc.execute(ddl);
+        }
     }
 
     /** 新增，返回自增主键；失败返回 -1 */
     public long insert(PlaceRow p) {
         return jdbc.insert(INSERT, p.map(), nz(p.page()), p.x(), p.y(), nz(p.name()), nz(p.aliases()),
                 nz(p.category()), nz(p.note()), nz(p.icon()), nz(p.color()),
-                p.landmark() ? 1 : 0, p.priority(), p.visible() ? 1 : 0,
+                p.landmark() ? 1 : 0, p.priority(), p.visible() ? 1 : 0, nz(p.canvasFp()),
                 nz(p.createdAt()), nz(p.updatedAt()));
     }
 
@@ -95,8 +119,19 @@ public class KbMapPlaceRepository {
     public boolean update(PlaceRow p) {
         return jdbc.update(UPDATE, nz(p.map()), nz(p.page()), p.x(), p.y(), nz(p.name()),
                 nz(p.aliases()), nz(p.category()), nz(p.note()), nz(p.icon()), nz(p.color()),
-                p.landmark() ? 1 : 0, p.priority(), p.visible() ? 1 : 0,
+                p.landmark() ? 1 : 0, p.priority(), p.visible() ? 1 : 0, nz(p.canvasFp()),
                 nz(p.updatedAt()), p.id()) > 0;
+    }
+
+    /**
+     * 只更新底图指纹 —— "位置我看过了，没错" 用的。
+     *
+     * <p>单独一个方法而不是走 {@link #update}：确认动作不该碰坐标，
+     * 否则一次误触就会把点位挪到当前鼠标位置那种事就防不住了。
+     */
+    public boolean updateFingerprint(long id, String fingerprint) {
+        return jdbc.update("UPDATE kb_map_place SET canvas_fp = ? WHERE id = ?",
+                nz(fingerprint), id) > 0;
     }
 
     public boolean delete(long id) {

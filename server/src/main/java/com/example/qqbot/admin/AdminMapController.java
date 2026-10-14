@@ -86,6 +86,11 @@ public class AdminMapController {
         cache.put("bytes", st.bytes());
         out.put("tileCache", cache);
 
+        // 底图变了导致点位可能整体偏移 —— "待复核几条"必须一眼可见，
+        // 这是这套机制存在的全部意义（否则它只是个没人看的字段）
+        out.put("anchorPending", places.pendingReview().size());
+        out.put("placeTotal", places.count());
+
         out.put("jobs", jobs.states());
 
         List<Map<String, Object>> canvases = new ArrayList<>();
@@ -268,6 +273,40 @@ public class AdminMapController {
         });
     }
 
+    /**
+     * 底图变过、需要人复核的点位。
+     *
+     * <p>自定义点位存的是世界坐标，而"世界坐标落在底图的哪个像素上"由画布决定 ——
+     * 画布是从 wiki 同步来的。对方换了取景窗口，点位就会整体偏移，
+     * 而且**不会有任何报错**。这个接口就是那个"不会有报错"的替代品。
+     */
+    @GetMapping("/anchor")
+    public Map<String, Object> anchor() {
+        List<MapPlaceService.Review> pending = places.pendingReview();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("total", places.count());
+        out.put("pending", pending.size());
+        out.put("items", pending);
+        return out;
+    }
+
+    /**
+     * "位置我看过了，没错" —— 接受当前底图，把这条点位从待复核里放出来。
+     *
+     * <p>只更新指纹，不碰坐标。真的偏了的话应该走 {@code PUT /places/{id}} 把坐标改对。
+     */
+    @PostMapping("/places/{id}/confirm-anchor")
+    public ResponseEntity<?> confirmAnchor(@PathVariable long id) {
+        return handle(() -> {
+            if (!places.confirmAnchor(id)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "没有 id=" + id + " 的点位，或者它的画布现在找不到"));
+            }
+            return ResponseEntity.ok(Map.of("ok", true));
+        });
+    }
+
     /* ==================== wiki 点位备注 ==================== */
 
     @GetMapping("/notes")
@@ -370,10 +409,11 @@ public class AdminMapController {
         if (b == null) {
             throw new IllegalArgumentException("缺少内容");
         }
+        // canvasFp / anchorOk 由服务层在写入与读出时算，这里只占位
         return new MapPlaceService.Place(id, b.map(), b.page(), num(b.x()), num(b.y()),
                 b.name(), b.aliases() == null ? List.of() : b.aliases(), b.category(),
                 b.note(), b.icon(), b.color(), bool(b.landmark()), num(b.priority()),
-                b.visible() == null || b.visible(), "", "");
+                b.visible() == null || b.visible(), "", true, "", "");
     }
 
     private static boolean bool(Boolean b) {

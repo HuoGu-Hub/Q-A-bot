@@ -177,6 +177,33 @@ export interface JobState {
   summary: string
 }
 
+/**
+ * 一条「底图变了、需要人复核」的自定义点位。
+ *
+ * <p>自定义点位存的是世界坐标，而"世界坐标落在底图的哪个像素上"由画布决定 ——
+ * 画布是从 wiki 同步来的。对方换了取景窗口，点位就会整体偏移，且不会有任何报错。
+ * 这个结构就是那个"不会有报错"的替代品。
+ */
+export interface AnchorReview {
+  id: number
+  map: string
+  page: string
+  name: string
+  x: number
+  y: number
+  storedFp: string
+  currentFp: string
+  /** 人话说明变了哪一块，直接显示给管理员 */
+  reason: string
+}
+
+export interface AnchorReport {
+  ok: boolean
+  total: number
+  pending: number
+  items: AnchorReview[]
+}
+
 export interface MapStatus {
   ok: boolean
   enabled: boolean
@@ -185,6 +212,9 @@ export interface MapStatus {
   mapStoreAvailable: boolean
   placesAvailable: boolean
   notesAvailable: boolean
+  /** 底图变过、需要人复核的点位数。这是这套机制存在的全部意义，必须一眼可见 */
+  anchorPending: number
+  placeTotal: number
   tileCache: { enabled: boolean; root: string; files: number; bytes: number }
   jobs: Record<string, JobState>
   canvases: {

@@ -31,7 +31,7 @@ import Tabs from '@shared/ui/Tabs.vue'
 import { toast } from '@shared/ui/toast'
 import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import type { Catalog, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
+import type { AnchorReport, AnchorReview, Catalog, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 
 /** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
@@ -104,6 +104,14 @@ const categoryOptions = computed(() =>
 )
 const localPlaces = computed(() => markers.value.filter((m) => m.source === 'admin'))
 
+/**
+ * 底图变过、需要人复核的点位。
+ *
+ * <p>坐标不会自己变，变的是"世界坐标落在底图的哪个像素上"。所以它不会报错、
+ * 不会消失 —— 只会悄悄指错地方。这个清单就是让那件事**可见**。
+ */
+const anchor = ref<AnchorReport | null>(null)
+
 function blankForm(): PlaceInput & { id: number } {
   return {
     id: 0, map: mapName.value, page: '', x: 0, y: 0, name: '', aliases: [], category: 'resource',
@@ -122,6 +130,7 @@ async function boot() {
     mapName.value = first ? first.map : ''
     if (mapName.value) await loadMarkers()
     await loadStatus()
+    await loadAnchor()
     /*
      * 数据齐了**直接灌一次**图标表，不等 watcher。
      *
@@ -148,6 +157,39 @@ async function loadMarkers() {
 
 async function loadStatus() {
   status.value = await adminApi.get<MapStatus>('/map/status')
+}
+
+async function loadAnchor() {
+  try {
+    anchor.value = await adminApi.get<AnchorReport>('/map/anchor')
+  } catch {
+    // 读不到就当没有 —— 它是一个提示，不该让整页打不开
+    anchor.value = null
+  }
+}
+
+/** 跳到某条待复核的点位：换地图 → 换画布 → 选中它，面板自己会展开 */
+async function jumpToAnchor(a: AnchorReview) {
+  if (a.map !== mapName.value) {
+    mapName.value = a.map
+    await loadMarkers()
+  }
+  const idx = (currentMap.value?.canvases ?? []).findIndex((c) => c.page === a.page)
+  if (idx >= 0) canvasIndex.value = idx
+  await nextTick()
+  const m = markers.value.find((x) => x.id === 'place:' + a.id)
+  if (m) onPick([m])
+}
+
+/** 「位置我看过了，没错」—— 只接受当前底图，不动坐标 */
+async function confirmAnchor(id: number) {
+  try {
+    await adminApi.post('/map/places/' + id + '/confirm-anchor')
+    toast('已确认位置无误')
+    await loadAnchor()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
 }
 
 onMounted(boot)
@@ -281,6 +323,7 @@ async function savePlace() {
     draft.value = null
     await loadMarkers()
     await loadStatus()
+    await loadAnchor()
   } catch (e) {
     toast(describeError(e), 'error')
   } finally {
@@ -297,6 +340,7 @@ async function deletePlace() {
     form.value = blankForm()
     selected.value = null
     await loadMarkers()
+    await loadAnchor()
   } catch (e) {
     toast(describeError(e), 'error')
   }
@@ -407,8 +451,10 @@ async function pollStatus() {
     } catch { /* 状态查失败不该打断轮询本身 */ }
     const jobs = status.value?.jobs ?? {}
     const running = Object.values(jobs).some((j) => j.running)
-    if (!running) return
+    if (!running) break            // ⚠️ 不能 return：下面那步刷新就永远跑不到
   }
+  // 同步可能把画布定义换掉了 —— 任务跑完顺手刷新一次待复核清单
+  await loadAnchor()
 }
 
 function fmtBytes(n: number): string {
@@ -522,8 +568,17 @@ async function saveLayers(keys: string[] | null) {
     await adminApi.put('/map/layers', { map: cur.map, groups: keys })
     toast(keys === null ? '已恢复为未配置' : '已保存，公开地图页下次打开就按这个显示')
     await loadLayers()
-    // 标注页显示的图层就是公开站的默认，改完要立刻反映出来
+    /*
+     * 重拉目录，再按新的默认图层刷新。
+     *
+     * 顺序很关键：syncVisibleGroups() 读的是 catalog 里的 defaultGroups，
+     * 不先重拉的话它读到的还是保存前的旧值 ——
+     * 表现就是"保存了但地图没变，还得手动刷新一次"。
+     */
+    catalog.value = await adminApi.get<Catalog>('/map/catalog')
     syncVisibleGroups()
+    await nextTick()
+    mapCanvas.value?.setGroupIcons(groupIcons.value)
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -719,6 +774,28 @@ async function saveLayers(keys: string[] | null) {
 
       <!-- ==================== 点位列表 ==================== -->
       <div v-show="tab === 'places'" class="table-wrap">
+        <!--
+          底图变了导致点位可能整体偏移。
+          **坐标不会变、也不会报错**，只会悄悄指错地方 —— 所以这里必须主动喊一声。
+        -->
+        <div v-if="anchor && anchor.pending > 0" class="anchor-warn">
+          <div class="anchor-head">
+            <Icon name="alert" :size="16" />
+            <strong>底图变了，{{ anchor.pending }} 个点位要看一眼</strong>
+          </div>
+          <p class="hint">
+            它们的坐标没动，但所在底图的取景窗口或切图方式变了 —— 落点可能已经整体偏移。
+            点名字跳过去，把点拖到正确位置后保存；确认位置没错就点「位置无误」。
+          </p>
+          <ul class="anchor-list">
+            <li v-for="a in anchor.items" :key="a.id">
+              <button type="button" class="anchor-name" @click="jumpToAnchor(a)">{{ a.name }}</button>
+              <span class="anchor-why">{{ a.reason }}</span>
+              <Button size="sm" @click="confirmAnchor(a.id)">位置无误</Button>
+            </li>
+          </ul>
+        </div>
+
         <table class="tbl">
           <thead>
             <tr>
@@ -749,6 +826,20 @@ async function saveLayers(keys: string[] | null) {
         width="720px"
         @close="defaultsOpen = false"
       >
+        <!-- 动作放标题栏：分组有 43 条，放内容底部就得滚到底才点得到保存 -->
+        <template #actions>
+          <Button
+            variant="primary"
+            size="sm"
+            :disabled="layerSaving || !layerCurrent"
+            @click="saveLayers([...layerOn])"
+          >{{ layerSaving ? '保存中…' : '保存' }}</Button>
+          <Button
+            size="sm"
+            :disabled="layerSaving || !layerCurrent"
+            @click="saveLayers(null)"
+          >恢复未配置</Button>
+        </template>
       <div class="defaults">
         <p class="hint">
           公开地图页首屏默认打开哪些分组。分组多的时候全开会密密麻麻一片，
@@ -815,17 +906,6 @@ async function saveLayers(keys: string[] | null) {
               </li>
             </ul>
 
-            <div class="layer-actions">
-              <Button
-                variant="primary"
-                size="sm"
-                :disabled="layerSaving"
-                @click="saveLayers([...layerOn])"
-              >{{ layerSaving ? '保存中…' : '保存' }}</Button>
-              <Button size="sm" :disabled="layerSaving" @click="saveLayers(null)">
-                恢复未配置
-              </Button>
-            </div>
           </div>
         </template>
 
@@ -843,6 +923,14 @@ async function saveLayers(keys: string[] | null) {
           <p class="kv"><span>地图库</span>{{ status?.mapStoreAvailable ? '可用' : '不可用' }}</p>
           <p class="kv"><span>点位存储</span>{{ status?.placesAvailable ? '可用' : '不可用' }}</p>
           <p class="kv"><span>备注存储</span>{{ status?.notesAvailable ? '可用' : '不可用' }}</p>
+          <!-- 底图变了导致点位可能偏移 —— 这个数必须是零，否则就是有活要干 -->
+          <p class="kv">
+            <span>待复核点位</span>
+            <span v-if="status && status.anchorPending > 0" class="anchor-bad">
+              {{ status.anchorPending }} / {{ status.placeTotal }} 条（底图变过）
+            </span>
+            <span v-else>无</span>
+          </p>
           <p class="kv">
             <span>瓦片缓存</span>
             <template v-if="status">
@@ -1078,6 +1166,53 @@ async function saveLayers(keys: string[] | null) {
 .chip.on { border-color: var(--ember); color: var(--ember-hot); background: var(--ember-veil); }
 
 .table-wrap { overflow-x: auto; background: var(--stone-300); border-radius: var(--r-md); box-shadow: var(--bevel-raised); }
+
+/* ---------- 待复核点位：底图变了导致点位可能偏移 ---------- */
+
+.anchor-warn {
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--warn-bg, rgba(207, 163, 52, 0.12));
+  border: 1px solid var(--warn, #cfa334);
+}
+
+.anchor-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warn, #cfa334);
+  margin-bottom: 4px;
+}
+
+.anchor-list {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.anchor-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.anchor-name {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline dotted;
+}
+
+.anchor-why { flex: 1; color: var(--ink-dim); font-size: 12px; }
+
+.anchor-bad { color: var(--warn, #cfa334); }
 .tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .tbl.small { font-size: var(--fs-xs); }
 .tbl th, .tbl td { text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--edge-soft); }

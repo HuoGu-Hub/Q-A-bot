@@ -9,8 +9,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -43,10 +45,15 @@ public class MapPlaceService {
      * 一个自定义点位（落库/读出一致）。
      *
      * <p>{@code id <= 0} 表示"还没入库" —— 新增时用这个约定，不需要第二个类型。
+     *
+     * <p>{@code canvasFp} 是标记它时**底图的几何指纹**，{@code anchorOk} 是"这份指纹
+     * 与当前底图是否一致"的即时判断（不落库，每次读的时候算）。两者见
+     * {@link CanvasFingerprint} 与 {@link #pendingReview()}。
      */
     public record Place(long id, String map, String page, double x, double y, String name,
                         List<String> aliases, String category, String note, String icon,
                         String color, boolean landmark, int priority, boolean visible,
+                        String canvasFp, boolean anchorOk,
                         String createdAt, String updatedAt) {
 
         /** 转成核心认识的地点 —— 检索与相对位置描述用的是这个 */
@@ -56,12 +63,23 @@ public class MapPlaceService {
         }
     }
 
+    /**
+     * 一条"底图变了，需要人复核"的点位。
+     *
+     * @param reason 人话说明变了哪一块，直接显示给管理员
+     */
+    public record Review(long id, String map, String page, String name, double x, double y,
+                         String storedFp, String currentFp, String reason) {
+    }
+
     private final KbMapPlaceRepository repo;
+    private final KbMapStore mapStore;
 
     private volatile boolean available;
 
-    public MapPlaceService(KbMapPlaceRepository repo) {
+    public MapPlaceService(KbMapPlaceRepository repo, KbMapStore mapStore) {
         this.repo = repo;
+        this.mapStore = mapStore;
     }
 
     @PostConstruct
@@ -93,7 +111,8 @@ public class MapPlaceService {
             return List.of();
         }
         try {
-            return repo.byMap(map, onlyVisible).stream().map(MapPlaceService::fromRow).toList();
+            Fingerprints idx = currentFingerprints();
+            return repo.byMap(map, onlyVisible).stream().map(r -> fromRow(r, idx)).toList();
         } catch (Exception e) {
             log.warn("[MAP-PLACE] 读取失败：{}", e.getMessage());
             return List.of();
@@ -106,7 +125,7 @@ public class MapPlaceService {
         }
         try {
             KbMapPlaceRepository.PlaceRow row = repo.byId(id);
-            return row == null ? null : fromRow(row);
+            return row == null ? null : fromRow(row, currentFingerprints());
         } catch (Exception e) {
             log.warn("[MAP-PLACE] 读取 {} 失败：{}", id, e.getMessage());
             return null;
@@ -118,11 +137,117 @@ public class MapPlaceService {
             return List.of();
         }
         try {
+            Fingerprints idx = currentFingerprints();
             return repo.search(term.strip(), onlyVisible, limit).stream()
-                    .map(MapPlaceService::fromRow).toList();
+                    .map(r -> fromRow(r, idx)).toList();
         } catch (Exception e) {
             log.warn("[MAP-PLACE] 搜索失败：{}", e.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * 底图变过的点位 —— 标它的时候底图是那样，现在不是了。
+     *
+     * <p>这是 {@link CanvasFingerprint} 的全部意义所在：它**不能**把点位挪回正确位置，
+     * 但能让"这个点现在指错地方了"这件事出现在管理端，而不是安静地错下去。
+     */
+    public List<Review> pendingReview() {
+        if (!available) {
+            return List.of();
+        }
+        try {
+            Fingerprints idx = currentFingerprints();
+            if (!idx.usable()) {
+                // 画布一张都读不到（地图存储没起来）—— 这时候判"全部待复核"只会制造恐慌
+                return List.of();
+            }
+            List<Review> out = new ArrayList<>();
+            for (KbMapPlaceRepository.PlaceRow r : repo.byMap(null, false)) {
+                String current = idx.forPlace(r.map(), r.page());
+                if (anchorOk(r.canvasFp(), current)) {
+                    continue;
+                }
+                out.add(new Review(r.id(), r.map(), r.page(), r.name(), r.x(), r.y(),
+                        r.canvasFp(), current, CanvasFingerprint.describe(r.canvasFp(), current)));
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("[MAP-PLACE] 复核清单读取失败：{}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * "位置我看过了，没错" —— 把底图指纹更新成当前这份。
+     *
+     * <p>只动指纹、不动坐标：确认动作不该有能力挪动点位。
+     *
+     * @return false 表示这条点位不存在，或者它的画布现在根本找不到（那就不是"确认无误"能解决的）
+     */
+    public boolean confirmAnchor(long id) {
+        if (!available) {
+            return false;
+        }
+        try {
+            KbMapPlaceRepository.PlaceRow row = repo.byId(id);
+            if (row == null) {
+                return false;
+            }
+            String current = currentFingerprints().forPlace(row.map(), row.page());
+            if (current.isEmpty()) {
+                return false;
+            }
+            return repo.updateFingerprint(id, current);
+        } catch (Exception e) {
+            log.warn("[MAP-PLACE] 确认底图 {} 失败：{}", id, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 点位记下的指纹与当前底图是否一致。
+     *
+     * <p>当前指纹为空 = 画布找不到（页面被改名或删除）→ 一律算不一致，需要人看一眼。
+     */
+    private static boolean anchorOk(String stored, String current) {
+        return !current.isEmpty() && current.equals(trim(stored));
+    }
+
+    /**
+     * 当前所有画布的指纹索引。
+     *
+     * <p>一次算好而不是每个点位扫一遍画布表：管理端一次列全表就有几百个点。
+     */
+    private Fingerprints currentFingerprints() {
+        List<KbMapStore.Canvas> canvases = mapStore.canvases();
+        Map<String, String> fpOfPage = new LinkedHashMap<>();
+        for (KbMapStore.Canvas c : canvases) {
+            fpOfPage.put(trim(c.page()), CanvasFingerprint.of(c));
+        }
+        return new Fingerprints(WikiPlaceDirectory.canvasIndex(canvases),
+                WikiPlaceDirectory.primaryCanvasOf(canvases), fpOfPage);
+    }
+
+    /** 指纹索引三件套 —— 只为了把"算一次"表达清楚 */
+    private record Fingerprints(Map<String, String> canvasOfPage, Map<String, String> primaryOfMap,
+                                Map<String, String> fpOfPage) {
+
+        /** 画布表读不到东西时不做任何判断（否则会一次性报出满屏"待复核"） */
+        boolean usable() {
+            return !fpOfPage.isEmpty();
+        }
+
+        /**
+         * 一个点位真正落在哪张画布上、那张画布现在的指纹。
+         *
+         * <p>⚠️ 解析规则必须与渲染端（{@code MapViewService}）**逐字一致**：
+         * 规则一旦不同，这里比的就是另一张画布，那比不检查更糟。
+         */
+        String forPlace(String map, String page) {
+            String canvas = canvasOfPage.getOrDefault(trim(page),
+                    primaryOfMap.getOrDefault(trim(map), ""));
+            return fpOfPage.getOrDefault(canvas, "");
         }
     }
 
@@ -131,10 +256,12 @@ public class MapPlaceService {
         requireAvailable();
         Place clean = validate(input, true);
         String now = KbMapStore.now();
+        // 记下"标它的时候底图长什么样" —— 以后画布变了，这个点会被列进待复核
+        String fp = currentFingerprints().forPlace(clean.map(), clean.page());
         long id = repo.insert(new KbMapPlaceRepository.PlaceRow(0, clean.map(), clean.page(),
                 clean.x(), clean.y(), clean.name(), joinAliases(clean.aliases()), clean.category(),
                 clean.note(), clean.icon(), clean.color(), clean.landmark(), clean.priority(),
-                clean.visible(), now, now));
+                clean.visible(), fp, now, now));
         if (id <= 0) {
             throw new IllegalStateException("写入自定义点位失败");
         }
@@ -151,10 +278,13 @@ public class MapPlaceService {
             return null;
         }
         Place clean = validate(input, false);
+        // 人在界面上刚确认过位置，所以顺手把指纹刷成当前这份 ——
+        // 否则"改了坐标"和"底图变了"两件事会一直同时挂着这个点
+        String fp = currentFingerprints().forPlace(clean.map(), clean.page());
         boolean ok = repo.update(new KbMapPlaceRepository.PlaceRow(clean.id(), clean.map(),
                 clean.page(), clean.x(), clean.y(), clean.name(), joinAliases(clean.aliases()),
                 clean.category(), clean.note(), clean.icon(), clean.color(), clean.landmark(),
-                clean.priority(), clean.visible(), "", KbMapStore.now()));
+                clean.priority(), clean.visible(), fp, "", KbMapStore.now()));
         return ok ? get(clean.id()) : null;
     }
 
@@ -236,13 +366,15 @@ public class MapPlaceService {
                 PlaceCategory.normalize(p.category()), note,
                 clip(trim(p.icon()), MAX_ICON), clip(trim(p.color()), MAX_COLOR),
                 p.landmark(), Math.max(0, Math.min(100, p.priority())), p.visible(),
-                p.createdAt(), p.updatedAt());
+                p.canvasFp(), p.anchorOk(), p.createdAt(), p.updatedAt());
     }
 
-    private static Place fromRow(KbMapPlaceRepository.PlaceRow r) {
+    private static Place fromRow(KbMapPlaceRepository.PlaceRow r, Fingerprints idx) {
+        String current = idx.usable() ? idx.forPlace(r.map(), r.page()) : "";
         return new Place(r.id(), r.map(), r.page(), r.x(), r.y(), r.name(),
                 splitAliases(r.aliases()), PlaceCategory.normalize(r.category()), r.note(),
                 r.icon(), r.color(), r.landmark(), r.priority(), r.visible(),
+                r.canvasFp(), !idx.usable() || anchorOk(r.canvasFp(), current),
                 r.createdAt(), r.updatedAt());
     }
 
