@@ -1,5 +1,6 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.media.ImageMarkers;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.invocation.InvocationContext;
@@ -46,7 +47,9 @@ public class KbLookupTool {
             + "知识库正文是英文的（来自英文 wiki）：中文关键词若结果不佳，请把关键词换成游戏内的英文名再查一次，"
             + "最多重试两次；两次都查不到才说资料里没查到。"
             + "另外：命中资料里若出现了对回答有帮助的材料、地点、技能（例如配方里的铁、布料），"
-            + "可以再查它们怎么获得，这样能给出更完整的答案；但要克制，只在明显有用时才查。")
+            + "可以再查它们怎么获得，这样能给出更完整的答案；但要克制，只在明显有用时才查。"
+            + "还有：命中资料的正文末尾若出现 [[img:...]] 这样的图片标记，那说明这一块有配图，"
+            + "把它原样抄进回答里就会变成一张图；没有标记就不要自己拼。")
     public String lookup(@P("要查的词或问题") String query, InvocationContext ctx) {
         if (query == null || query.isBlank()) {
             return "没有提供要查的内容。";
@@ -76,11 +79,12 @@ public class KbLookupTool {
             if (titleHit) {
                 titleHits++;
             }
+            // 正文里的配图标记提到块尾单独一行，模型照抄时不容易漏（与资料注入同一处理）
             sb.append("【").append(h.entry().title()).append("】")
                     .append(" 相关度 ").append(String.format("%.3f", h.score()))
                     .append(" 来源 ").append(h.source())
                     .append(titleHit ? " 标题命中" : "")
-                    .append("\n").append(h.entry().text()).append("\n\n");
+                    .append("\n").append(ImageMarkers.hoistSingleMarker(h.entry().text())).append("\n\n");
         }
         sb.append("—— 共 ").append(n).append(" 条，最高相关度 ").append(String.format("%.3f", best))
                 .append("，标题命中 ").append(titleHits).append(" 条。");

@@ -28,6 +28,9 @@ import java.util.regex.Pattern;
  */
 public final class ImageMarkers {
 
+    /** 标记的前缀。它是协议的一部分，提示词、解析、重建标记都用这一个常量 */
+    public static final String PREFIX = "[[img:";
+
     /** 标记本体。key 里不许有方括号，避免贪婪吞掉正文 */
     private static final Pattern MARKER = Pattern.compile("\\[\\[img:([^\\[\\]]*)\\]\\]");
 
@@ -84,7 +87,7 @@ public final class ImageMarkers {
     }
 
     public static Parsed parse(String raw) {
-        if (raw == null || raw.isEmpty() || raw.indexOf("[[img:") < 0) {
+        if (raw == null || raw.isEmpty() || raw.indexOf(PREFIX) < 0) {
             return new Parsed(raw == null ? "" : raw, List.of());
         }
         Matcher m = MARKER.matcher(raw);
@@ -110,6 +113,50 @@ public final class ImageMarkers {
             cleaned = cleaned.replaceAll("[ \t]{2,}", " ");
         }
         return new Parsed(cleaned.strip(), List.copyOf(keys));
+    }
+
+    /**
+     * 把**唯一**的那个标记挪到正文末尾，单独一行。
+     *
+     * <h2>为什么值得做</h2>
+     * 资料块与工具结果的正文是模型要改写的东西。标记夹在句子中间时，
+     * 模型改写一遍正文就很容易把它<b>整句重写掉</b> —— 表现是"资料里明明有图，
+     * 机器人却从来不发"，而且不报错。提到末尾单独一行，它就成了一个显眼的、
+     * 可以不改写的东西。
+     *
+     * <h2>为什么只挪唯一的一个</h2>
+     * 一个块讲一件事、配一张图，这是绝大多数情况。出现两个及以上标记时
+     * <b>一个都不动</b>：那说明图与正文的对应关系有顺序（A 的图、B 的图），
+     * 挪到末尾就把对应关系弄丢了，模型可能把 B 的图配给 A，同样看不出来。
+     *
+     * @return 标记数不是 1、或者本来就在末尾时，原样返回
+     */
+    public static String hoistSingleMarker(String text) {
+        if (text == null || text.isEmpty() || text.indexOf(PREFIX) < 0) {
+            return text;
+        }
+        Matcher m = MARKER.matcher(text);
+        List<String> keys = new ArrayList<>();
+        int[] span = null;
+        while (m.find()) {
+            String key = m.group(1).trim();
+            if (isWellFormedKey(key)) {
+                keys.add(key);
+                span = new int[]{m.start(), m.end()};
+            }
+        }
+        if (keys.size() != 1 || span == null) {
+            return text;
+        }
+        String before = text.substring(0, span[0]);
+        String after = text.substring(span[1]);
+        // 已经"单独占一行且在最后"就原样返回；贴在句尾的（"…砍刀。[[img:x]]"）仍要拆成两行
+        if (after.isBlank() && (before.isEmpty() || before.endsWith("\n"))) {
+            return text;
+        }
+        String body = (before + after).strip().replaceAll("[ \\t]{2,}", " ");
+        String marker = PREFIX + keys.get(0) + "]]";
+        return body.isEmpty() ? marker : body + "\n" + marker;
     }
 
     private ImageMarkers() {

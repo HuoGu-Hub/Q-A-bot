@@ -88,4 +88,51 @@ class ImageMarkersTest {
         assertThat(p.keys()).containsExactly("kb:a");
         assertThat(p.hasKeys()).isTrue();
     }
+
+    @Test
+    @DisplayName("★ 单个标记被提到正文末尾单独一行 —— 模型改写正文时最不容易漏")
+    void hoistsSingleMarkerToEnd() {
+        String hoisted = ImageMarkers.hoistSingleMarker(
+                "一把涂满酸液的砍刀。[[img:kb:acid-cleaver]]\n获取：由拾荒者掉落。");
+
+        assertThat(hoisted).isEqualTo("一把涂满酸液的砍刀。\n获取：由拾荒者掉落。\n[[img:kb:acid-cleaver]]");
+    }
+
+    @Test
+    @DisplayName("已经在末尾的标记：原样返回，不来回搬")
+    void keepsMarkerAlreadyAtEnd() {
+        String text = "正文\n[[img:kb:a]]";
+
+        assertThat(ImageMarkers.hoistSingleMarker(text)).isEqualTo(text);
+    }
+
+    @Test
+    @DisplayName("★ 两个标记一个都不挪 —— 挪了就把「哪张图配哪一段」弄丢了")
+    void doesNotHoistWhenMultipleMarkers() {
+        String text = "甲：[[img:kb:a]] 乙：[[img:kb:b]]";
+
+        assertThat(ImageMarkers.hoistSingleMarker(text)).isEqualTo(text);
+    }
+
+    @Test
+    @DisplayName("没有标记：一个字都不改")
+    void hoistWithoutMarkerIsNoop() {
+        String text = "就是一句 普通的话";
+
+        assertThat(ImageMarkers.hoistSingleMarker(text)).isEqualTo(text);
+    }
+
+    @Test
+    @DisplayName("只有标记时，挪完还是那一行")
+    void hoistMarkerOnly() {
+        assertThat(ImageMarkers.hoistSingleMarker("[[img:kb:a]]")).isEqualTo("[[img:kb:a]]");
+    }
+
+    @Test
+    @DisplayName("不合法的标记不参与「唯一标记」的判断，也不会被搬到末尾")
+    void hoistIgnoresMalformedMarker() {
+        String text = "正文 [[img:没来源]] [[img:kb:a]]";
+
+        assertThat(ImageMarkers.hoistSingleMarker(text)).endsWith("[[img:kb:a]]");
+    }
 }

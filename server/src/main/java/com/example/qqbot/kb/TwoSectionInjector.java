@@ -1,5 +1,6 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.media.ImageMarkers;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -39,13 +40,19 @@ public class TwoSectionInjector implements KbKnowledgeInjector {
         return sb.toString().strip();
     }
 
-    /** 把命中块按 {@code [n] 标题 / url / 正文} 渲染 */
+    /**
+     * 把命中块按 {@code [n] 标题 / url / 正文} 渲染。
+     *
+     * <p>正文里的配图标记会被**提到块尾单独一行**（见 {@link ImageMarkers#hoistSingleMarker}）：
+     * 模型要改写正文，标记夹在句子中间最容易被顺手重写掉 ——
+     * 那样"资料里明明有图，机器人却从来不发"，而且不报错。
+     */
     private static void appendHits(StringBuilder sb, List<KbRetriever.Hit> hits) {
         int n = 1;
         for (KbRetriever.Hit hit : hits) {
             sb.append('[').append(n++).append("] ").append(hit.entry().title()).append('\n')
                     .append(hit.entry().url()).append('\n')
-                    .append(hit.entry().text()).append("\n\n");
+                    .append(ImageMarkers.hoistSingleMarker(hit.entry().text())).append("\n\n");
         }
     }
 
