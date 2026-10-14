@@ -22,7 +22,6 @@ import Button from '@shared/ui/Button.vue'
 import Input from '@shared/ui/Input.vue'
 import Tag from '@shared/ui/Tag.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import { categoryColor } from '@shared/map/palette'
 import type { Catalog, LocateHit, LocateResult, MapSpec, Marker, Relative } from '@shared/map/types'
 
 const route = useRoute()
@@ -85,16 +84,16 @@ const categoryLabel = computed(() => {
 })
 
 /**
- * 图例：当前画布上**实际出现过**的分类。
+ * 分布：当前画布上**实际可见**的分类与数量。
  *
- * <p>只列出现过的，不列一份固定的七类清单 —— 空图例会让人以为地图坏了。
- * 它回答的是"这个颜色是什么意思"；具体是哪个分组，看下面图层里的图标。
+ * <p>不配色块了。原来每个分类带一个颜色圆点，是为了解释地图上的兜底圆点；
+ * 现在点位一律画分组图标、缩得太小就不画，颜色在地图上不再出现，
+ * 再摆一排色块等于指着一个地图上不存在的东西让人对照。
  */
 const legend = computed(() => {
   const counts = new Map<string, number>()
   for (const m of markersOnCanvas.value) {
-    // 只数**当前可见**的点：图层关掉的分类不该还挂在图例上，
-    // 否则图例在描述一个地图上并不存在的分布
+    // 只数可见的点：图层关掉的分类不该还挂在上面
     const on = m.source === 'admin'
       ? visibleCategories.value.has(m.category)
       : visibleGroups.value.has(m.group)
@@ -102,9 +101,7 @@ const legend = computed(() => {
     counts.set(m.category, (counts.get(m.category) ?? 0) + 1)
   }
   return [...counts.entries()]
-    .map(([key, count]) => ({
-      key, count, color: categoryColor(key), label: categoryLabel.value.get(key) ?? key,
-    }))
+    .map(([key, count]) => ({ key, count, label: categoryLabel.value.get(key) ?? key }))
     .sort((a, b) => b.count - a.count)
 })
 
@@ -334,23 +331,10 @@ function fmt(n: number): string {
               <Icon name="close" :size="15" />
             </button>
           </div>
-        <div class="block">
-          <h2 class="block-title">地图</h2>
+        <!-- 一张地图有多个画布时才需要切换；地图本身不做切换入口 -->
+        <div v-if="(currentMap?.canvases.length ?? 0) > 1" class="block">
+          <h2 class="block-title">图层</h2>
           <div class="chips">
-            <button
-              v-for="m in catalog.maps"
-              :key="m.map"
-              type="button"
-              class="chip"
-              :class="{ on: m.map === mapName }"
-              :aria-pressed="m.map === mapName"
-              @click="mapName = m.map"
-            >
-              {{ m.label }}
-              <span class="chip-n">{{ fmt(m.markerCount) }}</span>
-            </button>
-          </div>
-          <div v-if="(currentMap?.canvases.length ?? 0) > 1" class="chips sub">
             <button
               v-for="(c, i) in currentMap?.canvases"
               :key="c.page"
@@ -394,17 +378,16 @@ function fmt(n: number): string {
         </div>
 
         <div v-if="legend.length" class="block">
-          <h2 class="block-title">图例</h2>
+          <h2 class="block-title">分布</h2>
           <ul class="legend">
             <li v-for="c in legend" :key="c.key">
-              <span class="dot" :style="{ background: c.color }" />
               <span class="layer-name">{{ c.label }}</span>
               <span class="layer-n">{{ c.count }}</span>
             </li>
           </ul>
           <p class="hint">
-            地图上每个点位画的是它所属分组的图标；颜色是分类，缩小时作为兜底。
-            带灵火外圈的是本站补充的点位。
+            每个点位画的是它所属分组的图标，具体分组见下面的图层列表。
+            带灵火外圈的是本站补充的点位；缩得太小时不画点位，放大即可看到。
           </p>
         </div>
 
@@ -755,10 +738,14 @@ function fmt(n: number): string {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  /* 四周留白之后它是一块"嵌在页面里的画面"，圆角与投影就是它的边框 */
+  /*
+   * 这里**不铺任何底色、不加投影**。
+   *
+   * 之前用的是 wiki 给的 backdrop 色（#2e2e2c）加一层深底 —— 结果画布区域是一块
+   * 比页面更亮的方块，四周留白一放大就非常明显，看着像盖了张蒙版。
+   * 现在画布与页面同底：瓦片没盖到的地方直接露出页面背景，边界由地图自身决定。
+   */
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-lift), var(--bevel-shelf);
-  background: var(--stone-void);
 }
 /* 缩放按钮放左下：左上留给控制栏，右下留给详情卡 */
 .stage-tools {
