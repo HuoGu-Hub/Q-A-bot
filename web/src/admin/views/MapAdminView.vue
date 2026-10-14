@@ -132,6 +132,32 @@ watch(groupIcons, () => mapCanvas.value?.setGroupIcons(groupIcons.value), { flus
 
 /* ==================== 地图交互 ==================== */
 
+/**
+ * 侧栏是否展开。**默认收起**。
+ *
+ * <p>标注是"偶尔做一次"的活，常驻侧栏等于天天占着四分之一屏幕看一个空表单。
+ * 收起之后地图是主角，要标点时才把面板拉出来 —— 和公开站的侧栏同一套逻辑。
+ */
+const panelOpen = ref(false)
+
+/** 从顶部按钮进来：清空表单，进入待落点状态 */
+function startNewPlace() {
+  selected.value = null
+  draft.value = null
+  form.value = { ...blankForm(), map: mapName.value, page: currentCanvas.value?.page ?? '' }
+  noteForm.value = { alias: '', note: '', category: '', landmark: false, priority: 0, hidden: false }
+  panelOpen.value = true
+  mode.value = 'edit'
+}
+
+/** 收起面板：顺手退回浏览模式，免得收起后点空白还在悄悄落点 */
+function closePanel() {
+  panelOpen.value = false
+  mode.value = 'view'
+  selected.value = null
+  draft.value = null
+}
+
 function onPick(m: Marker | null) {
   if (!m) {
     selected.value = null
@@ -139,6 +165,8 @@ function onPick(m: Marker | null) {
   }
   selected.value = m
   highlight.value = null
+  // 点到点位就把面板拉出来：这时候用户要看/改的就是它
+  panelOpen.value = true
   if (m.source === 'admin') {
     form.value = {
       id: Number(m.id.replace('place:', '')),
@@ -162,6 +190,7 @@ function onPickedPoint(x: number, y: number) {
   draft.value = { x, y }
   form.value = { ...blankForm(), map: mapName.value, page: currentCanvas.value?.page ?? '', x, y }
   selected.value = null
+  panelOpen.value = true
 }
 
 /** 从列表跳到一个点位：先切到它所在的画布，再选中它 */
@@ -440,8 +469,8 @@ async function saveLayers(keys: string[] | null) {
       ]" />
     </template>
     <template #actions>
-      <Button size="sm" @click="mode = mode === 'edit' ? 'view' : 'edit'">
-        {{ mode === 'edit' ? '切到浏览' : '切到标注' }}
+      <Button size="sm" @click="startNewPlace">
+        <Icon name="plus" :size="14" />新增点位
       </Button>
       <Button size="sm" @click="boot"><Icon name="refresh" :size="14" />重新载入</Button>
     </template>
@@ -464,8 +493,40 @@ async function saveLayers(keys: string[] | null) {
           <Button variant="primary" size="sm" @click="tab = 'status'">去同步</Button>
         </div>
 
-        <div v-else class="board">
-        <aside class="panel-col">
+        <div v-else class="stage">
+          <MapCanvas
+            ref="mapCanvas"
+            v-if="currentCanvas"
+            :canvas="currentCanvas"
+            :markers="markersOnCanvas"
+            :visible-groups="visibleGroups"
+            :visible-categories="allCategories"
+            :selected-id="selected?.id ?? ''"
+            :highlight="highlight"
+            :draft="draft"
+            :map-name="mapName"
+            :max-zoom="catalog?.maxZoom ?? 2"
+            :mode="mode"
+            @pick="onPick"
+            @picked-point="onPickedPoint"
+          />
+
+          <!-- 收起状态：只剩一颗按钮，地图满宽 -->
+          <button v-if="!panelOpen" type="button" class="panel-toggle" @click="startNewPlace">
+            <Icon name="plus" :size="16" />
+            新增点位
+          </button>
+
+          <aside v-show="panelOpen" id="mark-panel" class="panel" aria-label="点位编辑">
+            <div class="panel-head">
+              <span class="panel-title">
+                {{ form.id > 0 ? '编辑点位' : (selected?.source === 'wiki' ? 'wiki 点位备注' : '新增点位') }}
+              </span>
+              <button type="button" class="panel-close" aria-label="收起面板" @click="closePanel">
+                <Icon name="close" :size="15" />
+              </button>
+            </div>
+
           <!-- 新建 / 编辑本地点位 -->
           <div class="card">
             <h2 class="card-title">
@@ -578,26 +639,7 @@ async function saveLayers(keys: string[] | null) {
               </div>
             </template>
           </div>
-        </aside>
-
-        <div class="stage">
-          <MapCanvas
-            v-if="currentCanvas"
-            ref="mapCanvas"
-            :canvas="currentCanvas"
-            :markers="markersOnCanvas"
-            :visible-groups="visibleGroups"
-            :visible-categories="allCategories"
-            :selected-id="selected?.id ?? ''"
-            :highlight="highlight"
-            :draft="draft"
-            :map-name="mapName"
-            :max-zoom="catalog?.maxZoom ?? 2"
-            :mode="mode"
-            @pick="onPick"
-            @picked-point="onPickedPoint"
-          />
-        </div>
+          </aside>
         </div>
       </div>
 
@@ -811,16 +853,96 @@ async function saveLayers(keys: string[] | null) {
 }
 .empty-state h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); }
 
-.board {
-  display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
-  gap: var(--sp-4);
-  align-items: start;
+/* ==================== 舞台与悬浮面板 ====================
+   和公开站同一套：地图居中占满，侧栏浮在它上面，收起后只剩一颗按钮。 */
+.stage {
+  position: relative;
+  /*
+   * 高度 = 视口 - 顶端导航 - 其余外壳。
+   * 顶端导航那 56 由变量给出；剩下的 150 是页面栏、上下两处 gap，
+   * 以及 .page 那 76px 的页脚留白，再留一点余量。
+   *
+   * 这个数只能量、不能推：实测 100dvh 在这个环境下解析出来的值比 innerHeight 小几像素，
+   * 按 136 算仍然会溢出 6px 冒出一条滚动条，所以宁可让地图短几像素。
+   */
+  height: calc(100dvh - var(--admin-bar-h, 56px) - 150px);
+  min-height: 420px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-lift);
 }
-@media (max-width: 1080px) {
-  .board { grid-template-columns: minmax(0, 1fr); }
+.panel {
+  position: absolute;
+  left: var(--sp-3);
+  top: var(--sp-3);
+  bottom: var(--sp-3);
+  width: 320px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-radius: var(--r-md);
+  /* 比公开站实一点：这里是表单，读字比看地图重要 */
+  background: color-mix(in srgb, var(--stone-300) 90%, transparent);
+  box-shadow: var(--shadow-pop), var(--bevel-raised);
+  backdrop-filter: blur(10px);
+  overscroll-behavior: contain;
 }
-.panel-col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  position: sticky;
+  top: calc(var(--sp-3) * -1);
+  margin: calc(var(--sp-3) * -1) calc(var(--sp-4) * -1) 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
+  background: color-mix(in srgb, var(--stone-300) 94%, transparent);
+  border-bottom: 1px solid var(--edge-soft);
+}
+.panel-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semi);
+  letter-spacing: .04em;
+  color: var(--ink-2);
+}
+.panel-close,
+.panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--stone-400) 90%, transparent);
+  color: var(--ink-2);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.panel-close { padding: 4px 6px; border-radius: var(--r-sm); }
+.panel-toggle {
+  position: absolute;
+  left: var(--sp-3);
+  top: var(--sp-3);
+  z-index: 3;
+  padding: 7px 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+}
+.panel-toggle:hover,
+.panel-close:hover { color: var(--ember-hot); border-color: var(--ember); }
+@media (max-width: 760px) {
+  .stage { height: auto; min-height: 62vh; }
+  .panel {
+    left: var(--sp-2);
+    right: var(--sp-2);
+    top: var(--sp-2);
+    bottom: auto;
+    width: auto;
+    max-height: 70%;
+  }
+  .panel-toggle { left: var(--sp-2); top: var(--sp-2); }
+}
 
 .card {
   padding: var(--sp-4);
@@ -860,15 +982,6 @@ async function saveLayers(keys: string[] | null) {
   cursor: pointer;
 }
 .chip.on { border-color: var(--ember); color: var(--ember-hot); background: var(--ember-veil); }
-
-.stage {
-  position: relative;
-  height: clamp(520px, 78vh, 1040px);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-lift);
-  background: var(--stone-void);
-}
 
 .table-wrap { overflow-x: auto; background: var(--stone-300); border-radius: var(--r-md); box-shadow: var(--bevel-raised); }
 .tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
