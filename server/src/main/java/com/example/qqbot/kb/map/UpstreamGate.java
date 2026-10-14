@@ -30,9 +30,10 @@ final class UpstreamGate {
     static final long MAX_GAP_MS = 30_000;
 
     private final Semaphore gate = new Semaphore(1);
-    private final long baseGapMs;
-    private final long pauseMs;
-    private final int streakLimit;
+    /** 基准间隔 —— 用取值函数而不是固定值，**配置中心改了立刻生效**，不用重启 */
+    private final java.util.function.LongSupplier baseGap;
+    private final java.util.function.LongSupplier pauseMs;
+    private final java.util.function.IntSupplier streakLimit;
     private final long summaryWindowMs;
 
     private volatile long gapMs;
@@ -50,13 +51,37 @@ final class UpstreamGate {
         this(baseGapMs, pauseMs, streakLimit, SUMMARY_WINDOW_MS);
     }
 
-    /** 汇总窗口可传是为了能测 —— 生产用 {@link #SUMMARY_WINDOW_MS}，测试传几十毫秒 */
+    /** 定值版（测试用）：生产走取值函数，好让配置中心改完立刻生效 */
     UpstreamGate(long baseGapMs, long pauseMs, int streakLimit, long summaryWindowMs) {
-        this.baseGapMs = Math.max(50, baseGapMs);
-        this.pauseMs = Math.max(0, pauseMs);
-        this.streakLimit = Math.max(1, streakLimit);
+        this(() -> baseGapMs, () -> pauseMs, () -> streakLimit, summaryWindowMs);
+    }
+
+    UpstreamGate(java.util.function.LongSupplier baseGap, java.util.function.LongSupplier pauseMs,
+                 java.util.function.IntSupplier streakLimit) {
+        this(baseGap, pauseMs, streakLimit, SUMMARY_WINDOW_MS);
+    }
+
+    /** 汇总窗口可传是为了能测 —— 生产用 {@link #SUMMARY_WINDOW_MS}，测试传几十毫秒 */
+    UpstreamGate(java.util.function.LongSupplier baseGap, java.util.function.LongSupplier pauseMs,
+                 java.util.function.IntSupplier streakLimit, long summaryWindowMs) {
+        this.baseGap = baseGap;
+        this.pauseMs = pauseMs;
+        this.streakLimit = streakLimit;
         this.summaryWindowMs = Math.max(1, summaryWindowMs);
-        this.gapMs = this.baseGapMs;
+        this.gapMs = baseGapMs();
+    }
+
+    /** 当前基准间隔。每次读都取最新配置 */
+    private long baseGapMs() {
+        return Math.max(50, baseGap.getAsLong());
+    }
+
+    private long pauseMs() {
+        return Math.max(0, pauseMs.getAsLong());
+    }
+
+    private int streakLimit() {
+        return Math.max(1, streakLimit.getAsInt());
     }
 
     /** 一段窗口里的限流统计 */
@@ -91,8 +116,12 @@ final class UpstreamGate {
     void onSuccess() {
         windowOk++;
         streak = 0;
-        if (gapMs > baseGapMs) {
-            gapMs = Math.max(baseGapMs, gapMs - 500);
+        // 间隔慢慢收回**当前**基准值 —— 后台刚把基准调大时，这里也会跟着往上收
+        long base = baseGapMs();
+        if (gapMs > base) {
+            gapMs = Math.max(base, gapMs - 500);
+        } else if (gapMs < base) {
+            gapMs = base;
         }
     }
 
@@ -104,10 +133,11 @@ final class UpstreamGate {
     boolean onRateLimited() {
         windowLimited++;
         streak++;
-        if (pauseMs > 0 && streak >= streakLimit) {
-            pausedUntil = System.currentTimeMillis() + pauseMs;
+        long pause = pauseMs();
+        if (pause > 0 && streak >= streakLimit()) {
+            pausedUntil = System.currentTimeMillis() + pause;
             streak = 0;
-            gapMs = baseGapMs;
+            gapMs = baseGapMs();
             return true;
         }
         gapMs = Math.min(MAX_GAP_MS, gapMs * 2);
@@ -128,7 +158,7 @@ final class UpstreamGate {
         }
         pausedUntil = 0;
         streak = 0;
-        gapMs = baseGapMs;
+        gapMs = baseGapMs();
         return false;
     }
 

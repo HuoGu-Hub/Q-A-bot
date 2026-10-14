@@ -6,6 +6,7 @@ import com.example.qqbot.config.GuardProperties;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.config.LogProperties;
+import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.config.SiteProperties;
@@ -13,7 +14,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.example.qqbot.config.SettingsConfig;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,7 +43,7 @@ class SettingsPrefixTest {
         // ⚠️ 表来自**真实的装配代码**（SettingsConfig），不是测试自己拼的 ——
         //    否则「加了白名单却忘了注册」这件事就测不出来了。
         SettingsRoots roots = new SettingsConfig().settingsRoots(
-                mock(GuardProperties.class), mock(KbProperties.class),
+                mock(GuardProperties.class), mock(KbProperties.class), mock(MapOptions.class),
                 mock(MediaProperties.class), mock(QaProperties.class),
                 mock(LogProperties.class), mock(CommandProperties.class),
                 mock(SiteProperties.class), mock(LlmProperties.class),
@@ -65,6 +68,34 @@ class SettingsPrefixTest {
         assertThat(prefixes).as("白名单不能是空的").isNotEmpty();
         assertThat(missing)
                 .as("这些前缀没有配置对象接管，改它们必然报「不支持的配置前缀」")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("★ 白名单里每一项都要能解析到「对象 + 字段」—— 前缀有人接管、路径对不上照样改不动")
+    void everyWhitelistedKeyResolves() {
+        // ⚠️ 这里用**真实**的配置对象，不能用 mock：
+        //    带嵌套对象的 key（app.media.temp-images.dir、app.kb.map.shot.enabled）要靠 getter 往里走，
+        //    mock 的 getter 返回 null，测出来的"坏"是假的
+        SettingsService service = new SettingsService(new SettingsWhitelist(),
+                mock(OverridesFile.class),
+                new SettingsConfig().settingsRoots(
+                        new GuardProperties(), new KbProperties(), new MapOptions(),
+                        new MediaProperties(), new QaProperties(), new LogProperties(),
+                        new CommandProperties(), new SiteProperties(), new LlmProperties(),
+                        new BotProperties()));
+
+        List<String> broken = new ArrayList<>();
+        for (SettingsWhitelist.Item item : SettingsWhitelist.ITEMS) {
+            if (!service.canResolve(item.key())) {
+                broken.add(item.key());
+            }
+        }
+
+        // 2026-10-15：app.kb.map.* 三项就是这么坏的 —— 白名单加了、多段前缀没注册，
+        // 界面上看得见、一改就报「配置路径不存在」
+        assertThat(broken)
+                .as("这些配置项在界面上改不动（解析不到承载它们的对象与字段）")
                 .isEmpty();
     }
 }

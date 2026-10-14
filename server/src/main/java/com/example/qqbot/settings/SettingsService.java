@@ -60,6 +60,21 @@ public class SettingsService {
         return roots.containsKey(prefix);
     }
 
+    /**
+     * 仅供测试：这个 key 能不能真的解析到「对象 + 字段」。
+     *
+     * <p>比 {@link #supportsPrefix} 严一层 —— 前缀有人接管、路径却对不上，
+     * 界面上照样是"看得见、改不动"。那正是多段前缀漏注册时的表现。
+     */
+    boolean canResolve(String key) {
+        try {
+            resolve(key);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public record ItemView(String key, String label, String group, String type,
                            String hint, Object value) {
     }
@@ -145,26 +160,39 @@ public class SettingsService {
         f.set(h.target, convert(f.getType(), value));
     }
 
+    /**
+     * 把 {@code app.<前缀...>.<字段>} 解析成「哪个对象 + 哪个字段」。
+     *
+     * <h2>前缀可以是多段，且**从长的开始试**</h2>
+     * 配置根不止按第二段划分：{@code app.kb.map.*} 归 {@code MapOptions}，
+     * 而 {@code app.kb.*} 的其余部分归 {@code KbProperties}。
+     * 所以候选前缀要按长度从大到小试，先命中者赢 —— 反过来 "kb" 会把 "kb.map" 抢走，
+     * 表现是**那一组配置项在界面上看得见、一改就报「配置路径不存在」**
+     * （2026-10-15 实测：{@code app.kb.map.request-gap-ms} 等三项就是这么报的）。
+     */
     private ObjectHolder resolve(String key) throws Exception {
         String[] parts = key.split("\\.");
-        Object target = roots.get(parts[1]);
-        if (target == null) {
-            throw new IllegalArgumentException("不支持的配置前缀：" + parts[1]);
-        }
-        for (int i = 2; i < parts.length - 1; i++) {
-            String getter = "get" + capitalize(camel(parts[i]));
-            Object next;
-            try {
-                next = target.getClass().getMethod(getter).invoke(target);
-            } catch (NoSuchMethodException e) {
-                next = null;
+        for (int cut = parts.length - 1; cut >= 2; cut--) {
+            Object target = roots.get(String.join(".", java.util.Arrays.copyOfRange(parts, 1, cut)));
+            if (target == null) {
+                continue;
             }
-            if (next == null) {
-                throw new IllegalArgumentException("配置路径不存在：" + key);
+            for (int i = cut; i < parts.length - 1; i++) {
+                String getter = "get" + capitalize(camel(parts[i]));
+                Object next;
+                try {
+                    next = target.getClass().getMethod(getter).invoke(target);
+                } catch (NoSuchMethodException e) {
+                    next = null;
+                }
+                if (next == null) {
+                    throw new IllegalArgumentException("配置路径不存在：" + key);
+                }
+                target = next;
             }
-            target = next;
+            return new ObjectHolder(target, camel(parts[parts.length - 1]));
         }
-        return new ObjectHolder(target, camel(parts[parts.length - 1]));
+        throw new IllegalArgumentException("不支持的配置前缀：" + parts[1]);
     }
 
     private record ObjectHolder(Object target, String field) {

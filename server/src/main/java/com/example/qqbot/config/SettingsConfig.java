@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.settings.SettingsRoots;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,7 +32,7 @@ import java.util.Map;
 public class SettingsConfig {
 
     @Bean
-    public SettingsRoots settingsRoots(GuardProperties guard, KbProperties kb,
+    public SettingsRoots settingsRoots(GuardProperties guard, KbProperties kb, MapOptions map,
                                        MediaProperties media, QaProperties qa,
                                        LogProperties logs, CommandProperties commands,
                                        SiteProperties site, LlmProperties llm,
@@ -39,6 +40,9 @@ public class SettingsConfig {
         return new SettingsRoots(Map.of(
                 "guard", guard,
                 "kb", kb,
+                // 地图是**独立一份**配置对象（app.kb.map.*），不在 KbProperties 里 ——
+                // 它管的是在线路径（取图速率、配图），与"从 wiki 拉数据"的批处理不是一回事
+                "kb.map", map,
                 "media", media,
                 "qa", qa,
                 "logs", logs,

@@ -49,8 +49,9 @@ public class WikiMapImageSource implements MapImageSource {
 
     public WikiMapImageSource(MapOptions options) {
         this.options = options;
-        this.gate = new UpstreamGate(options.getRequestGapMs(), options.getRateLimitPauseMs(),
-                options.getRateLimitStreak());
+        // 传取值函数而不是当时的值：配置中心调完立刻生效，不用重启
+        this.gate = new UpstreamGate(options::getRequestGapMs, options::getRateLimitPauseMs,
+                options::getRateLimitStreak);
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 // 必须跟随：Special:FilePath 是 302，真正的字节在 /images/ 下
