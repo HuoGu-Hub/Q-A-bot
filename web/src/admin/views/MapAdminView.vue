@@ -19,7 +19,7 @@
  * 标注是"边看地图边填"的活：弹窗会挡住地图，而你要反复对照位置。
  * 固定在侧栏就能一边看图一边改字段，而且切点位时表单原地刷新，不用开关弹窗。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Button from '@shared/ui/Button.vue'
@@ -122,6 +122,16 @@ async function boot() {
     mapName.value = first ? first.map : ''
     if (mapName.value) await loadMarkers()
     await loadStatus()
+    /*
+     * 数据齐了**直接灌一次**图标表，不等 watcher。
+     *
+     * 实测这里会漏：画布是 v-if 挂载的，图标表在 catalog 到手那一刻就变了，
+     * 而 watcher（post flush）跑的时候画布实例可能还没绑上 ref ——
+     * 于是 setGroupIcons 一次都没被调用，画布里 groupIcons 是空 Map，
+     * 结果不是"图标画不出来"，而是**连一张图标的请求都没发**，地图上只剩空心圈。
+     */
+    await nextTick()
+    mapCanvas.value?.setGroupIcons(groupIcons.value)
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -148,7 +158,9 @@ watch(mapName, async (next, prev) => {
   await loadMarkers()
 })
 
-watch(groupIcons, () => mapCanvas.value?.setGroupIcons(groupIcons.value), { flush: 'post' })
+// 图标表与画布实例都可能在数据之后才就绪，两个都盯着才不会漏掉其中一次。
+// 只盯图标表的话，画布晚一步挂载就永远拿不到图标 —— 表现是"地图上只有空心圈，一直不变成图标"
+watch([groupIcons, mapCanvas], () => mapCanvas.value?.setGroupIcons(groupIcons.value), { flush: 'post' })
 
 /* ==================== 地图交互 ==================== */
 
@@ -169,6 +181,24 @@ function startNewPlace() {
   panelOpen.value = true
   mode.value = 'edit'
 }
+
+/**
+ * 面板里该显示哪个表单。
+ *
+ * <p>三种互斥的情况，**不能同时摆出来**：
+ * <ul>
+ *   <li>{@code new} —— 新增点位模式：只给"新增点位"表单；</li>
+ *   <li>{@code place} —— 选中了自定义点位：给它的编辑表单；</li>
+ *   <li>{@code note} —— 选中了 wiki 点位：给备注表单。</li>
+ * </ul>
+ * 以前三张卡片一直摆着，想改一个已有点位时还得先在心里跳过那张"新增"表 ——
+ * 那不是并列的功能，是同一个位置的不同状态。
+ */
+const panelKind = computed<'new' | 'place' | 'note' | null>(() => {
+  if (mode.value === 'edit') return 'new'
+  if (!selected.value) return null
+  return selected.value.source === 'admin' ? 'place' : 'note'
+})
 
 /** 收起面板：顺手退回浏览模式，免得收起后点空白还在悄悄落点 */
 function closePanel() {
@@ -574,7 +604,7 @@ async function saveLayers(keys: string[] | null) {
             </div>
 
           <!-- 新建 / 编辑本地点位 -->
-          <div class="card">
+          <div v-if="panelKind === 'new' || panelKind === 'place'" class="card">
             <h2 class="card-title">
               {{ form.id > 0 ? '编辑点位' : '新增点位' }}
               <Tag v-if="form.id > 0" tone="flame">id {{ form.id }}</Tag>
@@ -635,13 +665,11 @@ async function saveLayers(keys: string[] | null) {
             </div>
           </div>
 
-          <!-- wiki 点位备注 -->
-          <div class="card" :class="{ dim: selected?.source !== 'wiki' }">
+          <!-- wiki 点位备注：只有选中 wiki 点位时才出现 -->
+          <div v-else-if="panelKind === 'note'" class="card">
             <h2 class="card-title">wiki 点位备注</h2>
-            <p v-if="selected?.source !== 'wiki'" class="hint">
-              在地图上点一个 wiki 点位（尖塔、神龛一类），这里就能给它补中文名与说明。
-            </p>
-            <template v-else>
+            <!-- v-if="selected" 不只是防御：它让 TS 在模板里把 selected 收窄成非空 -->
+            <template v-if="selected">
               <p class="picked">
                 <Icon name="map-pin" :size="14" />
                 {{ selected.original || selected.name }}
