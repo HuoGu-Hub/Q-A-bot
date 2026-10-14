@@ -159,6 +159,9 @@ hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
 </div>
 
 <h2>六、分期实施</h2>
+<blockquote><p><b>进度</b>：P1–P4 已落地并通过全量测试（633 个测试全绿）。实现过程中实测发现一处既有缺陷：
+收集品画布的四至是 y 轴向下的，前端只按 y 轴向上算，导致那张画布渲染成空白、46 个点位落在画布外。
+已在视图层按「左上 = 最小 x / 最大 y」归一化修掉，前端与出站图同时受益。</p></blockquote>
 <table>
 <tr><th>期</th><th>做什么</th><th>验收</th></tr>
 <tr><td>P1</td><td><code>MapProjection</code> 纯函数 + 真实点位对照测试</td><td>上面那个算例的数字全部对上</td></tr>
@@ -167,6 +170,7 @@ hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
 <tr><td>P4</td><td><code>locate</code> 工具结果带上配图 key</td><td>问「X 在哪」时工具输出里出现可照抄的标记</td></tr>
 <tr><td>P5</td><td>结果缓存落盘 + 预热接入现有预热任务</td><td>同一个点位第二次问零渲染成本</td></tr>
 </table>
+<p class="meta">进度：P1 坐标换算与对照测试、P2 渲染器、P3 出图来源与降级、P4 工具结果带配图 key —— <b>均已完成</b>；P5 待做。</p>
 
 <h2>七、风险与对策</h2>
 <table>
