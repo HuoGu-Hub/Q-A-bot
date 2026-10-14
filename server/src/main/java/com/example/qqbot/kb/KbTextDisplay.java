@@ -1,5 +1,7 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.media.ImageMarkers;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -103,6 +105,9 @@ public final class KbTextDisplay {
         t = LANG_LINK.matcher(t).replaceAll("");
         t = MD_HEADING.matcher(t).replaceAll("");
         t = TITLE_PREFIX.matcher(t).replaceFirst("");
+        // 配图标记是给**模型**看的：它的用途是在回复里触发一次发图。
+        // 留在公开站的摘要与详情页里，人看到的就只是一串 [[img:kb:xxx]]。
+        t = ImageMarkers.parse(t).text();
 
         // 去掉 Infobox 的包裹名（Item Infobox: / Item_Infobox: / Infobox/Skill:）
         t = t.replaceAll("(?i)\\bItem[_ ]?Infobox\\s*:\\s*", "");
