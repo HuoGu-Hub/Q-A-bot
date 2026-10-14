@@ -475,7 +475,17 @@ function closePanel() {
 function onPick(list: Marker[]) {
   const m = list[0] ?? null
   if (!m) {
+    /*
+     * 点到空白处 = "我不改这个了"。
+     *
+     * 这里以前只清了 selected、**没关面板**，于是 panelKind 变成 null：
+     * 面板还开着，但里面一张卡片都不渲染，标题又退回"新增点位" ——
+     * 看到的就是一块空白、标题写着新增、点 × 也说不清该不该关的面板。
+     * 收起面板（顺带退回浏览模式）才是"点空白处"该有的结果。
+     */
     selected.value = null
+    panelOpen.value = false
+    mode.value = 'view'
     return
   }
   selected.value = m
@@ -905,8 +915,11 @@ async function saveLayers(keys: string[] | null) {
 
           <aside v-show="panelOpen" id="mark-panel" class="panel" aria-label="点位编辑">
             <div class="panel-head">
+              <!-- 标题跟着 panelKind 走，和"显示哪张卡片"用同一个判据 ——
+                   各写一套的话，两边一旦不一致就会出现"标题说新增、内容是空的" -->
               <span class="panel-title">
-                {{ form.id > 0 ? '编辑点位' : (selected?.source === 'wiki' ? 'wiki 点位备注' : '新增点位') }}
+                {{ panelKind === 'note' ? 'wiki 点位备注'
+                  : panelKind === 'place' ? '编辑点位' : '新增点位' }}
               </span>
               <button type="button" class="panel-close" aria-label="收起面板" @click="closePanel">
                 <Icon name="close" :size="15" />
