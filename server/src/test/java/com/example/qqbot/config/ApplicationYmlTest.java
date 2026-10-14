@@ -36,11 +36,6 @@ class ApplicationYmlTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<String> castStringList(Object raw) {
-        return raw instanceof List ? (List<String>) raw : List.of();
-    }
-
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> at(Map<String, Object> root, String... path) {
         Map<String, Object> cur = root;
         for (String p : path) {
@@ -85,18 +80,12 @@ class ApplicationYmlTest {
     }
 
     @Test
-    @DisplayName("★ 地图白名单非空且只留当前世界 —— 空列表会把 6 张旧地图全拉回来")
-    void mapAllowlistKeepsOnlyTheCurrentWorld() throws Exception {
+    @DisplayName("★ map-sync 不再有地图白名单 —— 判断「用哪张图」不该固化在配置里")
+    void mapSyncHasNoMapAllowlist() throws Exception {
         Map<String, Object> mapSync = at(load(), "app", "kb", "map-sync");
-        List<String> maps = castStringList(mapSync.get("maps"));
-        assertThat(maps)
-                .as("空列表 = 不过滤：命名空间里的旧世界图与区域小图会全部进库，"
-                        + "污染界面上的地图选择与地点语料")
-                .isNotEmpty();
-        assertThat(maps).contains("Embervale");
-        assertThat(maps).allSatisfy(m -> assertThat(m)
-                .as("地图名不能带首尾空格（按前缀匹配，多一个空格整张图就没了）")
-                .isEqualTo(m.trim()));
+        // 白名单是"哪张地图是当前世界"这个会变的判断 —— 写进配置就会在改名后静默失效。
+        // 它现在由 kb_map_active 表 + 后台「地图」页决定（见 kb.map.MapScope）
+        assertThat(mapSync).doesNotContainKey("maps");
     }
 
     @Test

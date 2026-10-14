@@ -134,9 +134,7 @@ public class MapJobs {
             try {
                 KbMapSyncService.SyncReport r = syncService.sync(dryRun);
                 String summary = "页 " + r.pages() + " / 变更 " + r.changed() + " / 写入 marker "
-                        + r.markers() + " / 失败 " + r.failed()
-                        + (r.skipped() > 0 ? " / 跳过 " + r.skipped() + "（不在白名单）" : "")
-                        + " / " + r.elapsedMs() + " ms";
+                        + r.markers() + " / 失败 " + r.failed() + " / " + r.elapsedMs() + " ms";
                 if (!r.errors().isEmpty()) {
                     summary = summary + "；" + String.join("；", r.errors());
                 }

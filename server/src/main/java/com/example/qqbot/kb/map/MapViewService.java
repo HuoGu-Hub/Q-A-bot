@@ -127,15 +127,18 @@ public class MapViewService {
     private final MapNoteService notes;
     private final PlaceDirectory directory;
     private final MapLayerService layers;
+    private final MapScope scope;
     private final ObjectMapper mapper;
 
     public MapViewService(KbMapStore mapStore, MapPlaceService places, MapNoteService notes,
-                          PlaceDirectory directory, MapLayerService layers, ObjectMapper mapper) {
+                          PlaceDirectory directory, MapLayerService layers, MapScope scope,
+                          ObjectMapper mapper) {
         this.mapStore = mapStore;
         this.places = places;
         this.notes = notes;
         this.directory = directory;
         this.layers = layers;
+        this.scope = scope;
         this.mapper = mapper;
     }
 
@@ -195,6 +198,11 @@ public class MapViewService {
         Map<String, Set<String>> configured = layers.configured();
         List<MapView> out = new ArrayList<>();
         for (KbMapRepositoryCount c : mapCounts()) {
+            // 只列**启用**的地图：没启用的数据留在库里（随时能切回来），但不该露脸。
+            // 见 MapScope —— 这一步是"多张地图互不干扰"的唯一开关
+            if (!scope.isActive(c.map())) {
+                continue;
+            }
             Map<String, Integer> byGroup = mapStore.countsByGroup(c.map());
             List<KbMapStore.Group> groups = mapStore.groups(c.map());
             List<GroupView> groupViews = new ArrayList<>();
@@ -380,6 +388,11 @@ public class MapViewService {
      */
     public boolean allowedAsset(String map, String page, String name) {
         if (name == null || name.isBlank()) {
+            return false;
+        }
+        // 没启用的地图连图片都不放行 —— 否则它虽然不显示，却仍能被按名字取出来，
+        // 顺带把它的瓦片灌进缓存目录
+        if (!scope.isActive(map)) {
             return false;
         }
         String want = name.strip().replace(' ', '_');

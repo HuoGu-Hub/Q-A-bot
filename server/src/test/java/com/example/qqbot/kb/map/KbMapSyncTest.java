@@ -20,9 +20,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * 地图同步的**端到端**验收：真的去 wiki 拉一次，真的落库，然后查回来。
@@ -51,15 +48,8 @@ class KbMapSyncTest {
         }
     }
 
-    /** 清理器在同步末尾会被调一次；这里只关心它别炸，所以图片缓存与语料都用假件 */
-    private static MapResidueCleaner cleanerFor(com.example.qqbot.kb.KbPolicy policy, KbMapStore store) {
-        MapImageCache images = mock(MapImageCache.class);
-        when(images.purgeMapsNotIn(any())).thenReturn(new MapImageCache.CachePurge(0, 0, List.of()));
-        return new MapResidueCleaner(policy, store, images, mock(LocationCorpusBuilder.class));
-    }
-
     @Test
-    @DisplayName("★ 真拉一次 wiki 地图数据：只拉白名单里的世界，千余 marker 且 article 能 join 回来")
+    @DisplayName("★ 真拉一次 wiki 地图数据：32 页 / 千余 marker，且 article 能 join 回来")
     void syncFromRealWiki() {
         Assumptions.assumeTrue("on".equalsIgnoreCase(System.getProperty("qqbot.map.sync")),
                 "需要 -Dqqbot.map.sync=on 才跑（会真的访问 wiki 并写临时库）");
@@ -79,19 +69,14 @@ class KbMapSyncTest {
 
         KbProperties kb = new KbProperties();
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        // ⚠️ 用默认白名单（app.kb.map-sync.maps）：命名空间里除了当前世界，
-        //    还躺着抢先体验版的旧世界图和几个区域小图 —— 那些不该进库
-        KbMapSyncService service = new KbMapSyncService(client, store, kb,
-                cleanerFor(kb, store));
+        // 同步**不筛地图**：命名空间里有什么就拉什么，谁都不用丢
+        //（"用哪几张"由 kb_map_active + MapScope 决定，见那儿）
+        KbMapSyncService service = new KbMapSyncService(client, store);
 
         // 先 dryRun：只比版本，不取正文
         KbMapSyncService.SyncReport dry = service.sync(true);
-        System.out.printf("dryRun：白名单内 %d 页，跳过 %d 页，其中 %d 页需要同步%n",
-                dry.pages(), dry.skipped(), dry.changed());
-        assertThat(dry.pages()).as("白名单里只有 Embervale，页数应当只是它那几页")
-                .isBetween(5, 20);
-        assertThat(dry.skipped()).as("命名空间里其余的页属于旧世界与区域小图")
-                .isGreaterThan(5);
+        System.out.printf("dryRun：命名空间 %d 页，其中 %d 页需要同步%n", dry.pages(), dry.changed());
+        assertThat(dry.pages()).isGreaterThan(20);
         assertThat(dry.changed()).isEqualTo(dry.pages());
 
         // 真同步
@@ -102,11 +87,11 @@ class KbMapSyncTest {
                 .forEach(e -> System.out.printf("   %-34s %d%n", e.getKey(), e.getValue()));
 
         assertThat(r.failed()).as("失败页：" + r.errors()).isZero();
-        assertThat(r.parsed()).isGreaterThan(5);
+        assertThat(r.parsed()).isGreaterThan(20);
         assertThat(store.markerCount()).as("Embervale 一张图就约 1,064 个 marker").isGreaterThan(800);
         assertThat(store.groupCount()).isGreaterThan(30);
-        // ★ 白名单必须真的把别的地图挡在库外：这是"多地图残留"的源头开关
-        assertThat(store.mapNames()).containsExactly("Embervale");
+        // 全拉进库（这是有意的）：出不出现在界面上由 MapScope 决定，不由同步决定
+        assertThat(store.mapNames()).contains("Embervale");
 
         // 幂等 + 增量：立刻再同步一次，应当 0 页需要处理
         KbMapSyncService.SyncReport again = service.sync(false);
@@ -116,10 +101,9 @@ class KbMapSyncTest {
         // article 是通往知识库的外键 —— 必须能按它查回来
         List<KbMapStore.Marker> byArticle = store.byArticle("Ancient Spire", 20);
         assertThat(byArticle).as("article=Ancient Spire 的 marker").isNotEmpty();
-        // 白名单生效后库里只剩一张地图，所以每条都应当来自它。
-        // （以前这里只能断言"包含 Embervale" —— 因为同一个 article 会在
-        //   Embervale 与 Blackmire 各有一份，正是多地图混进来的证据。）
-        assertThat(byArticle).extracting(KbMapStore.Marker::map).containsOnly("Embervale");
+        // ⚠️ 同一个 article 会出现在**多张地图**里（实测 Ancient Spire 在 Embervale 与 Blackmire 都有），
+        //    所以不能断言"第一条就是 Embervale"，只能断言"包含 Embervale 的"。
+        assertThat(byArticle).extracting(KbMapStore.Marker::map).contains("Embervale");
         assertThat(byArticle).allSatisfy(m -> assertThat(m.x()).isGreaterThan(0));
         // article 之外，description 里还带 wiki 内链（如 [[Fell Thunderbrute]]）——
         // 这是 NPC / 怪物名字的来源，也是下一步语料扩维要挖的东西

@@ -10,14 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -156,85 +151,6 @@ public class MapImageCache {
             }
         }
         return new Stats(isEnabled(), root.toString(), files, bytes);
-    }
-
-    /* ==================== 清理 ==================== */
-
-    /** 一次缓存清理扫掉的东西 */
-    public record CachePurge(long files, long bytes, List<String> dirs) {
-    }
-
-    /**
-     * 删掉不在白名单里的地图的瓦片目录。
-     *
-     * <p>缓存键的第一段就是地图名的 slug（{@code root/<map>/...}），所以"哪些目录该删"
-     * 可以直接从地图名算出来 —— 不需要反查数据库，也不需要维护第二份索引。
-     *
-     * <p>缓存本身是**派生物**（随时可以整个删掉重建），所以这里删得干脆：
-     * 这些地图已经不进库了，它们的瓦片永远不会再被任何页面请求到。
-     *
-     * @param keep 要保留的地图名；为空时什么都不做
-     */
-    public CachePurge purgeMapsNotIn(List<String> keep) {
-        if (!isEnabled() || keep == null || keep.isEmpty()) {
-            return new CachePurge(0, 0, List.of());
-        }
-        Path root = root();
-        if (!Files.isDirectory(root)) {
-            return new CachePurge(0, 0, List.of());
-        }
-        Set<String> keepDirs = new HashSet<>();
-        for (String m : keep) {
-            keepDirs.add(slug(m, 64));
-        }
-        long files = 0;
-        long bytes = 0;
-        List<String> gone = new ArrayList<>();
-        try (var children = Files.list(root)) {
-            for (Path dir : children.toList()) {
-                if (!Files.isDirectory(dir)) {
-                    continue;
-                }
-                String name = dir.getFileName().toString();
-                if (keepDirs.contains(name)) {
-                    continue;
-                }
-                // 先数再删 —— 删完就数不出来了
-                try (var walk = Files.walk(dir)) {
-                    for (Path p : walk.filter(Files::isRegularFile).toList()) {
-                        files++;
-                        bytes += Files.size(p);
-                    }
-                }
-                deleteRecursively(dir);
-                gone.add(name);
-            }
-        } catch (IOException e) {
-            log.warn("[MAP-IMG] 清理瓦片缓存失败：{}", e.getMessage());
-        }
-        if (!gone.isEmpty()) {
-            log.info("[MAP-IMG] 清掉非白名单地图的瓦片缓存：{} 个目录 / {} 个文件 / {}",
-                    gone.size(), files, human(bytes));
-        }
-        return new CachePurge(files, bytes, gone);
-    }
-
-    private static void deleteRecursively(Path dir) throws IOException {
-        try (var walk = Files.walk(dir)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(p);
-            }
-        }
-    }
-
-    private static String human(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        }
-        if (bytes < 1024 * 1024) {
-            return (bytes / 1024) + " KB";
-        }
-        return String.format(Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0);
     }
 
     /* ==================== 路径与校验 ==================== */

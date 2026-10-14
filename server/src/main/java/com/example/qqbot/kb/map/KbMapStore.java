@@ -351,6 +351,35 @@ public class KbMapStore {
         return out;
     }
 
+    /** 每张地图有多少个点位 —— "自动选点数最多那张"和后台候选列表都要用 */
+    public Map<String, Integer> markerCounts() {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        if (!available) {
+            return out;
+        }
+        try {
+            for (KbMapRepository.MapCount m : repo.mapCounts()) {
+                out.put(m.map(), (int) m.count());
+            }
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读地图点位数失败：{}", e.getMessage());
+        }
+        return out;
+    }
+
+    /** 每张地图的页面在 wiki 上最后一次改动的时间 */
+    public Map<String, String> latestPageUpdate() {
+        if (!available) {
+            return Map.of();
+        }
+        try {
+            return repo.latestPageUpdate();
+        } catch (Exception e) {
+            log.warn("[KB-MAP] 读页面更新时间失败：{}", e.getMessage());
+            return Map.of();
+        }
+    }
+
     /** 有哪些地图（只要名字）—— 遍历分组、拼目录时用 */
     public List<String> mapNames() {
         if (!available) {
@@ -365,27 +394,6 @@ public class KbMapStore {
         } catch (Exception e) {
             log.warn("[KB-MAP] 读地图名失败：{}", e.getMessage());
             return List.of();
-        }
-    }
-
-    /**
-     * 清掉不在白名单里的地图数据（页面状态 / 画布 / 分组 / marker / 备注 / 自定义点位）。
-     *
-     * <p>白名单只挡住了"以后不再写进来"，已经躺在库里的不会自己走，
-     * 而它们照样会出现在目录、图层选择、地点问答和地点语料里。见
-     * {@link MapResidueCleaner} 与 {@link KbMapRepository#purgeMapsNotIn}。
-     *
-     * @param keep 要保留的地图名；为空时**什么都不做**（保持旧行为）
-     */
-    public KbMapRepository.PurgeCounts purgeMapsNotIn(List<String> keep) {
-        if (!available) {
-            return new KbMapRepository.PurgeCounts(0, 0, 0, 0, 0, 0, List.of());
-        }
-        try {
-            return repo.purgeMapsNotIn(keep);
-        } catch (Exception e) {
-            log.warn("[KB-MAP] 清理非白名单地图失败：{}", e.getMessage());
-            return new KbMapRepository.PurgeCounts(0, 0, 0, 0, 0, 0, List.of());
         }
     }
 

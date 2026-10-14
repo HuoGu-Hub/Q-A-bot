@@ -60,11 +60,14 @@ public class WikiPlaceDirectory implements PlaceDirectory {
     private final KbMapStore mapStore;
     private final MapPlaceService places;
     private final MapNoteService notes;
+    private final MapScope scope;
 
-    public WikiPlaceDirectory(KbMapStore mapStore, MapPlaceService places, MapNoteService notes) {
+    public WikiPlaceDirectory(KbMapStore mapStore, MapPlaceService places, MapNoteService notes,
+                              MapScope scope) {
         this.mapStore = mapStore;
         this.places = places;
         this.notes = notes;
+        this.scope = scope;
     }
 
     @Override
@@ -90,6 +93,11 @@ public class WikiPlaceDirectory implements PlaceDirectory {
         Set<String> seen = new LinkedHashSet<>();
         for (Map.Entry<String, List<KbMapStore.Marker>> e : wikiByMap.entrySet()) {
             String map = e.getKey();
+            // 没启用的地图不进问答：库里留着它们（随时能切回来），但机器人的坐标必须来自当前世界。
+            // 以前这里混着 5 张图的点位，"远古尖塔在哪"会答出旧世界的坐标
+            if (!scope.isActive(map)) {
+                continue;
+            }
             Map<String, MapNoteService.Note> mapNotes = notes.byMap(map);
             for (KbMapStore.Marker m : e.getValue()) {
                 MapNoteService.Note note = mapNotes.get(MapNoteService.ref(m.page(), m.markerId()));
@@ -110,6 +118,9 @@ public class WikiPlaceDirectory implements PlaceDirectory {
 
         // 管理员点位：只取公开的。隐藏逻辑与上面一致
         for (MapPlaceService.Place p : places.list(null, true)) {
+            if (!scope.isActive(p.map())) {
+                continue;
+            }
             String canvas = p.page() == null || p.page().isBlank()
                     ? primaryOfMap.getOrDefault(nz(p.map()), "")
                     : p.page();

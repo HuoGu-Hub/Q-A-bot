@@ -14,6 +14,7 @@ import com.example.qqbot.kb.block.KbBlockIndex;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
+import com.example.qqbot.persistence.KbMapActiveRepository;
 import com.example.qqbot.persistence.KbMapRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
@@ -32,9 +33,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * 地点语料的**端到端**验收：真同步 → 真派生 → 真检索，看"地点类问题"到底能不能答。
@@ -107,19 +105,20 @@ class LocationCorpusE2ETest {
         Assumptions.assumeTrue(embedding.isAvailable(), "需要 SILICONFLOW_API_KEY 才能向量化派生块");
 
         // ① 同步地图数据
-        KbMapStore mapStore = new KbMapStore(new KbMapRepository(new Jdbc(sqlite)));
+        Jdbc jdbc = new Jdbc(sqlite);
+        KbMapStore mapStore = new KbMapStore(new KbMapRepository(jdbc));
         mapStore.init();
+        KbMapActiveRepository activeMaps = new KbMapActiveRepository(jdbc);
+        activeMaps.initSchema();
+        MapScope scope = new MapScope(mapStore, activeMaps);
         WikiApiClient client = new WikiApiClient(kb, mapper);
-        MapImageCache images = mock(MapImageCache.class);
-        when(images.purgeMapsNotIn(any())).thenReturn(new MapImageCache.CachePurge(0, 0, List.of()));
-        KbMapSyncService sync = new KbMapSyncService(client, mapStore, kb,
-                new MapResidueCleaner(kb, mapStore, images, mock(LocationCorpusBuilder.class)));
+        KbMapSyncService sync = new KbMapSyncService(client, mapStore);
         KbMapSyncService.SyncReport sr = sync.sync(false);
         System.out.printf("地图同步：%d 页 / %d 个 marker / 失败 %d%n", sr.parsed(), sr.markers(), sr.failed());
         assertThat(sr.failed()).isZero();
 
         // ② 派生地点语料
-        LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, embedding);
+        LocationCorpusBuilder builder = new LocationCorpusBuilder(mapStore, blocks, embedding, scope);
         LocationCorpusBuilder.BuildReport plan = builder.planOnly();
         System.out.printf("派生计划：%d 条（区域 %d / POI %d / 具名地点 %d / NPC %d），排除 Lore %d 条%n",
                 plan.entries(), plan.regions(), plan.pois(), plan.places(), plan.npcs(), plan.skippedLore());

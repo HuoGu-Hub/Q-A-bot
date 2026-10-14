@@ -7,6 +7,7 @@ import com.example.qqbot.kb.map.MapJobs;
 import com.example.qqbot.kb.map.MapLayerService;
 import com.example.qqbot.kb.map.MapNoteService;
 import com.example.qqbot.kb.map.MapPlaceService;
+import com.example.qqbot.kb.map.MapScope;
 import com.example.qqbot.kb.map.MapViewService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,10 +51,11 @@ public class AdminMapController {
     private final MapJobs jobs;
     private final MapOptions options;
     private final MapLayerService layers;
+    private final MapScope scope;
 
     public AdminMapController(MapViewService view, MapPlaceService places, MapNoteService notes,
                               KbMapStore mapStore, MapImageCache images, MapJobs jobs,
-                              MapOptions options, MapLayerService layers) {
+                              MapOptions options, MapLayerService layers, MapScope scope) {
         this.view = view;
         this.places = places;
         this.notes = notes;
@@ -62,6 +64,7 @@ public class AdminMapController {
         this.jobs = jobs;
         this.options = options;
         this.layers = layers;
+        this.scope = scope;
     }
 
     /* ==================== 状态 ==================== */
@@ -194,6 +197,42 @@ public class AdminMapController {
         }
         out.put("maps", maps);
         return out;
+    }
+
+    /* ==================== 当前用哪几张地图 ==================== */
+
+    /**
+     * 地图候选列表：wiki 上现在有的**每一张**地图 + 点数 + 最后改动时间 + 是否启用。
+     *
+     * <p>这是"不把判断写死在配置里"的落点：同步把命名空间里的地图全拉进来（谁也不丢），
+     * 用哪几张在这里由人决定。游戏更新后 wiki 另起一页，它会自己出现在这份列表里等人决定 ——
+     * 而不是像白名单那样被静默跳过、让旧图继续以"最新"的样子留着。
+     */
+    @GetMapping("/maps")
+    public Map<String, Object> maps() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("active", scope.activeMaps());
+        out.put("candidates", scope.candidates());
+        return out;
+    }
+
+    /** 启停请求。{@code active} 缺省视为 true */
+    public record ActiveRequest(String map, Boolean active) {
+    }
+
+    @PutMapping("/maps/active")
+    public ResponseEntity<?> setActive(@RequestBody ActiveRequest body) {
+        return handle(() -> {
+            if (body == null || body.map() == null || body.map().isBlank()) {
+                throw new IllegalArgumentException("缺少地图名");
+            }
+            boolean on = body.active() == null || body.active();
+            if (!scope.setActive(body.map(), on)) {
+                throw new IllegalStateException("地图启用状态存不了（问答库没起来）");
+            }
+            return ResponseEntity.ok(Map.of("ok", true, "active", scope.activeMaps()));
+        });
     }
 
     /** 保存请求。{@code groups} 为 null = 恢复"未配置" */

@@ -31,7 +31,7 @@ import Tabs from '@shared/ui/Tabs.vue'
 import { toast } from '@shared/ui/toast'
 import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import type { AnchorReport, AnchorReview, Catalog, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
+import type { AnchorReport, AnchorReview, Catalog, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 
 /** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
@@ -112,6 +112,14 @@ const localPlaces = computed(() => markers.value.filter((m) => m.source === 'adm
  */
 const anchor = ref<AnchorReport | null>(null)
 
+/**
+ * 候选地图列表。
+ *
+ * <p>同步**不筛地图**（命名空间里有什么就拉什么，谁也不丢），用哪几张在这里定。
+ * 这样 wiki 哪天换了新地图，它会自己出现在列表里等人决定 —— 而不是被静默跳过。
+ */
+const mapList = ref<MapCandidates | null>(null)
+
 function blankForm(): PlaceInput & { id: number } {
   return {
     id: 0, map: mapName.value, page: '', x: 0, y: 0, name: '', aliases: [], category: 'resource',
@@ -131,6 +139,7 @@ async function boot() {
     if (mapName.value) await loadMarkers()
     await loadStatus()
     await loadAnchor()
+    await loadMaps()
     /*
      * 数据齐了**直接灌一次**图标表，不等 watcher。
      *
@@ -157,6 +166,26 @@ async function loadMarkers() {
 
 async function loadStatus() {
   status.value = await adminApi.get<MapStatus>('/map/status')
+}
+
+async function loadMaps() {
+  try {
+    mapList.value = await adminApi.get<MapCandidates>('/map/maps')
+  } catch {
+    mapList.value = null
+  }
+}
+
+async function toggleMap(m: MapCandidate) {
+  try {
+    await adminApi.put('/map/maps/active', { map: m.map, active: !m.active })
+    toast((m.active ? '已停用 ' : '已启用 ') + m.map)
+    // 启用状态一变，目录/图层/问答全都跟着变 —— 重新拉一遍
+    await loadMaps()
+    await boot()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
 }
 
 async function loadAnchor() {
@@ -487,8 +516,9 @@ async function pollStatus() {
     const running = Object.values(jobs).some((j) => j.running)
     if (!running) break            // ⚠️ 不能 return：下面那步刷新就永远跑不到
   }
-  // 同步可能把画布定义换掉了 —— 任务跑完顺手刷新一次待复核清单
+  // 同步可能把画布定义换掉了，也可能带来了新地图 —— 两样都刷新一次
   await loadAnchor()
+  await loadMaps()
 }
 
 function fmtBytes(n: number): string {
@@ -978,6 +1008,43 @@ async function saveLayers(keys: string[] | null) {
             </template>
           </p>
           <p class="kv"><span>目录</span><code>{{ status?.tileCache.root }}</code></p>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">地图</h2>
+          <p class="hint">
+            同步会把 wiki 上 Map 命名空间里的地图<b>全部</b>拉进来，谁也不丢；
+            用哪几张在这里定。没启用的数据只是不露脸 —— 不渲染、不参与地点问答、不进地点语料，
+            点一下就能切回来。
+          </p>
+          <p class="hint">
+            ⚠️ 这里<b>没有</b>写死的白名单：游戏更新后 wiki 往往会另起一页（名字也变），
+            白名单那时只会静默跳过新图、让旧图继续以「最新」的样子留着。
+            所以新地图会自己出现在下面等人决定。
+          </p>
+          <table v-if="mapList && mapList.candidates.length" class="tbl small">
+            <thead>
+              <tr>
+                <th>地图</th><th>点位</th><th>wiki 最后改动</th><th>状态</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in mapList.candidates" :key="m.map">
+                <td class="mono">{{ m.map }}</td>
+                <td>{{ fmt(m.markers) }}</td>
+                <td class="mono">{{ m.lastChanged ? m.lastChanged.slice(0, 10) : '—' }}</td>
+                <td>
+                  <Tag :tone="m.active ? 'good' : 'neutral'">
+                    {{ m.active ? (m.auto ? '自动启用' : '已启用') : '未启用' }}
+                  </Tag>
+                </td>
+                <td>
+                  <Button size="sm" @click="toggleMap(m)">{{ m.active ? '停用' : '启用' }}</Button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="muted">还没有地图数据（先同步一次）。</p>
         </div>
 
         <div class="card">

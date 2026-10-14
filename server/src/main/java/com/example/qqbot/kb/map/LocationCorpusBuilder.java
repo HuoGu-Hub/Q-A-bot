@@ -135,13 +135,15 @@ public class LocationCorpusBuilder {
     private final KbMapStore mapStore;
     private final KbBlockStore blockStore;
     private final EmbeddingClient embedding;
+    private final MapScope scope;
 
     /* 既不持有块索引、也不持有词条表：写完索引自己失效、词条表自己补齐 */
     public LocationCorpusBuilder(KbMapStore mapStore, KbBlockStore blockStore,
-                                 EmbeddingClient embedding) {
+                                 EmbeddingClient embedding, MapScope scope) {
         this.mapStore = mapStore;
         this.blockStore = blockStore;
         this.embedding = embedding;
+        this.scope = scope;
     }
 
     /** 一个待写入的派生块 */
@@ -161,10 +163,30 @@ public class LocationCorpusBuilder {
                               int written, int purged, boolean dryRun, List<String> samples) {
     }
 
+    /**
+     * 只拿**启用**的地图的 marker。
+     *
+     * <p>这一步是"五套坐标系混成一条语料"的根治处：语料按 article 聚合，
+     * 一旦把旧世界图一起喂进来，"远古尖塔"就会变成一条含 25 个坐标、横跨 5 张图的记录。
+     * 见 {@link MapScope}。
+     */
+    private List<KbMapStore.Marker> activeMarkers() {
+        List<KbMapStore.Marker> all = mapStore.all();
+        Set<String> active = scope.activeMaps();
+        List<KbMapStore.Marker> out = new ArrayList<>();
+        for (KbMapStore.Marker m : all) {
+            if (active.contains(m.map())) {
+                out.add(m);
+            }
+        }
+        return out;
+    }
+
     /** 只算不写（dryRun / 测试用） */
     public BuildReport planOnly() {
-        List<Entry> entries = plan(mapStore.all());
-        return report(entries, countSkippedLore(mapStore.all()), 0, 0, true);
+        List<KbMapStore.Marker> markers = activeMarkers();
+        List<Entry> entries = plan(markers);
+        return report(entries, countSkippedLore(markers), 0, 0, true);
     }
 
     /**
@@ -174,7 +196,7 @@ public class LocationCorpusBuilder {
      * 这里**不吞**：块写进去了却没有向量，等于"检索永远看不到它"，比直接失败更难排查。
      */
     public BuildReport build(boolean dryRun) {
-        List<KbMapStore.Marker> markers = mapStore.all();
+        List<KbMapStore.Marker> markers = activeMarkers();
         List<Entry> entries = plan(markers);
         int skippedLore = countSkippedLore(markers);
         if (dryRun) {
@@ -201,22 +223,6 @@ public class LocationCorpusBuilder {
                 written, countKind(entries, "region"), countKind(entries, "poi"),
                 countKind(entries, "place"), countKind(entries, "npc"), skippedLore);
         return report(entries, skippedLore, written, 0, false);
-    }
-
-    /**
-     * 当前库里有多少条地图派生的地点语料。
-     *
-     * <p>清掉某张地图之后这些块就**过期了**（它们是拿那张图的坐标算出来的），
-     * 但重新派生要调向量接口、要花钱，不能在一个后台清理里顺手做 ——
-     * 所以 {@link MapResidueCleaner} 用它来判断"要不要喊人重新派生"。
-     */
-    public int derivedCount() {
-        try {
-            return blockStore.byDoc(DOC_ID).size();
-        } catch (Exception e) {
-            log.warn("[KB-MAP] 读地点语料条数失败：{}", e.getMessage());
-            return 0;
-        }
     }
 
     /** 清掉全部派生块 —— 回滚用。返回删掉的条数 */

@@ -204,6 +204,30 @@ export interface AnchorReport {
   items: AnchorReview[]
 }
 
+/**
+ * 一张候选地图。
+ *
+ * <p>同步会把 wiki 上 Map 命名空间里的地图**全部**拉进来（谁也不丢），
+ * 用哪几张在这里由人决定。这就是"不把判断写死在配置里"的落点：
+ * 游戏更新后 wiki 另起一页，它会自己出现在这份列表里等人决定，
+ * 而不是被白名单静默跳过、让旧图继续以「最新」的样子留着。
+ */
+export interface MapCandidate {
+  map: string
+  markers: number
+  /** wiki 最后改动这页的时间（空 = 没记录）。它是判断"哪张是新的"的客观信号之一 */
+  lastChanged: string
+  active: boolean
+  /** 当前启用它是因为"自动兜底选点数最多那张"，而不是有人选过 */
+  auto: boolean
+}
+
+export interface MapCandidates {
+  ok: boolean
+  active: string[]
+  candidates: MapCandidate[]
+}
+
 export interface MapStatus {
   ok: boolean
   enabled: boolean
