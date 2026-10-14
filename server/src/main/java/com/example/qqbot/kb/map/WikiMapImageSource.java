@@ -79,7 +79,7 @@ public class WikiMapImageSource implements MapImageSource {
     }
 
     /** 重试的等待时长。429 是"你太快了"，等得短了等于没等 */
-    private static final long[] RETRY_BACKOFF_MS = {900, 2500};
+    private static final long[] RETRY_BACKOFF_MS = {900, 2500, 6000};
 
     /** 上游说"你太快了"。单独一个类型，才能和网络故障区别对待 */
     static final class RateLimited extends IOException {
