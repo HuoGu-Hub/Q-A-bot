@@ -520,11 +520,10 @@ function fmt(n: number): string {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  /*
-   * 左右各留一道边。铺满整屏看着像"页面没渲染完"，留白才像一张地图；
-   * 用 clamp 而不是固定值：宽屏需要更宽的边距才压得住，窄屏则不能浪费横向空间。
-   */
-  padding: var(--sp-4) clamp(var(--sp-3), 2.4vw, var(--sp-6));
+  /* 左右只留一道最小边距，真正的留白交给舞台自己的宽度上限 */
+  padding: var(--sp-4) var(--sp-3);
+  display: flex;
+  justify-content: center;
 }
 @media (max-width: 760px) {
   /* 手机上横向一寸都不能浪费；底部留给底栏的空白由外壳那层负责 */
@@ -745,6 +744,14 @@ function fmt(n: number): string {
 /* ==================== 舞台 ==================== */
 .stage {
   position: relative;
+  /*
+   * 只占视口宽度的 75%，居中。
+   *
+   * 为什么是 min(100%, max(680px, 75vw)) 而不是一个百分比：手机上 75vw 只有两百多像素，
+   * 地图会窄到没法看。这样写等于"宽屏按比例留白、窄屏自动吃满可用宽度"，
+   * 一个表达式覆盖两头，不需要再写一套媒体查询。
+   */
+  width: min(100%, max(680px, 75vw));
   height: 100%;
   min-height: 0;
   overflow: hidden;
