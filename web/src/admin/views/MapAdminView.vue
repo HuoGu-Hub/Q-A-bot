@@ -20,7 +20,7 @@
  * 固定在侧栏就能一边看图一边改字段，而且切点位时表单原地刷新，不用开关弹窗。
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { adminApi, describeError } from '@shared/api/client'
+import { adminApi, describeError, publicApi } from '@shared/api/client'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Button from '@shared/ui/Button.vue'
 import Icon from '@shared/ui/Icon.vue'
@@ -31,7 +31,7 @@ import Tabs from '@shared/ui/Tabs.vue'
 import { toast } from '@shared/ui/toast'
 import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import type { AnchorReport, AnchorReview, Catalog, JobState, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
+import type { AnchorReport, AnchorReview, Catalog, JobState, LocateHit, LocateResult, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 
 /** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
@@ -70,6 +70,46 @@ const noteForm = ref({
 const noteSaving = ref(false)
 
 const mapCanvas = ref<InstanceType<typeof MapCanvas> | null>(null)
+
+/* ==================== 找点位 ====================
+ * 复用公开站那一套（同一个 /map/locate 接口、同一份命中结构）：
+ * 标注时"我要改某个点"和浏览时"我要找某个点"是同一件事，
+ * 各写一套搜索只会两处结果不一致。
+ */
+const findQuery = ref('')
+const finding = ref(false)
+const found = ref<LocateResult | null>(null)
+
+async function findPoint() {
+  const q = findQuery.value.trim()
+  if (!q || finding.value) return
+  finding.value = true
+  try {
+    // 这个接口在公开侧，管理端直接调即可 —— 它本来就不需要登录
+    found.value = await publicApi.get<LocateResult>('/map/locate?q=' + encodeURIComponent(q))
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    finding.value = false
+  }
+}
+
+/**
+ * 跳到一条命中。
+ *
+ * <p>先在本地点位表里把它认出来 —— 认得出来就走 {@link jumpTo}，
+ * 那样才会切画布、选中并**带出编辑面板**；认不出来就只把视野挪过去。
+ */
+function focusHit(hit: LocateHit) {
+  const m = markers.value.find((x) => x.id === hit.ref)
+    ?? markers.value.find((x) => Math.abs(x.x - hit.x) < 0.5 && Math.abs(x.y - hit.y) < 0.5)
+  if (m) {
+    jumpTo(m)
+  } else {
+    mapCanvas.value?.focus(hit.x, hit.y, Math.max(mapCanvas.value?.scale() ?? 0.5, 0.6))
+  }
+  found.value = null
+}
 
 const currentMap = computed<MapSpec | null>(
   () => catalog.value?.maps.find((m) => m.map === mapName.value) ?? null,
@@ -862,6 +902,12 @@ async function saveLayers(keys: string[] | null) {
       ]" />
     </template>
     <template #actions>
+      <form class="find" @submit.prevent="findPoint">
+        <Input v-model="findQuery" placeholder="找点位：铁矿 / 尖塔 / 木匠" autocapitalize="off" />
+        <Button type="submit" size="sm" :disabled="finding">
+          <Icon name="search" :size="14" />{{ finding ? '查找中' : '查找' }}
+        </Button>
+      </form>
       <Button size="sm" @click="openDefaults">
         <Icon name="display" :size="14" />设置默认显示
       </Button>
@@ -870,6 +916,29 @@ async function saveLayers(keys: string[] | null) {
       </Button>
       <Button size="sm" @click="boot"><Icon name="refresh" :size="14" />重新载入</Button>
     </template>
+
+    <!-- 命中列表：浮在页头下面。点一条就跳过去并带出它的编辑面板 -->
+    <div v-if="found" class="find-hits">
+      <div class="find-hits-head">
+        <span class="hint">「{{ found.q }}」找到 {{ found.hits.length }} 个</span>
+        <button type="button" class="mini" @click="found = null">关闭</button>
+      </div>
+      <ol v-if="found.hits.length" class="hits">
+        <li v-for="h in found.hits" :key="h.ref + h.x + h.y">
+          <button type="button" class="hit" @click="focusHit(h)">
+            <span class="hit-name">
+              {{ h.name }}
+              <Tag v-if="h.source === 'admin'" tone="flame">本地</Tag>
+            </span>
+            <span class="hit-rel">
+              <template v-if="h.relative">{{ h.relative.phrase }}</template>
+              <template v-else>坐标 ({{ fmt(h.x) }}, {{ fmt(h.y) }})</template>
+            </span>
+          </button>
+        </li>
+      </ol>
+      <p v-else class="hint">没找到。换个词试试，比如只写「铁矿」。</p>
+    </div>
 
     <p v-if="error" class="alert" role="alert">{{ error }}</p>
     <p v-if="loading" class="muted">正在载入…</p>
@@ -1791,6 +1860,47 @@ async function saveLayers(keys: string[] | null) {
   font-size: var(--fs-sm);
 }
 .layer-row:hover { background: var(--stone-400); }
+/* ==================== 找点位 ==================== */
+.find { display: flex; align-items: center; gap: var(--sp-2); min-width: 260px; }
+.find :deep(input) { min-width: 180px; }
+
+/*
+ * 命中列表浮在页头下面，不挤占版面。
+ * 用 fixed 而不是 absolute：它挂在 AdminPage 的内容流里，而页头是 sticky 的，
+ * absolute 会跟着内容滚走。
+ */
+.find-hits {
+  position: fixed;
+  top: calc(var(--admin-bar-h, 56px) + 62px);
+  right: var(--sp-5);
+  z-index: var(--z-drawer);
+  width: min(380px, calc(100vw - var(--sp-5) * 2));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--stone-300);
+  box-shadow: var(--shadow-pop), var(--bevel-raised);
+}
+.find-hits-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.hits { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
+.hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hit:hover { background: var(--stone-400); }
+.hit-name { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--ink); }
+.hit-rel { font-size: var(--fs-xs); color: var(--ink-3); }
+
 .layer-icon { width: 18px; height: 18px; object-fit: contain; }
 .layer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
