@@ -895,8 +895,14 @@ async function saveLayers(keys: string[] | null) {
 
 /* ==================== 舞台与悬浮面板 ====================
    和公开站同一套：地图居中占满，侧栏浮在它上面，收起后只剩一颗按钮。 */
-/* 地图要贴到接近视口底部。.page 默认 76px 的页脚留白会把地图往上顶，留出一条空带 */
-:deep(.page) { padding-bottom: 20px; }
+/*
+ * 地图要贴到接近视口底部。.page 默认 76px 的页脚留白会把地图往上顶，留出一条空带。
+ *
+ * ⚠️ 这里**不能写 :deep(.page)**：AdminPage 的根元素本身就带本组件的 scope 标记，
+ * 而 :deep() 编译成的是**后代**选择器，永远匹配不到它自己 ——
+ * 表现为"改了内边距但页面纹丝不动、还多出 56px 滚动"。直接写 .page 才是对的。
+ */
+.page { padding-bottom: 20px; }
 
 .stage {
   position: relative;
