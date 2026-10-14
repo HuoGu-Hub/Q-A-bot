@@ -40,10 +40,10 @@ public class MapViewService {
     /**
      * 地图中文名 —— 只影响界面标签，不动语料（改语料的名字会动向量，那是另一件事）。
      *
-     * <p>⚠️ 这里收录的比 {@code app.kb.map-sync.maps} 白名单多：EarlyAccess / FrozenFrontier /
-     * Update4 / Test 现在都不同步了（见 {@link com.example.qqbot.kb.MapSync#getMaps()}）。
-     * 留着它们**不是残留** —— 以后想把某张区域图加回白名单时，不必再去查一遍中文名。
-     * 界面上不会因此多出任何东西：能显示什么由库里有哪些地图决定。
+     * <p>这里比**当前启用的**地图多：EarlyAccess / FrozenFrontier / Update4 这些旧世界图与
+     * 区域小图，同步时照样会进库（{@link MapScope} 决定用哪几张），只是没启用而已。
+     * 留着它们的中文名不是残留 —— 哪天在后台把它们打开，界面立刻就有名字可用。
+     * 至于界面会不会多出东西：不会，能显示什么由 {@link MapScope} 决定。
      */
     private static final Map<String, String> MAP_ZH = Map.of(
             "Embervale", "余烬谷",
