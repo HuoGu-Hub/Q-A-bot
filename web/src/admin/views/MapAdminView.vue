@@ -29,6 +29,7 @@ import Select from '@shared/ui/Select.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Tabs from '@shared/ui/Tabs.vue'
 import { toast } from '@shared/ui/toast'
+import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
 import type { Catalog, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 
@@ -465,10 +466,13 @@ async function loadLayers() {
   }
 }
 
-/** 切到这一页就重新拉一次：刚同步过的话，分组清单可能已经变了 */
-watch(tab, (t) => {
-  if (t === 'defaults') void loadLayers()
-})
+/** 打开弹窗就重新拉一次：刚同步过的话，分组清单可能已经变了 */
+function openDefaults() {
+  defaultsOpen.value = true
+  void loadLayers()
+}
+
+const defaultsOpen = ref(false)
 
 watch(layerMap, syncLayerSelection)
 
@@ -488,6 +492,8 @@ async function saveLayers(keys: string[] | null) {
     await adminApi.put('/map/layers', { map: cur.map, groups: keys })
     toast(keys === null ? '已恢复为未配置' : '已保存，公开地图页下次打开就按这个显示')
     await loadLayers()
+    // 标注页显示的图层就是公开站的默认，改完要立刻反映出来
+    syncVisibleGroups()
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -502,11 +508,13 @@ async function saveLayers(keys: string[] | null) {
       <Tabs v-model="tab" :tabs="[
         { key: 'mark', label: '标注' },
         { key: 'places', label: '点位列表', count: localPlaces.length },
-        { key: 'defaults', label: '默认显示' },
         { key: 'status', label: '同步与状态' },
       ]" />
     </template>
     <template #actions>
+      <Button size="sm" @click="openDefaults">
+        <Icon name="display" :size="14" />设置默认显示
+      </Button>
       <Button size="sm" @click="startNewPlace">
         <Icon name="plus" :size="14" />新增点位
       </Button>
@@ -704,8 +712,16 @@ async function saveLayers(keys: string[] | null) {
       </div>
 
       <!-- ==================== 状态 ==================== -->
-      <!-- ==================== 默认显示 ==================== -->
-      <div v-show="tab === 'defaults'" class="defaults">
+      <!-- ==================== 默认显示（弹窗） ====================
+           从独立的标签页搬到了这里：它改的是"公开站默认显示什么"，
+           和标注是同一件事的两面，分开两页只会让人来回切。 -->
+      <Modal
+        :open="defaultsOpen"
+        title="设置默认显示"
+        width="720px"
+        @close="defaultsOpen = false"
+      >
+      <div class="defaults">
         <p class="hint">
           公开地图页首屏默认打开哪些分组。分组多的时候全开会密密麻麻一片，
           所以只有在这里挑过的才会显示；新同步进来的分组默认是关着的，不会自己冒出来。
@@ -790,6 +806,7 @@ async function saveLayers(keys: string[] | null) {
           <p>先到「同步与状态」同步一次 wiki 地图。</p>
         </div>
       </div>
+      </Modal>
 
       <div v-show="tab === 'status'" class="status">
         <div class="card">
