@@ -29,6 +29,7 @@ import Select from '@shared/ui/Select.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
+import Modal from '@shared/ui/Modal.vue'
 import Empty from '@shared/ui/Empty.vue'
 
 /** 与后端 CategoryService.UNCATEGORIZED 一致 */
@@ -294,11 +295,44 @@ async function clearAllAliases() {
   }
 }
 
+// ==================== 导出（选格式）====================
+
+/**
+ * 「导出」是一个按钮：点开先选格式，再真的导出。
+ *
+ * 原来工具栏上并排两个导出按钮，占位却只差一个后缀；收成一个入口之后，
+ * 工具栏腾出来的地方正好放筛选。
+ */
+const exportOpen = ref(false)
+
+/** 家底读数 —— 原来那块独立的「筛选」面板删掉后，数字折成标题旁的一行，一条都不丢 */
+const ledgerText = computed(() => {
+  const c = counts.value
+  if (!c) return ''
+  return '有别名 ' + num(c.aliased) + ' · 无别名 ' + num(c.unaliased)
+    + ' · 未分类 ' + num(c.uncategorized) + ' · 已下架 ' + num(c.retired)
+})
+
+function openExport() {
+  exportOpen.value = true
+}
+function closeExport() {
+  exportOpen.value = false
+}
+async function chooseExport(format: 'xlsx' | 'tsv') {
+  exportOpen.value = false
+  await exportTable(format)
+}
+
 onMounted(load)
 
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
+  // 这几个按钮现在挂在页面顶栏（KbView），面板只保留动作
+  openExport,
+  pickImport,
+  clearAllAliases,
 })
 </script>
 
@@ -307,72 +341,40 @@ defineExpose({
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <Notice v-if="ok" tone="ok">{{ ok }}</Notice>
 
-    <!-- 筛选 + 家底读数：一条筛选栏，下面用发丝线接一行读数 -->
-    <Panel title="筛选">
-      <div class="filters">
-        <div class="f-view">
-          <Select
-            :model-value="view"
-            :options="VIEWS"
-            aria-label="视图预设"
-            @update:model-value="(v: string) => { view = v; applyFilter() }"
-          />
-        </div>
-        <div class="f-cat">
-          <Select
-            :model-value="category"
-            :options="categoryOptions"
-            aria-label="按分类筛选"
-            @update:model-value="(v: string) => { category = v; applyFilter() }"
-          />
-        </div>
-        <Input
-          :model-value="q"
-          class="f-kw"
-          placeholder="搜标题 / 别名 …"
-          aria-label="搜索词条"
-          @update:model-value="(v: string) => (q = v)"
-          @keyup.enter="applyFilter"
-        />
-        <Button size="sm" @click="applyFilter">搜索</Button>
-      </div>
-
-      <dl class="ledger">
-        <div class="led-lede">
-          <dt>全部</dt>
-          <dd class="num">{{ num(counts?.all ?? 0) }}</dd>
-        </div>
-        <div>
-          <dt>有别名</dt>
-          <dd class="num">{{ num(counts?.aliased ?? 0) }}</dd>
-        </div>
-        <div>
-          <dt>无别名</dt>
-          <dd class="num">{{ num(counts?.unaliased ?? 0) }}</dd>
-        </div>
-        <div>
-          <dt>未分类</dt>
-          <dd class="num">{{ num(counts?.uncategorized ?? 0) }}</dd>
-        </div>
-        <div>
-          <dt>已下架</dt>
-          <dd class="num">{{ num(counts?.retired ?? 0) }}</dd>
-        </div>
-      </dl>
-    </Panel>
-
-    <Panel title="词条" :count="total">
+    <Panel title="词条" :hint="ledgerText" :count="total">
       <div class="toolbar">
-        <div class="tb-group">
-          <Button size="sm" :disabled="loading" @click="exportTable('xlsx')">导出 xlsx</Button>
-          <Button size="sm" :disabled="loading" @click="exportTable('tsv')">导出 tsv</Button>
-          <Button size="sm" :disabled="loading" @click="pickImport">导入别名表</Button>
+        <!-- 筛选控件顶替原来导入/导出按钮的位置，成为这一行的主角 -->
+        <div class="tb-filters">
+          <div class="f-view">
+            <Select
+              :model-value="view"
+              :options="VIEWS"
+              aria-label="视图预设"
+              @update:model-value="(v: string) => { view = v; applyFilter() }"
+            />
+          </div>
+          <div class="f-cat">
+            <Select
+              :model-value="category"
+              :options="categoryOptions"
+              aria-label="按分类筛选"
+              @update:model-value="(v: string) => { category = v; applyFilter() }"
+            />
+          </div>
+          <Input
+            :model-value="q"
+            class="f-kw"
+            placeholder="搜标题 / 别名 …"
+            aria-label="搜索词条"
+            @update:model-value="(v: string) => (q = v)"
+            @keyup.enter="applyFilter"
+          />
+          <Button size="sm" @click="applyFilter">搜索</Button>
         </div>
         <div class="tb-group tb-right">
           <span class="faint page">{{ pageLabel }}</span>
           <Button size="sm" :disabled="!canPrev || loading" @click="goPage(-1)">上一页</Button>
           <Button size="sm" :disabled="!canNext || loading" @click="goPage(1)">下一页</Button>
-          <Button size="sm" variant="danger" :disabled="loading" @click="clearAllAliases">清空全部别名</Button>
         </div>
         <input ref="fileInput" type="file" accept=".xlsx,.tsv,.csv,.txt" class="hidden-file" @change="onFile" >
       </div>
@@ -502,34 +504,29 @@ defineExpose({
         </tbody>
       </DataTable>
     </Panel>
+
+    <Modal :open="exportOpen" title="导出词条表" width="480px" @close="closeExport">
+      <p class="export-lede">
+        按当前筛选导出 <b class="num">{{ num(total) }}</b> 条词条。选一种格式：
+      </p>
+      <div class="export-opts">
+        <button type="button" class="export-opt" @click="chooseExport('xlsx')">
+          <span class="opt-title">Excel 表格（.xlsx）</span>
+          <span class="opt-hint">在 WPS / Excel 里改别名，再用「导入别名表」导回</span>
+        </button>
+        <button type="button" class="export-opt" @click="chooseExport('tsv')">
+          <span class="opt-title">纯文本（.tsv）</span>
+          <span class="opt-hint">给脚本或调试用：制表符分隔、不带 BOM</span>
+        </button>
+      </div>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* ==================== 筛选 ==================== */
-.filters { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
-.f-view { flex: none; width: 150px; }
-.f-cat { flex: none; width: 220px; }
-.f-kw { flex: 1; min-width: 200px; }
-
-/* 家底读数：一条横向账目，数字与标签成对，不铺成四张卡 */
-.ledger {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-5);
-  margin: var(--sp-4) 0 0;
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--hairline);
-}
-.ledger > div { display: flex; align-items: baseline; gap: var(--sp-2); }
-.ledger dt { font-size: var(--fs-meta); color: var(--ink-3); }
-.ledger dd { margin: 0; font-size: var(--fs-body); color: var(--ink-2); }
-.led-lede dt { color: var(--ink-2); }
-.led-lede dd { font-size: var(--fs-lg); color: var(--ink); }
-
-/* ==================== 工具栏 ==================== */
+/* ==================== 工具栏（筛选 + 翻页） ==================== */
 .toolbar {
   display: flex;
   align-items: center;
@@ -537,10 +534,41 @@ defineExpose({
   flex-wrap: wrap;
   margin-bottom: var(--sp-3);
 }
+/* 筛选控件是这一行的主角：占满左侧，翻页靠右 */
+.tb-filters { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; flex-wrap: wrap; }
+.f-view { flex: none; width: 150px; }
+.f-cat { flex: none; width: 220px; }
+.f-kw { flex: 1; min-width: 200px; }
 .tb-group { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .tb-right { margin-left: auto; }
 .page { font-size: var(--fs-meta); }
 .hidden-file { display: none; }
+
+/* ==================== 导出格式选择 ==================== */
+.export-lede { margin: 0 0 var(--sp-3); font-size: var(--fs-body); color: var(--ink-2); }
+.export-lede b { color: var(--ink); }
+.export-opts { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* 两个选项是"动作卡片"而不是单选：点了就直接导出，所以做成按钮 */
+.export-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
+.export-opt:hover { background: var(--bg-raised); border-color: var(--edge-hover); transform: translateY(-1px); }
+.export-opt:active { background: var(--surface-active); transform: translateY(0); }
+.export-opt:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.opt-title { font-size: var(--fs-body); color: var(--ink); }
+.opt-hint { font-size: var(--fs-meta); color: var(--ink-3); }
 
 /* ==================== 表格 ==================== */
 .title { color: var(--ink); }

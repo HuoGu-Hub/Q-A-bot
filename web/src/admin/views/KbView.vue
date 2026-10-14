@@ -3,7 +3,7 @@
  * 知识库 —— 「文档」「词条」「分类」「提案」「抓取」五个二级目录合并后的页面。
  *
  *  文档   往知识库**导入文档**（按块 id 操作，导入即自动切割成一个个词条）
- *  词条   **一个词条 = 一个分块**：id + 标题 + 别名 + 分类；别名在这里改
+ *  词条   **一个词条 = 一个分块**：列表看标题 / 别名 / 分类，点「编辑」展开改别名与正文
  *  分类   人工维护的平铺分类清单：新增 / 改名 / 删除；标签认不出就是「未分类」
  *  提案   被认可的回答攒够阈值后，由 agent 产出、等人确认的改进提案
  *  抓取   从 wiki 抓文章（来源名与页面分类会自动登记进分类清单）
@@ -77,8 +77,16 @@ const propTitle = computed(() => prop.value?.analyzeTitle() ?? '')
     </template>
 
     <template #actions>
+      <!--
+        词条：动作全在顶栏（筛选、翻页在面板里）。
+        导出收成一个入口，点了先选 xlsx / tsv —— 原来两个并排按钮只差一个后缀。
+      -->
       <template v-if="tab === 'terms'">
-        <span class="stat faint">一个词条 = 一个分块</span>
+        <Button size="sm" :disabled="tmLoading" @click="tm?.openExport()">导出</Button>
+        <Button size="sm" :disabled="tmLoading" @click="tm?.pickImport()">导入别名表</Button>
+        <Button size="sm" variant="danger" :disabled="tmLoading" @click="tm?.clearAllAliases()">
+          清空全部别名
+        </Button>
         <Button size="sm" :disabled="tmLoading" @click="tm?.reload()">
           {{ tmLoading ? '读取中…' : '刷新' }}
         </Button>
