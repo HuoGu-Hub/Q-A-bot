@@ -84,6 +84,15 @@ export function minScale(canvas: CanvasSpec, vw: number, vh: number): number {
 export const DEFAULT_MAX_ZOOM = 2
 
 /**
+ * 低于这个缩放，**完全不画点位**。
+ *
+ * <p>为什么是"不画"而不是"改画圆点"：总览上几百个圆点同样分不出谁是谁，
+ * 而且它们正好盖住了底图 —— 而那个缩放下用户要看的就是地形本身。
+ * 也就是说圆点这个折中两边都不讨好，直接去掉。
+ */
+export const ICON_MIN_ZOOM = 0.22
+
+/**
  * 夹缩放。
  *
  * 顺序是"先夹上限、再保证不低于 minScale"：画布比视口还小时，
@@ -131,6 +140,25 @@ export function zoomAt(view: View, sx: number, sy: number, factor: number): View
     tx: sx - (sx - view.tx) * ratio,
     ty: sy - (sy - view.ty) * ratio,
   }
+}
+
+/**
+ * 首屏视图：**至少放大到看得清图标**，同时不缩过头。
+ *
+ * <p>取 contain 与 ICON_MIN_ZOOM 的较大者，再留一点余量（1.15 倍）。
+ * 对小地图（黑沼只有 1485×1267）contain 本来就远大于阈值，于是仍然一屏看全；
+ * 对余烬谷这种 10240 的大图，contain 只有 0.08，一屏看全等于看一片点，
+ * 所以首屏落在 0.25 左右 —— 大约显示四成地图，图标清晰、还看得出整体走向。
+ *
+ * <p>放大锚点是**画布中心**：从左上角放大等于把用户丢到地图角落里。
+ */
+export function initialView(canvas: CanvasSpec, vw: number, vh: number,
+                           maxZoom: number = DEFAULT_MAX_ZOOM): View {
+  const fit = fitView(canvas, vw, vh)
+  const k = clampScale(canvas, vw, vh, Math.max(fit.k, ICON_MIN_ZOOM * 1.15), maxZoom)
+  const [w, h] = extentOf(canvas)
+  return clampView(canvas, vw, vh,
+    { k, tx: vw / 2 - (w / 2) * k, ty: vh / 2 - (h / 2) * k }, maxZoom)
 }
 
 /** 让整张画布完整可见并居中 —— 首次打开与"复位"用 */

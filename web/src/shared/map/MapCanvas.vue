@@ -24,10 +24,9 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { CanvasSpec, Marker, Relative } from './types'
-import { categoryColor } from './palette'
 import {
-  clampView, centerOn, crsOf, extentOf, fitPoints, fitView, hitTest,
-  screenOf, visibleMarkers, worldAt, worldOf, worldOfMarker, zoomAt,
+  ICON_MIN_ZOOM, clampView, centerOn, crsOf, extentOf, fitPoints, fitView, hitTest,
+  initialView, screenOf, visibleMarkers, worldAt, worldOf, worldOfMarker, zoomAt,
   type View,
 } from './mapMath'
 
@@ -146,7 +145,6 @@ const palette = shallowRef({
   warn: '#cfa334',
   ink: '#eae5da',
   inkDim: '#8b95a3',
-  backdrop: props.canvas.backdrop || '#2e2e2c',
 })
 
 /** 颜色从主题令牌读一次，而不是写死 —— 页面换主题时地图跟着换 */
@@ -162,17 +160,7 @@ function readPalette() {
     warn: get('--warn', '#cfa334'),
     ink: get('--ink', '#eae5da'),
     inkDim: get('--ink-3', '#8b95a3'),
-    backdrop: props.canvas.backdrop || '#2e2e2c',
   }
-}
-
-/**
- * 圆点颜色按**分类**取，自定义点位与 wiki 点位同色 ——
- * "是不是本地点位"用外圈一道灵火描边表示，不占用一个颜色维度。
- * 这样"绿色=资源"在两种来源上都成立，图例才说得通。
- */
-function colorOf(m: Marker): string {
-  return categoryColor(m.category)
 }
 
 /* ==================== 图标缓存 ==================== */
@@ -242,19 +230,9 @@ function draw() {
   ctx.clearRect(0, 0, w, h)
 
   const v = view.value
-  const list = visibleMarkers(props.canvas, shown.value, v, w, h)
+  // 缩放不够就一个点都不画：那个尺度上图标只会叠成一团，还挡住底图
+  const list = v.k >= ICON_MIN_ZOOM ? visibleMarkers(props.canvas, shown.value, v, w, h) : []
   const box = iconBox(v.k)
-  /**
-   * 屏幕上每个点位平均能分到多大一块地方。
-   *
-   * <p>不够摆下两个图标就退回**分类圆点**：总览上几百个图标互相压在一起，
-   * 和"分不出类型"没有区别 —— 而圆点至少能用颜色把资源/地标/兴趣点/收集品分开，
-   * 配合侧栏图例就能回答"这是资源还是敌寨"。放大到点与点拉开了，图标自然回来。
-   */
-  const spacing = Math.sqrt((w * h) / Math.max(1, list.length))
-  // 3.2 倍边长：两个图标之间要留出足够空隙才叫"分辨得出"，挨着摆和叠着摆没区别。
-  // 实测总览（四百多个点）落在这一侧走圆点，放大到十几倍就切回图标。
-  const useIcons = spacing >= box * 3.2
 
   // 普通点先画、地标后画、选中的最后画 —— 保证"重要"和"被选中"的压在最上面
   const ordered = [...list].sort((a, b) => rank(a) - rank(b))
@@ -273,8 +251,9 @@ function draw() {
       ctx.fill()
     }
 
-    // 选中的那一个永远画图标 —— 用户刚点过它，必须看得清
-    const img = useIcons || selected ? iconFor(m) : null
+    // 图标没加载完就先不画这个点。**不留圆点占位**：占位圆点正是上一版被嫌弃的东西，
+    // 而且它只在首帧出现几十毫秒，换来的是"闪一下又变"的观感
+    const img = iconFor(m)
     if (img) {
       const s = selected ? box + 4 : box
       // 图标来自 wiki，深浅底图上都需要一圈暗底才看得清
@@ -291,16 +270,6 @@ function draw() {
         ctx.strokeStyle = palette.value.emberHot
         ctx.stroke()
       }
-    } else {
-      // 圆点要够大才看得出颜色差异 —— 3px 的色块在深色底图上几乎认不出来
-      const r = selected || hover ? 6 : 4
-      ctx.beginPath()
-      ctx.arc(sx, sy, r, 0, Math.PI * 2)
-      ctx.fillStyle = colorOf(m)
-      ctx.fill()
-      ctx.lineWidth = 1.2
-      ctx.strokeStyle = 'rgba(8,10,14,.8)'
-      ctx.stroke()
     }
 
     if (selected) {
@@ -529,7 +498,7 @@ onMounted(() => {
     size.value = { w: el.clientWidth, h: el.clientHeight }
     if (needsFit && size.value.w > 0 && size.value.h > 0) {
       needsFit = false
-      view.value = fitView(props.canvas, size.value.w, size.value.h)
+      view.value = initialView(props.canvas, size.value.w, size.value.h, props.maxZoom)
     } else {
       view.value = clampView(props.canvas, size.value.w, size.value.h, view.value, props.maxZoom)
     }
@@ -548,7 +517,7 @@ watch(
   () => props.canvas.page,
   () => {
     if (size.value.w > 0) {
-      view.value = fitView(props.canvas, size.value.w, size.value.h)
+      view.value = initialView(props.canvas, size.value.w, size.value.h, props.maxZoom)
       needsFit = false
     } else {
       needsFit = true
@@ -601,7 +570,6 @@ defineExpose({
   <div
     ref="host"
     class="map-host"
-    :style="{ background: palette.backdrop }"
     role="application"
     aria-label="地图画布"
     @pointerdown="onPointerDown"
