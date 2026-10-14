@@ -37,7 +37,14 @@ public class MapViewService {
 
     private static final Logger log = LoggerFactory.getLogger(MapViewService.class);
 
-    /** 地图中文名 —— 只影响界面标签，不动语料（改语料的名字会动向量，那是另一件事） */
+    /**
+     * 地图中文名 —— 只影响界面标签，不动语料（改语料的名字会动向量，那是另一件事）。
+     *
+     * <p>⚠️ 这里收录的比 {@code app.kb.map-sync.maps} 白名单多：EarlyAccess / FrozenFrontier /
+     * Update4 / Test 现在都不同步了（见 {@link com.example.qqbot.kb.MapSync#getMaps()}）。
+     * 留着它们**不是残留** —— 以后想把某张区域图加回白名单时，不必再去查一遍中文名。
+     * 界面上不会因此多出任何东西：能显示什么由库里有哪些地图决定。
+     */
     private static final Map<String, String> MAP_ZH = Map.of(
             "Embervale", "余烬谷",
             "Blackmire", "黑沼",
