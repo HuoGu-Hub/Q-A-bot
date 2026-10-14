@@ -313,8 +313,10 @@ async function savePlace() {
   saving.value = true
   try {
     const body = { ...form.value }
-    if (form.value.id > 0) {
-      await adminApi.put('/map/places/' + form.value.id, body)
+    // 保存前先抓一份"它原来在哪"：保存后待复核清单会刷新，那份就没了
+    const before = anchor.value?.items.find((a) => a.id === body.id) ?? null
+    if (body.id > 0) {
+      await adminApi.put('/map/places/' + body.id, body)
       toast('已更新点位')
     } else {
       await adminApi.post('/map/places', body)
@@ -324,10 +326,42 @@ async function savePlace() {
     await loadMarkers()
     await loadStatus()
     await loadAnchor()
+    if (before) await offerBatchShift(before, body.x, body.y)
   } catch (e) {
     toast(describeError(e), 'error')
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * 把刚修正好的那个点当作基准，问一句"其余待复核的点要不要一起搬"。
+ *
+ * <p>新旧坐标之间的对应关系**只有人知道**，而人已经用一个点表达过了 ——
+ * 就是他把它从哪拖到了哪。剩下的点照搬这个偏移即可，不用逐个再拖一遍。
+ */
+async function offerBatchShift(before: AnchorReview, x: number, y: number) {
+  const dx = x - before.x
+  const dy = y - before.y
+  if (dx === 0 && dy === 0) return
+  const siblings = (anchor.value?.items ?? []).filter(
+    (a) => a.id !== before.id && a.map === before.map && a.page === before.page,
+  ).length
+  if (siblings === 0) return
+  const d = (n: number) => (n > 0 ? '+' : '') + Math.round(n)
+  const yes = window.confirm(
+    '「' + before.name + '」挪了 (' + d(dx) + ', ' + d(dy) + ')。\n' +
+    '同一张底图上还有 ' + siblings + ' 个待复核的点，要按同样的偏移一起搬吗？',
+  )
+  if (!yes) return
+  try {
+    const r = await adminApi.post<{ moved: number; skipped: number }>(
+      '/map/anchor/apply-offset', { referenceId: before.id, dx, dy })
+    toast('已按偏移搬移 ' + r.moved + ' 个点位' + (r.skipped ? '，跳过 ' + r.skipped + ' 个' : ''))
+    await loadMarkers()
+    await loadAnchor()
+  } catch (e) {
+    toast(describeError(e), 'error')
   }
 }
 

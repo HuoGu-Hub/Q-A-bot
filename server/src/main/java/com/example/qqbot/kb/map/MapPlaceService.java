@@ -41,6 +41,9 @@ public class MapPlaceService {
     private static final int MAX_ICON = 120;
     private static final int MAX_COLOR = 24;
 
+    /** 一次批量搬移允许的最大偏移（坐标单位）。超过它基本可以断定是参数传错了 */
+    private static final double MAX_OFFSET = 200_000;
+
     /**
      * 一个自定义点位（落库/读出一致）。
      *
@@ -70,6 +73,15 @@ public class MapPlaceService {
      */
     public record Review(long id, String map, String page, String name, double x, double y,
                          String storedFp, String currentFp, String reason) {
+    }
+
+    /**
+     * 批量搬移的结果。
+     *
+     * @param moved   跟着基准点一起挪了的点数
+     * @param skipped 没动的：基准点自己、别的画布上的点、以及**本来就没问题的点**
+     */
+    public record OffsetReport(int moved, int skipped) {
     }
 
     private final KbMapPlaceRepository repo;
@@ -206,6 +218,63 @@ public class MapPlaceService {
     }
 
     /**
+     * 以**人工修正过的那个点**为基准，把同一张底图上其余待复核的点按同样的偏移搬过去。
+     *
+     * <h2>为什么是"人工给偏移"而不是自动算</h2>
+     * 底图换了坐标系之后，新旧坐标之间那份对应关系<b>只有人知道</b> ——
+     * 理论算不出来（对方什么时候换图、按什么范围重导，我们收不到任何通知）。
+     * 但人只要把一个点拖对，那份对应关系就**已经用行动表达出来**了：
+     * 就是它挪了多远。剩下的点照搬这个偏移即可。
+     *
+     * <p>只处理**待复核**的点：本来就没问题的点动它等于把它弄坏；
+     * 已经人工修过的点因为保存时刷新了指纹，也已经不在待复核里了。
+     *
+     * @param referenceId 基准点，必须已经人工修正并保存过
+     * @return {@code null} 表示基准点不存在（调用方翻成 404）
+     */
+    public OffsetReport applyOffset(long referenceId, double dx, double dy) {
+        if (!available) {
+            throw new IllegalStateException("地图点位存储不可用（问答库没起来）");
+        }
+        if (!Double.isFinite(dx) || !Double.isFinite(dy)) {
+            throw new IllegalArgumentException("偏移量必须是有限数字");
+        }
+        // 一个偏移大到这个量级，只可能是参数传错了 —— 与其把全图点位搬飞，不如拒绝
+        if (Math.abs(dx) > MAX_OFFSET || Math.abs(dy) > MAX_OFFSET) {
+            throw new IllegalArgumentException("偏移量超出合理范围（上限 " + (long) MAX_OFFSET + "）");
+        }
+        KbMapPlaceRepository.PlaceRow ref = repo.byId(referenceId);
+        if (ref == null) {
+            return null;
+        }
+        Fingerprints idx = currentFingerprints();
+        String refCanvas = idx.canvasOf(ref.map(), ref.page());
+
+        int moved = 0;
+        int skipped = 0;
+        for (KbMapPlaceRepository.PlaceRow p : repo.byMap(ref.map(), false)) {
+            String current = idx.forPlace(p.map(), p.page());
+            boolean sameCanvas = idx.canvasOf(p.map(), p.page()).equals(refCanvas);
+            if (p.id() == referenceId || !sameCanvas || anchorOk(p.canvasFp(), current)) {
+                skipped++;
+                continue;
+            }
+            boolean ok = repo.update(new KbMapPlaceRepository.PlaceRow(p.id(), p.map(), p.page(),
+                    p.x() + dx, p.y() + dy, p.name(), p.aliases(), p.category(), p.note(),
+                    p.icon(), p.color(), p.landmark(), p.priority(), p.visible(),
+                    current, p.createdAt(), KbMapStore.now()));
+            if (ok) {
+                moved++;
+            } else {
+                skipped++;
+            }
+        }
+        log.info("[MAP-PLACE] 按基准点 {} 的偏移 ({}, {}) 搬移 {} 个点位，跳过 {} 个",
+                referenceId, dx, dy, moved, skipped);
+        return new OffsetReport(moved, skipped);
+    }
+
+    /**
      * 点位记下的指纹与当前底图是否一致。
      *
      * <p>当前指纹为空 = 画布找不到（页面被改名或删除）→ 一律算不一致，需要人看一眼。
@@ -245,9 +314,13 @@ public class MapPlaceService {
          * 规则一旦不同，这里比的就是另一张画布，那比不检查更糟。
          */
         String forPlace(String map, String page) {
-            String canvas = canvasOfPage.getOrDefault(trim(page),
+            return fpOfPage.getOrDefault(canvasOf(map, page), "");
+        }
+
+        /** 这个点位落在哪张画布上 —— 与渲染端同一条规则 */
+        String canvasOf(String map, String page) {
+            return canvasOfPage.getOrDefault(trim(page),
                     primaryOfMap.getOrDefault(trim(map), ""));
-            return fpOfPage.getOrDefault(canvas, "");
         }
     }
 

@@ -307,6 +307,32 @@ public class AdminMapController {
         });
     }
 
+    /** 批量搬移请求。{@code dx/dy} 由前端算：它手里同时有"原来在哪"和"现在拖到哪" */
+    public record OffsetRequest(Long referenceId, Double dx, Double dy) {
+    }
+
+    /**
+     * 以人工修正过的那个点为基准，把同一张底图上**其余待复核**的点按同样的偏移一起搬。
+     *
+     * <p>为什么偏移要由前端给：新旧坐标之间的对应关系只有人知道，而人已经用一个点表达过了
+     * —— 就是他把它从哪拖到了哪。剩下的点照搬即可，不必逐个再拖一遍。
+     */
+    @PostMapping("/anchor/apply-offset")
+    public ResponseEntity<?> applyOffset(@RequestBody OffsetRequest body) {
+        return handle(() -> {
+            if (body == null || body.referenceId() == null) {
+                throw new IllegalArgumentException("缺少基准点位 id");
+            }
+            MapPlaceService.OffsetReport r = places.applyOffset(body.referenceId(),
+                    body.dx() == null ? 0 : body.dx(), body.dy() == null ? 0 : body.dy());
+            if (r == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "没有 id=" + body.referenceId() + " 的点位"));
+            }
+            return ResponseEntity.ok(Map.of("ok", true, "moved", r.moved(), "skipped", r.skipped()));
+        });
+    }
+
     /* ==================== wiki 点位备注 ==================== */
 
     @GetMapping("/notes")

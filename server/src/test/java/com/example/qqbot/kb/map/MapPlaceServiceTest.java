@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -208,6 +210,68 @@ class MapPlaceServiceTest {
 
         verify(repo).updateFingerprint(eq(7L), eq(now));
         verify(repo, never()).update(any());
+    }
+
+    /* ==================== 基准点 + 批量搬移 ==================== */
+
+    private static KbMapPlaceRepository.PlaceRow row(long id, String map, String page,
+                                                     double x, double y, String fp) {
+        return new KbMapPlaceRepository.PlaceRow(id, map, page, x, y, "点位" + id, "", "custom",
+                "", "", "", false, 0, true, fp, "t", "t");
+    }
+
+    @Test
+    @DisplayName("★ 批量搬移：只动同一张底图上待复核的点，基准点与没问题的点都不碰")
+    void applyOffsetMovesOnlyPendingSiblings() {
+        String oldFp = CanvasFingerprint.of(embervale(0, 10240, 10240, 0));
+        KbMapStore.Canvas moved = embervale(-1024, 11264, 11264, -1024);
+        String newFp = CanvasFingerprint.of(moved);
+        // 同一张地图的另一个画布：另一套取景窗口，属于"别的地方"
+        KbMapStore.Canvas other = canvas("Embervale", "Map:Embervale/Collectibles",
+                -3695, -9045, 6545, 1195);
+        when(mapStore.canvases()).thenReturn(List.of(moved, other));
+
+        // 1 号 = 基准点（人工修正过，指纹已是新的）
+        // 2 号 = 待复核 → 该被搬
+        // 3 号 = 指纹已经是对的 → 本来就没问题，动它等于把它弄坏
+        // 4 号 = 另一张画布上的待复核点 → 偏移是照着这张图量的，不该套到那边
+        when(repo.byId(1L)).thenReturn(row(1, "Embervale", "Map:Embervale/Background", 100, 200, newFp));
+        when(repo.byMap("Embervale", false)).thenReturn(List.of(
+                row(1, "Embervale", "Map:Embervale/Background", 100, 200, newFp),
+                row(2, "Embervale", "Map:Embervale/Background", 10, 20, oldFp),
+                row(3, "Embervale", "Map:Embervale/Background", 30, 40, newFp),
+                row(4, "Embervale", "Map:Embervale/Collectibles", 50, 60, "另一张画布的老指纹")));
+        when(repo.update(any())).thenReturn(true);
+
+        MapPlaceService.OffsetReport report = service.applyOffset(1, 5, -7);
+
+        assertThat(report.moved()).isEqualTo(1);
+        assertThat(report.skipped()).isEqualTo(3);
+
+        ArgumentCaptor<KbMapPlaceRepository.PlaceRow> saved =
+                ArgumentCaptor.forClass(KbMapPlaceRepository.PlaceRow.class);
+        verify(repo).update(saved.capture());
+        assertThat(saved.getValue().id()).isEqualTo(2);
+        assertThat(saved.getValue().x()).isEqualTo(15);
+        assertThat(saved.getValue().y()).isEqualTo(13);
+        assertThat(saved.getValue().canvasFp()).as("搬完就算对齐当前底图，不再挂待复核")
+                .isEqualTo(newFp);
+    }
+
+    @Test
+    @DisplayName("基准点不存在返回 null（控制器翻成 404）")
+    void applyOffsetWithMissingReference() {
+        when(repo.byId(404L)).thenReturn(null);
+        assertThat(service.applyOffset(404, 1, 1)).isNull();
+    }
+
+    @Test
+    @DisplayName("离谱的偏移直接拒绝 —— 与其把全图点位搬飞，不如报错")
+    void applyOffsetRejectsAbsurdDelta() {
+        assertThatThrownBy(() -> service.applyOffset(1, Double.NaN, 0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("有限");
+        assertThatThrownBy(() -> service.applyOffset(1, 0, 999_999))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("范围");
     }
 
     @Test
