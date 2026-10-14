@@ -119,9 +119,10 @@ hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
 <h2>七、怎么用</h2>
 <ol>
 <li>把图放进 <code>server/data/kb-images/</code>，文件名去掉扩展名就是 key。例如 <code>copper-vein.png</code> 对应 <code>kb:copper-vein</code>。</li>
-<li>让模型知道这个 key：资料块、工具结果、或指令话术里写上 <code>[[img:kb:copper-vein]]</code> 原样一串。</li>
-<li>模型照抄标记，出站层换成真图。抄错、图被删、超过上限都只表现为"少一张图"，正文照常发出。</li>
+<li>让模型知道这个 key。最顺的一条是写进知识库：<b>新增一个块</b>，标题即词条名，正文最后一行写 <code>[[img:kb:copper-vein]]</code>。命中这块时，资料段与 <code>lookup</code> 工具结果都会带上标记。建议<b>图片文件名就用块的 id</b>：块 id 只许英文字母数字与 <code>-</code>，正好是图片名允许的字符集。</li>
+<li>模型照抄标记，出站层换成真图。抄错、图被删、超过上限都只表现为「少一张图」，正文照常发出。</li>
 </ol>
+<p>两个渲染点会把<strong>唯一的</strong>那个标记提到块尾单独一行（<code>ImageMarkers.hoistSingleMarker</code>）：资料注入与工具结果各调用一次。理由是模型要改写正文，标记夹在句子中间最容易被顺手重写掉；出现两个及以上标记时一个都不动，因为那时图的顺序有含义。</p>
 <div class="warn"><p>目前还没有后台传图界面，配图靠往目录里放文件。目录本身就是唯一索引，因此不存在"索引与目录不一致"的悬案。</p></div>
 
 <h2>八、阶段二：地图截图</h2>
