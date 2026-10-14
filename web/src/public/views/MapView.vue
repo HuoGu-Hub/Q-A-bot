@@ -83,28 +83,6 @@ const categoryLabel = computed(() => {
   return out
 })
 
-/**
- * 分布：当前画布上**实际可见**的分类与数量。
- *
- * <p>不配色块了。原来每个分类带一个颜色圆点，是为了解释地图上的兜底圆点；
- * 现在点位一律画分组图标、缩得太小就不画，颜色在地图上不再出现，
- * 再摆一排色块等于指着一个地图上不存在的东西让人对照。
- */
-const legend = computed(() => {
-  const counts = new Map<string, number>()
-  for (const m of markersOnCanvas.value) {
-    // 只数可见的点：图层关掉的分类不该还挂在上面
-    const on = m.source === 'admin'
-      ? visibleCategories.value.has(m.category)
-      : visibleGroups.value.has(m.group)
-    if (!on) continue
-    counts.set(m.category, (counts.get(m.category) ?? 0) + 1)
-  }
-  return [...counts.entries()]
-    .map(([key, count]) => ({ key, count, label: categoryLabel.value.get(key) ?? key }))
-    .sort((a, b) => b.count - a.count)
-})
-
 const adminCategories = computed(() => {
   const seen = new Set<string>()
   for (const m of markers.value) {
@@ -365,20 +343,6 @@ function fmt(n: number): string {
           </ol>
           <p v-else-if="located && !located.found" class="hint warn">
             地图上还没有标过「{{ located.q }}」。资源点可以让管理员补一个。
-          </p>
-        </div>
-
-        <div v-if="legend.length" class="block">
-          <h2 class="block-title">分布</h2>
-          <ul class="legend">
-            <li v-for="c in legend" :key="c.key">
-              <span class="layer-name">{{ c.label }}</span>
-              <span class="layer-n">{{ c.count }}</span>
-            </li>
-          </ul>
-          <p class="hint">
-            每个点位画的是它所属分组的图标，具体分组见下面的图层列表。
-            带灵火外圈的是本站补充的点位；缩得太小时不画点位，放大即可看到。
           </p>
         </div>
 
@@ -689,8 +653,6 @@ function fmt(n: number): string {
 .hit-name { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
 .hit-rel { font-size: var(--fs-xs); color: var(--ink-3); }
 
-.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.legend li { display: flex; align-items: center; gap: var(--sp-2); padding: 3px 6px; font-size: var(--fs-sm); }
 .layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .layer {
   display: flex;
