@@ -1601,11 +1601,17 @@ async function saveLayers(keys: string[] | null) {
       （设计令牌里写着：灵火一屏之内只给最该先看一眼的东西）；
    ③ 状态与它的触发方式必须挨在一起。 */
 
+/*
+  宽度：这一页是"一列文档"，而外壳是 1400 的宽版（标注那页的地图要占满，所以不能改成
+  narrow）。因此这里自己收窄并**居中** —— 少了 margin:auto 的话，这一列会贴在 1400 的左边、
+  右边空出一大片，跟上面的吸顶栏对不上。留窄是必要的：长任务的按钮在最右，
+  撑满 1350px 会让名字和按钮之间空出一大块。 */
 .status {
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
   max-width: 1120px;
+  margin-inline: auto;
 }
 
 /* 区块标签：中文小字 + 刻字间距。结构靠它分段，不靠再加一层框 */
