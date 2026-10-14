@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { renderInline } from './renderInline'
 import { t } from './useSiteText'
@@ -7,6 +7,16 @@ import Icon from '@shared/ui/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+/**
+ * 全屏页：地图要占满一屏、页面本身不滚动。
+ *
+ * <p>为什么由外壳来判断，而不是让地图页自己写 {@code position: fixed}：
+ * fixed 会让它脱离文档流，外壳的高度计算立刻失去依据 ——
+ * 页脚会跑到地图底下去、手机底栏会压住地图。
+ * 在这里做，只需要把页脚藏掉、把主区域撑满。
+ */
+const fullBleed = computed(() => route.name === 'map')
 
 /**
  * 路由正在换页 —— 顶部那条细进度条的开关。
@@ -52,7 +62,7 @@ const isActive = (to: string) =>
 </script>
 
 <template>
-  <div class="shell mist-veil texture-grain">
+  <div class="shell mist-veil texture-grain" :class="{ 'is-full': fullBleed }">
     <!-- 键盘用户第一个 Tab 就能跳过导航。视觉上隐藏，聚焦时才出现 -->
     <a class="skip" href="#main">跳到主要内容</a>
 
@@ -280,6 +290,26 @@ const isActive = (to: string) =>
 }
 
 .main { flex: 1; }
+
+/* ==================== 全屏页（地图） ====================
+   一屏到底：外壳高度锁死、主区域撑满、页脚藏掉。
+   ⚠️ 主区域必须给 min-height: 0 —— flex 子项默认 min-height: auto，
+   内容一高就会把容器顶破，那时 overflow: hidden 反而会裁掉地图的底部。 */
+.shell.is-full {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+.shell.is-full .main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.shell.is-full .ftr { display: none; }
+@media (max-width: 760px) {
+  /* 手机底栏是 fixed 的，地图要让出它的高度，否则底部一截永远被压着 */
+  .shell.is-full .main { padding-bottom: var(--tabbar-h); }
+}
 
 /* ==================== 页脚 ==================== */
 .ftr { padding-top: var(--sp-7); padding-bottom: var(--sp-6); }

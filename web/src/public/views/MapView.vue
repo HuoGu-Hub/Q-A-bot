@@ -46,6 +46,14 @@ const located = ref<LocateResult | null>(null)
 
 const mapCanvas = ref<InstanceType<typeof MapCanvas> | null>(null)
 
+/**
+ * 悬浮控制栏是否展开。
+ *
+ * <p>默认展开：第一次进来必须看得见"哪里能搜、哪里能开关图层" ——
+ * 一上来就收起等于把这些功能藏起来。用户收起一次之后，这一次访问内保持收起。
+ */
+const railOpen = ref(true)
+
 const currentMap = computed<MapSpec | null>(
   () => catalog.value?.maps.find((m) => m.map === mapName.value) ?? null,
 )
@@ -270,32 +278,62 @@ function fmt(n: number): string {
 </script>
 
 <template>
-  <section class="page map-page">
-    <header class="head">
-      <p class="eyebrow">雾锁王国 · 地图</p>
-      <h1>全地图查看器</h1>
-      <p class="lede">
-        底图与点位来自 Enshrouded Wiki，另加本站补充的资源点与备注。
-        拖动看图、滚轮缩放、点任意点位看详情；搜「铁矿」这类词会告诉你它离哪个地标最近、在地图的哪个方向。
-      </p>
-    </header>
+  <div class="map-page">
+    <div class="stage">
+      <MapCanvas
+        v-if="currentCanvas"
+        ref="mapCanvas"
+        :canvas="currentCanvas"
+        :markers="markersOnCanvas"
+        :visible-groups="visibleGroups"
+        :visible-categories="visibleCategories"
+        :selected-id="selected?.id ?? ''"
+        :highlight="highlight"
+        :map-name="mapName"
+        :max-zoom="catalog?.maxZoom ?? 2"
+        mode="view"
+        @pick="onPick"
+      />
 
-    <p v-if="error" class="alert" role="alert">{{ error }}</p>
+      <p v-if="error" class="overlay alert" role="alert">{{ error }}</p>
+      <p v-if="loading" class="overlay notice">正在载入地图数据…</p>
 
-    <p v-if="loading" class="muted">正在载入地图数据…</p>
+      <div v-else-if="!catalog || !catalog.maps.length" class="overlay empty-state">
+        <Icon name="map-pin" :size="26" />
+        <h2>还没有地图数据</h2>
+        <p>
+          地图数据由管理员在后台「地图标注」页触发一次同步后就有了。
+          同步会从 wiki 拉取底图信息与全部点位，只跑一次，之后是增量的。
+        </p>
+      </div>
 
-    <div v-else-if="!catalog || !catalog.maps.length" class="empty-state">
-      <Icon name="map-pin" :size="26" />
-      <h2>还没有地图数据</h2>
-      <p>
-        地图数据由管理员在后台「地图标注」页触发一次同步后就有了。
-        同步会从 wiki 拉取底图信息与全部点位，只跑一次，之后是增量的。
-      </p>
-    </div>
+      <template v-else>
+        <button
+          v-if="!railOpen"
+          type="button"
+          class="rail-toggle"
+          aria-controls="map-rail"
+          :aria-expanded="false"
+          @click="railOpen = true"
+        >
+          <Icon name="menu" :size="16" />
+          面板
+        </button>
 
-    <div v-else class="board">
-      <!-- ==================== 控制栏 ==================== -->
-      <aside class="rail" aria-label="地图控制">
+        <aside v-show="railOpen" id="map-rail" class="rail" aria-label="地图控制">
+          <div class="rail-head">
+            <span class="rail-title">{{ currentMap?.label ?? '地图' }}</span>
+            <button
+              type="button"
+              class="rail-collapse"
+              aria-controls="map-rail"
+              :aria-expanded="true"
+              aria-label="收起面板"
+              @click="railOpen = false"
+            >
+              <Icon name="close" :size="15" />
+            </button>
+          </div>
         <div class="block">
           <h2 class="block-title">地图</h2>
           <div class="chips">
@@ -424,24 +462,7 @@ function fmt(n: number): string {
             </li>
           </ul>
         </div>
-      </aside>
-
-      <!-- ==================== 地图 ==================== -->
-      <div class="stage">
-        <MapCanvas
-          v-if="currentCanvas"
-          ref="mapCanvas"
-          :canvas="currentCanvas"
-          :markers="markersOnCanvas"
-          :visible-groups="visibleGroups"
-          :visible-categories="visibleCategories"
-          :selected-id="selected?.id ?? ''"
-          :highlight="highlight"
-          :map-name="mapName"
-          :max-zoom="catalog?.maxZoom ?? 2"
-          mode="view"
-          @pick="onPick"
-        />
+        </aside>
 
         <div class="stage-tools" role="group" aria-label="缩放">
           <button type="button" class="tool" aria-label="放大" @click="mapCanvas?.zoomBy(1.35)">
@@ -485,75 +506,134 @@ function fmt(n: number): string {
             </a>
           </p>
         </article>
-      </div>
+      </template>
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.map-page { --board-h: clamp(460px, 74vh, 900px); }
-.head { margin-bottom: var(--sp-5); }
-.eyebrow {
-  margin: 0 0 var(--sp-2);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--ember);
+/*
+ * 地图页是**全屏页**：外壳去掉了页脚与留白（见 App.vue 的 is-full），
+ * 这一层把自己撑满，并且自己**绝不滚动** —— 页面能滚的话，拖地图时会连带把页面拖动。
+ */
+.map-page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
-h1 {
-  margin: 0 0 var(--sp-3);
-  font-family: var(--font-title);
-  font-size: var(--fs-2xl);
-  letter-spacing: var(--tracking-ink);
-  line-height: var(--lh-tight);
+
+/* 空态 / 加载 / 报错都浮在地图之上，而不是把地图顶下去 */
+.overlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  max-width: min(520px, calc(100% - var(--sp-6)));
+  z-index: 4;
 }
-.lede { margin: 0; max-width: var(--read-max); color: var(--ink-2); }
-.muted { color: var(--ink-3); }
-.alert {
-  margin: 0 0 var(--sp-4);
+.overlay.alert {
+  top: var(--sp-4);
+  transform: translateX(-50%);
   padding: var(--sp-3) var(--sp-4);
   border-left: 3px solid var(--blight);
-  background: var(--blight-veil);
+  background: color-mix(in srgb, var(--stone-300) 94%, transparent);
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
   color: var(--blight-lift);
 }
+.overlay.notice {
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--stone-400) 90%, transparent);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
 
 .empty-state {
-  padding: var(--sp-7) var(--sp-5);
+  padding: var(--sp-6) var(--sp-5);
   text-align: center;
-  background: var(--stone-300);
+  background: color-mix(in srgb, var(--stone-300) 94%, transparent);
   border-radius: var(--r-md);
-  box-shadow: var(--bevel-raised);
+  box-shadow: var(--shadow-pop), var(--bevel-raised);
   color: var(--ink-2);
 }
 .empty-state h2 { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-lg); color: var(--ink); }
 .empty-state p { margin: 0 auto; max-width: 46ch; }
 
-/* ==================== 版面 ==================== */
-.board {
-  display: grid;
-  grid-template-columns: 288px minmax(0, 1fr);
-  gap: var(--sp-4);
-  align-items: stretch;
-}
-@media (max-width: 900px) {
-  .board { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* ==================== 控制栏 ==================== */
+/* ==================== 悬浮控制栏 ====================
+   面板**浮在地图上**，不再占一列：地图才是主角，控制栏不该永久吃掉 288px 的宽度。
+   收起之后只剩左上角一颗按钮，地图回到满宽。 */
 .rail {
+  position: absolute;
+  left: var(--sp-3);
+  top: var(--sp-3);
+  bottom: var(--sp-3);
+  width: 288px;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  max-height: var(--board-h);
   overflow-y: auto;
-  padding: var(--sp-4);
-  background: var(--stone-300);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-radius: var(--r-md);
-  box-shadow: var(--bevel-raised);
+  /* 半透明 + 模糊：盖得住底下的点位，又看得出底下还是地图 */
+  background: color-mix(in srgb, var(--stone-300) 92%, transparent);
+  box-shadow: var(--shadow-pop), var(--bevel-raised);
+  backdrop-filter: blur(10px);
+  /* 面板自己滚到底时不要把页面一起带着滚 */
+  overscroll-behavior: contain;
 }
-@media (max-width: 900px) {
-  .rail { max-height: none; order: 2; }
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  position: sticky;
+  top: calc(var(--sp-3) * -1);
+  margin: calc(var(--sp-3) * -1) calc(var(--sp-4) * -1) 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
+  background: color-mix(in srgb, var(--stone-300) 96%, transparent);
+  border-bottom: 1px solid var(--edge-soft);
+}
+.rail-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semi);
+  letter-spacing: .04em;
+  color: var(--ink-2);
+}
+.rail-toggle,
+.rail-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--stone-400) 90%, transparent);
+  color: var(--ink-2);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.rail-collapse { padding: 4px 6px; border-radius: var(--r-sm); }
+.rail-toggle {
+  position: absolute;
+  left: var(--sp-3);
+  top: var(--sp-3);
+  z-index: 3;
+  padding: 7px 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+}
+.rail-toggle:hover, .rail-collapse:hover { color: var(--ember-hot); border-color: var(--ember); }
+@media (max-width: 760px) {
+  /* 手机上不给固定 288px：左右留边、纵向收一半，别把地图全盖住 */
+  .rail {
+    left: var(--sp-2);
+    right: var(--sp-2);
+    top: var(--sp-2);
+    bottom: auto;
+    width: auto;
+    max-height: 62%;
+  }
+  .rail-toggle { left: var(--sp-2); top: var(--sp-2); }
 }
 .block + .block { padding-top: var(--sp-3); border-top: 1px solid var(--edge-soft); }
 .block-title {
@@ -650,19 +730,17 @@ h1 {
 /* ==================== 舞台 ==================== */
 .stage {
   position: relative;
-  height: var(--board-h);
-  border-radius: var(--r-md);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  box-shadow: var(--shadow-lift), var(--bevel-shelf);
   background: var(--stone-void);
 }
-@media (max-width: 900px) {
-  .stage { order: 1; height: 62vh; }
-}
+/* 缩放按钮放左下：左上留给控制栏，右下留给详情卡 */
 .stage-tools {
   position: absolute;
   left: var(--sp-3);
-  top: var(--sp-3);
+  bottom: var(--sp-3);
+  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -682,6 +760,7 @@ h1 {
 .tool:hover { color: var(--ember-hot); border-color: var(--ember); }
 .stage-loading {
   position: absolute;
+  z-index: 2;
   top: var(--sp-3);
   left: 50%;
   transform: translateX(-50%);
@@ -696,6 +775,7 @@ h1 {
 /* ==================== 详情 ==================== */
 .detail {
   position: absolute;
+  z-index: 2;
   right: var(--sp-3);
   bottom: var(--sp-3);
   width: min(340px, calc(100% - var(--sp-5)));
