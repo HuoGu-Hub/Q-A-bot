@@ -31,7 +31,7 @@ import Tabs from '@shared/ui/Tabs.vue'
 import { toast } from '@shared/ui/toast'
 import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import type { AnchorReport, AnchorReview, CanvasSpec, Catalog, JobState, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
+import type { AnchorReport, AnchorReview, Catalog, JobState, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 
 /** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
@@ -130,46 +130,31 @@ const mapList = ref<MapCandidates | null>(null)
  */
 const primarySpec = computed(() => catalog.value?.maps?.[0] ?? null)
 
-/** 当前世界**最大**的那张画布 —— 报头那根刻度轴画的是它的取景窗 */
-const primaryCanvas = computed<CanvasSpec | null>(() => {
-  const list = primarySpec.value?.canvases ?? []
-  let best: CanvasSpec | null = null
-  let bestArea = -1
-  for (const c of list) {
-    const area = Math.abs((c.bottomRight[0] - c.topLeft[0]) * (c.bottomRight[1] - c.topLeft[1]))
-    if (area > bestArea) {
-      bestArea = area
-      best = c
-    }
-  }
-  return best
-})
+/** 现在对外显示的到底哪一张 —— 候选表标题行用它，省掉一整块报头 */
+const displayMap = computed(() =>
+  primarySpec.value?.map ?? mapList.value?.candidates?.find((c) => c.active)?.map ?? '—'
+)
 
 /**
- * 取景窗刻度轴。
+ * 某张地图的底图情况 —— 候选表的「底图 / 可渲染」两列。
  *
- * <p>坐标系是这套系统的心脏，而 "10240 × 10240" 这一串数字看不出"有多大、被切成几块"。
- * 轴上的**每一格就是一列底图瓦片** —— 它同时说明了世界范围与切图方式。
+ * <p>这两列原本在下面那张「画布」表里，10 行里 5 行永远不可渲染、3 行是 {@code Tabs/*}
+ * 指向同一张底图的重复页，真正在用的只有 2 行。而它要回答的问题——
+ * "这张图能不能渲染"——恰恰是**决定要不要启用它**时的判断材料，
+ * 所以并到候选表里，而不是单独占一张表。
  */
-const windowAxis = computed(() => {
-  const c = primaryCanvas.value
-  if (!c) {
-    return null
+function canvasOf(map: string): { label: string; renderable: boolean } {
+  const list = (status.value?.canvases ?? []).filter((c) => c.map === map)
+  const ok = list.filter((c) => c.renderable)
+  if (ok.length) {
+    const tiles = ok.reduce((n, c) => n + (c.tiles || 0), 0)
+    return { label: ok.length + ' 张 · ' + fmt(tiles) + ' 瓦片', renderable: true }
   }
-  const w = Math.abs(c.bottomRight[0] - c.topLeft[0])
-  const h = Math.abs(c.topLeft[1] - c.bottomRight[1])
-  const tw = c.tileSize?.[0] ?? 0
-  const th = c.tileSize?.[1] ?? 0
-  const cols = tw > 0 ? Math.max(1, Math.round(w / tw)) : 0
-  const rows = th > 0 ? Math.max(1, Math.round(h / th)) : 0
-  const size = fmt(w) + ' × ' + fmt(h) + ' 世界单位'
-  return {
-    from: c.topLeft[0],
-    to: c.bottomRight[0],
-    cols: cols > 0 ? cols : 4,
-    caption: cols > 0 && rows > 0 ? size + ' · ' + cols + '×' + rows + ' 瓦片' : size + ' · 整图一张',
-  }
-})
+  return { label: list.find((c) => c.background)?.background || '—', renderable: false }
+}
+
+/** 解析失败的页。同步页那张表只在有它们时才值得展开 */
+const failedPages = computed(() => (status.value?.pages ?? []).filter((p) => p.error))
 
 /**
  * 长任务**按任务**组织，而不是按按钮。
@@ -1149,45 +1134,7 @@ async function saveLayers(keys: string[] | null) {
 
       <div v-show="tab === 'status'" class="status">
 
-        <!-- ══════════ 报头 ══════════
-             这一页存在的理由是一句话：现在对外是哪张图、有没有活要干。
-             所以先给结论，不给一排并列的卡片。 -->
-        <header class="brief">
-          <div class="brief-main">
-            <p class="eyebrow">当前对外显示</p>
-            <template v-if="primarySpec">
-              <h2 class="brief-title">{{ primarySpec.label || primarySpec.map }}</h2>
-              <p class="brief-stats">
-                <span>{{ fmt(primarySpec.markerCount) }} 点位</span>
-                <i>·</i>
-                <span>{{ primarySpec.groups.length }} 图层</span>
-                <i>·</i>
-                <span class="mono">{{ primarySpec.map }}</span>
-              </p>
-              <p class="brief-meta">
-                wiki 最后改动
-                <b>{{ mapList?.candidates?.find((c) => c.map === primarySpec?.map)?.lastChanged?.slice(0, 10) || '—' }}</b>
-                <i>·</i>
-                上次同步 <b>{{ stamp(status?.jobs?.sync?.finishedAt) }}</b>
-              </p>
-            </template>
-            <p v-else class="brief-empty">库里还没有地图数据 —— 先同步一次。</p>
-          </div>
 
-          <!--
-            签名单品：把当前世界的取景窗画成一根刻度轴。
-            轴上**每一格就是一列底图瓦片** —— 世界范围与切图方式一眼同时看到，
-            而 "10240 × 10240" 那串数字两者都说不出来。
-          -->
-          <figure v-if="windowAxis" class="window">
-            <div class="axis">
-              <span class="axis-cap">{{ fmt(windowAxis.from) }}</span>
-              <span class="axis-rail"><i v-for="n in windowAxis.cols" :key="n" /></span>
-              <span class="axis-cap">{{ fmt(windowAxis.to) }}</span>
-            </div>
-            <figcaption>{{ windowAxis.caption }}</figcaption>
-          </figure>
-        </header>
 
         <!-- ══════════ 待办 ══════════
              只在该出现时出现。它是全页唯一配用暖色的东西 —— 没有它时整页是灰阶，
@@ -1209,31 +1156,31 @@ async function saveLayers(keys: string[] | null) {
         </p>
 
         <!-- ══════════ 用哪几张地图 ══════════
-             只有一张候选时不出现：没有可决定的东西就不该占地方。
-             wiki 换了新图时，这一块会自己多出一行 —— 这是整套设计的落点。 -->
-        <details v-if="mapList && mapList.candidates.length > 1" ref="mapsDetails" class="diag">
+             标题行直接给出"现在显示哪张"，展开才是可切换的列表 ——
+             所以不需要再来一块报头说同一件事。
+             wiki 换了新图时这里会自己多出一行，这是整套设计的落点。 -->
+        <details ref="mapsDetails" class="diag">
           <summary>
             <Icon name="chevron-right" :size="14" class="caret" />
-            <span class="diag-name">候选地图</span>
-            <span class="diag-count">{{ mapList.candidates.length }}</span>
-            <span class="diag-note">wiki 上有这些；用哪几张你定</span>
+            <span class="diag-name">地图</span>
+            <span class="diag-count">{{ mapList?.candidates?.length ?? 0 }}</span>
+            <span class="diag-here">当前显示 <b>{{ displayMap }}</b></span>
           </summary>
-          <p class="hint">
-            同步把命名空间里的地图<b>全部</b>拉进来，谁也不丢。没启用只是不露脸 ——
-            不渲染、不参与地点问答、不进地点语料，点一下就能切回来。
-            正因如此，wiki 哪天另起一页新图，它会自己出现在这里等人决定，
-            而不是被白名单静默跳过。
-          </p>
-          <table class="tbl small">
+          <table v-if="mapList && mapList.candidates.length" class="tbl small">
             <thead>
               <tr>
-                <th>地图</th><th>点位</th><th>wiki 最后改动</th><th>状态</th><th></th>
+                <th>地图</th><th>点位</th><th>底图</th><th>可渲染</th>
+                <th>wiki 最后改动</th><th>状态</th><th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="m in mapList.candidates" :key="m.map">
                 <td class="mono">{{ m.map }}</td>
                 <td>{{ fmt(m.markers) }}</td>
+                <td class="mono">{{ canvasOf(m.map).label }}</td>
+                <td :class="{ no: !canvasOf(m.map).renderable }">
+                  {{ canvasOf(m.map).renderable ? '是' : '否' }}
+                </td>
                 <td class="mono">{{ m.lastChanged ? m.lastChanged.slice(0, 10) : '—' }}</td>
                 <td>
                   <Tag :tone="m.active ? 'good' : 'neutral'">
@@ -1246,6 +1193,7 @@ async function saveLayers(keys: string[] | null) {
               </tr>
             </tbody>
           </table>
+          <p v-else class="hint">还没有地图数据 —— 先同步一次。</p>
         </details>
 
         <!-- ══════════ 长任务 ══════════
@@ -1298,10 +1246,9 @@ async function saveLayers(keys: string[] | null) {
               <span class="diag-note">数据库、缓存、待复核</span>
             </summary>
             <dl class="facts">
+              <!-- 这里**故意不列**"地图库/点位/备注 可用吗"：不可用时顶部的「待办」
+                   已经点名喊过了，列在这里只在一切正常时出现 —— 那时它是噪声 -->
               <div><dt>问答库</dt><dd class="mono">{{ status?.directory }}</dd></div>
-              <div><dt>地图库</dt><dd>{{ status?.mapStoreAvailable ? '可用' : '不可用' }}</dd></div>
-              <div><dt>点位存储</dt><dd>{{ status?.placesAvailable ? '可用' : '不可用' }}</dd></div>
-              <div><dt>备注存储</dt><dd>{{ status?.notesAvailable ? '可用' : '不可用' }}</dd></div>
               <div>
                 <dt>待复核点位</dt>
                 <dd :class="{ bad: (status?.anchorPending ?? 0) > 0 }">
@@ -1324,17 +1271,29 @@ async function saveLayers(keys: string[] | null) {
             </dl>
           </details>
 
-          <details ref="pagesDetails" class="diag">
+          <!--
+            同步页：正常时**只有一行**。
+            以前它是 12 行 × 4 列的常驻表，而健康状态下整张表的信息量是一个 bit（"0 错误"）——
+            12 页里有 7 页是 0 点位的容器页，列出来只是占地方。
+            有失败页时才变成可展开的表，而且**只列失败的那几页**：
+            失败页故意不推进 revid，下一轮同步会自动重试它，这里要回答的是"哪几页、为什么"。
+          -->
+          <div v-if="status && !failedPages.length" class="diag diag-flat">
+            <Icon name="check" :size="14" class="ok" />
+            <span class="diag-name">同步页</span>
+            <span class="diag-ok">{{ status.pages.length }} 页全部同步正常</span>
+          </div>
+          <details v-else ref="pagesDetails" class="diag">
             <summary>
               <Icon name="chevron-right" :size="14" class="caret" />
               <span class="diag-name">同步页</span>
-              <span class="diag-count">{{ status?.pages?.length ?? 0 }}</span>
-              <span class="diag-note">每页的 revid、点位数与解析错误</span>
+              <span class="diag-count bad">{{ failedPages.length }}</span>
+              <span class="diag-note">解析失败的页，下一轮同步会自动重试</span>
             </summary>
             <table class="tbl small">
               <thead><tr><th>页面</th><th>revid</th><th>点位</th><th>错误</th></tr></thead>
               <tbody>
-                <tr v-for="p in status?.pages ?? []" :key="p.page">
+                <tr v-for="p in failedPages" :key="p.page">
                   <td class="mono">{{ p.page }}</td>
                   <td class="mono">{{ p.revid }}</td>
                   <td>{{ p.markerCount }}</td>
@@ -1344,27 +1303,12 @@ async function saveLayers(keys: string[] | null) {
             </table>
           </details>
 
-          <details class="diag">
-            <summary>
-              <Icon name="chevron-right" :size="14" class="caret" />
-              <span class="diag-name">画布</span>
-              <span class="diag-count">{{ status?.canvases?.length ?? 0 }}</span>
-              <span class="diag-note">坐标系、底图、可渲染性</span>
-            </summary>
-            <table class="tbl small">
-              <thead><tr><th>地图</th><th>页面</th><th>底图</th><th>可渲染</th><th>尺寸</th><th>同步时间</th></tr></thead>
-              <tbody>
-                <tr v-for="c in status?.canvases ?? []" :key="c.page">
-                  <td>{{ c.map }}</td>
-                  <td class="mono">{{ c.page }}</td>
-                  <td>{{ c.tiles ? c.tiles + ' 瓦片' : c.background || '—' }}</td>
-                  <td>{{ c.renderable ? '是' : '否' }}</td>
-                  <td class="mono">{{ fmt(c.extent[0]) }} × {{ fmt(c.extent[1]) }}</td>
-                  <td class="mono">{{ stamp(c.syncedAt) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </details>
+          <!--
+            这里原本还有一张「画布」表：10 行里 5 行永远不可渲染，3 行是 Tabs/* 指向同一张
+            底图的重复页，真正在用的只有 2 行。它要回答的"这张图能不能渲染、底图是什么"
+            是**决定要不要启用一张新地图**时的判断材料 —— 所以那两列已经并进上面的「地图」表，
+            这块独立表格没有继续存在的理由。
+          -->
         </section>
       </div>
 
@@ -1630,74 +1574,7 @@ async function saveLayers(keys: string[] | null) {
   color: var(--ink-3);
 }
 
-/* ---------- 报头 ---------- */
-.brief {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--sp-5);
-  padding: var(--sp-5) var(--sp-5) var(--sp-4);
-  border-radius: var(--r-md);
-  background: var(--stone-300);
-  box-shadow: var(--bevel-raised);
-}
-.brief-main { min-width: 0; }
-.eyebrow {
-  margin: 0 0 var(--sp-2);
-  font-size: var(--fs-xs);
-  letter-spacing: var(--tracking-ink);
-  color: var(--ink-3);
-}
-/* 全页唯一的大字。宋体只在标题上用 —— 沿用全站的字形分工 */
-.brief-title {
-  margin: 0;
-  font-family: var(--font-title);
-  font-size: var(--fs-2xl);
-  font-weight: var(--fw-semi);
-  line-height: var(--lh-tight);
-  letter-spacing: .04em;
-  color: var(--ink);
-}
-.brief-stats,
-.brief-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  align-items: baseline;
-}
-.brief-stats { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
-.brief-meta { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
-.brief-stats i, .brief-meta i { font-style: normal; color: var(--ink-4); }
-.brief-meta b { font-weight: var(--fw-medium); color: var(--ink-2); }
-.brief-empty { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--ink-3); }
 
-/* 签名单品：取景窗刻度轴。轴上一格 = 一列底图瓦片 */
-.window { flex: none; margin: 0; text-align: right; }
-.axis { display: flex; align-items: center; gap: var(--sp-2); }
-.axis-cap {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.axis-rail {
-  display: flex;
-  width: 176px;
-  height: 14px;
-  overflow: hidden;
-  border-radius: var(--r-xs);
-  background: var(--stone-void);
-  /* 刻度轴是"量出来的"，所以是刻进石头里的槽，不是摆在上面的条 */
-  box-shadow: var(--bevel-inset);
-}
-.axis-rail i { flex: 1; border-right: 1px solid var(--hairline); }
-.axis-rail i:last-child { border-right: none; }
-.window figcaption {
-  margin-top: var(--sp-2);
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ---------- 待办：全页唯一配用暖色的地方 ---------- */
 .todo-list {
@@ -1782,6 +1659,14 @@ async function saveLayers(keys: string[] | null) {
   color: var(--ink-3);
 }
 .diag-note { font-size: var(--fs-xs); color: var(--ink-3); }
+/* 健康时的一行：与可展开的行同款石板，但没有箭头、不可点 —— 它只是告诉你"这没事" */
+.diag-flat { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); cursor: default; }
+.ok { color: var(--vital); }
+.diag-ok { font-size: var(--fs-xs); color: var(--ink-3); }
+.diag-here { font-size: var(--fs-xs); color: var(--ink-3); }
+.diag-here b { font-family: var(--font-mono); font-weight: var(--fw-medium); color: var(--ink-2); }
+.diag-count.bad { background: var(--blight-veil); box-shadow: none; color: var(--blight-lift); }
+.tbl td.no { color: var(--ink-4); }
 .caret { color: var(--ink-4); transition: transform .15s var(--ease); }
 .diag[open] > summary > .caret { transform: rotate(90deg); }
 .diag > .tbl, .diag > .hint, .diag > .facts { margin: var(--sp-3) var(--sp-4) var(--sp-4); }
@@ -1794,8 +1679,6 @@ async function saveLayers(keys: string[] | null) {
 .facts dd.bad { color: var(--warn); }
 
 @media (max-width: 760px) {
-  .brief { flex-direction: column; align-items: flex-start; }
-  .window { text-align: left; }
   .op { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
   .op-actions { flex-wrap: wrap; }
   .todo-list li { flex-wrap: wrap; }
