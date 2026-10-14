@@ -25,8 +25,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { CanvasSpec, Marker, Relative } from './types'
 import {
-  ICON_MIN_ZOOM, clampView, centerOn, crsOf, extentOf, fitPoints, fitView, hitTest,
-  initialView, screenOf, visibleMarkers, worldAt, worldOf, worldOfMarker, zoomAt,
+  ICON_MIN_ZOOM, clampView, centerOn, crsOf, extentOf, fitPoints, fitView,
+  hitTest, hitTestAll, initialView, screenOf, visibleMarkers, worldAt, worldOf,
+  worldOfMarker, zoomAt,
   type View,
 } from './mapMath'
 
@@ -54,7 +55,13 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  pick: [Marker | null]
+  /**
+   * 选中了点位。**是一个数组**，空数组表示点到了空白处。
+   *
+   * <p>为什么不是单个：同一个像素上可能压着好几个点位，
+   * 只给最近的那个等于让用户永远看不到另外几个。上层用堆叠卡片展示它们。
+   */
+  pick: [Marker[]]
   pickedPoint: [number, number]
   viewChange: [View]
 }>()
@@ -513,10 +520,13 @@ function onPointerMove(e: PointerEvent) {
 
   if (!dragging) {
     const p = localPoint(e)
-    const hit = hitTest(props.canvas, shown.value, view.value, p[0], p[1])
+    // 新增点位模式下点位不可点，悬停也就不该给出"可点"的反馈
+    const hit = props.mode === 'edit'
+      ? null
+      : hitTest(props.canvas, shown.value, view.value, p[0], p[1])
     if (hit !== hovered.value) {
       hovered.value = hit
-      host.value.style.cursor = hit ? 'pointer' : props.mode === 'edit' ? 'crosshair' : 'grab'
+      host.value.style.cursor = props.mode === 'edit' ? 'crosshair' : hit ? 'pointer' : 'grab'
       schedule()
     }
     return
@@ -541,17 +551,21 @@ function onPointerUp(e: PointerEvent) {
   // 拖过就不算点击 —— 否则拖着看图会一路弹详情出来
   if (moved > 6) return
   const p = localPoint(e)
-  const hit = hitTest(props.canvas, shown.value, view.value, p[0], p[1])
-  if (hit) {
-    emit('pick', hit)
-    return
-  }
   if (props.mode === 'edit') {
+    /*
+     * 新增点位模式：**完全不做命中测试**。
+     *
+     * 踩过一次坑：以前先测命中、命中就选中，测不到才落点。
+     * 于是"想在敌营旁边插一个矿点"，手一抖点在敌营图标上就变成编辑敌营了 ——
+     * 而用户当时心里想的是"我在新增"。既然按钮叫新增点位，
+     * 这个模式下每一次点击都必须是新增，哪怕正好压在已有点位上。
+     * 想编辑已有点位，退出这个模式再点它。
+     */
     const wp = worldAt(view.value, p[0], p[1])
     emit('pickedPoint', ...crsOf(props.canvas, wp[0], wp[1]))
-  } else {
-    emit('pick', null)
+    return
   }
+  emit('pick', hitTestAll(props.canvas, shown.value, view.value, p[0], p[1]))
 }
 
 function onWheel(e: WheelEvent) {

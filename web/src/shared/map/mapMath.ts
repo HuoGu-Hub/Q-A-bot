@@ -253,3 +253,36 @@ export function hitTest(
   }
   return best
 }
+
+/**
+ * 命中点附近的**全部**点位，按距离从近到远。
+ *
+ * <p>为什么不能只返回最近的一个：wiki 上好几个点位本来就落在同一处
+ * （同一个尖塔既是传送点、又是收集品、还可能是任务点）。
+ * 只给最近的那个，等于让用户永远看不到另外几个 —— 而它们就在同一个像素上。
+ *
+ * <p>多出来的那几个由上层用堆叠卡片展示：不摊开时看得出"不止一张"，
+ * 悬停才展开，免得一屏铺满卡片把地图盖住。
+ */
+export function hitTestAll(
+  canvas: CanvasSpec,
+  markers: Marker[],
+  view: View,
+  sx: number,
+  sy: number,
+  radius = 14,
+): Marker[] {
+  const hits: { m: Marker; d: number }[] = []
+  const r2 = radius * radius
+  for (const m of markers) {
+    const [wx, wy] = worldOfMarker(canvas, m)
+    const dx = wx * view.k + view.tx - sx
+    const dy = wy * view.k + view.ty - sy
+    const d = dx * dx + dy * dy
+    if (d <= r2) {
+      hits.push({ m, d })
+    }
+  }
+  hits.sort((a, b) => a.d - b.d)
+  return hits.map((h) => h.m)
+}
