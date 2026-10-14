@@ -37,6 +37,9 @@ import java.util.Map;
 @Repository
 public class KbBlockRepository {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(KbBlockRepository.class);
+
     /**
      * 一行块。
      *
@@ -103,6 +106,8 @@ public class KbBlockRepository {
         // 老库没有 alias 列 —— 补一次（SQLite 的 ADD COLUMN 重复执行会报错，所以先查再补）
         if (!hasColumn("kb_block", "alias")) {
             jdbc.execute("ALTER TABLE kb_block ADD COLUMN alias TEXT NOT NULL DEFAULT ''");
+            // 只在"刚刚加上这一列"的那一次做旧数据搬迁 —— 见下
+            migrateLegacyTermAliases();
         }
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_block_doc ON kb_block(doc_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_block_retired ON kb_block(retired)");
@@ -125,6 +130,41 @@ public class KbBlockRepository {
         return jdbc.query("PRAGMA table_info(" + table + ")",
                         r -> r.str("name"), new Object[0])
                 .stream().anyMatch(column::equalsIgnoreCase);
+    }
+
+    private boolean hasTable(String table) {
+        return jdbc.queryOne("SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                r -> r.str("name"), table) != null;
+    }
+
+    /**
+     * 旧库的**一次性**搬迁：把老名字表（{@code kb_term}）里人工填的中文名搬进 {@code alias}。
+     *
+     * <p>只在 {@code alias} 列刚加上那一次运行 —— 旧库有几千条人工译名，直接丢掉
+     * 会让中文提问重新够不到那些英文页（B 路关键词检索的燃料就是这些名字）。
+     *
+     * <p>只搬「英文标题 + 旧中文名里含非 ASCII」那批：中文标题的块本来就自带中文，
+     * 旧 {@code zh} 只是标题的副本，搬过来只会制造重复别名。
+     *
+     * <p>搬完不清 {@code kb_term} —— 留着它是一份可回溯的备份，也不会再被读取。
+     */
+    private void migrateLegacyTermAliases() {
+        if (!hasTable("kb_term")) {
+            return;
+        }
+        try {
+            int n = jdbc.update(
+                    "UPDATE kb_block SET alias = (SELECT t.zh FROM kb_term t WHERE t.en = kb_block.id)"
+                            + " WHERE alias = ''"
+                            + "   AND kb_block.title NOT GLOB '*[^ -~]*'"
+                            + "   AND EXISTS (SELECT 1 FROM kb_term t WHERE t.en = kb_block.id"
+                            + "               AND t.zh <> '' AND t.zh GLOB '*[^ -~]*')");
+            if (n > 0) {
+                log.info("[KB-BLOCK] 已把 {} 条旧词条中文名搬迁为别名", n);
+            }
+        } catch (Exception e) {
+            log.warn("[KB-BLOCK] 旧词条中文名搬迁失败（不影响启动）：{}", e.getMessage());
+        }
     }
 
     // ==================== 读 ====================
