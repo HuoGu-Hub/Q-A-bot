@@ -183,6 +183,26 @@ function closeEditor() {
   closeEditorSilently()
 }
 
+/**
+ * 下架 / 恢复一块。
+ *
+ * 下架**保留数据**，只是不再参与检索 —— 所以不用二次确认，随时能恢复。
+ * 正在编辑这一条时先收起，免得改到一半的东西和"已下架"状态对不上。
+ */
+async function toggleRetire(e: KbEntryItem) {
+  const retire = !e.retired
+  error.value = ''
+  ok.value = ''
+  try {
+    await adminApi.post('/kb/blocks/retire', { id: e.id, retired: retire })
+    if (editId.value === e.id) closeEditorSilently()
+    ok.value = (retire ? '已下架：' : '已恢复：') + (e.title || '词条')
+    await load()
+  } catch (err) {
+    error.value = describeError(err)
+  }
+}
+
 async function saveEditor(e: KbEntryItem) {
   if (bodyReady.value && !editBody.value.trim()) {
     editError.value = '正文不能为空；要下架这一块请去「文档」面板'
@@ -428,14 +448,19 @@ defineExpose({
               </td>
 
               <td class="c-ops">
-                <Button
-                  size="sm"
-                  :aria-expanded="isOpen(e)"
-                  :aria-controls="sheetId(e.id)"
-                  @click="isOpen(e) ? closeEditor() : openEditor(e)"
-                >
-                  {{ isOpen(e) ? '收起' : '编辑' }}
-                </Button>
+                <div class="ops">
+                  <Button
+                    size="sm"
+                    :aria-expanded="isOpen(e)"
+                    :aria-controls="sheetId(e.id)"
+                    @click="isOpen(e) ? closeEditor() : openEditor(e)"
+                  >
+                    {{ isOpen(e) ? '收起' : '编辑' }}
+                  </Button>
+                  <Button size="sm" :disabled="loading" @click="toggleRetire(e)">
+                    {{ e.retired ? '恢复' : '下架' }}
+                  </Button>
+                </div>
               </td>
             </tr>
 
@@ -455,7 +480,8 @@ defineExpose({
                         @update:model-value="(v: string) => (editAlias = v)"
                       />
                       <p class="sheet-hint">
-                        关键词检索靠这些名字命中；留空则用标题里「（英文）」那一半。
+                        别名是<b>追加</b>的叫法：标题（连同括号里的英文）始终在检索里，不会被这里替换。
+                        留空时列表里显示标题括号中的英文。
                       </p>
                     </div>
                   </div>
@@ -479,8 +505,8 @@ defineExpose({
                         @update:model-value="(v: string) => (editBody = v)"
                       />
                       <p class="sheet-hint">
-                        保存正文会重算这一块的向量（只改文本不重算，检索仍按旧正文匹配）。
-                        <span class="count num">{{ num(editBody.length) }}</span> 字
+                        从这里保存会<b>立刻重算</b>这一块的向量。若绕过它直接改库里的文本，检索仍按旧正文匹配
+                        —— 所以正文只从这里改。<span class="count num">{{ num(editBody.length) }}</span> 字
                       </p>
                     </div>
                   </div>
@@ -588,7 +614,9 @@ defineExpose({
 
 .panel-wrap :deep(th.c-alias), .panel-wrap :deep(td.c-alias) { width: 280px; }
 .panel-wrap :deep(th.c-cat), .panel-wrap :deep(td.c-cat) { width: 190px; }
-.panel-wrap :deep(th.c-ops), .panel-wrap :deep(td.c-ops) { width: 90px; text-align: right; white-space: nowrap; }
+.panel-wrap :deep(th.c-ops), .panel-wrap :deep(td.c-ops) { width: 168px; text-align: right; white-space: nowrap; }
+/* 按钮横排放进 div —— 不能给 td 加 display:flex，那会拆掉表格布局 */
+.ops { display: flex; gap: var(--sp-2); justify-content: flex-end; }
 
 /* 展开的那一行：给主行一条火焰左缘，让"正在改的是哪一条"一眼可见 */
 .panel-wrap :deep(tr.row-open td) { background: var(--surface-hover); }
@@ -628,6 +656,7 @@ defineExpose({
 }
 .sheet-ctrl { min-width: 0; }
 .sheet-hint { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--ink-3); line-height: 1.7; }
+.sheet-hint b { color: var(--ink-2); font-weight: var(--fw-medium); }
 .sheet-hint .count { color: var(--ink-2); }
 .loading { padding: 9px 0; font-size: var(--fs-base); }
 .load-failed { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
