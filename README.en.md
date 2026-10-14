@@ -69,6 +69,7 @@ The path of one message: event intake → five guard stages → three recall pat
 | Safety layer | Five local stages at zero token cost, plus an outbound sensitive-word filter |
 | Cost budget | Per-user, per-group and global daily quotas with a global token cap; over budget it degrades |
 | Images and quotes | Reads quoted text and images; image questions go to a vision model |
+| Replying with images | An `[[img:source:name]]` marker in a reply becomes a real image in the same message; sources plug in via `ImageSource`, currently `kb:` (knowledge-base images) |
 | Q&A plaza | A help request stays in its group; votes promote good answers into improvement proposals |
 
 ## 3. Upstream dependencies
