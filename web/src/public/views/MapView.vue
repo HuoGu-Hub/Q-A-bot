@@ -36,8 +36,27 @@ const markersLoading = ref(false)
 
 const visibleGroups = ref<Set<string>>(new Set())
 const visibleCategories = ref<Set<string>>(new Set())
-const selected = ref<Marker | null>(null)
+/**
+ * 选中的点位**栈**：同一个像素上可能压着好几个点位。
+ *
+ * <p>为什么是栈而不是单个：wiki 上一个尖塔既是传送点、又是收集品、还可能是任务点，
+ * 它们坐标完全相同。以前只取最近的那个，另外几个等于永远点不开。
+ */
+const pickedStack = ref<Marker[]>([])
+/** 栈顶那张，也就是最近的那个 —— 高亮、详情里的"主"信息都用它 */
+const selected = computed(() => pickedStack.value[0] ?? null)
 const highlight = ref<{ toRef: string; relative: Relative } | null>(null)
+
+/**
+ * 堆叠顺序：**最近的在最前**（i = 0）。
+ *
+ * <p>DOM 顺序保持"近的在前"，靠 z-index 决定谁压在上面 ——
+ * 因为 CSS 要靠 :first-child 把栈顶那张留在正常流里撑住容器高度，
+ * 否则整叠卡片都是绝对定位，容器高度塌成 0，鼠标就没有可悬停的面积。
+ */
+const stackCards = computed(() =>
+  pickedStack.value.map((m, i) => ({ m, i })),
+)
 
 const query = ref('')
 const locating = ref(false)
@@ -138,7 +157,7 @@ async function loadMarkers(map: string) {
     const cats = new Set<string>()
     for (const c of catalog.value?.categories ?? []) cats.add(c.key)
     visibleCategories.value = cats
-    selected.value = null
+    pickedStack.value = []
     highlight.value = null
   } finally {
     markersLoading.value = false
@@ -155,7 +174,7 @@ watch(mapName, async (next, prev) => {
 })
 
 watch(canvasIndex, () => {
-  selected.value = null
+  pickedStack.value = []
   highlight.value = null
 })
 
@@ -206,12 +225,12 @@ async function focusHit(hit: LocateHit) {
   } else {
     mapCanvas.value?.focus(target.x, target.y, 0.8)
   }
-  if (target) selected.value = target
+  if (target) pickedStack.value = [target]
 }
 
-function onPick(m: Marker | null) {
-  selected.value = m
-  if (!m) highlight.value = null
+function onPick(list: Marker[]) {
+  pickedStack.value = list
+  if (!list.length) highlight.value = null
 }
 
 /* ==================== 图层 ==================== */
@@ -416,34 +435,57 @@ function fmt(n: number): string {
 
         <p v-if="markersLoading" class="stage-loading">正在载入点位…</p>
 
-        <!-- 详情卡：右下角。地图不被遮挡太多，又离手最近 -->
-        <article v-if="selected" class="detail">
-          <header class="detail-head">
-            <h3>{{ selected.name }}</h3>
-            <button type="button" class="mini x" aria-label="关闭详情" @click="selected = null">
-              <Icon name="close" :size="15" />
-            </button>
-          </header>
-          <p class="detail-tags">
-            <Tag :tone="selected.source === 'admin' ? 'flame' : 'neutral'">
-              {{ selected.source === 'admin' ? '本地补充' : 'wiki' }}
-            </Tag>
-            <Tag tone="neutral">{{ categoryLabel.get(selected.category) ?? selected.category }}</Tag>
-            <Tag v-if="selected.landmark" tone="warn">可作方位参照</Tag>
-          </p>
-          <p v-if="selected.original && selected.original !== selected.name" class="detail-line">
-            wiki 原名：{{ selected.original }}
-          </p>
-          <p class="detail-line mono">坐标 ({{ fmt(selected.x) }}, {{ fmt(selected.y) }})</p>
-          <p v-if="selected.note" class="detail-note">{{ selected.note }}</p>
-          <p v-if="selected.description" class="detail-desc">{{ selected.description }}</p>
-          <p v-if="selected.article" class="detail-line">
-            <a :href="wikiUrl(selected)" target="_blank" rel="noopener noreferrer">
-              在 wiki 上看这个词条
-              <Icon name="external-link" :size="13" />
-            </a>
-          </p>
-        </article>
+        <!--
+          详情卡：右下角。地图不被遮挡太多，又离手最近。
+          多个点位重合时叠成一副牌 —— 平时只露出每张的顶边，看得出"不止一张"，
+          悬停或键盘聚焦才摊开。摊开是**位移**而不是改布局，所以不会把地图推来推去。
+        -->
+        <div
+          v-if="stackCards.length"
+          class="detail-stack"
+          :class="{ many: stackCards.length > 1 }"
+          tabindex="0"
+          :aria-label="stackCards.length > 1 ? '重合点位，共 ' + stackCards.length + ' 个' : '点位详情'"
+        >
+          <article
+            v-for="c in stackCards"
+            :key="c.m.id"
+            class="detail"
+            :style="{ '--i': c.i }"
+          >
+            <header class="detail-head">
+              <h3>{{ c.m.name }}</h3>
+              <button
+                v-if="c.i === 0"
+                type="button"
+                class="mini x"
+                aria-label="关闭详情"
+                @click="pickedStack = []"
+              >
+                <Icon name="close" :size="15" />
+              </button>
+            </header>
+            <p class="detail-tags">
+              <Tag :tone="c.m.source === 'admin' ? 'flame' : 'neutral'">
+                {{ c.m.source === 'admin' ? '本地补充' : 'wiki' }}
+              </Tag>
+              <Tag tone="neutral">{{ categoryLabel.get(c.m.category) ?? c.m.category }}</Tag>
+              <Tag v-if="c.m.landmark" tone="warn">可作方位参照</Tag>
+            </p>
+            <p v-if="c.m.original && c.m.original !== c.m.name" class="detail-line">
+              wiki 原名：{{ c.m.original }}
+            </p>
+            <p class="detail-line mono">坐标 ({{ fmt(c.m.x) }}, {{ fmt(c.m.y) }})</p>
+            <p v-if="c.m.note" class="detail-note">{{ c.m.note }}</p>
+            <p v-if="c.m.description" class="detail-desc">{{ c.m.description }}</p>
+            <p v-if="c.m.article" class="detail-line">
+              <a :href="wikiUrl(c.m)" target="_blank" rel="noopener noreferrer">
+                在 wiki 上看这个词条
+                <Icon name="external-link" :size="13" />
+              </a>
+            </p>
+          </article>
+        </div>
       </template>
     </div>
   </div>
@@ -738,12 +780,18 @@ function fmt(n: number): string {
 }
 
 /* ==================== 详情 ==================== */
-.detail {
+/* ==================== 详情卡（可堆叠） ==================== */
+.detail-stack {
   position: absolute;
   z-index: 2;
   right: var(--sp-3);
   bottom: var(--sp-3);
   width: min(340px, calc(100% - var(--sp-5)));
+  max-height: calc(100% - var(--sp-6));
+  outline: none;
+}
+.detail {
+  position: relative;
   max-height: calc(100% - var(--sp-6));
   overflow-y: auto;
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
@@ -751,6 +799,40 @@ function fmt(n: number): string {
   background: color-mix(in srgb, var(--stone-300) 94%, transparent);
   box-shadow: var(--shadow-pop), var(--bevel-raised);
   backdrop-filter: blur(8px);
+}
+/*
+ * 多张重合：叠成一副牌，每张只往上露出 16px 的顶边。
+ * 用绝对定位 + 位移，不改布局 —— 改布局会让整叠卡片的尺寸随悬停跳动。
+ */
+.detail-stack.many .detail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /*
+   * 对齐的是**顶边**不是底边。
+   * 底对齐 + 上移会让比栈顶矮的卡片整个藏到它后面（矮的那张顶边更低），
+   * 看上去还是只有一张；顶对齐则不论高矮都稳定露出 i×16px 的一条边。
+   */
+  top: 0;
+  /* 越靠前的越在上面：栈顶那张要压住后面露出来的边 */
+  z-index: calc(20 - var(--i));
+  transform: translateY(calc(var(--i) * -16px));
+  transition: transform var(--dur) var(--ease);
+}
+/*
+ * 栈顶那张留在正常流里，把容器撑到它自己的高度。
+ * 不给它这个位置的话，整叠卡片全是绝对定位，容器高度是 0 ——
+ * 视觉上照常显示，但鼠标找不到可悬停的面积，摊开就永远触发不了。
+ */
+.detail-stack.many .detail:first-child {
+  position: relative;
+  z-index: 20;
+}
+
+/* 悬停或键盘聚焦才摊开：每张按自身高度让开，露出完整内容 */
+.detail-stack.many:hover .detail,
+.detail-stack.many:focus-within .detail {
+  transform: translateY(calc(var(--i) * -1 * (100% + 8px)));
 }
 .detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
 .detail-head h3 { margin: 0; font-size: var(--fs-lg); font-family: var(--font-title); }

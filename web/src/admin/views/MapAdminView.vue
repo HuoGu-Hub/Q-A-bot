@@ -73,7 +73,25 @@ const currentCanvas = computed(() => {
 const markersOnCanvas = computed(() =>
   markers.value.filter((m) => !currentCanvas.value || !m.canvas || m.canvas === currentCanvas.value.page),
 )
-const visibleGroups = computed(() => new Set((currentMap.value?.groups ?? []).map((g) => g.key)))
+/**
+ * 管理端显示的图层。
+ *
+ * <p>和公开站**用同一份默认**：管理员标注时看到的应该就是访客看到的那张图。
+ * 这里若全开、公开站只开几个，就会出现"在访客根本看不见的图层旁边插点位"的情况。
+ */
+const visibleGroups = ref<Set<string>>(new Set())
+
+function syncVisibleGroups() {
+  const map = currentMap.value
+  const configured = map?.defaultGroups
+  if (configured) {
+    visibleGroups.value = new Set(configured)
+    return
+  }
+  visibleGroups.value = new Set(
+    (map?.groups ?? []).filter((g) => g.category !== 'collection').map((g) => g.key),
+  )
+}
 const allCategories = computed(() => new Set((catalog.value?.categories ?? []).map((c) => c.key)))
 const groupIcons = computed(() => {
   const out = new Map<string, string>()
@@ -113,6 +131,7 @@ async function boot() {
 async function loadMarkers() {
   const r = await adminApi.get<{ markers: Marker[] }>('/map/markers?map=' + encodeURIComponent(mapName.value))
   markers.value = r.markers
+  syncVisibleGroups()
   selected.value = null
 }
 
@@ -158,7 +177,14 @@ function closePanel() {
   draft.value = null
 }
 
-function onPick(m: Marker | null) {
+/**
+ * 选中点位。画布给的是**数组**（同一处可能压着好几个），管理端只关心最近的那个。
+ *
+ * <p>管理端不做堆叠展开：标注时你要改的是一个确定的点位，
+ * 把重合的几个摊开反而要你多选一次。
+ */
+function onPick(list: Marker[]) {
+  const m = list[0] ?? null
   if (!m) {
     selected.value = null
     return
@@ -199,7 +225,7 @@ function jumpTo(m: Marker) {
   const idx = list.findIndex((c) => c.page === m.canvas)
   if (idx >= 0) canvasIndex.value = idx
   tab.value = 'mark'
-  onPick(m)
+  onPick([m])
   mapCanvas.value?.focus(m.x, m.y, Math.max(mapCanvas.value?.scale() ?? 0.5, 0.6))
 }
 
@@ -869,17 +895,20 @@ async function saveLayers(keys: string[] | null) {
 
 /* ==================== 舞台与悬浮面板 ====================
    和公开站同一套：地图居中占满，侧栏浮在它上面，收起后只剩一颗按钮。 */
+/* 地图要贴到接近视口底部。.page 默认 76px 的页脚留白会把地图往上顶，留出一条空带 */
+:deep(.page) { padding-bottom: 20px; }
+
 .stage {
   position: relative;
   /*
    * 高度 = 视口 - 顶端导航 - 其余外壳。
-   * 顶端导航那 56 由变量给出；剩下的 150 是页面栏、上下两处 gap，
-   * 以及 .page 那 76px 的页脚留白，再留一点余量。
+   * 顶端导航那 56 由变量给出；剩下的 92 = 页面栏 56 + 上下两处 gap 16 + 底部留白 20。
    *
-   * 这个数只能量、不能推：实测 100dvh 在这个环境下解析出来的值比 innerHeight 小几像素，
-   * 按 136 算仍然会溢出 6px 冒出一条滚动条，所以宁可让地图短几像素。
+   * 底部留白本来是 .page 的 76px 页脚内边距，会把地图往上顶、下面空出一条带子，
+   * 整体看着像一根长条 —— 所以这里把 .page 的内边距压到 20px（见下面的 :deep(.page)）。
+   * 这个数只能量、不能推：实测 100dvh 解析出来比 innerHeight 小几像素，宁可让地图短几像素。
    */
-  height: calc(100dvh - var(--admin-bar-h, 56px) - 150px);
+  height: calc(100dvh - var(--admin-bar-h, 56px) - 92px);
   min-height: 420px;
   border-radius: var(--r-md);
   overflow: hidden;
