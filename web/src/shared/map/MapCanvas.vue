@@ -69,6 +69,14 @@ const hovered = ref<Marker | null>(null)
 const WIDTHS = [160, 320, 640, 1280]
 
 /**
+ * 底座层的档位。
+ *
+ * <p>固定用最低档，而且**它自己永远不换档** —— 它的唯一职责就是"换档期间不露黑底"，
+ * 一旦它也跟着换，就等于把黑闪问题原样搬到了下一层。
+ */
+const BASE_WIDTH = 160
+
+/**
  * 当前该用哪一档缩略图。
  *
  * 判据是"这张瓦片在屏幕上会有多大"：取**不小于**它的最小档，
@@ -86,6 +94,14 @@ const bgBox = computed(() => {
   return { w: e[0], h: e[1] }
 })
 
+/** 旧 schema 那张整图的位置与尺寸 —— 底座层与细节层共用 */
+const bgBoxStyle = computed(() => ({
+  left: '0px',
+  top: '0px',
+  width: bgBox.value.w + 'px',
+  height: bgBox.value.h + 'px',
+}))
+
 /** 世界容器的 transform —— 拖拽时唯一会变的样式 */
 const worldStyle = computed(() => {
   const v = view.value
@@ -95,6 +111,16 @@ const worldStyle = computed(() => {
     transform: 'translate3d(' + v.tx + 'px,' + v.ty + 'px,0) scale(' + v.k + ')',
   }
 })
+
+/** 瓦片在 world 层里的位置与尺寸 —— 底座层与细节层共用同一份，两层才能严丝合缝 */
+function tileBox(t: { left: number; top: number; w: number; h: number }) {
+  return {
+    left: t.left + 'px',
+    top: t.top + 'px',
+    width: t.w + 'px',
+    height: t.h + 'px',
+  }
+}
 
 function tileUrl(name: string, w: number, withPage = true): string {
   const q = new URLSearchParams({ map: props.mapName, name })
@@ -585,27 +611,63 @@ defineExpose({
       实测这会让首屏白白多下十几兆。
     -->
     <div v-if="size.w > 0" class="world" :style="worldStyle">
-      <!-- 新 schema：瓦片集 -->
-      <img
-        v-for="t in tiles"
-        :key="t.key"
-        class="tile"
-        :src="tileUrl(t.image, lod)"
-        :style="{ left: t.left + 'px', top: t.top + 'px', width: t.w + 'px', height: t.h + 'px' }"
-        alt=""
-        draggable="false"
-        decoding="async"
-      />
-      <!-- 旧 schema：一整张大图 -->
-      <img
-        v-if="!tiles.length && canvas.background"
-        class="tile"
-        :src="tileUrl(canvas.background, lod, false)"
-        :style="{ left: '0px', top: '0px', width: bgBox.w + 'px', height: bgBox.h + 'px' }"
-        alt=""
-        draggable="false"
-        decoding="async"
-      />
+      <!--
+        ==================== 瓦片分两层 ====================
+
+        **底座层**：固定最低档位，src 永不改变。
+        **细节层**：跟随缩放换档。
+
+        为什么必须分两层：细节层换档改的是同一张 img 的 src，而浏览器会在
+        src 改变的那一刻**立刻丢掉旧图**、等新图到达 —— 于是整张地图在换档瞬间变黑。
+        滚轮缩放会连续跨过好几档，看起来就是"一闪一闪的黑色频闪"。
+
+        有了底座层，换档期间露出来的是低清地图而不是黑底，观感上只是"由糊变清"。
+        底座只有 160px 一档、64 张，一次之后就全在浏览器缓存里，代价很小。
+      -->
+      <template v-if="tiles.length">
+        <img
+          v-for="t in tiles"
+          :key="'base-' + t.key"
+          class="tile"
+          :src="tileUrl(t.image, BASE_WIDTH)"
+          :style="tileBox(t)"
+          alt=""
+          draggable="false"
+          decoding="async"
+        />
+        <template v-if="lod !== BASE_WIDTH">
+          <img
+            v-for="t in tiles"
+            :key="'detail-' + t.key"
+            class="tile"
+            :src="tileUrl(t.image, lod)"
+            :style="tileBox(t)"
+            alt=""
+            draggable="false"
+            decoding="async"
+          />
+        </template>
+      </template>
+      <!-- 旧 schema：一整张大图，同样分两层 -->
+      <template v-else-if="canvas.background">
+        <img
+          class="tile"
+          :src="tileUrl(canvas.background, BASE_WIDTH, false)"
+          :style="bgBoxStyle"
+          alt=""
+          draggable="false"
+          decoding="async"
+        />
+        <img
+          v-if="lod !== BASE_WIDTH"
+          class="tile"
+          :src="tileUrl(canvas.background, lod, false)"
+          :style="bgBoxStyle"
+          alt=""
+          draggable="false"
+          decoding="async"
+        />
+      </template>
     </div>
 
     <canvas ref="canvasEl" class="dots" :style="{ width: size.w + 'px', height: size.h + 'px' }" />
