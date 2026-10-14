@@ -240,6 +240,12 @@ export interface KbEntryImportResponse {
   skipped: number
 }
 
+/** 按 id 取单块（含正文）—— 词条面板编辑正文用 */
+export interface KbBlockItemResponse {
+  ok: boolean
+  block: KbBlockView
+}
+
 /* ==================== 指令系统 ==================== */
 
 export interface BotCommand {

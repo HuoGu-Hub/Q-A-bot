@@ -59,6 +59,20 @@ public class KbBlockController {
         return Map.of("doc", doc, "blocks", service.blocksOfDoc(doc));
     }
 
+    /**
+     * 按 id 取**单块**（含正文）—— 「词条」面板编辑正文用。
+     *
+     * <p>词条列表刻意不带正文（三千多条全文太大），所以编辑前单独取一次。
+     */
+    @GetMapping("/item")
+    public ResponseEntity<Map<String, Object>> item(@RequestParam("id") String id) {
+        KbBlockAdminService.BlockView view = service.get(id);
+        if (view == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个块：" + id));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "block", view));
+    }
+
     /** 改一块的正文（会重算向量） */
     @PostMapping("/update")
     public ResponseEntity<Map<String, Object>> update(@RequestBody Map<String, Object> body) {

@@ -20,6 +20,7 @@ import type {
   KbCategoryStat,
   KbEntryExportResponse,
   KbEntryImportResponse,
+  KbBlockItemResponse,
 } from '@shared/api/types'
 import { num } from '@shared/utils/format'
 import Panel from '@shared/ui/Panel.vue'
@@ -29,6 +30,7 @@ import Select from '@shared/ui/Select.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
+import Modal from '@shared/ui/Modal.vue'
 import Empty from '@shared/ui/Empty.vue'
 
 /** 与后端 CategoryService.UNCATEGORIZED 一致 */
@@ -180,6 +182,62 @@ async function clearAllAliases() {
     await load()
   } catch (e) {
     error.value = describeError(e)
+  }
+}
+
+// ==================== 正文（块）====================
+
+/**
+ * 词条就是分块，所以改正文 = 改这一块的正文。
+ *
+ * ⚠️ 保存会**重算这一块的向量** —— 只改文本不重算，检索会按旧正文匹配，改了等于没改。
+ * 列表刻意不带正文（三千多条全文太大），所以编辑前单独取一次。
+ */
+const bodyOpen = ref(false)
+const bodyLoading = ref(false)
+const bodySaving = ref(false)
+const bodyError = ref('')
+const bodyId = ref('')
+const bodyTitle = ref('')
+const bodyText = ref('')
+
+async function openBody(e: KbEntryItem) {
+  bodyId.value = e.id
+  bodyTitle.value = e.title || e.id
+  bodyText.value = ''
+  bodyError.value = ''
+  bodyOpen.value = true
+  bodyLoading.value = true
+  try {
+    const r = await adminApi.get<KbBlockItemResponse>('/kb/blocks/item?id=' + encodeURIComponent(e.id))
+    bodyText.value = r.block?.text ?? ''
+  } catch (err) {
+    bodyError.value = describeError(err)
+  } finally {
+    bodyLoading.value = false
+  }
+}
+
+function closeBody() {
+  bodyOpen.value = false
+}
+
+async function saveBody() {
+  if (!bodyText.value.trim()) {
+    bodyError.value = '正文不能为空；要下架这一块请用「文档」面板'
+    return
+  }
+  bodySaving.value = true
+  bodyError.value = ''
+  try {
+    await adminApi.post('/kb/blocks/update', { id: bodyId.value, text: bodyText.value })
+    ok.value = '已保存正文：' + bodyTitle.value + '（向量已重算）'
+    bodyOpen.value = false
+    await load()
+  } catch (err) {
+    bodyError.value = describeError(err)
+  } finally {
+    bodySaving.value = false
   }
 }
 
@@ -368,21 +426,46 @@ defineExpose({
               </template>
             </td>
             <td class="c-ops">
+              <Button size="sm" @click="openBody(e)">正文</Button>
               <template v-if="isDirty(e)">
-                <Button size="sm" variant="primary" @click="saveOne(e)">保存</Button>
+                <Button size="sm" variant="primary" @click="saveOne(e)">保存别名</Button>
                 <Button size="sm" @click="revert(e)">撤销</Button>
               </template>
-              <Button v-else-if="e.alias" size="sm" @click="clearAlias(e)">清空</Button>
-              <span v-else class="faint">—</span>
+              <Button v-else-if="e.alias" size="sm" @click="clearAlias(e)">清空别名</Button>
             </td>
           </tr>
         </tbody>
       </DataTable>
 
       <p class="faint tip">
-        词条就是分块：正文改在「文档」面板；分类只读分块符号里的标签，认不出就是「未分类」。
+        词条就是分块：正文点「正文」直接改（保存会重算这一块的向量）；分类只读分块符号里的标签，
+        认不出就是「未分类」。
       </p>
     </Panel>
+
+    <Modal :open="bodyOpen" :title="'正文：' + bodyTitle" width="760px" @close="closeBody">
+      <div v-if="bodyLoading" class="faint body-loading">载入中…</div>
+      <template v-else>
+        <Notice v-if="bodyError" tone="error">{{ bodyError }}</Notice>
+        <Input
+          v-model="bodyText"
+          multiline
+          :rows="16"
+          mono
+          aria-label="块正文"
+          placeholder="这一块的正文"
+        />
+        <p class="faint body-hint">
+          保存后会重算这一块的向量 —— 只改文本不重算，检索仍会按旧正文匹配。
+        </p>
+        <div class="body-actions">
+          <Button size="sm" :disabled="bodySaving" @click="closeBody">取消</Button>
+          <Button size="sm" variant="primary" :disabled="bodySaving" @click="saveBody">
+            {{ bodySaving ? '保存中…' : '保存正文' }}
+          </Button>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -405,7 +488,11 @@ defineExpose({
 .panel-wrap :deep(th.c-id), .panel-wrap :deep(td.c-id) { width: 220px; }
 .panel-wrap :deep(th.c-alias), .panel-wrap :deep(td.c-alias) { width: 260px; }
 .panel-wrap :deep(th.c-cat), .panel-wrap :deep(td.c-cat) { width: 180px; }
-.panel-wrap :deep(th.c-ops), .panel-wrap :deep(td.c-ops) { text-align: right; white-space: nowrap; }
+.panel-wrap :deep(th.c-ops), .panel-wrap :deep(td.c-ops) { width: 230px; text-align: right; white-space: nowrap; }
+
+.body-loading { padding: var(--sp-4); text-align: center; }
+.body-hint { font-size: var(--fs-meta); margin-top: var(--sp-2); }
+.body-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-3); }
 .c-id code { font-size: var(--fs-xs); color: var(--ink-dim); overflow-wrap: anywhere; }
 .c-cat { display: flex; gap: 4px; flex-wrap: wrap; }
 .tip { font-size: var(--fs-meta); margin-top: var(--sp-3); }
