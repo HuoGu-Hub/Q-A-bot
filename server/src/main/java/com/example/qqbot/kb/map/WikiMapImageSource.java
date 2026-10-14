@@ -46,8 +46,22 @@ public class WikiMapImageSource implements MapImageSource {
      */
     private final java.util.concurrent.Semaphore gate = new java.util.concurrent.Semaphore(1);
 
-    /** 两次出站请求之间的最小间隔。实测 3 次/秒不会再触发 429 */
+    /** 两次出站请求之间的**最小**间隔 */
     private static final long MIN_GAP_MS = 300;
+
+    /** 间隔的上限。撞狠了也不能慢到"一张图等半分钟" */
+    private static final long MAX_GAP_MS = 4000;
+
+    /**
+     * 当前实际间隔 —— **跟着 429 自适应**。
+     *
+     * <p>为什么固定值不行：实测 3 次/秒能撑过一小批请求，但**连续几分钟**地拉
+     * （比如预热一整张图）依然会被限流，而那时的 429 会打在**同时在看图的访客**身上
+     * —— 他们看到的是地图缺块。所以撞到 429 就把间隔翻倍，顺利几次再慢慢收回来。
+     *
+     * <p>这是"礼貌客户端"的常规做法：把对方的限流当成**信号**，而不是一次性故障。
+     */
+    private volatile long gapMs = MIN_GAP_MS;
 
     /** 只在闸门内读写 */
     private long lastRequestAt;
@@ -67,6 +81,13 @@ public class WikiMapImageSource implements MapImageSource {
     /** 重试的等待时长。429 是"你太快了"，等得短了等于没等 */
     private static final long[] RETRY_BACKOFF_MS = {900, 2500};
 
+    /** 上游说"你太快了"。单独一个类型，才能和网络故障区别对待 */
+    static final class RateLimited extends IOException {
+        RateLimited(String message) {
+            super(message);
+        }
+    }
+
     /**
      * 取图，失败按 {@link #RETRY_BACKOFF_MS} 退避重试。
      *
@@ -81,6 +102,14 @@ public class WikiMapImageSource implements MapImageSource {
                 return fetchOnce(fileName, width);
             } catch (IOException e) {
                 last = e;
+                // 429 是节流信号：把出站间隔翻倍，让整条链路慢下来；
+                // 顺利的时候再一点点收回，别因为一次抖动就永久变慢
+                if (e instanceof RateLimited) {
+                    gapMs = Math.min(MAX_GAP_MS, gapMs * 2);
+                    log.info("[MAP-IMG] 上游限流，出站间隔调整为 {} ms", gapMs);
+                } else if (gapMs > MIN_GAP_MS) {
+                    gapMs = Math.max(MIN_GAP_MS, gapMs - 100);
+                }
                 if (attempt < RETRY_BACKOFF_MS.length) {
                     sleep(RETRY_BACKOFF_MS[attempt]);
                 }
@@ -106,7 +135,7 @@ public class WikiMapImageSource implements MapImageSource {
             Thread.currentThread().interrupt();
             throw new IOException("等待出站闸门被中断", e);
         }
-        long wait = MIN_GAP_MS - (System.currentTimeMillis() - lastRequestAt);
+        long wait = gapMs - (System.currentTimeMillis() - lastRequestAt);
         if (wait > 0) {
             sleep(wait);
         }
@@ -134,6 +163,9 @@ public class WikiMapImageSource implements MapImageSource {
                 .build();
         try {
             HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() == 429) {
+                throw new RateLimited("上游限流（429）：" + url);
+            }
             if (response.statusCode() != 200) {
                 throw new IOException("上游返回 " + response.statusCode() + "：" + url);
             }

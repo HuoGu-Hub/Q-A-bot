@@ -169,23 +169,49 @@ public class MapJobs {
         return true;
     }
 
-    /** 两档缩略图足够覆盖首屏；原图等用户真的放大时再按需取 */
+    /**
+     * 预热的档位：**只拉低倍两档**。
+     *
+     * <p>这个取舍算过一次账：打开地图时视野里有多少瓦片，取决于当前缩放 ——
+     * 缩到最小时整个画布 64 张全在视野里（低倍档），而放大到 1 倍以上时视野里只剩个位数张（高倍档）。
+     * 也就是说<b>要"多"的只有低倍档，要"清楚"的只有高倍档</b>。
+     *
+     * <p>把四档全拉过一次：原图每张约 363 KB，整轮要十几分钟，
+     * 一个"点一下就等十几分钟"的按钮没人会用。而高倍档按需取只有几张，
+     * 节流下也就几秒，期间低清图还在，不会白屏。
+     */
     private static final int[] WARM_WIDTHS = {160, 320};
 
+    /**
+     * 把"查看器会用到的图"全部取进本地缓存。
+     *
+     * <p><b>分组图标也算</b>：它们只有几十个、每个几 KB，但**不预热的话首屏就是一片占位圆点**
+     * —— 图标没到之前只能画圆点，而"分不出这是资源还是敌寨"正是用户最直接的抱怨。
+     * 图标在缓存里的键是 {@code (map, 空 page, 文件名)}，与浏览器发的请求一致。
+     *
+     * <p>数据一次从 {@code catalog()} 拿全：它内部已经算好了每张地图真正用得到的画布，
+     * 再单独遍历一遍地图名只会多一次全量扫描。
+     */
     private int warm() {
         int done = 0;
-        for (String map : view.maps()) {
-            for (MapViewService.CanvasView c : view.canvasesOf(map)) {
+        for (MapViewService.MapView m : view.catalog()) {
+            for (MapViewService.GroupView g : m.groups()) {
+                if (g.icon() != null && !g.icon().isBlank()
+                        && images.get(m.map(), null, g.icon(), 0).isPresent()) {
+                    done++;
+                }
+            }
+            for (MapViewService.CanvasView c : m.canvases()) {
                 for (MapViewService.TileView t : c.tiles()) {
                     for (int w : WARM_WIDTHS) {
-                        if (images.get(map, c.page(), t.image(), w).isPresent()) {
+                        if (images.get(m.map(), c.page(), t.image(), w).isPresent()) {
                             done++;
                         }
                     }
                 }
                 if (c.background() != null && !c.background().isBlank()) {
                     for (int w : WARM_WIDTHS) {
-                        if (images.get(map, c.page(), c.background(), w).isPresent()) {
+                        if (images.get(m.map(), c.page(), c.background(), w).isPresent()) {
                             done++;
                         }
                     }
