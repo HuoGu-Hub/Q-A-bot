@@ -180,6 +180,8 @@ public class SettingsWhitelist {
                     "bool", "关掉后回复里的地图标记一律不出图，只当普通文本丢掉", true),
             new Item("app.kb.map.shot.deadline-ms", "配图取图预算", "知识库",
                     "int", "单位毫秒；到点放弃出图、只回文字，等下次预热好了再补", 2000),
+            new Item("app.kb.map.request-gap-ms", "取图出站间隔", "知识库",
+                    "int", "单位毫秒。被 wiki 限流就调大它，6000 是实测的友好值", 6000),
 
             // ---------- 机器人身份 ----------
             // ⚠️ 只放**真的有人读**的项 —— 放进来却没人读的配置会变成

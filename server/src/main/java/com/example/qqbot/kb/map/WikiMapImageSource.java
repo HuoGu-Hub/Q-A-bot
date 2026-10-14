@@ -34,43 +34,23 @@ public class WikiMapImageSource implements MapImageSource {
     private static final Logger log = LoggerFactory.getLogger(WikiMapImageSource.class);
 
     /**
-     * 对上游的**串行闸门**。
+     * 出站闸门：串行 + **固定间隔** + 撞限流就整条暂停。
      *
-     * <p>实测：并发拉瓦片时 wiki 直接回 <b>429 Too Many Requests</b>，
-     * 而"打开一次地图"正好就是几十个并发请求 —— 不节流的话首屏会缺一大片瓦片，
-     * 用户看到的是"这地图是坏的"。
+     * <p>实测：并发拉瓦片时对方直接回 <b>429 Too Many Requests</b>，
+     * 而"打开一次地图"正好就是几十个并发请求 —— 不节流的话首屏会缺一大片瓦片。
      *
-     * <p>所以出站请求串行化，并保证两次之间有 {@link #MIN_GAP_MS} 的间隔。
-     * 代价是首次拉满一张图的瓦片要二十来秒，但那是一次性的 ——
-     * 之后所有访客都命中本地缓存，一个字节都不再打扰 wiki。
+     * <p>速率的取法与依据见 {@link UpstreamGate}：那里也说明了为什么
+     * "自适应漂移"被换成了固定值 + 暂停。
      */
-    private final java.util.concurrent.Semaphore gate = new java.util.concurrent.Semaphore(1);
-
-    /** 两次出站请求之间的**最小**间隔 */
-    private static final long MIN_GAP_MS = 300;
-
-    /** 间隔的上限。撞狠了也不能慢到"一张图等半分钟" */
-    private static final long MAX_GAP_MS = 4000;
-
-    /**
-     * 当前实际间隔 —— **跟着 429 自适应**。
-     *
-     * <p>为什么固定值不行：实测 3 次/秒能撑过一小批请求，但**连续几分钟**地拉
-     * （比如预热一整张图）依然会被限流，而那时的 429 会打在**同时在看图的访客**身上
-     * —— 他们看到的是地图缺块。所以撞到 429 就把间隔翻倍，顺利几次再慢慢收回来。
-     *
-     * <p>这是"礼貌客户端"的常规做法：把对方的限流当成**信号**，而不是一次性故障。
-     */
-    private volatile long gapMs = MIN_GAP_MS;
-
-    /** 只在闸门内读写 */
-    private long lastRequestAt;
+    private final UpstreamGate gate;
 
     private final MapOptions options;
     private final HttpClient http;
 
     public WikiMapImageSource(MapOptions options) {
         this.options = options;
+        this.gate = new UpstreamGate(options.getRequestGapMs(), options.getRateLimitPauseMs(),
+                options.getRateLimitStreak());
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 // 必须跟随：Special:FilePath 是 302，真正的字节在 /images/ 下
@@ -96,22 +76,38 @@ public class WikiMapImageSource implements MapImageSource {
      */
     @Override
     public byte[] fetch(String fileName, int width) throws IOException {
+        if (gate.paused()) {
+            // 暂停期里**一次请求都不发**：对方已经在说"别来了"，继续敲只会把限流窗口拉长。
+            // 这里抛的是 RateLimited，调用方（MapImageCache）把它当"暂时取不到"处理，
+            // 只在 debug 里留一行 —— 不然一张图一条 WARN，日志就没法看了。
+            throw new RateLimited("上游限流暂停中（还剩 " + gate.pauseRemainingMs() / 1000 + " 秒）");
+        }
         IOException last = null;
         for (int attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
             try {
-                return fetchOnce(fileName, width);
+                byte[] bytes = fetchOnce(fileName, width);
+                gate.onSuccess();
+                logSummary();
+                return bytes;
             } catch (MapImageSource.NotFound e) {
                 // 文件不存在，重试一百次也还是不存在 —— 直接往上抛，一次都不多问
                 throw e;
             } catch (IOException e) {
                 last = e;
-                // 429 是节流信号：把出站间隔翻倍，让整条链路慢下来；
-                // 顺利的时候再一点点收回，别因为一次抖动就永久变慢
                 if (e instanceof RateLimited) {
-                    gapMs = Math.min(MAX_GAP_MS, gapMs * 2);
-                    log.info("[MAP-IMG] 上游限流，出站间隔调整为 {} ms", gapMs);
-                } else if (gapMs > MIN_GAP_MS) {
-                    gapMs = Math.max(MIN_GAP_MS, gapMs - 100);
+                    // 429 是节流信号：先顶高间隔，顶到连击上限就整条暂停。
+                    // 日志只在"进入暂停"时说一句，其余降到 debug —— 实测每张图都会撞一次，
+                    // 按原来的写法一次预热就是上千行 WARN。
+                    if (gate.onRateLimited()) {
+                        log.warn("[MAP-IMG] 上游持续限流，暂停取图 {} 秒 —— 期间一张都不取，等预热下次补",
+                                options.getRateLimitPauseMs() / 1000);
+                    } else {
+                        log.debug("[MAP-IMG] 上游限流，出站间隔顶到 {} ms（连击 {}）", gate.gapMs(), gate.streak());
+                    }
+                    logSummary();
+                    if (gate.paused()) {
+                        break;      // 已经决定暂停，再重试没有意义
+                    }
                 }
                 if (attempt < RETRY_BACKOFF_MS.length) {
                     sleep(RETRY_BACKOFF_MS[attempt]);
@@ -119,6 +115,15 @@ public class WikiMapImageSource implements MapImageSource {
             }
         }
         throw last == null ? new IOException("取图失败：" + fileName) : last;
+    }
+
+    /** 限流统计：**每五分钟最多一句**，把"成功多少 / 限流多少 / 当前间隔"一次说完 */
+    private void logSummary() {
+        UpstreamGate.Stats stats = gate.summaryIfDue();
+        if (stats != null) {
+            log.info("[MAP-IMG] 近 5 分钟：成功 {} 张 / 撞限流 {} 次，当前出站间隔 {} ms",
+                    stats.ok(), stats.limited(), stats.gapMs());
+        }
     }
 
     private void sleep(long ms) throws IOException {
@@ -130,31 +135,12 @@ public class WikiMapImageSource implements MapImageSource {
         }
     }
 
-    /** 进闸门并补齐间隔。**必须在 finally 里 {@link #leave()}** */
-    private void enter() throws IOException {
-        try {
-            gate.acquire();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("等待出站闸门被中断", e);
-        }
-        long wait = gapMs - (System.currentTimeMillis() - lastRequestAt);
-        if (wait > 0) {
-            sleep(wait);
-        }
-        lastRequestAt = System.currentTimeMillis();
-    }
-
-    private void leave() {
-        gate.release();
-    }
-
     private byte[] fetchOnce(String fileName, int width) throws IOException {
-        enter();
+        gate.enter();
         try {
             return send(url(fileName, width));
         } finally {
-            leave();
+            gate.leave();
         }
     }
 
@@ -187,7 +173,11 @@ public class WikiMapImageSource implements MapImageSource {
             Thread.currentThread().interrupt();
             throw new IOException("取图被中断：" + url, e);
         } catch (IOException e) {
-            log.warn("[MAP-IMG] 取图失败：{} —— {}", url, e.getMessage());
+            // 429 不在这里报：它是节流信号，由 fetch 汇总成"每五分钟一句"。
+            // 这里只留真正的故障（超时、5xx、内容异常）。
+            if (!(e instanceof RateLimited)) {
+                log.warn("[MAP-IMG] 取图失败：{} —— {}", url, e.getMessage());
+            }
             throw e;
         }
     }

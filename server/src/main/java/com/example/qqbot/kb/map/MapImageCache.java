@@ -123,6 +123,11 @@ public class MapImageCache {
             log.warn("[MAP-IMG] 上游没有这张图，{} 小时内不再询问：{}", MISSING_TTL_MS / 3600000, file);
             missing.put(key, System.currentTimeMillis());
             return Optional.empty();
+        } catch (WikiMapImageSource.RateLimited e) {
+            // 限流不是故障，是"暂时取不到"：一次预热会撞上几十次，按 WARN 报会把日志淹掉。
+            // 汇总那一句在 WikiMapImageSource 里，五分钟一条。
+            log.debug("[MAP-IMG] 上游限流，本次跳过：{} —— {}", file, e.getMessage());
+            return Optional.empty();
         } catch (Exception e) {
             log.warn("[MAP-IMG] 取图失败：{} —— {}", file, e.getMessage());
             return Optional.empty();

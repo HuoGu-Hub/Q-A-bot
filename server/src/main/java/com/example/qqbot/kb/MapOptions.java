@@ -75,6 +75,21 @@ public class MapOptions {
     private Shot shot = new Shot();
 
     /**
+     * 两次出站取图之间的最小间隔（毫秒）—— **固定值**，不再是自适应漂移的那个数。
+     *
+     * <p>实测 2026-10-15：连两个从未取过的瓦片、间隔 6 秒，对方（Cloudflare）仍然都回 429，
+     * 且没有 {@code Retry-After}。说明这已经不是"每秒几次"的问题，而是被记了一段时间。
+     * 所以默认取 6 秒（约 10 次/分钟），撞限流时靠下面的暂停来止损。
+     */
+    private long requestGapMs = 6000;
+
+    /** 连续撞多少次 429 就整条链路暂停取图 */
+    private int rateLimitStreak = 3;
+
+    /** 暂停多久（毫秒）。暂停期间一次请求都不发 */
+    private long rateLimitPauseMs = 300_000;
+
+    /**
      * 地图同步发现内容变化后，自动补一次**首屏档**预热。
      *
      * <p>只补首屏档是有意的：同步是管理员随时可能点的，而全量预热要拉原图、跑十几分钟，
@@ -173,6 +188,30 @@ public class MapOptions {
 
     public void setWarmAfterSync(boolean warmAfterSync) {
         this.warmAfterSync = warmAfterSync;
+    }
+
+    public long getRequestGapMs() {
+        return requestGapMs;
+    }
+
+    public void setRequestGapMs(long requestGapMs) {
+        this.requestGapMs = Math.max(50, requestGapMs);
+    }
+
+    public int getRateLimitStreak() {
+        return rateLimitStreak;
+    }
+
+    public void setRateLimitStreak(int rateLimitStreak) {
+        this.rateLimitStreak = Math.max(1, rateLimitStreak);
+    }
+
+    public long getRateLimitPauseMs() {
+        return rateLimitPauseMs;
+    }
+
+    public void setRateLimitPauseMs(long rateLimitPauseMs) {
+        this.rateLimitPauseMs = Math.max(0, rateLimitPauseMs);
     }
 
     public Shot getShot() {
