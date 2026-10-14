@@ -86,6 +86,22 @@ class LocationCorpusBuilderTest {
     }
 
     @Test
+    @DisplayName("★ 每个地点块的正文都带配图凭据 —— 地点问题常常是资料答掉的，不是工具")
+    void everyPlaceBlockCarriesImageKey() {
+        List<KbMapStore.Marker> markers = List.of(
+                marker("Springlands", "Village", "A village in the Springlands.", 1));
+
+        LocationCorpusBuilder.Entry entry = LocationCorpusBuilder.plan(markers).get(0);
+
+        // 用真正的标记解析器验一遍：产出必须正好是消费者认得的形状
+        com.example.qqbot.media.ImageMarkers.Parsed parsed =
+                com.example.qqbot.media.ImageMarkers.parse(entry.body());
+        assertThat(entry.body()).contains("配图：[[img:map:");
+        assertThat(parsed.keys()).as("块正文里必须有一个合法的地图标记").hasSize(1);
+        assertThat(parsed.keys().get(0)).startsWith("map:");
+    }
+
+    @Test
     @DisplayName("id 是确定性 slug（重跑不会造出新块）")
     void deterministicId() {
         assertThat(LocationCorpusBuilder.idOf("Flame Shrine")).isEqualTo("map-loc-flame-shrine");

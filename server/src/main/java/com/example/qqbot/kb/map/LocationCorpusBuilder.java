@@ -225,6 +225,22 @@ public class LocationCorpusBuilder {
         return report(entries, skippedLore, written, 0, false);
     }
 
+    /**
+     * 当前库里有多少条由地图派生的地点语料。
+     *
+     * <p>清空地图数据**不会**顺手删这些块（那是"清除地点语料"自己的事），但清完之后它们
+     * 就成了**过期的**：里面写的是已经不存在的点位算出来的坐标。所以清空任务要能报出这个数，
+     * 好让管理员知道还差一步。
+     */
+    public int derivedCount() {
+        try {
+            return blockStore.byDoc(DOC_ID).size();
+        } catch (Exception e) {
+            log.warn("[MAP] 读地点语料条数失败：{}", e.getMessage());
+            return 0;
+        }
+    }
+
     /** 清掉全部派生块 —— 回滚用。返回删掉的条数 */
     public int purge() {
         int n = 0;
@@ -342,6 +358,13 @@ public class LocationCorpusBuilder {
         if (ms.size() > 1) {
             body.append("另有 ").append(ms.size() - 1).append(" 处，见 wiki 地图。");
         }
+        // 配图凭据：地点问题经常是**这块资料答掉的**，而不是 locate 工具 ——
+        // 凭据必须跟着块正文走，否则模型手里根本没有可抄的东西。
+        // 实测漏过一次：问「渔夫在哪里」，模型照抄了本块的坐标，但块里没有标记，于是没有图。
+        KbMapStore.Marker first = ms.get(0);
+        body.append("配图：[[img:map:")
+                .append(com.example.qqbot.kb.PlacePoint.keyOf(first.page() + "#" + first.markerId()))
+                .append("]]");
 
         String url = "https://enshrouded.wiki.gg/wiki/" + article.replace(' ', '_');
         List<String> tags = new ArrayList<>();
