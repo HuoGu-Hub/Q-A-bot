@@ -40,10 +40,69 @@ class MapImageCacheTest {
         }
     }
 
+    /** 一个"上游说这个文件不存在"的假来源 */
+    private static final class MissingSource implements MapImageSource {
+        final AtomicInteger calls = new AtomicInteger();
+
+        @Override
+        public byte[] fetch(String fileName, int width) throws IOException {
+            calls.incrementAndGet();
+            throw new NotFound("上游没有这个文件（404）");
+        }
+
+        @Override
+        public String describe() {
+            return "missing";
+        }
+    }
+
     private static MapOptions options(Path dir) {
         MapOptions o = new MapOptions();
         o.setTileDir(dir.toString());
         return o;
+    }
+
+    @Test
+    @DisplayName("上游说文件不存在：只问一次，之后连一次出站都不发")
+    void missingFileIsAskedOnce(@TempDir Path dir) {
+        MissingSource src = new MissingSource();
+        MapImageCache cache = new MapImageCache(options(dir), src);
+
+        assertThat(cache.get("FrozenFrontier", "Map:FrozenFrontier/Main", "Map-FrozenFrontier.jpg", 160))
+                .isEmpty();
+        assertThat(cache.get("FrozenFrontier", "Map:FrozenFrontier/Main", "Map-FrozenFrontier.jpg", 320))
+                .isEmpty();
+        assertThat(cache.get("FrozenFrontier", "Map:FrozenFrontier/Main", "Map-FrozenFrontier.jpg", 0))
+                .isEmpty();
+
+        // 三次请求、三个档位，来源只被调用一次 —— 另外两次在"已知不存在"那一关就挡掉了
+        assertThat(src.calls).hasValue(1);
+    }
+
+    @Test
+    @DisplayName("不存在的判定按文件记：同一张图的不同档位不会各问一次")
+    void missingIsKeyedByFileNotWidth(@TempDir Path dir) {
+        MissingSource src = new MissingSource();
+        MapImageCache cache = new MapImageCache(options(dir), src);
+
+        for (int w : new int[]{160, 320, 640, 0}) {
+            cache.get("FrozenFrontier", "Map:FrozenFrontier/Main", "Map-FrozenFrontier.jpg", w);
+        }
+
+        // 四档只问一次 —— 文件在不在跟要多大宽度没有关系
+        assertThat(src.calls).hasValue(1);
+    }
+
+    @Test
+    @DisplayName("另一张图不会被上一张的「不存在」连坐")
+    void missingDoesNotLeakAcrossFiles(@TempDir Path dir) {
+        MissingSource src = new MissingSource();
+        MapImageCache cache = new MapImageCache(options(dir), src);
+
+        cache.get("FrozenFrontier", "Map:FrozenFrontier/Main", "Map-FrozenFrontier.jpg", 160);
+        cache.get("FrozenFrontier", "Map:FrozenFrontier/Main", "Map-Blackmire.jpg", 160);
+
+        assertThat(src.calls).hasValue(2);
     }
 
     @Test
