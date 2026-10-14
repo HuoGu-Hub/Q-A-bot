@@ -77,13 +77,22 @@ export function minScale(canvas: CanvasSpec, vw: number, vh: number): number {
   return containScale(canvas, vw, vh) * 0.9
 }
 
-/** 缩放上限：world 像素放大到屏幕 8 倍已经远超原图分辨率（瓦片只有 1280） */
-export function maxScale(): number {
-  return 8
-}
+/**
+ * 缩放上限的兜底值。真实值来自服务端的 {@code app.kb.map.max-zoom}，
+ * 由目录接口下发 —— 它是"屏幕像素 / 原图像素"的比例，只有前端知道屏幕。
+ */
+export const DEFAULT_MAX_ZOOM = 2
 
-export function clampScale(canvas: CanvasSpec, vw: number, vh: number, k: number): number {
-  return Math.min(maxScale(), Math.max(minScale(canvas, vw, vh), k))
+/**
+ * 夹缩放。
+ *
+ * 顺序是"先夹上限、再保证不低于 minScale"：画布比视口还小时，
+ * 看清全貌比遵守放大上限更重要（否则地图会永远装不进屏幕）。
+ */
+export function clampScale(canvas: CanvasSpec, vw: number, vh: number, k: number,
+                           maxZoom: number = DEFAULT_MAX_ZOOM): number {
+  const cap = maxZoom > 0 ? maxZoom : DEFAULT_MAX_ZOOM
+  return Math.max(minScale(canvas, vw, vh), Math.min(cap, k))
 }
 
 /**
@@ -92,9 +101,10 @@ export function clampScale(canvas: CanvasSpec, vw: number, vh: number, k: number
  * 规则是"每一边至少留 15% 的内容可见"——比"必须完整可见"宽松，
  * 允许把边角挪到视野外去看相邻区域，但不允许拖走之后一片空白。
  */
-export function clampView(canvas: CanvasSpec, vw: number, vh: number, view: View): View {
+export function clampView(canvas: CanvasSpec, vw: number, vh: number, view: View,
+                          maxZoom: number = DEFAULT_MAX_ZOOM): View {
   const [w, h] = extentOf(canvas)
-  const k = clampScale(canvas, vw, vh, view.k)
+  const k = clampScale(canvas, vw, vh, view.k, maxZoom)
   const sw = w * k
   const sh = h * k
   /**
@@ -151,6 +161,7 @@ export function fitPoints(
   pts: [number, number][],
   vw: number,
   vh: number,
+  maxZoom: number = DEFAULT_MAX_ZOOM,
 ): View {
   if (pts.length === 0) return fitView(canvas, vw, vh)
   const xs = pts.map((p) => p[0])
@@ -161,10 +172,10 @@ export function fitPoints(
   const maxY = Math.max(...ys)
   const spanX = Math.max(1, maxX - minX)
   const spanY = Math.max(1, maxY - minY)
-  const k = clampScale(canvas, vw, vh, Math.min(vw / spanX, vh / spanY) * 0.75)
+  const k = clampScale(canvas, vw, vh, Math.min(vw / spanX, vh / spanY) * 0.75, maxZoom)
   const cx = (minX + maxX) / 2
   const cy = (minY + maxY) / 2
-  return clampView(canvas, vw, vh, { k, tx: vw / 2 - cx * k, ty: vh / 2 - cy * k })
+  return clampView(canvas, vw, vh, { k, tx: vw / 2 - cx * k, ty: vh / 2 - cy * k }, maxZoom)
 }
 
 /**

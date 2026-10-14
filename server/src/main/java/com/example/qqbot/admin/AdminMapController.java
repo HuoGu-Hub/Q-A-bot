@@ -129,6 +129,7 @@ public class AdminMapController {
         out.put("ok", true);
         out.put("enabled", options.isEnabled());
         out.put("unitsPerMeter", options.getUnitsPerMeter());
+        out.put("maxZoom", options.getMaxZoom());
         out.put("categories", MapViewService.categoryLabels());
         out.put("maps", view.catalog());
         return out;

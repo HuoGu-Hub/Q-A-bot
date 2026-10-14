@@ -506,6 +506,7 @@ function fmt(n: number): string {
             :highlight="highlight"
             :draft="draft"
             :map-name="mapName"
+            :max-zoom="catalog?.maxZoom ?? 2"
             :mode="mode"
             @pick="onPick"
             @picked-point="onPickedPoint"

@@ -24,6 +24,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { CanvasSpec, Marker, Relative } from './types'
+import { categoryColor } from './palette'
 import {
   clampView, centerOn, crsOf, extentOf, fitPoints, fitView, hitTest,
   screenOf, visibleMarkers, worldAt, worldOf, worldOfMarker, zoomAt,
@@ -47,8 +48,10 @@ const props = withDefaults(
     draft?: { x: number; y: number } | null
     /** 地图名，拼图片地址用 */
     mapName: string
+    /** 最大放大倍数，来自服务端配置；缺省时用 2 */
+    maxZoom?: number
   }>(),
-  { mode: 'view', selectedId: '', highlight: null, draft: null },
+  { mode: 'view', selectedId: '', highlight: null, draft: null, maxZoom: 2 },
 )
 
 const emit = defineEmits<{
@@ -163,19 +166,32 @@ function readPalette() {
   }
 }
 
+/**
+ * 圆点颜色按**分类**取，自定义点位与 wiki 点位同色 ——
+ * "是不是本地点位"用外圈一道灵火描边表示，不占用一个颜色维度。
+ * 这样"绿色=资源"在两种来源上都成立，图例才说得通。
+ */
 function colorOf(m: Marker): string {
-  if (m.source === 'admin') {
-    return m.category === 'resource' ? palette.value.vital : palette.value.emberHot
-  }
-  if (m.landmark) return palette.value.ember
-  if (m.category === 'collection') return palette.value.warn
-  return palette.value.mist
+  return categoryColor(m.category)
 }
 
 /* ==================== 图标缓存 ==================== */
 
 const iconCache = new Map<string, HTMLImageElement>()
-const ICON_BOX = 22
+
+/**
+ * 图标在屏幕上的边长。
+ *
+ * <p><b>为什么不按缩放级别切换"图标 / 圆点"</b>：上一版在 k < 0.35 时只画圆点，
+ * 而总览恰好就在那个区间 —— 于是用户看到的永远是一堆分不出类型的小圆点，
+ * 而"分不出这是资源还是敌寨"正是他打开地图要解决的问题。
+ *
+ * <p>现在**永远画图标**，只让尺寸跟着缩放走：缩小时 14px、放大时 26px。
+ * 总览上 14px 的图标仍然能看出形状差异，而且覆盖率只有一成多，不会糊成一片。
+ */
+function iconBox(k: number): number {
+  return Math.max(14, Math.min(26, 8 + 24 * k))
+}
 
 /** 分组 key → 图标文件名。由父组件注入，省得为了图标名多调一次接口 */
 const groupIcons = ref<Map<string, string>>(new Map())
@@ -227,7 +243,18 @@ function draw() {
 
   const v = view.value
   const list = visibleMarkers(props.canvas, shown.value, v, w, h)
-  const useIcons = v.k >= 0.35
+  const box = iconBox(v.k)
+  /**
+   * 屏幕上每个点位平均能分到多大一块地方。
+   *
+   * <p>不够摆下两个图标就退回**分类圆点**：总览上几百个图标互相压在一起，
+   * 和"分不出类型"没有区别 —— 而圆点至少能用颜色把资源/地标/兴趣点/收集品分开，
+   * 配合侧栏图例就能回答"这是资源还是敌寨"。放大到点与点拉开了，图标自然回来。
+   */
+  const spacing = Math.sqrt((w * h) / Math.max(1, list.length))
+  // 3.2 倍边长：两个图标之间要留出足够空隙才叫"分辨得出"，挨着摆和叠着摆没区别。
+  // 实测总览（四百多个点）落在这一侧走圆点，放大到十几倍就切回图标。
+  const useIcons = spacing >= box * 3.2
 
   // 普通点先画、地标后画、选中的最后画 —— 保证"重要"和"被选中"的压在最上面
   const ordered = [...list].sort((a, b) => rank(a) - rank(b))
@@ -246,17 +273,27 @@ function draw() {
       ctx.fill()
     }
 
-    const img = useIcons ? iconFor(m) : null
+    // 选中的那一个永远画图标 —— 用户刚点过它，必须看得清
+    const img = useIcons || selected ? iconFor(m) : null
     if (img) {
-      const s = selected ? ICON_BOX + 4 : ICON_BOX
+      const s = selected ? box + 4 : box
       // 图标来自 wiki，深浅底图上都需要一圈暗底才看得清
       ctx.beginPath()
       ctx.arc(sx, sy, s / 2 + 1.5, 0, Math.PI * 2)
       ctx.fillStyle = 'rgba(8,10,14,.72)'
       ctx.fill()
       ctx.drawImage(img, sx - s / 2, sy - s / 2, s, s)
+      // 自定义点位：外圈一道灵火，不靠换颜色区分来源
+      if (m.source === 'admin') {
+        ctx.beginPath()
+        ctx.arc(sx, sy, s / 2 + 3, 0, Math.PI * 2)
+        ctx.lineWidth = 1.6
+        ctx.strokeStyle = palette.value.emberHot
+        ctx.stroke()
+      }
     } else {
-      const r = selected || hover ? 5 : 3
+      // 圆点要够大才看得出颜色差异 —— 3px 的色块在深色底图上几乎认不出来
+      const r = selected || hover ? 6 : 4
       ctx.beginPath()
       ctx.arc(sx, sy, r, 0, Math.PI * 2)
       ctx.fillStyle = colorOf(m)
@@ -416,7 +453,7 @@ function onPointerMove(e: PointerEvent) {
       const factor = d / pinchBase
       pinchBase = d
       view.value = clampView(props.canvas, size.value.w, size.value.h,
-        zoomAt(view.value, mid[0], mid[1], factor))
+        zoomAt(view.value, mid[0], mid[1], factor), props.maxZoom)
       schedule()
     }
     return
@@ -440,7 +477,7 @@ function onPointerMove(e: PointerEvent) {
   moved += Math.abs(dx) + Math.abs(dy)
   const v = view.value
   view.value = clampView(props.canvas, size.value.w, size.value.h,
-    { k: v.k, tx: v.tx + dx, ty: v.ty + dy })
+    { k: v.k, tx: v.tx + dx, ty: v.ty + dy }, props.maxZoom)
   schedule()
 }
 
@@ -469,14 +506,14 @@ function onWheel(e: WheelEvent) {
   const p = localPoint(e)
   const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
   view.value = clampView(props.canvas, size.value.w, size.value.h,
-    zoomAt(view.value, p[0], p[1], factor))
+    zoomAt(view.value, p[0], p[1], factor), props.maxZoom)
   schedule()
 }
 
 function onDoubleClick(e: MouseEvent) {
   const p = localPoint(e)
   view.value = clampView(props.canvas, size.value.w, size.value.h,
-    zoomAt(view.value, p[0], p[1], 1.8))
+    zoomAt(view.value, p[0], p[1], 1.8), props.maxZoom)
   schedule()
 }
 
@@ -494,7 +531,7 @@ onMounted(() => {
       needsFit = false
       view.value = fitView(props.canvas, size.value.w, size.value.h)
     } else {
-      view.value = clampView(props.canvas, size.value.w, size.value.h, view.value)
+      view.value = clampView(props.canvas, size.value.w, size.value.h, view.value, props.maxZoom)
     }
     schedule()
   })
@@ -536,7 +573,7 @@ defineExpose({
   },
   zoomBy(factor: number) {
     view.value = clampView(props.canvas, size.value.w, size.value.h,
-      zoomAt(view.value, size.value.w / 2, size.value.h / 2, factor))
+      zoomAt(view.value, size.value.w / 2, size.value.h / 2, factor), props.maxZoom)
     schedule()
   },
   /** 把某个 crs 坐标放到视野中心 */
@@ -544,14 +581,14 @@ defineExpose({
     const wp = worldOf(props.canvas, x, y)
     const base = { k: k ?? Math.max(view.value.k, 0.6), tx: view.value.tx, ty: view.value.ty }
     view.value = clampView(props.canvas, size.value.w, size.value.h,
-      centerOn(base, wp[0], wp[1], size.value.w, size.value.h))
+      centerOn(base, wp[0], wp[1], size.value.w, size.value.h), props.maxZoom)
     schedule()
   },
   /** 让锚点与目标同时进视野 */
   showPair(fromX: number, fromY: number, toX: number, toY: number) {
     view.value = fitPoints(props.canvas,
       [worldOf(props.canvas, fromX, fromY), worldOf(props.canvas, toX, toY)],
-      size.value.w, size.value.h)
+      size.value.w, size.value.h, props.maxZoom)
     schedule()
   },
   scale() {

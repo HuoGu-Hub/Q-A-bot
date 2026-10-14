@@ -80,6 +80,8 @@ public class PublicMapController {
         out.put("ok", true);
         out.put("enabled", options.isEnabled());
         out.put("unitsPerMeter", options.getUnitsPerMeter());
+        // 缩放上限交给前端：它是"屏幕像素 / 原图像素"的比例，只有前端知道屏幕
+        out.put("maxZoom", options.getMaxZoom());
         out.put("categories", MapViewService.categoryLabels());
         out.put("maps", view.catalog());
         return ResponseEntity.ok(out);

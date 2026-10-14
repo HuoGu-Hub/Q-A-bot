@@ -39,6 +39,8 @@ export interface GroupSpec {
   icon: string
   collectible: boolean
   landmark: boolean
+  /** 分类键。用来决定默认开哪些图层：收集品默认关，不然总览糊成一片 */
+  category: string
   count: number
 }
 
@@ -56,6 +58,8 @@ export interface Catalog {
   enabled: boolean
   /** 1 米等于多少坐标单位；0 = 后端没有输出米 */
   unitsPerMeter: number
+  /** 最大放大倍数（屏幕像素 / 原图像素）。超过它就是在放大像素，看着就是糊的 */
+  maxZoom: number
   categories: { key: string; label: string }[]
   maps: MapSpec[]
 }

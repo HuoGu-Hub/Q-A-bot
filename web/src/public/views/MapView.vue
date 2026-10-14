@@ -22,6 +22,7 @@ import Button from '@shared/ui/Button.vue'
 import Input from '@shared/ui/Input.vue'
 import Tag from '@shared/ui/Tag.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
+import { categoryColor } from '@shared/map/palette'
 import type { Catalog, LocateHit, LocateResult, MapSpec, Marker, Relative } from '@shared/map/types'
 
 const route = useRoute()
@@ -75,6 +76,30 @@ const categoryLabel = computed(() => {
   return out
 })
 
+/**
+ * 图例：当前画布上**实际出现过**的分类。
+ *
+ * <p>只列出现过的，不列一份固定的七类清单 —— 空图例会让人以为地图坏了。
+ * 它回答的是"这个颜色是什么意思"；具体是哪个分组，看下面图层里的图标。
+ */
+const legend = computed(() => {
+  const counts = new Map<string, number>()
+  for (const m of markersOnCanvas.value) {
+    // 只数**当前可见**的点：图层关掉的分类不该还挂在图例上，
+    // 否则图例在描述一个地图上并不存在的分布
+    const on = m.source === 'admin'
+      ? visibleCategories.value.has(m.category)
+      : visibleGroups.value.has(m.group)
+    if (!on) continue
+    counts.set(m.category, (counts.get(m.category) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([key, count]) => ({
+      key, count, color: categoryColor(key), label: categoryLabel.value.get(key) ?? key,
+    }))
+    .sort((a, b) => b.count - a.count)
+})
+
 const adminCategories = computed(() => {
   const seen = new Set<string>()
   for (const m of markers.value) {
@@ -112,10 +137,12 @@ async function loadMarkers(map: string) {
   try {
     const r = await publicApi.get<{ markers: Marker[] }>('/map/markers?map=' + encodeURIComponent(map))
     markers.value = r.markers
-    // 默认图层：Lore 是世界观文本（几百条），一上来全开会把地图糊掉
+    // 默认图层：只开"找地方"用得上的。
+    // 收集品（化石、乐谱、壁毯）与世界观文本加起来五百多条，全开会让总览糊成一片，
+    // 而它们并不是"资源在哪、敌营在哪"这类问题的答案。想要的人自己在图层里打开。
     const groups = new Set<string>()
     for (const g of currentMap.value?.groups ?? []) {
-      if (!g.key.startsWith('Lore')) groups.add(g.key)
+      if (g.category !== 'collection') groups.add(g.key)
     }
     visibleGroups.value = groups
     const cats = new Set<string>()
@@ -328,6 +355,21 @@ function fmt(n: number): string {
           </p>
         </div>
 
+        <div v-if="legend.length" class="block">
+          <h2 class="block-title">图例</h2>
+          <ul class="legend">
+            <li v-for="c in legend" :key="c.key">
+              <span class="dot" :style="{ background: c.color }" />
+              <span class="layer-name">{{ c.label }}</span>
+              <span class="layer-n">{{ c.count }}</span>
+            </li>
+          </ul>
+          <p class="hint">
+            地图上每个点位画的是它所属分组的图标；颜色是分类，缩小时作为兜底。
+            带灵火外圈的是本站补充的点位。
+          </p>
+        </div>
+
         <div class="block">
           <div class="block-head">
             <h2 class="block-title">图层</h2>
@@ -396,6 +438,7 @@ function fmt(n: number): string {
           :selected-id="selected?.id ?? ''"
           :highlight="highlight"
           :map-name="mapName"
+          :max-zoom="catalog?.maxZoom ?? 2"
           mode="view"
           @pick="onPick"
         />
@@ -578,6 +621,8 @@ h1 {
 .hit-name { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
 .hit-rel { font-size: var(--fs-xs); color: var(--ink-3); }
 
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.legend li { display: flex; align-items: center; gap: var(--sp-2); padding: 3px 6px; font-size: var(--fs-sm); }
 .layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .layer {
   display: flex;

@@ -56,6 +56,18 @@ public class MapOptions {
      */
     private double unitsPerMeter = 0;
 
+    /**
+     * 最大放大倍数：**屏幕像素 / 原图像素**。
+     *
+     * <p>为什么必须有上限：瓦片原图只有 1280×1280，把它画到屏幕上 1280 像素就是 1:1。
+     * 再往上每一倍都是在放大像素 —— 用户看到的是"糊"，而他会以为是我们做得不如 wiki 清楚。
+     * 实测 8 倍时整张图就是一团色块。
+     *
+     * <p>默认 2 倍：放大到两倍仍能看清地形纹理与图标，同时足够把一小片区域铺满屏幕。
+     * 想要更"能放大"就调大它，代价是越往上越糊。
+     */
+    private double maxZoom = 2.0;
+
     /** 一次地点问答最多列几处 */
     private int answerLimit = 5;
 
@@ -121,6 +133,15 @@ public class MapOptions {
 
     public void setUnitsPerMeter(double unitsPerMeter) {
         this.unitsPerMeter = unitsPerMeter;
+    }
+
+    public double getMaxZoom() {
+        return maxZoom;
+    }
+
+    public void setMaxZoom(double maxZoom) {
+        // 小于 1 就等于"连原图都看不到"，那一定是配错了 —— 收在 1 起步
+        this.maxZoom = Math.max(1.0, maxZoom);
     }
 
     public int getAnswerLimit() {
