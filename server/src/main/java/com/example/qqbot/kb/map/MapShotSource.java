@@ -11,8 +11,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 地图截图作为出站图片的来源 —— 标记 {@code [[img:map:<点位身份>]]} 由它解析。
@@ -67,14 +71,15 @@ public class MapShotSource implements ImageSource {
                 if (!PlacePoint.keyOf(marker.id()).equals(key)) {
                     continue;
                 }
-                return render(map.map(), marker);
+                return render(map, marker);
             }
         }
         log.info("[MAP-SHOT] 没有这个身份的点位，本次不出图：{}", key);
         return Optional.empty();
     }
 
-    private Optional<OutboundImage> render(String map, MapViewService.MarkerView marker) {
+    private Optional<OutboundImage> render(MapViewService.MapView mapView, MapViewService.MarkerView marker) {
+        String map = mapView.map();
         MapViewService.CanvasView canvas = view.canvasesOf(map).stream()
                 .filter(c -> c.page().equals(marker.canvas()))
                 .findFirst()
@@ -86,13 +91,29 @@ public class MapShotSource implements ImageSource {
         MapProjection.Canvas geometry = MapProjection.Canvas.of(
                 canvas.topLeft(), canvas.bottomRight(), canvas.tileAt(), canvas.tileSize());
 
+        Map<String, String> iconOf = iconsOf(mapView);
+        // 只有公开站也看得见的点位才配当背景 —— 藏起来的不能借截图漏出去
+        List<MapViewService.MarkerView> visible = view.markers(map, true);
+        Map<String, String> groupOf = new HashMap<>();
+        for (MapViewService.MarkerView m : visible) {
+            groupOf.put(m.id(), m.group());
+        }
+
+        // 目标点与地标都带上自己那一层的图标：圈套在图标外面，读图的人知道那是什么东西
         MapProjection.Point target = MapProjection.worldOf(geometry, marker.x(), marker.y());
         List<MapShotRenderer.Mark> marks = new ArrayList<>();
-        marks.add(new MapShotRenderer.Mark(target.x(), target.y(), true, marker.name()));
+        marks.add(new MapShotRenderer.Mark(target.x(), target.y(), true, marker.name(),
+                iconOf.getOrDefault(nz(marker.group()), "")));
+        Set<String> focus = new LinkedHashSet<>();
+        focus.add(marker.id());
         nearestLandmark(map, marker, geometry).ifPresent(point -> {
             MapProjection.Point at = MapProjection.worldOf(geometry, point.x(), point.y());
-            marks.add(new MapShotRenderer.Mark(at.x(), at.y(), false, point.name()));
+            marks.add(new MapShotRenderer.Mark(at.x(), at.y(), false, point.name(),
+                    iconOf.getOrDefault(nz(groupOf.get(point.ref())), "")));
+            focus.add(point.ref());
         });
+
+        List<MapShotRenderer.Mark> context = contextIcons(mapView, marker, geometry, iconOf, visible, focus);
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
         // 缺口清单有两个来源：取失败的（get 返回空）与**超预算没去取的**（need）。
@@ -115,15 +136,68 @@ public class MapShotSource implements ImageSource {
                 usedWidth[0] = width;
                 missing.add(image);
             }
+
+            @Override
+            public Optional<MapImageCache.Image> icon(String image) {
+                // 图标按分组走、不带档位、也没有页面归属 —— 与预热时同一个调用形状。
+                // ★ 必须**只读缓存**：出图跑在回复路径上，一张没预热到的图标就是一次
+                //   好几秒的上游请求（出站全局串行节流），十几个图标能把回复拖到不可用。
+                //   没预热到就少画一个图标，由预热任务负责补齐。
+                return images.cached(map, null, image, 0);
+            }
         };
 
         Optional<byte[]> shot = renderer.render(geometry, canvas.tiles(), canvas.background(),
-                marks, fetcher, deadline);
+                marks, context, fetcher, deadline);
         if (shot.isEmpty() && !missing.isEmpty()) {
             // 这次没图，但缺的那几张已经交给后台了 —— 同一个点位再问一次就有
             warmer.warmAsync(map, canvas.page(), missing, usedWidth[0]);
         }
         return shot.map(bytes -> OutboundImage.ofBytes(bytes, "image/jpeg"));
+    }
+
+    /** 分组 key → 图标文件名。没有图标的分组不进表 —— 出图时"查不到"就是"不画" */
+    private static Map<String, String> iconsOf(MapViewService.MapView map) {
+        Map<String, String> out = new HashMap<>();
+        for (MapViewService.GroupView g : map.groups()) {
+            if (g.icon() != null && !g.icon().isBlank()) {
+                out.put(g.key(), g.icon());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 背景图标：把这张图上**默认显示**的点位一并截进来。
+     *
+     * <h2>为什么非有不可</h2>
+     * 只有目标点与地标两三个圈时，读图的人面对的是一片地形纹理 —— 看不出这是地图的哪一块，
+     * 更看不出旁边有什么。把默认显示的图标一起画上，截图才像"地图上的一角"。
+     *
+     * <p>筛选口径与公开站一致：<b>当前画布 + 默认显示的分组</b>。目标点与地标已经单独
+     * 画过（图标 + 圈 + 名字），这里跳过，免得同一处画两遍。
+     */
+    private List<MapShotRenderer.Mark> contextIcons(MapViewService.MapView mapView,
+                                                    MapViewService.MarkerView marker,
+                                                    MapProjection.Canvas geometry,
+                                                    Map<String, String> iconOf,
+                                                    List<MapViewService.MarkerView> visible,
+                                                    Set<String> focus) {
+        Set<String> shown = mapView.shownGroups();
+        List<MapShotRenderer.Mark> out = new ArrayList<>();
+        for (MapViewService.MarkerView m : visible) {
+            if (!nz(marker.canvas()).equals(nz(m.canvas())) || focus.contains(m.id())
+                    || !shown.contains(nz(m.group()))) {
+                continue;
+            }
+            String icon = iconOf.getOrDefault(nz(m.group()), "");
+            if (icon.isBlank()) {
+                continue;
+            }
+            MapProjection.Point at = MapProjection.worldOf(geometry, m.x(), m.y());
+            out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), icon));
+        }
+        return out;
     }
 
     /**

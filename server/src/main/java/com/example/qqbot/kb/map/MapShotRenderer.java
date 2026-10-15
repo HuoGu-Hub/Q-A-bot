@@ -22,8 +22,10 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -51,6 +53,9 @@ public class MapShotRenderer {
 
     /** 底图没盖到的地方露出来的底色 —— 用深灰而不是纯黑，免得看着像"数据缺失" */
     private static final Color BACKGROUND = new Color(24, 28, 34);
+
+    /** 图标底下那圈暗色 —— 图标来自 wiki，深浅底图上都得看得清（与查看器同一套做法） */
+    private static final Color ICON_BACKING = new Color(8, 10, 14, 184);
 
     /** 标签底色：半透明黑。与圈一样要打底 —— 浅色雪原与深色林地都得读得出来 */
     private static final Color LABEL_BG = new Color(0, 0, 0, 165);
@@ -96,15 +101,40 @@ public class MapShotRenderer {
          */
         default void need(String image, int width) {
         }
+
+        /**
+         * 取一张**分组图标**（原图档）。默认空实现 —— 不画图标的调用方与测试不用管。
+         *
+         * <p>图标与瓦片不是一回事：它按分组走、不带档位、也没有页面归属。
+         *
+         * <p><b>实现必须只读缓存，绝不能在这里等上游</b>：这一路调用发生在回复路径上，
+         * 一张没预热到的图标就是一次好几秒的请求。取不到就不画，由预热任务补齐。
+         */
+        default Optional<MapImageCache.Image> icon(String image) {
+            return Optional.empty();
+        }
     }
 
     /**
      * 要画在图上的一点。
      *
      * @param x       画布像素坐标
+     * @param y       画布像素坐标
      * @param primary true = 目标点，画大标记；false = 地标，画小标记
+     * @param label   写在一旁的名字；空 = 不写
+     * @param icon    分组图标文件名（如 {@code Flame_Shrine.png}）；空 = 只有圈
      */
-    public record Mark(double x, double y, boolean primary, String label) {
+    public record Mark(double x, double y, boolean primary, String label, String icon) {
+
+        /** 只有高亮圈、没有图标：目标点与地标在没有分组图标时走这一条 */
+        public Mark(double x, double y, boolean primary, String label) {
+            this(x, y, primary, label, "");
+        }
+
+        /** 只有背景图标：地图上本来就显示着的点位用 —— 不写名字，只提供参照 */
+        public static Mark icon(double x, double y, String icon) {
+            return new Mark(x, y, false, "", icon);
+        }
     }
 
     private final MapOptions options;
@@ -124,6 +154,19 @@ public class MapShotRenderer {
     public Optional<byte[]> render(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
                                    String background, List<Mark> marks, TileFetcher fetcher,
                                    long deadlineAtMillis) {
+        return render(canvas, tiles, background, marks, List.of(), fetcher, deadlineAtMillis);
+    }
+
+    /**
+     * 带背景图标的重载。
+     *
+     * @param context 地图上"本来就显示着"的点位。它们<b>不参与取景</b>（视口只由 {@code marks}
+     *                决定），只负责让这张截图看得出是地图的哪一块 —— 只有目标点与地标的话，
+     *                读图的人面对一片地形纹理无从判断自己在哪。
+     */
+    public Optional<byte[]> render(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                   String background, List<Mark> marks, List<Mark> context,
+                                   TileFetcher fetcher, long deadlineAtMillis) {
         MapOptions.Shot cfg = options.getShot();
         if (!cfg.isEnabled() || marks == null || marks.isEmpty()) {
             return Optional.empty();
@@ -216,7 +259,10 @@ public class MapShotRenderer {
                 drawTile(g, base.get(i), baseBoxes.get(i), vp, k);
                 used++;
             }
-            drawMarks(g, marks, vp, k, outW, outH);
+            // 图标要解码一次就够：一张图里同一个分组可能有十几个点
+            Map<String, BufferedImage> iconCache = new HashMap<>();
+            drawIcons(g, context, vp, k, outW, outH, fetcher, iconCache);
+            drawMarks(g, marks, vp, k, outW, outH, fetcher, iconCache);
         } finally {
             g.dispose();
         }
@@ -267,34 +313,117 @@ public class MapShotRenderer {
      * 为什么要打底：底图有浅色的雪原也有深色的林地，单色圈总有一半糊在里面看不见。
      */
     private static void drawMarks(Graphics2D g, List<Mark> marks, MapProjection.Viewport vp,
-                                  double k, int outW, int outH) {
+                                  double k, int outW, int outH, TileFetcher fetcher,
+                                  Map<String, BufferedImage> iconCache) {
         int r = Math.max(7, outW / 90);
+        int iconSize = iconBox(k);
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
                 RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         for (Mark m : marks) {
             double sx = (m.x() - vp.left()) * k;
             double sy = (m.y() - vp.top()) * k;
+            // 有图标就先画图标，圈套在图标外面；没图标才退回"圈 + 十字"。
+            // 圈比图标小的话会被图标盖住，等于没有高亮 —— 半径必须让开图标。
+            boolean withIcon = m.icon() != null && !m.icon().isBlank()
+                    && drawIcon(g, fetcher, iconCache, m.icon(), sx, sy, iconSize, outW, outH);
             int radius;
             if (m.primary()) {
-                radius = r;
-                ring(g, sx, sy, r, PRIMARY_HALO, 4.5f);
-                ring(g, sx, sy, r, PRIMARY, 2.5f);
-                g.setColor(PRIMARY);
-                g.setStroke(new BasicStroke(2.5f));
-                int arm = (int) Math.round(r * 1.9);
-                int gap = (int) Math.round(r * 0.7);
-                g.drawLine((int) sx - arm, (int) sy, (int) sx - gap, (int) sy);
-                g.drawLine((int) sx + gap, (int) sy, (int) sx + arm, (int) sy);
-                g.drawLine((int) sx, (int) sy - arm, (int) sx, (int) sy - gap);
-                g.drawLine((int) sx, (int) sy + gap, (int) sx, (int) sy + arm);
+                radius = withIcon ? Math.max(r, iconSize / 2 + 4) : r;
+                ring(g, sx, sy, radius, PRIMARY_HALO, 4.5f);
+                ring(g, sx, sy, radius, PRIMARY, 2.5f);
+                if (!withIcon) {
+                    g.setColor(PRIMARY);
+                    g.setStroke(new BasicStroke(2.5f));
+                    int arm = (int) Math.round(r * 1.9);
+                    int gap = (int) Math.round(r * 0.7);
+                    g.drawLine((int) sx - arm, (int) sy, (int) sx - gap, (int) sy);
+                    g.drawLine((int) sx + gap, (int) sy, (int) sx + arm, (int) sy);
+                    g.drawLine((int) sx, (int) sy - arm, (int) sx, (int) sy - gap);
+                    g.drawLine((int) sx, (int) sy + gap, (int) sx, (int) sy + arm);
+                }
             } else {
-                radius = Math.max(5, (int) Math.round(r * 0.65));
+                int small = Math.max(5, (int) Math.round(r * 0.65));
+                radius = withIcon ? Math.max(small, iconSize / 2 + 4) : small;
                 ring(g, sx, sy, radius, SECONDARY_HALO, 4f);
                 ring(g, sx, sy, radius, SECONDARY, 2f);
             }
             drawLabel(g, m, sx, sy, radius, outW, outH);
         }
+    }
+
+    /** 背景图标：默认显示的那些点位，画在底图之上、目标点与地标之下 */
+    private static void drawIcons(Graphics2D g, List<Mark> context, MapProjection.Viewport vp,
+                                  double k, int outW, int outH, TileFetcher fetcher,
+                                  Map<String, BufferedImage> iconCache) {
+        if (context == null || context.isEmpty()) {
+            return;
+        }
+        int size = iconBox(k);
+        for (Mark m : context) {
+            double sx = (m.x() - vp.left()) * k;
+            double sy = (m.y() - vp.top()) * k;
+            drawIcon(g, fetcher, iconCache, m.icon(), sx, sy, size, outW, outH);
+        }
+    }
+
+    /**
+     * 画一个分组图标，返回有没有真的画上去。
+     *
+     * <p>图标取自 wiki，缓存里没有就是没有 —— 这时**什么都不画**，让调用方自己决定要不要退回
+     * 画圈。画一个"占位空心圈"是查看器的做法（那边图标是异步到的），静态截图里那样做只会多出一堆
+     * 没有意义的圈。
+     */
+    private static boolean drawIcon(Graphics2D g, TileFetcher fetcher,
+                                    Map<String, BufferedImage> iconCache, String name,
+                                    double sx, double sy, int size, int outW, int outH) {
+        if (name == null || name.isBlank() || size <= 0) {
+            return false;
+        }
+        // 视口外的不画 —— 视口是取景框，权当它天然裁剪
+        if (sx < -size || sy < -size || sx > outW + size || sy > outH + size) {
+            return false;
+        }
+        BufferedImage img = iconImage(fetcher, name, iconCache);
+        if (img == null) {
+            return false;
+        }
+        int x = (int) Math.round(sx - size / 2.0);
+        int y = (int) Math.round(sy - size / 2.0);
+        // 图标是彩色小图，深浅底图上都得有一圈暗底才看得清（查看器同一套做法）
+        g.setColor(ICON_BACKING);
+        g.fillOval(x - 2, y - 2, size + 4, size + 4);
+        g.drawImage(img, x, y, size, size, null);
+        return true;
+    }
+
+    private static BufferedImage iconImage(TileFetcher fetcher, String name,
+                                           Map<String, BufferedImage> iconCache) {
+        if (iconCache.containsKey(name)) {
+            return iconCache.get(name);
+        }
+        BufferedImage img = null;
+        try {
+            Optional<MapImageCache.Image> got = fetcher.icon(name);
+            if (got.isPresent()) {
+                img = decode(got.get().bytes());
+            }
+        } catch (Exception e) {
+            // 图标取不到只是少一个参照物，绝不能把整张图带走
+            log.warn("[MAP-SHOT] 图标取不到，本张不出这个图标：{} —— {}", name, e.getMessage());
+        }
+        iconCache.put(name, img);   // 失败也记下来：同一张图里同一个图标只试一次
+        return img;
+    }
+
+    /**
+     * 图标在屏幕上的边长 —— 与查看器 {@code MapCanvas.vue} 的 {@code iconBox} 同一个公式。
+     *
+     * <p>查看器实测的结论是"永远画图标，只让尺寸跟着缩放走"：缩小时 14px、放大时 26px。
+     * 出图这里缩放通常是 1:1 上下，所以几乎是满尺寸 26px —— 和访客在网页上看到的一致。
+     */
+    static int iconBox(double k) {
+        return (int) Math.round(Math.max(14, Math.min(26, 8 + 24 * k)));
     }
 
     /**

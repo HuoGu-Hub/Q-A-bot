@@ -129,6 +129,68 @@ class MapShotRendererTest {
     }
 
     @Test
+    @DisplayName("★ 背景图标只提供参照，不参与取景 —— 否则远处一个图标就把目标点挤到角落")
+    void contextIconsDoNotMoveViewport() throws IOException {
+        MapShotRenderer.TileFetcher withIcons = new MapShotRenderer.TileFetcher() {
+            @Override
+            public Optional<MapImageCache.Image> get(String image, int width) {
+                return Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+            }
+
+            @Override
+            public Optional<MapImageCache.Image> icon(String image) {
+                return Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+            }
+        };
+
+        byte[] shot = renderer.render(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "目标")),
+                List.of(MapShotRenderer.Mark.icon(2500, 2500, "Far.png"),
+                        MapShotRenderer.Mark.icon(1400, 1280, "Near.png")),
+                withIcons, System.currentTimeMillis() + 5000).orElseThrow();
+
+        BufferedImage img = ImageIO.read(new ByteArrayInputStream(shot));
+        // 只有一个目标点时视口是 1200×750 居中于它 → 屏幕正中心 (100,63)。
+        // 远处那个 (2500,2500) 的图标要是参与了取景，目标点就会被挤到角落
+        assertThat(hasRedNear(img, 100, 63, 12)).as("远处图标不该改变取景").isTrue();
+    }
+
+    @Test
+    @DisplayName("★ 背景图标画得出：暗底 + 图标文件本身")
+    void contextIconsAreDrawn() throws IOException {
+        int[] asked = {0};
+        MapShotRenderer.TileFetcher withIcons = new MapShotRenderer.TileFetcher() {
+            @Override
+            public Optional<MapImageCache.Image> get(String image, int width) {
+                return Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+            }
+
+            @Override
+            public Optional<MapImageCache.Image> icon(String image) {
+                asked[0]++;
+                return Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+            }
+        };
+
+        byte[] quiet = renderer.render(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
+                List.of(), withIcons, System.currentTimeMillis() + 5000).orElseThrow();
+        byte[] shot = renderer.render(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
+                List.of(MapShotRenderer.Mark.icon(1400, 1280, "Near.png"),
+                        MapShotRenderer.Mark.icon(1420, 1300, "Near.png")),
+                withIcons, System.currentTimeMillis() + 5000).orElseThrow();
+
+        // 两个点同一个分组：图标只解码一次
+        assertThat(asked[0]).isEqualTo(1);
+        // 白底 + 不透明的白图标，能看见的只有图标四周那圈暗底（真正的图标是带透明底的 PNG，
+        // 暗底会露出更多）。这里只钉住"暗底确实画了"，不去数具体像素
+        assertThat(darkPixels(ImageIO.read(new ByteArrayInputStream(shot))))
+                .as("图标底下必须有一圈暗色，否则浅底图上就看不见了")
+                .isGreaterThan(darkPixels(ImageIO.read(new ByteArrayInputStream(quiet))) + 20);
+    }
+
+    @Test
     @DisplayName("★ 目标点与地标都要写上名字 —— 没有名字的圈定不了位")
     void drawsLabelsForMarks() throws IOException {
         // 用纯白瓦片当底图：那片区域默认是白的，多出来的深色像素只可能来自标签胶囊

@@ -182,6 +182,28 @@ public class MapViewService {
     public record MapView(String map, String label, int markerCount, int adminCount,
                           List<CanvasView> canvases, List<GroupView> groups,
                           List<String> defaultGroups) {
+
+        /**
+         * 这张地图**实际会显示**的分组 —— 与公开站同一条规则（{@code MapView.vue#loadMarkers}）。
+         *
+         * <p>管理员配过就完全按他的选择；没配过用内置经验值：收集品之外都开。收集品与 Lore
+         * 加起来五百多条，全开会让总览糊成一片，而它们不是"资源在哪、敌营在哪"这类问题的答案。
+         *
+         * <p>地图出图靠它决定"截哪几层图标"：只截默认显示的，图才与访客看到的一致。
+         */
+        public Set<String> shownGroups() {
+            Set<String> out = new java.util.LinkedHashSet<>();
+            if (defaultGroups != null) {
+                out.addAll(defaultGroups);
+                return out;
+            }
+            for (GroupView g : groups) {
+                if (!PlaceCategory.COLLECTION.equals(g.category())) {
+                    out.add(g.key());
+                }
+            }
+            return out;
+        }
     }
 
     /** 一个点位。wiki 点与自定义点在这一层**长得一样**，前端只需一条渲染路径 */

@@ -48,6 +48,10 @@ class MapShotSourceTest {
     private MapShotWarmer warmer;
     private MapShotSource source;
 
+    /** 夹具里的画布与点位 —— 个别用例要另配它们的兄弟点位 */
+    private MapViewService.CanvasView canvasView;
+    private MapViewService.MarkerView markerView;
+
     @BeforeEach
     void setUp() throws IOException {
         options = new MapOptions();
@@ -66,6 +70,8 @@ class MapShotSourceTest {
                 "Map:Embervale/Main", CANVAS_PAGE, "Landmark", "春之原野远古尖塔", "Ancient Spire - Springlands",
                 "", "Ancient_Spire", 1280, 1280, "", true, "landmark", 0, "", "wiki");
 
+        canvasView = canvas;
+        markerView = marker;
         view = mock(MapViewService.class);
         when(view.catalog()).thenReturn(List.of(new MapViewService.MapView(MAP, "余烬谷", 1, 0,
                 List.of(canvas), List.of(), List.of())));
@@ -159,8 +165,8 @@ class MapShotSourceTest {
 
         @Override
         public Optional<byte[]> render(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
-                                       String background, List<Mark> marks, TileFetcher fetcher,
-                                       long deadlineAtMillis) {
+                                       String background, List<Mark> marks, List<Mark> context,
+                                       TileFetcher fetcher, long deadlineAtMillis) {
             tiles.forEach(tile -> fetcher.need(tile.image(), 640));
             return Optional.empty();
         }
@@ -175,6 +181,57 @@ class MapShotSourceTest {
         assertThat(budgeted.resolve(PlacePoint.keyOf(REF))).isEmpty();
         verify(warmer).warmAsync(eq(MAP), eq(CANVAS_PAGE),
                 eq(List.of("t00.png", "t10.png", "t01.png", "t11.png")), eq(640));
+    }
+
+    /** 只把"背景图标"记下来、不真画图的渲染器 —— 筛选题材是这里的被测对象 */
+    private static final class CapturingRenderer extends MapShotRenderer {
+
+        List<Mark> context = List.of();
+
+        CapturingRenderer(MapOptions options) {
+            super(options);
+        }
+
+        @Override
+        public Optional<byte[]> render(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                       String background, List<Mark> marks, List<Mark> context,
+                                       TileFetcher fetcher, long deadlineAtMillis) {
+            this.context = List.copyOf(context);
+            return Optional.empty();
+        }
+    }
+
+    @Test
+    @DisplayName("★ 背景图标只截默认显示的分组：收集品不入图，目标点与地标也不重复画")
+    void contextIconsFollowDefaultLayers() {
+        MapViewService.MarkerView shrine = new MapViewService.MarkerView(
+                "Map:Embervale/Main#FlameShrine-1", MAP, "Map:Embervale/Main", CANVAS_PAGE,
+                "Flame_Shrine", "火焰神龛·春之原野", "Flame Shrine", "", "Flame_Shrine",
+                1980, 1280, "", true, "landmark", 0, "", "wiki");
+        MapViewService.MarkerView fossil = new MapViewService.MarkerView(
+                "Map:Embervale/Main#Fossil-1", MAP, "Map:Embervale/Main", CANVAS_PAGE,
+                "Fossil", "化石", "Fossil", "", "Fossil",
+                1300, 1980, "", false, "collection", 0, "", "wiki");
+        MapViewService.MarkerView otherCanvas = new MapViewService.MarkerView(
+                "Map:Embervale/Collectibles#Chest-1", MAP, "Map:Embervale/Collectibles",
+                "Map:Embervale/Collectibles", "Camp", "箱子", "Chest", "", "",
+                1280, 1280, "", false, "poi", 0, "", "wiki");
+        when(view.markers(MAP, true)).thenReturn(List.of(markerView, shrine, fossil, otherCanvas));
+
+        List<MapViewService.GroupView> groups = List.of(
+                new MapViewService.GroupView("Landmark", "地标", "Landmark.png", false, true, "landmark", 1),
+                new MapViewService.GroupView("Flame_Shrine", "火焰神龛", "Flame_Shrine.png", false, true, "landmark", 63),
+                new MapViewService.GroupView("Fossil", "化石", "Fossil.png", true, false, "collection", 120));
+        // defaultGroups = null：按内置经验值兜底（收集品之外都开），与公开站同一条规则
+        when(view.catalog()).thenReturn(List.of(new MapViewService.MapView(
+                MAP, "余烬谷", 4, 0, List.of(canvasView), groups, null)));
+
+        CapturingRenderer capturing = new CapturingRenderer(options);
+        MapShotSource shot = new MapShotSource(view, places, images, capturing, warmer, options);
+
+        assertThat(shot.resolve(PlacePoint.keyOf(REF))).isEmpty();
+        assertThat(capturing.context).extracting(MapShotRenderer.Mark::icon)
+                .containsExactly("Flame_Shrine.png");
     }
 
     @Test
