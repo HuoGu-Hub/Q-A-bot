@@ -1,5 +1,6 @@
 package com.example.qqbot.llm;
 
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
@@ -9,6 +10,7 @@ import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.request.ToolChoice;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.slf4j.Logger;
@@ -468,7 +470,41 @@ public class LlmRouter {
      * 而且不报错，模型只能按 system.md 的文字自己"编"工具调用标记，最后漏到群里（实测）。
      */
     public ChatResponse chatMessages(ChatRequest request) {
-        return callWithFallbackResponse(request, null);
+        return callWithFallbackResponse(capToolRoundTrips(request), null);
+    }
+
+    /**
+     * 工具轮次用满之后，**不再把工具递给模型**，逼它用已经拿到手的资料作答。
+     *
+     * <h2>为什么不靠 AiServices 的上限</h2>
+     * 到点它会直接抛 {@code exceeded N tool calling round trips} ——
+     * <b>整条回答连同已经查到的资料一起丢掉</b>，群友收到的是兜底话术。
+     * 线上实测（2026-10-15）：模型一口气要到第 4 轮，两次都是这么"走神"的。
+     *
+     * <p>摘掉工具之后模型没得可调，只能作答。上限的语义因此从"抛异常"变成
+     * "换一种问法"，同一份预算下用户至少拿得到一个基于已查资料的答案。
+     *
+     * <p>判据是**请求里已有几条带工具调用的助手消息**，与
+     * {@code app.llm.tool.max-round-trips} 同一个数（AiServices 也用它）。
+     */
+    private ChatRequest capToolRoundTrips(ChatRequest request) {
+        if (request.toolSpecifications() == null || request.toolSpecifications().isEmpty()) {
+            return request;
+        }
+        int max = Math.max(1, props.getTool().getMaxRoundTrips());
+        long used = request.messages().stream()
+                .filter(AiMessage.class::isInstance)
+                .map(AiMessage.class::cast)
+                .filter(AiMessage::hasToolExecutionRequests)
+                .count();
+        if (used < max) {
+            return request;
+        }
+        log.info("[LLM] 工具轮次已用满（{}/{}），本轮禁止再调工具，要求模型直接用已有资料作答", used, max);
+        // ⚠️ 别想着用 toBuilder().toolSpecifications(List.of()) 把工具"摘掉" ——
+        //    ChatRequest.Builder 对**空列表不生效**（实测：摘完里面还是原样）。
+        //    tool_choice=none 才是对厂商真正生效的那句话，两家 provider 实测都认。
+        return request.toBuilder().toolChoice(ToolChoice.NONE).build();
     }
 
     /** 只有消息的请求（老路径与视觉路径用；它们没有工具） */

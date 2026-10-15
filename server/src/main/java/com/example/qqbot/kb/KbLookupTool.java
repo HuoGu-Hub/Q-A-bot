@@ -160,9 +160,19 @@ public class KbLookupTool {
      */
     @Tool("查询《雾锁王国》地图上某类地点或资源的位置，返回它相对最近地标的方位、距离与坐标。"
             + "问『哪里有X』『X在哪』时用这个。只读。")
-    public String locate(@P("要查的地点或资源名，例如 铁矿、远古尖塔、木匠") String place) {
+    public String locate(@P("要查的地点或资源名，例如 铁矿、远古尖塔、木匠") String place,
+                         InvocationContext ctx) {
         if (place == null || place.isBlank()) {
             return "没有提供要查的地点。";
+        }
+        // ★ 与 lookup / search_titles 同一道闸门（2026-10-15 补）。
+        //   locate 原先**不占预算**，于是模型可以反复调它刷轮次，最后撞上
+        //   "工具轮次上限"把整条回答连资料一起丢掉 —— 线上实测的兜底话术就是这么来的。
+        ToolBudget budget = ToolBudget.of(ctx);
+        if (budget != null && !budget.tryAcquire()) {
+            log.info("[TOOL] locate 被预算拦下：{}（已用 {}/{}，{} ms）", budget.reason(), budget.used(),
+                    budget.maxCalls(), budget.elapsedMillis());
+            return "本次检索预算已用完（" + budget.reason() + "），请直接用已有资料作答，不要再调用工具。";
         }
         if (!places.isAvailable()) {
             return "地图点位数据暂时不可用。";

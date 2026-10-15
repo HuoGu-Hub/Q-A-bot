@@ -293,6 +293,47 @@ class KbToolAssistantTest {
     }
 
     @Test
+    @DisplayName("★ 工具：locate 也走预算闸门 —— 原先它能无限刷轮次，把整条回答刷丢")
+    void locateRespectsBudget() {
+        int[] finds = {0};
+        PlaceDirectory places = new PlaceDirectory() {
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public List<PlacePoint> all() {
+                return List.of();
+            }
+
+            @Override
+            public List<PlacePoint> find(String term, int limit) {
+                finds[0]++;
+                return List.of();
+            }
+
+            @Override
+            public Map<String, double[]> worldSizes() {
+                return Map.of();
+            }
+        };
+        KbLookupTool tool = new KbLookupTool(mock(KbRetriever.class), mock(KbCorpus.class), places, new MapOptions());
+
+        InvocationContext ctx = mock(InvocationContext.class);
+        InvocationParameters params = new InvocationParameters();
+        params.put(ToolBudget.KEY, new ToolBudget(30, 1));
+        when(ctx.invocationParameters()).thenReturn(params);
+
+        tool.locate("铁矿", ctx);
+        String second = tool.locate("铁矿", ctx);
+
+        assertThat(second).contains("预算已用完");
+        // 关键：被拦的那次**不该真的去查点位** —— 否则闸门只是嘴上说说
+        assertThat(finds[0]).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("工具：没命中时明说没查到，不编内容")
     void toolSaysNotFound() {
         KbRetriever retriever = mock(KbRetriever.class);
