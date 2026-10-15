@@ -249,17 +249,13 @@ onMounted(load)
             />
 
             <!--
-              校样边栏：只有**覆盖过或正在改**的条目才展开。
-              它回答的是改完之后人心里那个问题：「原来的字是什么、要不要退回去」——
-              所以恢复动作紧贴它要恢复的值，而不是飘在标题行右边。
-              （2026-09-27 曾把「默认：<原文>」从**每一块**下面删掉，理由是噪声；
-               这里只在有对照价值时才出现，而且带着动作，不是同一种东西。）
+              条目动作行：只有**覆盖过或正在改**的条目才有，没动过的条目一个字都不多。
+              ⚠️ 不在这里回显默认文本（2026-09-27 删过一次，理由是噪声；恢复默认是按钮的事，
+                 把原文摊在每块下面只是噪声）。要对照就去右边预览栏看改后的效果。
+              两件事分开：撤销的是还没发出去的一次编辑，恢复默认动的是公开站。
+              都成立时两个都给 —— 否则「恢复默认」会顺手丢掉你刚打的字。
             -->
             <div v-if="b.overridden || isChanged(b)" class="proof">
-              <span class="proof-key">默认</span>
-              <del class="proof-default">{{ b.defaultText }}</del>
-              <!-- 两件事分开：撤销的是还没发出去的一次编辑，恢复默认动的是公开站。
-                   都成立时两个都给 —— 否则「恢复默认」会顺手丢掉你刚打的字。 -->
               <Button v-if="isChanged(b)" size="sm" @click="discardLocal(b)">撤销修改</Button>
               <Button v-if="b.overridden" size="sm" :disabled="saving" @click="resetBlock(b)">
                 恢复默认
@@ -437,35 +433,14 @@ onMounted(load)
    竖线足够，而且它正是预览栏标改过用的那条线：两栏共用一套语言，学一次两处都认。 */
 .blk.changed { box-shadow: inset 2px 0 0 var(--flame); border-radius: var(--r-sm); }
 
-/* 校样边栏：默认值（已被取代的那一版）+ 恢复动作。
-   只有覆盖过或正在改的条目才展开 —— 它回答的是"原来的字是什么、要不要退回去"，
-   所以恢复动作紧贴它要恢复的值，而不是飘在标题行右边。
-   ⚠️ 它**不引入新底色、新颜色**：这一页的色只讲一件事（灵火 = 改过），
-   所以这里只是一条发丝线 + 一行暗色文字 + 一个动作。 */
+/* 条目动作行：改过的条目在输入框下面多一行动作，靠右。
+   ⚠️ 不回显默认文本，也不加底色与分隔线 —— 这一页的色只讲一件事（灵火 = 改过），
+   这里只有两个按钮。 */
 .proof {
   display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3);
+  justify-content: flex-end;
+  gap: var(--sp-2);
   margin-top: var(--sp-1);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--hairline);
-}
-.proof-key {
-  flex: none;
-  font-size: var(--fs-meta);
-  color: var(--ink-faint);
-  letter-spacing: .04em;
-}
-/* ⚠️ 默认值是**真内容**，不是装饰：用 --ink-faint（= --ink-3，下限 4.8:1）。
-   --ink-4 是刻痕与禁用态专用的，对比度不足以承载正文。 */
-.proof-default {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-meta);
-  color: var(--ink-faint);
-  text-decoration: line-through;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 
 .blk-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }

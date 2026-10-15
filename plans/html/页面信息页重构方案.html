@@ -77,8 +77,7 @@
 │ ────────────────────────────────────────  │ <i>火色 = 已改动</i>             │
 │ ▍条目名  [改过]                            │                              │
 │ ▍  [ 输入槽 ]                              │                              │
-│ ▍  ┌ 默认 <s>原来的字</s>      [恢复默认] ┐   │                              │
-│ ▍  └──────────────────────────────────┘   │                              │
+│ ▍              [撤销修改] [恢复默认]        │                              │
 │ ────────────────────────────────────────  │                              │
 │   条目名                                   │                              │
 │     [ 输入槽 ]                             │                              │
@@ -86,14 +85,14 @@
 </pre>
   <p><code>▍</code> 是火色竖轨：改过 = 灵火，未改 = 发丝线。左栏是一条<strong>连续改下去的稿纸</strong>，所以不再套一层大面板；页面名也不重复，页签已经写着你在哪一页。</p>
 
-  <h2>签名元素：校样边栏</h2>
-  <p>只有<strong>覆盖过或正在改</strong>的条目才在输入框下方展开一条窄边栏：左边是<strong>默认值</strong>，用删除线标出它已被取代；右边是<strong>恢复动作</strong>。恢复动作紧贴它要恢复的值，而不是飘在标题行右边。</p>
-  <div class="card" style="border-top:1px solid var(--hairline);border-radius:0;background:transparent;padding:12px 0 0">
-    <span style="color:var(--ink-4);font-size:12px;letter-spacing:.04em">默认</span>
-    <del style="color:var(--ink-3);font-size:12px;margin-left:10px">灵火祭坛是复活点。死亡后会在最近的祭坛复活。</del>
+  <h2>签名元素：条目动作行</h2>
+  <p>只有<strong>覆盖过或正在改</strong>的条目，才在输入框下面多一行动作，靠右。没动过的条目一个字都不多。</p>
+  <div class="card" style="background:transparent;padding:12px 0 0;text-align:right">
+    <span style="display:inline-block;padding:4px 12px;border-radius:6px;background:var(--stone-400);color:var(--ink-2);font-size:12.5px;margin-right:8px">撤销修改</span>
+    <span style="display:inline-block;padding:4px 12px;border-radius:6px;background:var(--stone-400);color:var(--ink-2);font-size:12.5px">恢复默认</span>
   </div>
-  <p>它<strong>不引入新底色、新颜色</strong>：这一页的色只讲一件事，灵火 = 改过。所以校样边栏只是一条发丝线加一行暗色文字，不是一个新盒子。</p>
   <p>两个动作分得很清：<strong>撤销修改</strong>丢弃还没发出去的一次编辑，<strong>恢复默认</strong>动的是公开站。两者都成立时两个都给 —— 否则「恢复默认」会顺手丢掉刚打的字。</p>
+  <p><strong>不回显默认文本</strong>。这一条 2026-09-27 就定过：恢复默认是按钮的事，把原文摊在每块下面只是噪声。我在重构里一度把它以「校样边栏」的名义请了回来，现在按原判断收回 —— 要对照就去右边看改后的效果。它也不带底色与分隔线：这一页的色只讲一件事，灵火 = 改过。</p>
 
   <h2>砍掉的配件</h2>
   <ul>
@@ -102,6 +101,7 @@
     <li class="cut"><b>重复的页面名</b> —— 页签已经标出你在哪一页，标题再写一遍是重复。</li>
     <li class="cut"><b>每块下面的填写帮助</b> —— 同一句话在十几块下面各来一遍就是噪声。改成<strong>只在正在编辑的那一块出现</strong>，完整的说明仍在「填写说明」弹窗里。</li>
     <li class="cut"><b>标题行右侧的恢复按钮</b> —— 移到校样边栏里，紧贴它要恢复的值。</li>
+    <li class="cut"><b>默认文本的回显</b> —— 恢复默认是按钮的事，把原文摊在每块下面只是噪声。请回来过一版，又按原判断收回。</li>
     <li class="cut"><b>改动块那层 10% 的橙底</b> —— 校样边栏进来之后，这层底会连它一起罩住，
       一整块泛橙更像"选中态"。<strong>只留左边那条火色竖线</strong>，它正是预览栏标改过用的那条线。</li>
   </ul>
