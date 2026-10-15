@@ -431,10 +431,11 @@ onMounted(load)
    同级之间用发丝线 + 留白分隔（留白比线更重要）。 */
 .blk { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-2); }
 .blk + .blk { border-top: 1px solid var(--hairline); }
-/* 改动高亮：背景 + 内阴影，不动布局。
-   ⚠️ 这条与预览里"改过的块"是**同一条规矩**（火色 = 已改动）——
-   两栏共用一套语言，学一次两处都认。 */
-.blk.changed { background: var(--flame-veil); box-shadow: inset 2px 0 0 var(--flame); border-radius: var(--r-sm); }
+/* 改动高亮：**只留左边那条火色竖线**，不要背景。
+   原先还有一层 10% 的橙底（--flame-veil），但那层底现在会把校样边栏一起罩住 ——
+   一整块泛橙更像"选中态"，和"这块被改过"这件事不成比例。
+   竖线足够，而且它正是预览栏标改过用的那条线：两栏共用一套语言，学一次两处都认。 */
+.blk.changed { box-shadow: inset 2px 0 0 var(--flame); border-radius: var(--r-sm); }
 
 /* 校样边栏：默认值（已被取代的那一版）+ 恢复动作。
    只有覆盖过或正在改的条目才展开 —— 它回答的是"原来的字是什么、要不要退回去"，
