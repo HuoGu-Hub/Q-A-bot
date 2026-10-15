@@ -262,13 +262,6 @@ onMounted(load)
               @update:model-value="(v: string) => onEdit(b, v)"
             />
 
-            <!--
-              填写帮助（怎么写标记、能写哪些占位符）—— 它是「怎么填」的说明，
-              所以跟着输入框走，而不是挂在页面工具栏上。
-            -->
-            <div class="faint blk-help">
-              可用 <code>[文字](链接)</code>、<code>**加粗**</code>；占位符 <code>{kb}</code>、<code>{year}</code>
-            </div>
           </div>
         </template>
 
@@ -445,22 +438,7 @@ onMounted(load)
 .blk-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .blk-label { font-size: var(--fs-body); font-weight: var(--fw-medium); }
 .blk-hint { font-size: var(--fs-meta); }
-/* 填写帮助：只在**正在编辑的那一块**出现。
-   同一句话在十几块下面各来一遍就是噪声 —— 而「填写说明」弹窗里本来就有一份完整的。
-   跟着输入框走仍然成立：需要它的时刻，正是你在这一块里打字的时候。
-   ⚠️ 用 opacity 而不是 display:none：位置一直留着，出现时不跳版。 */
-.blk-help {
-  font-size: var(--fs-meta);
-  overflow-wrap: anywhere;
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease);
-}
-.blk:focus-within .blk-help { opacity: 1; }
-.blk-help code {
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--surface-inset);
-  color: var(--ink-dim);
-  font-family: var(--font-mono);
-}
+/* 每块下面的那行填写提示已删（2026-10-15）：怎么写标记、能用哪些占位符，
+   在「填写说明」弹窗里有一份完整的，同一句话在十几块下面各来一遍只是噪声。
+   ⚠️ 往模板里加提示文字之前先看这里：说明只留一处，就在那个弹窗里。 */
 </style>
