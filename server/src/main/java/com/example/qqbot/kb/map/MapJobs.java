@@ -69,6 +69,9 @@ public class MapJobs {
     /**
      * 一次任务的结果快照。
      *
+     * @param ok    上一次运行成功了没有。**从未运行过时它没有意义**（{@code false}），
+     *              界面必须靠 {@code finishedAt} 是否为空来区分"没跑过"与"失败" ——
+     *              只看 {@code ok} 会把"本进程还没跑过"显示成"成功"
      * @param done  正在跑时的进度：已处理多少项
      * @param total 正在跑时的进度：一共多少项。**开工前就算得出来** ——
      *              预热那种几十分钟的任务，没有总数的进度条等于没有
@@ -101,7 +104,7 @@ public class MapJobs {
 
         public String describe() {
             return "命中 " + cached + " / 新下载 " + fetched + " / 失败 " + missing
-                    + "（共 " + total + "，" + elapsedMs + " ms）";
+                    + "（共 " + total + " · " + humanMs(elapsedMs) + "）";
         }
     }
 
@@ -192,6 +195,22 @@ public class MapJobs {
             }
         });
         return true;
+    }
+
+    /** 给管理员看的时长。摘要里报"跑了多久"，那个 1952091 ms 没人愿意现场换算 */
+    static String humanMs(long ms) {
+        if (ms < 1000) {
+            return ms + " ms";
+        }
+        long s = Math.round(ms / 1000.0);
+        if (s < 60) {
+            return s + " 秒";
+        }
+        long m = s / 60;
+        if (m < 60) {
+            return s % 60 == 0 ? m + " 分" : m + " 分 " + (s % 60) + " 秒";
+        }
+        return (m / 60) + " 小时 " + (m % 60) + " 分";
     }
 
     /** 给管理员看的字节数。任务摘要里报"删了多少"，不该只给一串原始数字 */
@@ -438,7 +457,8 @@ public class MapJobs {
                 "已处理 " + done + " / " + total, done, total));
     }
 
+    /** 本进程还没跑过这个任务。ok 一律 false —— "没跑过"不是"成功" */
     private static JobState idle(String name, String label) {
-        return new JobState(name, label, false, true, "", "", "尚未运行过", 0, 0);
+        return new JobState(name, label, false, false, "", "", "", 0, 0);
     }
 }

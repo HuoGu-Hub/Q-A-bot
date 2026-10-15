@@ -158,6 +158,29 @@ class MapJobsWarmTest {
     }
 
     @Test
+    @DisplayName("时长说人话：摘要里不再出现 1952091 ms 这种要现场换算的数字")
+    void durationIsHuman() {
+        assertThat(MapJobs.humanMs(850)).isEqualTo("850 ms");
+        assertThat(MapJobs.humanMs(18_400)).isEqualTo("18 秒");
+        assertThat(MapJobs.humanMs(120_000)).isEqualTo("2 分");
+        assertThat(MapJobs.humanMs(1_952_091)).isEqualTo("32 分 32 秒");
+        assertThat(MapJobs.humanMs(5_100_000)).isEqualTo("1 小时 25 分");
+    }
+
+    @Test
+    @DisplayName("★ 从未运行过的任务是「未运行」，不是「成功」—— 只看 ok 就会把没跑过显示成成功")
+    void idleIsNotSuccess(@TempDir Path dir) {
+        CountingSource source = new CountingSource();
+        MapOptions options = options(dir);
+        MapJobs jobs = jobs(new MapImageCache(options, source), options);
+
+        MapJobs.JobState warm = jobs.states().get(MapJobs.WARM);
+        assertThat(warm.running()).isFalse();
+        assertThat(warm.finishedAt()).as("没跑过就没有结束时间 —— 界面靠它区分未运行与失败").isEmpty();
+        assertThat(warm.ok()).as("没跑过不是成功").isFalse();
+    }
+
+    @Test
     @DisplayName("★ 预热要报进度：总数开工前就定下来，每一项报一次，最后 done == total")
     void warmReportsProgress(@TempDir Path dir) {
         CountingSource source = new CountingSource();

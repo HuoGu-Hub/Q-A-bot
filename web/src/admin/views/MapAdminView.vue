@@ -213,13 +213,29 @@ const failedPages = computed(() => (status.value?.pages ?? []).filter((p) => p.e
  */
 const jobRows = computed(() => {
   const j = (status.value?.jobs ?? {}) as Record<string, JobState | undefined>
+  // 只放状态与触发方式。每个按钮花多少钱（几分钟、要不要调模型）写在按钮自己的 title 里 ——
+  // 它是看过一次就记住的东西，不该天天占着页面
   return [
-    { key: 'sync', label: '同步 wiki 地图', note: '增量 · 只拉版本变过的页，常态几秒', state: j.sync },
-    { key: 'warm', label: '底图缓存', note: '首屏档一两分钟；全量含原图，首次十几分钟', state: j.warm },
-    { key: 'corpus', label: '地点语料', note: '派生与清除都要调向量接口，较慢', state: j.corpus },
-    { key: 'reset', label: '地图数据', note: '清空 wiki 同步来的数据；自建点位、备注、图层配置不动', state: j.reset },
+    { key: 'sync', label: '同步 wiki 地图', state: j.sync },
+    { key: 'warm', label: '底图缓存', state: j.warm },
+    { key: 'corpus', label: '地点语料', state: j.corpus },
+    { key: 'reset', label: '地图数据', state: j.reset },
   ]
 })
+
+/**
+ * 任务的标签。**「没跑过」与「成功」必须分开** ——
+ * 后端从未运行时 finishedAt 是空的，只看 ok 会把"本进程还没跑过"读成"成功"。
+ */
+function jobTag(j?: JobState): { tone: 'good' | 'bad' | 'warn' | 'neutral'; text: string } {
+  if (!j || j.running) {
+    return { tone: j ? 'warn' : 'neutral', text: j ? '运行中' : '未运行' }
+  }
+  if (!j.finishedAt) {
+    return { tone: 'neutral', text: '未运行' }
+  }
+  return j.ok ? { tone: 'good', text: '成功' } : { tone: 'bad', text: '失败' }
+}
 
 /**
  * 清空同步进来的地图数据。
@@ -333,6 +349,28 @@ function todoAction(id: string) {
   } else if (id === 'maps') {
     reveal(mapsDetails.value)
   }
+}
+
+/**
+ * ISO 瞬时 → "刚刚 / 12 分钟前 / 3 小时前 / 10-14 17:37"。
+ *
+ * <p>这一页问的是"数据还新不新"，先回答"多久以前"；精确时刻留在 title 里。
+ */
+function since(iso?: string): string {
+  if (!iso) {
+    return '—'
+  }
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) {
+    return stamp(iso)
+  }
+  const minutes = Math.round((Date.now() - t) / 60000)
+  if (minutes <= 0) return '刚刚'
+  if (minutes < 60) return minutes + ' 分钟前'
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return hours + ' 小时前'
+  const days = Math.round(hours / 24)
+  return days < 7 ? days + ' 天前' : stamp(iso)
 }
 
 /** ISO 瞬时 → 本地 MM-DD HH:mm。管理端看的是"什么时候跑完的"，时区不该由读者换算 */
@@ -761,14 +799,6 @@ async function pollStatus() {
   // 同步可能把画布定义换掉了，也可能带来了新地图 —— 两样都刷新一次
   await loadAnchor()
   await loadMaps()
-}
-
-/** 进度百分比文本；不知道总数时返回空串（模板据此不画进度条） */
-function pct(j?: JobState): string {
-  if (!j || j.total <= 0) {
-    return ''
-  }
-  return Math.min(100, Math.round((j.done / j.total) * 100)) + '%'
 }
 
 function fmtBytes(n: number): string {
@@ -1340,44 +1370,44 @@ async function saveLayers(keys: string[] | null) {
               <div class="op-main">
                 <div class="op-head">
                   <span class="op-name">{{ row.label }}</span>
-                  <Tag :tone="row.state?.running ? 'warn' : !row.state ? 'neutral' : (row.state.ok ? 'good' : 'bad')">
-                    {{ row.state?.running ? '运行中' : !row.state ? '未运行' : (row.state.ok ? '成功' : '失败') }}
-                  </Tag>
+                  <Tag :tone="jobTag(row.state).tone">{{ jobTag(row.state).text }}</Tag>
                 </div>
-                <p class="op-result">
-                  {{ row.state?.summary || '尚未运行过' }}
-                  <span v-if="row.state?.finishedAt" class="op-when">· {{ stamp(row.state.finishedAt) }}</span>
+
+                <!-- 跑着：进度条就是这一行的状态，数字由它自己带 -->
+                <Bar
+                  v-if="row.state?.running && row.state.total > 0"
+                  class="op-bar"
+                  :label="'已处理 ' + row.state.done + ' / ' + row.state.total"
+                  :value="row.state.done"
+                  :max="row.state.total"
+                  :show-value="false"
+                />
+                <!-- 跑完：留下事实（处理了多少、花了多久），精确时刻在 title 里 -->
+                <p v-else-if="row.state?.finishedAt" class="op-result" :title="stamp(row.state.finishedAt)">
+                  {{ row.state.summary }} · {{ since(row.state.finishedAt) }}
                 </p>
-                <!-- 进度条：只在知道总数时画。几十分钟的任务，没有它就是个黑箱 -->
-                <div v-if="row.state?.running && row.state.total > 0" class="op-progress">
-                  <Bar label="进度" :value="row.state.done" :max="row.state.total" :show-value="false" />
-                  <span class="op-pct">{{ row.state.done }} / {{ row.state.total }} · {{ pct(row.state) }}</span>
-                </div>
-                <!-- 预热这一行还要说清"磁盘上已经有什么"：任务是本进程的状态，缓存是跨重启的。
-                     不说的话每次重启都显示"尚未运行过"，看着像必须重新预热一遍 -->
-                <p v-if="row.key === 'warm' && status?.tileCache?.enabled" class="op-note">
-                  缓存里已有 {{ fmt(status.tileCache.files) }} 个文件 · {{ fmtBytes(status.tileCache.bytes) }}
-                  <template v-if="status.tileCache.latestAt">· 最近写入 {{ stamp(status.tileCache.latestAt) }}</template>
-                  —— 重启不需要重新预热
+                <!-- 本进程没跑过：预热这一行给出**磁盘上已经有什么**。任务是本进程的状态，缓存是跨重启的 -->
+                <p v-else-if="row.key === 'warm' && status?.tileCache?.enabled" class="op-result">
+                  缓存 {{ fmt(status.tileCache.files) }} 个文件 · {{ fmtBytes(status.tileCache.bytes) }}
+                  · 最近写入 {{ since(status.tileCache.latestAt) }}
                 </p>
-                <p class="op-note">{{ row.note }}</p>
               </div>
               <div class="op-actions">
                 <template v-if="row.key === 'sync'">
-                  <Button variant="primary" size="sm" @click="runSync">
+                  <Button variant="primary" size="sm" title="只拉版本变过的页" @click="runSync">
                     <Icon name="refresh" :size="14" />同步
                   </Button>
                 </template>
                 <template v-else-if="row.key === 'warm'">
-                  <Button size="sm" @click="runWarm">预热首屏档</Button>
-                  <Button size="sm" @click="runWarmFull">全量预热</Button>
+                  <Button size="sm" title="160 / 320 / 640 三档，一两分钟" @click="runWarm">预热首屏档</Button>
+                  <Button size="sm" title="再加 1280 与原图档，首次十几分钟" @click="runWarmFull">全量预热</Button>
                 </template>
                 <template v-else-if="row.key === 'corpus'">
-                  <Button size="sm" @click="runCorpus(false)">派生语料</Button>
-                  <Button variant="danger" size="sm" @click="runCorpus(true)">清除语料</Button>
+                  <Button size="sm" title="每个地点块调一次向量接口" @click="runCorpus(false)">派生语料</Button>
+                  <Button variant="danger" size="sm" title="删掉全部派生地点块" @click="runCorpus(true)">清除语料</Button>
                 </template>
                 <template v-else>
-                  <Button variant="danger" size="sm" @click="runReset">清空地图数据</Button>
+                  <Button variant="danger" size="sm" title="删掉 wiki 同步来的页、画布、分组与点位" @click="runReset">清空地图数据</Button>
                 </template>
               </div>
             </li>
@@ -1393,7 +1423,6 @@ async function saveLayers(keys: string[] | null) {
             <summary>
               <Icon name="chevron-right" :size="14" class="caret" />
               <span class="diag-name">存储与路径</span>
-              <span class="diag-note">数据库、缓存、待复核</span>
             </summary>
             <dl class="facts">
               <!-- 这里**故意不列**"地图库/点位/备注 可用吗"：不可用时顶部的「待办」
@@ -1438,7 +1467,7 @@ async function saveLayers(keys: string[] | null) {
               <Icon name="chevron-right" :size="14" class="caret" />
               <span class="diag-name">同步页</span>
               <span class="diag-count bad">{{ failedPages.length }}</span>
-              <span class="diag-note">解析失败的页，下一轮同步会自动重试</span>
+              <span class="diag-note">下一轮同步自动重试</span>
             </summary>
             <table class="tbl small">
               <thead><tr><th>页面</th><th>revid</th><th>点位</th><th>错误</th></tr></thead>
@@ -1777,13 +1806,9 @@ async function saveLayers(keys: string[] | null) {
   color: var(--ink-2);
   word-break: break-word;
 }
-.op-when { color: var(--ink-4); }
-.op-note { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
 /* 进度：任务要能"看见在动"，不然几十分钟的预热与卡死没有区别。
-   条子本身用设计系统里的 Bar，这里只管摆放与那串数字 */
-.op-progress { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-2); max-width: 460px; }
-.op-progress > :first-child { flex: 1; min-width: 0; }
-.op-pct { flex: none; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-3); }
+   条子用设计系统里的 Bar（与抓取作业同一套），这里只管摆放 */
+.op-bar { margin-top: var(--sp-2); max-width: 420px; }
 .op-actions { flex: none; display: flex; gap: var(--sp-2); }
 
 /* ---------- 诊断：默认折叠 ---------- */
