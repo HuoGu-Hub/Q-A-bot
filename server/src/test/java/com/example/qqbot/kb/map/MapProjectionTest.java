@@ -175,6 +175,15 @@ class MapProjectionTest {
     }
 
     @Test
+    @DisplayName("★ 卡在两个档位中间时往上取，不放大像素 —— 3000 跨度要 546，就该拿 640 而不是 320")
+    void roundsUpToSharperTier() {
+        // needed = 1280 × 1280 ÷ 3000 ≈ 546：拿 320 就是 1.7 倍放大，整张图发糊
+        assertThat(MapProjection.pickTileWidth(3000, 1280, WIDTHS)).isEqualTo(640);
+        // 正好落在档位上时不浪费：needed = 640，就是 640
+        assertThat(MapProjection.pickTileWidth(2560, 1280, WIDTHS)).isEqualTo(640);
+    }
+
+    @Test
     @DisplayName("跨度很小就用最高档，不会退化成原图")
     void picksHighestWhenSpanIsSmall() {
         assertThat(MapProjection.pickTileWidth(1200, 1280, WIDTHS)).isEqualTo(1280);

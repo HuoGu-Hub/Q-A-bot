@@ -203,8 +203,12 @@ public final class MapProjection {
      *
      * <pre>档位宽度 ≈ 1280 × outputWidth ÷ span</pre>
      *
-     * <p>取<b>不超过</b>这个值的最大可用档位：多下的分辨率是白花的流量与内存。
-     * 0 表示原图，不参与档位选择。
+     * <p>取<b>不小于</b>这个值的最小可用档位 —— 宁可多下一档，也不要放大像素。
+     * 反过来的话（取不超过的最大档）会出现"要 546 像素却拿 320 档"这种 1.7 倍放大，
+     * 表现就是整张图发糊，而看的人只会觉得"你们这图不清楚"。
+     * 多下的那点分辨率，比一张糊图值。
+     *
+     * <p>0 表示原图，不参与档位选择；所有档位都比需要的小时，用最大的那个兜底。
      *
      * @return 选中的档位；没有任何可用档位时返回 0
      */
@@ -214,20 +218,20 @@ public final class MapProjection {
         }
         double needed = DEFAULT_TILE * outputWidth / span;
         int best = -1;
-        int smallest = Integer.MAX_VALUE;
+        int largest = -1;
         for (Integer w : available) {
             if (w == null || w <= 0) {
                 continue;
             }
-            smallest = Math.min(smallest, w);
-            if (w <= needed && w > best) {
+            largest = Math.max(largest, w);
+            if (w >= needed && (best < 0 || w < best)) {
                 best = w;
             }
         }
         if (best > 0) {
             return best;
         }
-        return smallest == Integer.MAX_VALUE ? 0 : smallest;
+        return Math.max(largest, 0);
     }
 
     private static double clamp(double v, double lo, double hi) {
