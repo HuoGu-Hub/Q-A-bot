@@ -200,7 +200,13 @@ public class WikiPlaceDirectory implements PlaceDirectory {
                 MapNoteService.ref(m.page(), m.markerId()));
     }
 
-    private static String autoName(KbMapStore.Marker m, String article, String zh, String region) {
+    /**
+     * 显示名的自动拼法 —— <b>全项目只有这一份</b>。
+     *
+     * <p>包内可见是因为 {@code MapViewService} 也要用它：那边曾经自己抄了一遍，
+     * 于是同一个点位在公开站里叫「雾水盆地·雾水盆地」，在问答里却是对的。
+     */
+    static String autoName(KbMapStore.Marker m, String article, String zh, String region) {
         String base = zh != null ? zh : nz(m.name());
         if (base.isBlank()) {
             base = article == null ? "未命名点位" : article;

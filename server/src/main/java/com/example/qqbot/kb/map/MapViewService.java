@@ -352,10 +352,9 @@ public class MapViewService {
             String article = LocationCorpusBuilder.normalizeArticle(m.article());
             String zh = LocationCorpusBuilder.zhName(article);
             String region = LocationCorpusBuilder.regionOf(m);
-            String auto = zh != null ? zh : nz(m.name());
-            if (region != null && !region.isBlank()) {
-                auto = auto + "·" + region;
-            }
+            // 显示名的拼法只有一份（见 WikiPlaceDirectory#autoName）—— 这里曾经自己抄了一遍，
+            // 于是"词条就是区域"的点位在这里被评为「雾水盆地·雾水盆地」，问答里却是对的
+            String auto = WikiPlaceDirectory.autoName(m, article, zh, region);
             String display = note != null && !nz(note.alias()).isBlank() ? note.alias().strip() : auto;
             String category = note != null && PlaceCategory.isKnown(note.category())
                     ? PlaceCategory.normalize(note.category())
