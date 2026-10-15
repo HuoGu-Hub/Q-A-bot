@@ -233,6 +233,20 @@ onMounted(load)
               <span class="blk-label">{{ b.label }}</span>
               <Tag v-if="b.overridden" tone="flame">改过</Tag>
               <span v-if="b.hint" class="faint blk-hint">{{ b.hint }}</span>
+              <!--
+                动作放在**标题行右侧**，不单开一行 —— 单开一行会把条目撑高，
+                而这一页一屏要看十几条。
+                ⚠️ 不回显默认文本（2026-09-27 的原判断：恢复默认是按钮的事，
+                   把原文摊在每块下面只是噪声）。要对照就去右边预览栏看改后的效果。
+                两件事分开：撤销的是还没发出去的一次编辑，恢复默认动的是公开站；
+                都成立时两个都给 —— 否则「恢复默认」会顺手丢掉你刚打的字。
+              -->
+              <span v-if="b.overridden || isChanged(b)" class="blk-actions">
+                <Button v-if="isChanged(b)" size="sm" @click="discardLocal(b)">撤销修改</Button>
+                <Button v-if="b.overridden" size="sm" :disabled="saving" @click="resetBlock(b)">
+                  恢复默认
+                </Button>
+              </span>
             </div>
             <!--
               ⚠️ aria-label 是必须的：上一行那块标签文字只是"看起来像标签"，
@@ -247,20 +261,6 @@ onMounted(load)
               :aria-label="b.label"
               @update:model-value="(v: string) => onEdit(b, v)"
             />
-
-            <!--
-              条目动作行：只有**覆盖过或正在改**的条目才有，没动过的条目一个字都不多。
-              ⚠️ 不在这里回显默认文本（2026-09-27 删过一次，理由是噪声；恢复默认是按钮的事，
-                 把原文摊在每块下面只是噪声）。要对照就去右边预览栏看改后的效果。
-              两件事分开：撤销的是还没发出去的一次编辑，恢复默认动的是公开站。
-              都成立时两个都给 —— 否则「恢复默认」会顺手丢掉你刚打的字。
-            -->
-            <div v-if="b.overridden || isChanged(b)" class="proof">
-              <Button v-if="isChanged(b)" size="sm" @click="discardLocal(b)">撤销修改</Button>
-              <Button v-if="b.overridden" size="sm" :disabled="saving" @click="resetBlock(b)">
-                恢复默认
-              </Button>
-            </div>
 
             <!--
               填写帮助（怎么写标记、能写哪些占位符）—— 它是「怎么填」的说明，
@@ -433,14 +433,13 @@ onMounted(load)
    竖线足够，而且它正是预览栏标改过用的那条线：两栏共用一套语言，学一次两处都认。 */
 .blk.changed { box-shadow: inset 2px 0 0 var(--flame); border-radius: var(--r-sm); }
 
-/* 条目动作行：改过的条目在输入框下面多一行动作，靠右。
-   ⚠️ 不回显默认文本，也不加底色与分隔线 —— 这一页的色只讲一件事（灵火 = 改过），
-   这里只有两个按钮。 */
-.proof {
+/* 条目动作：挂在标题行右侧。margin-left: auto 把它顶到最右，
+   所以不需要一个 .spacer 空元素；标题行本身可换行，窄屏时它自然落到下一行。 */
+.blk-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: var(--sp-2);
-  margin-top: var(--sp-1);
+  margin-left: auto;
 }
 
 .blk-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }

@@ -75,9 +75,8 @@
 ┌─ 稿纸 2fr ────────────────────────────────┬─ 落点 3fr <i>sticky</i> ──────────┐
 │ <b>3 块改过   1 处未保存</b>                       │ 公开站预览                    │
 │ ────────────────────────────────────────  │ <i>火色 = 已改动</i>             │
-│ ▍条目名  [改过]                            │                              │
+│ ▍条目名  [改过]        [撤销修改] [恢复默认] │                              │
 │ ▍  [ 输入槽 ]                              │                              │
-│ ▍              [撤销修改] [恢复默认]        │                              │
 │ ────────────────────────────────────────  │                              │
 │   条目名                                   │                              │
 │     [ 输入槽 ]                             │                              │
@@ -85,8 +84,8 @@
 </pre>
   <p><code>▍</code> 是火色竖轨：改过 = 灵火，未改 = 发丝线。左栏是一条<strong>连续改下去的稿纸</strong>，所以不再套一层大面板；页面名也不重复，页签已经写着你在哪一页。</p>
 
-  <h2>签名元素：条目动作行</h2>
-  <p>只有<strong>覆盖过或正在改</strong>的条目，才在输入框下面多一行动作，靠右。没动过的条目一个字都不多。</p>
+  <h2>条目：一行状态 + 一行输入</h2>
+  <p>一条文案只占两行：<strong>标题行</strong>（条目名 + 改过徽标 + 说明 + 动作）和<strong>输入槽</strong>。动作挂在标题行右侧、靠 <code>margin-left: auto</code> 顶到最右，<strong>不单开一行</strong> —— 单开一行会把每条撑高，而这一页一屏要看十几条。没动过的条目一个字都不多。</p>
   <div class="card" style="background:transparent;padding:12px 0 0;text-align:right">
     <span style="display:inline-block;padding:4px 12px;border-radius:6px;background:var(--stone-400);color:var(--ink-2);font-size:12.5px;margin-right:8px">撤销修改</span>
     <span style="display:inline-block;padding:4px 12px;border-radius:6px;background:var(--stone-400);color:var(--ink-2);font-size:12.5px">恢复默认</span>
