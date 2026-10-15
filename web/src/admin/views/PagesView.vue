@@ -175,7 +175,12 @@ onMounted(load)
 </script>
 
 <template>
-  <AdminPage :width="page === CAROUSEL_KEY ? 'wide' : 'narrow'">
+  <!--
+    ⚠️ 整页只用一个宽度。
+    原来轮播那栏是 wide、其余是 narrow，切换页签时整个页面会左右跳一下 ——
+    这一页的每一栏都值得用宽版：稿纸 + 预览是两栏，轮播是张表，站点信息是个表单。
+  -->
+  <AdminPage width="wide">
     <template #tabs>
       <Tabs v-if="tabList.length" :tabs="tabList" :model-value="page" @update:model-value="setPage" />
     </template>

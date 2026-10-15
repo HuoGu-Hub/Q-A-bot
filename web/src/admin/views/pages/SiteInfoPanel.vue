@@ -124,6 +124,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
+/* 四个短输入框不该铺满整页宽 —— 页面容器是宽版，这里自己收窄 */
+.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); max-width: 760px; }
 .settings-bar { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
 </style>

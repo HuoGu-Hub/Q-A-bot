@@ -74,12 +74,20 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
   box-shadow: 0 8px 16px -14px rgba(0, 0, 0, .9);
 }
 .spacer { flex: 1; }
+/* 目录吃掉剩余宽度；不够时**它自己横向滚**（Tabs 内部 overflow-x） */
 .bar-tabs { min-width: 0; flex: 0 1 auto; }
+/*
+  动作按钮**不参与压缩，也不换行**。
+  原来是 flex-wrap: wrap 且默认可压缩：目录一长，这一格被压到内容宽度以下，
+  四个按钮就折成两行 —— 吸顶栏凭空高一倍，看着像坏了。
+  腾地方是目录的事（它本来就能横向滚），按钮只负责待在一条线上。
+*/
 .bar-actions {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  flex-wrap: wrap;
+  flex: none;
+  flex-wrap: nowrap;
   padding-bottom: var(--sp-2);
 }
 
@@ -89,6 +97,6 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
   .page-bar { flex-wrap: wrap; align-items: center; }
   .spacer { display: none; }
   .bar-tabs { flex: 1 1 100%; }
-  .bar-actions { flex: 1 1 100%; justify-content: flex-end; }
+  .bar-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; }
 }
 </style>
