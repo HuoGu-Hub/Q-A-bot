@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -99,7 +100,7 @@ public class MapShotSource implements ImageSource {
         marks.add(new MapShotRenderer.Mark(target.x(), target.y(), true, marker.name(),
                 iconOf.getOrDefault(nz(marker.group()), "")));
 
-        List<MapShotRenderer.Mark> context = contextIcons(mapView, marker, geometry, iconOf, visible);
+        List<MapShotRenderer.Mark> context = contextIcons(mapView, marker, geometry, target, iconOf, visible);
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
         // 缺口清单有两个来源：取失败的（get 返回空）与**超预算没去取的**（need）。
@@ -160,23 +161,43 @@ public class MapShotSource implements ImageSource {
      * 只有目标点与地标两三个圈时，读图的人面对的是一片地形纹理 —— 看不出这是地图的哪一块，
      * 更看不出旁边有什么。把默认显示的图标一起画上，截图才像"地图上的一角"。
      *
+     * <h2>为什么图标全画、名字只标几个</h2>
+     * 图标回答"这里有什么"，一屏几十个正是地图该有的样子；名字回答"这是哪一处"，
+     * 一屏几十个就会互相压住，一个都读不成。所以名字只给**离目标点最近**的几个
+     * （{@code app.kb.map.shot.label-max}）—— 认方位用的正是它们，其余点位有图标就够了。
+     *
      * <p>筛选口径与公开站一致：<b>当前画布 + 默认显示的分组</b>。目标点跳过 —— 它由
-     * {@code marks} 单独画（多一圈红环），免得同一处画两遍。
+     * {@code marks} 单独画（多一圈红环），名字也一定写。
      */
     private List<MapShotRenderer.Mark> contextIcons(MapViewService.MapView mapView,
                                                     MapViewService.MarkerView marker,
                                                     MapProjection.Canvas geometry,
+                                                    MapProjection.Point target,
                                                     Map<String, String> iconOf,
                                                     List<MapViewService.MarkerView> visible) {
+        record Candidate(double distance, MapShotRenderer.Mark mark) {
+        }
         Set<String> shown = mapView.shownGroups();
-        List<MapShotRenderer.Mark> out = new ArrayList<>();
+        List<Candidate> found = new ArrayList<>();
         for (MapViewService.MarkerView m : visible) {
             if (!nz(marker.canvas()).equals(nz(m.canvas())) || marker.id().equals(m.id())
                     || !shown.contains(nz(m.group()))) {
                 continue;
             }
             MapProjection.Point at = MapProjection.worldOf(geometry, m.x(), m.y());
-            out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), nz(m.name()), iconOf.getOrDefault(nz(m.group()), "")));
+            double dx = at.x() - target.x();
+            double dy = at.y() - target.y();
+            found.add(new Candidate(dx * dx + dy * dy, MapShotRenderer.Mark.icon(
+                    at.x(), at.y(), nz(m.name()), iconOf.getOrDefault(nz(m.group()), ""))));
+        }
+        found.sort(Comparator.comparingDouble(Candidate::distance));
+
+        int labelMax = Math.max(0, options.getShot().getLabelMax());
+        List<MapShotRenderer.Mark> out = new ArrayList<>(found.size());
+        for (int i = 0; i < found.size(); i++) {
+            MapShotRenderer.Mark m = found.get(i).mark();
+            // 名额用完就把名字摘掉 —— 图标留着，那才是地图本来的样子
+            out.add(i < labelMax ? m : new MapShotRenderer.Mark(m.x(), m.y(), false, "", m.icon()));
         }
         return out;
     }

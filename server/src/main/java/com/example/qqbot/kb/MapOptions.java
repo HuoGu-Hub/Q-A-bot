@@ -257,6 +257,14 @@ public class MapOptions {
         /** 取瓦片的总预算（毫秒）。到点就放弃本次出图 */
         private long deadlineMs = 2000;
 
+        /**
+         * 一张截图里除目标点外，最多再给几个点位标名字。
+         *
+         * <p>名字是拿来认方位的，不是拿来列清单的：一屏几十个名字会互相压住，
+         * 结果一个都读不成。所以只标**离目标点最近**的几个，其余点位只画图标。
+         */
+        private int labelMax = 4;
+
         /** 输出字节上限（KB）。超了先降 JPEG 质量，再缩一档 */
         private int maxKb = 2048;
 
@@ -317,6 +325,14 @@ public class MapOptions {
 
         public void setDeadlineMs(long deadlineMs) {
             this.deadlineMs = Math.max(1, deadlineMs);
+        }
+
+        public int getLabelMax() {
+            return labelMax;
+        }
+
+        public void setLabelMax(int labelMax) {
+            this.labelMax = Math.max(0, labelMax);
         }
 
         public int getMaxKb() {

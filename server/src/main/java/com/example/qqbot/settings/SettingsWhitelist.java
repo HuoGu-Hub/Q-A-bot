@@ -180,6 +180,8 @@ public class SettingsWhitelist {
                     "bool", "关掉后回复里的地图标记一律不出图，只当普通文本丢掉", true),
             new Item("app.kb.map.shot.deadline-ms", "配图取图预算", "知识库",
                     "int", "单位毫秒；到点放弃出图、只回文字，等下次预热好了再补", 2000),
+            new Item("app.kb.map.shot.label-max", "配图标几个名字", "知识库",
+                    "int", "除目标点外最多标几个名字（只标离目标点最近的几个）；0 = 一个都不标", 4),
             new Item("app.kb.map.request-gap-ms", "取图出站间隔", "知识库",
                     "int", "单位毫秒。被 wiki 限流就调大它，6000 是实测的友好值", 6000),
 

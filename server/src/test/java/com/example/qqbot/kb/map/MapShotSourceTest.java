@@ -14,6 +14,7 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +44,12 @@ class MapShotSourceTest {
     private MapOptions options;
     private MapViewService view;
     private MapImageCache images;
+    private static MapViewService.MarkerView shrines(String name, double x, double y) {
+        return new MapViewService.MarkerView("Map:Embervale/Main#" + name, MAP, "Map:Embervale/Main",
+                CANVAS_PAGE, "Flame_Shrine", name, name, "", "Flame_Shrine",
+                x, y, "", true, "landmark", 0, "", "wiki");
+    }
+
     private MapShotWarmer warmer;
     private MapShotSource source;
 
@@ -226,6 +233,33 @@ class MapShotSourceTest {
             assertThat(m.label()).isEqualTo("火焰神龛·春之原野");
             assertThat(m.primary()).as("背景点不套高亮圈").isFalse();
         });
+    }
+
+    @Test
+    @DisplayName("★ 名字只给离目标点最近的几个，其余点位只画图标")
+    void onlyNearestFewAreNamed() {
+        options.getShot().setLabelMax(2);
+        // 三个同组点位，按离目标点 (1280,1280) 的距离排：近、中、远
+        List<MapViewService.MarkerView> many = new ArrayList<>();
+        many.add(markerView);
+        many.add(shrines("Near", 1300, 1280));
+        many.add(shrines("Middle", 1500, 1280));
+        many.add(shrines("Far", 2400, 2400));
+        when(view.markers(MAP, true)).thenReturn(many);
+        when(view.catalog()).thenReturn(List.of(new MapViewService.MapView(MAP, "余烬谷", 4, 0,
+                List.of(canvasView),
+                List.of(new MapViewService.GroupView("Flame_Shrine", "火焰神龛", "Flame_Shrine.png",
+                        false, true, "landmark", 63)), null)));
+
+        CapturingRenderer capturing = new CapturingRenderer(options);
+        MapShotSource shot = new MapShotSource(view, images, capturing, warmer, options);
+
+        assertThat(shot.resolve(PlacePoint.keyOf(REF))).isEmpty();
+        assertThat(capturing.context).extracting(MapShotRenderer.Mark::label)
+                .as("三个点位都画图标，但只有最近的两个写名字")
+                .containsExactly("Near", "Middle", "");
+        assertThat(capturing.context).extracting(MapShotRenderer.Mark::icon)
+                .containsOnly("Flame_Shrine.png");
     }
 
     @Test
