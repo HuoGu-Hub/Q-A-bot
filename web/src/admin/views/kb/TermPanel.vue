@@ -30,6 +30,7 @@ import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Modal from '@shared/ui/Modal.vue'
+import ActionOption from '@shared/ui/ActionOption.vue'
 import Empty from '@shared/ui/Empty.vue'
 
 /** 与后端 CategoryService.UNCATEGORIZED 一致 */
@@ -597,14 +598,16 @@ defineExpose({
         按当前筛选导出 <b class="num">{{ num(total) }}</b> 条词条。选一种格式：
       </p>
       <div class="export-opts">
-        <button type="button" class="export-opt" @click="chooseExport('xlsx')">
-          <span class="opt-title">Excel 表格（.xlsx）</span>
-          <span class="opt-hint">在 WPS / Excel 里改别名，再用「导入别名表」导回</span>
-        </button>
-        <button type="button" class="export-opt" @click="chooseExport('tsv')">
-          <span class="opt-title">纯文本（.tsv）</span>
-          <span class="opt-hint">给脚本或调试用：制表符分隔、不带 BOM</span>
-        </button>
+        <ActionOption
+          title="Excel 表格（.xlsx）"
+          hint="在 WPS / Excel 里改别名，再用「导入别名表」导回"
+          @select="chooseExport('xlsx')"
+        />
+        <ActionOption
+          title="纯文本（.tsv）"
+          hint="给脚本或调试用：制表符分隔、不带 BOM"
+          @select="chooseExport('tsv')"
+        />
       </div>
     </Modal>
 
@@ -692,30 +695,10 @@ defineExpose({
 .hidden-file { display: none; }
 
 /* ==================== 导出格式选择 ==================== */
+/* 两个选项的样式在 shared/ui/ActionOption.vue —— 抓取页的「选一种方式」用的是同一个 */
 .export-lede { margin: 0 0 var(--sp-3); font-size: var(--fs-body); color: var(--ink-2); }
 .export-lede b { color: var(--ink); }
 .export-opts { display: flex; flex-direction: column; gap: var(--sp-2); }
-/* 两个选项是"动作卡片"而不是单选：点了就直接导出，所以做成按钮 */
-.export-opt {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  text-align: left;
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--surface-raised);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-sm);
-  color: inherit;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease),
-              transform var(--dur-fast) var(--ease);
-}
-.export-opt:hover { background: var(--bg-raised); border-color: var(--edge-hover); transform: translateY(-1px); }
-.export-opt:active { background: var(--surface-active); transform: translateY(0); }
-.export-opt:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
-.opt-title { font-size: var(--fs-body); color: var(--ink); }
-.opt-hint { font-size: var(--fs-meta); color: var(--ink-3); }
 
 /* ==================== 表格 ==================== */
 .title { color: var(--ink); }

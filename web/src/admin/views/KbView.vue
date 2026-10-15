@@ -6,12 +6,12 @@
  *  词条   **一个词条 = 一个分块**：列表看标题 / 别名 / 分类，点「编辑」展开改别名与正文
  *  分类   人工维护的平铺分类清单：新增 / 改名 / 删除；标签认不出就是「未分类」
  *  提案   被认可的回答攒够阈值后，由 agent 产出、等人确认的改进提案
- *  抓取   从 wiki 抓文章（来源名与页面分类会自动登记进分类清单）
+ *  抓取   从 wiki 抓文章：选范围 → 开始抓取（空跑 / 增量 / 强制重洗）→ 看进度与结果
  *
  * 页面栏（吸顶）只剩「刷新」这类整页动作 —— 筛选、导出、导入都在各自面板里，
  * 免得一条吸顶栏塞十几个控件。tab 状态同步到 URL 查询串。
  *
- * ⚠️ **四个面板各用一个 ref，不能共用一个**。Vue 3.5 把模板 ref 的写入推迟到
+ * ⚠️ **每个面板各用一个 ref，不能共用一个**。Vue 3.5 把模板 ref 的写入推迟到
  * post-render 队列，切 tab 的那一次渲染里 ref 还留着上一个面板的实例 ——
  * 共用一个 ref 时会调到类型不对的实例。分开之后每个 ref 只会是自己那个组件或 null。
  */
@@ -20,6 +20,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Tabs from '@shared/ui/Tabs.vue'
 import Button from '@shared/ui/Button.vue'
+import Tag from '@shared/ui/Tag.vue'
 import TermPanel from './kb/TermPanel.vue'
 import CategoryPanel from './kb/CategoryPanel.vue'
 import ProposalPanel from './kb/ProposalPanel.vue'
@@ -53,11 +54,13 @@ const termRef = ref<InstanceType<typeof TermPanel> | null>(null)
 const catRef = ref<InstanceType<typeof CategoryPanel> | null>(null)
 const propRef = ref<InstanceType<typeof ProposalPanel> | null>(null)
 const docRef = ref<InstanceType<typeof DocPanel> | null>(null)
+const wikiRef = ref<InstanceType<typeof WikiPanel> | null>(null)
 
 const tm = computed(() => (tab.value === 'terms' ? termRef.value : null))
 const cat = computed(() => (tab.value === 'category' ? catRef.value : null))
 const prop = computed(() => (tab.value === 'proposals' ? propRef.value : null))
 const doc = computed(() => (tab.value === 'docs' ? docRef.value : null))
+const wiki = computed(() => (tab.value === 'wiki' ? wikiRef.value : null))
 
 const tmLoading = computed(() => tm.value?.isLoading() ?? false)
 const catLoading = computed(() => cat.value?.isLoading() ?? false)
@@ -68,6 +71,9 @@ const propAnalyzing = computed(() => prop.value?.analyzing() ?? false)
 const propLoading = computed(() => prop.value?.isLoading() ?? false)
 const propCanAnalyze = computed(() => prop.value?.canAnalyze() ?? false)
 const propTitle = computed(() => prop.value?.analyzeTitle() ?? '')
+
+const wikiRunning = computed(() => wiki.value?.isRunning() ?? false)
+const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', label: '空闲', tone: 'neutral' as const })
 </script>
 
 <template>
@@ -122,6 +128,18 @@ const propTitle = computed(() => prop.value?.analyzeTitle() ?? '')
         </Button>
       </template>
 
+      <!--
+        抓取：主操作常驻顶栏。这个页面以前最大的问题就是"找不到从哪开始" ——
+        现在无论滚到分类菜单的哪一行，「开始抓取」都在同一处。
+      -->
+      <template v-else-if="tab === 'wiki'">
+        <Tag :tone="wikiState.tone">{{ wikiState.label }}</Tag>
+        <Button size="sm" variant="primary" :disabled="wikiRunning" @click="wikiRef?.openRun()">
+          {{ wikiRunning ? '抓取中…' : '开始抓取' }}
+        </Button>
+        <Button size="sm" @click="wikiRef?.reload()">刷新</Button>
+      </template>
+
       <template v-else-if="tab === 'docs'">
         <Button size="sm" :disabled="docLoading" @click="docRef?.reload()">
           {{ docLoading ? '读取中…' : '刷新' }}
@@ -137,7 +155,7 @@ const propTitle = computed(() => prop.value?.analyzeTitle() ?? '')
       <TermPanel v-else-if="tab === 'terms'" ref="termRef" />
       <CategoryPanel v-else-if="tab === 'category'" ref="catRef" />
       <ProposalPanel v-else-if="tab === 'proposals'" ref="propRef" />
-      <WikiPanel v-else-if="tab === 'wiki'" />
+      <WikiPanel v-else-if="tab === 'wiki'" ref="wikiRef" />
     </KeepAlive>
   </AdminPage>
 </template>
