@@ -32,6 +32,7 @@ import { toast } from '@shared/ui/toast'
 import Modal from '@shared/ui/Modal.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
 import type { AnchorReport, AnchorReview, Catalog, JobState, LocateHit, LocateResult, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
+import Bar from '@shared/ui/Bar.vue'
 
 /** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
@@ -762,6 +763,14 @@ async function pollStatus() {
   await loadMaps()
 }
 
+/** 进度百分比文本；不知道总数时返回空串（模板据此不画进度条） */
+function pct(j?: JobState): string {
+  if (!j || j.total <= 0) {
+    return ''
+  }
+  return Math.min(100, Math.round((j.done / j.total) * 100)) + '%'
+}
+
 function fmtBytes(n: number): string {
   if (n < 1024) return n + ' B'
   if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB'
@@ -1339,6 +1348,18 @@ async function saveLayers(keys: string[] | null) {
                   {{ row.state?.summary || '尚未运行过' }}
                   <span v-if="row.state?.finishedAt" class="op-when">· {{ stamp(row.state.finishedAt) }}</span>
                 </p>
+                <!-- 进度条：只在知道总数时画。几十分钟的任务，没有它就是个黑箱 -->
+                <div v-if="row.state?.running && row.state.total > 0" class="op-progress">
+                  <Bar label="进度" :value="row.state.done" :max="row.state.total" :show-value="false" />
+                  <span class="op-pct">{{ row.state.done }} / {{ row.state.total }} · {{ pct(row.state) }}</span>
+                </div>
+                <!-- 预热这一行还要说清"磁盘上已经有什么"：任务是本进程的状态，缓存是跨重启的。
+                     不说的话每次重启都显示"尚未运行过"，看着像必须重新预热一遍 -->
+                <p v-if="row.key === 'warm' && status?.tileCache?.enabled" class="op-note">
+                  缓存里已有 {{ fmt(status.tileCache.files) }} 个文件 · {{ fmtBytes(status.tileCache.bytes) }}
+                  <template v-if="status.tileCache.latestAt">· 最近写入 {{ stamp(status.tileCache.latestAt) }}</template>
+                  —— 重启不需要重新预热
+                </p>
                 <p class="op-note">{{ row.note }}</p>
               </div>
               <div class="op-actions">
@@ -1758,6 +1779,11 @@ async function saveLayers(keys: string[] | null) {
 }
 .op-when { color: var(--ink-4); }
 .op-note { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
+/* 进度：任务要能"看见在动"，不然几十分钟的预热与卡死没有区别。
+   条子本身用设计系统里的 Bar，这里只管摆放与那串数字 */
+.op-progress { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-2); max-width: 460px; }
+.op-progress > :first-child { flex: 1; min-width: 0; }
+.op-pct { flex: none; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-3); }
 .op-actions { flex: none; display: flex; gap: var(--sp-2); }
 
 /* ---------- 诊断：默认折叠 ---------- */

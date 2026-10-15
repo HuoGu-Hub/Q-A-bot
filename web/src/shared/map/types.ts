@@ -175,6 +175,9 @@ export interface JobState {
   startedAt: string
   finishedAt: string
   summary: string
+  /** 正在跑时的进度：已处理多少项 / 共多少项。total 为 0 = 不知道总数，界面不画进度条 */
+  done: number
+  total: number
 }
 
 /**
@@ -239,7 +242,8 @@ export interface MapStatus {
   /** 底图变过、需要人复核的点位数。这是这套机制存在的全部意义，必须一眼可见 */
   anchorPending: number
   placeTotal: number
-  tileCache: { enabled: boolean; root: string; files: number; bytes: number }
+  /** latestAt = 缓存目录里最近一次写入（ISO）。它是跨重启的，任务状态不是 */
+  tileCache: { enabled: boolean; root: string; files: number; bytes: number; latestAt: string }
   jobs: Record<string, JobState>
   /**
    * 每张画布一行，**不过滤启用范围** —— 候选地图表要靠它显示"未启用那张能不能渲染"。

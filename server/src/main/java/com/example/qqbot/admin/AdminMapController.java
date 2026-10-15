@@ -87,6 +87,8 @@ public class AdminMapController {
         cache.put("root", st.root());
         cache.put("files", st.files());
         cache.put("bytes", st.bytes());
+        // 最近写入时间：任务状态是本进程的，缓存是磁盘上的 —— 前端靠它说明"重启不用重新预热"
+        cache.put("latestAt", st.latestAt());
         out.put("tileCache", cache);
 
         // 底图变了导致点位可能整体偏移 —— "待复核几条"必须一眼可见，

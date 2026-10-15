@@ -167,25 +167,36 @@ public class MapImageCache {
         return s == null ? "" : s;
     }
 
-    /** 缓存目录的规模 —— 管理端展示用，顺带证明缓存真的在长 */
-    public record Stats(boolean enabled, String root, long files, long bytes) {
+    /**
+     * 缓存目录的规模 —— 管理端展示用，顺带证明缓存真的在长。
+     *
+     * @param latestAt 最近写入的时间（ISO）；空 = 目录里什么都没有。
+     *                 它是**跨重启**的：任务是本进程的状态，缓存是磁盘上的
+     */
+    public record Stats(boolean enabled, String root, long files, long bytes, String latestAt) {
     }
 
     public Stats stats() {
         Path root = root();
         long files = 0;
         long bytes = 0;
+        java.time.Instant latest = null;
         if (isEnabled() && Files.isDirectory(root)) {
             try (var walk = Files.walk(root, 4)) {
                 for (Path p : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
                     files++;
                     bytes += Files.size(p);
+                    java.time.Instant at = Files.getLastModifiedTime(p).toInstant();
+                    if (latest == null || at.isAfter(latest)) {
+                        latest = at;
+                    }
                 }
             } catch (IOException e) {
                 log.warn("[MAP-IMG] 统计缓存目录失败：{}", e.getMessage());
             }
         }
-        return new Stats(isEnabled(), root.toString(), files, bytes);
+        return new Stats(isEnabled(), root.toString(), files, bytes,
+                latest == null ? "" : latest.toString());
     }
 
     /* ==================== 清空 ==================== */

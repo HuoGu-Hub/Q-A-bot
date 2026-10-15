@@ -7,7 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -64,9 +66,22 @@ public class MapJobs {
      */
     static final int[] FULL_WARM_WIDTHS = {160, 320, 640, 1280, 0};
 
-    /** 一次任务的结果快照 */
+    /**
+     * 一次任务的结果快照。
+     *
+     * @param done  正在跑时的进度：已处理多少项
+     * @param total 正在跑时的进度：一共多少项。**开工前就算得出来** ——
+     *              预热那种几十分钟的任务，没有总数的进度条等于没有
+     */
     public record JobState(String name, String label, boolean running, boolean ok,
-                           String startedAt, String finishedAt, String summary) {
+                           String startedAt, String finishedAt, String summary,
+                           int done, int total) {
+    }
+
+    /** 进度回调：已处理 {@code done} / 共 {@code total}。管理端的进度条靠它 */
+    @FunctionalInterface
+    interface Progress {
+        void report(int done, int total);
     }
 
     /**
@@ -312,7 +327,7 @@ public class MapJobs {
         mark(WARM, label, true, true, "已开始（" + widths.length + " 档）");
         pool.submit(() -> {
             try {
-                WarmReport r = warm(widths);
+                WarmReport r = warm(widths, (done, total) -> markProgress(WARM, label, done, total));
                 if (!r.ok()) {
                     log.warn("[MAP-JOB] 预热有缺口：{}", r.describe());
                 }
@@ -339,27 +354,46 @@ public class MapJobs {
      *
      * <p>已经落盘的图会直接命中磁盘、一个字节都不再请求上游 —— 所以这个方法是**幂等**的，
      * 重复跑只补缺口。
+     *
+     * @param progress 可空。先把要处理的项摊平再逐个取，于是**开工前就有总数** ——
+     *                 一次全量预热要几十分钟，没有总数的进度条等于没有进度条
      */
     WarmReport warm(int[] widths) {
+        return warm(widths, null);
+    }
+
+    WarmReport warm(int[] widths, Progress progress) {
         long t0 = System.currentTimeMillis();
-        int[] counts = new int[3];
+
+        record Item(String map, String page, String name, int width) {
+        }
+        List<Item> items = new ArrayList<>();
         for (MapViewService.MapView m : view.catalog()) {
             for (MapViewService.GroupView g : m.groups()) {
                 if (g.icon() != null && !g.icon().isBlank()) {
-                    tally(counts, images.get(m.map(), null, g.icon(), 0));
+                    items.add(new Item(m.map(), null, g.icon(), 0));
                 }
             }
             for (MapViewService.CanvasView c : m.canvases()) {
                 for (MapViewService.TileView t : c.tiles()) {
                     for (int w : widths) {
-                        tally(counts, images.get(m.map(), c.page(), t.image(), w));
+                        items.add(new Item(m.map(), c.page(), t.image(), w));
                     }
                 }
                 if (c.background() != null && !c.background().isBlank()) {
                     for (int w : widths) {
-                        tally(counts, images.get(m.map(), c.page(), c.background(), w));
+                        items.add(new Item(m.map(), c.page(), c.background(), w));
                     }
                 }
+            }
+        }
+
+        int[] counts = new int[3];
+        for (int i = 0; i < items.size(); i++) {
+            Item it = items.get(i);
+            tally(counts, images.get(it.map(), it.page(), it.name(), it.width()));
+            if (progress != null) {
+                progress.report(i + 1, items.size());
             }
         }
         return new WarmReport(counts[0] + counts[1] + counts[2], counts[0], counts[1], counts[2],
@@ -383,15 +417,28 @@ public class MapJobs {
     }
 
     private void mark(String name, String label, boolean running, boolean ok, String summary) {
+        mark(name, label, running, ok, summary, 0, 0);
+    }
+
+    private void mark(String name, String label, boolean running, boolean ok, String summary,
+                      int done, int total) {
         long now = System.currentTimeMillis();
         JobState prev = states.get(name);
         String stamp = java.time.Instant.ofEpochMilli(now).toString();
         String started = running || prev == null ? stamp : prev.startedAt();
         states.put(name, new JobState(name, label, running, ok, started,
-                running ? "" : stamp, summary));
+                running ? "" : stamp, summary, done, total));
+    }
+
+    /** 运行中的进度：只更新计数与摘要，开始时间沿用，结束时间留空 */
+    private void markProgress(String name, String label, int done, int total) {
+        JobState prev = states.get(name);
+        String started = prev == null ? java.time.Instant.now().toString() : prev.startedAt();
+        states.put(name, new JobState(name, label, true, true, started, "",
+                "已处理 " + done + " / " + total, done, total));
     }
 
     private static JobState idle(String name, String label) {
-        return new JobState(name, label, false, true, "", "", "尚未运行过");
+        return new JobState(name, label, false, true, "", "", "尚未运行过", 0, 0);
     }
 }

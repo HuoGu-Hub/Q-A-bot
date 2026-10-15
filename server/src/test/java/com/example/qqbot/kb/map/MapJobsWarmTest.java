@@ -158,6 +158,24 @@ class MapJobsWarmTest {
     }
 
     @Test
+    @DisplayName("★ 预热要报进度：总数开工前就定下来，每一项报一次，最后 done == total")
+    void warmReportsProgress(@TempDir Path dir) {
+        CountingSource source = new CountingSource();
+        MapOptions options = options(dir);
+        MapJobs jobs = jobs(new MapImageCache(options, source), options);
+
+        List<String> ticks = new CopyOnWriteArrayList<>();
+        MapJobs.WarmReport report = jobs.warm(MapJobs.FULL_WARM_WIDTHS,
+                (done, total) -> ticks.add(done + "/" + total));
+
+        assertThat(report.total()).isEqualTo(16);
+        // 几十分钟的任务不能是黑箱：总数从第一条就固定，进度只增不减
+        assertThat(ticks).hasSize(16).allMatch(t -> t.endsWith("/16"));
+        assertThat(ticks.get(0)).isEqualTo("1/16");
+        assertThat(ticks.get(15)).isEqualTo("16/16");
+    }
+
+    @Test
     @DisplayName("★ 有缺口就不算成功：上游 404 会让 missing > 0、ok 为 false")
     void gapsAreReportedNotSwallowed(@TempDir Path dir) {
         MissingSource source = new MissingSource();
