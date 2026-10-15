@@ -212,7 +212,8 @@ onMounted(load)
         盒子套盒子会让每块看着各自独立，反而看不出"这一页一共改了几处、改到哪了"。
         页面名也不在这里重复一遍：上面的页签已经写着你在哪一页。
       -->
-      <div class="galley">
+      <!-- texture-noise：与 Panel 同一种石材表面，不然这一列会比别的面板"平" -->
+      <div class="galley texture-noise">
         <div v-if="loading" class="muted">读取中…</div>
 
         <template v-else-if="blocks.length">
@@ -372,9 +373,20 @@ onMounted(load)
 }
 
 /* ---------- 稿纸列 ----------
-   不再是"面板里的一堆块"：这一列是一张**连续改下去的稿纸**，所以没有外层盒子，
-   也没有标题 —— 上面的页签已经写着你在哪一页，再写一遍是重复。 */
-.galley { display: flex; flex-direction: column; min-width: 0; }
+   布局是新的：不再"面板里的一堆块"，这一列是一张连续改下去的稿纸，
+   没有标题 —— 上面的页签已经写着你在哪一页，再写一遍是重复。
+   ⚠️ 但**表面色沿用原来那一档**（就是 Panel 的那套：stone-300 + 凸起 + 24px 内衬）。
+   去掉那层盒子时如果什么都不补，这一列会落到页面底 stone-200 上，
+   比右边的预览暗一档 —— 那是我改布局时顺手带出来的颜色变化，不是设计决定。 */
+.galley {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--stone-300);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  box-shadow: var(--bevel-raised);
+}
 
 /* 状态条：只在真的有改动时出现，没改动时一个字都不占位置。
    两件事分开说 —— 「改过」是公开站现在的样子，「未保存」还只在你屏幕上。 */
@@ -382,15 +394,13 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: 0 var(--sp-3) var(--sp-3);
+  padding: 0 var(--sp-2) var(--sp-3);
   font-size: var(--fs-meta);
   color: var(--ink-faint);
   border-bottom: 1px solid var(--hairline);
 }
 .status-item { display: inline-flex; align-items: baseline; gap: 4px; }
 .status-item b { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--ink-dim); }
-/* 还没保存的那一处用灵火：它是"最该先看一眼"的东西 */
-.status-item--dirty b { color: var(--flame); }
 
 /* 空态那句「这个页面没有可编辑的固定文案」用 */
 .note { font-size: var(--fs-meta); margin: 0; }
@@ -419,31 +429,25 @@ onMounted(load)
 
 /* 每块文案：标题行 + 输入 +（改过时）校样边栏。
    同级之间用发丝线 + 留白分隔（留白比线更重要）。 */
-.blk {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-4) var(--sp-3);
-  border-radius: var(--r-sm);
-}
+.blk { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-2); }
 .blk + .blk { border-top: 1px solid var(--hairline); }
-/* 改动高亮：火色内阴影 + 淡底，不动布局。
+/* 改动高亮：背景 + 内阴影，不动布局。
    ⚠️ 这条与预览里"改过的块"是**同一条规矩**（火色 = 已改动）——
    两栏共用一套语言，学一次两处都认。 */
-.blk.changed { background: var(--flame-veil); box-shadow: inset 2px 0 0 var(--flame); }
+.blk.changed { background: var(--flame-veil); box-shadow: inset 2px 0 0 var(--flame); border-radius: var(--r-sm); }
 
 /* 校样边栏：默认值（已被取代的那一版）+ 恢复动作。
    只有覆盖过或正在改的条目才展开 —— 它回答的是"原来的字是什么、要不要退回去"，
-   所以恢复动作紧贴它要恢复的值，而不是飘在标题行右边。 */
+   所以恢复动作紧贴它要恢复的值，而不是飘在标题行右边。
+   ⚠️ 它**不引入新底色、新颜色**：这一页的色只讲一件事（灵火 = 改过），
+   所以这里只是一条发丝线 + 一行暗色文字 + 一个动作。 */
 .proof {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
   margin-top: var(--sp-1);
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-sm);
-  background: var(--surface-inset);
-  box-shadow: var(--bevel-inset);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--hairline);
 }
 .proof-key {
   flex: none;

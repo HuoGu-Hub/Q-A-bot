@@ -88,15 +88,17 @@
 
   <h2>签名元素：校样边栏</h2>
   <p>只有<strong>覆盖过或正在改</strong>的条目才在输入框下方展开一条窄边栏：左边是<strong>默认值</strong>，用删除线标出它已被取代；右边是<strong>恢复动作</strong>。恢复动作紧贴它要恢复的值，而不是飘在标题行右边。</p>
-  <div class="card card--inset">
+  <div class="card" style="border-top:1px solid var(--hairline);border-radius:0;background:transparent;padding:12px 0 0">
     <span style="color:var(--ink-4);font-size:12px;letter-spacing:.04em">默认</span>
     <del style="color:var(--ink-3);font-size:12px;margin-left:10px">灵火祭坛是复活点。死亡后会在最近的祭坛复活。</del>
   </div>
+  <p>它<strong>不引入新底色、新颜色</strong>：这一页的色只讲一件事，灵火 = 改过。所以校样边栏只是一条发丝线加一行暗色文字，不是一个新盒子。</p>
   <p>两个动作分得很清：<strong>撤销修改</strong>丢弃还没发出去的一次编辑，<strong>恢复默认</strong>动的是公开站。两者都成立时两个都给 —— 否则「恢复默认」会顺手丢掉刚打的字。</p>
 
   <h2>砍掉的配件</h2>
   <ul>
-    <li class="cut"><b>外层大面板</b> —— 盒子套盒子让每块看着各自独立，反而看不出这一页一共改了几处。</li>
+    <li class="cut"><b>外层大面板的盒子与标题</b> —— 盒子套盒子让每块看着各自独立，反而看不出这一页一共改了几处。<br>
+      <span style="color:var(--ink-4)">⚠️ 只去掉那层结构，<strong>表面色照旧</strong>：仍是 stone-300 + 凸起 + 24px 内衬。去掉盒子时若什么都不补，这一列会落到页面底 stone-200 上，比右边的预览暗一档 —— 那是改布局时顺手带出来的颜色变化，不是设计决定，已还原。</span></li>
     <li class="cut"><b>重复的页面名</b> —— 页签已经标出你在哪一页，标题再写一遍是重复。</li>
     <li class="cut"><b>每块下面的填写帮助</b> —— 同一句话在十几块下面各来一遍就是噪声。改成<strong>只在正在编辑的那一块出现</strong>，完整的说明仍在「填写说明」弹窗里。</li>
     <li class="cut"><b>标题行右侧的恢复按钮</b> —— 移到校样边栏里，紧贴它要恢复的值。</li>
@@ -105,7 +107,7 @@
   <h2>没有做的事</h2>
   <ul>
     <li><strong>不做编号</strong>：文案块不是序列，序号编码不了任何真实信息。</li>
-    <li><strong>不换配色与字体</strong>：这一版的身份由结构与那一处灵火承担。</li>
+    <li><strong>不换配色与字体</strong>：这一版的身份由结构与那一处灵火承担，所以一个令牌都没动，新元素也不带自己的底色。</li>
     <li><strong>不动预览栏</strong>：它是这一页最有用的东西，只把它从「与编辑区同权的面板」变成「带框的一块屏」，figure 与 ground 这才分开。</li>
   </ul>
 
