@@ -3,6 +3,7 @@ package com.example.qqbot.onebot.outbound;
 import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
+import com.example.qqbot.llm.ToolCallMarkup;
 import com.example.qqbot.media.ImageLibrary;
 import com.example.qqbot.media.ImageMarkers;
 import com.example.qqbot.onebot.BotIdentity;
@@ -124,11 +125,14 @@ public class OutboundSender {
     /**
      * **唯一的出站实现** —— 所有发送都必须经过这里。
      *
-     * <p>顺序是有约束的，三步都不能换位置：
+     * <p>顺序是有约束的，四步都不能换位置：
      * <ol>
-     *   <li><b>先摘图片标记</b>：出站过滤是按词替换文本的，标记一旦被改写就再也匹配不上，
+     *   <li><b>先摘工具调用标记</b>：模型把"要调工具"写成正文时留下的协议噪音，
+     *       不是给群友看的东西（见 {@link ToolCallMarkup}）。放在唯一出口，
+     *       这样广场、指令、兜底话术**任何一条路**都漏不出去；</li>
+     *   <li><b>再摘图片标记</b>：出站过滤是按词替换文本的，标记一旦被改写就再也匹配不上，
      *       于是"这张图没了"且不报错；</li>
-     *   <li><b>再过滤文本</b>：过滤只看正文，图片是我们自己资产里的东西，没有可过滤的文字；</li>
+     *   <li><b>然后过滤文本</b>：过滤只看正文，图片是我们自己资产里的东西，没有可过滤的文字；</li>
      *   <li><b>最后分片发送</b>：图片挂在第一段上。</li>
      * </ol>
      *
@@ -136,7 +140,14 @@ public class OutboundSender {
      *         调用方要记的是"机器人说了什么"，而图片有它自己的日志。
      */
     private String dispatch(Target target, String text) {
-        ImageMarkers.Parsed parsed = ImageMarkers.parse(text);
+        // 工具调用标记先摘：它是模型的协议细节，发到群里就是事故（2026-10-15 实测）
+        String raw = text;
+        if (ToolCallMarkup.hasMarkup(raw)) {
+            raw = ToolCallMarkup.strip(raw);
+            log.warn("[OUT] 回复里出现模型工具调用标记，已摘除（{} 字 → {} 字）", text.length(), raw.length());
+        }
+
+        ImageMarkers.Parsed parsed = ImageMarkers.parse(raw);
         List<OutboundImage> attached = images.resolveAll(parsed.keys());
         String body = parsed.text();
 

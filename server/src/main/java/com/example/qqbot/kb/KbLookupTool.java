@@ -104,7 +104,7 @@ public class KbLookupTool {
      * 从返回的标题里认出正确的那个，再用完整英文名去 {@link #lookup}。
      * 这一步是纯字面匹配，不花向量钱，也不受跨语言相似度影响。
      */
-    @Tool("按英文关键词查知识库里的条目名（标题），返回匹配到的标题列表。只读。"
+    @Tool(name = "search_titles", value = "按英文关键词查知识库里的条目名（标题），返回匹配到的标题列表。只读。"
             + "当你不知道某个中文名对应的英文名时用它：先猜一个英文词（如 sickle、scythe、critter），"
             + "看返回的标题里有没有正确的那个，再用完整英文名去 lookup。")
     public String searchTitles(@P("英文关键词，例如 sickle") String word, InvocationContext ctx) {

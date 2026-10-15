@@ -16,6 +16,11 @@ import org.springframework.stereotype.Component;
  * <p><b>它不注入系统提示词</b>：系统消息由 AiServices 提供。
  * 这一点与 {@link LlmRouter#chat(String)} 不同 —— 那条入口自己拼系统消息，
  * 现在只服务广场与提案两条旁路。
+ *
+ * <p><b>它必须整条转发 {@code ChatRequest}，不能只转发 {@code request.messages()}</b>：
+ * 工具定义住在 {@code ChatRequest.toolSpecifications()} 里。只传消息的话工具
+ * 永远到不了模型 —— 而且不报错：模型只能照着 system.md 里提到的工具名自己"编"，
+ * 写出来的 {@code <tool_call>{"name": ...}</tool_call>} 被当成正常回答发进了群（实测事故 2026-10-15）。
  */
 @Component
 public class LlmRouterChatModel implements ChatModel {
@@ -28,6 +33,7 @@ public class LlmRouterChatModel implements ChatModel {
 
     @Override
     public ChatResponse doChat(ChatRequest request) {
-        return router.chatMessages(request.messages());
+        // 整条转发：工具定义、工具选择、响应格式都在 request 里，漏一个模型就"看不见"工具
+        return router.chatMessages(request);
     }
 }

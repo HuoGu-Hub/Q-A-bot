@@ -243,6 +243,21 @@ class KbToolAssistantTest {
         verify(retriever).retrieve(anyString());
     }
 
+    @Test
+    @DisplayName("★ 工具定义确实进了 ChatModel 收到的请求（LlmRouterChatModel 靠它转发给厂商）")
+    void toolSpecificationsReachTheModel() {
+        FakeChatModel model = new FakeChatModel(null);
+        KbToolAssistant a = assistant(model, kbWith(augmentorReturning(List.of())));
+
+        a.chat("力量有什么用", "力量有什么用", new KbRetrievalDiagnostics(), true, "群:1/用户:2");
+
+        // 名字必须和 system.md、授权白名单一致：ApiServices 把工具放在请求里，
+        // 而 LlmRouter 只负责原样转发 —— 这一层丢了，模型就只能自己"编"工具调用
+        assertThat(model.seen.get(0).toolSpecifications())
+                .extracting(dev.langchain4j.agent.tool.ToolSpecification::name)
+                .containsExactlyInAnyOrder("lookup", "locate", "search_titles");
+    }
+
     // ---------- 工具本身 ----------
 
     @Test

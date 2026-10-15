@@ -8,6 +8,7 @@ import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.llm.KbToolAssistant;
 import com.example.qqbot.llm.LlmRouter;
+import com.example.qqbot.llm.ToolCallMarkup;
 import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -130,7 +131,7 @@ public class ChatService {
             try {
                 String reply = toolAssistant.chatWithImages(envelope, images, visionQuery, visionSink,
                         useMode != ReplyMode.NONE, visionCaller);
-                return done(reply, t0, kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs()));
+                return done(sanitize(reply), t0, kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs()));
             } catch (Exception e) {
                 log.error("视觉模型调用失败：{}", e.getMessage());
                 return done("图片我看了，但一时没想明白，你直接说说想问什么吧～", t0,
@@ -151,12 +152,36 @@ public class ChatService {
             String userMessage = buildUserMessage(event, text, quoteText, null, useMode);
             String reply = toolAssistant.chat(userMessage, query, sink, useMode != ReplyMode.NONE,
                     callerOf(event));
-            return done(reply, t0, kbRetriever.traceOf(sink, query, sink.elapsedMs()));
+            return done(sanitize(reply), t0, kbRetriever.traceOf(sink, query, sink.elapsedMs()));
         } catch (Exception e) {
             log.error("调用大模型失败：{}", e.getMessage());
             return done("抱歉，我刚才走神了，稍后再问我一次吧～", t0,
                     kbRetriever.traceOf(sink, query, sink.elapsedMs()));
         }
+    }
+
+    /**
+     * 模型回复的最后一道检查：**工具调用标记绝不能当成回答发出去**。
+     *
+     * <p>2026-10-15 实测两次：模型把要调的工具写成了正文
+     * （一次 {@code <tool_call>{"name":"search_titles",…}</tool_call>}，一次 DSML），
+     * 结果群里收到一串协议细节。根因已修（工具定义曾经漏在请求外），
+     * 但这里必须兜住：模型编错工具名、厂商漏解析时同样会吐这种文字。
+     *
+     * <p>整条回复只有标记时不能"摘完发空消息" —— 换成正常的兜底话术，
+     * 群友看到的是一条"我卡住了"，而不是空白或协议噪音。
+     */
+    private String sanitize(String reply) {
+        if (!ToolCallMarkup.hasMarkup(reply)) {
+            return reply;
+        }
+        String cleaned = ToolCallMarkup.strip(reply);
+        if (cleaned.isBlank()) {
+            log.warn("[CHAT] 模型只返回了工具调用标记（{} 字），已换成兜底话术", reply.length());
+            return "抱歉，我刚才走神了，稍后再问我一次吧～";
+        }
+        log.warn("[CHAT] 已从模型回复里摘掉工具调用标记：{} 字 → {} 字", reply.length(), cleaned.length());
+        return cleaned;
     }
 
     private ReplyResult done(String text, long t0, KbTrace trace) {

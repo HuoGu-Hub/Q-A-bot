@@ -8,6 +8,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.slf4j.Logger;
@@ -48,9 +49,13 @@ public class LlmRouter {
     /**
      * 能力标签：支持函数调用。
      *
-     * <p>降级链按能力过滤时用它 —— 链里某个厂商不支持工具调用的话，
-     * 一次工具调用会在中途断掉（模型要调工具、而这家不会）。
-     * 工具执行接入之前它只用于显式筛选，不影响现有路径。
+     * <p><b>带工具的请求只发给声明了它的厂商</b>。不支持工具调用的厂商不会报错，
+     * 而是把"要调工具"写成正文 —— 实测模型把 {@code <tool_call>{"name": ...}</tool_call>}
+     * 这类标记当普通文字吐出来，被当成回答发进了群。所以工具能不能用不能靠厂商自觉，
+     * 只能靠这里筛。
+     *
+     * <p>⚠️ {@code KbToolAssistant} 总是注册工具，所以群聊**每一次**请求都带工具 ——
+     * 这一项实际上是必配；漏配的后果不是"没有工具"，而是"所有回答都失败"。
      */
     public static final String CAP_TOOLS = "tools";
 
@@ -375,8 +380,8 @@ public class LlmRouter {
      * @param userMessage 用户这一轮的内容（不要把系统提示词塞进来）
      */
     public String chat(String userMessage) {
-        return callWithFallback(
-                List.of(SystemMessage.from(systemPromptWithStyle()), new UserMessage(userMessage)), null);
+        return callWithFallback(request(List.of(
+                SystemMessage.from(systemPromptWithStyle()), new UserMessage(userMessage))), null);
     }
 
     /**
@@ -443,7 +448,7 @@ public class LlmRouter {
             contents.add(ImageContent.from(image.base64(), image.mimeType()));
         }
         ChatMessage message = UserMessage.from(contents);
-        return callWithFallback(List.of(SystemMessage.from(systemPromptWithStyle()), message), CAP_VISION);
+        return callWithFallback(request(List.of(SystemMessage.from(systemPromptWithStyle()), message)), CAP_VISION);
     }
 
     /**
@@ -452,30 +457,48 @@ public class LlmRouter {
      * @param requiredCapability 需要的模型能力（null = 任意）
      */
     /**
-     * 消息级入口：**原样把消息发出去，不注入系统提示词**。
+     * 请求级入口：**整条 {@link ChatRequest} 原样转发，不注入系统提示词**。
      *
      * <p>AiServices 自己管系统消息，所以它需要一个"别替我加"的入口；
      * 而 {@link #chat(String)} 仍然自己拼系统消息，现在只服务广场与提案两条旁路。
      * {@link #chatWithImages} 自视觉路径改走 AiServices 后已无生产调用方。
+     *
+     * <p><b>必须整条转发，不能只转发 {@code messages()}</b>：工具定义住在
+     * {@code ChatRequest.toolSpecifications()} 里。只传消息的话工具根本到不了模型 ——
+     * 而且不报错，模型只能按 system.md 的文字自己"编"工具调用标记，最后漏到群里（实测）。
      */
-    public ChatResponse chatMessages(List<ChatMessage> messages) {
-        return callWithFallbackResponse(messages, null);
+    public ChatResponse chatMessages(ChatRequest request) {
+        return callWithFallbackResponse(request, null);
+    }
+
+    /** 只有消息的请求（老路径与视觉路径用；它们没有工具） */
+    private static ChatRequest request(List<ChatMessage> messages) {
+        return ChatRequest.builder().messages(messages).build();
     }
 
     /** 老路径用的字符串版：成功响应的正文 */
-    private String callWithFallback(List<ChatMessage> messages, String requiredCapability) {
-        return callWithFallbackResponse(messages, requiredCapability).aiMessage().text();
+    private String callWithFallback(ChatRequest request, String requiredCapability) {
+        return callWithFallbackResponse(request, requiredCapability).aiMessage().text();
     }
 
-    private ChatResponse callWithFallbackResponse(List<ChatMessage> messages, String requiredCapability) {
+    private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability) {
+        // 带工具的请求**只能**交给声明了 tools 能力的厂商：不支持工具调用的厂商不会报错，
+        // 而是把工具调用当正文吐出来（见 CAP_TOOLS 的说明），那就漏到群里了。
+        boolean needsTools = request.toolSpecifications() != null && !request.toolSpecifications().isEmpty();
         List<String> candidates = new ArrayList<>();
         for (String name : chain) {
-            if (requiredCapability == null || configs.get(name).hasCapability(requiredCapability)) {
-                candidates.add(name);
+            if (requiredCapability != null && !configs.get(name).hasCapability(requiredCapability)) {
+                continue;
             }
+            if (needsTools && !configs.get(name).hasCapability(CAP_TOOLS)) {
+                continue;
+            }
+            candidates.add(name);
         }
         if (candidates.isEmpty()) {
-            throw new LlmException(requiredCapability == null
+            throw new LlmException(needsTools
+                    ? "没有声明「" + CAP_TOOLS + "」能力的模型，带工具的请求无法调用"
+                    : requiredCapability == null
                     ? "没有配置任何可用的大模型 provider"
                     : "没有支持「" + requiredCapability + "」能力的模型（图片理解需要它）");
         }
@@ -485,7 +508,7 @@ public class LlmRouter {
             ChatModel model = models.get(name);
             try {
                 long start = System.currentTimeMillis();
-                ChatResponse response = model.chat(messages);
+                ChatResponse response = model.chat(request);
                 long cost = System.currentTimeMillis() - start;
                 String text = response.aiMessage().text();
                 boolean wantsTools = response.aiMessage().hasToolExecutionRequests();
@@ -493,24 +516,23 @@ public class LlmRouter {
                 // 会把 token 全花在「思考」上，content 返回空字符串。
                 // 直接发出去就是一条空白消息，用户只会觉得机器人坏了。
                 if (text == null || text.isBlank()) {
-                    // ★ 但"空文本 + 有工具请求"是**正常**的一次工具调用，不是故障。
-                    //   模型请求调用工具时，content 本来就是空的，要读的是 toolExecutionRequests。
-                    //   这两种情况必须分开：混在一起的话，工具一接上，
-                    //   第一次工具调用就会被判成"空回复"→ 换厂商 → 这次调用直接丢掉。
-                    //   工具执行器接入之前，这种情况按"当前厂商用不了"处理，并把原因记清楚。
-                    if (wantsTools) {
-                        log.warn("[LLM] {} ({}) 只返回了工具调用请求（工具执行尚未接入），尝试下一个 provider",
+                    // ★ 但"空文本 + 有工具请求"是**正常**的一次工具调用，不是故障：
+                    //   模型请求调用工具时 content 本来就是空的，要读的是 toolExecutionRequests。
+                    //   以前这里把它当成"这家用不了"而换下一家 —— 工具一接上，
+                    //   第一次工具调用就会被丢掉。这两种情况必须分开。
+                    if (!wantsTools) {
+                        log.warn("[LLM] {} ({}) 返回了空内容（推理模型可能把预算花在思考上了），尝试下一个 provider",
                                 name, configs.get(name).getModelName());
-                        errors.add(name + " -> 只返回工具请求");
+                        errors.add(name + " -> 空回复");
                         continue;
                     }
-                    log.warn("[LLM] {} ({}) 返回了空内容（推理模型可能把预算花在思考上了），尝试下一个 provider",
-                            name, configs.get(name).getModelName());
-                    errors.add(name + " -> 空回复");
-                    continue;
+                    log.info("[LLM] {} ({}) 请求调用工具 {} 个，交给工具执行器",
+                            name, configs.get(name).getModelName(),
+                            response.aiMessage().toolExecutionRequests().size());
+                } else {
+                    log.info("[LLM] {} ({}) 回复成功，耗时 {} ms，{} 字",
+                            name, configs.get(name).getModelName(), cost, text.length());
                 }
-                log.info("[LLM] {} ({}) 回复成功，耗时 {} ms，{} 字",
-                        name, configs.get(name).getModelName(), cost, text.length());
                 // 用量只有这一层拿得到（langchain4j 的 ChatResponse 里带着），
                 // 交给成本预算累加，供「今日 token 额度」判定用
                 if (response.tokenUsage() != null) {

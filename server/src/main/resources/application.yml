@@ -736,7 +736,10 @@ app:
         # ⚠️ 但 provider 的 /models 只返回 id/owner，【没有】模态信息，
         #    所以换模型时这一项必须自己测一遍 —— 声明错了不会报错，
         #    只会被当成"有视觉能力"去调用，然后拿到空回复或瞎猜。
-        capabilities: [chat, vision]
+        # tools = 支持函数调用。**必须声明**：带工具的请求只会发给声明了它的厂商
+        #    （见 LlmRouter.CAP_TOOLS）。漏了它不会报错，而是模型看不到工具，
+        #    只能照着 system.md 编工具调用标记，然后漏到群里（2026-10-15 实测事故）。
+        capabilities: [chat, vision, tools]
         temperature: 0.7
         timeout-seconds: 60
         max-retries: 1
@@ -756,7 +759,8 @@ app:
         base-url: https://api.deepseek.com/v1
         api-key: ${DEEPSEEK_API_KEY:}
         model-name: deepseek-flash
-        capabilities: [chat]
+        # 2026-10-15 实测：deepseek-flash 原生支持 function calling（返回 tool_calls，不是正文标记）
+        capabilities: [chat, tools]
         temperature: 0.7
         timeout-seconds: 60
 

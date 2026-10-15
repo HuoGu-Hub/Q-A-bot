@@ -397,4 +397,28 @@ class OutboundSenderTest {
         assertThat(sent).isEmpty();
         verify(api, never()).sendGroupMsg(anyLong(), any());
     }
+
+    @Test
+    @DisplayName("★ 模型把工具调用写成正文：标记一个字都不能发到群里（2026-10-15 事故回归）")
+    void toolCallMarkupIsStrippedBeforeSending() {
+        String leaked = "<tool_call>{\"name\": \"search_titles\", \"arguments\": {\"query\": \"光芒戒指\"}}</tool_call>";
+
+        String sent = sender.send(groupEvent(), leaked);
+
+        // 整条都是协议噪音 → 摘完是空的，宁可不发也不能发标记
+        assertThat(sent).isEmpty();
+        verify(api, never()).sendGroupMsg(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ 标记混在正文里：只摘标记，正文照发")
+    void markupIsRemovedFromMixedReply() {
+        String sent = sender.send(groupEvent(),
+                "戒指在东桥。\n<tool_call>{\"name\": \"lookup\"}</tool_call>");
+
+        assertThat(sent).isEqualTo("戒指在东桥。");
+        ArgumentCaptor<JsonNode> msg = ArgumentCaptor.forClass(JsonNode.class);
+        verify(api).sendGroupMsg(eq(GROUP), msg.capture());
+        assertThat(msg.getValue().toString()).doesNotContain("tool_call").contains("戒指在东桥。");
+    }
 }
