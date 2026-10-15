@@ -54,11 +54,11 @@ class MapShotRendererTest {
     }
 
     @Test
-    @DisplayName("★ 出图：尺寸按配置，目标点是红圈、地标是黄圈，底图铺满")
+    @DisplayName("★ 出图：尺寸按配置，只有目标点套红圈，底图铺满")
     void rendersMarksOnTiles() throws IOException {
         byte[] shot = renderer.render(CANVAS, TILES, "",
-                List.of(new MapShotRenderer.Mark(1280, 1280, true, "目标"),
-                        new MapShotRenderer.Mark(1980, 1280, false, "地标")),
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "Target"),
+                        new MapShotRenderer.Mark(1980, 1280, false, "Landmark")),
                 whiteFetcher(), System.currentTimeMillis() + 5000).orElseThrow();
 
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(shot));
@@ -66,9 +66,9 @@ class MapShotRendererTest {
         assertThat(img.getHeight()).isEqualTo(125);
 
         // 视口以两点中点 (1630,1280) 为中心，跨度被抬到下限 1200、高 750，缩放 k = 200/1200
-        // 目标点 (1280,1280) → 屏幕 (41.7, 62.5)；地标 (1980,1280) → (158.3, 62.5)
+        // 目标点 (1280,1280) → 屏幕 (41.7, 62.5)；参照点 (1980,1280) → (158.3, 62.5)
         assertThat(hasRedNear(img, 42, 63, 12)).as("目标点附近应有红圈").isTrue();
-        assertThat(hasAmberNear(img, 158, 63, 12)).as("地标附近应有黄圈").isTrue();
+        assertThat(hasAmberNear(img, 158, 63, 12)).as("参照点不该再套一个圈").isFalse();
         assertThat(isWhiteNear(img, 5, 5)).as("左上角应该是底图").isTrue();
     }
 
@@ -145,8 +145,8 @@ class MapShotRendererTest {
 
         byte[] shot = renderer.render(CANVAS, TILES, "",
                 List.of(new MapShotRenderer.Mark(1280, 1280, true, "目标")),
-                List.of(MapShotRenderer.Mark.icon(2500, 2500, "Far.png"),
-                        MapShotRenderer.Mark.icon(1400, 1280, "Near.png")),
+                List.of(MapShotRenderer.Mark.icon(2500, 2500, "Far Mine", "Far.png"),
+                        MapShotRenderer.Mark.icon(1400, 1280, "Near Camp", "Near.png")),
                 withIcons, System.currentTimeMillis() + 5000).orElseThrow();
 
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(shot));
@@ -177,8 +177,8 @@ class MapShotRendererTest {
                 List.of(), withIcons, System.currentTimeMillis() + 5000).orElseThrow();
         byte[] shot = renderer.render(CANVAS, TILES, "",
                 List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
-                List.of(MapShotRenderer.Mark.icon(1400, 1280, "Near.png"),
-                        MapShotRenderer.Mark.icon(1420, 1300, "Near.png")),
+                List.of(MapShotRenderer.Mark.icon(1400, 1280, "Near Camp", "Near.png"),
+                        MapShotRenderer.Mark.icon(1420, 1300, "Far Camp", "Near.png")),
                 withIcons, System.currentTimeMillis() + 5000).orElseThrow();
 
         // 两个点同一个分组：图标只解码一次

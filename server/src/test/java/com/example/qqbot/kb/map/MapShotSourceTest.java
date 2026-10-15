@@ -1,7 +1,6 @@
 package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
-import com.example.qqbot.kb.PlaceDirectory;
 import com.example.qqbot.kb.PlacePoint;
 import com.example.qqbot.media.ImageMarkers;
 import com.example.qqbot.onebot.model.OutboundImage;
@@ -43,7 +42,6 @@ class MapShotSourceTest {
 
     private MapOptions options;
     private MapViewService view;
-    private PlaceDirectory places;
     private MapImageCache images;
     private MapShotWarmer warmer;
     private MapShotSource source;
@@ -78,21 +76,13 @@ class MapShotSourceTest {
         when(view.markers(MAP, false)).thenReturn(List.of(marker));
         when(view.canvasesOf(MAP)).thenReturn(List.of(canvas));
 
-        PlacePoint target = new PlacePoint(MAP, CANVAS_PAGE, "春之原野远古尖塔", List.of(),
-                1280, 1280, "landmark", "", true, 0, "wiki", REF);
-        PlacePoint anchor = new PlacePoint(MAP, CANVAS_PAGE, "灵火祭坛", List.of(),
-                1980, 1280, "landmark", "", true, 0, "wiki", "Map:Embervale/Main#FlameAltar");
-        places = mock(PlaceDirectory.class);
-        when(places.all()).thenReturn(List.of(target, anchor));
-        when(places.worldSizes()).thenReturn(java.util.Map.of(MAP, new double[]{2560, 2560}));
-
         tilePng = solidPng();
         images = mock(MapImageCache.class);
         when(images.get(any(), any(), any(), anyInt()))
                 .thenReturn(Optional.of(new MapImageCache.Image(tilePng, "image/png", true)));
 
         warmer = mock(MapShotWarmer.class);
-        source = new MapShotSource(view, places, images, new MapShotRenderer(options), warmer, options);
+        source = new MapShotSource(view, images, new MapShotRenderer(options), warmer, options);
     }
 
     @Test
@@ -175,7 +165,7 @@ class MapShotSourceTest {
     @Test
     @DisplayName("★ 超预算没取上的瓦片也要交给按需预热 —— 否则问多少次都不出图")
     void handsBudgetSkippedTilesToWarmer() {
-        MapShotSource budgeted = new MapShotSource(view, places, images,
+        MapShotSource budgeted = new MapShotSource(view, images,
                 new BudgetExhaustedRenderer(options), warmer, options);
 
         assertThat(budgeted.resolve(PlacePoint.keyOf(REF))).isEmpty();
@@ -227,11 +217,15 @@ class MapShotSourceTest {
                 MAP, "余烬谷", 4, 0, List.of(canvasView), groups, null)));
 
         CapturingRenderer capturing = new CapturingRenderer(options);
-        MapShotSource shot = new MapShotSource(view, places, images, capturing, warmer, options);
+        MapShotSource shot = new MapShotSource(view, images, capturing, warmer, options);
 
         assertThat(shot.resolve(PlacePoint.keyOf(REF))).isEmpty();
-        assertThat(capturing.context).extracting(MapShotRenderer.Mark::icon)
-                .containsExactly("Flame_Shrine.png");
+        // 图标要带上，名字也要带上 —— 只画图标，读图的人认不出"这是哪个敌营"
+        assertThat(capturing.context).singleElement().satisfies(m -> {
+            assertThat(m.icon()).isEqualTo("Flame_Shrine.png");
+            assertThat(m.label()).isEqualTo("火焰神龛·春之原野");
+            assertThat(m.primary()).as("背景点不套高亮圈").isFalse();
+        });
     }
 
     @Test

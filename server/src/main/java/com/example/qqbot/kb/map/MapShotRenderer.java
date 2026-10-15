@@ -16,6 +16,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -76,8 +77,6 @@ public class MapShotRenderer {
     private static volatile String labelFamily;
     private static final Color PRIMARY = new Color(230, 40, 40);
     private static final Color PRIMARY_HALO = Color.WHITE;
-    private static final Color SECONDARY = new Color(255, 196, 0);
-    private static final Color SECONDARY_HALO = new Color(70, 45, 0);
 
     /**
      * 取一张瓦片或整图。
@@ -131,9 +130,9 @@ public class MapShotRenderer {
             this(x, y, primary, label, "");
         }
 
-        /** 只有背景图标：地图上本来就显示着的点位用 —— 不写名字，只提供参照 */
-        public static Mark icon(double x, double y, String icon) {
-            return new Mark(x, y, false, "", icon);
+        /** 地图上本来就显示着的点位：图标 + 自己的名字，不带高亮圈 */
+        public static Mark icon(double x, double y, String label, String icon) {
+            return new Mark(x, y, false, label, icon);
         }
     }
 
@@ -261,8 +260,7 @@ public class MapShotRenderer {
             }
             // 图标要解码一次就够：一张图里同一个分组可能有十几个点
             Map<String, BufferedImage> iconCache = new HashMap<>();
-            drawIcons(g, context, vp, k, outW, outH, fetcher, iconCache);
-            drawMarks(g, marks, vp, k, outW, outH, fetcher, iconCache);
+            drawPoints(g, context, marks, vp, k, outW, outH, fetcher, iconCache);
         } finally {
             g.dispose();
         }
@@ -307,64 +305,88 @@ public class MapShotRenderer {
     }
 
     /**
-     * 画标记。
+     * 画点位。
      *
-     * <p>目标点是白圈打底 + 红圈 + 十字，地标是暗圈打底 + 黄圈，两者旁边都写上名字。
-     * 为什么要打底：底图有浅色的雪原也有深色的林地，单色圈总有一半糊在里面看不见。
+     * <p>两类点在这里合流：<b>背景点</b>（地图上默认显示的那些，图标 + 名字）与
+     * <b>目标点</b>（同一套画法再套一圈红环）。背景先画、目标后画，压在最上面。
+     *
+     * <p>为什么背景点也要名字：只画图标，读图的人认得出"这里是敌营"，却认不出"这是哪个敌营"，
+     * 而群友互相指路用的是名字。名字与图标一样要打底，否则浅色雪原上读不出来。
      */
-    private static void drawMarks(Graphics2D g, List<Mark> marks, MapProjection.Viewport vp,
-                                  double k, int outW, int outH, TileFetcher fetcher,
-                                  Map<String, BufferedImage> iconCache) {
-        int r = Math.max(7, outW / 90);
-        int iconSize = iconBox(k);
+    private static void drawPoints(Graphics2D g, List<Mark> context, List<Mark> marks,
+                                   MapProjection.Viewport vp, double k, int outW, int outH,
+                                   TileFetcher fetcher, Map<String, BufferedImage> iconCache) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
                 RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        for (Mark m : marks) {
-            double sx = (m.x() - vp.left()) * k;
-            double sy = (m.y() - vp.top()) * k;
-            // 有图标就先画图标，圈套在图标外面；没图标才退回"圈 + 十字"。
-            // 圈比图标小的话会被图标盖住，等于没有高亮 —— 半径必须让开图标。
-            boolean withIcon = m.icon() != null && !m.icon().isBlank()
-                    && drawIcon(g, fetcher, iconCache, m.icon(), sx, sy, iconSize, outW, outH);
-            int radius;
-            if (m.primary()) {
-                radius = withIcon ? Math.max(r, iconSize / 2 + 4) : r;
-                ring(g, sx, sy, radius, PRIMARY_HALO, 4.5f);
-                ring(g, sx, sy, radius, PRIMARY, 2.5f);
-                if (!withIcon) {
-                    g.setColor(PRIMARY);
-                    g.setStroke(new BasicStroke(2.5f));
-                    int arm = (int) Math.round(r * 1.9);
-                    int gap = (int) Math.round(r * 0.7);
-                    g.drawLine((int) sx - arm, (int) sy, (int) sx - gap, (int) sy);
-                    g.drawLine((int) sx + gap, (int) sy, (int) sx + arm, (int) sy);
-                    g.drawLine((int) sx, (int) sy - arm, (int) sx, (int) sy - gap);
-                    g.drawLine((int) sx, (int) sy + gap, (int) sx, (int) sy + arm);
-                }
-            } else {
-                int small = Math.max(5, (int) Math.round(r * 0.65));
-                radius = withIcon ? Math.max(small, iconSize / 2 + 4) : small;
-                ring(g, sx, sy, radius, SECONDARY_HALO, 4f);
-                ring(g, sx, sy, radius, SECONDARY, 2f);
+        int size = iconBox(k);
+        // 1) 图标：背景先、目标后，目标压在最上面
+        if (context != null) {
+            for (Mark m : context) {
+                drawGlyph(g, m, vp, k, size, outW, outH, fetcher, iconCache, false);
             }
-            drawLabel(g, m, sx, sy, radius, outW, outH);
+        }
+        for (Mark m : marks) {
+            drawGlyph(g, m, vp, k, size, outW, outH, fetcher, iconCache, m.primary());
+        }
+        // 2) 名字：**目标点先占位**（它必须有名字），背景点撞上就让位
+        List<Rectangle> taken = new ArrayList<>();
+        for (Mark m : marks) {
+            drawLabel(g, m, vp, k, size, outW, outH, taken);
+        }
+        if (context != null) {
+            for (Mark m : context) {
+                drawLabel(g, m, vp, k, size, outW, outH, taken);
+            }
         }
     }
 
-    /** 背景图标：默认显示的那些点位，画在底图之上、目标点与地标之下 */
-    private static void drawIcons(Graphics2D g, List<Mark> context, MapProjection.Viewport vp,
-                                  double k, int outW, int outH, TileFetcher fetcher,
-                                  Map<String, BufferedImage> iconCache) {
-        if (context == null || context.isEmpty()) {
+    /**
+     * 一个点的图形部分：图标，{@code highlight} 为真时再套一圈红环。
+     *
+     * <p><b>只有目标点套环</b>：环的意思就是"看这里"，一圈好几个等于一个都没圈。
+     * 参照物靠"图标 + 名字"去认，那本来就是地图的读法。
+     */
+    private static void drawGlyph(Graphics2D g, Mark m, MapProjection.Viewport vp, double k,
+                                  int iconSize, int outW, int outH, TileFetcher fetcher,
+                                  Map<String, BufferedImage> iconCache, boolean highlight) {
+        double[] at = onScreen(m, vp, k, iconSize, outW, outH);
+        if (at == null) {
             return;
         }
-        int size = iconBox(k);
-        for (Mark m : context) {
-            double sx = (m.x() - vp.left()) * k;
-            double sy = (m.y() - vp.top()) * k;
-            drawIcon(g, fetcher, iconCache, m.icon(), sx, sy, size, outW, outH);
+        double sx = at[0];
+        double sy = at[1];
+        boolean withIcon = drawIcon(g, fetcher, iconCache, m.icon(), sx, sy, iconSize, outW, outH);
+        if (!highlight) {
+            return;
         }
+        int r = Math.max(7, outW / 90);
+        // 圈比图标小的话会被图标盖住，等于没有高亮 —— 半径必须让开图标。
+        // 图标没画上时才退回"圈 + 十字"，那是没有图标可认时的兜底
+        int radius = withIcon ? Math.max(r, iconSize / 2 + 4) : r;
+        ring(g, sx, sy, radius, PRIMARY_HALO, 4.5f);
+        ring(g, sx, sy, radius, PRIMARY, 2.5f);
+        if (!withIcon) {
+            g.setColor(PRIMARY);
+            g.setStroke(new BasicStroke(2.5f));
+            int arm = (int) Math.round(r * 1.9);
+            int gap = (int) Math.round(r * 0.7);
+            g.drawLine((int) sx - arm, (int) sy, (int) sx - gap, (int) sy);
+            g.drawLine((int) sx + gap, (int) sy, (int) sx + arm, (int) sy);
+            g.drawLine((int) sx, (int) sy - arm, (int) sx, (int) sy - gap);
+            g.drawLine((int) sx, (int) sy + gap, (int) sx, (int) sy + arm);
+        }
+    }
+
+    /** 点在屏幕上的位置；视口外返回 {@code null} —— 视口就是取景框，权当它天然裁剪 */
+    private static double[] onScreen(Mark m, MapProjection.Viewport vp, double k, int iconSize,
+                                     int outW, int outH) {
+        double sx = (m.x() - vp.left()) * k;
+        double sy = (m.y() - vp.top()) * k;
+        if (sx < -iconSize || sy < -iconSize || sx > outW + iconSize || sy > outH + iconSize) {
+            return null;
+        }
+        return new double[]{sx, sy};
     }
 
     /**
@@ -427,54 +449,74 @@ public class MapShotRenderer {
     }
 
     /**
-     * 在圈旁边写上名字 —— {@link Mark#label()} 存在的理由。
+     * 在点位旁边写上名字 —— {@link Mark#label()} 存在的理由。
      *
-     * <p><b>没有名字的圈等于没有参照</b>：读图的人知道"目标点在某个黄圈的西南方"，
-     * 却不知道那个黄圈是远古尖塔还是火焰神龛，于是这张图只能定"在哪一片"，
-     * 定不了"在哪"。目标点与地标都要写，方位关系才成立。
+     * <h2>为什么必须有</h2>
+     * 只画图标，读图的人认得出"这里是敌营"，却认不出"这是哪个敌营"，而群友互相指路用的
+     * 是名字。名字与图标一样要打底：深色半透明胶囊 + 白字，浅色雪原与深色林地都读得出来。
      *
-     * <p>文字与圈一样要打底：深色半透明胶囊 + 白字，浅色雪原与深色林地都读得出来。
-     * 位置默认在圈右侧，右边放不下就翻到左侧，再夹进图内。
+     * <h2>为什么要抢位置</h2>
+     * 一屏可能有几十个点位，名字全画出来会糊成一团、一个都读不成。所以按
+     * <b>右 → 左 → 下 → 上</b> 依次试，撞上已占位的就让位；四个方向都撞上，这个点这一张
+     * 就不写名字。调用方**先传目标点**，它的名字因此永远有位置 —— 被问的就是它。
      */
-    private static void drawLabel(Graphics2D g, Mark m, double sx, double sy, int radius,
-                                  int outW, int outH) {
+    private static void drawLabel(Graphics2D g, Mark m, MapProjection.Viewport vp, double k,
+                                  int iconSize, int outW, int outH, List<Rectangle> taken) {
         String text = m.label() == null ? "" : m.label().strip();
         if (text.isEmpty()) {
             return;
         }
-        Font base = labelFont(text);
-        if (base == null) {
+        double[] at = onScreen(m, vp, k, iconSize, outW, outH);
+        if (at == null) {
+            return;
+        }
+        Font fontBase = labelFont(text);
+        if (fontBase == null) {
             // 一个能显示这段字的字体都没有：宁可不写，也不要画一排方框
             return;
         }
         int size = Math.max(12, outW / 64);
-        Font font = base.deriveFont((float) size);
+        Font font = fontBase.deriveFont((float) size);
         FontMetrics fm = g.getFontMetrics(font);
         int padX = Math.max(6, size / 3);
         int padY = Math.max(3, size / 6);
         int w = fm.stringWidth(text) + padX * 2;
         int h = fm.getHeight() + padY * 2;
-        int gap = Math.max(4, radius / 2);
 
-        int x = (int) Math.round(sx) + radius + gap;
-        if (x + w > outW - 4) {
-            x = (int) Math.round(sx) - radius - gap - w;
+        // 让开的东西不一样：目标点要绕开红环，背景点绕开图标
+        int off = m.primary()
+                ? Math.max(Math.max(7, outW / 90), iconSize / 2 + 4)
+                : iconSize / 2;
+        int gap = Math.max(4, off / 2);
+        int cx = (int) Math.round(at[0]);
+        int cy = (int) Math.round(at[1]);
+        int[][] spots = {
+                {cx + off + gap, cy - h / 2},
+                {cx - off - gap - w, cy - h / 2},
+                {cx - w / 2, cy + off + gap},
+                {cx - w / 2, cy - off - gap - h},
+        };
+        for (int[] spot : spots) {
+            int x = Math.max(4, Math.min(spot[0], Math.max(4, outW - w - 4)));
+            int y = Math.max(4, Math.min(spot[1], Math.max(4, outH - h - 4)));
+            Rectangle rect = new Rectangle(x, y, w, h);
+            if (taken.stream().anyMatch(rect::intersects)) {
+                continue;
+            }
+            taken.add(rect);
+            g.setColor(LABEL_BG);
+            g.fillRoundRect(x, y, w, h, h, h);
+            if (m.primary()) {
+                // 目标点的标签描一圈红边，与红圈对应；其余不描边，读的时候一眼分得开
+                g.setColor(PRIMARY);
+                g.setStroke(new BasicStroke(2f));
+                g.drawRoundRect(x, y, w, h, h, h);
+            }
+            g.setFont(font);
+            g.setColor(LABEL_TEXT);
+            g.drawString(text, x + padX, y + padY + fm.getAscent());
+            return;
         }
-        x = Math.max(4, Math.min(x, Math.max(4, outW - w - 4)));
-        int y = (int) Math.round(sy) - h / 2;
-        y = Math.max(4, Math.min(y, Math.max(4, outH - h - 4)));
-
-        g.setColor(LABEL_BG);
-        g.fillRoundRect(x, y, w, h, h, h);
-        if (m.primary()) {
-            // 目标点的标签描一圈红边，与红圈对应；地标不描边，读的时候一眼分得开
-            g.setColor(PRIMARY);
-            g.setStroke(new BasicStroke(2f));
-            g.drawRoundRect(x, y, w, h, h, h);
-        }
-        g.setFont(font);
-        g.setColor(LABEL_TEXT);
-        g.drawString(text, x + padX, y + padY + fm.getAscent());
     }
 
     /**

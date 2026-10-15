@@ -1,9 +1,7 @@
 package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
-import com.example.qqbot.kb.PlaceDirectory;
 import com.example.qqbot.kb.PlacePoint;
-import com.example.qqbot.kb.RelativeLocation;
 import com.example.qqbot.media.ImageSource;
 import com.example.qqbot.onebot.model.OutboundImage;
 import org.slf4j.Logger;
@@ -26,7 +24,9 @@ import java.util.Set;
  *   <li>按身份找到点位；</li>
  *   <li>找到它该画在哪张画布上 —— <b>用现成的归属，不自己猜</b>：同一张地图有多套坐标系，
  *       猜错会让标记偏上万像素，而且只是"图不对"，不报错；</li>
- *   <li>把最近的地标也算出来一起画进图里：群友靠地标认路，比看孤零零一个点有用；</li>
+ *   <li>把这张图上**默认显示**的点位一并画进去（图标 + 名字）—— 只有目标点一个标记时，
+ *       群友面对的是一片地形纹理，看不出这是地图的哪一块，更看不出旁边有什么；</li>
+ *   <li>只给目标点套红环：环的意思是"看这里"，一圈好几个等于一个都没圈；</li>
  *   <li>交给 {@link MapShotRenderer}，把取瓦片的预算卡死。</li>
  * </ol>
  *
@@ -40,16 +40,14 @@ public class MapShotSource implements ImageSource {
     private static final Logger log = LoggerFactory.getLogger(MapShotSource.class);
 
     private final MapViewService view;
-    private final PlaceDirectory places;
     private final MapImageCache images;
     private final MapShotRenderer renderer;
     private final MapShotWarmer warmer;
     private final MapOptions options;
 
-    public MapShotSource(MapViewService view, PlaceDirectory places, MapImageCache images,
+    public MapShotSource(MapViewService view, MapImageCache images,
                          MapShotRenderer renderer, MapShotWarmer warmer, MapOptions options) {
         this.view = view;
-        this.places = places;
         this.images = images;
         this.renderer = renderer;
         this.warmer = warmer;
@@ -92,28 +90,16 @@ public class MapShotSource implements ImageSource {
                 canvas.topLeft(), canvas.bottomRight(), canvas.tileAt(), canvas.tileSize());
 
         Map<String, String> iconOf = iconsOf(mapView);
-        // 只有公开站也看得见的点位才配当背景 —— 藏起来的不能借截图漏出去
+        // 只有公开站也看得见的点位才配进图 —— 藏起来的不能借截图漏出去
         List<MapViewService.MarkerView> visible = view.markers(map, true);
-        Map<String, String> groupOf = new HashMap<>();
-        for (MapViewService.MarkerView m : visible) {
-            groupOf.put(m.id(), m.group());
-        }
 
-        // 目标点与地标都带上自己那一层的图标：圈套在图标外面，读图的人知道那是什么东西
+        // 目标点：带自己那一层的图标，画的时候再套一圈红环
         MapProjection.Point target = MapProjection.worldOf(geometry, marker.x(), marker.y());
         List<MapShotRenderer.Mark> marks = new ArrayList<>();
         marks.add(new MapShotRenderer.Mark(target.x(), target.y(), true, marker.name(),
                 iconOf.getOrDefault(nz(marker.group()), "")));
-        Set<String> focus = new LinkedHashSet<>();
-        focus.add(marker.id());
-        nearestLandmark(map, marker, geometry).ifPresent(point -> {
-            MapProjection.Point at = MapProjection.worldOf(geometry, point.x(), point.y());
-            marks.add(new MapShotRenderer.Mark(at.x(), at.y(), false, point.name(),
-                    iconOf.getOrDefault(nz(groupOf.get(point.ref())), "")));
-            focus.add(point.ref());
-        });
 
-        List<MapShotRenderer.Mark> context = contextIcons(mapView, marker, geometry, iconOf, visible, focus);
+        List<MapShotRenderer.Mark> context = contextIcons(mapView, marker, geometry, iconOf, visible);
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
         // 缺口清单有两个来源：取失败的（get 返回空）与**超预算没去取的**（need）。
@@ -174,60 +160,25 @@ public class MapShotSource implements ImageSource {
      * 只有目标点与地标两三个圈时，读图的人面对的是一片地形纹理 —— 看不出这是地图的哪一块，
      * 更看不出旁边有什么。把默认显示的图标一起画上，截图才像"地图上的一角"。
      *
-     * <p>筛选口径与公开站一致：<b>当前画布 + 默认显示的分组</b>。目标点与地标已经单独
-     * 画过（图标 + 圈 + 名字），这里跳过，免得同一处画两遍。
+     * <p>筛选口径与公开站一致：<b>当前画布 + 默认显示的分组</b>。目标点跳过 —— 它由
+     * {@code marks} 单独画（多一圈红环），免得同一处画两遍。
      */
     private List<MapShotRenderer.Mark> contextIcons(MapViewService.MapView mapView,
                                                     MapViewService.MarkerView marker,
                                                     MapProjection.Canvas geometry,
                                                     Map<String, String> iconOf,
-                                                    List<MapViewService.MarkerView> visible,
-                                                    Set<String> focus) {
+                                                    List<MapViewService.MarkerView> visible) {
         Set<String> shown = mapView.shownGroups();
         List<MapShotRenderer.Mark> out = new ArrayList<>();
         for (MapViewService.MarkerView m : visible) {
-            if (!nz(marker.canvas()).equals(nz(m.canvas())) || focus.contains(m.id())
+            if (!nz(marker.canvas()).equals(nz(m.canvas())) || marker.id().equals(m.id())
                     || !shown.contains(nz(m.group()))) {
                 continue;
             }
-            String icon = iconOf.getOrDefault(nz(m.group()), "");
-            if (icon.isBlank()) {
-                continue;
-            }
             MapProjection.Point at = MapProjection.worldOf(geometry, m.x(), m.y());
-            out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), icon));
+            out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), nz(m.name()), iconOf.getOrDefault(nz(m.group()), "")));
         }
         return out;
-    }
-
-    /**
-     * 目标点最近的地标，与 {@code locate} 用的是**同一套选择逻辑**
-     * （{@link RelativeLocation#pickAnchor}），所以图上的参照物和文字里的方位说的是同一个地方。
-     *
-     * <p>只取同一张画布上的地标：不同画布的坐标不能直接比距离。
-     */
-    private Optional<PlacePoint> nearestLandmark(String map, MapViewService.MarkerView marker,
-                                                 MapProjection.Canvas geometry) {
-        PlacePoint target = null;
-        List<PlacePoint> candidates = new ArrayList<>();
-        for (PlacePoint p : places.all()) {
-            if (!map.equals(nz(p.map()))) {
-                continue;
-            }
-            if (marker.id().equals(p.ref())) {
-                target = p;
-            } else if (p.landmark() && nz(p.canvas()).equals(nz(marker.canvas()))) {
-                candidates.add(p);
-            }
-        }
-        if (target == null || candidates.isEmpty()) {
-            return Optional.empty();
-        }
-        double[] size = places.worldSizes().get(map);
-        double diagonal = RelativeLocation.diagonal(
-                size != null ? size : new double[]{geometry.width(), geometry.height()});
-        RelativeLocation.Neighbour neighbour = RelativeLocation.pickAnchor(target, candidates, diagonal);
-        return neighbour == null ? Optional.empty() : Optional.of(neighbour.anchor());
     }
 
     private static String nz(String s) {
