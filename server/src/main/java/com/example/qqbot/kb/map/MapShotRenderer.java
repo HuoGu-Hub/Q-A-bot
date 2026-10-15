@@ -63,6 +63,18 @@ public class MapShotRenderer {
     @FunctionalInterface
     public interface TileFetcher {
         Optional<MapImageCache.Image> get(String image, int width);
+
+        /**
+         * 登记一张「这次要画、但预算用完没去取」的瓦片。
+         *
+         * <p><b>为什么必须有这个通道</b>：调用方只看得见 {@link #get} 返回空的那种缺口，
+         * 而超预算时最常见的情形恰恰是**前一张取到了、只是太慢** —— 它不会出现在缺口里，
+         * 于是按需预热永远收不到活干，表现就是同一个点位问多少次都不出图。
+         *
+         * <p>默认空实现：只关心取图的调用方与测试不必实现它。
+         */
+        default void need(String image, int width) {
+        }
     }
 
     /**
@@ -119,6 +131,7 @@ public class MapShotRenderer {
             List<BufferedImage> base = new ArrayList<>();
             List<MapProjection.Box> baseBoxes = new ArrayList<>();
             int wanted = 0;
+            int skipped = 0;
             if (tiles != null && !tiles.isEmpty()) {
                 for (MapViewService.TileView tile : tiles) {
                     MapProjection.Box box = MapProjection.tileBox(canvas, tile.col(), tile.row());
@@ -127,8 +140,12 @@ public class MapShotRenderer {
                     }
                     wanted++;
                     if (System.currentTimeMillis() > deadlineAtMillis) {
-                        log.info("[MAP-SHOT] 取瓦片超预算，本次不出图（已取 {}/{} 张）", base.size(), wanted);
-                        return Optional.empty();
+                        // 超预算之后**不再取图**，但要把名字登记出去 —— 见 TileFetcher#need。
+                        // 直接 return 的话调用方拿到的是空缺口清单："取到了、只是太慢"会被误判成
+                        // "什么都不缺"，按需预热于是永远不补，同一个点位问多少次都不出图。
+                        skipped++;
+                        fetcher.need(tile.image(), tileWidth);
+                        continue;
                     }
                     Optional<MapImageCache.Image> got = fetcher.get(tile.image(), tileWidth);
                     if (got.isEmpty()) {
@@ -141,6 +158,11 @@ public class MapShotRenderer {
                         base.add(tileImage);
                         baseBoxes.add(box);
                     }
+                }
+                if (skipped > 0) {
+                    log.info("[MAP-SHOT] 取瓦片超预算，本次不出图（已取 {}/{} 张，{} 张已交给按需预热，{} 档）",
+                            base.size(), wanted, skipped, tileWidth);
+                    return Optional.empty();
                 }
                 if (base.size() < wanted) {
                     log.info("[MAP-SHOT] 底图缺瓦片（{}/{} 张），本次不出图 —— 半张图比没有图更糟",

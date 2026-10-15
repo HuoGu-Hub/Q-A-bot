@@ -144,6 +144,39 @@ class MapShotSourceTest {
         verify(warmer).warmAsync(eq(MAP), eq(CANVAS_PAGE), eq(List.of("t01.png")), anyInt());
     }
 
+    /**
+     * 只登记缺口、一张都不取的假渲染器 —— 复刻"取第一张就把预算耗光"的真实情形。
+     *
+     * <p>真实场景里渲染器会**取到**第一张瓦片（只是花了 6 秒，远超 2 秒预算），
+     * 所以那几张不会出现在 {@code get} 返回空的缺口里；旧实现直接 return，
+     * 调用方拿到空缺口清单 → 按需预热一直不补 → 同一个点位问多少次都不出图。
+     */
+    private static final class BudgetExhaustedRenderer extends MapShotRenderer {
+
+        BudgetExhaustedRenderer(MapOptions options) {
+            super(options);
+        }
+
+        @Override
+        public Optional<byte[]> render(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                       String background, List<Mark> marks, TileFetcher fetcher,
+                                       long deadlineAtMillis) {
+            tiles.forEach(tile -> fetcher.need(tile.image(), 640));
+            return Optional.empty();
+        }
+    }
+
+    @Test
+    @DisplayName("★ 超预算没取上的瓦片也要交给按需预热 —— 否则问多少次都不出图")
+    void handsBudgetSkippedTilesToWarmer() {
+        MapShotSource budgeted = new MapShotSource(view, places, images,
+                new BudgetExhaustedRenderer(options), warmer, options);
+
+        assertThat(budgeted.resolve(PlacePoint.keyOf(REF))).isEmpty();
+        verify(warmer).warmAsync(eq(MAP), eq(CANVAS_PAGE),
+                eq(List.of("t00.png", "t10.png", "t01.png", "t11.png")), eq(640));
+    }
+
     @Test
     @DisplayName("出图成功时不该去打扰预热")
     void noWarmWhenShotSucceeds() {

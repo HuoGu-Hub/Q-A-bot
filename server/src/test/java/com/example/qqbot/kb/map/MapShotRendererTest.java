@@ -102,11 +102,30 @@ class MapShotRendererTest {
     }
 
     @Test
-    @DisplayName("★ 超出取图预算就放弃，不把出站路径拖住")
-    void deadlineGivesUp() {
+    @DisplayName("★ 超出取图预算就放弃，不把出站路径拖住；但**没取上的瓦片必须登记出去**")
+    void deadlineGivesUpButReportsSkippedTiles() {
+        List<String> needed = new java.util.ArrayList<>();
+        List<String> fetched = new java.util.ArrayList<>();
+        MapShotRenderer.TileFetcher recording = new MapShotRenderer.TileFetcher() {
+            @Override
+            public Optional<MapImageCache.Image> get(String image, int width) {
+                fetched.add(image);
+                return Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+            }
+
+            @Override
+            public void need(String image, int width) {
+                needed.add(image);
+            }
+        };
+
         assertThat(renderer.render(CANVAS, TILES, "",
                 List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
-                whiteFetcher(), System.currentTimeMillis() - 1)).isEmpty();
+                recording, System.currentTimeMillis() - 1)).isEmpty();
+        // 一张都不该去取：预算已经用完，取图只会把出站路径拖住
+        assertThat(fetched).isEmpty();
+        // 缺口一张都不能少 —— 调用方要靠它去按需预热，否则同一个点位问多少次都不出图
+        assertThat(needed).containsExactlyInAnyOrder("t00.png", "t10.png", "t01.png", "t11.png");
     }
 
     @Test

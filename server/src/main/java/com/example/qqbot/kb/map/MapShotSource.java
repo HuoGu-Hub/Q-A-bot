@@ -95,16 +95,26 @@ public class MapShotSource implements ImageSource {
         });
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
-        // 顺手记下缺口：渲染器会把相交的瓦片都试一遍，所以这里拿到的是**完整**的缺失清单
+        // 缺口清单有两个来源：取失败的（get 返回空）与**超预算没去取的**（need）。
+        // 少记后者就等于"不漏图"这件事只对取失败的瓦片成立 —— 见 TileFetcher#need。
         List<String> missing = new ArrayList<>();
         int[] usedWidth = {0};
-        MapShotRenderer.TileFetcher fetcher = (image, width) -> {
-            usedWidth[0] = width;
-            Optional<MapImageCache.Image> got = images.get(map, canvas.page(), image, width);
-            if (got.isEmpty()) {
+        MapShotRenderer.TileFetcher fetcher = new MapShotRenderer.TileFetcher() {
+            @Override
+            public Optional<MapImageCache.Image> get(String image, int width) {
+                usedWidth[0] = width;
+                Optional<MapImageCache.Image> got = images.get(map, canvas.page(), image, width);
+                if (got.isEmpty()) {
+                    missing.add(image);
+                }
+                return got;
+            }
+
+            @Override
+            public void need(String image, int width) {
+                usedWidth[0] = width;
                 missing.add(image);
             }
-            return got;
         };
 
         Optional<byte[]> shot = renderer.render(geometry, canvas.tiles(), canvas.background(),
