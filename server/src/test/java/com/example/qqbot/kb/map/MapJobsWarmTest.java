@@ -19,8 +19,9 @@ import static org.mockito.Mockito.when;
  *
  * <h2>这里要守住的两件事</h2>
  * <ol>
- *   <li><b>档位必须和查看器真正会请求的一致</b>：白名单里的 {@code 1280} 前端永远不会请求
- *       （它在 {@code want >= 1280} 时换成 0 = 原图）。按配置循环去预热会白拉一百多张大图。</li>
+ *   <li><b>档位必须和真正会请求它的人一致</b>：查看器在 {@code want >= 1280} 时换成 0 = 原图，
+ *       所以它不请求 1280；<b>但地图出图会</b>（输出 1280、最小跨度 1200 → 选中 1280 档）。
+ *       1280 曾经因此被排除在预热之外，后果是出图永远拿不到预热好的瓦片。</li>
  *   <li><b>缺口要如实上报</b>：旧实现把成功数当全部、状态硬编码为成功，定时任务跑失败
  *       没人会发现。现在 {@code missing > 0} 就必须是"失败"。</li>
  * </ol>
@@ -95,25 +96,26 @@ class MapJobsWarmTest {
     }
 
     @Test
-    @DisplayName("★ 全量预热只请求查看器真正会用的档位：160/320/640/原图，绝不请求 1280")
-    void fullWarmCoversViewerTiersOnly(@TempDir Path dir) {
+    @DisplayName("★ 全量预热覆盖查看器与出图会用到的全部档位：160/320/640/1280/原图")
+    void fullWarmCoversViewerAndShotTiers(@TempDir Path dir) {
         CountingSource source = new CountingSource();
         MapOptions options = options(dir);
         MapJobs jobs = jobs(new MapImageCache(options, source), options);
 
         MapJobs.WarmReport report = jobs.warm(MapJobs.FULL_WARM_WIDTHS);
 
-        // 2 张瓦片 × 4 档 + 1 张底图 × 4 档 + 1 个图标（图标只有原图一档）
+        // 2 张瓦片 × 5 档 + 1 张底图 × 5 档 + 1 个图标（图标只有原图一档）
         assertThat(source.asked).containsExactlyInAnyOrder(
-                "0_0.jpg@160", "0_0.jpg@320", "0_0.jpg@640", "0_0.jpg@0",
-                "0_1.jpg@160", "0_1.jpg@320", "0_1.jpg@640", "0_1.jpg@0",
-                "bg.jpg@160", "bg.jpg@320", "bg.jpg@640", "bg.jpg@0",
+                "0_0.jpg@160", "0_0.jpg@320", "0_0.jpg@640", "0_0.jpg@1280", "0_0.jpg@0",
+                "0_1.jpg@160", "0_1.jpg@320", "0_1.jpg@640", "0_1.jpg@1280", "0_1.jpg@0",
+                "bg.jpg@160", "bg.jpg@320", "bg.jpg@640", "bg.jpg@1280", "bg.jpg@0",
                 "Enemy_Camp.png@0");
-        // 显式再挡一次最容易踩的那个坑：配置白名单里有 1280，但那不是查看器的档位
-        assertThat(source.asked).noneMatch(a -> a.endsWith("@1280"));
+        // ★ 出图选的就是 1280 档（见 MapShotRenderer.pickTileWidth）：不预热它，
+        //   每个新点位第一次问必然没图 —— 这条断言就是把那个回归钉住
+        assertThat(source.asked).contains("0_0.jpg@1280", "0_1.jpg@1280", "bg.jpg@1280");
 
-        assertThat(report.total()).isEqualTo(13);
-        assertThat(report.fetched()).isEqualTo(13);
+        assertThat(report.total()).isEqualTo(16);
+        assertThat(report.fetched()).isEqualTo(16);
         assertThat(report.cached()).isZero();
         assertThat(report.missing()).isZero();
         assertThat(report.ok()).isTrue();
@@ -150,7 +152,7 @@ class MapJobsWarmTest {
         MapJobs.WarmReport second = jobs.warm(MapJobs.FULL_WARM_WIDTHS);
 
         assertThat(second.fetched()).isZero();
-        assertThat(second.cached()).isEqualTo(13);
+        assertThat(second.cached()).isEqualTo(16);
         assertThat(second.ok()).isTrue();
         assertThat(source.asked).hasSize(firstRound);
     }
@@ -164,10 +166,10 @@ class MapJobsWarmTest {
 
         MapJobs.WarmReport report = jobs.warm(MapJobs.FULL_WARM_WIDTHS);
 
-        assertThat(report.total()).isEqualTo(13);
+        assertThat(report.total()).isEqualTo(16);
         assertThat(report.fetched()).isZero();
         assertThat(report.cached()).isZero();
-        assertThat(report.missing()).isEqualTo(13);
+        assertThat(report.missing()).isEqualTo(16);
         assertThat(report.ok()).as("有缺口就必须是失败，不能显示成功").isFalse();
         // "文件不存在"按文件记、不按档位记：4 个文件只问上游 4 次，其余档位直接挡掉
         assertThat(source.asked).hasSize(4);
