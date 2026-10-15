@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雾锁王国 3D 地图实现方案 · 路线评估</title>
+<style>
+:root{--bg:#fff;--soft:#f7f8fa;--code:#f4f6f8;--fg:#1f2328;--fg2:#57606a;--fg3:#8b949e;
+--bd:#d8dee4;--bd2:#e6eaef;--ac:#2563eb;--acs:#eff4ff;--wn:#b45309;--wnb:#fffbeb;--ok:#15803d;
+--r:10px;--content:900px}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--soft:#161b22;--code:#161b22;--fg:#e6edf3;
+--fg2:#9198a1;--fg3:#6e7681;--bd:#30363d;--bd2:#21262d;--ac:#6ea8fe;--acs:#16233a;--wn:#f0b429;
+--wnb:#2a2109;--ok:#4ade80}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font-size:16px;line-height:1.8;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif}
+.wrap{max-width:var(--content);margin:0 auto;padding:56px 24px 96px}
+h1{font-size:2rem;line-height:1.3;margin:0 0 6px}
+h2{font-size:1.28rem;margin:46px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--bd2)}
+h3{font-size:1.04rem;margin:26px 0 10px}
+.lede{color:var(--fg2);margin:0 0 8px}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font-size:.88em;
+font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+pre{background:var(--code);border:1px solid var(--bd2);border-radius:var(--r);padding:14px 16px;
+overflow:auto;font-size:.85rem;line-height:1.6}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.93rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--bd2);vertical-align:top}
+th{background:var(--soft);font-weight:600}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--acs);border-left:3px solid var(--ac);border-radius:0 var(--r) var(--r) 0}
+blockquote p{margin:0}
+.warn{background:var(--wnb);border-left:3px solid var(--wn);padding:12px 18px;border-radius:0 var(--r) var(--r) 0;margin:16px 0}
+.warn p{margin:0}
+.ok{background:var(--soft);border-left:3px solid var(--ok);padding:12px 18px;border-radius:0 var(--r) var(--r) 0;margin:16px 0}
+.ok p{margin:0}
+.meta{color:var(--fg3);font-size:.88rem}
+ol,ul{padding-left:1.4em}
+li{margin:4px 0}
+hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
+figure{margin:20px 0}
+figure img{width:100%;border:1px solid var(--bd2);border-radius:var(--r);display:block}
+figcaption{color:var(--fg3);font-size:.86rem;margin-top:8px}
+.pick{border:1px solid var(--ok);border-radius:var(--r);padding:2px 10px;font-size:.8rem;color:var(--ok)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>雾锁王国 3D 地图实现方案</h1>
+<p class="lede">3D 地图与标点显示的三种路径 · 含实测结论与工作量评估</p>
+<p class="meta">项目：飘雪喵问答机器人　｜　评估日期：2026-10-15　｜　现状：公开站 <code>/map</code> 为 2D 画布</p>
+
+<h2>一、结论</h2>
+<ol>
+<li><b>能做</b>，而且 3D 场景本身不难。难点不在渲染，在<b>高程数据从哪来</b>。</li>
+<li><b>你现在手上的底图不含地貌信息</b>，无法反推出地形起伏。已实测，见第二节。</li>
+<li>所以「游戏地图」和「找地方」这两件事应该分开：<b>2D 保留为主界面，3D 做可选视图</b>。3D 在找点上并不比 2D 好，它的价值是展示与氛围。</li>
+<li>建议先做不依赖任何新数据的<b>方案 A</b>，把 3D 框架立起来；真地形作为后续升级，优先走<b>方案 B</b> 的授权路线。</li>
+</ol>
+
+<h2>二、实测：底图能不能反推地形</h2>
+<p>项目已缓存 Embervale 底图 <b>64 张 1280×1280 瓦片</b>，覆盖 <code>10240×10240</code>，与画布 extent 完全一致。这看起来是个现成的高程来源：地图上的明暗就是山体阴影。于是做了实测。</p>
+<figure>
+<img src="雾锁王国3D地图-底图拼接.png" alt="由 64 张瓦片拼接的 Embervale 底图">
+<figcaption>由缓存瓦片拼接的 Embervale 底图。这是游戏内地图的纹理本身，外围紫色是 Shroud 覆盖区，青色是水体。它是一张<b>俯视示意纹理</b>，不是地貌渲染。</figcaption>
+</figure>
+<p>把底图亮度当作高程代理，与本项目已有的真实高程图做配准搜索，遍历四种翻转与 ±40 像素的平移：</p>
+<table>
+<tr><th>对照方式</th><th>相关系数</th></tr>
+<tr><td>原始对齐</td><td>+0.109</td></tr>
+<tr><td>最优配准，翻转 rot180 加偏移 36,36</td><td>+0.160</td></tr>
+</table>
+<div class="warn"><p><b>此路不通。</b>最优配准下相关系数仅 +0.16，说明底图的明暗与真实地形高度基本无关。底图内容偏平，且被 Shroud 紫雾与水体配色主导。想靠它做出可信的地形起伏，只会得到一片随机噪点。</p></div>
+
+<h2>三、三条路线</h2>
+<table>
+<tr><th>路线</th><th>高程来源</th><th>授权</th><th>视觉效果</th><th>工作量</th></tr>
+<tr><td><b>A</b> 立体展示层</td><td>无，用平面加厚度</td><td>现有 CC BY-NC-SA 底图</td><td>有透视、可旋转、点位立体</td><td>2 至 3 天</td></tr>
+<tr><td><b>B</b> 授权接真地形</td><td>gamevault 的高程数据</td><td>需向对方取得许可</td><td>与目标站点一致</td><td>1 至 2 天，叠加在 A 之上</td></tr>
+<tr><td><b>C</b> 自建提取管线</td><td>自己安装的游戏本体</td><td>完全自主</td><td>与目标站点一致</td><td>2 至 4 周</td></tr>
+</table>
+
+<h3>方案 A · 立体展示层 <span class="pick">建议先做</span></h3>
+<p>不引入任何新数据，把现有底图与点位放进 Three.js 场景，做出真正的三维观看体验。</p>
+<ul>
+<li><b>地表</b>：把 64 张瓦片拼成贴图，按块切成纹理按需加载，避免一次拉 131MB。地表做成带厚度的地块，侧边给一个深色截面，视觉上像一块浮空的立体模型。</li>
+<li><b>点位</b>：1703 个点位用实例化 billboard 绘制，直接复用现有分组图标。每个点位加一道竖直光柱，让它在斜视角下也能被看见，并按距离做遮挡与淡出。</li>
+<li><b>相机</b>：OrbitControls 做旋转、俯仰、缩放；限制俯仰角不小于 25 度，避免看到地表的零厚度侧面。</li>
+<li><b>命中检测</b>：射线拾取替代现有的屏幕距离命中。现有 <code>hitTestAll</code> 的「同一点位堆叠」语义要一并迁移，尖塔那种重叠点位在 3D 里更容易被挡住。</li>
+<li><b>坐标对接</b>：<code>mapMath.ts</code> 已经把换算拆成了纯函数，3D 只需再加一层 <code>world → 三维坐标</code> 的映射，<code>crs</code> 与 <code>world</code> 两层直接复用，不需要改动现有 2D 代码。</li>
+<li><b>性能</b>：three 打包后约 600KB，必须走动态 import，只在用户切到 3D 时才加载，否则会拖慢主要用于找点的地图页。</li>
+</ul>
+<div class="warn"><p><b>要接受的前提</b>：没有真实起伏。这块是平的，所有点位都在同一高度。看着比 2D 有层次，但不是目标站点那种「山脉真的立起来」的效果。</p></div>
+
+<h3>方案 B · 授权接真地形</h3>
+<p>目标站点的高程数据已经把游戏世界烘焙成了 <code>2560²</code> 与 <code>5120²</code> 两级网格，体素边长 4 米与 2 米，另有洞穴体素分块。拿到它，方案 A 的地表换成真实高程网格即可，其余全部复用。</p>
+<ul>
+<li><b>先做的一件事是发信询问</b>。对方站底有 <code>/contact</code>，本身是逆向社区性质的项目。取得书面许可后，无论接数据还是后续维护都站得住。</li>
+<li>若对方只肯授权「引用与链接」，退一步是只取高程、自己配色重渲，并在页面署名。</li>
+<li>若对方拒绝，直接跳到方案 C，不要绕过 robots 硬接。</li>
+</ul>
+
+<h3>方案 C · 自建提取管线</h3>
+<p>从自己安装的游戏本体读世界数据，自己生成高程。目标站点的前端里就带着这套读取器的实现思路：8×8×8 体素砖块、游程编码的材质与密度双流、以及 <code>zstd</code> 帧的存档容器。</p>
+<ul>
+<li>工作量大在存储格式的逆向与校验，以及一次完整的世界烘焙。</li>
+<li>好处是完全自主，不依赖任何第三方授权，游戏更新后也能自己重跑。</li>
+<li>本项目后端是 Java，需要新写一份体素容器解析；现有物品知识库那条链路与此无关，不会互相影响。</li>
+</ul>
+
+<h2>四、建议的落地顺序</h2>
+<table>
+<tr><th>步骤</th><th>内容</th><th>产出</th></tr>
+<tr><td>1</td><td>先确证 <code>units-per-meter</code>，按勘察结论填 1 并做一次游戏内实测核对</td><td>米制描述上线，3D 也有了比例依据</td></tr>
+<tr><td>2</td><td>做方案 A，3D 作为 <code>/map</code> 上的可选视图切换</td><td>可旋转的立体地图与点位</td></tr>
+<tr><td>3</td><td>同时向 gamevault 发信询问授权</td><td>决定能否进入方案 B</td></tr>
+<tr><td>4</td><td>有授权则接真地形；无授权且确有必要，再评估方案 C</td><td>真实起伏</td></tr>
+</table>
+
+<h2>五、明确不做的事</h2>
+<ul>
+<li><b>不从前端再抓一次地形数据</b>。对方 <code>robots.txt</code> 禁止 <code>/data/</code> 路径，产品化使用必须先取得许可。</li>
+<li><b>不用程序噪声伪造地形</b>。玩家会拿它和游戏内地图对照，假的起伏只会让人误判位置。</li>
+<li><b>不用 3D 取代 2D</b>。找地方时俯视正交视角是最快的，斜视角反而增加判断成本。</li>
+</ul>
+<p class="meta">评估方式：拼接项目已缓存的 64 张底图瓦片，与既有高程图做配准搜索验证高程可提取性；阅读 <code>mapMath.ts</code>、<code>types.ts</code> 与公开地图视图确认接入点。</p>
+
+</div>
+</body>
+</html>
