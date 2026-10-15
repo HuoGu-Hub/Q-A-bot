@@ -18,7 +18,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Tabs from '@shared/ui/Tabs.vue'
-import Panel from '@shared/ui/Panel.vue'
 import Input from '@shared/ui/Input.vue'
 import { toast } from '@shared/ui/toast'
 import Button from '@shared/ui/Button.vue'
@@ -83,6 +82,25 @@ const blocks = computed(() => pages.value[page.value] ?? [])
 const keyOf = (b: Block) => `${b.page}.${b.key}`
 const val = (b: Block) => changed.value[keyOf(b)] ?? b.text
 const isChanged = (b: Block) => keyOf(b) in changed.value && changed.value[keyOf(b)] !== b.text
+
+/**
+ * 这一页的状态：**改过几块**（库里存了覆盖行）与**几处没保存**（只在浏览器里）。
+ * 两件事分开数：前者是公开站现在的样子，后者还只在你屏幕上。
+ */
+const overriddenCount = computed(() => blocks.value.filter(b => b.overridden).length)
+const dirtyCount = computed(() => blocks.value.filter(isChanged).length)
+
+/**
+ * 撤销这一处未保存的改动（本地）。
+ *
+ * <p>和「恢复默认」不是一回事：那个是让公开站回到代码里的默认值（要发请求删覆盖行），
+ * 这个只是把还没发出去的一次编辑丢掉。所以两者的按钮文字也不一样。
+ */
+function discardLocal(b: Block) {
+  const next = { ...changed.value }
+  delete next[keyOf(b)]
+  changed.value = next
+}
 
 /** 填写说明弹窗：写标记、占位符、多行块的规矩集中在一处，不再挤在每块下面 */
 const helpOpen = ref(false)
@@ -183,17 +201,32 @@ onMounted(load)
     <SiteInfoPanel v-else-if="page === SITE_KEY" />
 
     <div v-else class="cols">
-      <div class="panel-wrap">
+      <!--
+        稿纸列。
+        不再把整列包进一个大面板：面板是"盒子"，而这一列是**一张连续改下去的稿纸** ——
+        盒子套盒子会让每块看着各自独立，反而看不出"这一页一共改了几处、改到哪了"。
+        页面名也不在这里重复一遍：上面的页签已经写着你在哪一页。
+      -->
+      <div class="galley">
         <div v-if="loading" class="muted">读取中…</div>
 
-        <Panel v-else-if="blocks.length" :title="blocks[0].pageLabel" :count="blocks.length + ' 块'">
-          <div v-for="b in blocks" :key="keyOf(b)" class="blk" :class="{ changed: isChanged(b) }">
+        <template v-else-if="blocks.length">
+          <!-- 状态条：只在真的有改动时出现。空着的时候它一个字都不占 -->
+          <div v-if="overriddenCount || dirtyCount" class="galley-status">
+            <span v-if="overriddenCount" class="status-item">
+              <b class="num">{{ overriddenCount }}</b> 块改过
+            </span>
+            <span v-if="dirtyCount" class="status-item status-item--dirty">
+              <b class="num">{{ dirtyCount }}</b> 处未保存
+            </span>
+          </div>
+
+          <div v-for="b in blocks" :key="keyOf(b)" class="blk"
+               :class="{ changed: b.overridden || isChanged(b) }">
             <div class="blk-head">
               <span class="blk-label">{{ b.label }}</span>
               <Tag v-if="b.overridden" tone="flame">改过</Tag>
               <span v-if="b.hint" class="faint blk-hint">{{ b.hint }}</span>
-              <span class="spacer" />
-              <Button v-if="b.overridden" size="sm" :disabled="saving" @click="resetBlock(b)">恢复默认</Button>
             </div>
             <!--
               ⚠️ aria-label 是必须的：上一行那块标签文字只是"看起来像标签"，
@@ -208,17 +241,34 @@ onMounted(load)
               :aria-label="b.label"
               @update:model-value="(v: string) => onEdit(b, v)"
             />
+
+            <!--
+              校样边栏：只有**覆盖过或正在改**的条目才展开。
+              它回答的是改完之后人心里那个问题：「原来的字是什么、要不要退回去」——
+              所以恢复动作紧贴它要恢复的值，而不是飘在标题行右边。
+              （2026-09-27 曾把「默认：<原文>」从**每一块**下面删掉，理由是噪声；
+               这里只在有对照价值时才出现，而且带着动作，不是同一种东西。）
+            -->
+            <div v-if="b.overridden || isChanged(b)" class="proof">
+              <span class="proof-key">默认</span>
+              <del class="proof-default">{{ b.defaultText }}</del>
+              <!-- 两件事分开：撤销的是还没发出去的一次编辑，恢复默认动的是公开站。
+                   都成立时两个都给 —— 否则「恢复默认」会顺手丢掉你刚打的字。 -->
+              <Button v-if="isChanged(b)" size="sm" @click="discardLocal(b)">撤销修改</Button>
+              <Button v-if="b.overridden" size="sm" :disabled="saving" @click="resetBlock(b)">
+                恢复默认
+              </Button>
+            </div>
+
             <!--
               填写帮助（怎么写标记、能写哪些占位符）—— 它是「怎么填」的说明，
               所以跟着输入框走，而不是挂在页面工具栏上。
-              原先这里放的是「默认：<原文>」，已删：恢复默认是按钮的事，
-              把原文摊在每块下面只是噪声。
             -->
             <div class="faint blk-help">
               可用 <code>[文字](链接)</code>、<code>**加粗**</code>；占位符 <code>{kb}</code>、<code>{year}</code>
             </div>
           </div>
-        </Panel>
+        </template>
 
         <p v-else class="faint note">这个页面没有可编辑的固定文案。</p>
       </div>
@@ -316,13 +366,28 @@ onMounted(load)
   .preview-col { position: static; }
 }
 
-.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+/* ---------- 稿纸列 ----------
+   不再是"面板里的一堆块"：这一列是一张**连续改下去的稿纸**，所以没有外层盒子，
+   也没有标题 —— 上面的页签已经写着你在哪一页，再写一遍是重复。 */
+.galley { display: flex; flex-direction: column; min-width: 0; }
 
-/* 动作行已上移到页面栏（AdminPage#actions），这里不再自己排一条。
-   .spacer 仍留给下面每个文案块的标题行（把「恢复默认」顶到右边）。 */
-.spacer { flex: 1; }
-/* 空态那句「这个页面没有可编辑的固定文案」用。
-   原来这条是给工具栏那行「本页 N 块」计数的，计数删掉后样式留下给空态用。 */
+/* 状态条：只在真的有改动时出现，没改动时一个字都不占位置。
+   两件事分开说 —— 「改过」是公开站现在的样子，「未保存」还只在你屏幕上。 */
+.galley-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-3) var(--sp-3);
+  font-size: var(--fs-meta);
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--hairline);
+}
+.status-item { display: inline-flex; align-items: baseline; gap: 4px; }
+.status-item b { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--ink-dim); }
+/* 还没保存的那一处用灵火：它是"最该先看一眼"的东西 */
+.status-item--dirty b { color: var(--flame); }
+
+/* 空态那句「这个页面没有可编辑的固定文案」用 */
 .note { font-size: var(--fs-meta); margin: 0; }
 
 /* ---------- 填写说明弹窗 ---------- */
@@ -347,18 +412,66 @@ onMounted(load)
 }
 .help b { color: var(--ink); font-weight: var(--fw-medium); }
 
-/* 每块文案：标题行 + 输入 + 默认值回显。
+/* 每块文案：标题行 + 输入 +（改过时）校样边栏。
    同级之间用发丝线 + 留白分隔（留白比线更重要）。 */
-.blk { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-2); }
+.blk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-3);
+  border-radius: var(--r-sm);
+}
 .blk + .blk { border-top: 1px solid var(--hairline); }
-.blk:first-of-type { padding-top: var(--sp-2); }
-/* 改动高亮：背景 + 内阴影，不动布局 */
-.blk.changed { background: var(--flame-veil); box-shadow: inset 2px 0 0 var(--flame); border-radius: var(--r-sm); }
+/* 改动高亮：火色内阴影 + 淡底，不动布局。
+   ⚠️ 这条与预览里"改过的块"是**同一条规矩**（火色 = 已改动）——
+   两栏共用一套语言，学一次两处都认。 */
+.blk.changed { background: var(--flame-veil); box-shadow: inset 2px 0 0 var(--flame); }
+
+/* 校样边栏：默认值（已被取代的那一版）+ 恢复动作。
+   只有覆盖过或正在改的条目才展开 —— 它回答的是"原来的字是什么、要不要退回去"，
+   所以恢复动作紧贴它要恢复的值，而不是飘在标题行右边。 */
+.proof {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-top: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+  box-shadow: var(--bevel-inset);
+}
+.proof-key {
+  flex: none;
+  font-size: var(--fs-meta);
+  color: var(--ink-faint);
+  letter-spacing: .04em;
+}
+/* ⚠️ 默认值是**真内容**，不是装饰：用 --ink-faint（= --ink-3，下限 4.8:1）。
+   --ink-4 是刻痕与禁用态专用的，对比度不足以承载正文。 */
+.proof-default {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-meta);
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 
 .blk-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .blk-label { font-size: var(--fs-body); font-weight: var(--fw-medium); }
 .blk-hint { font-size: var(--fs-meta); }
-.blk-help { font-size: var(--fs-meta); overflow-wrap: anywhere; }
+/* 填写帮助：只在**正在编辑的那一块**出现。
+   同一句话在十几块下面各来一遍就是噪声 —— 而「填写说明」弹窗里本来就有一份完整的。
+   跟着输入框走仍然成立：需要它的时刻，正是你在这一块里打字的时候。
+   ⚠️ 用 opacity 而不是 display:none：位置一直留着，出现时不跳版。 */
+.blk-help {
+  font-size: var(--fs-meta);
+  overflow-wrap: anywhere;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.blk:focus-within .blk-help { opacity: 1; }
 .blk-help code {
   padding: 0 4px;
   border-radius: 3px;
