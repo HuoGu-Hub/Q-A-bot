@@ -134,6 +134,35 @@ public class MapImageCache {
         }
     }
 
+    /**
+     * **只看缓存**：命中就返回，没命中返回空，一次出站都不发。
+     *
+     * <p>给"回复路径上的取图"用：地图出图要画十几个分组图标，图标没预热到时，
+     * 宁可这张图少一个图标，也不能让群友等一次上游请求 —— 出站还是全局串行节流的，
+     * 一张就是好几秒。要"没有就去取"的语义请用 {@link #get}。
+     */
+    public Optional<Image> cached(String map, String page, String name, int width) {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        String file;
+        try {
+            file = safeName(name);
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        Path target = pathOf(map, page, file, normalizeWidth(width));
+        if (!Files.isRegularFile(target)) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new Image(Files.readAllBytes(target), mimeOf(file), true));
+        } catch (IOException e) {
+            log.warn("[MAP-IMG] 缓存读取失败，本次当没有这张图：{} —— {}", target, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
     private static String nz(String s) {
         return s == null ? "" : s;
     }
