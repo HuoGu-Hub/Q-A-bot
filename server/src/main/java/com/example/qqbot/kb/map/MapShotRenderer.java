@@ -12,7 +12,10 @@ import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -48,6 +51,24 @@ public class MapShotRenderer {
 
     /** 底图没盖到的地方露出来的底色 —— 用深灰而不是纯黑，免得看着像"数据缺失" */
     private static final Color BACKGROUND = new Color(24, 28, 34);
+
+    /** 标签底色：半透明黑。与圈一样要打底 —— 浅色雪原与深色林地都得读得出来 */
+    private static final Color LABEL_BG = new Color(0, 0, 0, 165);
+    private static final Color LABEL_TEXT = new Color(255, 255, 255);
+
+    /**
+     * 画标签优先用哪些字体。
+     *
+     * <p>地点名是中文，而运行环境（容器）不一定装了中文字体：装不上时会画出一排方框，
+     * 比不画更糟。所以按这张表逐个试 {@code canDisplayUpTo}，都不行再扫系统字体，
+     * 实在没有就**放弃文字**、圈照画 —— 图本身还是能用的。
+     */
+    private static final String[] LABEL_FONTS = {
+            "Noto Sans SC", "Noto Serif SC", "Noto Sans CJK SC", "Source Han Sans SC",
+            "WenQuanYi Zen Hei", "Microsoft YaHei", "SimHei", "PingFang SC", Font.SANS_SERIF};
+
+    /** 已经选中的字体族 —— 字体表查询不便宜，而一张图要问好几次 */
+    private static volatile String labelFamily;
     private static final Color PRIMARY = new Color(230, 40, 40);
     private static final Color PRIMARY_HALO = Color.WHITE;
     private static final Color SECONDARY = new Color(255, 196, 0);
@@ -195,7 +216,7 @@ public class MapShotRenderer {
                 drawTile(g, base.get(i), baseBoxes.get(i), vp, k);
                 used++;
             }
-            drawMarks(g, marks, vp, k, outW);
+            drawMarks(g, marks, vp, k, outW, outH);
         } finally {
             g.dispose();
         }
@@ -242,17 +263,21 @@ public class MapShotRenderer {
     /**
      * 画标记。
      *
-     * <p>目标点是白圈打底 + 红圈 + 十字，地标是暗圈打底 + 黄圈。
+     * <p>目标点是白圈打底 + 红圈 + 十字，地标是暗圈打底 + 黄圈，两者旁边都写上名字。
      * 为什么要打底：底图有浅色的雪原也有深色的林地，单色圈总有一半糊在里面看不见。
      */
     private static void drawMarks(Graphics2D g, List<Mark> marks, MapProjection.Viewport vp,
-                                  double k, int outW) {
+                                  double k, int outW, int outH) {
         int r = Math.max(7, outW / 90);
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         for (Mark m : marks) {
             double sx = (m.x() - vp.left()) * k;
             double sy = (m.y() - vp.top()) * k;
+            int radius;
             if (m.primary()) {
+                radius = r;
                 ring(g, sx, sy, r, PRIMARY_HALO, 4.5f);
                 ring(g, sx, sy, r, PRIMARY, 2.5f);
                 g.setColor(PRIMARY);
@@ -264,11 +289,95 @@ public class MapShotRenderer {
                 g.drawLine((int) sx, (int) sy - arm, (int) sx, (int) sy - gap);
                 g.drawLine((int) sx, (int) sy + gap, (int) sx, (int) sy + arm);
             } else {
-                int small = Math.max(5, (int) Math.round(r * 0.65));
-                ring(g, sx, sy, small, SECONDARY_HALO, 4f);
-                ring(g, sx, sy, small, SECONDARY, 2f);
+                radius = Math.max(5, (int) Math.round(r * 0.65));
+                ring(g, sx, sy, radius, SECONDARY_HALO, 4f);
+                ring(g, sx, sy, radius, SECONDARY, 2f);
+            }
+            drawLabel(g, m, sx, sy, radius, outW, outH);
+        }
+    }
+
+    /**
+     * 在圈旁边写上名字 —— {@link Mark#label()} 存在的理由。
+     *
+     * <p><b>没有名字的圈等于没有参照</b>：读图的人知道"目标点在某个黄圈的西南方"，
+     * 却不知道那个黄圈是远古尖塔还是火焰神龛，于是这张图只能定"在哪一片"，
+     * 定不了"在哪"。目标点与地标都要写，方位关系才成立。
+     *
+     * <p>文字与圈一样要打底：深色半透明胶囊 + 白字，浅色雪原与深色林地都读得出来。
+     * 位置默认在圈右侧，右边放不下就翻到左侧，再夹进图内。
+     */
+    private static void drawLabel(Graphics2D g, Mark m, double sx, double sy, int radius,
+                                  int outW, int outH) {
+        String text = m.label() == null ? "" : m.label().strip();
+        if (text.isEmpty()) {
+            return;
+        }
+        Font base = labelFont(text);
+        if (base == null) {
+            // 一个能显示这段字的字体都没有：宁可不写，也不要画一排方框
+            return;
+        }
+        int size = Math.max(12, outW / 64);
+        Font font = base.deriveFont((float) size);
+        FontMetrics fm = g.getFontMetrics(font);
+        int padX = Math.max(6, size / 3);
+        int padY = Math.max(3, size / 6);
+        int w = fm.stringWidth(text) + padX * 2;
+        int h = fm.getHeight() + padY * 2;
+        int gap = Math.max(4, radius / 2);
+
+        int x = (int) Math.round(sx) + radius + gap;
+        if (x + w > outW - 4) {
+            x = (int) Math.round(sx) - radius - gap - w;
+        }
+        x = Math.max(4, Math.min(x, Math.max(4, outW - w - 4)));
+        int y = (int) Math.round(sy) - h / 2;
+        y = Math.max(4, Math.min(y, Math.max(4, outH - h - 4)));
+
+        g.setColor(LABEL_BG);
+        g.fillRoundRect(x, y, w, h, h, h);
+        if (m.primary()) {
+            // 目标点的标签描一圈红边，与红圈对应；地标不描边，读的时候一眼分得开
+            g.setColor(PRIMARY);
+            g.setStroke(new BasicStroke(2f));
+            g.drawRoundRect(x, y, w, h, h, h);
+        }
+        g.setFont(font);
+        g.setColor(LABEL_TEXT);
+        g.drawString(text, x + padX, y + padY + fm.getAscent());
+    }
+
+    /**
+     * 挑一个能显示这段文字的字体；一个都挑不到返回 {@code null}。
+     *
+     * <p>先看上次选中的（{@link #labelFamily}），再从偏好表里找，最后扫系统全部字体。
+     * 结果缓存下来：{@code getAvailableFontFamilyNames} 不便宜，而每张图要问好几次。
+     */
+    private static Font labelFont(String text) {
+        String cached = labelFamily;
+        if (cached != null) {
+            Font f = new Font(cached, Font.PLAIN, 1);
+            if (f.canDisplayUpTo(text) < 0) {
+                return f;
             }
         }
+        for (String family : LABEL_FONTS) {
+            Font f = new Font(family, Font.PLAIN, 1);
+            if (f.canDisplayUpTo(text) < 0) {
+                labelFamily = f.getFamily();
+                return f;
+            }
+        }
+        for (String family : GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getAvailableFontFamilyNames()) {
+            Font f = new Font(family, Font.PLAIN, 1);
+            if (f.canDisplayUpTo(text) < 0) {
+                labelFamily = f.getFamily();
+                return f;
+            }
+        }
+        return null;
     }
 
     private static void ring(Graphics2D g, double x, double y, int r, Color color, float width) {

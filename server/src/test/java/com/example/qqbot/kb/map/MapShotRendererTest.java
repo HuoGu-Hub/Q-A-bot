@@ -129,6 +129,23 @@ class MapShotRendererTest {
     }
 
     @Test
+    @DisplayName("★ 目标点与地标都要写上名字 —— 没有名字的圈定不了位")
+    void drawsLabelsForMarks() throws IOException {
+        // 用纯白瓦片当底图：那片区域默认是白的，多出来的深色像素只可能来自标签胶囊
+        byte[] quiet = renderer.render(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
+                whiteFetcher(), System.currentTimeMillis() + 5000).orElseThrow();
+        byte[] labelled = renderer.render(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Mark(1280, 1280, true, "Iron Mine"),
+                        new MapShotRenderer.Mark(1980, 1280, false, "Flame Shrine")),
+                whiteFetcher(), System.currentTimeMillis() + 5000).orElseThrow();
+
+        assertThat(darkPixels(ImageIO.read(new ByteArrayInputStream(labelled))))
+                .as("写了名字就一定有字与底衬画上去")
+                .isGreaterThan(darkPixels(ImageIO.read(new ByteArrayInputStream(quiet))) + 200);
+    }
+
+    @Test
     @DisplayName("既没有瓦片也没有整图：画不出来，老实返回空")
     void noBaseMapGivesUp() {
         assertThat(renderer.render(CANVAS, List.of(), "", List.of(new MapShotRenderer.Mark(1280, 1280, true, "")),
@@ -163,6 +180,20 @@ class MapShotRendererTest {
 
     private static boolean hasAmberNear(BufferedImage img, int cx, int cy, int radius) {
         return anyPixel(img, cx, cy, radius, (r, g, b) -> r > 170 && g > 120 && b < 120 && r - b > 80);
+    }
+
+    /** 整张图里"明显偏暗"的像素数 —— 白底图上，只有标签胶囊与圈会把它抬起来 */
+    private static int darkPixels(BufferedImage img) {
+        int n = 0;
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int rgb = img.getRGB(x, y);
+                if (((rgb >> 16) & 0xFF) < 150 && ((rgb >> 8) & 0xFF) < 150 && (rgb & 0xFF) < 150) {
+                    n++;
+                }
+            }
+        }
+        return n;
     }
 
     private static boolean isWhiteNear(BufferedImage img, int cx, int cy) {

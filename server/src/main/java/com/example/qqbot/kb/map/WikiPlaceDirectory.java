@@ -205,7 +205,17 @@ public class WikiPlaceDirectory implements PlaceDirectory {
         if (base.isBlank()) {
             base = article == null ? "未命名点位" : article;
         }
-        return region == null || region.isBlank() ? base : base + "·" + region;
+        if (region == null || region.isBlank()) {
+            return base;
+        }
+        // 词条本身就是区域时（实测：雾水盆地里的酒馆，article 直接指向 Veilwater Basin），
+        // 再挂一次区域只会得到「雾水盆地·雾水盆地」—— 挂上去等于没挂。
+        // 这时 wiki 自己的名字更有信息量：读图的人要的是"是哪个酒馆"，不是"又一条区域名"。
+        if (region.equals(base)) {
+            String own = nz(m.name());
+            return own.isBlank() || own.equals(base) ? base : own;
+        }
+        return base + "·" + region;
     }
 
     /**
