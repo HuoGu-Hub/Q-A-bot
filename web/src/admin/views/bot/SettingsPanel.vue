@@ -9,7 +9,7 @@
  * defineExpose 把这些动作抛出去 —— 按钮要调的是面板内部状态，
  * 视图拿不到，所以必须这样开口子。
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { SettingsView, SettingItem } from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
@@ -26,6 +26,17 @@ const groups = ref<Record<string, SettingsView['groups'][string]>>({})
 
 /** 改动缓冲：只有改过的项才会提交 */
 const changed = ref<Record<string, unknown>>({})
+
+/**
+ * 不归 Bot 配置管的分组。
+ *
+ * <p>它们描述的是**公开站长什么样**（轮播怎么播、加群信息怎么写），与机器人怎么回答无关，
+ * 已经搬到「页面信息」：轮播那 4 项在轮播面板里，站点信息是它的一个页签。
+ * 两边都显示过一次 —— 改的人分不清哪边是真的，所以从这里摘掉。
+ */
+const SITE_GROUPS = ['首页轮播', '站点信息']
+const botGroups = computed(() => Object.fromEntries(
+  Object.entries(groups.value).filter(([name]) => !SITE_GROUPS.includes(name))))
 
 /**
  * 折叠状态：默认【全部收起】。
@@ -136,7 +147,7 @@ onMounted(load)
 
     <template v-else>
       <Panel
-        v-for="(items, group) in groups"
+        v-for="(items, group) in botGroups"
         :key="group + '-' + gen"
         :title="String(group)"
         :count="items.length + ' 项'"

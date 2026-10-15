@@ -27,6 +27,7 @@ import Modal from '@shared/ui/Modal.vue'
 import { INLINE_MARKUP_HINT } from '@/public/renderInline'
 import PagePreview from './pages/PagePreview.vue'
 import CarouselPanel from './pages/CarouselPanel.vue'
+import SiteInfoPanel from './pages/SiteInfoPanel.vue'
 
 interface Block {
   page: string; pageLabel: string; key: string; label: string; hint: string
@@ -55,10 +56,23 @@ const pageTabs = computed(() => pageKeys.value.map(k => ({
  * 追加在文案页后面。⚠️ 别把它并进 pageTabs：那个列表是后端注册表驱动的，混进来会打架。
  */
 const CAROUSEL_KEY = 'carousel'
-const tabList = computed(() => [...pageTabs.value, { key: CAROUSEL_KEY, label: '首页轮播' }])
+
+/**
+ * 「站点信息」（群名 / 群号 / 群说明 / 加群提示）也不是文案块，而是设置项。
+ * 它原先在 Bot 配置里 —— 那是个错位：它描述的是公开站长什么样，与机器人怎么回答无关。
+ * 这里同样是一条固定目录项。
+ */
+const SITE_KEY = 'site'
+
+const tabList = computed(() => [
+  ...pageTabs.value,
+  { key: CAROUSEL_KEY, label: '首页轮播' },
+  { key: SITE_KEY, label: '站点信息' },
+])
 
 const valid = (k: unknown) =>
-  typeof k === 'string' && (k === CAROUSEL_KEY || Object.prototype.hasOwnProperty.call(pages.value, k))
+  typeof k === 'string'
+  && (k === CAROUSEL_KEY || k === SITE_KEY || Object.prototype.hasOwnProperty.call(pages.value, k))
 const page = ref('')
 function setPage(k: string) {
   page.value = k
@@ -94,7 +108,7 @@ async function load() {
     changed.value = {}
     // 落位：URL 指定 > 后端给的第一个页面 > 轮播（后端一个页面都没有时，至少还有它能用）
     const want = typeof route.query.p === 'string' && valid(route.query.p) ? String(route.query.p) : ''
-    page.value = want || Object.keys(r.pages)[0] || CAROUSEL_KEY
+    page.value = want || Object.keys(r.pages)[0] || CAROUSEL_KEY   // 一个页面都没有时至少还有轮播能用
   } catch (e) { toast(describeError(e), 'error') } finally {
     loading.value = false
   }
@@ -149,8 +163,8 @@ onMounted(load)
     </template>
 
     <template #actions>
-      <!-- 轮播那一栏的按钮在它自己的面板里（列表一组、设置一组），页面栏这排文案动作对它没有意义 -->
-      <template v-if="page !== CAROUSEL_KEY">
+      <!-- 轮播与站点信息这两栏的按钮在它们自己的面板里，页面栏这排「文案块」动作对它们没有意义 -->
+      <template v-if="page !== CAROUSEL_KEY && page !== SITE_KEY">
         <!-- 「本页 N 块」那行计数已删（2026-09-27）：它是给开发者看的数字，
              改过的块本身就有火色高亮，不需要再数一遍。换成一个说明按钮。 -->
         <Button size="sm" @click="helpOpen = true">填写说明</Button>
@@ -164,6 +178,9 @@ onMounted(load)
 
     <!-- 首页轮播：图片不是「文案块」，所以整块换成它自己的面板 -->
     <CarouselPanel v-if="page === CAROUSEL_KEY" />
+
+    <!-- 站点信息：同样是设置项而不是文案，见上面 SITE_KEY 的说明 -->
+    <SiteInfoPanel v-else-if="page === SITE_KEY" />
 
     <div v-else class="cols">
       <div class="panel-wrap">
