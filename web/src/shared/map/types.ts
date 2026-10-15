@@ -259,5 +259,7 @@ export interface MapStatus {
     page: string; map: string; revid: number; markerCount: number
     syncedAt: string; error: string
   }[]
+  /** 库里的地点语料：条数与最后写入时间。它跨重启，任务状态不跨 */
+  corpus: { blocks: number; latestAt: string }
   categories: { key: string; label: string }[]
 }

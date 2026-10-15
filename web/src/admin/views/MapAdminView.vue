@@ -211,30 +211,57 @@ const failedPages = computed(() => (status.value?.pages ?? []).filter((p) => p.e
  * 于是"这个按钮是干什么的、上次跑成什么样"要在屏幕上跳两次才连得起来。
  * 一个任务的状态与它的触发方式必须待在一起。
  */
+/**
+ * 每个任务在**库/磁盘上**留下了什么。
+ *
+ * <p>这是这一块的主角：任务是本进程的状态，重启之后就"没跑过"，而数据一直在库里。
+ * 重启后想知道"要不要重新同步 / 重新预热"，看的是这一行，不是任务状态。
+ */
+const jobFacts = computed<Record<string, string>>((): Record<string, string> => {
+  const s = status.value
+  if (!s) return {}
+  const pages = s.pages ?? []
+  const markers = pages.reduce((n, p) => n + p.markerCount, 0)
+  const syncedAt = pages.reduce((t, p) => (p.syncedAt > t ? p.syncedAt : t), '')
+  const cache = s.tileCache
+  return {
+    sync: pages.length + ' 页 · ' + fmt(markers) + ' 个点位 · 最近同步 ' + since(syncedAt),
+    warm: cache.enabled
+      ? fmt(cache.files) + ' 个文件 · ' + fmtBytes(cache.bytes) + ' · 最近写入 ' + since(cache.latestAt)
+      : '缓存已关闭',
+    corpus: fmt(s.corpus?.blocks ?? 0) + ' 条 · 最近派生 ' + since(s.corpus?.latestAt),
+    reset: '',
+  }
+})
+
 const jobRows = computed(() => {
   const j = (status.value?.jobs ?? {}) as Record<string, JobState | undefined>
-  // 只放状态与触发方式。每个按钮花多少钱（几分钟、要不要调模型）写在按钮自己的 title 里 ——
-  // 它是看过一次就记住的东西，不该天天占着页面
+  const facts = jobFacts.value
+  // 一行 = 一个数据对象 + 它的现状 + 触发方式。每个按钮花多少钱写在按钮自己的 title 里 ——
+  // 那是看过一次就记住的东西，不该天天占着页面
   return [
     { key: 'sync', label: '同步 wiki 地图', state: j.sync },
     { key: 'warm', label: '底图缓存', state: j.warm },
     { key: 'corpus', label: '地点语料', state: j.corpus },
     { key: 'reset', label: '地图数据', state: j.reset },
-  ]
+  ].map((r) => ({
+    ...r,
+    tag: jobTag(r.state),
+    facts: facts[r.key] ?? '',
+    fail: r.state?.finishedAt && !r.state.ok ? r.state.summary : '',
+  }))
 })
 
 /**
- * 任务的标签。**「没跑过」与「成功」必须分开** ——
- * 后端从未运行时 finishedAt 是空的，只看 ok 会把"本进程还没跑过"读成"成功"。
+ * 任务的标签。**「成功」与「没跑过」都不给标签** ——
+ * 它们回答的是"本进程跑过没有"，而这一页要回答的是"库里现在有什么"，那由数据行说。
+ * 标签只留给两种情况：正在跑，以及真的失败了（后者要人去看一眼）。
  */
-function jobTag(j?: JobState): { tone: 'good' | 'bad' | 'warn' | 'neutral'; text: string } {
-  if (!j || j.running) {
-    return { tone: j ? 'warn' : 'neutral', text: j ? '运行中' : '未运行' }
-  }
-  if (!j.finishedAt) {
-    return { tone: 'neutral', text: '未运行' }
-  }
-  return j.ok ? { tone: 'good', text: '成功' } : { tone: 'bad', text: '失败' }
+function jobTag(j?: JobState): { tone: 'warn' | 'bad'; text: string } | null {
+  if (!j) return null
+  if (j.running) return { tone: 'warn', text: '运行中' }
+  if (j.finishedAt && !j.ok) return { tone: 'bad', text: '失败' }
+  return null
 }
 
 /**
@@ -1370,7 +1397,7 @@ async function saveLayers(keys: string[] | null) {
               <div class="op-main">
                 <div class="op-head">
                   <span class="op-name">{{ row.label }}</span>
-                  <Tag :tone="jobTag(row.state).tone">{{ jobTag(row.state).text }}</Tag>
+                  <Tag v-if="row.tag" :tone="row.tag.tone">{{ row.tag.text }}</Tag>
                 </div>
 
                 <!-- 跑着：进度条就是这一行的状态，数字由它自己带 -->
@@ -1382,15 +1409,11 @@ async function saveLayers(keys: string[] | null) {
                   :max="row.state.total"
                   :show-value="false"
                 />
-                <!-- 跑完：留下事实（处理了多少、花了多久），精确时刻在 title 里 -->
-                <p v-else-if="row.state?.finishedAt" class="op-result" :title="stamp(row.state.finishedAt)">
-                  {{ row.state.summary }} · {{ since(row.state.finishedAt) }}
-                </p>
-                <!-- 本进程没跑过：预热这一行给出**磁盘上已经有什么**。任务是本进程的状态，缓存是跨重启的 -->
-                <p v-else-if="row.key === 'warm' && status?.tileCache?.enabled" class="op-result">
-                  缓存 {{ fmt(status.tileCache.files) }} 个文件 · {{ fmtBytes(status.tileCache.bytes) }}
-                  · 最近写入 {{ since(status.tileCache.latestAt) }}
-                </p>
+
+                <!-- 主语是**库里现在有什么**（跨重启），不是"任务跑没跑过"（只属于本进程） -->
+                <p v-if="row.facts" class="op-result">{{ row.facts }}</p>
+                <!-- 失败才多说一句：为什么失败、缺了多少 —— 那是唯一需要人去处理的情况 -->
+                <p v-if="row.fail" class="op-fail">{{ row.fail }}</p>
               </div>
               <div class="op-actions">
                 <template v-if="row.key === 'sync'">
@@ -1809,6 +1832,14 @@ async function saveLayers(keys: string[] | null) {
 /* 进度：任务要能"看见在动"，不然几十分钟的预热与卡死没有区别。
    条子用设计系统里的 Bar（与抓取作业同一套），这里只管摆放 */
 .op-bar { margin-top: var(--sp-2); max-width: 420px; }
+/* 失败才多说一句：为什么失败、缺了多少。它是全页唯一需要人去处理的那类信息 */
+.op-fail {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--blight-lift);
+  word-break: break-word;
+}
 .op-actions { flex: none; display: flex; gap: var(--sp-2); }
 
 /* ---------- 诊断：默认折叠 ---------- */

@@ -233,12 +233,40 @@ public class LocationCorpusBuilder {
      * 好让管理员知道还差一步。
      */
     public int derivedCount() {
+        return derived().blocks();
+    }
+
+    /**
+     * 磁盘上的派生语料：条数与最后一次写入。
+     *
+     * @param latestAt 最后一块的写入时间；空 = 一条都没有
+     */
+    public record Derived(int blocks, String latestAt) {
+    }
+
+    /**
+     * 现在库里有多少派生语料、最后一次是什么时候写的。
+     *
+     * <p>管理端"我们现在有什么"要的是它，而不是"任务跑没跑过" ——
+     * 任务是本进程的状态，语料是库里的，重启不影响。
+     *
+     * <p>读失败只报 0 条，不抛：状态页少一个数字，好过整页打不开。
+     */
+    public Derived derived() {
+        int n = 0;
+        String latest = "";
         try {
-            return blockStore.byDoc(DOC_ID).size();
+            for (KbBlock b : blockStore.byDoc(DOC_ID)) {
+                n++;
+                String at = b.updatedAt() == null ? "" : b.updatedAt();
+                if (at.compareTo(latest) > 0) {
+                    latest = at;
+                }
+            }
         } catch (Exception e) {
-            log.warn("[MAP] 读地点语料条数失败：{}", e.getMessage());
-            return 0;
+            log.warn("[MAP] 读地点语料失败：{}", e.getMessage());
         }
+        return new Derived(n, latest);
     }
 
     /** 清掉全部派生块 —— 回滚用。返回删掉的条数 */

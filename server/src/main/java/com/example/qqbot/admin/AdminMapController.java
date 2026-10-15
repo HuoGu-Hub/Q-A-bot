@@ -2,6 +2,7 @@ package com.example.qqbot.admin;
 
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.kb.map.KbMapStore;
+import com.example.qqbot.kb.map.LocationCorpusBuilder;
 import com.example.qqbot.kb.map.MapImageCache;
 import com.example.qqbot.kb.map.MapJobs;
 import com.example.qqbot.kb.map.MapLayerService;
@@ -52,10 +53,18 @@ public class AdminMapController {
     private final MapOptions options;
     private final MapLayerService layers;
     private final MapScope scope;
+    /**
+     * 地点语料的状态页要报"库里现在有多少条"。
+     *
+     * <p>不绕 {@link MapJobs} 拿：那是**任务**的门面，而这一行讲的是**数据** ——
+     * 任务是本进程的，语料是库里的。
+     */
+    private final LocationCorpusBuilder corpus;
 
     public AdminMapController(MapViewService view, MapPlaceService places, MapNoteService notes,
                               KbMapStore mapStore, MapImageCache images, MapJobs jobs,
-                              MapOptions options, MapLayerService layers, MapScope scope) {
+                              MapOptions options, MapLayerService layers, MapScope scope,
+                              LocationCorpusBuilder corpus) {
         this.view = view;
         this.places = places;
         this.notes = notes;
@@ -65,6 +74,7 @@ public class AdminMapController {
         this.options = options;
         this.layers = layers;
         this.scope = scope;
+        this.corpus = corpus;
     }
 
     /* ==================== 状态 ==================== */
@@ -97,6 +107,10 @@ public class AdminMapController {
         out.put("placeTotal", places.count());
 
         out.put("jobs", jobs.states());
+
+        // 磁盘上的语料：任务状态是本进程的，语料是库里的 —— 状态页两个都要，但先说库里那个
+        LocationCorpusBuilder.Derived derived = corpus.derived();
+        out.put("corpus", Map.of("blocks", derived.blocks(), "latestAt", derived.latestAt()));
 
         // 只输出界面真正会读的四个字段。它原先还带 page / hasCrs / extent / syncedAt，
         // 那些是给已经删掉的「画布」表用的 —— 没人读的字段留着只会让下一个人以为它在被用。
