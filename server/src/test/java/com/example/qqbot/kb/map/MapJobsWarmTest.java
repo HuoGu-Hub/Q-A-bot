@@ -199,6 +199,28 @@ class MapJobsWarmTest {
     }
 
     @Test
+    @DisplayName("★ 覆盖情况按单位报：画布 × 档位，缺口落在哪一格一眼可见；且看一眼不出站")
+    void coveragePerUnit(@TempDir Path dir) {
+        CountingSource source = new CountingSource();
+        MapOptions options = options(dir);
+        MapJobs jobs = jobs(new MapImageCache(options, source), options);
+
+        // 开工前：一格都没有。1 张画布（2 瓦片 + 1 底图）× 5 档 + 1 个分组图标
+        List<MapJobs.WarmUnit> before = jobs.coverage();
+        assertThat(before).hasSize(6).allMatch(u -> u.have() == 0);
+        assertThat(before).filteredOn(u -> u.tier().equals("原图")).hasSize(2);
+        assertThat(before).filteredOn(u -> u.unit().equals("分组图标")).singleElement()
+                .satisfies(u -> assertThat(u.need()).isEqualTo(1));
+        assertThat(before).filteredOn(u -> u.unit().equals("主地图")).allMatch(u -> u.need() == 3);
+
+        jobs.warm(MapJobs.FULL_WARM_WIDTHS);
+        int asked = source.asked.size();
+
+        assertThat(jobs.coverage()).allMatch(MapJobs.WarmUnit::complete);
+        assertThat(source.asked).as("覆盖情况只看本地，一次出站都不发").hasSize(asked);
+    }
+
+    @Test
     @DisplayName("★ 有缺口就不算成功：上游 404 会让 missing > 0、ok 为 false")
     void gapsAreReportedNotSwallowed(@TempDir Path dir) {
         MissingSource source = new MissingSource();

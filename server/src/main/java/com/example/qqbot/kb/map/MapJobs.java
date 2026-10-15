@@ -108,6 +108,23 @@ public class MapJobs {
         }
     }
 
+    /**
+     * 一个预热单位的覆盖情况 —— "这一格拉齐了没有"。
+     *
+     * @param unit  可读的单位名：画布名，或{@code 分组图标}
+     * @param tier  档位显示名（{@code 160} / {@code 原图}）；空 = 这个单位不分档
+     * @param have  本地已有的张数
+     * @param need  该单位一共需要几张
+     */
+    public record WarmUnit(String map, String mapLabel, String unit, String tier,
+                           int have, int need) {
+
+        /** 拉齐了。need = 0 的空单位不算齐（它本来就不需要任何图） */
+        public boolean complete() {
+            return need > 0 && have >= need;
+        }
+    }
+
     private final KbMapSyncService syncService;
     private final LocationCorpusBuilder corpusBuilder;
     private final MapImageCache images;
@@ -417,6 +434,66 @@ public class MapJobs {
         }
         return new WarmReport(counts[0] + counts[1] + counts[2], counts[0], counts[1], counts[2],
                 System.currentTimeMillis() - t0);
+    }
+
+    /**
+     * 预热的**分单位覆盖情况**：哪个画布的哪一档拉齐了没有。
+     *
+     * <h2>为什么"542 个文件"不够</h2>
+     * 出图要的是**某一档**完整：1280 档缺一半时，总文件数看着挺好，而窄跨度出图一张都画不出来。
+     * 所以这里按 <b>地图 × 画布 × 档位</b> 给出 have/need，缺在哪一格一眼可见。
+     *
+     * <p>档位按**全量档**报（它是轻量档的超集），所以每一格都能同时回答
+     * "轻量预热齐了吗"（前三档）与"全量齐了吗"（加上 1280 与原图）。
+     *
+     * <p>只看本地有没有，**一次出站都不发** —— 状态页会反复拉它。
+     */
+    public List<WarmUnit> coverage() {
+        List<WarmUnit> out = new ArrayList<>();
+        for (MapViewService.MapView m : view.catalog()) {
+            for (MapViewService.CanvasView c : m.canvases()) {
+                for (int w : FULL_WARM_WIDTHS) {
+                    int need = c.tiles().size()
+                            + (c.background() != null && !c.background().isBlank() ? 1 : 0);
+                    if (need == 0) {
+                        continue;
+                    }
+                    int have = 0;
+                    for (MapViewService.TileView t : c.tiles()) {
+                        if (images.cached(m.map(), c.page(), t.image(), w).isPresent()) {
+                            have++;
+                        }
+                    }
+                    if (c.background() != null && !c.background().isBlank()
+                            && images.cached(m.map(), c.page(), c.background(), w).isPresent()) {
+                        have++;
+                    }
+                    out.add(new WarmUnit(m.map(), m.label(), c.label(), tier(w), have, need));
+                }
+            }
+            // 分组图标只有原图一档，但"没有它首屏就是一排占位圆点"，也必须报
+            int iconNeed = 0;
+            int iconHave = 0;
+            for (MapViewService.GroupView g : m.groups()) {
+                if (g.icon() == null || g.icon().isBlank()) {
+                    continue;
+                }
+                iconNeed++;
+                if (images.cached(m.map(), null, g.icon(), 0).isPresent()) {
+                    iconHave++;
+                }
+            }
+            if (iconNeed > 0) {
+                // 图标只有原图一档（width 0）。照样给档位名，界面才用同一张表渲染
+                out.add(new WarmUnit(m.map(), m.label(), "分组图标", tier(0), iconHave, iconNeed));
+            }
+        }
+        return out;
+    }
+
+    /** 档位显示名：0 就是原图，报数字没人知道那是什么意思 */
+    private static String tier(int width) {
+        return width <= 0 ? "原图" : String.valueOf(width);
     }
 
     /** 计数：0 = 命中缓存，1 = 本次新下载，2 = 拿不到（失败或上游没有） */

@@ -261,5 +261,14 @@ export interface MapStatus {
   }[]
   /** 库里的地点语料：条数与最后写入时间。它跨重启，任务状态不跨 */
   corpus: { blocks: number; latestAt: string }
+  /**
+   * 预热的**分单位覆盖**：哪个画布的哪一档拉齐了。
+   *
+   * <p>"542 个文件"回答不了"够不够" —— 出图要的是**某一档**完整。
+   */
+  warmCoverage: {
+    map: string; mapLabel: string; unit: string; tier: string
+    have: number; need: number
+  }[]
   categories: { key: string; label: string }[]
 }

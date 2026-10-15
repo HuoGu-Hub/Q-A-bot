@@ -107,6 +107,8 @@ public class AdminMapController {
         out.put("placeTotal", places.count());
 
         out.put("jobs", jobs.states());
+        // 分单位覆盖：出图要的是"某一档齐没齐"，总文件数回答不了这个
+        out.put("warmCoverage", jobs.coverage());
 
         // 磁盘上的语料：任务状态是本进程的，语料是库里的 —— 状态页两个都要，但先说库里那个
         LocationCorpusBuilder.Derived derived = corpus.derived();

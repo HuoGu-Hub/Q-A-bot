@@ -234,6 +234,50 @@ const jobFacts = computed<Record<string, string>>((): Record<string, string> => 
   }
 })
 
+interface CoverCell { have: number; need: number }
+interface CoverRow { key: string; label: string; title: string; cells: Record<string, CoverCell | undefined> }
+
+/**
+ * 分单位覆盖：行 = 画布（含分组图标），列 = 档位。
+ *
+ * <p>列顺序取自后端返回的顺序（后端按档位从细到粗发），前端不猜 —— 档位是配置项，
+ * 写死五列迟早会和配置对不上。
+ */
+const warmCover = computed(() => {
+  const units = status.value?.warmCoverage ?? []
+  const tiers: string[] = []
+  const rows: CoverRow[] = []
+  const byKey = new Map<string, CoverRow>()
+  const multiMap = new Set(units.map((u) => u.map)).size > 1
+  for (const u of units) {
+    if (u.tier && !tiers.includes(u.tier)) tiers.push(u.tier)
+    const key = u.map + '|' + u.unit
+    let row = byKey.get(key)
+    if (!row) {
+      row = {
+        key,
+        label: (multiMap ? u.mapLabel + ' · ' : '') + u.unit,
+        title: u.mapLabel + ' · ' + u.unit,
+        cells: {},
+      }
+      byKey.set(key, row)
+      rows.push(row)
+    }
+    row.cells[u.tier] = { have: u.have, need: u.need }
+  }
+  return { tiers, rows }
+})
+
+/** 补齐的格子要静，缺的格子要响 —— 一屏里只有缺的那几格该被眼睛抓到 */
+function coverTone(cell?: CoverCell): string {
+  if (!cell) return 't-none'
+  return cell.have >= cell.need ? 't-ok' : 't-short'
+}
+
+function coverText(cell?: CoverCell): string {
+  return cell ? cell.have + '/' + cell.need : '—'
+}
+
 const jobRows = computed(() => {
   const j = (status.value?.jobs ?? {}) as Record<string, JobState | undefined>
   const facts = jobFacts.value
@@ -1412,6 +1456,26 @@ async function saveLayers(keys: string[] | null) {
 
                 <!-- 主语是**库里现在有什么**（跨重启），不是"任务跑没跑过"（只属于本进程） -->
                 <p v-if="row.facts" class="op-result">{{ row.facts }}</p>
+
+                <!-- 分单位覆盖：出图要的是**某一档**拉齐，总文件数看不出缺在哪一格 -->
+                <div
+                  v-if="row.key === 'warm' && status?.tileCache?.enabled && warmCover.rows.length"
+                  class="cover"
+                >
+                  <div class="cover-line cover-head">
+                    <span class="cover-name" />
+                    <span v-for="t in warmCover.tiers" :key="t" class="cover-cell">{{ t }}</span>
+                  </div>
+                  <div v-for="r in warmCover.rows" :key="r.key" class="cover-line">
+                    <span class="cover-name" :title="r.title">{{ r.label }}</span>
+                    <span
+                      v-for="t in warmCover.tiers"
+                      :key="t"
+                      class="cover-cell"
+                      :class="coverTone(r.cells[t])"
+                    >{{ coverText(r.cells[t]) }}</span>
+                  </div>
+                </div>
                 <!-- 失败才多说一句：为什么失败、缺了多少 —— 那是唯一需要人去处理的情况 -->
                 <p v-if="row.fail" class="op-fail">{{ row.fail }}</p>
               </div>
@@ -1832,6 +1896,23 @@ async function saveLayers(keys: string[] | null) {
 /* 进度：任务要能"看见在动"，不然几十分钟的预热与卡死没有区别。
    条子用设计系统里的 Bar（与抓取作业同一套），这里只管摆放 */
 .op-bar { margin-top: var(--sp-2); max-width: 420px; }
+/* 覆盖矩阵：行 = 画布，列 = 档位。补齐的格子是灰的，缺的格子用暖色喊一声 */
+.cover { margin-top: var(--sp-2); max-width: 520px; display: flex; flex-direction: column; gap: 2px; }
+.cover-line { display: flex; align-items: center; gap: var(--sp-2); }
+.cover-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+}
+.cover-cell { flex: none; width: 58px; text-align: right; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.cover-head .cover-cell { color: var(--ink-4); }
+.t-ok { color: var(--ink-3); }
+.t-short { color: var(--ember); }
+.t-none { color: var(--ink-4); }
 /* 失败才多说一句：为什么失败、缺了多少。它是全页唯一需要人去处理的那类信息 */
 .op-fail {
   margin: var(--sp-1) 0 0;
