@@ -25,7 +25,7 @@ import static org.mockito.Mockito.when;
  * 管理端「抓取」页的接口契约 —— 页面点了什么，后端就该做什么。
  *
  * <p>这里盯四件事：没配过时回显 yml 默认值、保存是整表替换、
- * 三种触发模式解析正确、分类菜单带缓存（不能每次打开页面都去数 40 个分类）。
+ * 三种触发模式解析正确、分类菜单带缓存（页数走批量接口，示例页名只给内容类取）。
  */
 class KbWikiControllerTest {
 
@@ -129,11 +129,13 @@ class KbWikiControllerTest {
     }
 
     @Test
-    @DisplayName("★ 分类菜单带缓存：页面反复打开不能把 wiki 打疼")
+    @DisplayName("★ 分类菜单带缓存；页数走批量接口，示例页名只给内容类取")
     void catalogIsCached() {
         when(client.listAllCategories()).thenReturn(List.of(
                 new WikiApiClient.CategoryInfo("Lore", 264),
                 new WikiApiClient.CategoryInfo("Music", 95)));
+        // ★ 页数来自批量接口（一次问 50 个分类）—— 不再"只数前 40 个、其余留空"
+        when(client.fetchCategoryPages(any())).thenReturn(Map.of("Lore", 264, "Music", 95));
         when(client.listCategoryMembers(anyString(), anyInt()))
                 .thenReturn(new WikiApiClient.Collected(List.of("A", "B"), false, 1));
 
@@ -144,13 +146,17 @@ class KbWikiControllerTest {
         assertThat(second).isSameAs(first);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) first.get("items");
-        assertThat(items.get(0).get("name")).as("按成员数降序").isEqualTo("Lore");
+        assertThat(items.get(0).get("name")).as("按正文页数降序").isEqualTo("Lore");
+        assertThat(items.get(0).get("pages")).as("★ 每个分类都要有准确页数").isEqualTo(264);
+        assertThat(items.get(1).get("pages")).as("非内容类也有页数").isEqualTo(95);
         assertThat(items.get(0).get("klass")).isEqualTo("content");
         assertThat(items.get(0).get("advice")).isEqualTo("内容类：可以选");
         @SuppressWarnings("unchecked")
         List<String> samples = (List<String>) items.get(0).get("samples");
         assertThat(samples).as("示例页名，让英文分类名能看懂").containsExactly("A", "B");
         verify(client, times(1)).listAllCategories();
-        verify(client, times(2)).listCategoryMembers(anyString(), anyInt());
+        verify(client, times(1)).fetchCategoryPages(any());
+        // 示例页名只给内容类取：Music 是索引类，页面上没有「选它」，取来没人看
+        verify(client, times(1)).listCategoryMembers(anyString(), anyInt());
     }
 }

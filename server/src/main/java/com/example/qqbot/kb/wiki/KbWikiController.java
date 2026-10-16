@@ -33,10 +33,17 @@ public class KbWikiController {
 
     private static final Logger log = LoggerFactory.getLogger(KbWikiController.class);
 
-    /** 菜单缓存时长：wiki 上分类不会分钟级变化，而每个分类要发一次请求数页数 */
+    /** 菜单缓存时长：wiki 上分类不会分钟级变化，而示例页名要逐个数 */
     private static final long CATALOG_TTL_MILLIS = 10 * 60 * 1000L;
-    /** 菜单里最多数多少个分类的准确页数（其余只给成员数） */
-    private static final int CATALOG_COUNT_LIMIT = 40;
+
+    /**
+     * 给多少个分类取"前三个示例页名"。
+     *
+     * <p>页数不再需要逐个数 —— {@code prop=categoryinfo} 一次能问 50 个分类。
+     * 但"示例页名"只能一个分类一次请求，所以只给**内容类**的前若干个取：
+     * 非内容类在页面上没有「选它」，取来没人看。
+     */
+    private static final int CATALOG_SAMPLE_LIMIT = 24;
 
     private final KbWikiSourceStore store;
     private final WikiApiClient client;
@@ -111,8 +118,13 @@ public class KbWikiController {
     /**
      * wiki 上的分类菜单。
      *
-     * <p>带缓存：列全部分类只要一次请求，但"这个分类有多少正文页"要逐个数 ——
-     * 40 个分类就是 40 次请求，页面每次打开都重算会把 wiki 打疼，也没必要。
+     * <h2>页数怎么来的（2026-10-17 改）</h2>
+     * 旧实现用 {@code list=categorymembers} 逐个分类去数，一次请求只数一个 ——
+     * 所以只敢数前 40 个，页面上**其余分类的页数全是空的**（看着像没读取）。
+     * 现在用 {@code prop=categoryinfo} 批量问（一次 50 个），每个分类都有准确页数；
+     * 它给的 {@code pages} 已经排除了子分类与文件，正是"选它大约会拉多少篇正文"。
+     *
+     * <p>仍然逐个请求的只剩"前三个示例页名"，且只给内容类的前若干个。
      */
     @GetMapping("/catalog")
     public Map<String, Object> catalog() {
@@ -122,31 +134,50 @@ public class KbWikiController {
         }
         // ⚠️ 先拷一份再排序：别假设上游给的是可变列表（List.of 那种一 sort 就抛）
         List<WikiApiClient.CategoryInfo> all = new ArrayList<>(client.listAllCategories());
-        all.sort((a, b) -> Integer.compare(b.size(), a.size()));
-        List<Map<String, Object>> rows = new ArrayList<>();
-        // 分类名 -> 前 3 个页名（顺手从数页数那次请求里取，不多发请求）
-        Map<String, List<String>> samples = new java.util.HashMap<>();
-        int counted = 0;
+
+        // 批量取每个分类的文章页数；整批失败就退回成员数（含子分类与文件，只作参考）
+        List<String> names = new ArrayList<>(all.size());
         for (WikiApiClient.CategoryInfo c : all) {
-            Integer pages = null;
-            if (counted < CATALOG_COUNT_LIMIT) {
+            names.add(c.name());
+        }
+        Map<String, Integer> loaded;
+        try {
+            loaded = client.fetchCategoryPages(names);
+        } catch (Exception e) {
+            log.warn("[KB-WIKI] 取分类页数失败，页数退回成员数：{}", e.getMessage());
+            loaded = Map.of();
+        }
+        // lambda 捕获的局部变量必须 effectively final —— 上面的 try/catch 赋值两次，所以这里拷一份
+        final Map<String, Integer> pagesByName = loaded;
+
+        // 按"会拉多少篇正文"排序 —— 大分类排前面，挑起来才有感觉
+        all.sort((a, b) -> Integer.compare(
+                pagesByName.getOrDefault(b.name(), b.size()),
+                pagesByName.getOrDefault(a.name(), a.size())));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, List<String>> samples = new java.util.HashMap<>();
+        int sampled = 0;
+        for (WikiApiClient.CategoryInfo c : all) {
+            String klass = klassOf(c.name());
+            if (sampled < CATALOG_SAMPLE_LIMIT && "content".equals(klass)) {
                 try {
-                    List<String> titles = client.listCategoryMembers(c.name(), 500).titles();
-                    pages = titles.size();
+                    // ⚠️ collect 在"没有下一页令牌"时会返回整页（最多 500 条），不认 cap，
+                    //    所以这里自己截前三个，别把 500 个页名塞进响应
+                    List<String> titles = client.listCategoryMembers(c.name(), 3).titles();
                     samples.put(c.name(), titles.subList(0, Math.min(3, titles.size())));
                 } catch (Exception e) {
-                    log.warn("[KB-WIKI] 数分类 {} 的页数失败：{}", c.name(), e.getMessage());
+                    log.warn("[KB-WIKI] 取分类 {} 的示例页失败：{}", c.name(), e.getMessage());
                 }
-                counted++;
+                sampled++;
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("name", c.name());
             m.put("size", c.size());
-            m.put("pages", pages);
-            m.put("klass", klassOf(c.name()));
+            m.put("pages", pagesByName.get(c.name()));
+            m.put("klass", klass);
             m.put("advice", adviceOf(c.name()));
-            // 示例页名：让"Crafting Materials"这种英文分类名一眼能看懂装的是什么。
-            // 顺手就有 —— 数页数那次请求已经返回了标题，不多发请求。
+            // 示例页名：让"Crafting Materials"这种英文分类名一眼能看懂装的是什么
             m.put("samples", samples.getOrDefault(c.name(), List.of()));
             rows.add(m);
         }

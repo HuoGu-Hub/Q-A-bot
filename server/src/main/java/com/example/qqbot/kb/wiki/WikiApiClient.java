@@ -16,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -337,6 +338,65 @@ public class WikiApiClient {
 
     /** 一个分类：名字 + 成员数（含子分类与文件，只作参考） */
     public record CategoryInfo(String name, int size) {
+    }
+
+    /**
+     * 一批分类**各自的文章页数**（{@code prop=categoryinfo}）。
+     *
+     * <h2>为什么不用 {@code list=categorymembers} 去数</h2>
+     * 那样要**一个分类一次请求**：298 个分类就是 298 次，所以旧实现只敢数前 40 个，
+     * 页面上其余分类的页数全是空的（看着像没读取）。{@code prop=categoryinfo}
+     * 一次能问 50 个分类，而且返回的 {@code pages} 已经把**子分类与文件排除**掉了 ——
+     * 正好是"这个分类里有多少篇正文页"，也就是选它大约会拉多少页。
+     *
+     * @return 分类名 → 文章页数。取不到的分类**不在表里**（调用方退回成员数）
+     */
+    public Map<String, Integer> fetchCategoryPages(List<String> names) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        if (names == null || names.isEmpty()) {
+            return out;
+        }
+        final int batchSize = 50;
+        for (int i = 0; i < names.size(); i += batchSize) {
+            List<String> batch = names.subList(i, Math.min(names.size(), i + batchSize));
+            Map<String, String> q = baseQuery();
+            q.put("prop", "categoryinfo");
+            StringBuilder titles = new StringBuilder();
+            for (String n : batch) {
+                if (titles.length() > 0) {
+                    titles.append('|');
+                }
+                titles.append("Category:").append(n);
+            }
+            q.put("titles", titles.toString());
+
+            JsonNode root;
+            try {
+                root = get(buildUrl(q));
+            } catch (Exception e) {
+                log.warn("[KB-WIKI] 取分类页数失败（第 {} 批）：{}", i / batchSize + 1, e.getMessage());
+                continue;
+            }
+            // 发出去的名字可能被规范化（下划线、首字母大小写）—— 用 normalized 映射回原名字
+            Map<String, String> normalized = new HashMap<>();
+            for (JsonNode n : root.path("query").path("normalized")) {
+                normalized.put(n.path("from").asText(""), n.path("to").asText(""));
+            }
+            Map<String, String> byCanonical = new HashMap<>();
+            for (String n : batch) {
+                String sent = "Category:" + n;
+                byCanonical.put(normalized.getOrDefault(sent, sent), n);
+            }
+            for (JsonNode p : root.path("query").path("pages")) {
+                String name = byCanonical.get(p.path("title").asText(""));
+                JsonNode info = p.path("categoryinfo");
+                if (name == null || info.isMissingNode()) {
+                    continue;
+                }
+                out.put(name, info.path("pages").asInt(0));
+            }
+        }
+        return out;
     }
 
     /**

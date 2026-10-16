@@ -104,8 +104,12 @@ public class WikiArticleImporter {
         }
     }
 
-    public record ImportReport(int sources, int pages, int changed, int imported, int failed, int chars,
-                               int rendered,
+    /**
+     * @param pages      本次要处理的**去重后**页数（同一页挂在多个来源下只算一次）
+     * @param duplicates 跨来源重复、被跳过的页数（同一个页面出现在多个选中的来源里）
+     */
+    public record ImportReport(int sources, int pages, int duplicates, int changed, int imported,
+                               int failed, int chars, int rendered,
                                List<String> errors, boolean dryRun, Map<String, Integer> bySource) {
     }
 
@@ -156,14 +160,14 @@ public class WikiArticleImporter {
     public ImportReport importAll(boolean dryRun, boolean force, Progress progress) {
         WikiImport cfg = props.getWikiImport();
         if (!cfg.isEnabled()) {
-            return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
+            return new ImportReport(0, 0, 0, 0, 0, 0, 0, 0, List.of("wiki 文章导入未启用"), dryRun, Map.of());
         }
         if (!store.isAvailable()) {
-            return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("文章状态存储不可用"), dryRun, Map.of());
+            return new ImportReport(0, 0, 0, 0, 0, 0, 0, 0, List.of("文章状态存储不可用"), dryRun, Map.of());
         }
         List<Source> sources = sources();
         if (sources.isEmpty()) {
-            return new ImportReport(0, 0, 0, 0, 0, 0, 0, List.of("没有配置任何来源（categories / prefixes）"), dryRun, Map.of());
+            return new ImportReport(0, 0, 0, 0, 0, 0, 0, 0, List.of("没有配置任何来源（categories / prefixes）"), dryRun, Map.of());
         }
 
         // 建中英对照索引：让英文文章块能被中文提问检索到（见 NameZhIndex 类注释里的实测缺口）
@@ -177,6 +181,8 @@ public class WikiArticleImporter {
         }
 
         int totalPages = 0;
+        /** 跨来源重复、被跳过的页数 */
+        int duplicates = 0;
         int totalChanged = 0;
         int imported = 0;
         // 用渲染文本而不是 wikitext 正文的页数（渲染兜底命中数）
@@ -189,6 +195,8 @@ public class WikiArticleImporter {
         Map<String, Integer> bySource = new LinkedHashMap<>();
         // 块 id 占用登记：撞车时必须吵（否则一页的内容会静默覆盖另一页）
         java.util.Map<String, String> blockIdOwner = new java.util.HashMap<>();
+        // 本次导入已经处理过的页名，跨来源累计 —— 用来去重（见 dedupeAcrossSources）
+        java.util.Set<String> seenInRun = new java.util.HashSet<>();
 
         for (Source src : sources) {
             WikiApiClient.Collected listed;
@@ -210,6 +218,14 @@ public class WikiArticleImporter {
                 log.warn("[KB-WIKI] {}", warn);
                 errors.add(warn);
             }
+            // ★ 跨来源去重：同一个页面会同时挂在多个分类下（一件装备既在 Melee Armor、
+            //   又在 Armor Set）。**页面名就是全局身份**（状态表 kb_wiki_page 的主键就是它），
+            //   所以这一页只处理一次 —— 否则 force 重洗会把同一页洗两遍、向量算两遍，
+            //   块归属的 docId 还会被后一个来源改掉。
+            List<String> unique = dedupeAcrossSources(titles, seenInRun);
+            duplicates += titles.size() - unique.size();
+            titles = unique;
+
             totalPages += titles.size();
             bySource.put(src.label(), titles.size());
             if (titles.isEmpty()) {
@@ -391,10 +407,10 @@ public class WikiArticleImporter {
         // ⚠️ 这一行是**机器可读的摘要**：管理端页面与运维都按它取数。
         //    导入报告走 System.out，在 Windows 上跟随控制台代码页（GBK），
         //    和 SLF4J 的 UTF-8 混在一个日志里 —— 所以关键数字必须也出现在这一行。
-        log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇 / 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字 / 渲染兜底 {} 页",
-                sources.size(), totalPages, totalChanged, imported, failed, chars, renderedPages);
-        return new ImportReport(sources.size(), totalPages, totalChanged, imported, failed, chars, renderedPages,
-                errors, dryRun, bySource);
+        log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇（去重跳过 {}）/ 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字 / 渲染兜底 {} 页",
+                sources.size(), totalPages, duplicates, totalChanged, imported, failed, chars, renderedPages);
+        return new ImportReport(sources.size(), totalPages, duplicates, totalChanged, imported, failed, chars,
+                renderedPages, errors, dryRun, bySource);
     }
 
     /**
@@ -445,6 +461,23 @@ public class WikiArticleImporter {
      * 所以调用点在"列完页之后"（`importAll` 里），而不是"真要写块"的时候 ——
      * 后者在正常增量跑（0 页要导）里根本不会执行，等于没有告警。
      */
+    /**
+     * 跨来源去重：同一页名只保留**第一次**出现的那次，顺序不变。
+     *
+     * <p>页面名是全局身份，所以一页被多个分类收录时只该处理一次。
+     *
+     * @param seenInRun 本次导入已处理过的页名，**跨来源累计**
+     */
+    static List<String> dedupeAcrossSources(List<String> titles, java.util.Set<String> seenInRun) {
+        List<String> out = new ArrayList<>(titles.size());
+        for (String t : titles) {
+            if (seenInRun.add(t)) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
     static String registerBlockId(java.util.Map<String, String> seen, String id, String title) {
         String prev = seen.putIfAbsent(id, title);
         return prev == null || prev.equals(title) ? null : prev;

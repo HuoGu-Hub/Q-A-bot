@@ -39,4 +39,24 @@ class WikiArticleImporterIdCollisionTest {
         assertThat(WikiArticleImporter.blockIdOf("Quests/Farmer's Advice"))
                 .isEqualTo(WikiArticleImporter.blockIdOf("Quests/Farmer\u2019s Advice"));
     }
+
+    @Test
+    @DisplayName("★ 跨来源去重：同一页出现在多个分类里，只处理一次")
+    void dedupesAcrossSources() {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+
+        // 来源 A：三页都是新的
+        assertThat(WikiArticleImporter.dedupeAcrossSources(
+                java.util.List.of("Adventurer Boots", "Adventurer Chest", "Adventurer Gloves"), seen))
+                .containsExactly("Adventurer Boots", "Adventurer Chest", "Adventurer Gloves");
+
+        // 来源 B：两页与 A 重叠、一页是新的 → 只留新的那页
+        assertThat(WikiArticleImporter.dedupeAcrossSources(
+                java.util.List.of("Adventurer Chest", "Rogue Boots", "Adventurer Boots"), seen))
+                .containsExactly("Rogue Boots");
+
+        // 来源 C：全重叠 → 一页不留
+        assertThat(WikiArticleImporter.dedupeAcrossSources(
+                java.util.List.of("Rogue Boots"), seen)).isEmpty();
+    }
 }

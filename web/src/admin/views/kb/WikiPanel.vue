@@ -67,6 +67,8 @@ interface CatalogResp {
 interface ImportReport {
   sources: number
   pages: number
+  /** 跨来源重复、被跳过的页数（同一个页面挂在多个来源下） */
+  duplicates: number
   changed: number
   imported: number
   chars: number
@@ -200,7 +202,9 @@ function inScope(name: string) {
   return items.value.some(s => s.name === name)
 }
 function pagesOf(c: CatalogRow) {
-  return c.pages === null ? '—' : String(c.pages)
+  if (c.pages !== null && c.pages !== undefined) return String(c.pages)
+  // 取不到精确页数时退回成员数（含子分类与文件），用 ≈ 标明这是近似值
+  return '≈' + c.size
 }
 
 async function loadSources() {
@@ -364,6 +368,7 @@ defineExpose({
       <template v-else-if="report">
         <div class="stats">
           <div class="stat"><span class="k">页面</span><span class="v num">{{ fmt(report.pages) }}</span></div>
+          <div v-if="report.duplicates" class="stat"><span class="k">去重跳过</span><span class="v num">{{ fmt(report.duplicates) }}</span></div>
           <div class="stat"><span class="k">版本变过</span><span class="v num">{{ fmt(report.changed) }}</span></div>
           <div class="stat"><span class="k">写入块</span><span class="v num">{{ fmt(report.imported) }}</span></div>
           <div class="stat"><span class="k">正文字数</span><span class="v num">{{ fmt(report.chars) }}</span></div>
@@ -459,7 +464,7 @@ defineExpose({
           </div>
         </div>
 
-        <div v-if="catalogLoading" class="cat-loading faint">正在读取 wiki 分类…（第一次要数几十个分类的页数，慢一点）</div>
+        <div v-if="catalogLoading" class="cat-loading faint">正在读取 wiki 分类…</div>
         <div v-else-if="!filteredCatalog.length" class="cat-loading">
           <Empty text="没有匹配的分类" hint="换个关键词，或把筛选切到「全部分类」" />
         </div>
@@ -499,7 +504,9 @@ defineExpose({
 
         <p class="faint cat-note">
           共 {{ catalogTotal }} 个分类<template v-if="catalogAt">（缓存于 {{ catalogAt }}）</template>。
-          维护清单与索引类选了会把几千页无关内容拉进语料，所以没有「选它」。
+          「正文页数」是分类里的文章页数，已排除子分类与文件。一个页面可能同时属于多个分类，
+          导入时同一页只处理一次 —— 实际会拉多少以「空跑」为准。
+          维护清单与索引类没有「选它」：选了会把几千页无关内容拉进语料。
         </p>
       </Panel>
     </div>
