@@ -100,6 +100,19 @@
     <tr><td><code>/del /output #id-3#</code></td><td>del/output</td><td>id=3</td><td>—</td><td>删掉编号 3 的输出</td></tr>
   </table>
 
+  <h2>触发的前置条件</h2>
+  <p>命令能被执行，先要过准入。这几件判定<b>不新增开关</b>，全部沿用已有的那一份：</p>
+  <table>
+    <tr><th>条件</th><th>读的是哪个设置</th><th>说明</th></tr>
+    <tr><td>群里必须 @ 机器人</td><td><code>app.guard.access.require-mention-in-group</code></td><td>与普通问答共用同一个开关。指令不再有自己的一份，同一个语义不留两个开关。</td></tr>
+    <tr><td>私聊能不能用</td><td><code>app.guard.access.private-chat-policy</code></td><td>私聊默认关闭，与问答同一份策略。</td></tr>
+    <tr><td>黑名单</td><td>群黑名单 · 用户黑名单</td><td>由 <code>Access.denial</code> 一处判定，指令与问答不会得出两个结论。</td></tr>
+  </table>
+  <p>现在库里有一个重复的 <code>app.commands.require-mention</code>，以及后台「指令系统」分组里对应的「命令必须 @」条目。这一版<b>把它删掉</b>：同一个语义留两份开关，就会出现「@ 了机器人，问答回了、指令没回」或者反过来这种自相矛盾的状态，而且不报错。</p>
+  <div class="callout">
+    指令在 Guard 之前跑，所以 @ 判定必须在命令匹配之前自己判一次。判法与 <code>MentionRequiredStage</code> 一样，抽出 <code>Access.mentionSatisfied</code> 一个方法给两边共用。
+  </div>
+
   <h2>路径怎么解析</h2>
   <p>规则是<b>最长匹配</b>：能吃进路径的词就吃，吃不动就停，停下的地方开始是参数和文本。</p>
   <pre>
@@ -274,12 +287,13 @@
     <tr><td><code>bot_command</code></td><td>加 <code>params</code>、<code>help</code>、<code>action</code> 三列</td><td>沿用 <code>addColumnIfMissing</code>，老库自动补列</td></tr>
     <tr><td><code>/命令 参数</code></td><td>参数改由 <code>#名-值#</code> 传入</td><td>模板里的 <code>{args}</code> 与 <code>{args.N}</code> 保留，老指令不受影响</td></tr>
     <tr><td><code>{cmd.list}</code></td><td>带参数的路径显示成 <code>/set /output #time-21:30# &lt;文本&gt;</code></td><td>列表自动变成自解释的用法</td></tr>
+    <tr><td><code>app.commands.require-mention</code></td><td>整项删除</td><td>群里是否必须 @ 改读 <code>app.guard.access.require-mention-in-group</code>；设置页同步去掉「命令必须 @」</td></tr>
   </table>
 
   <h2>实施顺序</h2>
   <table>
     <tr><th>阶段</th><th>内容</th><th>验收</th></tr>
-    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取、参数表模型、类型校验、<code>{arg.x}</code></td><td>解析用例全绿，老斜杠命令行为不变</td></tr>
+    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
     <tr><td>P1</td><td>单命令帮助、动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
     <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code></td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
     <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
@@ -308,11 +322,11 @@
     <tr><td>SQLite 写锁</td><td>写入是单行插入，量级是每人每天几条；扫描每 10 秒读一次，冲突可以忽略。</td></tr>
   </table>
 
-  <h2>需要你拍板的三件事</h2>
+  <h2>已经定下的三件事</h2>
   <div class="card">
-    <p><b>1. 带 <code>#date#</code> 是只发一次，不带是每天发。</b>这是我从「设置一条定时输出的文本」推出来的。若你要的是「全部只发一次」，那 <code>#date#</code> 就该是必填。</p>
-    <p><b>2. <code>#</code> 的转义用 <code>\#</code>。</b>若你觉得群里几乎不会出现这种文本，也可以先不做转义，解析失败时回显原文就够了。</p>
-    <p style="margin-bottom:0"><b>3. 群里是否仍要求 @ 机器人。</b>命令已经强制 <code>/</code> 开头，误触发面比原来小很多，但「贴代码路径」依旧存在。我建议保留这个开关的默认开启，配置页给一句提示。</p>
+    <p><b>1. <code>#date#</code> 决定周期。</b>带日期只发一次，不带就每天同一时刻发。回执里写明是「只此一次」还是「每天」，不让群友自己猜。</p>
+    <p><b>2. <code>#</code> 用 <code>\#</code> 转义。</b>解析失败时把原文一并回显，让人一眼看出哪一段被当成参数摘走了。</p>
+    <p style="margin-bottom:0"><b>3. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
   </div>
 
   <footer>飘雪喵 · 指令路径与参数系统设计 · 2026-10-18</footer>
