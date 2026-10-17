@@ -116,6 +116,7 @@ public class WikiImportService {
             Map<String, Object> report = new LinkedHashMap<>();
             report.put("sources", r.sources());
             report.put("pages", r.pages());
+            report.put("duplicates", r.duplicates());
             report.put("changed", r.changed());
             report.put("imported", r.imported());
             report.put("chars", r.chars());
