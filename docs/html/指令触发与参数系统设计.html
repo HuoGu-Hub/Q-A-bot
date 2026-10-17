@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>指令触发与参数系统设计</title>
+<style>
+  :root {
+    --void: #06070a; --stone-200: #0b0e13; --stone-300: #12161d; --stone-400: #1a1f28;
+    --stone-500: #232935; --hairline: rgba(255,255,255,.085);
+    --ink: #eae5da; --ink-2: #b9c0cb; --ink-3: #8b95a3; --ink-4: #626c7a;
+    --ember: #f2ab55; --ember-hot: #ffd08a; --ember-veil: rgba(242,171,85,.10);
+    --vital: #7ea36a; --mist: #8b9aab; --danger: #c4675c; --info: #6f8fa8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 32px 96px;
+    background: var(--stone-200); color: var(--ink);
+    font: 15px/1.75 "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: .01em; margin: 0 0 10px; }
+  .eyebrow { font-size: 12px; letter-spacing: .16em; color: var(--ink-4); text-transform: uppercase; }
+  h2 { font-size: 18px; font-weight: 600; margin: 46px 0 14px; padding-left: 12px; position: relative; }
+  h2::before { content: ''; position: absolute; left: 0; top: .32em; width: 2px; height: 1em; background: var(--ember); }
+  h3 { font-size: 15px; font-weight: 500; margin: 26px 0 8px; color: var(--ink); }
+  p { margin: 0 0 12px; color: var(--ink-2); }
+  b, strong { color: var(--ink); font-weight: 500; }
+  code { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; padding: 1px 5px; border-radius: 3px; background: var(--void); color: var(--ink-2); }
+  .lead { font-size: 16px; color: var(--ink-2); max-width: 780px; }
+  .card { background: var(--stone-300); border-radius: 10px; padding: 20px 24px; margin: 16px 0; }
+  .card--inset { background: var(--void); box-shadow: inset 0 1px 0 rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.045); }
+  .card h3 { margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; letter-spacing: .04em; padding: 7px 10px; border-bottom: 1px solid var(--hairline); }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--hairline); color: var(--ink-2); vertical-align: top; }
+  td:first-child { color: var(--ink); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  pre { background: var(--void); border-radius: 6px; padding: 16px 18px; overflow-x: auto; font: 12.5px/1.7 "JetBrains Mono", Consolas, monospace; color: var(--ink-3); margin: 14px 0; }
+  pre b { color: var(--ember); font-weight: 500; }
+  pre i { color: var(--ink-4); font-style: normal; }
+  ul { margin: 0 0 12px; padding-left: 1.2em; color: var(--ink-2); }
+  li { margin: 5px 0; }
+  li code { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hairline); color: var(--ink-3); margin-right: 6px; }
+  .tag--new { color: var(--ember); border-color: rgba(242,171,85,.35); background: var(--ember-veil); }
+  .tag--keep { color: var(--vital); border-color: rgba(126,163,106,.35); }
+  .tag--drop { color: var(--danger); border-color: rgba(196,103,92,.35); }
+  .callout { border-left: 2px solid var(--ember); padding: 2px 0 2px 16px; margin: 18px 0; color: var(--ink-2); }
+  .callout--warn { border-left-color: var(--danger); }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 13px; }
+  .diagram-link { display: inline-block; margin: 4px 0 0; padding: 10px 16px; border-radius: 8px; background: var(--stone-400); color: var(--ink); text-decoration: none; border: 1px solid var(--hairline); }
+  .diagram-link:hover { border-color: rgba(242,171,85,.4); color: var(--ember-hot); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--ink-4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">指令系统 · 触发与参数重构</div>
+  <h1>从斜杠到 @命令-值</h1>
+  <p class="lead">现有指令只能表达「命令」和「一整串参数」。要记录一件定时发送的事，群友得把事件和时间揉成一坨文本，机器人没法知道哪段是时间。这一版把命令拆成「命令名 + 声明式参数表」，让 @ 直接带上结构化取值。</p>
+
+  <div class="card">
+    <h3>一句话结论</h3>
+    <p style="margin-bottom:0">触发从「<code>/</code> 前缀」扩成两种形态：斜杠形态保持原样，<b>@ 机器人 + 命令名 + 破折号分隔的值</b>是新增形态。命令在库里声明自己的参数表，参数按类型解析、按名称取用，解析失败就回一句用法提示，绝不猜。动作类命令不调模型，直接交给一个可注册的执行器；定时任务落一张表，由一个扫描器到点经同一个出站口发出。</p>
+  </div>
+
+  <h2>现有系统卡在哪</h2>
+  <p>不是缺功能，是四个边界把新用法挡住了。</p>
+  <table>
+    <tr><th>现状</th><th>导致什么</th></tr>
+    <tr><td>只认 <code>/</code> 前缀</td><td>@ 了机器人之后还得再打斜杠，手机端两步操作，群友记不住。</td></tr>
+    <tr><td>参数只有一整串文本</td><td><code>{args}</code> 与 <code>{args.N}</code> 按空格切。事件里本来就有空格，切完就对不上号。</td></tr>
+    <tr><td>只有 template 与 agent 两类</td><td>两类都只会「回一句话」，没法写库、没法定时、没法撤销。</td></tr>
+    <tr><td><code>min_role</code> 只存不判</td><td>字段在库里、在后台表单里，代码里没有任何一处读它。删除别人的任务没有权限概念。</td></tr>
+  </table>
+  <p class="muted small">前三条是能力缺口，第四条是既有漏洞，这次一并补上。</p>
+
+  <h2>新触发模型</h2>
+  <p>一条群消息要变成指令，依次过四道闸。顺序不能换：先准入，再 @，再认形态，最后查表。</p>
+  <pre>
+  消息事件
+     │
+     ├─ ① 准入          黑名单 / 私聊策略        <i>不过 → 丢弃，与普通消息同一份判定</i>
+     ├─ ② @ 判定        群里是否 @ 了机器人    <i>开关 require-mention</i>
+     ├─ ③ 形态识别      斜杠形态 → 取首词
+     │                  破折号形态 → 取第一个 - 之前的词
+     └─ ④ 查表          命令名落在指令表里才算命中
+                        <i>不命中 → 交回普通问答，不是错误</i>
+  </pre>
+
+  <h3>两种形态</h3>
+  <table>
+    <tr><th>形态</th><th>写法</th><th>值怎么分</th><th>状态</th></tr>
+    <tr><td>斜杠</td><td><code>/记录 打本集合 20:00</code></td><td>空白分，最后一段吃剩下的</td><td><span class="tag tag--keep">保留</span></td></tr>
+    <tr><td>破折号</td><td><code>@机器人 记录-打本集合-20:00</code></td><td>破折号分，值里可以有空格</td><td><span class="tag tag--new">新增</span></td></tr>
+  </table>
+  <p>两种形态进同一个参数解析器，只是分隔符不同。破折号形态额外接受全角 <code>－</code> 与 <code>—</code>，中文输入法打不出半角时不会卡住。</p>
+
+  <h3>为什么不会误触发</h3>
+  <p>破折号形态看起来比斜杠宽松，实际上更严：<b>命令名必须在指令表里</b>。群里聊「今天-明天」不会命中，因为「今天」不是命令。真正被放开的是「触发词后面接东西」，而那正是我们要的。</p>
+  <p>还有一条隐含约束：<b>只有声明了参数表的命令才支持破折号形态</b>。话术类老命令仍旧只认斜杠，行为一个字节都不变。</p>
+
+  <div class="callout">
+    <b>@ 是闸门，不是装饰。</b>破折号形态依赖 @ 把自己和正常聊天分开。若关掉 <code>require-mention</code>，「记录」这个词就会变成保留词，群友再也不能用「记录-xxx」说别的事。所以这个开关在破折号形态下建议保持开启，配置页会给出提示。
+  </div>
+
+  <h2>参数：声明式参数表</h2>
+  <p>命令不再靠调用方约定参数顺序，而是在库里声明。参数表是命令的一部分，后台可编辑，可预览。</p>
+
+  <table>
+    <tr><th>字段</th><th>含义</th><th>例</th></tr>
+    <tr><td>name</td><td>参数名，模板里用 <code>{arg.name}</code> 取</td><td><code>事件</code></td></tr>
+    <tr><td>type</td><td>取值类型</td><td><code>text</code></td></tr>
+    <tr><td>required</td><td>缺了是否算解析失败</td><td><code>true</code></td></tr>
+    <tr><td>default</td><td>可选参数的默认值</td><td><code>30</code></td></tr>
+    <tr><td>maxChars</td><td>文本长度上限</td><td><code>200</code></td></tr>
+    <tr><td>example</td><td>用法提示里展示的样例</td><td><code>打本集合</code></td></tr>
+  </table>
+
+  <h3>四种类型</h3>
+  <table>
+    <tr><th>类型</th><th>接受什么</th><th>归一成什么</th></tr>
+    <tr><td><code>text</code></td><td>任意文本，超长按 maxChars 截断</td><td>原样字符串</td></tr>
+    <tr><td><code>int</code></td><td>十进制整数，允许前置负号</td><td><code>long</code></td></tr>
+    <tr><td><code>moment</code></td><td><code>20:00</code>、<code>明天20:00</code>、<code>10-18 20:00</code>、<code>3小时后</code></td><td>东八区的 <code>Instant</code></td></tr>
+    <tr><td><code>enum</code></td><td>参数表里列出的候选值，可给别名</td><td>规范值</td></tr>
+  </table>
+  <p>时间只认 <code>AppTime</code> 那一个口径。整条链路——解析、落库、展示、扫描——都用东八区，不引入第二套时区换算。</p>
+
+  <h3>切分规则</h3>
+  <p>破折号天然会和日期、内容里的连字符打架。规则只有一句：<b>类型化参数从右往左锚定，文本参数吃剩下的。</b></p>
+  <pre>
+  参数表：事件(text) · 时间(moment)
+  输入：  打本集合-第3关-20:00
+  结果：  事件 = 打本集合-第3关
+          时间 = 今天 20:00
+  </pre>
+  <p>实现上是有界回溯，参数上限 4 段：文本参数先按最短尝试，类型化参数必须解析成功；某一档不通过就多给文本一段再试，直到全部落位。上面这例只有把前三段整体交给事件、最后一段留给时间才全部通过。</p>
+  <p>仍有歧义时给引号逃生口：<code>记录-"打本-第3关"-20:00</code>。双引号、中文引号、书名号都认，引号内的分隔符不参与切分。</p>
+
+  <table>
+    <tr><th>输入</th><th>参数表</th><th>结果</th></tr>
+    <tr><td><code>记录-打本-20:00</code></td><td>事件 text · 时间 moment</td><td>事件=打本，时间=今天 20:00</td></tr>
+    <tr><td><code>记录-打本-第3关-20:00</code></td><td>同上</td><td>事件=打本-第3关，时间=20:00</td></tr>
+    <tr><td><code>记录-打本-10-18 20:00</code></td><td>同上</td><td>事件=打本，时间=10 月 18 日 20:00</td></tr>
+    <tr><td><code>记录-打本</code></td><td>同上</td><td>缺时间，回用法提示</td></tr>
+    <tr><td><code>记录-打本-25:99</code></td><td>同上</td><td>时间不合法，回用法提示并指出是哪一段</td></tr>
+    <tr><td><code>删除-3</code></td><td>编号 int</td><td>编号=3</td></tr>
+  </table>
+
+  <h3>失败要说清哪一段不对</h3>
+  <p>解析失败不能只回「格式错误」，群友不知道改哪里。回执固定三段：哪一个参数、期望什么、完整用法。</p>
+  <pre>
+  没看懂「时间」：25:99 不是有效时间。
+  用法：@机器人 记录-事件内容-时间
+  例：  @机器人 记录-打本集合-20:00
+  </pre>
+
+  <h2>动作：第三类命令</h2>
+  <p>命令类型从两类扩成三类。选择依据是「这次触发要不要花钱、要不要落库」。</p>
+  <table>
+    <tr><th>kind</th><th>做什么</th><th>走 Guard 与预算</th><th>例</th></tr>
+    <tr><td><code>template</code></td><td>渲染模板秒回</td><td>不走</td><td><code>/help</code></td></tr>
+    <tr><td><code>agent</code></td><td>参数当问题交给模型</td><td>走</td><td><code>/联网 今天什么版本</code></td></tr>
+    <tr><td><code>action</code></td><td>交给注册的执行器，写库或查库</td><td>不走</td><td><code>@机器人 记录-…-20:00</code></td></tr>
+  </table>
+  <p>动作用注册表分发，不写 <code>switch (command.action())</code>。每个动作是一个类，实现同一个接口：声明自己的参数表与用法，执行时拿到已经解析好的参数和上下文，返回一句回执。新增一个功能就是新增一个类，不改分派代码。</p>
+  <pre>
+  interface CommandAction {
+      String id();                 <i>// schedule.create</i>
+      List&lt;ParamSpec&gt; params();     <i>// 它的参数表，种子写库时用</i>
+      String usage();              <i>// 没带参数时回的话</i>
+      String execute(ActionContext ctx, CommandArgs args);
+  }
+  </pre>
+  <p>库里存的是动作 id 而不是类名。动作被删掉之后，那条指令在匹配阶段就当作停用并记一条告警日志，不会在线上抛 <code>ClassNotFound</code>。</p>
+
+  <h2>定时任务：从记下到发出</h2>
+  <p>三个内置动作组成一条闭环。它们都是 <code>builtin</code>，不可删除，但回执文案可在后台改。</p>
+  <table>
+    <tr><th>命令</th><th>动作</th><th>参数</th><th>回执</th></tr>
+    <tr><td>记录</td><td><code>schedule.create</code></td><td>事件 text · 时间 moment</td><td>已记下 #3：今天 20:00 在本群发送「打本集合」</td></tr>
+    <tr><td>任务</td><td><code>schedule.list</code></td><td>无</td><td>本群待发 #3 今天 20:00 打本集合</td></tr>
+    <tr><td>删除</td><td><code>schedule.delete</code></td><td>编号 int</td><td>已撤销 #3</td></tr>
+  </table>
+
+  <h3>任务表</h3>
+  <pre>
+  bot_schedule
+    id           INTEGER PK        <i>// 就是回执里的编号</i>
+    group_id     INTEGER           <i>// 0 = 私聊</i>
+    user_id      INTEGER           <i>// 创建者，删除权限的依据</i>
+    content      TEXT              <i>// 到点要发的那句话</i>
+    fire_at      TEXT              <i>// ISO 时刻，UTC 存盘</i>
+    status       TEXT              <i>// pending / sending / sent / failed / expired / canceled</i>
+    attempts     INTEGER
+    last_error   TEXT
+    created_at   TEXT
+    sent_at      TEXT
+  </pre>
+  <p>索引建在 <code>(status, fire_at)</code> 上，扫描只走这一条。</p>
+
+  <h3>扫描器要定的五件事</h3>
+  <table>
+    <tr><th>问题</th><th>决定</th><th>理由</th></tr>
+    <tr><td>多久扫一次</td><td>10 秒，首次延迟 15 秒</td><td>群聊提醒差十秒能接受，扫太勤只是空转。</td></tr>
+    <tr><td>会不会重复发</td><td>先 <code>UPDATE … WHERE status='pending'</code>，更新到 1 行才发</td><td>同一行只能被一个 tick 抢到。多实例也没问题，只要共用同一个库。</td></tr>
+    <tr><td>停机错过了怎么办</td><td>30 分钟内补发；超过标记 <code>expired</code>，不补</td><td>半夜重启后补发一条「下午三点集合」只会让人困惑。</td></tr>
+    <tr><td>发送失败怎么办</td><td>重试 3 次，间隔退避；仍失败标 <code>failed</code></td><td>协议端短暂掉线不该把任务丢掉，但也不能无限重试。</td></tr>
+    <tr><td>线程池</td><td>显式把 <code>spring.task.scheduling.pool.size</code> 调到 2</td><td>Spring 默认调度池只有一个线程，别的定时任务会被这个 10 秒 tick 挤在后面。</td></tr>
+  </table>
+
+  <h3>发送走哪条路</h3>
+  <p>扫描器不碰协议客户端，只调出站发送器。群聊走 <code>sendToGroup</code>，私聊需要新增一个 <code>sendToPrivate</code>，两者共用同一段出站过滤、分片与节流。<b>定时发送不能成为绕过内容过滤的侧门</b>，这是铁律②的直接后果。</p>
+
+  <h2>删除：编号、权限、回执</h2>
+  <p>删除按编号，不按内容匹配。内容匹配会误删——两句「打本集合」分不清是哪条。</p>
+  <table>
+    <tr><th>谁能删</th><th>判定</th></tr>
+    <tr><td>创建者本人</td><td><code>task.user_id == 触发者</code></td></tr>
+    <tr><td>群主与群管</td><td>事件里的 <code>sender.role</code> 是 <code>owner</code> 或 <code>admin</code></td></tr>
+    <tr><td>其他群友</td><td>拒绝，回「#3 不是你建的」</td></tr>
+    <tr><td>别的群</td><td>查不到。任务是群内资产，跨群不可见</td></tr>
+  </table>
+  <p>删除是软删除：状态改成 <code>canceled</code>，保留是谁、何时撤的。列表只显示 <code>pending</code> 与 <code>sending</code>，后台能看到全部。</p>
+  <p>权限判定统一走 <code>min_role</code>，把「只存不判」那个缺口补上。角色由路由层归一化成 <code>owner / admin / member / none</code> 放进上下文，动作层不解析 OneBot 的 JSON。</p>
+
+  <h2>组件与依赖</h2>
+  <p>新代码落在 <code>command</code> 包，持久化落 <code>persistence</code>。有三条既有护栏会直接约束实现方式：</p>
+  <ul>
+    <li><b>业务包不得依赖 config</b> —— 扫描器与动作的配置走 <code>CommandPolicy</code> 那样的只读接口，由 <code>config</code> 侧实现，不在业务包里 import 配置类。</li>
+    <li><b>只有 outbound 与 router 能碰 <code>OneBotApiClient</code></b> —— 扫描器只持有 <code>OutboundSender</code>。</li>
+    <li><b>持久化之外不得出现 <code>java.sql</code></b> —— 新表的所有 SQL 进 <code>ScheduleRepository</code>。</li>
+  </ul>
+  <p>点击查看完整的数据流：<br>
+  <a class="diagram-link" href="../diagrams/command-trigger-flow.html">打开交互版触发与参数流程图 →</a></p>
+
+  <h2>兼容与迁移</h2>
+  <table>
+    <tr><th>对象</th><th>改动</th><th>兼容策略</th></tr>
+    <tr><td><code>bot_command</code></td><td>加 <code>params</code>、<code>action</code> 两列</td><td>沿用 <code>addColumnIfMissing</code>，老库自动补列；老行 <code>params='[]'</code>，只走斜杠形态</td></tr>
+    <tr><td><code>BotCommand</code></td><td>record 增两个字段</td><td>构造点只有几处，一次改完；<code>kind</code> 为空仍当 <code>template</code></td></tr>
+    <tr><td><code>{args}</code> / <code>{args.N}</code></td><td>保留</td><td>老模板不受影响；新增按名取值的 <code>{arg.名称}</code></td></tr>
+    <tr><td><code>display()</code></td><td>有参数表的命令显示成 <code>记录-&lt;事件&gt;-&lt;时间&gt;</code></td><td><code>{cmd.list}</code> 自动变成自解释的用法，群友看列表就知道怎么发</td></tr>
+  </table>
+
+  <h2>实施顺序</h2>
+  <table>
+    <tr><th>阶段</th><th>内容</th><th>验收</th></tr>
+    <tr><td>P0</td><td>参数表模型、切分与类型解析、两种触发形态、<code>{arg.x}</code> 渲染</td><td>解析测试矩阵全绿；老斜杠用例一个不改仍然通过</td></tr>
+    <tr><td>P1</td><td>动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td>动作命令能回正确回执；无权限的删除被拒</td></tr>
+    <tr><td>P2</td><td><code>bot_schedule</code>、三个内置动作、扫描器、<code>sendToPrivate</code></td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
+    <tr><td>P3</td><td>后台参数表编辑、定时任务列表、调度线程池与配置项</td><td>后台能改参数表并预览；能撤销任务</td></tr>
+  </table>
+
+  <h2>验收清单</h2>
+  <ul>
+    <li>群里不 @ 不触发；@ 了但命令名不在表里，当普通聊天。</li>
+    <li><code>打本-第3关-20:00</code> 切出的事件里保留连字符。</li>
+    <li><code>25:99</code>、缺时间、多出三段，三种失败都给出具体是哪一段。</li>
+    <li>老模板里的 <code>{args.1}</code> 行为不变。</li>
+    <li>跨群删除查不到；非创建者删除被拒；群管可以删。</li>
+    <li>停机 10 分钟后重启，补发；停机 2 小时后重启，标记过期不补。</li>
+    <li>定时内容里出现敏感词时被出站过滤拦下，与即时回复同一套判定。</li>
+  </ul>
+
+  <h2>风险</h2>
+  <table>
+    <tr><th>风险</th><th>处置</th></tr>
+    <tr><td>定时发送变成骚扰工具</td><td>每人待发上限 5 条、内容 200 字、沿用独立限流；到点仍走出站过滤。后续可加免打扰时段。</td></tr>
+    <tr><td>SQLite 写锁</td><td>任务写入是单行插入，量级是每人每天几条。扫描每 10 秒读一次，冲突概率可以忽略。</td></tr>
+    <tr><td>多实例重复发送</td><td>状态位 CAS 已经兜住；部署文档写明当前按单实例设计。</td></tr>
+    <tr><td>时间语义歧义</td><td><code>20:00</code> 若已过则顺延到明天，并在回执里写明「明天」，不让群友自己猜。</td></tr>
+  </table>
+
+  <h2>需要你拍板的三件事</h2>
+  <div class="card">
+    <p><b>1. 要不要保留斜杠形态。</b>建议保留。老群友的习惯、后台里已有的指令、<code>{args}</code> 模板都依赖它，而且零成本。</p>
+    <p><b>2. 命令名用中文还是英文。</b>建议中文：<code>记录</code>、<code>任务</code>、<code>删除</code>。破折号形态下英文命令名和正常英文聊天更难区分。</p>
+    <p style="margin-bottom:0"><b>3. 定时任务要不要开放到私聊。</b>建议先只开群聊。私聊没有群管的第二双眼睛，滥用成本更低；表结构留了 <code>group_id=0</code>，以后放开不用迁移。</p>
+  </div>
+
+  <footer>飘雪喵 · 指令触发与参数系统设计 · 2026-10-17</footer>
+</div>
+</body>
+</html>

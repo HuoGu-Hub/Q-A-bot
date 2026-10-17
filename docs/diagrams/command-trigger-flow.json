@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "指令触发与参数分派",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "output": "docs/diagrams/command-trigger-flow.html",
+    "viewBox": [
+      1120,
+      720
+    ]
+  },
+  "lanes": [
+    {
+      "id": "client",
+      "label": "QQ 群聊"
+    },
+    {
+      "id": "entry",
+      "label": "入口判定"
+    },
+    {
+      "id": "args",
+      "label": "参数解析"
+    },
+    {
+      "id": "dispatch",
+      "label": "指令分派"
+    },
+    {
+      "id": "exec",
+      "label": "动作执行"
+    },
+    {
+      "id": "timeline",
+      "label": "定时投递"
+    },
+    {
+      "id": "fail",
+      "label": "未命中与提示",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "入口",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "recognize",
+      "label": "识别与解析",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "execute",
+      "label": "执行与落库",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "user",
+    "gate",
+    "parser",
+    "dispatcher",
+    "action",
+    "timer",
+    "sent"
+  ],
+  "nodes": [
+    {
+      "id": "user",
+      "lane": "client",
+      "col": 0,
+      "type": "external",
+      "label": "群友",
+      "sublabel": "@机器人 记录-打本-20:00"
+    },
+    {
+      "id": "gate",
+      "lane": "entry",
+      "col": 1,
+      "type": "backend",
+      "label": "入口判定",
+      "sublabel": "准入 · @ · 双形态",
+      "tag": "MessageRouter"
+    },
+    {
+      "id": "parser",
+      "lane": "args",
+      "col": 2,
+      "type": "backend",
+      "label": "参数解析",
+      "sublabel": "右锚定 · 类型归一",
+      "tag": "ArgParser"
+    },
+    {
+      "id": "dispatcher",
+      "lane": "dispatch",
+      "col": 3,
+      "type": "backend",
+      "label": "指令分派",
+      "sublabel": "话术 · 问答 · 动作",
+      "tag": "CommandHandler"
+    },
+    {
+      "id": "action",
+      "lane": "exec",
+      "col": 3,
+      "type": "messagebus",
+      "label": "动作执行",
+      "sublabel": "创建 · 删除 · 列表",
+      "tag": "ActionRegistry"
+    },
+    {
+      "id": "timer",
+      "lane": "timeline",
+      "col": 5,
+      "type": "backend",
+      "label": "定时投递",
+      "sublabel": "读任务表 · 到点出站",
+      "tag": "ScheduleRunner"
+    },
+    {
+      "id": "sent",
+      "lane": "client",
+      "col": 5,
+      "type": "external",
+      "label": "群消息",
+      "sublabel": "到点自动发送"
+    },
+    {
+      "id": "usage",
+      "lane": "fail",
+      "col": 2,
+      "type": "security",
+      "label": "用法提示",
+      "sublabel": "缺参 · 类型不符"
+    }
+  ],
+  "edges": [
+    {
+      "id": "user-gate",
+      "from": "user",
+      "to": "gate",
+      "variant": "default"
+    },
+    {
+      "id": "gate-parser",
+      "from": "gate",
+      "to": "parser",
+      "label": "命中",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "drop",
+      "labelAt": [
+        300,
+        305
+      ]
+    },
+    {
+      "id": "parser-dispatcher",
+      "from": "parser",
+      "to": "dispatcher",
+      "label": "参数就绪",
+      "variant": "default",
+      "labelAt": [
+        365,
+        429
+      ]
+    },
+    {
+      "id": "parser-usage",
+      "from": "parser",
+      "to": "usage",
+      "label": "不合格",
+      "variant": "security",
+      "role": "error",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "drop"
+    },
+    {
+      "id": "dispatcher-action",
+      "from": "dispatcher",
+      "to": "action",
+      "label": "kind=action",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "drop",
+      "labelAt": [
+        476,
+        553
+      ]
+    },
+    {
+      "id": "action-timer",
+      "from": "action",
+      "to": "timer",
+      "label": "写入待发",
+      "variant": "default",
+      "labelAt": [
+        500,
+        470
+      ]
+    },
+    {
+      "id": "timer-sent",
+      "from": "timer",
+      "to": "sent",
+      "label": "到点发送",
+      "variant": "emphasis",
+      "role": "return",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "触发形态",
+      "items": [
+        "斜杠形态保留：/命令 值 值",
+        "破折号形态新增：@机器人 命令-值-值",
+        "命令名不在指令表里就当普通聊天",
+        "群里是否必须 @，仍由开关决定"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "切分与类型",
+      "items": [
+        "类型化参数从右往左锚定",
+        "文本参数吃剩下的全部",
+        "值里本身带 - 时用引号包住",
+        "时间接受 20:00 / 明天20:00 / 10-18 20:00"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "到点与撤销",
+      "items": [
+        "创建时回一个编号，编号就是任务 id",
+        "创建者本人或群管才能删除",
+        "超过宽限期的任务标记过期，不补发",
+        "发送走同一个出站口，过滤与节流不绕过"
+      ]
+    }
+  ]
+}
