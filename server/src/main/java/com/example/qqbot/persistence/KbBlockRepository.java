@@ -202,6 +202,24 @@ public class KbBlockRepository {
                 + " FROM kb_block WHERE retired = 0 ORDER BY id", BLOCK);
     }
 
+    /**
+     * 某个来源下、每个 docId **生效**的块数。
+     *
+     * <p>管理端「抓取」页用它回答"这个来源的知识入库了没有" —— 块是按
+     * {@code wiki·<来源名>} 分组的，所以数一遍就能看出漏了哪个来源。
+     * 只数 {@code retired = 0}：下架的块不算生效的知识。
+     */
+    public Map<String, Integer> countActiveByDoc(String source) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> e : jdbc.query(
+                "SELECT doc_id AS d, COUNT(*) AS n FROM kb_block"
+                        + " WHERE retired = 0 AND source = ? GROUP BY doc_id",
+                r -> Map.entry(r.str("d"), r.intOf("n")), source)) {
+            out.put(e.getKey(), e.getValue());
+        }
+        return out;
+    }
+
     /** 某份文档下的所有块 */
     public List<Row> byDoc(String docId) {
         return jdbc.query("SELECT " + BLOCK_COLUMNS

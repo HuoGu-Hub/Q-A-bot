@@ -117,6 +117,11 @@ public class KbWikiPageStore {
         return available ? repo.count() : 0;
     }
 
+    /** 每个来源最近一次同步时间 —— 区分"从没拉过"和"拉过但没正文" */
+    public Map<String, String> lastSyncBySource() {
+        return available ? repo.lastSyncBySource() : Map.of();
+    }
+
     /**
      * 清空全部状态行。**purge 时必须调** —— 见 {@code KbWikiPageRepository#deleteAll}：
      * 留着 revid 会让下一次导入空转，purge 就成了单向门。

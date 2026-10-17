@@ -32,6 +32,8 @@ class KbWikiControllerTest {
     private KbWikiSourceStore store;
     private WikiApiClient client;
     private WikiImportService service;
+    private com.example.qqbot.kb.block.KbBlockStore blockStore;
+    private KbWikiPageStore pageStore;
     private KbWikiController controller;
 
     @BeforeEach
@@ -39,6 +41,8 @@ class KbWikiControllerTest {
         store = mock(KbWikiSourceStore.class);
         client = mock(WikiApiClient.class);
         service = mock(WikiImportService.class);
+        blockStore = mock(com.example.qqbot.kb.block.KbBlockStore.class);
+        pageStore = mock(KbWikiPageStore.class);
 
         WikiImport cfg = new WikiImport();
         cfg.setPrefixes(List.of("Quests/"));
@@ -57,7 +61,7 @@ class KbWikiControllerTest {
         when(service.status()).thenReturn(idle);
         when(service.start(any())).thenReturn(idle);
 
-        controller = new KbWikiController(store, client, service, props);
+        controller = new KbWikiController(store, client, service, props, blockStore, pageStore);
     }
 
     @Test
@@ -74,6 +78,29 @@ class KbWikiControllerTest {
                 .containsExactly("Quests/", "Gameplay", "Lore");
         assertThat(out.get("maxPagesPerSource")).as("原样回显配置里的上限").isEqualTo(500);
         assertThat(out.get("wikiBase")).as("页面用它拼'点开看'的链接").isEqualTo("https://enshrouded.wiki.gg");
+    }
+
+    @Test
+    @DisplayName("★ 来源要能看出入库了没有：按 docId 数生效块，再用同步时间区分'没拉过'")
+    void reportsCoveragePerSource() {
+        when(store.all()).thenReturn(List.of(
+                new KbWikiSourceRepository.Source("Melee Armor", "category", true, "")));
+        when(blockStore.activeCountByDoc(WikiArticleImporter.SRC_WIKI)).thenReturn(Map.of(
+                "wiki·Melee Armor", 112,
+                "wiki·Quests/", 149,
+                "other·X", 5));
+        when(pageStore.lastSyncBySource()).thenReturn(Map.of("Lore", "2026-10-17T02:00:00Z"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> cov = (Map<String, Object>) controller.sources().get("coverage");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> melee = (Map<String, Object>) cov.get("Melee Armor");
+        assertThat(melee.get("blocks")).as("docId 去掉 wiki· 前缀后的块数").isEqualTo(112);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> lore = (Map<String, Object>) cov.get("Lore");
+        assertThat(lore.get("blocks")).as("没入库的来源算 0，不是缺失").isEqualTo(0);
+        assertThat(lore.get("lastSync")).as("拉过但清洗后没正文 → 靠同步时间区分").isEqualTo("2026-10-17T02:00:00Z");
+        assertThat(cov).as("别的 source 的 docId 不算进来").doesNotContainKey("other·X");
     }
 
     @Test

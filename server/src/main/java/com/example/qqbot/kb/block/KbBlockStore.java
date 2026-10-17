@@ -141,6 +141,16 @@ public class KbBlockStore implements com.example.qqbot.kb.TermSource {
         return countOf(repo::countVectors);
     }
 
+    /**
+     * 某个来源下、每个 docId 生效的块数。
+     *
+     * <p>管理端「抓取」页拿它显示"这个来源入库了多少块" —— 见
+     * {@link com.example.qqbot.persistence.KbBlockRepository#countActiveByDoc}。
+     */
+    public Map<String, Integer> activeCountByDoc(String source) {
+        return available ? repo.countActiveByDoc(source) : Map.of();
+    }
+
     private int countOf(java.util.function.LongSupplier source) {
         if (!available) {
             return 0;

@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.wiki;
 
 import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.persistence.KbWikiSourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +22,8 @@ import java.util.Map;
  *
  * <p>这个控制器就是"把命令行搬进页面"的那一层：
  * <ul>
- *   <li>GET  /sources —— 当前范围（页面上勾选的结果，没配过则回显 yml 默认值）；</li>
+ *   <li>GET  /sources —— 当前范围（页面上勾选的结果，没配过则回显 yml 默认值）
+ *       + 每个来源在知识库里的**生效情况**（入库块数 / 最近同步时间）；</li>
  *   <li>POST /sources —— 保存范围（整表替换）；</li>
  *   <li>GET  /catalog —— wiki 上有什么分类、各多少页（菜单，带缓存）；</li>
  *   <li>POST /import —— 触发一次拉取 + 清洗（空跑 / 增量 / 强制重洗）；</li>
@@ -49,16 +52,63 @@ public class KbWikiController {
     private final WikiApiClient client;
     private final WikiImportService service;
     private final KbPolicy props;
+    private final KbBlockStore blockStore;
+    private final KbWikiPageStore pageStore;
 
     private volatile Map<String, Object> catalogCache;
     private volatile long catalogAt;
 
     public KbWikiController(KbWikiSourceStore store, WikiApiClient client,
-                            WikiImportService service, KbPolicy props) {
+                            WikiImportService service, KbPolicy props,
+                            KbBlockStore blockStore, KbWikiPageStore pageStore) {
         this.store = store;
         this.client = client;
         this.service = service;
         this.props = props;
+        this.blockStore = blockStore;
+        this.pageStore = pageStore;
+    }
+
+    /**
+     * 每个来源在知识库里的**生效情况** —— 页面上每个来源都要显示"入库了没有"。
+     *
+     * <p>返回 {@code {来源名: {blocks: N, lastSync: "..."}}}：
+     * <ul>
+     *   <li>{@code blocks} —— 该来源下 {@code retired = 0} 的块数。块按
+     *       {@code wiki·<来源名>} 分组（见 {@code WikiArticleImporter}），数一遍就知道漏没漏；</li>
+     *   <li>{@code lastSync} —— 该来源最近一次同步时间，用来区分"从没拉过"和
+     *       "拉过但清洗后没正文"（这两种 {@code blocks} 都是 0）。</li>
+     * </ul>
+     */
+    private Map<String, Object> coverage() {
+        String docPrefix = props.getWikiImport().getDocIdPrefix() + "·";
+        Map<String, Integer> blocks = new LinkedHashMap<>();
+        try {
+            for (Map.Entry<String, Integer> e
+                    : blockStore.activeCountByDoc(WikiArticleImporter.SRC_WIKI).entrySet()) {
+                if (e.getKey().startsWith(docPrefix)) {
+                    blocks.put(e.getKey().substring(docPrefix.length()), e.getValue());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[KB-WIKI] 统计来源入库块数失败：{}", e.getMessage());
+        }
+        Map<String, String> lastSync = Map.of();
+        try {
+            lastSync = pageStore.lastSyncBySource();
+        } catch (Exception e) {
+            log.warn("[KB-WIKI] 统计来源最近同步时间失败：{}", e.getMessage());
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        LinkedHashSet<String> names = new LinkedHashSet<>(blocks.keySet());
+        names.addAll(lastSync.keySet());
+        for (String name : names) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("blocks", blocks.getOrDefault(name, 0));
+            m.put("lastSync", lastSync.getOrDefault(name, ""));
+            out.put(name, m);
+        }
+        return out;
     }
 
     /** 当前范围 + yml 默认值（页面据此判断是不是还没配过） */
@@ -87,6 +137,8 @@ public class KbWikiController {
         // 页面上的"点开看"链接用：api-base 去掉 /api.php 就是站点根
         out.put("wikiBase", props.getMapSync().getApiBase().replace("/api.php", ""));
         out.put("renderEnabled", props.getWikiImport().getRender().isEnabled());
+        // 知识库里的生效情况（未缓存：导入完必须立刻反映出来）
+        out.put("coverage", coverage());
         return out;
     }
 

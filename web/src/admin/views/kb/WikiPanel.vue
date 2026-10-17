@@ -2,19 +2,17 @@
 /**
  * 「抓取」面板 —— 从 wiki 批量拉攻略、清洗、进知识库。
  *
- * <h2>这一页只干一件事：选范围 → 跑一次 → 看结果</h2>
- * 所以结构就是这三段，顺序即页面顺序：
- *   <ol>
- *     <li>作业面板（一整块）—— 跑的时候是进度条，跑完**原地**变成结果读数。
- *         不跳面板、不弹窗：同一个位置从"进行中"变成"已完成"。</li>
- *     <li>左「抓取范围」—— 这次要拉哪些来源，可开关、可移除、可加页名前缀，改完保存。</li>
- *     <li>右「挑分类」—— wiki 上有什么分类、各多少页、装了些什么；点「选它」进左边范围。</li>
- *   </ol>
+ * <h2>一张表：全部来源，勾选即范围（2026-10-17 改）</h2>
+ * 以前是"从菜单里一个个加入抓取范围 → 保存 → 再触发"，选几十个来源要点几十次。
+ * 现在 wiki 上的全部分类就是那张表，**勾上就是要拉**，改动自动保存，
+ * 「开始抓取」只拉勾上的那些。
  *
- * <p>「开始抓取」放在页面顶栏（KbView），滚动时永远看得见 —— 找不到按钮是这个页面
- * 以前最大的问题。点它先选方式（空跑 / 增量 / 强制重洗），再开跑。
+ * <p>每一行还显示**这个来源在知识库里生效了没有**（入库块数 / 最近同步时间）——
+ * 否则"漏了哪个来源"根本看不出来：块按 {@code wiki·<来源名>} 分组存，
+ * 后端数一遍就是这一列。
  *
- * <p>导入在服务端后台线程跑，关掉页面也会继续；跑完**要重启服务**索引才重载。
+ * <p>「开始抓取」在页面顶栏（KbView），滚动时永远看得见；导入在服务端后台跑，
+ * 关掉页面也会继续，跑完**要重启服务**索引才重载。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
@@ -22,7 +20,7 @@ import Panel from '@shared/ui/Panel.vue'
 import Button from '@shared/ui/Button.vue'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
-import Switch from '@shared/ui/Switch.vue'
+import Checkbox from '@shared/ui/Checkbox.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Bar from '@shared/ui/Bar.vue'
@@ -30,22 +28,28 @@ import Modal from '@shared/ui/Modal.vue'
 import ActionOption from '@shared/ui/ActionOption.vue'
 import Empty from '@shared/ui/Empty.vue'
 
+/** 一个已保存/默认来源（后端 kb_wiki_source 的一行） */
 interface SourceRow {
   name: string
   kind: string
   enabled: boolean
 }
 
+/** wiki 上的一个分类 */
 interface CatalogRow {
   name: string
   size: number
   pages: number | null
-  /** 后端判定：content 内容类 / maintenance 维护清单 / update 更新日期 / index 索引类 */
+  /** content 内容类 / maintenance 维护清单 / update 更新日期 / index 索引类 */
   klass: string
-  /** 中文建议，直接显示给运维看 */
   advice: string
-  /** 前三个页名，让英文分类名一眼能看懂装的是什么 */
   samples: string[]
+}
+
+/** 某个来源在知识库里的生效情况 */
+interface Coverage {
+  blocks: number
+  lastSync: string
 }
 
 interface SourcesResp {
@@ -54,8 +58,8 @@ interface SourcesResp {
   saved: boolean
   maxPagesPerSource: number
   renderEnabled: boolean
-  /** wiki 站点根，如 https://enshrouded.wiki.gg —— 拼"点开看"的链接 */
   wikiBase: string
+  coverage: Record<string, Coverage>
 }
 
 interface CatalogResp {
@@ -67,7 +71,6 @@ interface CatalogResp {
 interface ImportReport {
   sources: number
   pages: number
-  /** 跨来源重复、被跳过的页数（同一个页面挂在多个来源下） */
   duplicates: number
   changed: number
   imported: number
@@ -89,38 +92,174 @@ interface ImportStatus {
   errors: string[]
 }
 
+/** 表格里的一行：wiki 分类、自定义前缀、或 wiki 上已经没有了的老来源 */
+interface Row {
+  key: string
+  name: string
+  kind: string
+  checked: boolean
+  url: string
+  pages: number | null
+  klass: string
+  advice: string
+  samples: string[]
+  blocks: number
+  lastSync: string
+}
+
 const error = ref('')
 const okMsg = ref('')
-/** 保存范围是整表替换，双击会重复提交 —— 用一个标记把按钮按住 */
-const saving = ref(false)
 
-// ==================== 范围 ====================
-
-const items = ref<SourceRow[]>([])
-/** 已保存范围的快照 —— 用来判"有没有改动"，JSON 足够，条目就几条 */
-const savedSnapshot = ref('[]')
-const saved = ref(false)
-const maxPagesPerSource = ref(0)
-const wikiBase = ref('')
-const renderEnabled = ref(true)
-const prefixInput = ref('')
-
-const dirty = computed(() => JSON.stringify(items.value) !== savedSnapshot.value)
-const enabledCount = computed(() => items.value.filter(s => s.enabled).length)
-
-// ==================== 分类菜单 ====================
+// ==================== 来源表 ====================
 
 const catalog = ref<CatalogRow[]>([])
 const catalogTotal = ref(0)
 const catalogAt = ref('')
 const catalogLoading = ref(false)
+const coverage = ref<Record<string, Coverage>>({})
+/** 自定义前缀来源：勾没勾都要留在表里，否则取消勾选后就从页面上消失了 */
+const prefixNames = ref<string[]>([])
+
+const wikiBase = ref('')
+const maxPagesPerSource = ref(0)
+const renderEnabled = ref(true)
+
+/** 勾选的来源 key（kind + 名字）。用数组而不是 Set，赋值即触发刷新 */
+const checkedKeys = ref<string[]>([])
+const checkedSet = computed(() => new Set(checkedKeys.value))
+const savedSnapshot = ref('[]')
+const saving = ref(false)
+let saveTimer: number | undefined
+
+const dirty = computed(() => JSON.stringify(checkedKeys.value) !== savedSnapshot.value)
+
 const filter = ref('')
-/** 默认只看内容类：wiki 上 298 个分类里大多数是维护清单，不该混在可选列表里 */
-const klassFilter = ref('content')
-const KLASS_OPTIONS = [
+/** 默认只看内容类：wiki 上 298 个分类里大多数是维护清单，混在一起没法挑 */
+const view = ref('content')
+const VIEW_OPTIONS = [
   { value: 'content', label: '只看内容类' },
   { value: 'all', label: '全部分类' },
+  { value: 'checked', label: '只看已勾选' },
+  { value: 'missing', label: '只看没入库' },
 ]
+
+function key(kind: string, name: string) {
+  return kind + '\u0000' + name
+}
+
+function klassLabel(k: string) {
+  if (k === 'prefix') return '页名前缀'
+  if (k === 'stale') return 'wiki 上已没有'
+  if (k === 'maintenance') return '维护清单'
+  if (k === 'update') return '更新日期'
+  if (k === 'index') return '索引类'
+  return '内容类'
+}
+function klassTone(k: string): 'good' | 'bad' | 'warn' | 'neutral' {
+  if (k === 'prefix') return 'neutral'
+  if (k === 'stale') return 'warn'
+  if (k === 'maintenance' || k === 'index') return 'bad'
+  if (k === 'update') return 'warn'
+  return 'good'
+}
+
+/**
+ * 来源名 → wiki 上的地址。
+ *   分类  → Category 页
+ *   前缀  → Special:PrefixIndex 列出以它开头的全部页
+ */
+function wikiUrl(kind: string, name: string) {
+  if (!wikiBase.value) return ''
+  if (kind === 'prefix') {
+    return wikiBase.value + '/index.php?title=Special:PrefixIndex&prefix=' + encodeURIComponent(name)
+  }
+  return wikiBase.value + '/wiki/Category:' + encodeURIComponent(name.replace(/ /g, '_'))
+}
+
+function coverOf(name: string): Coverage {
+  return coverage.value[name] || { blocks: 0, lastSync: '' }
+}
+
+/** 全表：wiki 分类 + 自定义前缀 + 勾着但 wiki 上已经没有的老来源 */
+const allRows = computed<Row[]>(() => {
+  const rows: Row[] = []
+  const seen = new Set<string>()
+  const push = (r: Row) => {
+    if (!seen.has(r.key)) {
+      seen.add(r.key)
+      rows.push(r)
+    }
+  }
+  for (const c of catalog.value) {
+    const k = key('category', c.name)
+    const cov = coverOf(c.name)
+    push({
+      key: k, name: c.name, kind: 'category', checked: checkedSet.value.has(k),
+      url: wikiUrl('category', c.name), pages: c.pages, klass: c.klass,
+      advice: c.advice, samples: c.samples || [], blocks: cov.blocks, lastSync: cov.lastSync,
+    })
+  }
+  for (const name of prefixNames.value) {
+    const k = key('prefix', name)
+    const cov = coverOf(name)
+    push({
+      key: k, name, kind: 'prefix', checked: checkedSet.value.has(k),
+      url: wikiUrl('prefix', name), pages: null, klass: 'prefix',
+      advice: '页名前缀：列出以此开头的全部页面', samples: [],
+      blocks: cov.blocks, lastSync: cov.lastSync,
+    })
+  }
+  // 勾着、但 wiki 上已经查不到了 —— 也得显示，不然取消不掉
+  for (const k of checkedKeys.value) {
+    const cut = k.indexOf('\u0000')
+    const kind = k.slice(0, cut)
+    const name = k.slice(cut + 1)
+    if (kind !== 'category') continue
+    const cov = coverOf(name)
+    push({
+      key: k, name, kind: 'category', checked: true, url: wikiUrl('category', name),
+      pages: null, klass: 'stale', advice: 'wiki 的分类列表里已经没有它了', samples: [],
+      blocks: cov.blocks, lastSync: cov.lastSync,
+    })
+  }
+  return rows
+})
+
+const rowMap = computed(() => new Map(allRows.value.map(r => [r.key, r])))
+
+const filteredRows = computed(() => {
+  const kw = filter.value.trim().toLowerCase()
+  return allRows.value.filter(r => {
+    if (view.value === 'content' && !(r.klass === 'content' || r.klass === 'prefix' || r.klass === 'stale')) return false
+    if (view.value === 'checked' && !r.checked) return false
+    if (view.value === 'missing' && r.blocks > 0) return false
+    if (!kw) return true
+    // 英文分类名之外，也拿示例页名和中文建议一起搜 —— 不知道分类叫什么时用中文猜
+    return r.name.toLowerCase().includes(kw)
+      || r.advice.includes(kw)
+      || r.samples.some(s => s.toLowerCase().includes(kw))
+  })
+})
+
+const checkedRows = computed(() => checkedKeys.value.map(k => rowMap.value.get(k)).filter((r): r is Row => !!r))
+const checkedCount = computed(() => checkedRows.value.length)
+
+/** 本次范围大约要拉多少页（前缀来源预先不知道页数） */
+const estimatedPages = computed(() => {
+  let pages = 0
+  let unknown = 0
+  for (const r of checkedRows.value) {
+    if (r.pages === null) unknown++
+    else pages += r.pages
+  }
+  return { pages, unknown }
+})
+
+/** 会被每来源上限截断的勾选来源（上限为「不限」时永远不截） */
+const truncatedCount = computed(() => {
+  if (maxPagesPerSource.value <= 0) return 0
+  return checkedRows.value.filter(r => r.pages !== null && r.pages > maxPagesPerSource.value).length
+})
 
 // ==================== 作业 ====================
 
@@ -129,7 +268,7 @@ const status = ref<ImportStatus>({
   startedAt: '', finishedAt: '', report: null, errors: [],
 })
 const runOpen = ref(false)
-/** 回滚是破坏性操作：点一次变成"确认"，再点才真清 —— 不用弹窗，避免打断键盘流 */
+/** 回滚是破坏性操作：点一次变成"确认"，再点才真清 —— 不弹窗，不打断键盘流 */
 const purgeArmed = ref(false)
 
 const running = computed(() => status.value.state === 'running')
@@ -150,7 +289,6 @@ const stateTone = computed<'good' | 'bad' | 'warn' | 'neutral'>(() => {
   if (s === 'failed') return 'bad'
   return 'neutral'
 })
-
 const jobHint = computed(() => {
   if (running.value) return '进度'
   if (report.value) return '上次结果'
@@ -159,91 +297,16 @@ const jobHint = computed(() => {
 
 let timer: number | undefined
 
-/** 搜索过滤后的分类菜单 */
-const filteredCatalog = computed(() => {
-  const kw = filter.value.trim().toLowerCase()
-  return catalog.value.filter(c => {
-    if (klassFilter.value !== 'all' && c.klass !== klassFilter.value) return false
-    if (!kw) return true
-    // 英文分类名之外，也拿示例页名和中文建议一起搜 —— 不知道分类叫什么时用中文猜
-    return c.name.toLowerCase().includes(kw)
-      || c.advice.includes(kw)
-      || (c.samples || []).some(s => s.toLowerCase().includes(kw))
-  })
-})
-
-function klassLabel(k: string) {
-  if (k === 'maintenance') return '维护清单'
-  if (k === 'update') return '更新日期'
-  if (k === 'index') return '索引类'
-  return '内容类'
-}
-function klassTone(k: string): 'good' | 'bad' | 'warn' | 'neutral' {
-  if (k === 'maintenance' || k === 'index') return 'bad'
-  if (k === 'update') return 'warn'
-  return 'good'
-}
-
-/**
- * 这些英文名不是 URL，是 wiki 上的名字：
- *   分类  → wiki 的 Category 页，如 /wiki/Category:Gameplay
- *   前缀  → Special:PrefixIndex 列出以它开头的全部页，如 /wiki/Special:PrefixIndex?prefix=Quests/
- * 给链接就是为了让人能点开看一眼，不用凭英文名猜。
- */
-function wikiUrl(kind: string, name: string) {
-  if (!wikiBase.value) return ''
-  if (kind === 'prefix') {
-    return wikiBase.value + '/index.php?title=Special:PrefixIndex&prefix=' + encodeURIComponent(name)
-  }
-  return wikiBase.value + '/wiki/Category:' + encodeURIComponent(name.replace(/ /g, '_'))
-}
-
-function inScope(name: string) {
-  return items.value.some(s => s.name === name)
-}
-/** 分类来源在菜单里的页数；前缀来源菜单里没有 → null */
-function pagesFor(s: SourceRow): number | null {
-  if (s.kind !== 'category') return null
-  const c = catalog.value.find(x => x.name === s.name)
-  return c && c.pages !== null && c.pages !== undefined ? c.pages : null
-}
-function pagesText(s: SourceRow): string {
-  const p = pagesFor(s)
-  return p === null ? '' : fmt(p) + ' 页'
-}
-/** 这个来源会被上限截断吗 —— 上限设为「不限」时永远不截 */
-function truncatedText(s: SourceRow): string {
-  const p = pagesFor(s)
-  if (p === null || maxPagesPerSource.value <= 0) return ''
-  const lost = p - maxPagesPerSource.value
-  return lost > 0 ? '会漏 ' + fmt(lost) + ' 页' : ''
-}
-
-/** 本次范围大约要拉多少页（只算得出页数的分类来源；前缀来源是未知） */
-const estimatedPages = computed(() => {
-  let pages = 0
-  let unknown = 0
-  for (const s of items.value) {
-    if (!s.enabled) continue
-    const p = pagesFor(s)
-    if (p === null) unknown++
-    else pages += p
-  }
-  return { pages, unknown }
-})
-
-function pagesOf(c: CatalogRow) {
-  if (c.pages !== null && c.pages !== undefined) return String(c.pages)
-  // 取不到精确页数时退回成员数（含子分类与文件），用 ≈ 标明这是近似值
-  return '≈' + c.size
-}
+// ==================== 读取 ====================
 
 async function loadSources() {
   const r = await adminApi.get<SourcesResp>('/kb/wiki/sources')
+  coverage.value = r.coverage || {}
   // 没保存过就回显 yml 默认值 —— 页面一打开就能看见"现在实际在拉什么"
-  items.value = (r.saved ? r.items : r.defaults).map(s => ({ name: s.name, kind: s.kind, enabled: s.enabled }))
-  savedSnapshot.value = JSON.stringify(items.value)
-  saved.value = r.saved
+  const stored = r.saved ? r.items : r.defaults
+  prefixNames.value = stored.filter(s => s.kind === 'prefix').map(s => s.name)
+  checkedKeys.value = stored.filter(s => s.enabled).map(s => key(s.kind, s.name))
+  savedSnapshot.value = JSON.stringify(checkedKeys.value)
   maxPagesPerSource.value = r.maxPagesPerSource
   wikiBase.value = r.wikiBase || ''
   renderEnabled.value = r.renderEnabled
@@ -262,6 +325,7 @@ async function loadCatalog() {
 }
 
 async function refreshStatus() {
+  const wasRunning = running.value
   try {
     status.value = await adminApi.get<ImportStatus>('/kb/wiki/import/status')
   } catch (e) {
@@ -272,6 +336,14 @@ async function refreshStatus() {
     window.clearInterval(timer)
     timer = undefined
   }
+  // 刚跑完就刷一次"知识库"列 —— 否则入库情况还停在跑之前的样子
+  if (wasRunning && !running.value) {
+    try {
+      await loadSources()
+    } catch {
+      // 统计刷不出来不该覆盖掉刚拿到的报告
+    }
+  }
 }
 
 function poll() {
@@ -279,40 +351,60 @@ function poll() {
   timer = window.setInterval(refreshStatus, 1500)
 }
 
-// ==================== 范围：增删 ====================
-
-/** 菜单里直接选它 —— 这是唯一的"加入范围"入口，不再另开一个下拉 */
-function pick(c: CatalogRow) {
-  if (!inScope(c.name)) {
-    items.value.push({ name: c.name, kind: 'category', enabled: true })
+async function reload() {
+  error.value = ''
+  try {
+    await Promise.all([loadSources(), loadCatalog()])
+    await refreshStatus()
+    if (running.value) poll()
+  } catch (e) {
+    error.value = describeError(e)
   }
 }
 
-function addPrefix() {
-  const v = prefixInput.value.trim()
-  if (!v) return
-  if (!items.value.some(s => s.name === v)) {
-    items.value.push({ name: v, kind: 'prefix', enabled: true })
+// ==================== 勾选 ====================
+
+function isChecked(k: string) {
+  return checkedSet.value.has(k)
+}
+
+function toggle(k: string, on: boolean) {
+  if (on) {
+    if (!checkedSet.value.has(k)) checkedKeys.value = [...checkedKeys.value, k]
+  } else {
+    checkedKeys.value = checkedKeys.value.filter(x => x !== k)
   }
-  prefixInput.value = ''
+  scheduleSave()
 }
 
-function removeAt(i: number) {
-  items.value.splice(i, 1)
+/** 勾选即改范围：没有"保存"按钮，改完自动存，开始抓取前再兜一次 */
+function scheduleSave() {
+  if (saveTimer) window.clearTimeout(saveTimer)
+  saveTimer = window.setTimeout(() => {
+    saveTimer = undefined
+    void save()
+  }, 600)
 }
 
-function discard() {
-  items.value = JSON.parse(savedSnapshot.value)
+async function flushSave() {
+  if (saveTimer) {
+    window.clearTimeout(saveTimer)
+    saveTimer = undefined
+  }
+  if (dirty.value) await save()
 }
 
 async function save() {
   saving.value = true
   error.value = ''
-  okMsg.value = ''
   try {
-    const r = await adminApi.post<{ count: number; enabled: number }>('/kb/wiki/sources', { items: items.value })
-    okMsg.value = '范围已保存：' + r.count + ' 条来源，启用 ' + r.enabled + ' 条'
-    await loadSources()
+    // 前缀要留着（勾没勾都留，否则取消勾选后它就从表里消失了）；
+    // 分类只留勾上的 —— 没勾的分类 wiki 菜单里本来就有
+    const items = allRows.value
+      .filter(r => r.checked || r.kind === 'prefix')
+      .map(r => ({ name: r.name, kind: r.kind, enabled: r.checked }))
+    await adminApi.post('/kb/wiki/sources', { items })
+    savedSnapshot.value = JSON.stringify(checkedKeys.value)
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -320,9 +412,28 @@ async function save() {
   }
 }
 
-// ==================== 作业：开跑 ====================
+function checkFiltered() {
+  const keys = new Set(checkedKeys.value)
+  for (const r of filteredRows.value) keys.add(r.key)
+  checkedKeys.value = [...keys]
+  scheduleSave()
+}
+
+function uncheckFiltered() {
+  const drop = new Set(filteredRows.value.map(r => r.key))
+  checkedKeys.value = checkedKeys.value.filter(k => !drop.has(k))
+  scheduleSave()
+}
+
+// ==================== 触发 ====================
 
 function openRun() {
+  if (!checkedCount.value) {
+    okMsg.value = ''
+    error.value = '先在下面勾选要拉取的来源'
+    return
+  }
+  error.value = ''
   runOpen.value = true
 }
 function closeRun() {
@@ -330,6 +441,8 @@ function closeRun() {
 }
 async function chooseRun(mode: string) {
   runOpen.value = false
+  // 勾选可能还没落到库里（自动保存有防抖）—— 开跑前先兜一次
+  await flushSave()
   await start(mode)
 }
 
@@ -351,24 +464,22 @@ async function doPurge() {
   await start('purge')
 }
 
-function fmt(n: number | undefined) {
+function fmt(n: number | undefined | null) {
   if (n === undefined || n === null) return '—'
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-async function reload() {
-  error.value = ''
-  try {
-    await Promise.all([loadSources(), loadCatalog()])
-    await refreshStatus()
-    if (running.value) poll()
-  } catch (e) {
-    error.value = describeError(e)
-  }
+/** ISO 时间 → "10-17 02:00"，表格里够用 */
+function shortTime(iso: string) {
+  if (!iso || iso.length < 16) return iso
+  return iso.slice(5, 16).replace('T', ' ')
 }
 
 onMounted(reload)
-onUnmounted(() => { if (timer) window.clearInterval(timer) })
+onUnmounted(() => {
+  if (timer) window.clearInterval(timer)
+  if (saveTimer) window.clearTimeout(saveTimer)
+})
 
 defineExpose({
   reload,
@@ -389,13 +500,11 @@ defineExpose({
         <Tag :tone="stateTone">{{ stateLabel }}</Tag>
       </template>
 
-      <!-- 跑的时候：进度 -->
       <template v-if="running">
         <Bar :label="status.phase || '准备中…'" :value="status.done" :max="progressMax" />
         <p class="job-note">导入在服务端后台跑，关掉这个页面也会继续。</p>
       </template>
 
-      <!-- 跑完：原地变成结果 -->
       <template v-else-if="report">
         <div class="stats">
           <div class="stat"><span class="k">页面</span><span class="v num">{{ fmt(report.pages) }}</span></div>
@@ -430,14 +539,12 @@ defineExpose({
         </ul>
       </template>
 
-      <!-- 还没跑过 -->
       <template v-else>
         <p class="job-idle">
           还没跑过。点右上角<b>开始抓取</b>：先「空跑」确认会拉到多少页，再「增量导入」写进库。
         </p>
       </template>
 
-      <!-- 回滚：破坏性、很少用，收在面板底部 -->
       <div class="purge">
         <template v-if="!purgeArmed">
           <Button size="sm" :disabled="running" @click="purgeArmed = true">回滚：清空 wiki 块</Button>
@@ -451,105 +558,92 @@ defineExpose({
       </div>
     </Panel>
 
-    <!-- ============ 双栏：左范围、右分类 ============ -->
-    <div class="picker">
-      <Panel title="抓取范围" :count="items.length" :hint="saved ? '页面保存的范围生效中' : '还没保存过，用的是配置文件里的默认范围'">
-        <div class="meta-row">
-          <Tag :tone="saved ? 'good' : 'warn'">{{ saved ? '已保存' : '默认值' }}</Tag>
-          <Tag tone="neutral">每来源上限 {{ maxPagesPerSource > 0 ? fmt(maxPagesPerSource) + ' 页' : '不限' }}</Tag>
-          <Tag :tone="renderEnabled ? 'good' : 'neutral'">渲染兜底 {{ renderEnabled ? '开' : '关' }}</Tag>
-          <Tag v-if="dirty" tone="flame">有未保存改动</Tag>
-        </div>
+    <!-- ============ 来源表：勾选即范围 ============ -->
+    <Panel title="wiki 来源" :count="checkedCount" hint="勾选即范围，改动自动保存；开始抓取只拉勾上的">
+      <template #actions>
+        <Button size="sm" @click="checkFiltered">全选当前筛选</Button>
+        <Button size="sm" @click="uncheckFiltered">取消当前筛选</Button>
+      </template>
 
-        <ul v-if="items.length" class="scope-list">
-          <li v-for="(s, i) in items" :key="s.kind + ':' + s.name" class="scope-item">
-            <Switch v-model="s.enabled" :aria-label="'启用 ' + s.name" />
-            <a v-if="wikiUrl(s.kind, s.name)" class="scope-name" :href="wikiUrl(s.kind, s.name)" target="_blank" rel="noopener">{{ s.name }}</a>
-            <span v-else class="scope-name">{{ s.name }}</span>
-            <Tag v-if="s.kind === 'prefix'" tone="neutral">前缀</Tag>
-            <span v-if="pagesText(s)" class="faint scope-pages">{{ pagesText(s) }}</span>
-            <Tag v-if="truncatedText(s)" tone="warn">{{ truncatedText(s) }}</Tag>
-            <span class="spacer" />
-            <Button size="sm" @click="removeAt(i)">移除</Button>
-          </li>
-        </ul>
-        <Empty v-else text="范围是空的" hint="从右边「选分类」点一个「选它」，或加一个页名前缀" />
-
-        <div class="add-row">
-          <Input v-model="prefixInput" mono placeholder="页名前缀，如 Quests/" aria-label="页名前缀" />
-          <Button size="sm" :disabled="!prefixInput.trim()" @click="addPrefix">加前缀</Button>
+      <div class="filters">
+        <Input v-model="filter" mono placeholder="搜分类名、示例页名，或中文说明…" aria-label="搜索来源" />
+        <div class="filter-sel">
+          <Select v-model="view" :options="VIEW_OPTIONS" aria-label="筛选来源" />
         </div>
+      </div>
 
-        <div class="scope-actions">
-          <Button variant="primary" size="sm" :disabled="!dirty || saving" @click="save">
-            {{ saving ? '保存中…' : '保存范围' }}
-          </Button>
-          <Button size="sm" :disabled="!dirty || saving" @click="discard">放弃改动</Button>
-          <span class="faint">
-            启用 {{ enabledCount }} / {{ items.length }} · 本次约 {{ fmt(estimatedPages.pages) }} 页<template v-if="estimatedPages.unknown">（{{ estimatedPages.unknown }} 个来源页数未知）</template>
-          </span>
-        </div>
-      </Panel>
+      <div v-if="catalogLoading" class="cat-loading faint">正在读取 wiki 分类…</div>
+      <Empty
+        v-else-if="!filteredRows.length"
+        text="没有匹配的来源"
+        hint="换个关键词，或把筛选切到「全部分类」"
+      />
+      <div v-else class="src-scroll">
+        <table class="src-tbl">
+          <thead>
+            <tr>
+              <th class="c">选</th>
+              <th>来源（wiki 上的原名）</th>
+              <th>说明</th>
+              <th class="r">页数</th>
+              <th>知识库</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in filteredRows" :key="r.key" :class="{ on: r.checked }">
+              <td class="c">
+                <Checkbox
+                  :model-value="isChecked(r.key)"
+                  :aria-label="'选择 ' + r.name"
+                  @update:model-value="(v: boolean) => toggle(r.key, v)"
+                />
+              </td>
+              <td>
+                <div class="mono">
+                  <a v-if="r.url" :href="r.url" target="_blank" rel="noopener">{{ r.name }} ↗</a>
+                  <span v-else>{{ r.name }}</span>
+                </div>
+                <div v-if="r.samples.length" class="samples faint">例：{{ r.samples.join('、') }}</div>
+              </td>
+              <td>
+                <Tag :tone="klassTone(r.klass)">{{ klassLabel(r.klass) }}</Tag>
+                <div class="advice faint">{{ r.advice }}</div>
+              </td>
+              <td class="r num">{{ r.pages === null ? '—' : fmt(r.pages) }}</td>
+              <td>
+                <Tag v-if="r.blocks > 0" tone="good">已入库 {{ fmt(r.blocks) }} 块</Tag>
+                <Tag v-else-if="r.lastSync" tone="warn">拉过 · 无正文</Tag>
+                <span v-else class="faint">未入库</span>
+                <div v-if="r.lastSync" class="sync faint">{{ shortTime(r.lastSync) }}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      <Panel title="选分类" :count="filteredCatalog.length" hint="点「选它」加入左边范围">
-        <div class="filters">
-          <Input v-model="filter" mono placeholder="搜分类名、示例页名，或中文说明…" aria-label="搜索分类" />
-          <div class="filter-sel">
-            <Select v-model="klassFilter" :options="KLASS_OPTIONS" aria-label="按类别筛选" />
-          </div>
-        </div>
+      <div class="src-foot">
+        <span class="faint">
+          已勾选 <b class="num">{{ checkedCount }}</b> 个来源 · 本次约 <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（{{ estimatedPages.unknown }} 个前缀来源页数未知）</template>
+        </span>
+        <Tag v-if="truncatedCount" tone="warn">有 {{ truncatedCount }} 个来源会被上限截断</Tag>
+        <span class="spacer" />
+        <span class="faint">
+          {{ saving ? '保存中…' : dirty ? '未保存' : '已保存' }} · 每来源上限 {{ maxPagesPerSource > 0 ? fmt(maxPagesPerSource) + ' 页' : '不限' }} · 渲染兜底 {{ renderEnabled ? '开' : '关' }}
+        </span>
+      </div>
 
-        <div v-if="catalogLoading" class="cat-loading faint">正在读取 wiki 分类…</div>
-        <div v-else-if="!filteredCatalog.length" class="cat-loading">
-          <Empty text="没有匹配的分类" hint="换个关键词，或把筛选切到「全部分类」" />
-        </div>
-        <div v-else class="cat-scroll">
-          <table class="cat-tbl">
-            <thead>
-              <tr>
-                <th>分类（wiki 上的原名）</th>
-                <th>说明</th>
-                <th class="r">正文页数</th>
-                <th class="c">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in filteredCatalog" :key="c.name">
-                <td>
-                  <div class="mono">
-                    <a v-if="wikiUrl('category', c.name)" :href="wikiUrl('category', c.name)" target="_blank" rel="noopener">{{ c.name }} ↗</a>
-                    <span v-else>{{ c.name }}</span>
-                  </div>
-                  <div v-if="c.samples && c.samples.length" class="samples faint">例：{{ c.samples.join('、') }}</div>
-                </td>
-                <td>
-                  <Tag :tone="klassTone(c.klass)">{{ klassLabel(c.klass) }}</Tag>
-                  <div class="advice faint">{{ c.advice }}</div>
-                </td>
-                <td class="r num">{{ pagesOf(c) }}</td>
-                <td class="c">
-                  <Tag v-if="inScope(c.name)" tone="good">已选</Tag>
-                  <Button v-else-if="c.klass === 'content'" size="sm" @click="pick(c)">选它</Button>
-                  <span v-else class="faint">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p class="faint cat-note">
-          共 {{ catalogTotal }} 个分类<template v-if="catalogAt">（缓存于 {{ catalogAt }}）</template>。
-          「正文页数」是分类里的文章页数，已排除子分类与文件。一个页面可能同时属于多个分类，
-          导入时同一页只处理一次 —— 实际会拉多少以「空跑」为准。
-          维护清单与索引类没有「选它」：选了会把几千页无关内容拉进语料。
-        </p>
-      </Panel>
-    </div>
+      <p class="faint cat-note">
+        共 {{ catalogTotal }} 个分类<template v-if="catalogAt">（缓存于 {{ catalogAt }}）</template>。
+        「页数」是分类里的文章页数，已排除子分类与文件；「知识库」按来源数生效的块 ——
+        <b>未入库</b>说明这个来源还没拉过，「拉过 · 无正文」说明拉过但清洗后没有可入库的正文。
+      </p>
+    </Panel>
 
     <!-- 选一种抓取方式 -->
     <Modal :open="runOpen" title="开始抓取" width="540px" @close="closeRun">
       <p class="run-lede">
-        跑在服务端后台，关掉页面也会继续。本次范围约 <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个来源页数未知）</template>。选一种方式：
+        跑在服务端后台，关掉页面也会继续。本次要拉 <b class="num">{{ checkedCount }}</b> 个来源、约
+        <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个前缀来源页数未知）</template>。选一种方式：
       </p>
       <div class="run-opts">
         <ActionOption
@@ -612,57 +706,14 @@ defineExpose({
 }
 .warn-text { color: var(--flame-bright); font-size: var(--fs-meta); }
 
-/* ==================== 双栏 ==================== */
-.picker {
-  display: grid;
-  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
-  gap: var(--sp-4);
-  align-items: start;
-}
-
-/* ---- 左：范围 ---- */
-.meta-row { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--sp-3); }
-.scope-list { list-style: none; margin: 0; padding: 0; }
-.scope-item {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2) 0;
-  border-bottom: 1px solid var(--hairline);
-}
-.scope-item:last-child { border-bottom: 0; }
-.scope-name {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  color: var(--ink);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-a.scope-name { border-bottom: 1px solid var(--edge); }
-a.scope-name:hover { color: var(--flame-bright); border-bottom-color: var(--flame-bright); }
-.scope-item .spacer { flex: 1; }
-.scope-pages { font-size: var(--fs-meta); white-space: nowrap; }
-
-.add-row { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-3); }
-.add-row :deep(.inp) { font-size: var(--fs-sm); }
-
-.scope-actions {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--hairline);
-}
-
-/* ---- 右：分类菜单 ---- */
+/* ==================== 来源表 ==================== */
 .filters { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
 .filter-sel { flex: 0 0 160px; }
 .cat-loading { padding: var(--sp-4) 0; font-size: var(--fs-meta); text-align: center; }
-.cat-scroll { max-height: 460px; overflow-y: auto; overscroll-behavior-y: contain; }
-.cat-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-.cat-tbl th {
+
+.src-scroll { max-height: 560px; overflow-y: auto; overscroll-behavior-y: contain; }
+.src-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.src-tbl th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -676,15 +727,31 @@ a.scope-name:hover { color: var(--flame-bright); border-bottom-color: var(--flam
   letter-spacing: var(--tracking-label);
   white-space: nowrap;
 }
-.cat-tbl td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--hairline); vertical-align: top; }
-.cat-tbl tbody tr:hover { background: var(--surface-hover); }
-.cat-tbl tbody tr:last-child td { border-bottom: 0; }
-.cat-tbl td.c, .cat-tbl th.c { text-align: center; }
-.cat-tbl td.r, .cat-tbl th.r { text-align: right; }
-.cat-tbl a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--edge); }
-.cat-tbl a:hover { color: var(--flame-bright); border-bottom-color: var(--flame-bright); }
+.src-tbl td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--hairline); vertical-align: top; }
+.src-tbl tbody tr:hover { background: var(--surface-hover); }
+.src-tbl tbody tr:last-child td { border-bottom: 0; }
+/* 勾上的整行给一点底色 —— 一眼扫出这次要拉哪些 */
+.src-tbl tbody tr.on { background: var(--surface-raised); }
+.src-tbl tbody tr.on:hover { background: var(--surface-active); }
+.src-tbl td.c, .src-tbl th.c { text-align: center; width: 44px; }
+.src-tbl td.r, .src-tbl th.r { text-align: right; white-space: nowrap; }
+.src-tbl a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--edge); }
+.src-tbl a:hover { color: var(--flame-bright); border-bottom-color: var(--flame-bright); }
 .samples { font-size: var(--fs-xs); margin-top: 2px; }
 .advice { font-size: var(--fs-xs); margin-top: 3px; line-height: 1.6; max-width: 34em; }
+.sync { font-size: var(--fs-xs); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+.src-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-meta);
+}
+.src-foot .spacer { flex: 1; }
 .cat-note { font-size: var(--fs-meta); margin: var(--sp-3) 0 0; line-height: 1.7; }
 
 .mono { font-family: var(--font-mono); }
@@ -692,12 +759,9 @@ a.scope-name:hover { color: var(--flame-bright); border-bottom-color: var(--flam
 .faint { color: var(--ink-3); }
 
 /* ==================== 选方式 ==================== */
-.run-lede { margin: 0 0 var(--sp-3); font-size: var(--fs-body); color: var(--ink-2); }
+.run-lede { margin: 0 0 var(--sp-3); font-size: var(--fs-body); color: var(--ink-2); line-height: 1.8; }
 .run-opts { display: flex; flex-direction: column; gap: var(--sp-2); }
 
-@media (max-width: 1100px) {
-  .picker { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 760px) {
   .filters { flex-wrap: wrap; }
   .filter-sel { flex: 1 1 100%; }

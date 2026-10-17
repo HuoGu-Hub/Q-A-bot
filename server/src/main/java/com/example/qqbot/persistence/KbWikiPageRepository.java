@@ -133,6 +133,23 @@ public class KbWikiPageRepository {
     }
 
     /**
+     * 每个来源最近一次同步的时间。
+     *
+     * <p>管理端用它区分"从没拉过"和"拉过但清洗后没正文"—— 只看块数这两种都是 0。
+     */
+    public Map<String, String> lastSyncBySource() {
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : jdbc.query(
+                "SELECT source AS s, MAX(synced_at) AS t FROM kb_wiki_page GROUP BY source",
+                r -> Map.entry(r.str("s"), r.str("t") == null ? "" : r.str("t")))) {
+            if (!e.getKey().isEmpty()) {
+                out.put(e.getKey(), e.getValue());
+            }
+        }
+        return out;
+    }
+
+    /**
      * 清空全部状态行 —— **回滚时必须连它一起清**。
      *
      * <p>不清的话 {@code revid} 还记着，再跑一次导入会一篇都不处理
