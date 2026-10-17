@@ -12,7 +12,8 @@
  * 后端数一遍就是这一列。
  *
  * <p>「开始抓取」在页面顶栏（KbView），滚动时永远看得见；导入在服务端后台跑，
- * 关掉页面也会继续，跑完**要重启服务**索引才重载。
+ * 关掉页面也会继续。**跑完不需要重启服务**：写入会让语料版本 +1，索引、词表与
+ * 检索缓存都按版本对账，下一次检索自己重载（见 KbBlockIndex / Glossary）。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
@@ -535,13 +536,8 @@ defineExpose({
           <div class="stat"><span class="k">失败</span><span class="v num">{{ fmt(report.failed) }}</span></div>
         </div>
 
-        <p class="job-note">
-          <template v-if="report.dryRun">
-            <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」。
-          </template>
-          <template v-else>
-            <Tag tone="warn">跑完要重启服务</Tag> 索引才重载，新资料才会被检索到。
-          </template>
+        <p v-if="report.dryRun" class="job-note">
+          <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」。
         </p>
 
         <table v-if="report.bySource && Object.keys(report.bySource).length" class="mini">
