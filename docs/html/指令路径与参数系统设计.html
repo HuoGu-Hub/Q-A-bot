@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>指令路径与参数系统设计</title>
+<style>
+  :root {
+    --void: #06070a; --stone-200: #0b0e13; --stone-300: #12161d; --stone-400: #1a1f28;
+    --hairline: rgba(255,255,255,.085);
+    --ink: #eae5da; --ink-2: #b9c0cb; --ink-3: #8b95a3; --ink-4: #626c7a;
+    --ember: #f2ab55; --ember-hot: #ffd08a; --ember-veil: rgba(242,171,85,.10);
+    --vital: #7ea36a; --mist: #8b9aab; --danger: #c4675c; --info: #6f8fa8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 32px 96px;
+    background: var(--stone-200); color: var(--ink);
+    font: 15px/1.75 "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: .01em; margin: 0 0 10px; }
+  .eyebrow { font-size: 12px; letter-spacing: .16em; color: var(--ink-4); text-transform: uppercase; }
+  h2 { font-size: 18px; font-weight: 600; margin: 46px 0 14px; padding-left: 12px; position: relative; }
+  h2::before { content: ''; position: absolute; left: 0; top: .32em; width: 2px; height: 1em; background: var(--ember); }
+  h3 { font-size: 15px; font-weight: 500; margin: 26px 0 8px; color: var(--ink); }
+  p { margin: 0 0 12px; color: var(--ink-2); }
+  b, strong { color: var(--ink); font-weight: 500; }
+  code { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; padding: 1px 5px; border-radius: 3px; background: var(--void); color: var(--ink-2); }
+  .lead { font-size: 16px; color: var(--ink-2); max-width: 780px; }
+  .card { background: var(--stone-300); border-radius: 10px; padding: 20px 24px; margin: 16px 0; }
+  .card--inset { background: var(--void); box-shadow: inset 0 1px 0 rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.045); }
+  .card h3 { margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; letter-spacing: .04em; padding: 7px 10px; border-bottom: 1px solid var(--hairline); }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--hairline); color: var(--ink-2); vertical-align: top; }
+  td:first-child { color: var(--ink); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  pre { background: var(--void); border-radius: 6px; padding: 16px 18px; overflow-x: auto; font: 12.5px/1.7 "JetBrains Mono", Consolas, monospace; color: var(--ink-3); margin: 14px 0; }
+  pre b { color: var(--ember); font-weight: 500; }
+  pre i { color: var(--ink-4); font-style: normal; }
+  pre em { color: var(--vital); font-style: normal; }
+  ul { margin: 0 0 12px; padding-left: 1.2em; color: var(--ink-2); }
+  li { margin: 5px 0; }
+  li code { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hairline); color: var(--ink-3); margin-right: 6px; }
+  .tag--new { color: var(--ember); border-color: rgba(242,171,85,.35); background: var(--ember-veil); }
+  .tag--keep { color: var(--vital); border-color: rgba(126,163,106,.35); }
+  .tag--drop { color: var(--danger); border-color: rgba(196,103,92,.35); }
+  .callout { border-left: 2px solid var(--ember); padding: 2px 0 2px 16px; margin: 18px 0; color: var(--ink-2); }
+  .callout--warn { border-left-color: var(--danger); }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 13px; }
+  .diagram-link { display: inline-block; margin: 4px 0 0; padding: 10px 16px; border-radius: 8px; background: var(--stone-400); color: var(--ink); text-decoration: none; border: 1px solid var(--hairline); }
+  .diagram-link:hover { border-color: rgba(242,171,85,.4); color: var(--ember-hot); }
+  .syntax { font: 13px/1.9 "JetBrains Mono", Consolas, monospace; background: var(--void); border-radius: 8px; padding: 18px 20px; margin: 16px 0; color: var(--ink-3); }
+  .syntax .lit { color: var(--ink); }
+  .syntax .p { color: var(--ember); }
+  .syntax .v { color: var(--vital); }
+  .syntax .t { color: var(--info); }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--ink-4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">指令系统 · 触发与参数重构</div>
+  <h1>斜杠路径与井号参数</h1>
+  <p class="lead">命令一律以 <code>/</code> 开头，后面可以跟多级路径；每个取值用 <code>#变量名-值#</code> 单独标注。@ 只是入群闸门，不参与语法。</p>
+
+  <div class="card">
+    <h3>一句话结论</h3>
+    <p style="margin-bottom:0">一条命令拆成三段：<b>命令路径</b>、<b>井号参数</b>、<b>自由文本</b>。路径按最长匹配一级一级吃词，<code>/set /output</code> 是两级命令，<code>/xxx /help</code> 是取这条命令的说明。参数不再靠位置猜，而是自带名字，顺序随意、中英皆可、值里可以有减号和空格。命令在库里声明自己的参数表，解析失败就回一句指名道姓的用法提示。</p>
+  </div>
+
+  <h2>上一版错在哪</h2>
+  <p>上一版把 <code>@机器人 记录-打本-20:00</code> 当成新触发形态，这是错的。@ 在 QQ 里是「叫人」的语义，把它塞进命令语法会让群友分不清「@ 是叫人还是下命令」。另外破折号当分隔符要跟日期、内容里的连字符持续打架，得靠回溯猜。这一版把这两件事都收回去。</p>
+  <table>
+    <tr><th>要素</th><th>上一版</th><th>这一版</th></tr>
+    <tr><td>触发</td><td><code>@机器人 命令-值</code></td><td><code>/路径</code> <span class="tag tag--keep">不变</span></td></tr>
+    <tr><td>@ 的角色</td><td>语法的一部分</td><td>只是群里必须 @ 的准入闸门</td></tr>
+    <tr><td>取值分隔</td><td>破折号，需回溯猜</td><td><code>#名字-值#</code>，自带边界</td></tr>
+    <tr><td>参数顺序</td><td>有位置含义</td><td>无所谓，按名字取</td></tr>
+    <tr><td>层级</td><td>无</td><td><code>/set /output</code> 多级路径</td></tr>
+  </table>
+
+  <h2>命令长什么样</h2>
+  <div class="syntax">
+    <span class="lit">/</span><span class="p">路径</span> <span class="lit">/</span><span class="p">子路径</span> … <span class="lit">#</span><span class="p">变量名</span><span class="lit">-</span><span class="v">值</span><span class="lit">#</span> … <span class="t">自由文本</span>
+  </div>
+  <p>三段都是可选的，但至少要有一个路径。参数与文本可以任意穿插，解析器只摘走形状正确的井号段，剩下的全是文本。</p>
+
+  <table>
+    <tr><th>输入</th><th>路径</th><th>参数</th><th>文本</th><th>含义</th></tr>
+    <tr><td><code>/help</code></td><td>help</td><td>—</td><td>—</td><td>全部命令的列表</td></tr>
+    <tr><td><code>/xxx /help</code></td><td>xxx</td><td>—</td><td>—</td><td>只看 xxx 的说明</td></tr>
+    <tr><td><code>/set /output #time-21:30# 文本</code></td><td>set/output</td><td>time=21:30</td><td>文本</td><td>设置一条定时输出</td></tr>
+    <tr><td><code>/set /output 文本 #time-21:30#</code></td><td>set/output</td><td>time=21:30</td><td>文本</td><td>同上，参数放后面一样</td></tr>
+    <tr><td><code>/xxx /yyy #命令-数值# 文本</code></td><td>xxx/yyy</td><td>命令=数值</td><td>文本</td><td>两级命令带一个参数</td></tr>
+    <tr><td><code>/del /output #id-3#</code></td><td>del/output</td><td>id=3</td><td>—</td><td>删掉编号 3 的输出</td></tr>
+  </table>
+
+  <h2>路径怎么解析</h2>
+  <p>规则是<b>最长匹配</b>：能吃进路径的词就吃，吃不动就停，停下的地方开始是参数和文本。</p>
+  <pre>
+  ① 取第一个词，与一级路径精确比较         <i>大小写不敏感</i>
+     不在表里 → 不是命令，交回普通问答
+
+  ② 看下一个词以 / 开头？
+     且「当前路径/这个词」在表里 → 并入路径，回到 ②
+     否则 → 停在当前路径
+
+  ③ 停下的位置之后，先摘 #名字-值#
+     剩下的就是自由文本
+
+  特例：/路径 /help
+     若「路径/help」没注册 → 认作帮助修饰符，只回说明不执行
+  </pre>
+  <p>这条规则同时解决了两件事：多级命令不必额外声明层级语法，而文本里出现的 <code>/api/getUser</code> 只要不是注册过的子路径就不会被误吃。</p>
+  <pre>
+  /联网 /api/getUser 是什么
+    路径 = 联网            <i>api 不是联网的子路径，停在第一级</i>
+    文本 = /api/getUser 是什么
+  </pre>
+  <div class="callout">
+    <b>help 是保留字。</b>任何路径都不能把子命令命名成 help，否则第 ③ 步的判定会有歧义。新增指令时后台会直接拒绝这个名字。
+  </div>
+
+  <h2>参数怎么写</h2>
+  <p>形状固定为 <code>#名字-值#</code>，名字与值在<b>第一个减号</b>处切开，所以值里可以照常出现减号、空格、斜杠和冒号。</p>
+  <pre>
+  <b>#time-21:30#</b>          名字 time    值 21:30
+  <b>#date-2026-10-18#</b>     名字 date    值 2026-10-18      <i>值里的减号不动</i>
+  <b>#时间-晚上八点#</b>        名字 时间    值 晚上八点         <i>中文名一样用</i>
+  <b>#text-晚上打本-集合#</b>   名字 text    值 晚上打本-集合
+  </pre>
+  <table>
+    <tr><th>规则</th><th>说明</th></tr>
+    <tr><td>名字字符集</td><td>汉字、字母、数字、下划线；不能含减号、井号、空白</td></tr>
+    <tr><td>大小写</td><td>名字与路径都不敏感，值原样保留</td></tr>
+    <tr><td>顺序</td><td>随意，可出现在文本前、中、后</td></tr>
+    <tr><td>重复</td><td>同一个名字出现两次 → 报错，不静默取后者</td></tr>
+    <tr><td>全角</td><td><code>＃</code> 与 <code>#</code> 等价，中文输入法不会卡住</td></tr>
+    <tr><td>形状不符</td><td>没有减号的 <code>#1#</code> 不算参数，原样留在文本里</td></tr>
+    <tr><td>字面井号</td><td>文本里真要写 <code>#</code> 时用 <code>\#</code> 转义</td></tr>
+  </table>
+
+  <h3>参数由命令声明</h3>
+  <p>后台新增指令时填一份参数表，它就是这条命令的契约：解析、校验、帮助、模板取值全靠它。</p>
+  <table>
+    <tr><th>字段</th><th>含义</th><th>例</th></tr>
+    <tr><td>name</td><td>井号里的变量名，中英皆可</td><td><code>time</code> 或 <code>时间</code></td></tr>
+    <tr><td>type</td><td>取值类型</td><td><code>moment</code></td></tr>
+    <tr><td>required</td><td>缺了是否算失败</td><td><code>true</code></td></tr>
+    <tr><td>default</td><td>可选参数的默认值</td><td><code>21:00</code></td></tr>
+    <tr><td>description</td><td>帮助里那一行说明</td><td>每天几点发</td></tr>
+    <tr><td>example</td><td>帮助与回执里的样例</td><td><code>21:30</code></td></tr>
+  </table>
+  <table>
+    <tr><th>类型</th><th>接受什么</th><th>归一成什么</th></tr>
+    <tr><td><code>text</code></td><td>任意文本</td><td>原样字符串</td></tr>
+    <tr><td><code>int</code></td><td>十进制整数</td><td><code>long</code></td></tr>
+    <tr><td><code>moment</code></td><td><code>21:30</code>、<code>明天21:30</code>、<code>10-18 21:30</code></td><td>东八区的时刻</td></tr>
+    <tr><td><code>enum</code></td><td>参数表里列出的候选值</td><td>规范值</td></tr>
+  </table>
+  <p>时间只认 <code>AppTime</code> 那一套东八区口径，解析、落库、展示、扫描全链路一致，不引入第二套换算。模板里用 <code>{arg.time}</code> 取值，老命令的 <code>{args}</code> 与 <code>{args.N}</code> 原样保留。</p>
+
+  <h3>失败要说清是哪一项</h3>
+  <p>回执固定三段：哪个参数、期望什么、完整用法。不猜、不静默丢弃。</p>
+  <pre>
+  没有 #time# 这个参数。这条命令可用：#date# #text#
+  用法：/set /output #time-21:30# <文本>
+  例：  /set /output #time-21:30# 晚上打本集合
+
+  #time# 的 25:99 不是有效时间，示例：21:30
+  缺少必填参数 #text#
+  </pre>
+
+  <h2>单命令帮助</h2>
+  <p><code>/路径 /help</code> 只回这一条命令的说明。内容由参数表自动生成，后台可以整体覆盖成手写文案。</p>
+  <pre>
+  <b>/set /output</b> — 设置一条定时输出的文本
+  用法：/set /output #time-21:30# &lt;文本&gt;
+  参数：
+    #time#  时间点  必填  例 21:30
+    #date#  日期    可选  例 2026-10-18
+    #text#  内容    必填  例 晚上打本集合
+  示例：/set /output #time-21:30# 晚上打本集合
+  </pre>
+  <p>不带参数的裸命令 <code>/set /output</code> 也回同一份说明，这是「发了命令但不知道要传什么」时最自然的兜底。</p>
+
+  <h2>命令类型与动作</h2>
+  <p>类型仍是三类，判断依据是「要不要花钱、要不要落库」。</p>
+  <table>
+    <tr><th>kind</th><th>做什么</th><th>走 Guard 与预算</th><th>例</th></tr>
+    <tr><td><code>template</code></td><td>渲染模板秒回</td><td>不走</td><td><code>/help</code></td></tr>
+    <tr><td><code>agent</code></td><td>把文本当问题交给模型</td><td>走</td><td><code>/qa #mode-none# 今天什么版本</code></td></tr>
+    <tr><td><code>action</code></td><td>交给注册的执行器，写库或查库</td><td>不走</td><td><code>/set /output …</code></td></tr>
+  </table>
+  <p>动作用注册表分发，不写 <code>switch</code>。每个动作是一个类，声明自己的参数表与用法，执行时拿到校验过的 <code>CommandArgs</code> 和上下文，返回一句回执。动作被删掉之后，绑定它的命令在解析阶段就当作停用并记一条告警日志，不会在线上抛 <code>ClassNotFound</code>。</p>
+
+  <h2>定时输出：一条完整的链路</h2>
+  <p>就用你给的那个例子，三个动作组成闭环。它们都是内置命令，不可删除，回执文案可在后台改。</p>
+  <table>
+    <tr><th>命令</th><th>动作</th><th>参数</th><th>回执</th></tr>
+    <tr><td><code>/set /output</code></td><td>schedule.create</td><td>#time# 必填 · #date# 可选 · #text# 必填</td><td>已记下 #3：今天 21:30 在本群输出「晚上打本集合」</td></tr>
+    <tr><td><code>/list /output</code></td><td>schedule.list</td><td>无</td><td>本群待发 #3 今天 21:30 晚上打本集合</td></tr>
+    <tr><td><code>/del /output</code></td><td>schedule.delete</td><td>#id# 必填</td><td>已撤销 #3</td></tr>
+  </table>
+  <p>带 <code>#date#</code> 的只在指定那天发一次，不带就是每天同一时刻发。删除按编号，因为按内容匹配会误删——两句「打本集合」分不出是哪条。</p>
+
+  <h3>任务表</h3>
+  <pre>
+  bot_schedule
+    id           INTEGER PK        <i>// 回执里的编号</i>
+    group_id     INTEGER           <i>// 0 = 私聊</i>
+    user_id      INTEGER           <i>// 创建者，删除权限的依据</i>
+    content      TEXT              <i>// 到点要发的那句话</i>
+    fire_at      TEXT              <i>// 下一次触发时刻，UTC 存盘</i>
+    repeat_rule  TEXT              <i>// once / daily，带 #date# 的是 once</i>
+    status       TEXT              <i>// pending / sending / sent / failed / expired / canceled</i>
+    attempts     INTEGER
+    last_error   TEXT
+    created_at   TEXT
+    sent_at      TEXT
+  </pre>
+  <p>索引建在 <code>(status, fire_at)</code>，扫描只走这一条。周期任务发完之后按 <code>repeat_rule</code> 推下一个 <code>fire_at</code> 并回到 <code>pending</code>。</p>
+
+  <h3>扫描器要定的五件事</h3>
+  <table>
+    <tr><th>问题</th><th>决定</th><th>理由</th></tr>
+    <tr><td>多久扫一次</td><td>10 秒，首次延迟 15 秒</td><td>群聊提醒差十秒能接受，扫太勤只是空转。</td></tr>
+    <tr><td>会不会重复发</td><td>先 <code>UPDATE … WHERE status='pending'</code>，更新到 1 行才发</td><td>同一行只能被一个 tick 抢到，多实例共用同一个库也安全。</td></tr>
+    <tr><td>停机错过了怎么办</td><td>30 分钟内补发，超过标记 <code>expired</code></td><td>半夜重启后补发一条「下午三点集合」只会让人困惑。</td></tr>
+    <tr><td>发送失败怎么办</td><td>重试 3 次并退避，仍失败标 <code>failed</code></td><td>协议端短暂掉线不该丢任务，也不能无限重试。</td></tr>
+    <tr><td>线程池</td><td><code>spring.task.scheduling.pool.size</code> 调到 2</td><td>Spring 默认调度池只有一个线程，别的定时任务会被这个 10 秒 tick 挤住。</td></tr>
+  </table>
+  <p>扫描器不碰协议客户端，只调出站发送器：群聊走 <code>sendToGroup</code>，私聊需要新增 <code>sendToPrivate</code>。两条路共用出站过滤、分片与节流。<b>定时发送不能成为绕过内容过滤的侧门。</b></p>
+
+  <h3>删除权限</h3>
+  <table>
+    <tr><th>谁能删</th><th>判定</th></tr>
+    <tr><td>创建者本人</td><td><code>task.user_id == 触发者</code></td></tr>
+    <tr><td>群主与群管</td><td>事件里的 <code>sender.role</code> 是 <code>owner</code> 或 <code>admin</code></td></tr>
+    <tr><td>其他群友</td><td>拒绝，回「#3 不是你建的」</td></tr>
+    <tr><td>别的群</td><td>查不到，任务是群内资产</td></tr>
+  </table>
+  <p>权限判定走 <code>min_role</code>，顺手补上「字段只存不判」那个缺口。角色由路由层归一化成 <code>owner / admin / member / none</code> 放进上下文，动作层不解析 OneBot 的 JSON。</p>
+
+  <h2>组件与依赖</h2>
+  <p>新代码落在 <code>command</code> 包，持久化落 <code>persistence</code>。三条既有护栏直接约束实现方式：</p>
+  <ul>
+    <li><b>业务包不得依赖 config</b> —— 扫描器与动作的配置走只读接口，由 <code>config</code> 侧实现。</li>
+    <li><b>只有 outbound 与 router 能碰 OneBotApiClient</b> —— 扫描器只持有 <code>OutboundSender</code>。</li>
+    <li><b>持久化之外不得出现 java.sql</b> —— 新表所有 SQL 进 <code>ScheduleRepository</code>。</li>
+  </ul>
+  <pre>
+  command/
+    CommandMatcher      <i>// 是不是命令 + 路径最长匹配，不认识参数</i>
+    CommandParser       <i>// 摘 #名-值# + 按参数表校验 + 类型归一</i>
+    CommandArgs         <i>// 按名字取值的小对象</i>
+    CommandHelp         <i>// 由参数表生成单命令帮助</i>
+    CommandHandler      <i>// 按 kind 分派</i>
+    action/             <i>// CommandAction · ActionRegistry · 内置动作</i>
+    ScheduleStore · ScheduleRunner · SchedulePolicy
+  </pre>
+  <p>点击查看完整数据流：<br>
+  <a class="diagram-link" href="../diagrams/command-trigger-flow.html">打开交互版路径与参数流程图 →</a></p>
+
+  <h2>兼容与迁移</h2>
+  <table>
+    <tr><th>对象</th><th>改动</th><th>兼容策略</th></tr>
+    <tr><td><code>bot_command.trigger</code></td><td>值从 <code>help</code> 变成路径形式 <code>set/output</code></td><td>列名不动。老行的值就是一级路径，最长匹配天然兼容</td></tr>
+    <tr><td><code>bot_command</code></td><td>加 <code>params</code>、<code>help</code>、<code>action</code> 三列</td><td>沿用 <code>addColumnIfMissing</code>，老库自动补列</td></tr>
+    <tr><td><code>/命令 参数</code></td><td>参数改由 <code>#名-值#</code> 传入</td><td>模板里的 <code>{args}</code> 与 <code>{args.N}</code> 保留，老指令不受影响</td></tr>
+    <tr><td><code>{cmd.list}</code></td><td>带参数的路径显示成 <code>/set /output #time-21:30# &lt;文本&gt;</code></td><td>列表自动变成自解释的用法</td></tr>
+  </table>
+
+  <h2>实施顺序</h2>
+  <table>
+    <tr><th>阶段</th><th>内容</th><th>验收</th></tr>
+    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取、参数表模型、类型校验、<code>{arg.x}</code></td><td>解析用例全绿，老斜杠命令行为不变</td></tr>
+    <tr><td>P1</td><td>单命令帮助、动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
+    <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code></td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
+    <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
+  </table>
+
+  <h2>验收清单</h2>
+  <ul>
+    <li><code>/xxx /help</code> 只回 xxx 的说明，不回全局列表。</li>
+    <li><code>/联网 /api/getUser 是什么</code> 的文本完整保留，路径停在「联网」。</li>
+    <li><code>#date-2026-10-18#</code> 的值是 <code>2026-10-18</code>，没被切成两段。</li>
+    <li>参数顺序颠倒、放在文本之后，结果一致。</li>
+    <li><code>#time-25:99#</code>、缺 <code>#text#</code>、重复 <code>#time#</code> 三种失败都指名到参数。</li>
+    <li>文本里的 <code>#1#</code> 不被当成参数。</li>
+    <li>跨群删除查不到，非创建者被拒，群管可以删。</li>
+    <li>停机 10 分钟后重启补发，2 小时后重启标记过期不补。</li>
+    <li>定时内容命中敏感词时被出站过滤拦下，与即时回复同一套判定。</li>
+  </ul>
+
+  <h2>风险</h2>
+  <table>
+    <tr><th>风险</th><th>处置</th></tr>
+    <tr><td>文本里恰好出现 <code>#名字-值#</code> 形状</td><td>用 <code>\#</code> 转义；解析失败时把原文回显，让群友一眼看出被摘走了什么。</td></tr>
+    <tr><td>子路径名与文本冲突</td><td>只有注册过的子路径才会被吃进路径，其余原样当文本。</td></tr>
+    <tr><td>定时发送变成骚扰工具</td><td>每人待发上限 5 条、内容 200 字、沿用独立限流，到点仍走出站过滤。后续可加免打扰时段。</td></tr>
+    <tr><td>周期任务堆积</td><td>周期以行为单位更新同一个 <code>fire_at</code>，不预先展开成多行；到点失败三次自动停并私聊创建者。</td></tr>
+    <tr><td>SQLite 写锁</td><td>写入是单行插入，量级是每人每天几条；扫描每 10 秒读一次，冲突可以忽略。</td></tr>
+  </table>
+
+  <h2>需要你拍板的三件事</h2>
+  <div class="card">
+    <p><b>1. 带 <code>#date#</code> 是只发一次，不带是每天发。</b>这是我从「设置一条定时输出的文本」推出来的。若你要的是「全部只发一次」，那 <code>#date#</code> 就该是必填。</p>
+    <p><b>2. <code>#</code> 的转义用 <code>\#</code>。</b>若你觉得群里几乎不会出现这种文本，也可以先不做转义，解析失败时回显原文就够了。</p>
+    <p style="margin-bottom:0"><b>3. 群里是否仍要求 @ 机器人。</b>命令已经强制 <code>/</code> 开头，误触发面比原来小很多，但「贴代码路径」依旧存在。我建议保留这个开关的默认开启，配置页给一句提示。</p>
+  </div>
+
+  <footer>飘雪喵 · 指令路径与参数系统设计 · 2026-10-18</footer>
+</div>
+</body>
+</html>

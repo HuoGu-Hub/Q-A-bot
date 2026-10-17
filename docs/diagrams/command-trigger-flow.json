@@ -2,14 +2,10 @@
   "schema_version": 1,
   "diagram_type": "workflow",
   "meta": {
-    "title": "指令触发与参数分派",
+    "title": "指令路径与参数解析",
     "quality_profile": "showcase",
     "animation": "none",
-    "output": "docs/diagrams/command-trigger-flow.html",
-    "viewBox": [
-      1120,
-      720
-    ]
+    "output": "docs/diagrams/command-trigger-flow.html"
   },
   "lanes": [
     {
@@ -22,7 +18,7 @@
     },
     {
       "id": "args",
-      "label": "参数解析"
+      "label": "路径与参数"
     },
     {
       "id": "dispatch",
@@ -38,7 +34,7 @@
     },
     {
       "id": "fail",
-      "label": "未命中与提示",
+      "label": "帮助与提示",
       "variant": "exception"
     }
   ],
@@ -51,7 +47,7 @@
     },
     {
       "id": "recognize",
-      "label": "识别与解析",
+      "label": "解析与分派",
       "fromCol": 2,
       "toCol": 3,
       "variant": "emphasis"
@@ -80,7 +76,7 @@
       "col": 0,
       "type": "external",
       "label": "群友",
-      "sublabel": "@机器人 记录-打本-20:00"
+      "sublabel": "#time-21:30#"
     },
     {
       "id": "gate",
@@ -88,7 +84,7 @@
       "col": 1,
       "type": "backend",
       "label": "入口判定",
-      "sublabel": "准入 · @ · 双形态",
+      "sublabel": "准入 · / 触发",
       "tag": "MessageRouter"
     },
     {
@@ -96,9 +92,9 @@
       "lane": "args",
       "col": 2,
       "type": "backend",
-      "label": "参数解析",
-      "sublabel": "右锚定 · 类型归一",
-      "tag": "ArgParser"
+      "label": "路径与参数",
+      "sublabel": "最长匹配 · #名-值#",
+      "tag": "CommandParser"
     },
     {
       "id": "dispatcher",
@@ -115,7 +111,7 @@
       "col": 3,
       "type": "messagebus",
       "label": "动作执行",
-      "sublabel": "创建 · 删除 · 列表",
+      "sublabel": "设置 · 删除 · 列表",
       "tag": "ActionRegistry"
     },
     {
@@ -136,12 +132,12 @@
       "sublabel": "到点自动发送"
     },
     {
-      "id": "usage",
+      "id": "info",
       "lane": "fail",
       "col": 2,
       "type": "security",
-      "label": "用法提示",
-      "sublabel": "缺参 · 类型不符"
+      "label": "帮助与提示",
+      "sublabel": "/路径 /help · 用法提示"
     }
   ],
   "edges": [
@@ -169,7 +165,7 @@
       "id": "parser-dispatcher",
       "from": "parser",
       "to": "dispatcher",
-      "label": "参数就绪",
+      "label": "路径就绪",
       "variant": "default",
       "labelAt": [
         365,
@@ -177,15 +173,19 @@
       ]
     },
     {
-      "id": "parser-usage",
+      "id": "parser-info",
       "from": "parser",
-      "to": "usage",
+      "to": "info",
       "label": "不合格",
       "variant": "security",
       "role": "error",
       "fromSide": "bottom",
       "toSide": "top",
-      "route": "drop"
+      "route": "drop",
+      "labelAt": [
+        360,
+        540
+      ]
     },
     {
       "id": "dispatcher-action",
@@ -206,11 +206,7 @@
       "from": "action",
       "to": "timer",
       "label": "写入待发",
-      "variant": "default",
-      "labelAt": [
-        500,
-        470
-      ]
+      "variant": "default"
     },
     {
       "id": "timer-sent",
@@ -227,32 +223,32 @@
   "cards": [
     {
       "dot": "cyan",
-      "title": "触发形态",
+      "title": "命令写法",
       "items": [
-        "斜杠形态保留：/命令 值 值",
-        "破折号形态新增：@机器人 命令-值-值",
-        "命令名不在指令表里就当普通聊天",
-        "群里是否必须 @，仍由开关决定"
+        "一律以 / 开头，@ 只是入群闸门",
+        "路径可以分层：/set /output",
+        "路径按最长匹配吃词，吃不动就停",
+        "群里是否必须 @ 仍由开关决定"
       ]
     },
     {
       "dot": "emerald",
-      "title": "切分与类型",
+      "title": "参数写法",
       "items": [
-        "类型化参数从右往左锚定",
-        "文本参数吃剩下的全部",
-        "值里本身带 - 时用引号包住",
-        "时间接受 20:00 / 明天20:00 / 10-18 20:00"
+        "#变量名-值#，顺序随意",
+        "变量名中英皆可，新增指令时定义",
+        "值里的 - 与空格原样保留",
+        "名字不在参数表里就回用法提示"
       ]
     },
     {
       "dot": "rose",
-      "title": "到点与撤销",
+      "title": "帮助与定时",
       "items": [
-        "创建时回一个编号，编号就是任务 id",
-        "创建者本人或群管才能删除",
-        "超过宽限期的任务标记过期，不补发",
-        "发送走同一个出站口，过滤与节流不绕过"
+        "/路径 /help 输出这一条命令的帮助",
+        "帮助文档由参数表自动生成，也可手写",
+        "例：/set /output #time-21:30# 文本",
+        "创建者本人或群管才能撤销"
       ]
     }
   ]
