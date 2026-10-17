@@ -111,7 +111,9 @@ public class WikiApiClient {
      * 后者把 {@link Collected#truncated()} 标成 true，**调用方必须报出来**。
      */
     static Collected collect(java.util.function.Function<Map<String, String>, Page> fetch, int cap) {
-        int limit = Math.max(1, cap);
+        // cap <= 0 = **不限**：一路拉到 continue 结束，只受下面的 MAX_ROUNDS 兜底。
+        // 给"这个分类就是要全拉"用 —— 页数会随游戏更新长大，固定上限必然要改。
+        int limit = cap <= 0 ? Integer.MAX_VALUE : Math.max(1, cap);
         List<String> out = new ArrayList<>();
         Map<String, String> cont = Map.of();
         for (int round = 0; round < MAX_ROUNDS; round++) {
@@ -153,6 +155,8 @@ public class WikiApiClient {
      * <p>⚠️ 加了 {@code cmtype=page}：不加的话**子分类**（{@code Category:...}）与文件
      * （{@code File:...}）也会被当成文章列进来 —— 实测 {@code Category:Gameplay} 的 11 个成员里
      * 有 2 个是子分类，导进来只会在状态表里多两行 0 字产的账面数据。
+     *
+     * @param cap 最多列多少页；{@code <= 0} = 不限（拉到底）
      */
     public Collected listCategoryMembers(String category, int cap) {
         return collect(cont -> {

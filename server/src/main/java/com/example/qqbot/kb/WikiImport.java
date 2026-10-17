@@ -38,8 +38,18 @@ public class WikiImport {
     /** 页面前缀，如 `Quests/`（任务页都在这个前缀下） */
     private List<String> prefixes = new ArrayList<>();
 
-    /** 每个来源最多导入多少页 —— 防止某个分类突然膨胀时失控 */
-    private int maxPagesPerSource = 300;
+    /**
+     * 每个来源最多导入多少页。**0 = 不限**（默认）。
+     *
+     * <h2>为什么默认不限（2026-10-17 改）</h2>
+     * 原来是 300，而页数会随游戏更新长大 —— 实测 {@code Category:Crafting Materials}
+     * 已经 341 页，于是每跑一次都**静默少 41 页**（只有报告里一行警告）。
+     * 任何固定数字迟早会被超过，而"拉全资料"是硬需求，所以默认不设上限：
+     * 拉到底，由 {@code MAX_ROUNDS} 兜住死循环，页数在页面上**事前**看得见。
+     *
+     * <p>想给某个特别大的来源设闸，再把它调成具体数字；顶到时导入报告里会明确报出来。
+     */
+    private int maxPagesPerSource = 0;
 
     /** 派生块 docId 的前缀，形如 `wiki·任务`。purge 就按它清 */
     private String docIdPrefix = "wiki";

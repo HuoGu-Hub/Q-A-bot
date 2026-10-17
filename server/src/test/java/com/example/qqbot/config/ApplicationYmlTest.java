@@ -63,7 +63,7 @@ class ApplicationYmlTest {
     }
 
     @Test
-    @DisplayName("★ 语料入口的配置合法：来源非空、上限为正")
+    @DisplayName("★ 语料入口的配置合法：来源非空、上限非负")
     void corpusEntryPointsAreSane() throws Exception {
         Map<String, Object> wiki = at(load(), "app", "kb", "wiki-import");
         assertThat((List<?>) wiki.get("prefixes")).as("prefixes 不能空").isNotEmpty();
@@ -72,7 +72,9 @@ class ApplicationYmlTest {
                 assertThat(c).as("分类名不能有首尾空格（列页会匹配不到）")
                         .isInstanceOf(String.class).isEqualTo(((String) c).trim()));
         assertThat((Integer) wiki.get("max-body-chars")).as("单块上限必须为正").isPositive();
-        assertThat((Integer) wiki.get("max-pages-per-source")).as("每来源页数上限必须为正").isPositive();
+        // 0 = **不限**（默认）—— 页数会随游戏更新长大，固定上限必然被超过（见 WikiImport）
+        assertThat((Integer) wiki.get("max-pages-per-source"))
+                .as("每来源页数上限：0 = 不限，负数才是写错").isNotNegative();
 
         Map<String, Object> mapSync = at(load(), "app", "kb", "map-sync");
         assertThat((Integer) mapSync.get("max-pages")).isPositive();

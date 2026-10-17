@@ -212,8 +212,11 @@ public class WikiArticleImporter {
             // ⚠️ 顶到上限时**必须吵**：多出来的页既不在本次导入里、也不会进状态表 ——
             //    静默漏页是最难查的一类问题（见 WikiApiClient.collect）。
             if (listed.truncated()) {
-                String warn = src.label() + "：列到 " + titles.size() + " 页就顶到上限"
-                        + "（wiki-import.max-pages-per-source=" + cfg.getMaxPagesPerSource()
+                int cap = cfg.getMaxPagesPerSource();
+                String why = cap > 0
+                        ? "wiki-import.max-pages-per-source=" + cap
+                        : "翻页轮数上限（每来源上限当前是「不限」）";
+                String warn = src.label() + "：列到 " + titles.size() + " 页就顶到上限（" + why
                         + "），**后面还有页没列** —— 调大上限，或把它拆成多个来源";
                 log.warn("[KB-WIKI] {}", warn);
                 errors.add(warn);

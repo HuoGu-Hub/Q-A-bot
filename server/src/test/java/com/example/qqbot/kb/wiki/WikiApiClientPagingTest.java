@@ -77,6 +77,20 @@ class WikiApiClientPagingTest {
     }
 
     @Test
+    @DisplayName("★ 上限设为不限（0）时一路拉到底：不再有固定数字被超过的截断")
+    void zeroCapMeansUnlimited() {
+        AtomicInteger calls = new AtomicInteger();
+        WikiApiClient.Collected c = WikiApiClient.collect(contMap -> {
+            int n = calls.incrementAndGet();
+            return n < 4
+                    ? new WikiApiClient.Page(List.of("P" + n), cont("t" + n))
+                    : new WikiApiClient.Page(List.of("P4"), Map.of());
+        }, 0);
+        assertThat(c.titles()).containsExactly("P1", "P2", "P3", "P4");
+        assertThat(c.truncated()).isFalse();
+    }
+
+    @Test
     @DisplayName("wiki 一直回同一个令牌也不许把导入挂死：靠轮数上限兜住")
     void neverLoopsForever() {
         WikiApiClient.Collected c = WikiApiClient.collect(

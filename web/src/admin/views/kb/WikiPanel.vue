@@ -201,6 +201,37 @@ function wikiUrl(kind: string, name: string) {
 function inScope(name: string) {
   return items.value.some(s => s.name === name)
 }
+/** 分类来源在菜单里的页数；前缀来源菜单里没有 → null */
+function pagesFor(s: SourceRow): number | null {
+  if (s.kind !== 'category') return null
+  const c = catalog.value.find(x => x.name === s.name)
+  return c && c.pages !== null && c.pages !== undefined ? c.pages : null
+}
+function pagesText(s: SourceRow): string {
+  const p = pagesFor(s)
+  return p === null ? '' : fmt(p) + ' 页'
+}
+/** 这个来源会被上限截断吗 —— 上限设为「不限」时永远不截 */
+function truncatedText(s: SourceRow): string {
+  const p = pagesFor(s)
+  if (p === null || maxPagesPerSource.value <= 0) return ''
+  const lost = p - maxPagesPerSource.value
+  return lost > 0 ? '会漏 ' + fmt(lost) + ' 页' : ''
+}
+
+/** 本次范围大约要拉多少页（只算得出页数的分类来源；前缀来源是未知） */
+const estimatedPages = computed(() => {
+  let pages = 0
+  let unknown = 0
+  for (const s of items.value) {
+    if (!s.enabled) continue
+    const p = pagesFor(s)
+    if (p === null) unknown++
+    else pages += p
+  }
+  return { pages, unknown }
+})
+
 function pagesOf(c: CatalogRow) {
   if (c.pages !== null && c.pages !== undefined) return String(c.pages)
   // 取不到精确页数时退回成员数（含子分类与文件），用 ≈ 标明这是近似值
@@ -425,7 +456,7 @@ defineExpose({
       <Panel title="抓取范围" :count="items.length" :hint="saved ? '页面保存的范围生效中' : '还没保存过，用的是配置文件里的默认范围'">
         <div class="meta-row">
           <Tag :tone="saved ? 'good' : 'warn'">{{ saved ? '已保存' : '默认值' }}</Tag>
-          <Tag tone="neutral">每来源上限 {{ maxPagesPerSource }} 页</Tag>
+          <Tag tone="neutral">每来源上限 {{ maxPagesPerSource > 0 ? fmt(maxPagesPerSource) + ' 页' : '不限' }}</Tag>
           <Tag :tone="renderEnabled ? 'good' : 'neutral'">渲染兜底 {{ renderEnabled ? '开' : '关' }}</Tag>
           <Tag v-if="dirty" tone="flame">有未保存改动</Tag>
         </div>
@@ -436,6 +467,8 @@ defineExpose({
             <a v-if="wikiUrl(s.kind, s.name)" class="scope-name" :href="wikiUrl(s.kind, s.name)" target="_blank" rel="noopener">{{ s.name }}</a>
             <span v-else class="scope-name">{{ s.name }}</span>
             <Tag v-if="s.kind === 'prefix'" tone="neutral">前缀</Tag>
+            <span v-if="pagesText(s)" class="faint scope-pages">{{ pagesText(s) }}</span>
+            <Tag v-if="truncatedText(s)" tone="warn">{{ truncatedText(s) }}</Tag>
             <span class="spacer" />
             <Button size="sm" @click="removeAt(i)">移除</Button>
           </li>
@@ -452,7 +485,9 @@ defineExpose({
             {{ saving ? '保存中…' : '保存范围' }}
           </Button>
           <Button size="sm" :disabled="!dirty || saving" @click="discard">放弃改动</Button>
-          <span class="faint">启用 {{ enabledCount }} / {{ items.length }}</span>
+          <span class="faint">
+            启用 {{ enabledCount }} / {{ items.length }} · 本次约 {{ fmt(estimatedPages.pages) }} 页<template v-if="estimatedPages.unknown">（{{ estimatedPages.unknown }} 个来源页数未知）</template>
+          </span>
         </div>
       </Panel>
 
@@ -513,7 +548,9 @@ defineExpose({
 
     <!-- 选一种抓取方式 -->
     <Modal :open="runOpen" title="开始抓取" width="540px" @close="closeRun">
-      <p class="run-lede">跑在服务端后台，关掉页面也会继续。选一种方式：</p>
+      <p class="run-lede">
+        跑在服务端后台，关掉页面也会继续。本次范围约 <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个来源页数未知）</template>。选一种方式：
+      </p>
       <div class="run-opts">
         <ActionOption
           title="空跑"
@@ -604,6 +641,7 @@ defineExpose({
 a.scope-name { border-bottom: 1px solid var(--edge); }
 a.scope-name:hover { color: var(--flame-bright); border-bottom-color: var(--flame-bright); }
 .scope-item .spacer { flex: 1; }
+.scope-pages { font-size: var(--fs-meta); white-space: nowrap; }
 
 .add-row { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-3); }
 .add-row :deep(.inp) { font-size: var(--fs-sm); }

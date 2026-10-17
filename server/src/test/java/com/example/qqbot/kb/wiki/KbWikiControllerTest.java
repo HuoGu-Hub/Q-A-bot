@@ -43,6 +43,8 @@ class KbWikiControllerTest {
         WikiImport cfg = new WikiImport();
         cfg.setPrefixes(List.of("Quests/"));
         cfg.setCategories(List.of("Gameplay", "Lore"));
+        // 显式给一个上限，验"接口把配置原样回显"（默认是 0 = 不限，见 WikiImport）
+        cfg.setMaxPagesPerSource(500);
         KbPolicy props = mock(KbPolicy.class);
         when(props.getWikiImport()).thenReturn(cfg);
         // 页面上的"点开看"链接要用站点地址（api-base 去掉 /api.php）
@@ -70,7 +72,7 @@ class KbWikiControllerTest {
         List<Map<String, Object>> defaults = (List<Map<String, Object>>) out.get("defaults");
         assertThat(defaults).extracting(m -> m.get("name"))
                 .containsExactly("Quests/", "Gameplay", "Lore");
-        assertThat(out.get("maxPagesPerSource")).isEqualTo(300);
+        assertThat(out.get("maxPagesPerSource")).as("原样回显配置里的上限").isEqualTo(500);
         assertThat(out.get("wikiBase")).as("页面用它拼'点开看'的链接").isEqualTo("https://enshrouded.wiki.gg");
     }
 
