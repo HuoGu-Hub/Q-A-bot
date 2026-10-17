@@ -412,16 +412,35 @@ async function save() {
   }
 }
 
-function checkFiltered() {
-  const keys = new Set(checkedKeys.value)
-  for (const r of filteredRows.value) keys.add(r.key)
-  checkedKeys.value = [...keys]
+/** 当前筛选结果是不是已经全勾上了 —— 决定那个按钮是"全选"还是"取消" */
+const allFilteredChecked = computed(() =>
+  filteredRows.value.length > 0 && filteredRows.value.every(r => r.checked)
+)
+/** 当前筛选里有没有"有页数"的来源 —— 决定「全选有页数的」能不能点 */
+const hasPagedRows = computed(() =>
+  filteredRows.value.some(r => r.pages !== null && r.pages > 0)
+)
+
+/** 一个按钮两用：没全勾就全勾上，全勾了就都取消 */
+function toggleFiltered() {
+  const drop = new Set(filteredRows.value.map(r => r.key))
+  if (allFilteredChecked.value) {
+    checkedKeys.value = checkedKeys.value.filter(k => !drop.has(k))
+  } else {
+    const keys = new Set(checkedKeys.value)
+    for (const r of filteredRows.value) keys.add(r.key)
+    checkedKeys.value = [...keys]
+  }
   scheduleSave()
 }
 
-function uncheckFiltered() {
-  const drop = new Set(filteredRows.value.map(r => r.key))
-  checkedKeys.value = checkedKeys.value.filter(k => !drop.has(k))
+/** 把当前筛选里**有页数**的都勾上：空分类勾了也一篇都拉不到 */
+function checkPaged() {
+  const keys = new Set(checkedKeys.value)
+  for (const r of filteredRows.value) {
+    if (r.pages !== null && r.pages > 0) keys.add(r.key)
+  }
+  checkedKeys.value = [...keys]
   scheduleSave()
 }
 
@@ -561,8 +580,10 @@ defineExpose({
     <!-- ============ 来源表：勾选即范围 ============ -->
     <Panel title="wiki 来源" :count="checkedCount" hint="勾选即范围，改动自动保存；开始抓取只拉勾上的">
       <template #actions>
-        <Button size="sm" @click="checkFiltered">全选当前筛选</Button>
-        <Button size="sm" @click="uncheckFiltered">取消当前筛选</Button>
+        <Button size="sm" :disabled="!filteredRows.length" @click="toggleFiltered">
+          {{ allFilteredChecked ? '取消当前筛选' : '全选当前筛选' }}
+        </Button>
+        <Button size="sm" :disabled="!hasPagedRows" @click="checkPaged">全选有页数的</Button>
       </template>
 
       <div class="filters">
