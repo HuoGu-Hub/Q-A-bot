@@ -212,6 +212,8 @@
 
   <h2>文本里的变量</h2>
   <p>命令里要发出去的文字，可以直接写 <code>{变量名}</code>，取值表与管理端口令里那一套完全相同，不另学一套语法。渲染仍然只有 <code>VariableRenderer</code> 一份实现。</p>
+  <p><b>语言只由创建者决定，系统不做转换，也不做别名表。</b>命令名与参数名在新增指令时自己起，中英皆可；系统变量名固定是英文这一套，写 <code>{用户}</code> 会被当成未知变量原样保留，不会被猜成 <code>{user}</code>。同一个值不留两个名字。</p>
+  <p>参数一律用 <code>{arg.名称}</code> 取，所以即使有人把参数起名叫 <code>user</code>，也不会和系统变量 <code>{user}</code> 撞车：<code>{user}</code> 永远指系统变量。</p>
   <table>
     <tr><th>变量</th><th>值</th><th>例</th></tr>
     <tr><td><code>{user}</code></td><td>触发者昵称，群里优先取群名片</td><td>示例用户</td></tr>
@@ -401,6 +403,7 @@
     <li>定时任务里的 <code>{time}</code> 是发送时刻，不是创建时刻。</li>
     <li>触发者昵称含 <code>{cmd.list}</code> 时原样发出，不被二次展开。</li>
     <li>拼错的 <code>{usre}</code> 原样保留，不静默变成空串。</li>
+    <li><code>{用户}</code> 不被当成 <code>{user}</code>，原样保留。</li>
     <li><code>#name-{user}#</code> 拿到触发者昵称；<code>#time-{time}#</code> 先展开成 21:30 再通过 moment 校验。</li>
     <li><code>#text-{cmd.list}#</code> 展开出的指令列表里若含 <code>{...}</code>，不会被再展开一次。</li>
     <li>跨群删除查不到，非创建者被拒，群管可以删。</li>
@@ -426,7 +429,8 @@
     <p><b>3. 参数值里的变量在解析时展开。</b>展开在类型校验之前，所以数字型与时间型参数也能吃变量；展开只做一次，结果不再当模板。</p>
     <p><b>4. 自由文本里的变量在用时展开。</b>内容按模板存盘，所以 <code>{time}</code> <code>{date}</code> 是真正发出去那一刻的值；<code>{arg.名称}</code> 用当次参数的 JSON 一起展开。</p>
     <p><b>5. 空白按位置归一。</b>参数与路径之间的空白忽略，名字与值去首尾空白，值内部与文本内部的空格保留。</p>
-    <p style="margin-bottom:0"><b>6. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
+    <p><b>6. 不做变量别名表。</b>语言由创建者决定，命令名与参数名自己起；系统变量固定英文名，同一个值不留两个名字。</p>
+    <p style="margin-bottom:0"><b>7. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
   </div>
 
   <footer>飘雪喵 · 指令路径与参数系统设计 · 2026-10-18</footer>
