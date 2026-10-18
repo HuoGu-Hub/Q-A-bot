@@ -37,14 +37,10 @@ public class MentionRequiredStage implements GuardStage {
 
     @Override
     public GuardResult check(GuardContext ctx) {
-        if (!ctx.event().isGroupMessage()) {
-            return GuardResult.pass();
-        }
-        if (!config.isRequireMentionInGroup()) {
-            return GuardResult.pass();
-        }
         long selfId = identity.getSelfId();
-        if (codec.isMentioned(ctx.event(), selfId)) {
+        boolean mentioned = codec.isMentioned(ctx.event(), selfId);
+        // 判法与指令那一侧共用一处实现，见 Access.mentionSatisfied
+        if (config.mentionSatisfied(ctx.event().isGroupMessage(), mentioned)) {
             return GuardResult.pass();
         }
         return GuardResult.drop(name(), "群里没有 @ 机器人");

@@ -16,22 +16,6 @@ public class CommandProperties implements CommandPolicy {
     private boolean enabled = true;
 
     /**
-     * 群里触发指令是否必须 @ 机器人。
-     *
-     * <p>默认 true。理由：群聊里 "/" 开头的消息不罕见（贴路径、贴代码），
-     * 不加 @ 就会误触发，显得机器人很吵。
-     */
-    private boolean requireMention = true;
-
-    /**
-     * 是否需要 "/" 前缀。
-     *
-     * <p>默认 true。关掉的话 "@机器人 帮助" 也会触发 —— 但那和正常提问无法区分，
-     * 不建议关。
-     */
-    private boolean requireSlash = true;
-
-    /**
      * 指令的独立限流（每人每分钟几次）。
      *
      * <p>刻意和问答限流分开：问答限流是"每分钟只能问一次"，
@@ -59,24 +43,6 @@ public class CommandProperties implements CommandPolicy {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-    }
-
-    @Override
-    public boolean isRequireMention() {
-        return requireMention;
-    }
-
-    public void setRequireMention(boolean requireMention) {
-        this.requireMention = requireMention;
-    }
-
-    @Override
-    public boolean isRequireSlash() {
-        return requireSlash;
-    }
-
-    public void setRequireSlash(boolean requireSlash) {
-        this.requireSlash = requireSlash;
     }
 
     @Override

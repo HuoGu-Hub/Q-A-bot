@@ -124,6 +124,21 @@ public class Access {
         return Optional.of("未知的消息类型");
     }
 
+    /**
+     * 群聊里这条消息是否满足 @ 要求。
+     *
+     * <h2>为什么要有这个方法</h2>
+     * 指令跑在 Guard 之前，拿不到 {@code MentionRequiredStage} 的判定结果，
+     * 又必须和它得出同一个结论。抽成一个方法给两边共用，
+     * 总比在两个地方各读一次开关强 —— 那正是「同一条消息两个结论」的来源。
+     *
+     * @param inGroup   是不是群聊；私聊恒为满足
+     * @param mentioned 群里是否 @ 了机器人
+     */
+    public boolean mentionSatisfied(boolean inGroup, boolean mentioned) {
+        return !inGroup || !requireMentionInGroup || mentioned;
+    }
+
     /** 私聊策略是不是一个认识的值。不认识的会在启动时告警，行为按【关闭私聊】 */
     public boolean isRecognizedPrivateChatPolicy() {
         String policy = normalizedPrivateChatPolicy();

@@ -1,5 +1,6 @@
 package com.example.qqbot.command;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -30,11 +31,15 @@ public class CommandController {
     private final CommandStore store;
     private final VariableRenderer renderer;
     private final CommandPolicy props;
+    /** 只用来把后台传来的参数表 JSON 转成 ParamSpec，不承担别的语义 */
+    private final ObjectMapper mapper;
 
-    public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props) {
+    public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props,
+                             ObjectMapper mapper) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;
+        this.mapper = mapper;
     }
 
     /** 指令列表 */
@@ -43,8 +48,6 @@ public class CommandController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("available", store.isAvailable());
         out.put("commands", store.listAll());
-        out.put("requireMention", props.isRequireMention());
-        out.put("requireSlash", props.isRequireSlash());
         out.put("rateLimitPerMinute", props.getRateLimitPerMinute());
         out.put("allowUserIds", props.isAllowUserIds());
         return out;
@@ -69,19 +72,41 @@ public class CommandController {
         if (trigger == null || trigger.isBlank()) {
             return bad("触发词不能为空");
         }
-        // 触发词不能含空格或斜杠（斜杠是前缀，不该出现在触发词里）
+        // 命令名就是路径：允许 set/output 这种分层写法，但不允许空格与空段
         String t = trigger.trim();
-        if (t.contains(" ") || t.contains("/")) {
-            return bad("触发词不能含空格或斜杠（比如写 help 而不是 /help）");
+        if (t.contains(" ") || t.startsWith("/") || t.endsWith("/") || t.contains("//")) {
+            return bad("命令路径写法不对：写 set 或 set/output，不要带空格、首尾斜杠或空段");
         }
-        if (reply == null || reply.isBlank()) {
+        for (String seg : t.split("/")) {
+            if (!seg.matches("[\\p{IsHan}A-Za-z0-9_.-]+")) {
+                return bad("命令路径里的一段「" + seg + "」含不支持的字符");
+            }
+        }
+        // help 是保留字：/路径 /help 要留给单命令帮助
+        if (t.equalsIgnoreCase("help") || t.toLowerCase(java.util.Locale.ROOT).endsWith("/help")) {
+            return bad("help 是保留字，不能作为命令名或子命令名");
+        }
+
+        // 类型与回答模式：只有 agent 类才有"模式"，其余一律回落成 kb（无意义）
+        String kind = str(body.get("kind"));
+        kind = BotCommand.KIND_AGENT.equalsIgnoreCase(kind == null ? "" : kind) ? BotCommand.KIND_AGENT
+                : BotCommand.KIND_ACTION.equalsIgnoreCase(kind == null ? "" : kind)
+                ? BotCommand.KIND_ACTION : BotCommand.KIND_TEMPLATE;
+
+        // 动作类命令的"回复"是用法提示，可以为空；话术与问答类必须有内容
+        if (!BotCommand.KIND_ACTION.equals(kind) && (reply == null || reply.isBlank())) {
             return bad("回复内容不能为空");
         }
 
-        // 类型与回答模式：只有 agent 类才有"模式"，template 一律回落成 kb（无意义）
-        String kind = str(body.get("kind"));
-        kind = BotCommand.KIND_AGENT.equalsIgnoreCase(kind == null ? "" : kind)
-                ? BotCommand.KIND_AGENT : BotCommand.KIND_TEMPLATE;
+        List<ParamSpec> params = toParams(body.get("params"));
+        String paramError = validateParams(params, BotCommand.KIND_ACTION.equals(kind));
+        if (paramError != null) {
+            return bad(paramError);
+        }
+        String action = BotCommand.KIND_ACTION.equals(kind) ? str(body.get("action")) : null;
+        if (BotCommand.KIND_ACTION.equals(kind) && action == null) {
+            return bad("动作类命令要绑定一个执行器");
+        }
         String mode = str(body.get("mode"));
         mode = BotCommand.MODE_NONE.equalsIgnoreCase(mode == null ? "" : mode)
                 ? BotCommand.MODE_NONE : BotCommand.MODE_KB;
@@ -97,7 +122,10 @@ public class CommandController {
                     body.get("sortOrder") instanceof Number n ? n.intValue() : 0,
                     false,
                     kind,
-                    mode));
+                    mode,
+                    params,
+                    str(body.get("help")),
+                    action));
             log.info("[CMD] 保存指令 /{}（id={}，类型={}，模式={}）", t, id, kind, mode);
             return ResponseEntity.ok(Map.of("ok", true, "id", id));
         } catch (Exception e) {
@@ -181,6 +209,46 @@ public class CommandController {
         }
         String s = String.valueOf(o).trim();
         return s.isEmpty() ? null : s;
+    }
+
+    /**
+     * 后台传来的参数表。
+     *
+     * <p>坏条目直接跳过而不是整单失败：后台表单已经保证形状，
+     * 能走到这里说明是手工调用，跳过比 500 更容易排查。
+     */
+    private List<ParamSpec> toParams(Object raw) {
+        List<ParamSpec> out = new ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                if (item == null) {
+                    continue;
+                }
+                try {
+                    out.add(mapper.convertValue(item, ParamSpec.class));
+                } catch (Exception e) {
+                    log.warn("[CMD] 忽略一个形状不对的参数条目：{}", item);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** 参数名必须能写进 {@code #名字-值#}，且不能重名 */
+    private static String validateParams(List<ParamSpec> params, boolean actionCommand) {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (ParamSpec p : params) {
+            if (p.name().isEmpty() || !p.name().matches("[\\p{IsHan}A-Za-z0-9_]+")) {
+                return "参数名「" + p.name() + "」不合法：只能用汉字、字母、数字、下划线";
+            }
+            if (!seen.add(p.name())) {
+                return "参数名「" + p.name() + "」重复了";
+            }
+        }
+        if (actionCommand && params.isEmpty()) {
+            return "动作类命令至少要声明一个参数，否则没有东西可传";
+        }
+        return null;
     }
 
     private static List<Long> toLongList(Object o) {

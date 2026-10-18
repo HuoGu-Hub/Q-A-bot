@@ -268,8 +268,7 @@ export interface BotCommand {
 export interface CommandList {
   available: boolean
   commands: BotCommand[]
-  requireMention: boolean
-  requireSlash: boolean
+  /** 已移除：群里是否必须 @ 改读准入设置 app.guard.access.require-mention-in-group */
   rateLimitPerMinute: number
   allowUserIds: boolean
 }

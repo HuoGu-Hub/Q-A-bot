@@ -26,8 +26,13 @@ package com.example.qqbot.command;
  * 换快照会当场挂掉。
  *
  * <h2>粒度：一个配置类一个接口</h2>
- * 不做更细的拆分 —— 这 6 项是"指令系统怎么工作"这一件事；
+ * 不做更细的拆分 —— 这几项是"指令系统怎么工作"这一件事；
  * 拆成 3 个接口只会让 {@code CommandController}（后台要展示全部）拿 3 个参数。
+ *
+ * <h2>为什么这里没有"群里是否必须 @"</h2>
+ * 那条规则属于<b>准入</b>，与普通问答共用一份实现：
+ * {@code app.guard.access.require-mention-in-group}，判法在 {@code guard.Access}。
+ * 指令不再自带第二份开关。</p>
  * 将来某个消费者只用一两项、而字段继续膨胀时再拆：那时是加一个接口 + 改一个构造器。
  *
  * <p><b>方法名保留 {@code isXxx}/{@code getXxx}</b>：这样 {@code CommandProperties}
@@ -39,12 +44,6 @@ public interface CommandPolicy {
 
     /** 指令系统总开关 */
     boolean isEnabled();
-
-    /** 群里触发指令是否必须 @ 机器人 */
-    boolean isRequireMention();
-
-    /** 是否需要 "/" 前缀 */
-    boolean isRequireSlash();
 
     /** 指令的独立限流（每人每分钟几次） */
     int getRateLimitPerMinute();

@@ -16,15 +16,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 指令匹配的验收测试。
+ * 命令路径匹配的验收测试。
  *
  * <p>重点是**边界**：这个功能最怕误触发（群里贴路径、贴代码就会撞上），
  * 所以"不该触发的场景"比"该触发"更重要。
+ *
+ * <p>@ 判定不在这里 —— 那属于准入，路由层用同一份设置判，见 {@code Access.mentionSatisfied}。
  */
 class CommandMatcherTest {
 
@@ -53,17 +56,17 @@ class CommandMatcherTest {
         matcher = new CommandMatcher(props, store);
     }
 
-    /* ==================== 该触发的 ==================== */
-
     @AfterEach
     void closeStores() {
         db.close();
     }
 
+    /* ==================== 该触发的 ==================== */
+
     @Test
-    @DisplayName("群里 @ + /help → 触发")
-    void triggersWithMentionAndSlash() {
-        CommandMatcher.Match m = matcher.match("/help", true, true, 100L);
+    @DisplayName("/help → 命中一级命令")
+    void triggersOnRootCommand() {
+        CommandMatcher.Match m = matcher.match("/help", true, 100L);
 
         assertThat(m.hit()).isTrue();
         assertThat(m.command().trigger()).isEqualTo("help");
@@ -72,87 +75,113 @@ class CommandMatcherTest {
     @Test
     @DisplayName("大小写不敏感：/HELP 和 /Help 都触发")
     void caseInsensitive() {
-        assertThat(matcher.match("/HELP", true, true, 1L).hit()).isTrue();
-        assertThat(matcher.match("/Help", true, true, 1L).hit()).isTrue();
+        assertThat(matcher.match("/HELP", true, 1L).hit()).isTrue();
+        assertThat(matcher.match("/Help", true, 1L).hit()).isTrue();
     }
 
     @Test
-    @DisplayName("私聊不需要 @")
-    void privateNeedsNoMention() {
-        CommandMatcher.Match m = matcher.match("/help", false, false, 0L);
-
-        assertThat(m.hit()).isTrue();
+    @DisplayName("私聊也能命中（能不能用由 scope 决定，与在哪聊无关）")
+    void privateMatchWorks() {
+        assertThat(matcher.match("/help", false, 0L).hit()).isTrue();
     }
 
     @Test
     @DisplayName("内置指令已就绪：/help /list /ping /stats")
     void builtinsSeeded() {
         for (String t : new String[]{"help", "list", "ping", "stats"}) {
-            assertThat(matcher.match("/" + t, true, true, 1L).hit())
-                    .as("/" + t + " 应当存在").isTrue();
+            assertThat(matcher.match("/" + t, true, 1L).hit())
+                    .as("/%s 应当存在", t).isTrue();
         }
+    }
+
+    /* ==================== 多级路径 ==================== */
+
+    @Test
+    @DisplayName("★ 分层路径：/set /output 命中 set/output")
+    void multiLevelPath() throws Exception {
+        store.upsert(command("set/output", BotCommand.KIND_ACTION));
+
+        CommandMatcher.Match m = matcher.match("/set /output #time-21:30# 文本", true, 1L);
+
+        assertThat(m.hit()).isTrue();
+        assertThat(m.command().trigger()).isEqualTo("set/output");
+        assertThat(m.restOrEmpty()).isEqualTo("#time-21:30# 文本");
+    }
+
+    @Test
+    @DisplayName("★ 连写也认：/set/output 与 /set /output 等价")
+    void connectedPathAlsoMatches() throws Exception {
+        store.upsert(command("set/output", BotCommand.KIND_ACTION));
+
+        CommandMatcher.Match m = matcher.match("/set/output 文本", true, 1L);
+
+        assertThat(m.hit()).isTrue();
+        assertThat(m.command().trigger()).isEqualTo("set/output");
+        assertThat(m.restOrEmpty()).isEqualTo("文本");
+    }
+
+    @Test
+    @DisplayName("★ 最长匹配：set 与 set/output 都注册时，吃成 set/output")
+    void longestPathWins() throws Exception {
+        store.upsert(command("set", BotCommand.KIND_TEMPLATE));
+        store.upsert(command("set/output", BotCommand.KIND_ACTION));
+
+        assertThat(matcher.match("/set /output 文本", true, 1L).command().trigger())
+                .isEqualTo("set/output");
+    }
+
+    @Test
+    @DisplayName("★ 吃不动就停：/联网 /api/getUser 是什么 → 路径停在联网")
+    void stopsWhenPathCannotExtend() throws Exception {
+        store.upsert(command("联网", BotCommand.KIND_AGENT));
+
+        CommandMatcher.Match m = matcher.match("/联网 /api/getUser 是什么", true, 1L);
+
+        assertThat(m.hit()).isTrue();
+        assertThat(m.command().trigger()).isEqualTo("联网");
+        assertThat(m.restOrEmpty()).isEqualTo("/api/getUser 是什么");
+    }
+
+    @Test
+    @DisplayName("★ /路径 /help → 进入帮助分支，不执行")
+    void helpModifier() throws Exception {
+        store.upsert(command("set/output", BotCommand.KIND_ACTION));
+
+        CommandMatcher.Match m = matcher.match("/set /output /help", true, 1L);
+
+        assertThat(m.hit()).isTrue();
+        assertThat(m.helpRequested()).isTrue();
+        assertThat(m.restOrEmpty()).isEmpty();
     }
 
     /* ==================== ★ 不该触发的（更重要）==================== */
 
     @Test
-    @DisplayName("★ 群里没 @ → 不触发")
-    void noMentionInGroupDoesNotTrigger() {
-        assertThat(matcher.match("/help", false, true, 1L).hit()).isFalse();
-    }
-
-    @Test
-    @DisplayName("★ 触发词后面接东西（没有空格分隔）→ 不触发")
-    void extraContentWithoutSpaceDoesNotTrigger() {
-        // "/帮助一下" 的首词是"帮助一下"，根本不在指令表里 —— 这条边界必须守住
-        assertThat(matcher.match("/帮助一下", true, true, 1L).hit()).isFalse();
-        assertThat(matcher.match("/helpme", true, true, 1L).hit()).isFalse();
-    }
-
-    @Test
-    @DisplayName("★ 2026-09-28 起：/help 一下 → 命中，且参数被捕获（小活动靠它）")
-    void trailingArgsAreCaptured() {
-        CommandMatcher.Match m = matcher.match("/help 一下", true, true, 1L);
-
-        assertThat(m.hit()).as("首词精确命中，后面跟的是参数，不再是'额外内容'").isTrue();
-        assertThat(m.command().trigger()).isEqualTo("help");
-        assertThat(m.argsOrEmpty()).isEqualTo("一下");
-    }
-
-    @Test
-    @DisplayName("参数可以带空格、可以很长")
-    void multiWordArgs() {
-        CommandMatcher.Match m = matcher.match("/help  张三   18 岁 ", true, true, 1L);
-
-        assertThat(m.argsOrEmpty()).isEqualTo("张三   18 岁");
-    }
-
-    @Test
-    @DisplayName("不带参数时 args 是空串（不是 null，调用方少一层判空）")
-    void noArgsIsEmptyString() {
-        assertThat(matcher.match("/help", true, true, 1L).argsOrEmpty()).isEmpty();
-    }
-
-    @Test
     @DisplayName("★ 没有 / 前缀 → 不触发")
     void noSlashDoesNotTrigger() {
-        assertThat(matcher.match("help", true, true, 1L).hit()).isFalse();
-        assertThat(matcher.match("帮助", true, true, 1L).hit()).isFalse();
+        assertThat(matcher.match("help", true, 1L).hit()).isFalse();
+        assertThat(matcher.match("帮助", true, 1L).hit()).isFalse();
     }
 
     @Test
     @DisplayName("★ 群里贴代码路径 → 不触发（这是最容易被误伤的）")
     void codePathsDoNotTrigger() {
-        // 这些是真实会出现的消息，绝不能触发
-        assertThat(matcher.match("/api/getUser", true, true, 1L).hit()).isFalse();
-        assertThat(matcher.match("/usr/local/bin", true, true, 1L).hit()).isFalse();
-        assertThat(matcher.match("/home/user/config", true, true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/api/getUser", true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/usr/local/bin", true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/home/user/config", true, 1L).hit()).isFalse();
+    }
+
+    @Test
+    @DisplayName("触发词后面直接接东西 → 不触发")
+    void extraContentWithoutSpaceDoesNotTrigger() {
+        assertThat(matcher.match("/帮助一下", true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/helpme", true, 1L).hit()).isFalse();
     }
 
     @Test
     @DisplayName("★ 没配过的词 → 不触发，但标记为 looksLike（用于统计）")
-    void unknownSlashWordIsMiss() {
-        CommandMatcher.Match m = matcher.match("/不存在的命令", true, true, 1L);
+    void unknownWordIsMiss() {
+        CommandMatcher.Match m = matcher.match("/不存在的命令", true, 1L);
 
         assertThat(m.hit()).isFalse();
         assertThat(m.looksLike()).as("看起来像指令，要记下来").isTrue();
@@ -160,24 +189,10 @@ class CommandMatcherTest {
     }
 
     @Test
-    @DisplayName("关掉 require-mention 后，群里不 @ 也能触发")
-    void configurableMention() {
-        props.setRequireMention(false);
-        assertThat(matcher.match("/help", false, true, 1L).hit()).isTrue();
-    }
-
-    @Test
-    @DisplayName("关掉 require-slash 后，纯文本也能触发")
-    void configurableSlash() {
-        props.setRequireSlash(false);
-        assertThat(matcher.match("help", true, true, 1L).hit()).isTrue();
-    }
-
-    @Test
     @DisplayName("总开关关掉后什么都不触发")
     void disabledMeansNothing() {
         props.setEnabled(false);
-        assertThat(matcher.match("/help", true, true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/help", true, 1L).hit()).isFalse();
     }
 
     /* ==================== 作用范围 ==================== */
@@ -186,96 +201,100 @@ class CommandMatcherTest {
     @DisplayName("scope=group 的指令在私聊不触发")
     void groupScopeNotInPrivate() throws Exception {
         store.upsert(new BotCommand(0, "onlygroup", "群专用", "说明",
-                "group", java.util.List.of(), "member", true, 50, false,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB));
+                "group", List.of(), "member", true, 50, false,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null));
 
-        assertThat(matcher.match("/onlygroup", true, true, 1L).hit()).isTrue();
-        assertThat(matcher.match("/onlygroup", false, false, 0L).hit()).isFalse();
+        assertThat(matcher.match("/onlygroup", true, 1L).hit()).isTrue();
+        assertThat(matcher.match("/onlygroup", false, 0L).hit()).isFalse();
     }
 
     @Test
     @DisplayName("scope=private 的指令在群里不触发")
     void privateScopeNotInGroup() throws Exception {
         store.upsert(new BotCommand(0, "onlypm", "私聊专用", "说明",
-                "private", java.util.List.of(), "member", true, 51, false,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB));
+                "private", List.of(), "member", true, 51, false,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null));
 
-        assertThat(matcher.match("/onlypm", true, true, 1L).hit()).isFalse();
-        assertThat(matcher.match("/onlypm", false, false, 0L).hit()).isTrue();
+        assertThat(matcher.match("/onlypm", true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/onlypm", false, 0L).hit()).isTrue();
     }
 
     @Test
     @DisplayName("停用的指令不触发")
     void disabledCommandDoesNotTrigger() throws Exception {
         store.upsert(new BotCommand(0, "offcm", "内容", "说明",
-                "all", java.util.List.of(), "member", false, 52, false,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB));
+                "all", List.of(), "member", false, 52, false,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null));
 
-        assertThat(matcher.match("/offcm", true, true, 1L).hit()).isFalse();
+        assertThat(matcher.match("/offcm", true, 1L).hit()).isFalse();
     }
 
-    /* ==================== agent 类指令（会调模型的那一类）==================== */
+    /* ==================== 类型与展示 ==================== */
 
     @Test
-    @DisplayName("agent 指令：/联网 今天什么版本 → 命中并把参数当问题")
-    void agentCommandKeepsArgsAsQuestion() throws Exception {
-        store.upsert(new BotCommand(0, "联网", "用法：/联网 <问题>", "用实时资料回答",
-                "all", java.util.List.of(), "member", true, 60, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE));
+    @DisplayName("agent 指令：/联网 今天什么版本 → 尾部原样交给解析器")
+    void agentCommandKeepsTail() throws Exception {
+        store.upsert(command("联网", BotCommand.KIND_AGENT));
 
-        CommandMatcher.Match m = matcher.match("/联网 今天什么版本", true, true, 1L);
+        CommandMatcher.Match m = matcher.match("/联网 今天什么版本", true, 1L);
 
-        assertThat(m.hit()).isTrue();
-        assertThat(m.command().isAgent()).as("agent 类要调模型，路由会把它送进预算").isTrue();
-        assertThat(m.argsOrEmpty()).isEqualTo("今天什么版本");
+        assertThat(m.command().isAgent()).isTrue();
+        assertThat(m.restOrEmpty()).isEqualTo("今天什么版本");
     }
 
     @Test
-    @DisplayName("agent 指令不带参数也命中 —— 由路由回一句用法提示，不调模型")
-    void agentCommandWithoutArgsStillHits() throws Exception {
-        store.upsert(new BotCommand(0, "联网", "用法：/联网 <问题>", "用实时资料回答",
-                "all", java.util.List.of(), "member", true, 61, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE));
-
-        CommandMatcher.Match m = matcher.match("/联网", true, true, 1L);
-
-        assertThat(m.hit()).isTrue();
-        assertThat(m.argsOrEmpty()).isEmpty();
-    }
-
-    @Test
-    @DisplayName("★ 老数据（kind 为空）一律当话术处理，不会被当成调模型的指令")
+    @DisplayName("★ 老数据（kind 为空）一律当话术处理")
     void legacyRowDefaultsToTemplate() {
         BotCommand legacy = new BotCommand(1, "ping", "pong", "说明",
-                "all", java.util.List.of(), "member", true, 1, false, null, null);
+                "all", List.of(), "member", true, 1, false, null, null, null, null, null);
 
         assertThat(legacy.isAgent()).isFalse();
+        assertThat(legacy.isAction()).isFalse();
         assertThat(legacy.kindName()).isEqualTo(BotCommand.KIND_TEMPLATE);
         assertThat(legacy.modeName()).isEqualTo(BotCommand.MODE_KB);
         assertThat(legacy.display()).isEqualTo("/ping");
     }
 
     @Test
-    @DisplayName("agent 指令在列表里显示成 /命令 <问题>，群友才知道要带参数")
+    @DisplayName("agent 指令在列表里显示成 /命令 <问题>")
     void agentDisplayShowsArgsHint() {
         BotCommand agent = new BotCommand(1, "联网", "", "说明",
-                "all", java.util.List.of(), "member", true, 1, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE);
+                "all", List.of(), "member", true, 1, false,
+                BotCommand.KIND_AGENT, BotCommand.MODE_NONE, List.of(), null, null);
 
         assertThat(agent.display()).isEqualTo("/联网 <问题>");
     }
 
     @Test
-    @DisplayName("★ 存进去的 agent/mode 能原样读回来（含老库补列的迁移路径）")
-    void agentKindAndModeRoundTrip() throws Exception {
-        store.upsert(new BotCommand(0, "纯模型", "用法", "说明",
-                "all", java.util.List.of(), "member", true, 62, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE));
+    @DisplayName("★ 有参数表的命令把参数摆出来，路径每一层都补斜杠")
+    void displayListsParams() {
+        BotCommand cmd = new BotCommand(1, "set/output", "", "设置定时输出",
+                "all", List.of(), "member", true, 1, true,
+                BotCommand.KIND_ACTION, BotCommand.MODE_KB,
+                List.of(ParamSpec.of("time", "moment", true, "21:30")), null, "schedule.create");
 
-        BotCommand back = store.findByTrigger("纯模型");
-        assertThat(back.kindName()).isEqualTo(BotCommand.KIND_AGENT);
-        assertThat(back.modeName()).isEqualTo(BotCommand.MODE_NONE);
-        assertThat(back.isAgent()).isTrue();
+        assertThat(cmd.display()).isEqualTo("/set /output #time-21:30#");
+    }
+
+    @Test
+    @DisplayName("★ 参数表能原样落库读回")
+    void paramsRoundTrip() throws Exception {
+        store.upsert(new BotCommand(0, "set/output", "用法", "说明",
+                "all", List.of(), "member", true, 60, false,
+                BotCommand.KIND_ACTION, BotCommand.MODE_KB,
+                List.of(new ParamSpec("time", ParamType.MOMENT, true, "21:00", 0, "时间点", "21:30", List.of()),
+                        new ParamSpec("kind", ParamType.ENUM, false, null, 0, "类型", "daily", List.of("daily", "once"))),
+                "手写帮助", "schedule.create"));
+
+        BotCommand back = store.findByTrigger("set/output");
+
+        assertThat(back.kindName()).isEqualTo(BotCommand.KIND_ACTION);
+        assertThat(back.action()).isEqualTo("schedule.create");
+        assertThat(back.help()).isEqualTo("手写帮助");
+        assertThat(back.params()).hasSize(2);
+        assertThat(back.params().get(0).type()).isEqualTo(ParamType.MOMENT);
+        assertThat(back.params().get(0).defaultValue()).isEqualTo("21:00");
+        assertThat(back.params().get(1).options()).containsExactly("daily", "once");
     }
 
     /* ==================== 存储层 ==================== */
@@ -291,11 +310,9 @@ class CommandMatcherTest {
     @DisplayName("★ 改过内置指令后重启，不会被覆盖回去（INSERT OR IGNORE）")
     void builtinEditsSurviveReseed() throws Exception {
         store.upsert(new BotCommand(0, "help", "我改过的内容 {cmd.total}", "改过的说明",
-                "all", java.util.List.of(), "member", true, 1, true,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB));
+                "all", List.of(), "member", true, 1, true,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null));
 
-        // 模拟重启：再建一次（会再跑 seedBuiltins）
-        // 复用同一个 QaStore 的连接，避免 WAL 共享内存冲突
         CommandStore reopened = new CommandStore(new CommandRepository(new Jdbc(db)), new ObjectMapper());
         reopened.init();
 
@@ -315,5 +332,10 @@ class CommandMatcherTest {
         assertThat(unmatched).hasSize(1);
         assertThat(unmatched.get(0).get("trigger")).isEqualTo("不存在的命令");
         assertThat(unmatched.get(0).get("count")).isEqualTo(2L);
+    }
+
+    private static BotCommand command(String path, String kind) {
+        return new BotCommand(0, path, "回复", "说明", "all", List.of(), "member", true, 0, false,
+                kind, BotCommand.MODE_KB, List.of(), null, null);
     }
 }

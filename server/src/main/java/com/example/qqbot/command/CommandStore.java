@@ -1,6 +1,7 @@
 package com.example.qqbot.command;
 
 import com.example.qqbot.persistence.CommandRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -74,14 +75,14 @@ public class CommandStore {
      */
     private void seedBuiltins() {
         List<CommandRepository.Seed> builtins = List.of(
-                new CommandRepository.Seed("help", "{cmd.list}", "查看所有指令", 1),
-                new CommandRepository.Seed("list", "{cmd.list}", "列出所有指令", 2),
-                new CommandRepository.Seed("ping", "在的～（已运行 {uptime}）", "看看我在不在", 3),
+                new CommandRepository.Seed("help", "{cmd.list}", "查看所有指令", 1, "[]", null),
+                new CommandRepository.Seed("list", "{cmd.list}", "列出所有指令", 2, "[]", null),
+                new CommandRepository.Seed("ping", "在的～（已运行 {uptime}）", "看看我在不在", 3, "[]", null),
                 new CommandRepository.Seed("stats", """
                         知识库：{kb.count} 条资料
                         术语表：{kb.terms} 条
                         累计问答：{qa.total} 次（命中率 {qa.hitrate}）
-                        今天已回答：{qa.today} 次""", "查看知识库统计", 4));
+                        今天已回答：{qa.today} 次""", "查看知识库统计", 4, "[]", null));
 
         repo.seedBuiltins(builtins, Instant.now().toString());
     }
@@ -144,7 +145,7 @@ public class CommandStore {
     private BotCommand toCommand(CommandRepository.Row r) {
         return new BotCommand(r.id(), r.trigger(), r.reply(), r.description(), r.scope(),
                 parseGroupIds(r.groupIdsJson()), r.minRole(), r.enabled(), r.sortOrder(),
-                r.builtin(), r.kind(), r.mode());
+                r.builtin(), r.kind(), r.mode(), parseParams(r.paramsJson()), r.help(), r.action());
     }
 
     /** {@code group_ids} 列里是 JSON 数组；坏数据当空处理（旧实现就是这么容错的） */
@@ -161,6 +162,24 @@ public class CommandStore {
             // 坏数据当空处理
         }
         return groups;
+    }
+
+    /**
+     * {@code params} 列里是 JSON 数组；坏数据当空处理。
+     *
+     * <p>与 {@code group_ids} 同一个容错口径：一条命令的参数表坏了，
+     * 不该让它整条消失 —— 退化成"不吃参数"至少还能用。
+     */
+    private List<ParamSpec> parseParams(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        try {
+            return mapper.readValue(raw, new TypeReference<List<ParamSpec>>() { });
+        } catch (Exception e) {
+            log.warn("[CMD] 参数表解析失败，按无参数处理：{}", e.getMessage());
+            return List.of();
+        }
     }
 
     public int count() {
@@ -188,10 +207,17 @@ public class CommandStore {
         } catch (Exception e) {
             throw new IOException("群列表序列化失败：" + e.getMessage(), e);
         }
+        String paramsJson;
+        try {
+            paramsJson = mapper.writeValueAsString(cmd.params() == null ? List.of() : cmd.params());
+        } catch (Exception e) {
+            throw new IOException("参数表序列化失败：" + e.getMessage(), e);
+        }
         try {
             return repo.upsert(new CommandRepository.Row(0, cmd.trigger(), cmd.reply(),
                     cmd.description(), cmd.scope(), groupsJson, cmd.minRole(), cmd.enabled(),
-                    cmd.sortOrder(), false, cmd.kindName(), cmd.modeName()), now);
+                    cmd.sortOrder(), false, cmd.kindName(), cmd.modeName(),
+                    paramsJson, cmd.help(), cmd.action()), now);
         } catch (Exception e) {
             throw new IOException("写入指令失败：" + e.getMessage(), e);
         }

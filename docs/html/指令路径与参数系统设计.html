@@ -109,6 +109,7 @@
     <tr><td>黑名单</td><td>群黑名单 · 用户黑名单</td><td>由 <code>Access.denial</code> 一处判定，指令与问答不会得出两个结论。</td></tr>
   </table>
   <p>现在库里有一个重复的 <code>app.commands.require-mention</code>，以及后台「指令系统」分组里对应的「命令必须 @」条目。这一版<b>把它删掉</b>：同一个语义留两份开关，就会出现「@ 了机器人，问答回了、指令没回」或者反过来这种自相矛盾的状态，而且不报错。</p>
+  <p><code>app.commands.require-slash</code> 一并删掉。命令一律以 <code>/</code> 开头 —— 路径与井号参数的语法都建立在它之上，关掉前缀之后这套语法就没有定义了。</p>
   <div class="callout">
     指令在 Guard 之前跑，所以 @ 判定必须在命令匹配之前自己判一次。判法与 <code>MentionRequiredStage</code> 一样，抽出 <code>Access.mentionSatisfied</code> 一个方法给两边共用。
   </div>
@@ -157,6 +158,7 @@
     <tr><td>空白</td><td>路径与参数之间的空白忽略；名字与值去首尾空白，值内部空白原样保留</td></tr>
     <tr><td>值里的变量</td><td>值可以写 <code>{系统变量}</code>，先展开再做类型校验，只展开一次</td></tr>
     <tr><td>形状不符</td><td>没有减号的 <code>#1#</code> 不算参数，原样留在文本里</td></tr>
+    <tr><td>没有参数表</td><td>整段都是文本，一个井号段都不摘 —— 老指令的文本里出现 <code>#xxx#</code> 不该被判成参数错误</td></tr>
     <tr><td>字面井号</td><td>文本里真要写 <code>#</code> 时用 <code>\#</code> 转义</td></tr>
   </table>
 
@@ -189,6 +191,7 @@
     <tr><td>default</td><td>可选参数的默认值</td><td><code>21:00</code></td></tr>
     <tr><td>description</td><td>帮助里那一行说明</td><td>每天几点发</td></tr>
     <tr><td>example</td><td>帮助与回执里的样例</td><td><code>21:30</code></td></tr>
+    <tr><td>options</td><td>枚举类型的候选值，其余类型为空</td><td><code>daily / once</code></td></tr>
   </table>
   <table>
     <tr><th>类型</th><th>接受什么</th><th>归一成什么</th></tr>
@@ -225,6 +228,7 @@
     <tr><td><code>{qa.total}</code> <code>{qa.today}</code> <code>{qa.hitrate}</code></td><td>问答统计</td><td>87.3%</td></tr>
     <tr><td><code>{cmd.total}</code> <code>{cmd.list}</code></td><td>指令表本身</td><td>可用指令：…</td></tr>
     <tr><td><code>{arg.名称}</code></td><td>这条命令当次收到的参数值</td><td><code>{arg.time}</code> → 21:30</td></tr>
+    <tr><td><code>{text}</code></td><td>摘掉参数段之后的自由文本</td><td>晚上打本集合</td></tr>
     <tr><td><code>{user.id}</code> <code>{group.id}</code></td><td>高级变量，默认关闭</td><td>100000005</td></tr>
   </table>
   <p>生效范围分两种时机：模板回复与命令尾部的自由文本是<b>用时展开</b>，参数值是<b>解析时展开一次</b>。数字与时间参数展开完就是数据，不再当模板。</p>
@@ -301,6 +305,7 @@
     <tr><td><code>{qa.total}</code> <code>{qa.today}</code> <code>{qa.hitrate}</code></td><td>统计</td><td>问答统计</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
     <tr><td><code>{cmd.total}</code> <code>{cmd.list}</code></td><td>指令</td><td>指令表本身</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
     <tr><td><code>{arg.名称}</code></td><td>参数</td><td>本条命令当次收到的参数值</td><td>不能</td><td>能 · 用时</td></tr>
+    <tr><td><code>{text}</code></td><td>参数</td><td>摘掉参数段之后的自由文本</td><td>不能</td><td>能 · 用时</td></tr>
     <tr><td><code>{user.id}</code> <code>{group.id}</code></td><td>会话</td><td>高级变量，需打开开关</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
   </table>
   <p>表里的「用时」在定时任务上就是<b>到点发送那一刻</b>。这条口径写在页面上，不靠记。</p>

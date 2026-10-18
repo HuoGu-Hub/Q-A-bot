@@ -3,9 +3,12 @@ package com.example.qqbot.router;
 import com.example.qqbot.agent.ChatService;
 import com.example.qqbot.agent.ReplyMode;
 import com.example.qqbot.command.BotCommand;
+import com.example.qqbot.command.CommandHelp;
 import com.example.qqbot.command.CommandMatcher;
+import com.example.qqbot.command.CommandParser;
 import com.example.qqbot.command.CommandRateLimiter;
 import com.example.qqbot.command.CommandStore;
+import com.example.qqbot.command.RenderContext;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.config.AsyncProperties;
 import com.example.qqbot.config.CommandProperties;
@@ -124,6 +127,8 @@ class MessageRouterCommandTest {
         when(outboundPacer.reserveGroupSlot(anyLong())).thenReturn(0L);
         when(outboundFilter.filter(anyString())).thenAnswer(inv -> inv.getArgument(0));
 
+        // 渲染器是 mock，但上下文必须是真对象：CommandHandler 会把它交给解析器做变量展开
+        when(variableRenderer.contextOf(any(), any(), any(), any())).thenReturn(RenderContext.sample());
         when(commandRateLimiter.allow(anyString())).thenReturn(true);
         when(guardPipeline.check(any())).thenReturn(GuardResult.pass());
         when(budgetGuard.check(anyLong(), anyLong()))
@@ -137,7 +142,8 @@ class MessageRouterCommandTest {
                 new ImageLibrary(new MediaProperties(), List.of()));
         // 指令那一路住在 CommandHandler 里 —— 这里装真的，测试才是在验真实的那条链
         CommandHandler commandHandler = new CommandHandler(new CommandProperties(), commandMatcher,
-                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector, codec, identity);
+                new CommandParser(), new CommandHelp(variableRenderer), commandRateLimiter,
+                commandStore, variableRenderer, outboundSender, qaCollector);
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), new Access(),
                 mock(BlockNotifier.class), qaCollector, commandHandler, mock(FallbackService.class));
@@ -164,8 +170,8 @@ class MessageRouterCommandTest {
 
     /** 命中一条指令时，matcher 返回的东西 */
     private void matchCommand(BotCommand cmd, String args) {
-        when(commandMatcher.match(anyString(), anyBoolean(), anyBoolean(), anyLong()))
-                .thenReturn(new CommandMatcher.Match(cmd, true, cmd.trigger(), args));
+        when(commandMatcher.match(anyString(), anyBoolean(), anyLong()))
+                .thenReturn(new CommandMatcher.Match(cmd, true, cmd.trigger(), args, false));
     }
 
     private String sentText() {
@@ -181,9 +187,9 @@ class MessageRouterCommandTest {
     void templateCommandStaysOnFastPath() {
         BotCommand ping = new BotCommand(1, "ping", "在的喵～", "看看我在不在",
                 "all", List.of(), "member", true, 1, true,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB);
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
         matchCommand(ping, "");
-        when(variableRenderer.render(eq("在的喵～"), any(), anyBoolean(), anyString())).thenReturn("在的喵～");
+        when(variableRenderer.render(eq("在的喵～"), any())).thenReturn("在的喵～");
 
         router.handle(groupEvent("/ping"));
 
@@ -198,15 +204,15 @@ class MessageRouterCommandTest {
     void templateCommandReceivesArgs() {
         BotCommand signup = new BotCommand(2, "报名", "已记录：{args}", "活动报名",
                 "all", List.of(), "member", true, 2, false,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB);
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
         matchCommand(signup, "张三");
-        when(variableRenderer.render(eq("已记录：{args}"), any(), anyBoolean(), eq("张三")))
+        when(variableRenderer.render(eq("已记录：{args}"), any(RenderContext.class)))
                 .thenReturn("已记录：张三");
 
         router.handle(groupEvent("/报名 张三"));
 
         assertThat(sentText()).isEqualTo("已记录：张三");
-        verify(variableRenderer).render(eq("已记录：{args}"), any(), anyBoolean(), eq("张三"));
+        verify(variableRenderer).render(eq("已记录：{args}"), any(RenderContext.class));
     }
 
     // ==================== agent：必须走 Guard + 预算 ====================
@@ -216,7 +222,7 @@ class MessageRouterCommandTest {
     void agentCommandGoesThroughGuardAndBudget() {
         BotCommand web = new BotCommand(3, "联网", "用法：/联网 问题", "用实时资料回答",
                 "all", List.of(), "member", true, 3, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE);
+                BotCommand.KIND_AGENT, BotCommand.MODE_NONE, List.of(), null, null);
         matchCommand(web, "今天什么版本");
 
         router.handle(groupEvent("/联网 今天什么版本"));
@@ -233,7 +239,7 @@ class MessageRouterCommandTest {
     void budgetLimitBlocksAgentCommand() {
         BotCommand web = new BotCommand(4, "联网", "用法：/联网 问题", "说明",
                 "all", List.of(), "member", true, 4, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE);
+                BotCommand.KIND_AGENT, BotCommand.MODE_NONE, List.of(), null, null);
         matchCommand(web, "今天什么版本");
         when(budgetGuard.check(anyLong(), anyLong()))
                 .thenReturn(new BudgetGuard.Decision(BudgetGuard.Verdict.USER_LIMIT, "今天的额度用完了"));
@@ -249,14 +255,15 @@ class MessageRouterCommandTest {
     void agentCommandWithoutArgsRepliesUsage() {
         BotCommand web = new BotCommand(5, "联网", "用法：/联网 问题内容", "说明",
                 "all", List.of(), "member", true, 5, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_NONE);
+                BotCommand.KIND_AGENT, BotCommand.MODE_NONE, List.of(), null, null);
         matchCommand(web, "");
-        when(variableRenderer.render(eq("用法：/联网 问题内容"), any(), anyBoolean(), anyString()))
+        when(variableRenderer.render(eq("用法：/联网 问题内容"), any(RenderContext.class)))
                 .thenReturn("用法：/联网 问题内容");
 
         router.handle(groupEvent("/联网"));
 
-        assertThat(sentText()).isEqualTo("用法：/联网 问题内容");
+        // 现在会先说明"哪里不对"，再附上作者写的用法
+        assertThat(sentText()).isEqualTo("这次没带问题\n用法：/联网 问题内容");
         verify(guardPipeline, never()).check(any());
         verify(budgetGuard, never()).check(anyLong(), anyLong());
         verify(chatService, never()).reply(any(), anyString(), any(), any(), any(ReplyMode.class));
@@ -267,7 +274,7 @@ class MessageRouterCommandTest {
     void guardDropPreventsAgentModelCall() {
         BotCommand web = new BotCommand(6, "联网", "用法", "说明",
                 "all", List.of(), "member", true, 6, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_KB);
+                BotCommand.KIND_AGENT, BotCommand.MODE_KB, List.of(), null, null);
         matchCommand(web, "某个问题");
         when(guardPipeline.check(any())).thenReturn(GuardResult.drop("rate-limit", "太快了"));
 
@@ -284,9 +291,9 @@ class MessageRouterCommandTest {
     void templateCommandInClosedPrivateChatIsDropped() {
         BotCommand ping = new BotCommand(8, "ping", "在的喵～", "看看我在不在",
                 "all", List.of(), "member", true, 8, true,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB);
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
         matchCommand(ping, "");
-        when(variableRenderer.render(eq("在的喵～"), any(), anyBoolean(), anyString())).thenReturn("在的喵～");
+        when(variableRenderer.render(eq("在的喵～"), any())).thenReturn("在的喵～");
 
         // 默认 Access 的私聊策略是 off。指令必须在 Guard 之前跑，
         // 但"之前"不等于"绕开准入" —— 否则私聊一关，话术指令还能照回。
@@ -303,16 +310,17 @@ class MessageRouterCommandTest {
         blacklist.setUserBlacklist(List.of(USER));
         // 换一个持黑名单的 router 实例：Access 是构造时注入的，改不了已有那个
         CommandHandler handler = new CommandHandler(new CommandProperties(), commandMatcher,
-                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector, codec, identity);
+                new CommandParser(), new CommandHelp(variableRenderer), commandRateLimiter,
+                commandStore, variableRenderer, outboundSender, qaCollector);
         MessageRouter blacklisted = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), blacklist,
                 mock(BlockNotifier.class), qaCollector, handler, mock(FallbackService.class));
 
         BotCommand ping = new BotCommand(9, "ping", "在的喵～", "看看我在不在",
                 "all", List.of(), "member", true, 9, true,
-                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB);
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
         matchCommand(ping, "");
-        when(variableRenderer.render(eq("在的喵～"), any(), anyBoolean(), anyString())).thenReturn("在的喵～");
+        when(variableRenderer.render(eq("在的喵～"), any())).thenReturn("在的喵～");
 
         blacklisted.handle(groupEvent("/ping"));
 
@@ -324,7 +332,7 @@ class MessageRouterCommandTest {
     void commandRateLimitSilencesEverything() {
         BotCommand web = new BotCommand(7, "联网", "用法", "说明",
                 "all", List.of(), "member", true, 7, false,
-                BotCommand.KIND_AGENT, BotCommand.MODE_KB);
+                BotCommand.KIND_AGENT, BotCommand.MODE_KB, List.of(), null, null);
         matchCommand(web, "问题");
         when(commandRateLimiter.allow(anyString())).thenReturn(false);
 

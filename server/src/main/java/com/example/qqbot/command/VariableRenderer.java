@@ -21,35 +21,40 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 变量渲染 —— 把回复模板里的 §{变量}§ 替换成实际值。
+ * 变量渲染 —— 把回复模板与命令文本里的 §{变量}§ 替换成实际值。
  *
- * <p>这是"指令能动态获取信息"的核心。变量分四类：
+ * <p>这是"指令能动态获取信息"的核心。变量分五类：
  * <ol>
  *   <li><b>上下文</b> —— {user} {group} {bot}</li>
  *   <li><b>时间</b> —— {time} {date} {weekday} {uptime}</li>
  *   <li><b>统计</b> —— {kb.count} {qa.total} {qa.hitrate} …</li>
  *   <li><b>指令</b> —— {cmd.total} {cmd.list}</li>
+ *   <li><b>命令</b> —— {args} {args.N} {arg.名称} {text}</li>
  * </ol>
  *
  * <p><b>三条安全约束</b>：
  * <ol>
  *   <li>**不提供** {config.*} {env.*} {server.*} 这类能读系统信息的变量</li>
- *   <li>变量值**原样输出，不二次解析** —— 防止模板注入
- *       （用户昵称里如果写了 {cmd.list}，不会被再解析一次）</li>
+ *   <li>变量值**原样输出，不二次解析** —— 防模板注入。
+ *       变量现在也会作用在群友输入上，所以这条是硬约束：有人把昵称改成
+ *       {cmd.list}，发出去的就是那几个字，不会真的展开一次</li>
  *   <li>未知变量**原样保留**，方便发现拼错</li>
  * </ol>
+ *
+ * <p><b>语言只有一种</b>：系统变量名固定英文。命令名与参数名由创建者自己起，
+ * 中英皆可，但不做中英别名 —— 写 {用户} 会原样保留，不会被猜成 {user}。
  */
 @Component
 public class VariableRenderer {
 
     private static final Logger log = LoggerFactory.getLogger(VariableRenderer.class);
 
-    /** §{xxx}§ —— 变量名只允许字母数字点下划线 */
-    private static final Pattern VAR = Pattern.compile("\\{([a-zA-Z][a-zA-Z0-9_.]*)}");
+    /** §{xxx}§ —— 变量名只允许字母数字点下划线汉字 */
+    private static final Pattern VAR = Pattern.compile("\\{([a-zA-Z\\p{IsHan}][a-zA-Z0-9_.\\p{IsHan}]*)}");
 
     /** §{{§ 和 §}}§ 转义成字面量 */
-    private static final String ESC_OPEN = "\\u0000LBRACE\\u0000";
-    private static final String ESC_CLOSE = "\\u0000RBRACE\\u0000";
+    private static final String ESC_OPEN = "\u0000LBRACE\u0000";
+    private static final String ESC_CLOSE = "\u0000RBRACE\u0000";
 
     private final CommandPolicy props;
     private final CommandStore store;
@@ -75,7 +80,7 @@ public class VariableRenderer {
     public record VarInfo(String name, String label, String example, boolean advanced) {
     }
 
-    /** 全部可用变量 —— 配置界面靠它渲染"点击插入"按钮 */
+    /** 全部可用变量 —— 配置界面靠它渲染"点击插入"按钮，变量页靠它列清单 */
     public List<VarInfo> available() {
         List<VarInfo> list = new java.util.ArrayList<>(List.of(
                 new VarInfo("user", "提问者昵称", "示例用户", false),
@@ -96,9 +101,12 @@ public class VariableRenderer {
                 new VarInfo("cmd.total", "指令总数", "4", false),
                 new VarInfo("cmd.list", "指令列表（含说明）", "可用指令：…", false),
                 // 命令参数：/报名 张三 18 → {args}="张三 18"、{args.1}="张三"、{args.2}="18"
-                new VarInfo("args", "命令参数（全部）", "张三 18", false),
-                new VarInfo("args.1", "第 1 个参数", "张三", false),
-                new VarInfo("args.2", "第 2 个参数", "18", false)));
+                new VarInfo("args", "命令尾部原文（全部）", "张三 18", false),
+                new VarInfo("args.1", "第 1 个词", "张三", false),
+                new VarInfo("args.2", "第 2 个词", "18", false),
+                // 井号参数：#time-21:30# → {arg.time}="21:30"
+                new VarInfo("arg.名称", "井号参数（按名字）", "21:30", false),
+                new VarInfo("text", "摘掉参数后的自由文本", "晚上打本集合", false)));
 
         if (props.isAllowUserIds()) {
             list.add(new VarInfo("user.id", "提问者 QQ 号", "100000005", true));
@@ -111,22 +119,13 @@ public class VariableRenderer {
      * 渲染模板。
      *
      * @param template 含 §{变量}§ 的模板
-     * @param event    当前消息事件（可能为 null —— 预览场景）
-     * @param preview  预览模式：用占位值渲染，不查真实统计
+     * @param ctx      渲染上下文
      */
-    public String render(String template, OneBotEvent event, boolean preview) {
-        return render(template, event, preview, "");
-    }
-
-    /**
-     * 渲染模板（带命令参数）。
-     *
-     * @param args {@code /命令} 后面的全部内容 —— 供 {@code {args}} / {@code {args.N}} 取用
-     */
-    public String render(String template, OneBotEvent event, boolean preview, String args) {
+    public String render(String template, RenderContext ctx) {
         if (template == null || template.isEmpty()) {
             return "";
         }
+        RenderContext context = ctx == null ? RenderContext.sample() : ctx;
 
         // 1) 先把 {{ }} 保护起来，避免被当成变量
         String text = template.replace("{{", ESC_OPEN).replace("}}", ESC_CLOSE);
@@ -136,7 +135,7 @@ public class VariableRenderer {
         StringBuilder sb = new StringBuilder();
         while (m.find()) {
             String name = m.group(1).toLowerCase(Locale.ROOT);
-            String value = resolve(name, event, preview, args);
+            String value = resolve(name, context);
             // 未知变量原样保留
             m.appendReplacement(sb, Matcher.quoteReplacement(value != null ? value : m.group(0)));
         }
@@ -153,16 +152,47 @@ public class VariableRenderer {
         return out;
     }
 
+    /**
+     * 老签名的适配层：从入站事件构造上下文。
+     *
+     * <p>保留它只是为了让配置界面的预览与既有测试不必一起改；
+     * 真正做事的只有上面那个 {@link #render(String, RenderContext)}。
+     */
+    public String render(String template, OneBotEvent event, boolean preview) {
+        return render(template, event, preview, "");
+    }
+
+    public String render(String template, OneBotEvent event, boolean preview, String args) {
+        return render(template, contextOf(event, Map.of(), "", args, preview));
+    }
+
+    /** 从入站事件构造上下文 —— 事件形状只在 {@link VariableRenderer} 里出现一次 */
+    public RenderContext contextOf(OneBotEvent event, Map<String, String> namedArgs, String text,
+                                   String argsText) {
+        return contextOf(event, namedArgs, text, argsText, false);
+    }
+
+    public RenderContext contextOf(OneBotEvent event, Map<String, String> namedArgs, String text,
+                                   String argsText, boolean preview) {
+        if (event == null) {
+            return preview ? RenderContext.sample()
+                    : RenderContext.scheduled(0L, 0L, false, "朋友", argsText, namedArgs, text);
+        }
+        return new RenderContext(
+                event.getUserId(), event.getGroupId(), event.isGroupMessage(),
+                nickname(event), argsText, namedArgs, text, preview);
+    }
+
     /** 解析一个变量；返回 null 表示"未知变量，原样保留" */
-    private String resolve(String name, OneBotEvent event, boolean preview, String args) {
+    private String resolve(String name, RenderContext ctx) {
         // 高级变量：未开启时给出明确提示，而不是静默失败
         if (!props.isAllowUserIds() && (name.equals("user.id") || name.equals("group.id"))) {
             return "（未启用）";
         }
 
-        // 命令参数：{args} 取全部，{args.N} 取第 N 个词（小活动靠它）
+        // 命令参数：{args} 取全部原文，{args.N} 取第 N 个词（老命令靠它）
         if (name.equals("args")) {
-            return preview ? "张三 18" : argsTrimmed(args);
+            return ctx.preview() ? "张三 18" : argsTrimmed(ctx.argsText());
         }
         if (name.startsWith("args.")) {
             int idx = parseIndex(name.substring("args.".length()));
@@ -171,19 +201,40 @@ public class VariableRenderer {
                 // 方便在群里一眼看出拼错了（返回空串会让它静默消失，最难查）
                 return null;
             }
-            if (preview) {
+            if (ctx.preview()) {
                 return idx == 1 ? "张三" : idx == 2 ? "18" : "参数" + idx;
             }
-            String[] words = argsTrimmed(args).split("\\s+");
+            String[] words = argsTrimmed(ctx.argsText()).split("\\s+");
             return idx <= words.length && !words[idx - 1].isBlank() ? words[idx - 1] : "";
         }
 
+        // 井号参数：按名字取，取不到当未知变量（不静默变空）
+        if (name.startsWith("arg.")) {
+            String key = name.substring("arg.".length());
+            String value = ctx.namedArgs().get(key);
+            if (value != null) {
+                return value;
+            }
+            // 大小写不敏感地再找一遍：参数名中英皆可，{arg.Time} 也该认
+            for (Map.Entry<String, String> e : ctx.namedArgs().entrySet()) {
+                if (e.getKey().toLowerCase(Locale.ROOT).equals(key)) {
+                    return e.getValue();
+                }
+            }
+            return ctx.preview() && key.equals("名称") ? "21:30" : null;
+        }
+
+        if (name.equals("text")) {
+            return ctx.preview() ? "示例文本" : (ctx.text() == null ? "" : ctx.text());
+        }
+
         return switch (name) {
-            case "user" -> preview ? "示例用户" : nickname(event);
-            case "group" -> preview ? "示例玩家群" : groupName(event);
-            case "bot" -> preview ? "示例助手" : botName(event);
-            case "user.id" -> String.valueOf(event == null ? 100000005L : orZero(event.getUserId()));
-            case "group.id" -> String.valueOf(event == null ? 100000004L : orZero(event.getGroupId()));
+            case "user" -> ctx.preview() ? "示例用户"
+                    : (ctx.nickname() == null || ctx.nickname().isBlank() ? "朋友" : ctx.nickname());
+            case "group" -> ctx.preview() ? "示例玩家群" : groupName(ctx);
+            case "bot" -> ctx.preview() ? "示例助手" : botProps.getName();
+            case "user.id" -> String.valueOf(ctx.userId() == null ? 0L : ctx.userId());
+            case "group.id" -> String.valueOf(ctx.groupId() == null ? 0L : ctx.groupId());
 
             case "time" -> now("HH:mm");
             case "date" -> now("yyyy-MM-dd");
@@ -191,15 +242,15 @@ public class VariableRenderer {
             case "weekday" -> weekday();
             case "uptime" -> uptime();
 
-            case "kb.count" -> preview ? "4,131" : num(blockStore.isAvailable() ? blockStore.count() : 0);
-            case "kb.terms" -> preview ? "3,359" : num(glossary.size());
+            case "kb.count" -> ctx.preview() ? "4,131" : num(blockStore.isAvailable() ? blockStore.count() : 0);
+            case "kb.terms" -> ctx.preview() ? "3,359" : num(glossary.size());
 
-            case "qa.total" -> preview ? "128" : num(totalQa(0));
-            case "qa.today" -> preview ? "12" : num(totalQa(1));
-            case "qa.hitrate" -> preview ? "87.3%" : hitRate();
+            case "qa.total" -> ctx.preview() ? "128" : num(totalQa(0));
+            case "qa.today" -> ctx.preview() ? "12" : num(totalQa(1));
+            case "qa.hitrate" -> ctx.preview() ? "87.3%" : hitRate();
 
-            case "cmd.total" -> preview ? "4" : num(store.listEnabled().size());
-            case "cmd.list" -> cmdList(preview);
+            case "cmd.total" -> ctx.preview() ? "4" : num(store.listEnabled().size());
+            case "cmd.list" -> cmdList(ctx.preview());
 
             default -> null;
         };
@@ -207,7 +258,7 @@ public class VariableRenderer {
 
     // ==================== 各项取值 ====================
 
-    private String nickname(OneBotEvent event) {
+    private static String nickname(OneBotEvent event) {
         if (event == null || event.getSender() == null) {
             return "朋友";
         }
@@ -220,20 +271,12 @@ public class VariableRenderer {
         return nick.isBlank() ? "朋友" : nick;
     }
 
-    private String groupName(OneBotEvent event) {
-        if (event == null) {
-            return "本群";
+    /** 群名称不在消息事件里，用群号代替（避免为了显示名字多调一次 API） */
+    private static String groupName(RenderContext ctx) {
+        if (!ctx.group()) {
+            return "私聊";
         }
-        // 群名称不在消息事件里，用群号代替（避免为了显示名字多调一次 API）
-        return event.isGroupMessage() ? "本群(" + orZero(event.getGroupId()) + ")" : "私聊";
-    }
-
-    private String botName(OneBotEvent event) {
-        return botProps.getName();
-    }
-
-    private static long orZero(Long v) {
-        return v == null ? 0L : v;
+        return "本群(" + (ctx.groupId() == null ? 0L : ctx.groupId()) + ")";
     }
 
     private static String argsTrimmed(String args) {
@@ -306,11 +349,11 @@ public class VariableRenderer {
         List<BotCommand> cmds = preview
                 ? List.of(
                         new BotCommand(1, "help", "", "查看所有指令", "all", List.of(), "member", true, 1, true,
-                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB),
+                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null),
                         new BotCommand(2, "list", "", "列出所有指令", "all", List.of(), "member", true, 2, true,
-                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB),
+                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null),
                         new BotCommand(3, "ping", "", "看看我在不在", "all", List.of(), "member", true, 3, true,
-                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB))
+                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null))
                 : store.listEnabled();
 
         if (cmds.isEmpty()) {
@@ -335,7 +378,7 @@ public class VariableRenderer {
     public Map<String, String> previewAll() {
         Map<String, String> out = new LinkedHashMap<>();
         for (VarInfo v : available()) {
-            out.put(v.name(), render("{" + v.name() + "}", null, true));
+            out.put(v.name(), render("{" + v.name() + "}", RenderContext.sample()));
         }
         return out;
     }

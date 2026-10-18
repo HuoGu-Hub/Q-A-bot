@@ -34,11 +34,13 @@ public class CommandRepository {
     /** 一行指令（{@code groupIdsJson} 是列里的 JSON 原文） */
     public record Row(long id, String trigger, String reply, String description, String scope,
                       String groupIdsJson, String minRole, boolean enabled, int sortOrder,
-                      boolean builtin, String kind, String mode) {
+                      boolean builtin, String kind, String mode,
+                      String paramsJson, String help, String action) {
     }
 
-    /** 一条内置指令的种子 */
-    public record Seed(String trigger, String reply, String description, int sortOrder) {
+    /** 一条内置指令的种子；{@code paramsJson} 与 {@code action} 给动作类命令用 */
+    public record Seed(String trigger, String reply, String description, int sortOrder,
+                       String paramsJson, String action) {
     }
 
     /** 使用统计的一行 */
@@ -47,12 +49,13 @@ public class CommandRepository {
 
     private static final String COLUMNS =
             "id, trigger, reply, description, scope, group_ids, min_role,"
-                    + " enabled, sort_order, builtin, kind, mode";
+                    + " enabled, sort_order, builtin, kind, mode, params, help, action";
 
     private static final Jdbc.RowMapper<Row> MAP = r -> new Row(
             r.longOf("id"), r.str("trigger"), r.str("reply"), r.str("description"), r.str("scope"),
             r.str("group_ids"), r.str("min_role"), r.intOf("enabled") == 1, r.intOf("sort_order"),
-            r.intOf("builtin") == 1, r.str("kind"), r.str("mode"));
+            r.intOf("builtin") == 1, r.str("kind"), r.str("mode"),
+            r.str("params"), r.str("help"), r.str("action"));
 
     private final Jdbc jdbc;
 
@@ -95,6 +98,10 @@ public class CommandRepository {
         // 升级**已经存在**的表：CREATE TABLE IF NOT EXISTS 对老表什么都不做
         addColumnIfMissing("kind", "TEXT NOT NULL DEFAULT 'template'");
         addColumnIfMissing("mode", "TEXT NOT NULL DEFAULT 'kb'");
+        // 参数表、手写帮助、绑定的执行器 —— 老库升级后这三列才有内容
+        addColumnIfMissing("params", "TEXT NOT NULL DEFAULT '[]'");
+        addColumnIfMissing("help", "TEXT");
+        addColumnIfMissing("action", "TEXT");
     }
 
     /** 给已存在的表补列 —— 见类注释 */
@@ -111,12 +118,13 @@ public class CommandRepository {
     /** 写入内置指令（幂等，一个事务） */
     public int seedBuiltins(List<Seed> seeds, String now) {
         List<Object[]> rows = seeds.stream()
-                .map(s -> new Object[]{s.trigger(), s.reply(), s.description(), s.sortOrder(), now, now})
+                .map(s -> new Object[]{s.trigger(), s.reply(), s.description(), s.sortOrder(),
+                        s.paramsJson() == null ? "[]" : s.paramsJson(), s.action(), now, now})
                 .toList();
         return jdbc.batch("INSERT OR IGNORE INTO bot_command"
                 + " (trigger, reply, description, scope, min_role, enabled, sort_order, builtin,"
-                + "  created_at, updated_at)"
-                + " VALUES (?,?,?,'all','member',1,?,1,?,?)", rows);
+                + "  params, action, created_at, updated_at)"
+                + " VALUES (?,?,?,'all','member',1,?,1,?,?,?,?)", rows);
     }
 
     /** 全部指令（含停用的），按 sort_order 排 */
@@ -157,20 +165,23 @@ public class CommandRepository {
             Row existing = findByTrigger(row.trigger());
             if (existing != null) {
                 jdbc.update("UPDATE bot_command SET reply=?, description=?, scope=?, group_ids=?,"
-                                + " min_role=?, enabled=?, sort_order=?, kind=?, mode=?, updated_at=?"
+                                + " min_role=?, enabled=?, sort_order=?, kind=?, mode=?,"
+                                + " params=?, help=?, action=?, updated_at=?"
                                 + " WHERE id=?",
                         row.reply(), row.description(), row.scope(), row.groupIdsJson(),
                         row.minRole(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
-                        now, existing.id());
+                        row.paramsJson(), row.help(), row.action(), now, existing.id());
                 return existing.id();
             }
             // builtin 固定 0：内置指令由 seedBuiltins 写入，走不到这条路径
             return jdbc.insert("INSERT INTO bot_command"
                             + " (trigger, reply, description, scope, group_ids, min_role,"
-                            + "  enabled, sort_order, builtin, kind, mode, created_at, updated_at)"
-                            + " VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?)",
+                            + "  enabled, sort_order, builtin, kind, mode, params, help, action,"
+                            + "  created_at, updated_at)"
+                            + " VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)",
                     row.trigger(), row.reply(), row.description(), row.scope(), row.groupIdsJson(),
-                    row.minRole(), row.enabled(), row.sortOrder(), row.kind(), row.mode(), now, now);
+                    row.minRole(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
+                    row.paramsJson(), row.help(), row.action(), now, now);
         });
     }
 

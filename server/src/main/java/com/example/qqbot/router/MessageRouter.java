@@ -250,7 +250,14 @@ public class MessageRouter {
         //    · 话术类命中就秒回：不走限流、不走敏感词、不调模型。
         //      理由：/help 不该等模型 3 秒，也不该受"每分钟只能问一次"的限流。
         //    · 智能问答类**只登记**，继续往下走 Guard 与成本预算（它会真的调模型）。
-        CommandHandler.Outcome cmd = commandHandler.tryCommand(event, text, t0);
+        //
+        //    ⚠️ @ 判定复用准入那一份设置，指令不再自带 require-mention：
+        //    同一个语义留两个开关，会出现「问答回了、指令没回」这种自相矛盾的状态。
+        boolean mentioned = !event.isGroupMessage()
+                || codec.isMentioned(event, identity.getSelfId());
+        CommandHandler.Outcome cmd = guardAccess.mentionSatisfied(event.isGroupMessage(), mentioned)
+                ? commandHandler.tryCommand(event, text, t0)
+                : CommandHandler.Outcome.NOT_COMMAND;
         if (cmd.handled()) {
             return;
         }

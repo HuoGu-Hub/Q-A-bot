@@ -146,8 +146,6 @@ public class SettingsWhitelist {
             // ---------- 指令系统 ----------
             new Item("app.commands.enabled", "启用指令", "指令系统",
                     "bool", "关掉后 /命令 不再触发", true),
-            new Item("app.commands.require-mention", "命令必须 @", "指令系统",
-                    "bool", "建议保持开启，否则群里贴 /路径 会误触发", true),
             new Item("app.commands.rate-limit-per-minute", "命令每分钟上限", "指令系统",
                     "int", "每人每分钟最多触发几次指令", 10),
             new Item("app.commands.allow-user-ids", "允许 {user.id}", "指令系统",
