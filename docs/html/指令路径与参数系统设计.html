@@ -154,6 +154,7 @@
     <tr><td>顺序</td><td>随意，可出现在文本前、中、后</td></tr>
     <tr><td>重复</td><td>同一个名字出现两次 → 报错，不静默取后者</td></tr>
     <tr><td>全角</td><td><code>＃</code> 与 <code>#</code> 等价，中文输入法不会卡住</td></tr>
+    <tr><td>值里的变量</td><td>值可以写 <code>{系统变量}</code>，先展开再做类型校验，只展开一次</td></tr>
     <tr><td>形状不符</td><td>没有减号的 <code>#1#</code> 不算参数，原样留在文本里</td></tr>
     <tr><td>字面井号</td><td>文本里真要写 <code>#</code> 时用 <code>\#</code> 转义</td></tr>
   </table>
@@ -204,7 +205,7 @@
     <tr><td><code>{arg.名称}</code></td><td>这条命令当次收到的参数值</td><td><code>{arg.time}</code> → 21:30</td></tr>
     <tr><td><code>{user.id}</code> <code>{group.id}</code></td><td>高级变量，默认关闭</td><td>100000005</td></tr>
   </table>
-  <p>生效范围是<b>要发出去的文字</b>：模板回复、命令尾部的自由文本、以及 <code>text</code> 类型参数的值。数字、时间、枚举是数据，不参与渲染。</p>
+  <p>生效范围分两种时机：模板回复与命令尾部的自由文本是<b>用时展开</b>，参数值是<b>解析时展开一次</b>。数字与时间参数展开完就是数据，不再当模板。</p>
 
   <h3>什么时候取值</h3>
   <table>
@@ -222,7 +223,25 @@
     创建时只存模板
     21:30 发出：今晚 21:30 打本，2026-10-18 见
   </pre>
-  <p><code>{arg.名称}</code> 也走同一趟：任务行里存着当次参数的 JSON，发送时连同系统变量一起展开。</p>
+  <h3>参数值里的变量</h3>
+  <p>值本身也可以引用系统变量，写成 <code>#名字-{系统变量}#</code>。展开发生在<b>解析阶段</b>，也就是摘出井号段之后、类型校验之前。</p>
+  <pre>
+  <b>#name-{user}#</b>          → 先展开成 张三，再当一个 text 值
+  <b>#time-{time}#</b>          → 先展开成 21:30，再按 moment 解析    <i>顺序不能反</i>
+  <b>#group-{group.id}#</b>     → 100000004
+  </pre>
+  <p>顺序为什么必须在类型校验之前：<code>{time}</code> 本身永远不是合法时间。先校验就永远过不了，先展开才拿得到 21:30。反过来，<code>int</code> 与 <code>moment</code> 参数因此也能吃变量，不必只留给文本。</p>
+  <table>
+    <tr><th>位置</th><th>取值时刻</th><th>原因</th></tr>
+    <tr><td><code>#名字-值#</code> 里的变量</td><td>解析那一刻</td><td>参数是这次命令的输入，值当场定下来；类型校验必须在展开之后。</td></tr>
+    <tr><td>自由文本里的变量</td><td>用时那一刻，定时任务到点才展开</td><td>文本是要发出去的话，<code>{time}</code> 应当是发送时刻。</td></tr>
+  </table>
+  <p>两条边界：</p>
+  <ul>
+    <li>展开<b>只做一次</b>。展开得到的字符串不再被扫描，所以 <code>#text-{cmd.list}#</code> 拿到的是那一刻的指令列表，不会在里面继续展开。</li>
+    <li>值里<b>不解析 <code>{arg.*}</code></b>。参数之间不该互相引用，否则解析顺序会变成隐式依赖。</li>
+  </ul>
+  <p><code>{arg.名称}</code> 另走一条路：自由文本里写 <code>{arg.time}</code>，用时从任务行存着的参数 JSON 取值代入。</p>
 
   <div class="callout callout--warn">
     <b>变量现在会作用在群友输入上，三条安全约束一条都不能松。</b>
@@ -342,7 +361,7 @@
   <h2>实施顺序</h2>
   <table>
     <tr><th>阶段</th><th>内容</th><th>验收</th></tr>
-    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、<code>RenderContext</code> 与自由文本渲染；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
+    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、参数值与自由文本的变量展开、<code>RenderContext</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
     <tr><td>P1</td><td>单命令帮助、动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
     <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code>、内容按模板存盘并在发送时展开</td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
     <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
@@ -360,6 +379,8 @@
     <li>定时任务里的 <code>{time}</code> 是发送时刻，不是创建时刻。</li>
     <li>触发者昵称含 <code>{cmd.list}</code> 时原样发出，不被二次展开。</li>
     <li>拼错的 <code>{usre}</code> 原样保留，不静默变成空串。</li>
+    <li><code>#name-{user}#</code> 拿到触发者昵称；<code>#time-{time}#</code> 先展开成 21:30 再通过 moment 校验。</li>
+    <li><code>#text-{cmd.list}#</code> 展开出的指令列表里若含 <code>{...}</code>，不会被再展开一次。</li>
     <li>跨群删除查不到，非创建者被拒，群管可以删。</li>
     <li>停机 10 分钟后重启补发，2 小时后重启标记过期不补。</li>
     <li>定时内容命中敏感词时被出站过滤拦下，与即时回复同一套判定。</li>
@@ -380,8 +401,9 @@
   <div class="card">
     <p><b>1. <code>#date#</code> 决定周期。</b>带日期只发一次，不带就每天同一时刻发。回执里写明是「只此一次」还是「每天」，不让群友自己猜。</p>
     <p><b>2. <code>#</code> 用 <code>\#</code> 转义。</b>解析失败时把原文一并回显，让人一眼看出哪一段被当成参数摘走了。</p>
-    <p><b>3. 变量在发送时刻取值。</b>内容按模板存盘，所以 <code>{time}</code> <code>{date}</code> 是真正发出去那一刻的值；<code>{arg.名称}</code> 用当次参数的 JSON 一起展开。</p>
-    <p style="margin-bottom:0"><b>4. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
+    <p><b>3. 参数值里的变量在解析时展开。</b>展开在类型校验之前，所以数字型与时间型参数也能吃变量；展开只做一次，结果不再当模板。</p>
+    <p><b>4. 自由文本里的变量在用时展开。</b>内容按模板存盘，所以 <code>{time}</code> <code>{date}</code> 是真正发出去那一刻的值；<code>{arg.名称}</code> 用当次参数的 JSON 一起展开。</p>
+    <p style="margin-bottom:0"><b>5. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
   </div>
 
   <footer>飘雪喵 · 指令路径与参数系统设计 · 2026-10-18</footer>
