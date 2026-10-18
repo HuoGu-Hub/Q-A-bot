@@ -233,6 +233,12 @@ class MessageRouterCommandTest {
                 .thenReturn(new CommandMatcher.Match(cmd, true, cmd.trigger(), args, false));
     }
 
+    /** 命中并请求这一条命令的帮助 */
+    private void matchHelp(BotCommand cmd) {
+        when(commandMatcher.match(anyString(), anyBoolean(), anyLong()))
+                .thenReturn(new CommandMatcher.Match(cmd, true, cmd.trigger(), "", true));
+    }
+
     private String sentText() {
         ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
         verify(apiClient).sendGroupMsg(eq(GROUP), captor.capture());
@@ -381,6 +387,39 @@ class MessageRouterCommandTest {
 
         blacklisted.handle(groupEvent("/ping"));
 
+        verify(apiClient, never()).sendGroupMsg(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ /路径 /help：回这一条命令的帮助，不执行它")
+    void helpRequestRepliesCommandHelp() {
+        BotCommand ping = new BotCommand(1, "ping", "在的喵～", "看看我在不在",
+                "all", List.of(), "member", true, 1, true,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
+        matchHelp(ping);
+
+        router.handle(groupEvent("/ping /help"));
+
+        assertThat(sentText()).contains("/ping").contains("看看我在不在");
+        verify(guardPipeline, never()).check(any());
+    }
+
+    @Test
+    @DisplayName("★ 群里没 @ 机器人：指令与普通消息同样不响应")
+    void commandNeedsMentionWhenRequired() {
+        BotCommand ping = new BotCommand(1, "ping", "在的早～", "看看我在不在",
+                "all", List.of(), "member", true, 1, true,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
+        matchCommand(ping, "");
+        // 准入设置默认要求群内 @，这里模拟"没 @"
+        when(codec.isMentioned(any(), anyLong())).thenReturn(false);
+        // 生产上这一条会被 Guard 的 mention 阶段丢掉，这里照实模拟
+        when(guardPipeline.check(any())).thenReturn(GuardResult.drop("mention", "群里没有 @ 机器人"));
+
+        router.handle(groupEvent("/ping"));
+
+        // 指令处理器一次都不该被调到 —— @ 判定已经合并到准入那一处
+        verify(commandMatcher, never()).match(anyString(), anyBoolean(), anyLong());
         verify(apiClient, never()).sendGroupMsg(anyLong(), any());
     }
 
