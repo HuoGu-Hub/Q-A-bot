@@ -154,10 +154,30 @@
     <tr><td>顺序</td><td>随意，可出现在文本前、中、后</td></tr>
     <tr><td>重复</td><td>同一个名字出现两次 → 报错，不静默取后者</td></tr>
     <tr><td>全角</td><td><code>＃</code> 与 <code>#</code> 等价，中文输入法不会卡住</td></tr>
+    <tr><td>空白</td><td>路径与参数之间的空白忽略；名字与值去首尾空白，值内部空白原样保留</td></tr>
     <tr><td>值里的变量</td><td>值可以写 <code>{系统变量}</code>，先展开再做类型校验，只展开一次</td></tr>
     <tr><td>形状不符</td><td>没有减号的 <code>#1#</code> 不算参数，原样留在文本里</td></tr>
     <tr><td>字面井号</td><td>文本里真要写 <code>#</code> 时用 <code>\#</code> 转义</td></tr>
   </table>
+
+  <h3>空白怎么处理</h3>
+  <p>QQ 里空格很容易多打，参数段又会整段摘走，不做归一就会输出「文本前多一个空格」这种脏结果。规则按位置分：</p>
+  <table>
+    <tr><th>位置</th><th>处理</th></tr>
+    <tr><td>路径与参数之间</td><td>连续空白当分隔符，空片段丢弃。<code>/set　/output</code> 与 <code>/set /output</code> 等价</td></tr>
+    <tr><td>参数段的周围</td><td>连同两侧空白一起摘走，原位不留空格</td></tr>
+    <tr><td>自由文本</td><td>按参数段切开，每段去首尾空白、丢掉空段，再用一个空格接回去</td></tr>
+    <tr><td>参数名与值</td><td>首尾空白去掉，<b>内部空白原样保留</b></td></tr>
+    <tr><td>文本内部的换行</td><td>保留，方便写多行输出</td></tr>
+  </table>
+  <p>全角空格、制表符与半角空格等价，不间断空格也一并归一。真正要保住的是<b>值内部与文本内部的空格</b>：<code>#text-晚上 打本#</code> 的值是「晚上 打本」，这两个词之间的空格是内容，不该被吃掉。</p>
+  <pre>
+  /set   /output    #time-21:30#      文本
+    路径 set/output      参数 time=21:30      文本 = 文本        <i>前后多余空格不进入文本</i>
+
+  #text-  晚上   打本  #   →   值 = 晚上   打本                   <i>值内部空格保留</i>
+  </pre>
+  <p>路径也可以连着写：<code>/set/output #time-21:30# 文本</code> 与 <code>/set /output …</code> 等价，两种写法都认。</p>
 
   <h3>参数由命令声明</h3>
   <p>后台新增指令时填一份参数表，它就是这条命令的契约：解析、校验、帮助、模板取值全靠它。</p>
@@ -361,7 +381,7 @@
   <h2>实施顺序</h2>
   <table>
     <tr><th>阶段</th><th>内容</th><th>验收</th></tr>
-    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、参数值与自由文本的变量展开、<code>RenderContext</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
+    <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、参数值与自由文本的变量展开、空白归一、<code>RenderContext</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
     <tr><td>P1</td><td>单命令帮助、动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
     <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code>、内容按模板存盘并在发送时展开</td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
     <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
@@ -375,6 +395,8 @@
     <li>参数顺序颠倒、放在文本之后，结果一致。</li>
     <li><code>#time-25:99#</code>、缺 <code>#text#</code>、重复 <code>#time#</code> 三种失败都指名到参数。</li>
     <li>文本里的 <code>#1#</code> 不被当成参数。</li>
+    <li><code>/set   /output   #time-21:30#      文本</code> 切出的文本是「文本」，没有前后空格。</li>
+    <li><code>#text-晚上 打本#</code> 的值保留中间那一个空格。</li>
     <li><code>/say {user} 你好</code> 发出的文字里是触发者昵称。</li>
     <li>定时任务里的 <code>{time}</code> 是发送时刻，不是创建时刻。</li>
     <li>触发者昵称含 <code>{cmd.list}</code> 时原样发出，不被二次展开。</li>
@@ -403,7 +425,8 @@
     <p><b>2. <code>#</code> 用 <code>\#</code> 转义。</b>解析失败时把原文一并回显，让人一眼看出哪一段被当成参数摘走了。</p>
     <p><b>3. 参数值里的变量在解析时展开。</b>展开在类型校验之前，所以数字型与时间型参数也能吃变量；展开只做一次，结果不再当模板。</p>
     <p><b>4. 自由文本里的变量在用时展开。</b>内容按模板存盘，所以 <code>{time}</code> <code>{date}</code> 是真正发出去那一刻的值；<code>{arg.名称}</code> 用当次参数的 JSON 一起展开。</p>
-    <p style="margin-bottom:0"><b>5. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
+    <p><b>5. 空白按位置归一。</b>参数与路径之间的空白忽略，名字与值去首尾空白，值内部与文本内部的空格保留。</p>
+    <p style="margin-bottom:0"><b>6. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
   </div>
 
   <footer>飘雪喵 · 指令路径与参数系统设计 · 2026-10-18</footer>
