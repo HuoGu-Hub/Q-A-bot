@@ -5,6 +5,7 @@ import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.qa.QaAnalytics;
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.time.AppTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -176,11 +177,12 @@ public class VariableRenderer {
                                    String argsText, boolean preview) {
         if (event == null) {
             return preview ? RenderContext.sample()
-                    : RenderContext.scheduled(0L, 0L, false, "朋友", argsText, namedArgs, text);
+                    : RenderContext.scheduled(0L, 0L, false, "朋友", argsText, namedArgs, text,
+                            Instant.now());
         }
         return new RenderContext(
                 event.getUserId(), event.getGroupId(), event.isGroupMessage(),
-                nickname(event), argsText, namedArgs, text, preview);
+                nickname(event), argsText, namedArgs, text, preview, Instant.now());
     }
 
     /** 解析一个变量；返回 null 表示"未知变量，原样保留" */
@@ -236,10 +238,10 @@ public class VariableRenderer {
             case "user.id" -> String.valueOf(ctx.userId() == null ? 0L : ctx.userId());
             case "group.id" -> String.valueOf(ctx.groupId() == null ? 0L : ctx.groupId());
 
-            case "time" -> now("HH:mm");
-            case "date" -> now("yyyy-MM-dd");
-            case "datetime" -> now("yyyy-MM-dd HH:mm:ss");
-            case "weekday" -> weekday();
+            case "time" -> clock(ctx, "HH:mm");
+            case "date" -> clock(ctx, "yyyy-MM-dd");
+            case "datetime" -> clock(ctx, "yyyy-MM-dd HH:mm:ss");
+            case "weekday" -> weekday(ctx);
             case "uptime" -> uptime();
 
             case "kb.count" -> ctx.preview() ? "4,131" : num(blockStore.isAvailable() ? blockStore.count() : 0);
@@ -292,13 +294,20 @@ public class VariableRenderer {
         }
     }
 
-    private String now(String pattern) {
-        return LocalDateTime.now().format(DateTimeFormatter.ofPattern(pattern));
+    /**
+     * 当前时刻按东八区格式化。
+     *
+     * <p>取的是<b>上下文里的时刻</b>而不是 {@code LocalDateTime.now()}：定时发送渲染时，
+     * 后者只是"碰巧相等"，而且一旦想让测试喂一个确定的时刻就写不出来了。
+     */
+    private static String clock(RenderContext ctx, String pattern) {
+        return LocalDateTime.ofInstant(ctx.now(), AppTime.ZONE)
+                .format(DateTimeFormatter.ofPattern(pattern));
     }
 
-    private String weekday() {
+    private static String weekday(RenderContext ctx) {
         String[] names = {"星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"};
-        return names[LocalDateTime.now().getDayOfWeek().getValue() - 1];
+        return names[LocalDateTime.ofInstant(ctx.now(), AppTime.ZONE).getDayOfWeek().getValue() - 1];
     }
 
     private String uptime() {

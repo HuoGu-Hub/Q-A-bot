@@ -1,5 +1,6 @@
 package com.example.qqbot.command;
 
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -21,6 +22,8 @@ import java.util.Map;
  * @param namedArgs 解析出来的具名参数，供 {@code {arg.名称}}
  * @param text      摘掉参数段之后的自由文本，供 {@code {text}}
  * @param preview   预览模式：不查真实统计，用占位值
+ * @param now       渲染时刻。{@code {time}} {date} {weekday} 取的是它 ——
+ *                  定时发送要的是<b>发出去那一刻</b>，而不是渲染器被调用时系统时钟碰巧走到哪
  */
 public record RenderContext(
         Long userId,
@@ -30,16 +33,18 @@ public record RenderContext(
         String argsText,
         Map<String, String> namedArgs,
         String text,
-        boolean preview) {
+        boolean preview,
+        Instant now) {
 
     public RenderContext {
         namedArgs = namedArgs == null ? Map.of() : Map.copyOf(namedArgs);
+        now = now == null ? Instant.now() : now;
     }
 
     /** 配置界面的预览：走占位值，不依赖任何真实会话 */
     public static RenderContext sample() {
         return new RenderContext(100000005L, 100000004L, true, "示例用户",
-                "张三 18", Map.of(), "示例文本", true);
+                "张三 18", Map.of(), "示例文本", true, Instant.now());
     }
 
     /**
@@ -49,7 +54,8 @@ public record RenderContext(
      * 这一点必须写在帮助里，否则群友会以为它会变成每个看到的人。
      */
     public static RenderContext scheduled(long userId, long groupId, boolean group, String nickname,
-                                          String argsText, Map<String, String> namedArgs, String text) {
-        return new RenderContext(userId, groupId, group, nickname, argsText, namedArgs, text, false);
+                                          String argsText, Map<String, String> namedArgs, String text,
+                                          Instant now) {
+        return new RenderContext(userId, groupId, group, nickname, argsText, namedArgs, text, false, now);
     }
 }

@@ -185,7 +185,9 @@ public class CommandHandler {
 
         // ---------- 动作类：交给注册表里的执行器 ----------
         if (cmd.isAction()) {
-            runAction(event, cmd, args, body, tail, groupId, userId, inGroup, role, t0);
+            ActionContext actx = new ActionContext(userId, groupId, inGroup, role,
+                    ctx.nickname(), cmd.trigger(), body);
+            runAction(event, cmd, actx, args, tail, groupId, userId, t0);
             return Outcome.HANDLED;
         }
 
@@ -207,9 +209,8 @@ public class CommandHandler {
      * <p>三条失败路径都要回人话，且都<b>不回执成错误堆栈</b>：
      * 没绑执行器、执行器报预期错误、执行器返回空。
      */
-    private void runAction(OneBotEvent event, BotCommand cmd, CommandArgs args, String body,
-                           String tail, long groupId, long userId, boolean inGroup,
-                           CommandRole role, long t0) {
+    private void runAction(OneBotEvent event, BotCommand cmd, ActionContext actx, CommandArgs args,
+                           String tail, long groupId, long userId, long t0) {
         CommandAction action = actionRegistry.find(cmd.action());
         if (action == null) {
             // 命令还在，绑的动作被删了 —— 当作停用并告警，而不是在线上抛异常
@@ -221,11 +222,11 @@ public class CommandHandler {
 
         String out;
         try {
-            out = action.execute(
-                    new ActionContext(userId, groupId, inGroup, role, cmd.trigger(), body), args);
+            out = action.execute(actx, args);
         } catch (ActionException e) {
+            // 动作自己写的消息已经是一句完整人话，不必再加命令路径前缀
             log.info("[CMD] 动作 {} 拒绝执行 /{}：{}", action.id(), cmd.trigger(), e.getMessage());
-            reply(event, cmd, tail, cmd.trigger() + "：" + e.getMessage(), t0);
+            reply(event, cmd, tail, e.getMessage(), t0);
             return;
         } catch (RuntimeException e) {
             // 动作自己的 bug 不该把整条消息链路带崩，但要让日志能定位

@@ -82,9 +82,34 @@ public class CommandStore {
                         知识库：{kb.count} 条资料
                         术语表：{kb.terms} 条
                         累计问答：{qa.total} 次（命中率 {qa.hitrate}）
-                        今天已回答：{qa.today} 次""", "查看知识库统计", 4, "[]", null));
+                        今天已回答：{qa.today} 次""", "查看知识库统计", 4, "[]", null),
+
+                // ---------- 定时输出：一条命令一个动作，用路径分层 ----------
+                // 参数表直接引用动作声明的常量：两处各写一遍迟早会漂移
+                new CommandRepository.Seed("set/output",
+                        "写法：/set /output #time-21:30# 要发的内容",
+                        "设置一条定时输出", 10,
+                        paramsJson(ScheduleCreateAction.TIME, ScheduleCreateAction.DATE),
+                        ScheduleCreateAction.ID),
+                new CommandRepository.Seed("list/output", "",
+                        "查看本群待发的定时输出", 11, "[]", ScheduleListAction.ID),
+                new CommandRepository.Seed("del/output",
+                        "写法：/del /output #id-3#",
+                        "撤销一条定时输出", 12,
+                        paramsJson(ScheduleDeleteAction.ID_PARAM),
+                        ScheduleDeleteAction.ID));
 
         repo.seedBuiltins(builtins, Instant.now().toString());
+    }
+
+    /** 把内置命令的参数表序列化成库里那一列 */
+    private String paramsJson(ParamSpec... specs) {
+        try {
+            return mapper.writeValueAsString(List.of(specs));
+        } catch (Exception e) {
+            log.warn("[CMD] 内置命令参数表序列化失败，按无参数处理：{}", e.getMessage());
+            return "[]";
+        }
     }
 
     // ==================== 查询 ====================

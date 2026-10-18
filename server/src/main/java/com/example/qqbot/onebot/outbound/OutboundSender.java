@@ -123,6 +123,17 @@ public class OutboundSender {
     }
 
     /**
+     * 按 QQ 号私聊 —— 给定时输出用。
+     *
+     * <p>与 {@link #sendToGroup} 是同一个出口，所以出站过滤、分片、节流
+     * 一条都不会漏。定时发送最容易被人当成"绕过过滤的侧门"，
+     * 这里刻意只走这一条路。
+     */
+    public String sendToPrivate(long userId, String text) {
+        return dispatch(new Target(false, userId, 0), text);
+    }
+
+    /**
      * **唯一的出站实现** —— 所有发送都必须经过这里。
      *
      * <p>顺序是有约束的，四步都不能换位置：

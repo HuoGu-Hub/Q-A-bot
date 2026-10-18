@@ -13,6 +13,7 @@ import com.example.qqbot.config.OneBotProperties;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.PlazaProperties;
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.config.ScheduleProperties;
 import com.example.qqbot.config.SiteProperties;
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.onebot.BotIdentity;
@@ -43,7 +44,8 @@ import org.springframework.util.StringUtils;
 @EnableScheduling
 @EnableConfigurationProperties({OneBotProperties.class, GuardProperties.class, LlmProperties.class,
         AsyncProperties.class, MediaProperties.class, KbProperties.class, QaProperties.class,
-        AdminProperties.class, LogProperties.class, CommandProperties.class, PlazaProperties.class,
+        AdminProperties.class, LogProperties.class, CommandProperties.class, ScheduleProperties.class,
+        PlazaProperties.class,
         BotProperties.class, SiteProperties.class, PersistenceProperties.class,
         MapOptions.class})
 public class QqbotServerApplication {

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -125,14 +126,15 @@ class VariableRendererArgsTest {
     @Test
     @DisplayName("{text} 是摘掉参数段之后的自由文本")
     void textVariable() {
-        RenderContext ctx = new RenderContext(1L, 2L, true, "李四", "", Map.of(), "晚上打本集合", false);
+        RenderContext ctx = new RenderContext(1L, 2L, true, "李四", "", Map.of(),
+                "晚上打本集合", false, Instant.now());
 
         assertThat(renderer.render("内容：{text}", ctx)).isEqualTo("内容：晚上打本集合");
     }
 
     /** 造一个即时命令的上下文：群 2、触发者 1、昵称给定、具名参数给定 */
     private static RenderContext context(String nickname, Map<String, String> named) {
-        return new RenderContext(1L, 2L, true, nickname, "", named, "", false);
+        return new RenderContext(1L, 2L, true, nickname, "", named, "", false, Instant.now());
     }
 
     @Test

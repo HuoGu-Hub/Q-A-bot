@@ -317,9 +317,9 @@
   <b>/set /output</b> — 设置一条定时输出的文本
   用法：/set /output #time-21:30# &lt;文本&gt;
   参数：
-    #time#  时间点  必填  例 21:30
-    #date#  日期    可选  例 2026-10-18
-    #text#  内容    必填  例 晚上打本集合
+    #time#  每天几点发  必填  例 21:30
+    #date#  指定日期    可选  例 2026-10-18
+  内容就是把参数后面的话原样发出去。
   示例：/set /output #time-21:30# 晚上打本集合
   </pre>
   <p>不带参数的裸命令 <code>/set /output</code> 也回同一份说明，这是「发了命令但不知道要传什么」时最自然的兜底。</p>
@@ -339,11 +339,12 @@
   <p>就用你给的那个例子，三个动作组成闭环。它们都是内置命令，不可删除，回执文案可在后台改。</p>
   <table>
     <tr><th>命令</th><th>动作</th><th>参数</th><th>回执</th></tr>
-    <tr><td><code>/set /output</code></td><td>schedule.create</td><td>#time# 必填 · #date# 可选 · #text# 必填</td><td>已记下 #3：今天 21:30 在本群输出「晚上打本集合」</td></tr>
+    <tr><td><code>/set /output</code></td><td>schedule.create</td><td>#time# 必填 · #date# 可选 · 内容取自自由文本</td><td>已记下 #3：每天 21:30 在本群输出「晚上打本集合」</td></tr>
     <tr><td><code>/list /output</code></td><td>schedule.list</td><td>无</td><td>本群待发 #3 今天 21:30 晚上打本集合</td></tr>
     <tr><td><code>/del /output</code></td><td>schedule.delete</td><td>#id# 必填</td><td>已撤销 #3</td></tr>
   </table>
   <p>带 <code>#date#</code> 的只在指定那天发一次，不带就是每天同一时刻发。删除按编号，因为按内容匹配会误删——两句「打本集合」分不出是哪条。</p>
+  <p>要发的内容取自<b>自由文本</b>，不要求再包一层 <code>#text-...#</code>：群里最自然的写法就是把话直接打在参数后面。内容为空、超过长度上限、时间已经过去、或是同一个会话挂的条数到上限，都会被拒绝并说明原因。</p>
   <p>内容与参数都<b>按原文存盘</b>，到点才展开变量。所以 <code>{time}</code> 拿到的是发送时刻，改文案也不必重建任务。</p>
 
   <h3>任务表</h3>
@@ -371,7 +372,7 @@
     <tr><td>会不会重复发</td><td>先 <code>UPDATE … WHERE status='pending'</code>，更新到 1 行才发</td><td>同一行只能被一个 tick 抢到，多实例共用同一个库也安全。</td></tr>
     <tr><td>停机错过了怎么办</td><td>30 分钟内补发，超过标记 <code>expired</code></td><td>半夜重启后补发一条「下午三点集合」只会让人困惑。</td></tr>
     <tr><td>发送失败怎么办</td><td>重试 3 次并退避，仍失败标 <code>failed</code></td><td>协议端短暂掉线不该丢任务，也不能无限重试。</td></tr>
-    <tr><td>线程池</td><td><code>spring.task.scheduling.pool.size</code> 调到 2</td><td>Spring 默认调度池只有一个线程，别的定时任务会被这个 10 秒 tick 挤住。</td></tr>
+    <tr><td>线程池</td><td><code>spring.task.scheduling.pool.size</code> 已配成 2</td><td>Spring 默认调度池只有一个线程，别的定时任务会被这个 10 秒 tick 挤住。</td></tr>
   </table>
   <p>扫描器不碰协议客户端，只调出站发送器：群聊走 <code>sendToGroup</code>，私聊需要新增 <code>sendToPrivate</code>。两条路共用出站过滤、分片与节流。<b>定时发送不能成为绕过内容过滤的侧门。</b></p>
 
@@ -459,6 +460,10 @@
     <li>私聊里管理员命令用不了，普通命令照常。</li>
     <li>命令绑定的动作不存在时回用法提示，不抛异常。</li>
     <li>停机 10 分钟后重启补发，2 小时后重启标记过期不补。</li>
+    <li>周期任务推的下一个时刻保持原来那个钟点，不是「现在 + 1 天」。</li>
+    <li>同一条任务不会被两个 tick 发两遍。</li>
+    <li>别人设的任务撤不掉，群管与群主可以；重复撤销第二次会说明已经撤过。</li>
+    <li>私聊默认用不了定时输出。</li>
     <li>定时内容命中敏感词时被出站过滤拦下，与即时回复同一套判定。</li>
   </ul>
 

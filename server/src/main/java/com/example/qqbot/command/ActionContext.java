@@ -10,20 +10,24 @@ package com.example.qqbot.command;
  * @param userId  触发者 QQ 号
  * @param groupId 群号；私聊为 0
  * @param group   是不是群聊
- * @param role    归一化之后的角色
- * @param trigger 命中的命令路径
- * @param text    摘掉参数段之后的自由文本
+ * @param role     归一化之后的角色
+ * @param nickname 触发者昵称。定时任务会把它存进行里 —— 发送时没有入站事件，
+ *                 {@code {user}} 只能靠它
+ * @param trigger  命中的命令路径
+ * @param text     摘掉参数段之后的自由文本
  */
 public record ActionContext(
         long userId,
         long groupId,
         boolean group,
         CommandRole role,
+        String nickname,
         String trigger,
         String text) {
 
     public ActionContext {
         role = role == null ? CommandRole.MEMBER : role;
+        nickname = nickname == null ? "" : nickname;
         text = text == null ? "" : text;
     }
 }
