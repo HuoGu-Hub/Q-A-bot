@@ -275,6 +275,37 @@
   </div>
   <p>最坏情况也就是让机器人把本来就公开的统计数字打出来。若要让某条命令不吃变量，把它的自由文本按字面量处理即可，参数表加一个开关就够。</p>
 
+  <h2>变量查看</h2>
+  <p>系统变量由代码决定，随版本增减，不提供增删改。做成可编辑的配置只会多出「配了但代码里没有」这种状态。管理员真正要回答的是两个问题：<b>现在能写什么</b>、<b>什么时候取值</b>。所以这里只做一个只读页。</p>
+  <p>同一份清单已经喂给命令编辑器里的「点击插入」按钮，变量页只是把它完整摊开，<b>不另存第二份</b>。新增一个变量只改 <code>VariableRenderer.available()</code> 一处，插入按钮和变量页同时多一行。</p>
+
+  <h3>页面上有什么</h3>
+  <table>
+    <tr><th>区块</th><th>内容</th></tr>
+    <tr><td>取值时刻</td><td>固定说明：写在 <code>#名-值#</code> 里是解析那一刻展开；写在文本里是用时展开，定时任务到点才展开。</td></tr>
+    <tr><td>变量表</td><td>变量名、来源、含义、示例、能不能写在参数值里、能不能写在文本里、是否高级变量。</td></tr>
+    <tr><td>搜索</td><td>按变量名与含义过滤，变量多了以后靠它。</td></tr>
+    <tr><td>取当前值</td><td>按钮。未点时显示示例值，点过之后用真实值渲染一遍，便于确认变量到底吐出什么。</td></tr>
+  </table>
+  <p>「取当前值」把能算真的都算真：时刻、运行时长、知识库与问答统计、机器人昵称都是真实值。<b>事件相关的 <code>{user}</code> <code>{group}</code> <code>{user.id}</code> <code>{group.id}</code> 在管理端没有群会话可取，仍是占位值</b> —— 所以表里给每个变量标一个「来源」，一眼能看出哪些是真值、哪些只是形状。</p>
+
+  <h3>当前能提供的值</h3>
+  <table>
+    <tr><th>变量</th><th>来源</th><th>含义</th><th>写在 #参数值# 里</th><th>写在文本里</th></tr>
+    <tr><td><code>{user}</code></td><td>会话</td><td>触发者昵称，群里优先取群名片</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{group}</code></td><td>会话</td><td>本群名称与群号</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{bot}</code></td><td>配置</td><td>机器人昵称</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{time}</code> <code>{date}</code></td><td>时刻</td><td>当前时刻</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{datetime}</code> <code>{weekday}</code> <code>{uptime}</code></td><td>时刻</td><td>完整时间、星期、已运行时长</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{kb.count}</code> <code>{kb.terms}</code></td><td>统计</td><td>知识库规模</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{qa.total}</code> <code>{qa.today}</code> <code>{qa.hitrate}</code></td><td>统计</td><td>问答统计</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{cmd.total}</code> <code>{cmd.list}</code></td><td>指令</td><td>指令表本身</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+    <tr><td><code>{arg.名称}</code></td><td>参数</td><td>本条命令当次收到的参数值</td><td>不能</td><td>能 · 用时</td></tr>
+    <tr><td><code>{user.id}</code> <code>{group.id}</code></td><td>会话</td><td>高级变量，需打开开关</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
+  </table>
+  <p>表里的「用时」在定时任务上就是<b>到点发送那一刻</b>。这条口径写在页面上，不靠记。</p>
+  <p>接口沿用 <code>GET /admin/api/commands/variables</code>，只给 <code>VarInfo</code> 补两个布尔字段表示「能不能写在参数值里」「能不能写在文本里」，并在同一个响应里带上真实值。前端加一个只读页签即可，不加写操作。</p>
+
   <h2>单命令帮助</h2>
   <p><code>/路径 /help</code> 只回这一条命令的说明。内容由参数表自动生成，后台可以整体覆盖成手写文案。</p>
   <pre>
@@ -386,7 +417,7 @@
     <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、参数值与自由文本的变量展开、空白归一、<code>RenderContext</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
     <tr><td>P1</td><td>单命令帮助、动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
     <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code>、内容按模板存盘并在发送时展开</td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
-    <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
+    <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、只读变量页、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
   </table>
 
   <h2>验收清单</h2>
@@ -404,6 +435,8 @@
     <li>触发者昵称含 <code>{cmd.list}</code> 时原样发出，不被二次展开。</li>
     <li>拼错的 <code>{usre}</code> 原样保留，不静默变成空串。</li>
     <li><code>{用户}</code> 不被当成 <code>{user}</code>，原样保留。</li>
+    <li>变量页能搜到 <code>kb.count</code>，「取当前值」后显示真实条数。</li>
+    <li>变量页明确标出 <code>{arg.x}</code> 不能写在参数值里。</li>
     <li><code>#name-{user}#</code> 拿到触发者昵称；<code>#time-{time}#</code> 先展开成 21:30 再通过 moment 校验。</li>
     <li><code>#text-{cmd.list}#</code> 展开出的指令列表里若含 <code>{...}</code>，不会被再展开一次。</li>
     <li>跨群删除查不到，非创建者被拒，群管可以删。</li>
@@ -430,7 +463,8 @@
     <p><b>4. 自由文本里的变量在用时展开。</b>内容按模板存盘，所以 <code>{time}</code> <code>{date}</code> 是真正发出去那一刻的值；<code>{arg.名称}</code> 用当次参数的 JSON 一起展开。</p>
     <p><b>5. 空白按位置归一。</b>参数与路径之间的空白忽略，名字与值去首尾空白，值内部与文本内部的空格保留。</p>
     <p><b>6. 不做变量别名表。</b>语言由创建者决定，命令名与参数名自己起；系统变量固定英文名，同一个值不留两个名字。</p>
-    <p style="margin-bottom:0"><b>7. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
+    <p><b>7. 变量只读可查。</b>不做增删改，只提供查看：能写什么、什么时候取值。清单与命令编辑器共用一处来源。</p>
+    <p style="margin-bottom:0"><b>8. @ 判定只有一处。</b>命令匹配不再带自己的 <code>require-mention</code>，读准入设置；黑名单与私聊策略同样读准入那一份。</p>
   </div>
 
   <footer>飘雪喵 · 指令路径与参数系统设计 · 2026-10-18</footer>
