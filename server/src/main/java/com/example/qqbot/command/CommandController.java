@@ -31,14 +31,16 @@ public class CommandController {
     private final CommandStore store;
     private final VariableRenderer renderer;
     private final CommandPolicy props;
+    private final ActionRegistry actionRegistry;
     /** 只用来把后台传来的参数表 JSON 转成 ParamSpec，不承担别的语义 */
     private final ObjectMapper mapper;
 
     public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props,
-                             ObjectMapper mapper) {
+                             ActionRegistry actionRegistry, ObjectMapper mapper) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;
+        this.actionRegistry = actionRegistry;
         this.mapper = mapper;
     }
 
@@ -53,14 +55,35 @@ public class CommandController {
         return out;
     }
 
-    /** 可用变量（配置界面靠它渲染"点击插入"按钮） */
+    /** 可用变量（配置界面靠它渲染"点击插入"按钮，变量页靠它列清单） */
     @GetMapping("/variables")
     public Map<String, Object> variables() {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("variables", renderer.available());
+        // preview = 示例值，current = 真实值。会话相关的变量在管理端取不到，两者都是占位
         out.put("preview", renderer.previewAll());
+        out.put("current", renderer.currentValues());
         out.put("allowUserIds", props.isAllowUserIds());
         return out;
+    }
+
+    /**
+     * 已注册的动作。
+     *
+     * <p>配置界面用它渲染"绑定哪个执行器"的下拉，以及「载入该动作的参数表」——
+     * 后者只是把声明抄进表单，存进库里的仍然是这条命令自己的参数表。
+     * 于是管理员有权增删可选参数，而不用等代码改。
+     */
+    @GetMapping("/actions")
+    public Map<String, Object> actions() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (CommandAction action : actionRegistry.all()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", action.id());
+            item.put("params", action.params());
+            out.add(item);
+        }
+        return Map.of("actions", out);
     }
 
     /** 新增或更新 */

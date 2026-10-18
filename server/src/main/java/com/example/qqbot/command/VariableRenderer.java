@@ -77,41 +77,62 @@ public class VariableRenderer {
         this.botProps = botProps;
     }
 
-    /** 变量说明（给配置界面用） */
-    public record VarInfo(String name, String label, String example, boolean advanced) {
+    /**
+     * 变量说明（给配置界面用）。
+     *
+     * @param inParam 能不能写在 {@code #名-值#} 的值里。只有 {@code {arg.*}} 与
+     *                {@code {text}} 不行 —— 前者会自己引用自己，后者在参数摘完之前还不存在
+     * @param inText  能不能写在文本与模板里
+     */
+    public record VarInfo(String name, String label, String example, boolean advanced,
+                          boolean inParam, boolean inText) {
+
+        /** 两个位置都能用的系统变量 */
+        static VarInfo value(String name, String label, String example) {
+            return new VarInfo(name, label, example, false, true, true);
+        }
+
+        static VarInfo value(String name, String label, String example, boolean advanced) {
+            return new VarInfo(name, label, example, advanced, true, true);
+        }
+
+        /** 只能写在文本里 —— 参数之间不互相引用 */
+        static VarInfo textOnly(String name, String label, String example) {
+            return new VarInfo(name, label, example, false, false, true);
+        }
     }
 
     /** 全部可用变量 —— 配置界面靠它渲染"点击插入"按钮，变量页靠它列清单 */
     public List<VarInfo> available() {
         List<VarInfo> list = new java.util.ArrayList<>(List.of(
-                new VarInfo("user", "提问者昵称", "示例用户", false),
-                new VarInfo("group", "群名称", "示例玩家群", false),
-                new VarInfo("bot", "机器人昵称", "示例助手", false),
-                new VarInfo("time", "当前时间", "14:32", false),
-                new VarInfo("date", "今天日期", "2026-09-25", false),
-                new VarInfo("datetime", "完整时间", "2026-09-25 14:32:07", false),
-                new VarInfo("weekday", "星期", "星期四", false),
-                new VarInfo("uptime", "已运行时长", "3 小时 12 分", false),
+                VarInfo.value("user", "提问者昵称", "示例用户"),
+                VarInfo.value("group", "群名称", "示例玩家群"),
+                VarInfo.value("bot", "机器人昵称", "示例助手"),
+                VarInfo.value("time", "当前时间", "14:32"),
+                VarInfo.value("date", "今天日期", "2026-09-25"),
+                VarInfo.value("datetime", "完整时间", "2026-09-25 14:32:07"),
+                VarInfo.value("weekday", "星期", "星期四"),
+                VarInfo.value("uptime", "已运行时长", "3 小时 12 分"),
                 // ⚠️ 预览值必须是真实量级：kb.count 原来写 4,238，磁盘实际是 4,131
-                new VarInfo("kb.count", "知识库条目数", "4,131", false),
-                new VarInfo("kb.terms", "术语表词条数", "3,359", false),
+                VarInfo.value("kb.count", "知识库条目数", "4,131"),
+                VarInfo.value("kb.terms", "术语表词条数", "3,359"),
                 // 提问 = @ 了机器人 + 有效回应且未被拦截（guard_action='pass'）
-                new VarInfo("qa.total", "累计提问数", "128", false),
-                new VarInfo("qa.today", "今日提问数", "12", false),
-                new VarInfo("qa.hitrate", "检索命中率", "87.3%", false),
-                new VarInfo("cmd.total", "指令总数", "4", false),
-                new VarInfo("cmd.list", "指令列表（含说明）", "可用指令：…", false),
+                VarInfo.value("qa.total", "累计提问数", "128"),
+                VarInfo.value("qa.today", "今日提问数", "12"),
+                VarInfo.value("qa.hitrate", "检索命中率", "87.3%"),
+                VarInfo.value("cmd.total", "指令总数", "4"),
+                VarInfo.value("cmd.list", "指令列表（含说明）", "可用指令：…"),
                 // 命令参数：/报名 张三 18 → {args}="张三 18"、{args.1}="张三"、{args.2}="18"
-                new VarInfo("args", "命令尾部原文（全部）", "张三 18", false),
-                new VarInfo("args.1", "第 1 个词", "张三", false),
-                new VarInfo("args.2", "第 2 个词", "18", false),
+                VarInfo.value("args", "命令尾部原文（全部）", "张三 18"),
+                VarInfo.value("args.1", "第 1 个词", "张三"),
+                VarInfo.value("args.2", "第 2 个词", "18"),
                 // 井号参数：#time-21:30# → {arg.time}="21:30"
-                new VarInfo("arg.名称", "井号参数（按名字）", "21:30", false),
-                new VarInfo("text", "摘掉参数后的自由文本", "晚上打本集合", false)));
+                VarInfo.textOnly("arg.名称", "井号参数（按名字）", "21:30"),
+                VarInfo.textOnly("text", "摘掉参数后的自由文本", "晚上打本集合")));
 
         if (props.isAllowUserIds()) {
-            list.add(new VarInfo("user.id", "提问者 QQ 号", "100000005", true));
-            list.add(new VarInfo("group.id", "群号", "100000004", true));
+            list.add(VarInfo.value("user.id", "提问者 QQ 号", "100000005", true));
+            list.add(VarInfo.value("group.id", "群号", "100000004", true));
         }
         return list;
     }
@@ -227,7 +248,12 @@ public class VariableRenderer {
         }
 
         if (name.equals("text")) {
-            return ctx.preview() ? "示例文本" : (ctx.text() == null ? "" : ctx.text());
+            if (ctx.preview()) {
+                return "示例文本";
+            }
+            // text 为 null 表示"还没算出来"（正在展开参数值的那一趟）。
+            // 这时返回 null 让它原样保留，而不是静默变成空串 —— 后者最难查。
+            return ctx.text();
         }
 
         return switch (name) {
@@ -381,6 +407,22 @@ public class VariableRenderer {
 
     private static String num(long v) {
         return String.format("%,d", v);
+    }
+
+    /**
+     * 当前真实值 —— 变量页的「取当前值」按钮用。
+     *
+     * <p>管理端没有群会话，所以 {@code {user}} {@code {group}} 这类只能是占位值，
+     * 而时刻、统计、机器人昵称是真的。这一点必须让看的人知道，
+     * 所以变量页把「来源」列出来。
+     */
+    public Map<String, String> currentValues() {
+        RenderContext ctx = RenderContext.scheduled(0L, 0L, false, "", "", Map.of(), "", Instant.now());
+        Map<String, String> out = new LinkedHashMap<>();
+        for (VarInfo v : available()) {
+            out.put(v.name(), render("{" + v.name() + "}", ctx));
+        }
+        return out;
     }
 
     /** 供配置界面做"实时预览" */

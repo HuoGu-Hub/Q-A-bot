@@ -248,8 +248,23 @@ export interface KbBlockItemResponse {
 
 /* ==================== 指令系统 ==================== */
 
+/** 一条命令的参数声明。JSON 键 default 在后端 Java 侧叫 defaultValue */
+export interface AdminParamSpec {
+  name: string
+  /** text / int / moment / date / enum */
+  type: string
+  required: boolean
+  default?: string | null
+  maxChars?: number
+  description?: string | null
+  example?: string | null
+  /** 仅 enum 用 */
+  options?: string[]
+}
+
 export interface BotCommand {
   id: number
+  /** 命令路径，用 / 分层：set/output */
   trigger: string
   reply: string
   description: string
@@ -263,6 +278,22 @@ export interface BotCommand {
   kind: string
   /** agent 类的回答模式：kb = 走知识库（默认）；none = 不用知识库 */
   mode: string
+  /** 参数表：群里用 #名字-值# 传值，模板里用 {arg.名字} 取 */
+  params: AdminParamSpec[]
+  /** 手写的单命令帮助；为空则由参数表自动生成 */
+  help?: string | null
+  /** action 类绑定的执行器 id，其余类型为空 */
+  action?: string | null
+}
+
+/** 一个已注册的动作：配置界面用它渲染下拉与「载入参数表」 */
+export interface CommandActionInfo {
+  id: string
+  params: AdminParamSpec[]
+}
+
+export interface CommandActions {
+  actions: CommandActionInfo[]
 }
 
 export interface CommandList {
@@ -278,11 +309,18 @@ export interface CommandVariable {
   label: string
   example: string
   advanced: boolean
+  /** 能不能写在 #名字-值# 的值里 */
+  inParam: boolean
+  /** 能不能写在文本与模板里 */
+  inText: boolean
 }
 
 export interface CommandVariables {
   variables: CommandVariable[]
+  /** 示例值 */
   preview: Record<string, string>
+  /** 真实值。管理端没有群会话，会话相关的变量仍是占位 */
+  current: Record<string, string>
   allowUserIds: boolean
 }
 

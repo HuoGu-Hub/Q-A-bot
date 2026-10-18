@@ -31,6 +31,7 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import SettingsPanel from './bot/SettingsPanel.vue'
 import CommandsPanel from './bot/CommandsPanel.vue'
+import VariablesPanel from './bot/VariablesPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +39,8 @@ const router = useRouter()
 const TABS = [
   { key: 'settings', label: '设置' },
   { key: 'commands', label: '指令' },
+  // 只读：系统变量由代码决定，做成可编辑的配置只会多出「配了但代码里没有」
+  { key: 'variables', label: '变量' },
 ]
 
 const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'settings')
@@ -62,9 +65,11 @@ function setTab(k: string) {
  */
 const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const commandsRef = ref<InstanceType<typeof CommandsPanel> | null>(null)
+const variablesRef = ref<InstanceType<typeof VariablesPanel> | null>(null)
 
 const settings = computed(() => (tab.value === 'settings' ? settingsRef.value : null))
 const commands = computed(() => (tab.value === 'commands' ? commandsRef.value : null))
+const variables = computed(() => (tab.value === 'variables' ? variablesRef.value : null))
 </script>
 
 <template>
@@ -81,9 +86,12 @@ const commands = computed(() => (tab.value === 'commands' ? commandsRef.value : 
         <Button size="sm" :disabled="settings?.isLoading()" @click="settings?.reload()">放弃改动</Button>
         <Button size="sm" variant="primary" @click="settings?.save()">保存并生效</Button>
       </template>
-      <template v-else>
+      <template v-else-if="tab === 'commands'">
         <Button size="sm" :disabled="commands?.isLoading()" @click="commands?.reload()">刷新</Button>
         <Button size="sm" variant="primary" @click="commands?.newCommand()">+ 新建指令</Button>
+      </template>
+      <template v-else>
+        <Button size="sm" :disabled="variables?.isLoading()" @click="variables?.reload()">刷新</Button>
       </template>
     </template>
 
@@ -93,7 +101,8 @@ const commands = computed(() => (tab.value === 'commands' ? commandsRef.value : 
     -->
     <KeepAlive>
       <SettingsPanel v-if="tab === 'settings'" ref="settingsRef" />
-      <CommandsPanel v-else ref="commandsRef" />
+      <CommandsPanel v-else-if="tab === 'commands'" ref="commandsRef" />
+      <VariablesPanel v-else ref="variablesRef" />
     </KeepAlive>
   </AdminPage>
 </template>

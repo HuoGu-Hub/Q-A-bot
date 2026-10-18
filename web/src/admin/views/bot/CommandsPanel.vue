@@ -12,7 +12,9 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
-import type { CommandList, BotCommand, CommandVariables, CommandStats } from '@shared/api/types'
+import type {
+  CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
+} from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
 import Field from '@shared/ui/Field.vue'
@@ -27,6 +29,8 @@ const error = ref('')
 const data = ref<CommandList | null>(null)
 const vars = ref<CommandVariables | null>(null)
 const stats = ref<CommandStats | null>(null)
+/** 已注册的动作：只有 action 类命令才用得上 */
+const actions = ref<CommandActions | null>(null)
 
 /** 编辑中的指令（null = 没在编辑） */
 const editing = ref<Partial<BotCommand> | null>(null)
@@ -50,6 +54,16 @@ const SCOPE_OPTIONS: Array<{ value: string; label: string }> = [
 const KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'template', label: '话术（直接回复，不调模型）' },
   { value: 'agent', label: '智能问答（调模型，计入预算）' },
+  { value: 'action', label: '动作（写库 / 查库，不调模型）' },
+]
+
+/** 参数类型。与后端 ParamType 一一对应 */
+const PARAM_TYPES: Array<{ value: string; label: string }> = [
+  { value: 'text', label: '文本' },
+  { value: 'int', label: '整数' },
+  { value: 'moment', label: '时间点' },
+  { value: 'date', label: '日期' },
+  { value: 'enum', label: '枚举' },
 ]
 
 /** agent 类的知识来源。命名上刻意说"走/不走知识库"，而不是"温度""权重"这种看不出效果的词 */
@@ -59,10 +73,22 @@ const MODE_OPTIONS: Array<{ value: string; label: string }> = [
 ]
 
 const isAgent = computed(() => editing.value?.kind === 'agent')
+const isAction = computed(() => editing.value?.kind === 'action')
+/** 动作下拉：值是动作 id，直接存进库里那一列 */
+const actionOptions = computed(() =>
+  (actions.value?.actions ?? []).map((a) => ({ value: a.id, label: a.id }))
+)
+/** 编辑中的参数表。新建时是空数组，模板里靠它渲染行 */
+const paramRows = computed<AdminParamSpec[]>(() => editing.value?.params ?? [])
 
-const kindHint = computed(() => isAgent.value
-  ? '智能问答：群友发「/触发词 问题文本」→ 交给大模型回答。会走 Guard 与成本预算（会花钱），参数就是问题。'
-  : '话术：群友发「/触发词 参数…」→ 直接回下面的文本。不调模型、不计费，所以是秒回。')
+const kindHint = computed(() => {
+  if (isAction.value) {
+    return '动作：群友发「/路径 #名字-值# 文本」→ 交给绑定的执行器写库或查库。不调模型、不计费。'
+  }
+  return isAgent.value
+    ? '智能问答：群友发「/路径 问题文本」→ 交给大模型回答。会走 Guard 与成本预算（会花钱），自由文本就是问题。'
+    : '话术：群友发「/路径 #名字-值# 文本」→ 直接回下面的文本。不调模型、不计费，所以是秒回。'
+})
 
 async function load() {
   loading.value = true
@@ -71,6 +97,7 @@ async function load() {
     data.value = await adminApi.get<CommandList>('/commands')
     vars.value = await adminApi.get<CommandVariables>('/commands/variables')
     stats.value = await adminApi.get<CommandStats>('/commands/stats?days=30')
+    actions.value = await adminApi.get<CommandActions>('/commands/actions')
   } catch (e) { error.value = describeError(e) } finally {
     loading.value = false
   }
@@ -79,7 +106,7 @@ async function load() {
 function newCommand() {
   editing.value = {
     trigger: '', reply: '', description: '', scope: 'all', enabled: true, sortOrder: 0,
-    kind: 'template', mode: 'kb',
+    kind: 'template', mode: 'kb', params: [], help: '', action: null,
   }
   preview.value = ''
   sampleArgs.value = ''
@@ -91,9 +118,66 @@ function edit(c: BotCommand) {
   updatePreview()
 }
 
-/** 列表里怎么显示这条指令：agent 类要带 <问题>，否则群友不知道要传参数 */
+/**
+ * 列表里怎么显示这条指令。
+ *
+ * 路径每一层都补上斜杠，与群里写法一致；有参数表的把参数摆出来 ——
+ * 否则群友看到 /set /output 直接发出去，只会收到一句用法提示。
+ */
 function displayOf(c: BotCommand) {
-  return '/' + c.trigger + (c.kind === 'agent' ? ' <问题>' : '')
+  const path = '/' + c.trigger.split('/').join(' /')
+  const ps = c.params ?? []
+  if (ps.length) {
+    return path + ' ' + ps.map((p) => '#' + p.name + '-' + (p.example || p.name) + '#').join(' ')
+  }
+  return path + (c.kind === 'agent' ? ' <问题>' : '')
+}
+
+/* ==================== 参数表编辑 ==================== */
+
+function setParams(list: AdminParamSpec[]) {
+  patch({ params: list })
+}
+
+function patchParam(i: number, p: Partial<AdminParamSpec>) {
+  const list = paramRows.value.slice()
+  list[i] = { ...list[i], ...p }
+  setParams(list)
+}
+
+function addParam() {
+  setParams([...paramRows.value, { name: '', type: 'text', required: false, default: '', example: '', description: '' }])
+}
+
+function removeParam(i: number) {
+  setParams(paramRows.value.filter((_, idx) => idx !== i))
+}
+
+/** checkbox 的 change 事件要读 target.checked，模板里直接转型不好读，收成一个函数 */
+function onRequiredChange(i: number, e: Event) {
+  patchParam(i, { required: (e.target as HTMLInputElement).checked })
+}
+
+/** enum 的候选值在表单里是逗号分隔的文本 */
+function optionsText(p: AdminParamSpec) {
+  return (p.options ?? []).join(', ')
+}
+
+function onOptionsChange(i: number, v: string) {
+  patchParam(i, { options: v.split(/[,，]/).map((s) => s.trim()).filter(Boolean) })
+}
+
+/**
+ * 把选中动作声明的参数表抄进表单。
+ *
+ * 只覆盖名字与类型之外的空字段，不动用户已经填好的说明与示例 ——
+ * "载入"是省事，不是重置。
+ */
+function loadActionParams() {
+  const id = editing.value?.action
+  const found = (actions.value?.actions ?? []).find((a) => a.id === id)
+  if (!found) return
+  setParams(found.params.map((p) => ({ ...p })))
 }
 
 /**
@@ -211,6 +295,15 @@ onMounted(load)
       </Field>
       <p class="kind-note faint">{{ kindHint }}</p>
 
+      <Field v-if="isAction" label="绑定动作" control-width="360px">
+        <Select
+          :model-value="editing.action ?? ''"
+          :options="actionOptions"
+          aria-label="绑定动作"
+          @update:model-value="patch({ action: $event })"
+        />
+      </Field>
+
       <Field v-if="isAgent" label="回答模式" control-width="360px">
         <Select
           :model-value="editing.mode ?? 'kb'"
@@ -220,17 +313,89 @@ onMounted(load)
         />
       </Field>
 
-      <Field :label="isAgent ? '用法提示（没带参数时回这句）' : '回复'" control-width="520px">
+      <Field
+        :label="isAgent || isAction ? '用法提示（参数不合格时回这句）' : '回复'"
+        control-width="520px"
+      >
         <Input
           :model-value="editing.reply ?? ''"
           multiline
           :rows="6"
           mono
           :placeholder="isAgent
-            ? '用法：/联网 问题内容（群友只发 /联网 不带参数时回这句）'
-            : '回复内容，支持 {变量} 与 {args}'"
-          :aria-label="isAgent ? '用法提示' : '回复'"
+            ? '用法：/qa 问题内容（群友只发 /qa 不带内容时回这句）'
+            : isAction
+              ? '用法：/set /output #time-21:30# <内容>（留空则按参数表自动生成）'
+              : '回复内容，支持 {变量} 与 {args}'"
+          :aria-label="isAgent || isAction ? '用法提示' : '回复'"
           @update:model-value="onReplyInput"
+        />
+      </Field>
+
+      <Field label="参数表" control-width="820px">
+        <div class="params">
+          <p v-if="!paramRows.length" class="faint note">
+            没有参数：群友发过来的整段都当文本，模板里用 {<span></span>} 之外的 {args} 取。
+          </p>
+          <div v-for="(p, i) in paramRows" :key="i" class="param-row">
+            <Input
+              :model-value="p.name" placeholder="名字" aria-label="参数名"
+              @update:model-value="patchParam(i, { name: $event })"
+            />
+            <Select
+              :model-value="p.type" :options="PARAM_TYPES" aria-label="参数类型"
+              @update:model-value="patchParam(i, { type: $event })"
+            />
+            <label class="req">
+              <input type="checkbox" :checked="p.required" @change="onRequiredChange(i, $event)" />
+              必填
+            </label>
+            <Input
+              :model-value="p.default ?? ''" placeholder="默认值" aria-label="默认值"
+              @update:model-value="patchParam(i, { default: $event })"
+            />
+            <Input
+              :model-value="p.example ?? ''" placeholder="示例" aria-label="示例"
+              @update:model-value="patchParam(i, { example: $event })"
+            />
+            <Input
+              :model-value="p.description ?? ''" placeholder="说明" aria-label="说明"
+              @update:model-value="patchParam(i, { description: $event })"
+            />
+            <Button size="sm" variant="danger" @click="removeParam(i)">删</Button>
+            <Input
+              v-if="p.type === 'enum'"
+              class="enum-opts"
+              :model-value="optionsText(p)"
+              placeholder="候选值，用逗号分开，例：daily, once"
+              aria-label="候选值"
+              @update:model-value="onOptionsChange(i, $event)"
+            />
+          </div>
+          <div class="param-actions">
+            <Button size="sm" @click="addParam">+ 加一个参数</Button>
+            <Button
+              v-if="isAction && editing.action"
+              size="sm"
+              @click="loadActionParams"
+            >载入该动作的参数表</Button>
+          </div>
+          <p class="faint note">
+            群里写作 #名字-值#，顺序随意，值里可以有减号与空格。
+            名字只能用汉字、字母、数字、下划线；值里可以直接写变量，会在解析那一刻展开。
+          </p>
+        </div>
+      </Field>
+
+      <Field label="单命令帮助" control-width="520px">
+        <Input
+          :model-value="editing.help ?? ''"
+          multiline
+          :rows="4"
+          mono
+          placeholder="留空则按参数表自动生成；群里发「/路径 /help」看它"
+          aria-label="单命令帮助"
+          @update:model-value="patch({ help: $event })"
         />
       </Field>
 
@@ -315,11 +480,12 @@ onMounted(load)
           <tr v-for="c in data?.commands ?? []" :key="c.id">
             <td class="trig">{{ displayOf(c) }}</td>
             <td class="muted">{{ c.description }}</td>
-            <td class="reply">{{ c.reply.slice(0, 60) }}{{ c.reply.length > 60 ? "…" : "" }}</td>
+            <td class="reply">{{ (c.reply ?? "").slice(0, 60) }}{{ (c.reply ?? "").length > 60 ? "…" : "" }}</td>
             <td class="muted">{{ c.scope }}</td>
             <td>
               <Tag :tone="c.enabled ? 'good' : 'neutral'">{{ c.enabled ? "启用" : "停用" }}</Tag>
               <Tag v-if="c.kind === 'agent'" tone="warn">问答·{{ c.mode === 'none' ? '不用知识库' : '知识库' }}</Tag>
+              <Tag v-if="c.kind === 'action'" tone="warn">动作·{{ c.action }}</Tag>
               <Tag v-if="c.builtin" tone="flame">内置</Tag>
             </td>
             <td class="ops">
@@ -430,6 +596,27 @@ onMounted(load)
 .note { font-size: var(--fs-meta); margin: 0; }
 /* 类型说明紧跟在下拉后面：它决定"这条指令会不会花钱"，不适合塞进 placeholder */
 .kind-note { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); max-width: 620px; line-height: 1.7; }
+
+/* 参数表：一行一个参数。列宽固定，枚举的候选值另起一行 ——
+   它只在 type=enum 时出现，混在行里会把其余控件挤变形。 */
+.params { display: flex; flex-direction: column; gap: var(--sp-2); }
+.param-row {
+  display: grid;
+  grid-template-columns: 130px 108px 62px 118px 118px minmax(120px, 1fr) auto;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.param-row .enum-opts { grid-column: 1 / -1; }
+.req {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-meta); color: var(--mist); white-space: nowrap;
+}
+.req input[type='checkbox'] { accent-color: var(--flame); }
+.param-actions { display: flex; gap: var(--sp-2); }
+@media (max-width: 1100px) {
+  .param-row { grid-template-columns: 1fr 1fr; }
+  .param-row .enum-opts { grid-column: 1 / -1; }
+}
 
 /* 触发词列：等宽 + 灵火色，一眼能和说明文字分开 */
 .trig { font-family: var(--font-mono); color: var(--flame); }
