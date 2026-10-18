@@ -309,7 +309,8 @@
     <tr><td><code>{user.id}</code> <code>{group.id}</code></td><td>会话</td><td>高级变量，需打开开关</td><td>能 · 解析时</td><td>能 · 用时</td></tr>
   </table>
   <p>表里的「用时」在定时任务上就是<b>到点发送那一刻</b>。这条口径写在页面上，不靠记。</p>
-  <p>接口沿用 <code>GET /admin/api/commands/variables</code>，只给 <code>VarInfo</code> 补两个布尔字段表示「能不能写在参数值里」「能不能写在文本里」，并在同一个响应里带上真实值。前端加一个只读页签即可，不加写操作。</p>
+  <p>接口沿用 <code>GET /admin/api/commands/variables</code>，给 <code>VarInfo</code> 补两个布尔字段表示「能不能写在参数值里」「能不能写在文本里」，并在同一个响应里带上真实值。前端加一个只读页签即可，不加写操作。</p>
+  <p>指令编辑器另取 <code>GET /admin/api/commands/actions</code>：列出已注册的动作与它们声明的参数表，用于「绑定哪个执行器」的下拉，以及「载入该动作的参数表」按钮。载入只是把声明抄进表单，<b>存进库里的仍然是这条命令自己的参数表</b> —— 管理员有权增删可选参数，不必等代码改。</p>
 
   <h2>单命令帮助</h2>
   <p><code>/路径 /help</code> 只回这一条命令的说明。内容由参数表自动生成，后台可以整体覆盖成手写文案。</p>
@@ -433,7 +434,7 @@
     <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、参数值与自由文本的变量展开、空白归一、<code>RenderContext</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
     <tr><td>P1</td><td>单命令帮助、动作注册表与 <code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
     <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code>、内容按模板存盘并在发送时展开</td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
-    <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、只读变量页、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
+    <tr><td>P3</td><td>后台参数表编辑、动作绑定与「载入参数表」、帮助文案编辑、只读变量页、调度线程池配置</td><td>后台能改参数表并预览；变量页能搜能取当前值</td></tr>
   </table>
 
   <h2>验收清单</h2>
