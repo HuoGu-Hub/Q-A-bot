@@ -2,12 +2,18 @@ package com.example.qqbot.router;
 
 import com.example.qqbot.agent.ChatService;
 import com.example.qqbot.agent.ReplyMode;
+import com.example.qqbot.command.ActionContext;
+import com.example.qqbot.command.ActionException;
+import com.example.qqbot.command.ActionRegistry;
 import com.example.qqbot.command.BotCommand;
+import com.example.qqbot.command.CommandAction;
+import com.example.qqbot.command.CommandArgs;
 import com.example.qqbot.command.CommandHelp;
 import com.example.qqbot.command.CommandMatcher;
 import com.example.qqbot.command.CommandParser;
 import com.example.qqbot.command.CommandRateLimiter;
 import com.example.qqbot.command.CommandStore;
+import com.example.qqbot.command.ParamSpec;
 import com.example.qqbot.command.RenderContext;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.config.AsyncProperties;
@@ -90,6 +96,61 @@ class MessageRouterCommandTest {
 
     private MessageRouter router;
 
+    /** 只回一句话的假动作：验分派这条路，不牵扯真实业务 */
+    private static final CommandAction ECHO = new CommandAction() {
+        @Override
+        public String id() {
+            return "test.echo";
+        }
+
+        @Override
+        public List<ParamSpec> params() {
+            return List.of();
+        }
+
+        @Override
+        public String execute(ActionContext ctx, CommandArgs args) {
+            return "动作回执：" + ctx.text();
+        }
+    };
+
+    /** 按预期失败的动作：验"原因原样回给群友" */
+    private static final CommandAction FAILING = new CommandAction() {
+        @Override
+        public String id() {
+            return "test.fail";
+        }
+
+        @Override
+        public List<ParamSpec> params() {
+            return List.of();
+        }
+
+        @Override
+        public String execute(ActionContext ctx, CommandArgs args) throws ActionException {
+            throw new ActionException("编号 3 不是你建的");
+        }
+    };
+
+    private CommandHandler newHandler() {
+        return new CommandHandler(new CommandProperties(), commandMatcher, new CommandParser(),
+                new CommandHelp(variableRenderer), new ActionRegistry(List.of(ECHO, FAILING)),
+                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector);
+    }
+
+    private static BotCommand actionCommand(String action, String minRole) {
+        return new BotCommand(0, "test/echo", "用法", "动作测试",
+                "all", List.of(), minRole, true, 0, false,
+                BotCommand.KIND_ACTION, BotCommand.MODE_KB, List.of(), null, action);
+    }
+
+    /** 群里带角色的消息：权限用例要靠它 */
+    private OneBotEvent groupEventWithRole(String text, String role) {
+        OneBotEvent event = groupEvent(text);
+        when(event.getSender()).thenReturn(mapper.createObjectNode().put("role", role));
+        return event;
+    }
+
     @BeforeEach
     void setUp() {
         apiClient = mock(OneBotApiClient.class);
@@ -141,9 +202,7 @@ class MessageRouterCommandTest {
         outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new Outbound(), outboundFilter,
                 new ImageLibrary(new MediaProperties(), List.of()));
         // 指令那一路住在 CommandHandler 里 —— 这里装真的，测试才是在验真实的那条链
-        CommandHandler commandHandler = new CommandHandler(new CommandProperties(), commandMatcher,
-                new CommandParser(), new CommandHelp(variableRenderer), commandRateLimiter,
-                commandStore, variableRenderer, outboundSender, qaCollector);
+        CommandHandler commandHandler = newHandler();
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), new Access(),
                 mock(BlockNotifier.class), qaCollector, commandHandler, mock(FallbackService.class));
@@ -309,9 +368,7 @@ class MessageRouterCommandTest {
         Access blacklist = new Access();
         blacklist.setUserBlacklist(List.of(USER));
         // 换一个持黑名单的 router 实例：Access 是构造时注入的，改不了已有那个
-        CommandHandler handler = new CommandHandler(new CommandProperties(), commandMatcher,
-                new CommandParser(), new CommandHelp(variableRenderer), commandRateLimiter,
-                commandStore, variableRenderer, outboundSender, qaCollector);
+        CommandHandler handler = newHandler();
         MessageRouter blacklisted = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), blacklist,
                 mock(BlockNotifier.class), qaCollector, handler, mock(FallbackService.class));
@@ -325,6 +382,90 @@ class MessageRouterCommandTest {
         blacklisted.handle(groupEvent("/ping"));
 
         verify(apiClient, never()).sendGroupMsg(anyLong(), any());
+    }
+
+    // ==================== 动作类：交给注册表 ====================
+
+    @Test
+    @DisplayName("★ 动作类命令：交给注册的执行器，回它算出来的文本")
+    void actionCommandDispatchesToRegistry() {
+        matchCommand(actionCommand("test.echo", "member"), "文本");
+
+        router.handle(groupEvent("/test/echo 文本"));
+
+        assertThat(sentText()).isEqualTo("动作回执：文本");
+        verify(guardPipeline, never()).check(any());
+        verify(chatService, never()).reply(any(), anyString(), any(), any(), any(ReplyMode.class));
+    }
+
+    @Test
+    @DisplayName("★ 动作报预期错误：原因原样回给群友，不抛栈")
+    void actionFailureRepliesReason() {
+        matchCommand(actionCommand("test.fail", "member"), "");
+
+        router.handle(groupEvent("/test/echo"));
+
+        assertThat(sentText()).contains("编号 3 不是你建的");
+    }
+
+    @Test
+    @DisplayName("绑定的动作不存在：回用法提示，不在线上抛异常")
+    void unknownActionIsHandled() {
+        matchCommand(actionCommand("nobody.home", "member"), "");
+
+        router.handle(groupEvent("/test/echo"));
+
+        assertThat(sentText()).contains("动作还没接上");
+    }
+
+    // ==================== 权限：min_role 终于被判定 ====================
+
+    @Test
+    @DisplayName("★ 普通成员触发管理员命令：被挡下，动作根本没跑")
+    void adminOnlyCommandIsDeniedForMember() {
+        matchCommand(actionCommand("test.echo", "admin"), "文本");
+
+        router.handle(groupEventWithRole("/test/echo 文本", "member"));
+
+        assertThat(sentText()).contains("只有群主或管理员");
+    }
+
+    @Test
+    @DisplayName("群管触发管理员命令：放行")
+    void adminCanRunAdminOnlyCommand() {
+        matchCommand(actionCommand("test.echo", "admin"), "文本");
+
+        router.handle(groupEventWithRole("/test/echo 文本", "admin"));
+
+        assertThat(sentText()).isEqualTo("动作回执：文本");
+    }
+
+    @Test
+    @DisplayName("群主也能用管理员命令")
+    void ownerCanRunAdminOnlyCommand() {
+        matchCommand(actionCommand("test.echo", "owner"), "文本");
+
+        router.handle(groupEventWithRole("/test/echo 文本", "owner"));
+
+        assertThat(sentText()).isEqualTo("动作回执：文本");
+    }
+
+    @Test
+    @DisplayName("私聊没有群角色：管理员命令用不了")
+    void privateChatHasNoAdminRole() {
+        // 默认私聊是关的，那样根本走不到指令层 —— 这里显式开一个放行的实例
+        Access openPrivate = new Access();
+        openPrivate.setPrivateChatPolicy("all");
+        MessageRouter openRouter = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
+                outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), openPrivate,
+                mock(BlockNotifier.class), qaCollector, newHandler(), mock(FallbackService.class));
+        matchCommand(actionCommand("test.echo", "admin"), "文本");
+
+        openRouter.handle(privateEvent("/test/echo 文本"));
+
+        ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
+        verify(apiClient).sendPrivateMsg(eq(USER), captor.capture());
+        assertThat(captor.getValue().path("text").asText()).contains("只有群主或管理员");
     }
 
     @Test

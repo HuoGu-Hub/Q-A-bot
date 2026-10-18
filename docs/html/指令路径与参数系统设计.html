@@ -333,6 +333,7 @@
     <tr><td><code>action</code></td><td>交给注册的执行器，写库或查库</td><td>不走</td><td><code>/set /output …</code></td></tr>
   </table>
   <p>动作用注册表分发，不写 <code>switch</code>。每个动作是一个类，声明自己的参数表与用法，执行时拿到校验过的 <code>CommandArgs</code> 和上下文，返回一句回执。动作被删掉之后，绑定它的命令在解析阶段就当作停用并记一条告警日志，不会在线上抛 <code>ClassNotFound</code>。</p>
+  <p>两条实现约定：动作必须<b>毫秒级返回</b>，定时任务在这里只落库，「到点发」是另一个组件的事；动作返回的文本<b>就是最终文本，不会再渲染一遍</b> —— 参数已经展开并校验过，再渲染会让群友内容里的 <code>{...}</code> 被二次展开。</p>
 
   <h2>定时输出：一条完整的链路</h2>
   <p>就用你给的那个例子，三个动作组成闭环。它们都是内置命令，不可删除，回执文案可在后台改。</p>
@@ -382,7 +383,16 @@
     <tr><td>其他群友</td><td>拒绝，回「#3 不是你建的」</td></tr>
     <tr><td>别的群</td><td>查不到，任务是群内资产</td></tr>
   </table>
-  <p>权限判定走 <code>min_role</code>，顺手补上「字段只存不判」那个缺口。角色由路由层归一化成 <code>owner / admin / member / none</code> 放进上下文，动作层不解析 OneBot 的 JSON。</p>
+  <h3>权限判定</h3>
+  <p>权限走 <code>min_role</code>，顺手补上「字段只存不判」那个缺口。判定发生在参数解析之前 —— 权限不够的人不该看到参数表的细节，也不该触发任何动作。</p>
+  <table>
+    <tr><th>情况</th><th>归一成什么</th><th>为什么</th></tr>
+    <tr><td>群主 / 管理员 / 普通成员</td><td>owner / admin / member</td><td>OneBot 只有这三种</td></tr>
+    <tr><td>私聊</td><td>member</td><td>没有群角色。私聊里没有第二双眼睛，管理员命令不该在那里开放</td></tr>
+    <tr><td>缺 <code>sender</code> 或认不出来的 role</td><td>member</td><td>判成「无角色」会让任何不带 sender 的协议端实现<b>挡掉全部命令</b>，为防一件只有管理员才做的事把所有人关在门外</td></tr>
+    <tr><td>后台填的 min_role 认不出来</td><td>member</td><td>与库里那列的默认值一致</td></tr>
+  </table>
+  <p>角色由命令层归一化成一个枚举放进动作上下文，<b>动作层不解析 OneBot 的 JSON</b>。动作上下文里刻意不含发送器：动作只算出一句话，发出去由指令处理器统一做 —— 动作自己能发消息，出站过滤与节流就有第二条绕过路径。</p>
 
   <h2>组件与依赖</h2>
   <p>新代码落在 <code>command</code> 包，持久化落 <code>persistence</code>。三条既有护栏直接约束实现方式：</p>
@@ -420,7 +430,7 @@
   <table>
     <tr><th>阶段</th><th>内容</th><th>验收</th></tr>
     <tr><td>P0</td><td>路径最长匹配、<code>#名-值#</code> 提取与转义、参数表模型、类型校验、<code>{arg.x}</code>、参数值与自由文本的变量展开、空白归一、<code>RenderContext</code>；@ 判定合到准入一处</td><td>解析用例全绿，老斜杠命令行为不变；@ 开关只剩一处</td></tr>
-    <tr><td>P1</td><td>单命令帮助、动作注册表、<code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
+    <tr><td>P1</td><td>单命令帮助、动作注册表与 <code>kind=action</code> 分派、<code>min_role</code> 判定</td><td><code>/路径 /help</code> 输出正确；越权删除被拒</td></tr>
     <tr><td>P2</td><td>任务表、三个内置动作、扫描器、周期规则、<code>sendToPrivate</code>、内容按模板存盘并在发送时展开</td><td>创建后到点发出；重启不丢；错过宽限期的标记过期</td></tr>
     <tr><td>P3</td><td>后台参数表编辑、帮助文案编辑、只读变量页、任务列表与撤销、调度线程池配置</td><td>后台能改参数表并预览，能撤销任务</td></tr>
   </table>
@@ -445,6 +455,9 @@
     <li><code>#name-{user}#</code> 拿到触发者昵称；<code>#time-{time}#</code> 先展开成 21:30 再通过 moment 校验。</li>
     <li><code>#text-{cmd.list}#</code> 展开出的指令列表里若含 <code>{...}</code>，不会被再展开一次。</li>
     <li>跨群删除查不到，非创建者被拒，群管可以删。</li>
+    <li>普通成员触发管理员命令被挡下，且动作一次都没跑。</li>
+    <li>私聊里管理员命令用不了，普通命令照常。</li>
+    <li>命令绑定的动作不存在时回用法提示，不抛异常。</li>
     <li>停机 10 分钟后重启补发，2 小时后重启标记过期不补。</li>
     <li>定时内容命中敏感词时被出站过滤拦下，与即时回复同一套判定。</li>
   </ul>
