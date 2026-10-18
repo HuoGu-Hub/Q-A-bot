@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -84,6 +85,54 @@ class VariableRendererArgsTest {
         assertThat(renderer.render("{args}", null, true, "")).isEqualTo("张三 18");
         assertThat(renderer.render("{args.1}", null, true, "")).isEqualTo("张三");
         assertThat(renderer.render("{args.2}", null, true, "")).isEqualTo("18");
+    }
+
+    /* ==================== 井号参数：{arg.名字} ==================== */
+
+    @Test
+    @DisplayName("★ #名字-值# 的参数要用 {arg.名字} 取")
+    void namedArgsUseArgPrefix() {
+        RenderContext ctx = context("李四", Map.of("user", "张三"));
+
+        assertThat(renderer.render("{arg.user}", ctx)).isEqualTo("张三");
+    }
+
+    @Test
+    @DisplayName("★ {user} 永远是系统变量，与同名参数互不干扰")
+    void systemVariableAndParameterDoNotCollide() {
+        RenderContext ctx = context("李四", Map.of("user", "张三"));
+
+        assertThat(renderer.render("{user} 帮 {arg.user} 报了名", ctx))
+                .isEqualTo("李四 帮 张三 报了名");
+    }
+
+    @Test
+    @DisplayName("参数名中英皆可：{arg.时间}")
+    void chineseParameterName() {
+        RenderContext ctx = context("李四", Map.of("时间", "21:30"));
+
+        assertThat(renderer.render("{arg.时间}", ctx)).isEqualTo("21:30");
+    }
+
+    @Test
+    @DisplayName("取不到的参数名原样保留，不静默变空")
+    void unknownParameterNameIsKept() {
+        RenderContext ctx = context("李四", Map.of("user", "张三"));
+
+        assertThat(renderer.render("[{arg.time}]", ctx)).isEqualTo("[{arg.time}]");
+    }
+
+    @Test
+    @DisplayName("{text} 是摘掉参数段之后的自由文本")
+    void textVariable() {
+        RenderContext ctx = new RenderContext(1L, 2L, true, "李四", "", Map.of(), "晚上打本集合", false);
+
+        assertThat(renderer.render("内容：{text}", ctx)).isEqualTo("内容：晚上打本集合");
+    }
+
+    /** 造一个即时命令的上下文：群 2、触发者 1、昵称给定、具名参数给定 */
+    private static RenderContext context(String nickname, Map<String, String> named) {
+        return new RenderContext(1L, 2L, true, nickname, "", named, "", false);
     }
 
     @Test
