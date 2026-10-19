@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>命令系统骨架设计</title>
+<style>
+  :root {
+    --void: #06070a; --stone-200: #0b0e13; --stone-300: #12161d; --stone-400: #1a1f28;
+    --hairline: rgba(255,255,255,.085);
+    --ink: #eae5da; --ink-2: #b9c0cb; --ink-3: #8b95a3; --ink-4: #626c7a;
+    --ember: #f2ab55; --ember-veil: rgba(242,171,85,.10);
+    --vital: #7ea36a; --mist: #8b9aab; --danger: #c4675c; --info: #6f8fa8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 32px 96px;
+    background: var(--stone-200); color: var(--ink);
+    font: 15px/1.75 "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: .01em; margin: 0 0 10px; }
+  .eyebrow { font-size: 12px; letter-spacing: .16em; color: var(--ink-4); text-transform: uppercase; }
+  h2 { font-size: 18px; font-weight: 600; margin: 48px 0 14px; padding-left: 12px; position: relative; }
+  h2::before { content: ''; position: absolute; left: 0; top: .32em; width: 2px; height: 1em; background: var(--ember); }
+  h3 { font-size: 15px; font-weight: 500; margin: 28px 0 8px; color: var(--ink); }
+  p { margin: 0 0 12px; color: var(--ink-2); }
+  b, strong { color: var(--ink); font-weight: 500; }
+  code { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px; padding: 1px 5px; border-radius: 3px; background: var(--void); color: var(--ink-2); }
+  .lead { font-size: 16px; color: var(--ink-2); max-width: 800px; }
+  .card { background: var(--stone-300); border-radius: 10px; padding: 20px 24px; margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; letter-spacing: .04em; padding: 7px 10px; border-bottom: 1px solid var(--hairline); }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--hairline); color: var(--ink-2); vertical-align: top; }
+  td:first-child { color: var(--ink); }
+  tr:last-child td { border-bottom: none; }
+  pre { background: var(--void); border-radius: 6px; padding: 16px 18px; overflow-x: auto; font: 12.5px/1.75 "JetBrains Mono", Consolas, monospace; color: var(--ink-3); margin: 14px 0; }
+  pre b { color: var(--ember); font-weight: 500; }
+  pre i { color: var(--ink-4); font-style: normal; }
+  ul, ol { margin: 0 0 12px; padding-left: 1.3em; color: var(--ink-2); }
+  li { margin: 5px 0; }
+  .callout { border-left: 2px solid var(--ember); padding: 2px 0 2px 16px; margin: 18px 0; color: var(--ink-2); }
+  .callout--warn { border-left-color: var(--danger); }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 13px; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hairline); color: var(--ink-3); }
+  .tag--ok { color: var(--vital); border-color: rgba(126,163,106,.35); }
+  .tag--no { color: var(--danger); border-color: rgba(196,103,92,.35); }
+  .syntax { font: 13px/1.9 "JetBrains Mono", Consolas, monospace; background: var(--void); border-radius: 8px; padding: 18px 20px; margin: 16px 0; color: var(--ink-3); }
+  .syntax .p { color: var(--ember); }
+  .syntax .v { color: var(--vital); }
+  .syntax .t { color: var(--info); }
+  .qa { margin: 18px 0; }
+  .qa .q { color: var(--ink); }
+  .qa .a { color: var(--ink-3); }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--ink-4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">命令系统 · 重新设计</div>
+  <h1>骨架：一条消息怎么变成一件事</h1>
+  <p class="lead">这份文档只讲骨架：消息长什么样、谁有资格发、发出去的东西谁能看到。具体功能都挂在这个骨架上。</p>
+
+  <div class="card">
+    <h3 style="margin-top:0">一页结论</h3>
+    <p>命令一律以 <code>/</code> 开头，后面是路径、传入变量、文本三样。</p>
+    <p>每条命令带<b>两把独立的锁</b>：<b>谁能用</b>，和<b>能看到哪些群的数据</b>。公告这类锁死在本群，开黑那类显式放开成跨群。</p>
+    <p style="margin-bottom:0">有一条铁律：<b>写永远只能写发命令的那个群</b>。放宽的只有"读"。</p>
+  </div>
+
+  <h2>一条消息进来，发生什么</h2>
+  <pre>
+  群友发一条消息
+        │
+        ▼
+  ① 是不是命令？ ──── 不是 ────▶ 当普通聊天，交给问答
+     以 / 开头，路径能在命令表里找到
+        │ 是
+        ▼
+  ② 这个人有没有资格用？ ──── 没有 ────▶ 回一句说明，到此为止
+     全体 / 管理员 / 群主 / 白名单
+        │ 有
+        ▼
+  ③ 拆参数与文本
+     #名字-值# 摘出来，剩下的就是文本
+        │
+        ▼
+  ④ 这条命令能看到哪些群的数据？
+     本群 / 指定的几个群 / 全部群
+        │
+        ▼
+  ⑤ 执行：回一句话 / 交给模型 / 做一件事
+        │
+        ▼
+  ⑥ 落库：归属群永远是「发命令的这个群」
+  </pre>
+  <p>②在③前面不是随便排的：没资格的人不该看到参数表的细节，也不该触发任何动作。</p>
+
+  <h2>命令怎么写</h2>
+  <div class="syntax">
+    <span class="p">/路径</span> <span class="p">/子路径</span> … <span class="p">#</span><span class="p">名字</span>-<span class="v">值</span><span class="p">#</span> … <span class="t">文本</span>
+  </div>
+  <p>路径按最长匹配一级一级吃词，吃不动就停。所以 <code>/set /printout</code> 是一条两级命令，而 <code>/联网 /api/getUser 是什么</code> 的路径停在「联网」，后面整段是文本。</p>
+
+  <h3>两种变量，两条路</h3>
+  <table>
+    <tr><th>叫法</th><th>写法</th><th>用途</th><th>什么时候定下来</th></tr>
+    <tr><td>传入变量</td><td><code>#outtime-21:30#</code></td><td>群友把值送进系统，给程序做判断</td><td><b>收到消息那一刻</b></td></tr>
+    <tr><td>传出变量</td><td><code>{time}</code></td><td>系统把值填进要发出去的文字</td><td><b>真要发出去那一刻</b></td></tr>
+  </table>
+  <p>为什么必须分开：传入变量要拿去算「什么时候发」，所以消息一进来就得变成确定的值；传出变量的价值就在于「发出来那一刻是几点」，早一秒都算错。</p>
+
+  <pre>
+  /set /printout #outtime-每天21:30# 现在是 {time}
+
+  收到消息时  ──▶  outtime = 「每天 21:30」<b>算好并检查合法</b>
+                ──▶  文本原样存下：现在是 {time}
+
+  21:30 发出时 ──▶  {time} 才变成 21:30
+                ──▶  群友看到：现在是 21:30
+  </pre>
+
+  <h2>两把锁</h2>
+  <p>这两件事以前被混在一起，是错的。<b>能不能用</b>和<b>能看多少数据</b>是两件独立的事：</p>
+
+  <h3>锁一：谁能用这条命令</h3>
+  <table>
+    <tr><th>档位</th><th>含义</th><th>典型用法</th></tr>
+    <tr><td>全体</td><td>群里的任何人都能发</td><td>查公告、找开黑</td></tr>
+    <tr><td>管理员</td><td>群主与群管理员</td><td>发公告、撤公告</td></tr>
+    <tr><td>群主</td><td>只有群主</td><td>改群内规则类</td></tr>
+    <tr><td>白名单</td><td>指定的几个人</td><td>内测功能</td></tr>
+  </table>
+  <p>另有一个独立开关：<b>私聊能不能用</b>。默认关。私聊里没有群角色，所以「管理员」档的命令在私聊一律拒绝，并且明确回一句「这条命令要在群里用」，而不是含糊地说「权限不足」。</p>
+
+  <h3>锁二：这条命令能看到哪些群的数据</h3>
+  <table>
+    <tr><th>档位</th><th>读得到什么</th><th>写到哪里</th></tr>
+    <tr><td>本群</td><td>只有本群的数据</td><td>本群</td></tr>
+    <tr><td>指定几个群</td><td>只在给定的这几个群之间互相可见</td><td>仍然是本群</td></tr>
+    <tr><td>全部群</td><td>所有群的数据</td><td>仍然是本群</td></tr>
+  </table>
+  <p><b>默认是本群。</b>新建一条命令，不加任何设置就是隔离的；要跨群必须有人主动去后台改。</p>
+
+  <div class="callout callout--warn">
+    <b>铁律：写永远只能写本群。</b>任何命令都不能替别的群写数据。否则一个人在 1 群发一条，可以伪装成 2 群的内容 —— 跨群可见之后，这种伪造根本查不出来。放宽的只有"读"。
+  </div>
+
+  <h3>两把锁一组合，就能表达你的两类需求</h3>
+  <table>
+    <tr><th>命令</th><th>谁能用</th><th>数据范围</th><th>结果</th></tr>
+    <tr><td><code>/set /printout</code> 发公告</td><td>管理员</td><td>本群</td><td>1 群的公告 2 群永远看不到</td></tr>
+    <tr><td><code>/del /printout</code> 撤公告</td><td>管理员</td><td>本群</td><td>只能撤本群的</td></tr>
+    <tr><td><code>/lfg /post</code> 发开黑</td><td>全体</td><td>本群</td><td>写入时归属 1 群</td></tr>
+    <tr><td><code>/lfg /find</code> 找开黑</td><td>全体</td><td>全部群</td><td>2 群能查到 1 群的那条，并且知道它来自 1 群</td></tr>
+  </table>
+  <p>注意最后两行：<b>同一条功能的两半，范围可以不同</b>。发布只写本群，查询才放宽。这也是为什么锁要按命令路径配，而不是按功能配。</p>
+
+  <h2>数据归属与查询</h2>
+  <p>每条落库的记录都带一个<b>归属群</b>，就是发命令的那个群。查询时按「读的那条命令的范围」过滤：</p>
+  <pre>
+  /lfg /find 今晚有空
+
+  读的那条命令范围 = 全部群
+        │
+        ├─ 1 群的记录 ✓ 显示，并标注「来自 1 群」
+        ├─ 2 群的记录 ✓ 显示，并标注「来自 2 群」
+        └─ 3 群的记录 ✓ 显示，并标注「来自 3 群」
+
+  /set /printout 的列表
+  读的那条命令范围 = 本群 → 只看得到本群的公告
+  </pre>
+  <p><b>跨群结果必须标出来自哪个群。</b>不标的话，群友拿着一份联系方式不知道是哪个群的人，跨群就失去了意义。</p>
+
+  <h2>场景一：定时公告</h2>
+  <p>一次性和循环，都写在一个 <code>#时间-#</code> 里，读起来像人话：</p>
+  <table>
+    <tr><th>写法</th><th>意思</th></tr>
+    <tr><td><code>#时间-21:30#</code></td><td>今天 21:30；已经过了就是明天 21:30，只发一次</td></tr>
+    <tr><td><code>#时间-10月20日21:30#</code></td><td>10 月 20 日 21:30，只发一次</td></tr>
+    <tr><td><code>#时间-每天21:30#</code></td><td>每天 21:30，一直发</td></tr>
+    <tr><td><code>#时间-每周三21:30#</code></td><td>每周三 21:30</td></tr>
+    <tr><td><code>#时间-每3天21:30#</code></td><td>每 3 天的 21:30</td></tr>
+  </table>
+  <p>循环的那几种，发完之后<b>从原定时刻往后推一个周期</b>，而不是从「现在」起算。所以一条 21:30 的公告永远是 21:30，不会因为发的时候慢了 5 秒就漂成 21:30:05。</p>
+  <p>服务停机错过了好几天，恢复后只补最近一个未来的时刻，不连着补发。半夜重启后一口气收到三条「今晚八点开黑」是最烦人的。</p>
+
+  <div class="qa">
+    <p class="q">群友发：<code>/set /printout #时间-每天21:30# 今晚八点开黑</code></p>
+    <p class="a">机器人回：已记下 #12：每天 21:30 在本群发「今晚八点开黑」</p>
+    <p class="a muted small">如果这条命令的使用权限是「管理员」，而发的人只是普通成员 —— 机器人回：这条命令仅管理员可用。</p>
+  </div>
+
+  <h2>场景二：撤销</h2>
+  <p>撤销按编号，不按内容。两句「今晚开黑」分不出是哪一条，按内容撤会撤错。</p>
+  <div class="qa">
+    <p class="q">群友发：<code>/del /printout #id-12#</code></p>
+    <p class="a">机器人回：已撤销 #12：今晚八点开黑</p>
+  </div>
+  <table>
+    <tr><th>谁能撤</th><th>说明</th></tr>
+    <tr><td>创建者本人</td><td>自己设的自己能撤</td></tr>
+    <tr><td>本群管理员与群主</td><td>撤别人设的</td></tr>
+    <tr><td>别的群的管理员</td><td>撤不了。编号在别的群查不到，回「没有 #12 这条」</td></tr>
+  </table>
+  <p>撤销是打标记，不是删行。谁撤的、原定什么时候发，都还查得到，后台能看到完整历史。</p>
+
+  <h2>后台怎么配</h2>
+  <h3>单条命令的设置项</h3>
+  <table>
+    <tr><th>设置项</th><th>取值</th></tr>
+    <tr><td>启用</td><td>开 / 关</td></tr>
+    <tr><td>谁能用</td><td>全体 / 管理员 / 群主 / 白名单</td></tr>
+    <tr><td>私聊可用</td><td>开 / 关</td></tr>
+    <tr><td>数据范围</td><td>本群 / 指定几个群 / 全部群</td></tr>
+    <tr><td>参数表</td><td>这条命令收哪些传入变量、什么类型、必填与否</td></tr>
+    <tr><td>回复或动作</td><td>回一句话 / 交给模型 / 做一件事</td></tr>
+  </table>
+
+  <h3>一张总览表</h3>
+  <p>光有一条条改还不够 —— 权限最怕的是「我以为它没开，其实开了」。所以另加一页只读总览，把<strong>每条命令的两把锁</strong>并排列出来，一眼能扫出哪些命令开了跨群：</p>
+  <pre>
+  命令              谁能用    私聊   数据范围      状态
+  /set /printout    管理员    关     本群          启用
+  /del /printout    管理员    关     本群          启用
+  /lfg /post        全体      开     本群          启用
+  /lfg /find        全体      开     <b>全部群</b>        启用
+  /help             全体      开     ——            启用
+  </pre>
+  <p>「数据范围」那一列里，凡不是「本群」的都标成醒目颜色。这就是这张页面唯一的目的。</p>
+
+  <h2>需要你定的四件事</h2>
+
+  <div class="card">
+    <p><b>1. 使用权限的档位够不够。</b>现在设计四档：全体、管理员、群主、白名单。白名单要在后台另外挂人，是四档里唯一需要额外维护的。如果你觉得「全体 / 管理员」两档就够，可以先砍掉白名单，以后再补。</p>
+    <p><b>2. 跨群查询要不要把联系方式摊在群里。</b>按你说的，2 群的群友能查到 1 群那个人的联系方式。我的建议是：<b>列表公开</b>（空闲时间、风格、来自哪个群），<b>联系方式私聊</b>给发起查询的人。理由是群里一刷就是几十个人同时看到，事后收不回来；私聊只给真的要用的人。你要公开刷在群里也行，但得先知道这个代价。</p>
+    <p><b>3. 时间怎么写。</b>我推荐把重复规则揉进一个 <code>#时间-#</code>，像「每天21:30」这样读得出来。代价是这个参数的类型不再是纯时间，而是「时刻表达式」。另一种写法是拆成 <code>#重复-每天#</code> + <code>#时间-21:30#</code> 两个参数，更机械但更啰嗦。你选哪种？</p>
+    <p style="margin-bottom:0"><b>4. 编号是不是全系统唯一。</b>我推荐全局唯一：<code>#12</code> 永远只指向一条，日志和工单对得上。查询仍按范围过滤，所以别的群的编号查不到。另一种是每个群从 1 开始编号，好处是群友看不出别的群有多少条，坏处是排查时同一个编号要带上群号才说得清。</p>
+  </div>
+
+  <h2>和现在代码的关系</h2>
+  <p>不是推倒重来。已经能跑的是：<code>/</code> 触发、路径最长匹配、<code>#名字-值#</code> 的解析与校验、<code>{变量}</code> 的展开、定时任务的落库与投递、撤销。</p>
+  <p>这次要补进骨架的是：</p>
+  <ul>
+    <li><b>两把锁</b> —— 现在只有"谁能用"的一半，且没有数据范围的概念</li>
+    <li><b>数据归属与查询过滤</b> —— 记录要带群号，读的时候按命令的范围过一道</li>
+    <li><b>时间表达式</b> —— 现在只能定"某天某点"和"每天某点"，缺「每周几」「每 N 天」</li>
+    <li><b>权限总览页</b> —— 现在只有单条命令的设置，没有一眼扫全的地方</li>
+  </ul>
+  <p>做完上面四条，开黑那个功能就是在已有的骨架上加两个命令，不用再动骨架。</p>
+
+  <footer>飘雪喵 · 命令系统骨架设计 · 2026-10-20</footer>
+</div>
+</body>
+</html>
