@@ -72,10 +72,6 @@ async function submit() {
       <div v-if="error" class="err-slot">
         <Notice tone="error">{{ error }}</Notice>
       </div>
-      <p class="tip faint">
-        密码在服务端 <code>.env</code> 的 <code>ADMIN_PASSWORD</code>；
-        没配置时后台会整个返回 503。
-      </p>
     </div>
   </div>
 </template>
@@ -103,5 +99,4 @@ async function submit() {
 .sub { font-size: var(--fs-sm); color: var(--ink-3); margin: var(--sp-2) 0 var(--sp-5); }
 form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .err-slot { margin-top: var(--sp-3); }
-.tip { font-size: var(--fs-meta); margin: var(--sp-5) 0 0; line-height: 1.7; }
 </style>
