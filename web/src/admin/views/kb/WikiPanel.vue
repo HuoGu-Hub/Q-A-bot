@@ -417,9 +417,19 @@ async function save() {
 const allFilteredChecked = computed(() =>
   filteredRows.value.length > 0 && filteredRows.value.every(r => r.checked)
 )
+/** 当前筛选里"有页数"的来源 */
+const pagedRows = computed(() => filteredRows.value.filter(r => r.pages !== null && r.pages > 0))
 /** 当前筛选里有没有"有页数"的来源 —— 决定「全选有页数的」能不能点 */
-const hasPagedRows = computed(() =>
-  filteredRows.value.some(r => r.pages !== null && r.pages > 0)
+const hasPagedRows = computed(() => pagedRows.value.length > 0)
+/**
+ * 有页数的来源是不是已经全勾上。
+ *
+ * <p>「全选有页数的」天生不会勾那些页数为 0 的行，所以全选之后
+ * {@link allFilteredChecked} 仍然是 false，主按钮不会变成「取消当前筛选」。
+ * 这里单独判断它自己那一批，按钮到底还能不能做事就一眼看得出来。
+ */
+const allPagedChecked = computed(() =>
+  hasPagedRows.value && pagedRows.value.every(r => r.checked)
 )
 
 /** 一个按钮两用：没全勾就全勾上，全勾了就都取消 */
@@ -435,13 +445,33 @@ function toggleFiltered() {
   scheduleSave()
 }
 
-/** 把当前筛选里**有页数**的都勾上：空分类勾了也一篇都拉不到 */
-function checkPaged() {
-  const keys = new Set(checkedKeys.value)
-  for (const r of filteredRows.value) {
-    if (r.pages !== null && r.pages > 0) keys.add(r.key)
+/**
+ * 把当前筛选里**有页数**的都勾上；已经全勾上时反过来取消它们。
+ * 空分类勾了也一篇都拉不到，所以这批永远不碰页数为 0 的行 ——
+ * 按钮也必须能成对地撤销，否则勾完就只能逐个点掉。
+ */
+function togglePaged() {
+  if (allPagedChecked.value) {
+    const drop = new Set(pagedRows.value.map(r => r.key))
+    checkedKeys.value = checkedKeys.value.filter(k => !drop.has(k))
+  } else {
+    const keys = new Set(checkedKeys.value)
+    for (const r of pagedRows.value) keys.add(r.key)
+    checkedKeys.value = [...keys]
   }
-  checkedKeys.value = [...keys]
+  scheduleSave()
+}
+
+/**
+ * 清空全部已选（不只是当前筛选）。
+ *
+ * <p>必须有这个出口：批量勾选有好几个入口，「全选有页数的」不会勾空分类，
+ * 主按钮因此可能一直显示「全选当前筛选」—— 用户找不到取消全选的地方，
+ * 只能逐个点掉几百行。这里给一个永远可用的撤销，不依赖当前筛选与勾选比例。
+ */
+function clearAll() {
+  if (!checkedKeys.value.length) return
+  checkedKeys.value = []
   scheduleSave()
 }
 
@@ -574,12 +604,37 @@ defineExpose({
     </Panel>
 
     <!-- ============ 来源表：勾选即范围 ============ -->
-    <Panel title="wiki 来源" :count="checkedCount" hint="勾选即范围，改动自动保存；开始抓取只拉勾上的">
+    <Panel class="src-panel" title="wiki 来源" :count="checkedCount" hint="勾选即范围，改动自动保存；开始抓取只拉勾上的">
       <template #actions>
-        <Button size="sm" :disabled="!filteredRows.length" @click="toggleFiltered">
-          {{ allFilteredChecked ? '取消当前筛选' : '全选当前筛选' }}
-        </Button>
-        <Button size="sm" :disabled="!hasPagedRows" @click="checkPaged">全选有页数的</Button>
+        <div class="bulk-actions">
+          <Button
+            size="sm"
+            :disabled="!filteredRows.length"
+            :title="allFilteredChecked ? '取消当前筛选里已勾选的来源' : '勾选当前筛选里的全部来源'"
+            @click="toggleFiltered"
+          >
+            {{ allFilteredChecked ? '取消当前筛选' : '全选当前筛选' }}
+          </Button>
+          <Button
+            size="sm"
+            :disabled="!hasPagedRows"
+            :title="allPagedChecked
+              ? '取消当前筛选里页数大于 0 的来源'
+              : '只勾选当前筛选里页数大于 0 的来源（空分类勾了也拉不到内容）'"
+            @click="togglePaged"
+          >
+            {{ allPagedChecked ? '取消有页数的' : '全选有页数的' }}
+          </Button>
+          <!-- 全局撤销：不依赖当前筛选，也不依赖「是不是所有行都勾上了」 -->
+          <Button
+            v-if="checkedCount"
+            size="sm"
+            title="取消全部已勾选的来源"
+            @click="clearAll"
+          >
+            清空已选
+          </Button>
+        </div>
       </template>
 
       <div class="filters">
@@ -684,7 +739,9 @@ defineExpose({
 </template>
 
 <style scoped>
-.panel-wrap { display: grid; gap: var(--sp-4); }
+/* 用 flex 而不是 grid：grid 的隐式列默认 min-content，宽表会把整页顶出横向滚动条
+   （390px 下实测文档宽 624）。flex 列的方向上没有这个问题，宽度交给面板。 */
+.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
 /* ==================== 作业面板 ==================== */
 .job-idle { margin: 0; font-size: var(--fs-base); color: var(--ink-2); line-height: 1.8; }
@@ -724,11 +781,19 @@ defineExpose({
 .warn-text { color: var(--flame-bright); font-size: var(--fs-meta); }
 
 /* ==================== 来源表 ==================== */
+/* 三个批量按钮排成一组：窄屏时整组换到标题下一行，不把标题挤没 */
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
 .filters { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
 .filter-sel { flex: 0 0 160px; }
 .cat-loading { padding: var(--sp-4) 0; font-size: var(--fs-meta); text-align: center; }
 
-.src-scroll { max-height: 560px; overflow-y: auto; overscroll-behavior-y: contain; }
+/* 宽表在窄屏必须自己横滑：只设 overflow-y 时表格的 min-content 会撑破面板。 */
+.src-scroll { max-height: 560px; overflow: auto; overscroll-behavior: contain; }
 .src-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .src-tbl th {
   position: sticky;
@@ -782,5 +847,8 @@ defineExpose({
 @media (max-width: 760px) {
   .filters { flex-wrap: wrap; }
   .filter-sel { flex: 1 1 100%; }
+  /* 标题行允许换行，批量按钮整组落到下一行（右对齐），不撑破面板 */
+  .src-panel :deep(.panel-title) { flex-wrap: wrap; row-gap: var(--sp-2); }
+  .bulk-actions { flex: 1 1 100%; }
 }
 </style>
