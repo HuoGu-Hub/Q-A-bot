@@ -127,7 +127,6 @@ onMounted(load)
           <tr>
             <th>命令</th>
             <th>谁能用</th>
-            <th>私聊</th>
             <th>数据范围</th>
             <th>来源显示</th>
             <th>状态</th>
@@ -137,7 +136,6 @@ onMounted(load)
           <tr v-for="c in commands" :key="c.id">
             <td class="path">/{{ c.trigger.split('/').join(' /') }}</td>
             <td><Tag :tone="c.access === 'all' ? 'neutral' : 'warn'">{{ accessLabel(c) }}</Tag></td>
-            <td class="muted">—</td>
             <td>
               <Tag :tone="isOpen(c) ? 'bad' : 'neutral'">{{ scopeLabel(c) }}</Tag>
             </td>
