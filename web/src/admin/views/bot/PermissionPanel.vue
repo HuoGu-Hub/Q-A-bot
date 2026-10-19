@@ -16,6 +16,8 @@ import DataTable from '@shared/ui/DataTable.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
+import Select from '@shared/ui/Select.vue'
+import Input from '@shared/ui/Input.vue'
 
 const loading = ref(false)
 const error = ref('')
@@ -81,6 +83,79 @@ function accessLabel(c: BotCommand) {
 }
 
 const openCount = computed(() => commands.value.filter(isOpen).length)
+
+// ==================== 名单录入 ====================
+
+/**
+ * 四个框分开填：白名单的 QQ 号、白名单的群号、黑名单的 QQ 号、黑名单的群号。
+ *
+ * 为什么不让人混在一个框里自动猜 —— 群号和纯数字的 QQ 号长得一模一样，
+ * 猜错就是把整个群放进来或者封掉。
+ */
+const editingId = ref<number | null>(null)
+const whiteUsers = ref('')
+const blackUsers = ref('')
+const whiteGroups = ref('')
+const blackGroups = ref('')
+const saving = ref(false)
+const saved = ref('')
+
+const commandOptions = computed(() =>
+  commands.value.map((c) => ({ value: String(c.id), label: '/' + c.trigger.split('/').join(' /') }))
+)
+
+/** 一行一个号，逗号也算分隔 */
+function parseIds(text: string): number[] {
+  return text
+    .split(/[\s,，、]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => Number(s))
+    .filter((n) => Number.isFinite(n) && n > 0)
+}
+
+function lines(ids: number[]): string {
+  return ids.join('\n')
+}
+
+async function pick(idText: string) {
+  const id = Number(idText)
+  editingId.value = id
+  saved.value = ''
+  if (!id) {
+    whiteUsers.value = blackUsers.value = whiteGroups.value = blackGroups.value = ''
+    return
+  }
+  try {
+    const acl = await adminApi.get<CommandAcl>('/commands/' + id + '/acl')
+    whiteUsers.value = lines(acl.white.filter((a) => a.type === 'uid').map((a) => a.value))
+    whiteGroups.value = lines(acl.white.filter((a) => a.type === 'gid').map((a) => a.value))
+    blackUsers.value = lines(acl.black.filter((a) => a.type === 'uid').map((a) => a.value))
+    blackGroups.value = lines(acl.black.filter((a) => a.type === 'gid').map((a) => a.value))
+  } catch (e) { error.value = describeError(e) }
+}
+
+async function saveAcl() {
+  if (!editingId.value) return
+  saving.value = true
+  error.value = ''
+  try {
+    await adminApi.post('/commands/' + editingId.value + '/acl', {
+      white: [
+        ...parseIds(whiteUsers.value).map((v) => ({ type: 'uid', value: v })),
+        ...parseIds(whiteGroups.value).map((v) => ({ type: 'gid', value: v })),
+      ],
+      black: [
+        ...parseIds(blackUsers.value).map((v) => ({ type: 'uid', value: v })),
+        ...parseIds(blackGroups.value).map((v) => ({ type: 'gid', value: v })),
+      ],
+    })
+    saved.value = '已保存'
+    await load()
+  } catch (e) { error.value = describeError(e) } finally {
+    saving.value = false
+  }
+}
 
 defineExpose({
   reload: load,
@@ -166,8 +241,54 @@ onMounted(load)
       </div>
       <p class="faint note">
         名单条目可以填 QQ 号，也可以填群号，填群号代表整个群。
-        逐条挂人在「指令」页的命令名单里改。
       </p>
+
+      <div class="acl-edit">
+        <div class="acl-pick">
+          <Select
+            :model-value="editingId === null ? '' : String(editingId)"
+            :options="commandOptions"
+            aria-label="选择命令"
+            @update:model-value="pick"
+          />
+        </div>
+
+        <div v-if="editingId" class="boxes">
+          <div class="box">
+            <div class="box-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
+            <Input
+              :model-value="whiteUsers" multiline :rows="4" placeholder="一行一个 QQ 号"
+              aria-label="白名单 QQ 号" @update:model-value="whiteUsers = $event"
+            />
+          </div>
+          <div class="box">
+            <div class="box-k"><Tag tone="good">白名单 · 群号</Tag></div>
+            <Input
+              :model-value="whiteGroups" multiline :rows="4" placeholder="一行一个群号，代表整个群"
+              aria-label="白名单群号" @update:model-value="whiteGroups = $event"
+            />
+          </div>
+          <div class="box">
+            <div class="box-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
+            <Input
+              :model-value="blackUsers" multiline :rows="4" placeholder="一行一个 QQ 号"
+              aria-label="黑名单 QQ 号" @update:model-value="blackUsers = $event"
+            />
+          </div>
+          <div class="box">
+            <div class="box-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
+            <Input
+              :model-value="blackGroups" multiline :rows="4" placeholder="一行一个群号"
+              aria-label="黑名单群号" @update:model-value="blackGroups = $event"
+            />
+          </div>
+        </div>
+
+        <div v-if="editingId" class="box-actions">
+          <span class="faint small">{{ saved }}</span>
+          <Button size="sm" variant="primary" :disabled="saving" @click="saveAcl">保存名单</Button>
+        </div>
+      </div>
     </Panel>
   </div>
 </template>
@@ -183,6 +304,13 @@ onMounted(load)
 .note { font-size: var(--fs-meta); margin: var(--sp-3) 0 0; }
 
 .acl { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+
+.acl-edit { margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1px solid var(--hairline); }
+.acl-pick { max-width: 360px; }
+.boxes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: var(--sp-3); }
+.box-k { margin-bottom: var(--sp-1); }
+.box-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); margin-top: var(--sp-3); }
+.small { font-size: var(--fs-meta); }
 .acl-k { color: var(--ink); margin-bottom: var(--sp-1); }
 .acl-v { font-size: var(--fs-meta); line-height: 1.7; }
 
