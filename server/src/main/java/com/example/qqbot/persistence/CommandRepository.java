@@ -33,7 +33,7 @@ public class CommandRepository {
 
     /** 一行指令（{@code groupIdsJson} 是列里的 JSON 原文） */
     public record Row(long id, String trigger, String reply, String description, String scope,
-                      String groupIdsJson, String minRole, boolean enabled, int sortOrder,
+                      String groupIdsJson, String access, boolean enabled, int sortOrder,
                       boolean builtin, String kind, String mode,
                       String paramsJson, String help, String action) {
     }
@@ -169,7 +169,7 @@ public class CommandRepository {
                                 + " params=?, help=?, action=?, updated_at=?"
                                 + " WHERE id=?",
                         row.reply(), row.description(), row.scope(), row.groupIdsJson(),
-                        row.minRole(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
+                        row.access(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
                         row.paramsJson(), row.help(), row.action(), now, existing.id());
                 return existing.id();
             }
@@ -180,7 +180,7 @@ public class CommandRepository {
                             + "  created_at, updated_at)"
                             + " VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)",
                     row.trigger(), row.reply(), row.description(), row.scope(), row.groupIdsJson(),
-                    row.minRole(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
+                    row.access(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
                     row.paramsJson(), row.help(), row.action(), now, now);
         });
     }

@@ -13,6 +13,9 @@ import com.example.qqbot.command.CommandParseException;
 import com.example.qqbot.command.CommandParser;
 import com.example.qqbot.command.CommandPolicy;
 import com.example.qqbot.command.CommandRateLimiter;
+import com.example.qqbot.command.AccessRules;
+import com.example.qqbot.command.AclStore;
+import com.example.qqbot.command.CommandAccess;
 import com.example.qqbot.command.CommandRole;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.RenderContext;
@@ -62,6 +65,7 @@ public class CommandHandler {
     private final VariableRenderer variableRenderer;
     private final OutboundSender outboundSender;
     private final QaCollector qaCollector;
+    private final AclStore aclStore;
 
     public CommandHandler(CommandPolicy commandProperties,
                           CommandMatcher commandMatcher,
@@ -72,7 +76,8 @@ public class CommandHandler {
                           CommandStore commandStore,
                           VariableRenderer variableRenderer,
                           OutboundSender outboundSender,
-                          QaCollector qaCollector) {
+                          QaCollector qaCollector,
+                          AclStore aclStore) {
         this.commandProperties = commandProperties;
         this.commandMatcher = commandMatcher;
         this.commandParser = commandParser;
@@ -83,6 +88,7 @@ public class CommandHandler {
         this.variableRenderer = variableRenderer;
         this.outboundSender = outboundSender;
         this.qaCollector = qaCollector;
+        this.aclStore = aclStore;
     }
 
     /**
@@ -138,13 +144,15 @@ public class CommandHandler {
             return Outcome.HANDLED;   // 静默丢弃，不回复（避免"提示"本身变成刷屏）
         }
 
-        // ---------- 权限：min_role 原先只存不判，这里补上 ----------
-        CommandRole role = CommandRole.ofSender(event);
-        CommandRole required = CommandRole.ofMinRole(cmd.minRole());
-        if (!role.atLeast(required)) {
-            log.info("[CMD] 权限不足：用户 {} 在群 {} 触发 /{}（需要 {}，实为 {}）",
-                    userId, groupId, cmd.trigger(), required, role);
-            reply(event, cmd, tail, required.describe(inGroup), t0);
+        // ---------- 准入：档位 + 单命令名单 + 全局名单 ----------
+        // 判定顺序固定在 AccessRules 里，不在这里重写一遍 ——
+        // 五个层次两个维度，散落在调用点迟早会写歪
+        CommandAccess access = CommandAccess.of(cmd.access());
+        if (!AccessRules.allows(access, CommandRole.ofSender(event), userId, groupId,
+                aclStore.ofCommand(cmd.id()), aclStore.global())) {
+            log.info("[CMD] 准入拒绝：用户 {} 在群 {} 触发 /{}（档位 {}）",
+                    userId, groupId, cmd.trigger(), access.code());
+            reply(event, cmd, tail, access.describe(inGroup), t0);
             return Outcome.HANDLED;
         }
 
@@ -187,8 +195,9 @@ public class CommandHandler {
 
         // ---------- 动作类：交给注册表里的执行器 ----------
         if (cmd.isAction()) {
-            ActionContext actx = new ActionContext(userId, groupId, inGroup, role,
-                    ctx.nickname(), cmd.trigger(), body);
+            // 动作拿到的是"这个人的群角色"，不是准入档位 —— 撤销任务时要按群管/群主判
+            ActionContext actx = new ActionContext(userId, groupId, inGroup,
+                    CommandRole.ofSender(event), ctx.nickname(), cmd.trigger(), body);
             runAction(event, cmd, actx, args, tail, groupId, userId, t0);
             return Outcome.HANDLED;
         }

@@ -169,7 +169,7 @@ public class CommandStore {
 
     private BotCommand toCommand(CommandRepository.Row r) {
         return new BotCommand(r.id(), r.trigger(), r.reply(), r.description(), r.scope(),
-                parseGroupIds(r.groupIdsJson()), r.minRole(), r.enabled(), r.sortOrder(),
+                parseGroupIds(r.groupIdsJson()), r.access(), r.enabled(), r.sortOrder(),
                 r.builtin(), r.kind(), r.mode(), parseParams(r.paramsJson()), r.help(), r.action());
     }
 
@@ -240,7 +240,7 @@ public class CommandStore {
         }
         try {
             return repo.upsert(new CommandRepository.Row(0, cmd.trigger(), cmd.reply(),
-                    cmd.description(), cmd.scope(), groupsJson, cmd.minRole(), cmd.enabled(),
+                    cmd.description(), cmd.scope(), groupsJson, cmd.access(), cmd.enabled(),
                     cmd.sortOrder(), false, cmd.kindName(), cmd.modeName(),
                     paramsJson, cmd.help(), cmd.action()), now);
         } catch (Exception e) {

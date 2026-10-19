@@ -5,6 +5,7 @@ import com.example.qqbot.agent.ReplyMode;
 import com.example.qqbot.command.ActionContext;
 import com.example.qqbot.command.ActionException;
 import com.example.qqbot.command.ActionRegistry;
+import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.BotCommand;
 import com.example.qqbot.command.CommandAction;
 import com.example.qqbot.command.CommandArgs;
@@ -134,9 +135,12 @@ class MessageRouterCommandTest {
     };
 
     private CommandHandler newHandler() {
+        // 名单留空：这些用例验的是"档位 + 分派"，名单本身由 AccessRulesTest 覆盖
+        AclStore aclStore = mock(AclStore.class);
         return new CommandHandler(new CommandProperties(), commandMatcher, new CommandParser(),
                 new CommandHelp(variableRenderer), new ActionRegistry(List.of(ECHO, FAILING)),
-                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector);
+                commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector,
+                aclStore);
     }
 
     private static BotCommand actionCommand(String action, String minRole) {
