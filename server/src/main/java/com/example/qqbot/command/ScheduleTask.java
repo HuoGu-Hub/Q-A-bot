@@ -74,21 +74,30 @@ public record ScheduleTask(
     }
 
     /**
-     * 给群里看的时刻：周期任务只说钟点，一次性的说日期。
+     * 「什么时候发」的人话。
      *
-     * <p>周期任务不写「每天」而是由调用方补，所以这里只给时刻部分。
+     * <p>周期任务给出规则 + <b>全部时刻</b>：一天三趟的公告只显示"每天 07:00"
+     * 会让人以为另外两趟没设上。一次性任务给出具体日期。
      */
+    public String whenText() {
+        RepeatSchedule s = schedule();
+        if (s.rule().kind() == RepeatRule.Kind.ONCE) {
+            return LocalDateTime.ofInstant(fireAt, AppTime.ZONE)
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        }
+        return s.rule().describe() + " " + s.describeTimes();
+    }
+
+    /** 给群里看的时刻：周期任务只说钟点，一次性的说日期 */
     public String displayTime() {
-        LocalDateTime at = LocalDateTime.ofInstant(fireAt, AppTime.ZONE);
-        return at.format(isDaily()
+        return LocalDateTime.ofInstant(fireAt, AppTime.ZONE).format(isDaily()
                 ? DateTimeFormatter.ofPattern("HH:mm")
                 : DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
     }
 
-    /** 列表里的一行：{@code #3 每天21:30 晚上打本集合} */
+    /** 列表里的一行：{@code #3 每天 07:00、14:00 晚上打本集合} */
     public String displayLine() {
-        String when = isDaily() ? "每天 " + displayTime() : displayTime();
-        return "#" + id + "  " + when + "  " + shortContent();
+        return "#" + id + "  " + whenText() + "  " + shortContent();
     }
 
     /** 内容太长时截断，列表不该被一条长文案撑爆 */
