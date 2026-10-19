@@ -19,13 +19,20 @@ public class AsyncProperties implements AsyncPolicy {
      * Java 线程池的规则是「核心线程满了 → 先入队 → 队列满了 → 才扩容到 max」，
      * 所以如果队列很大而 max > core，max 永远不会生效（这是最经典的坑）。
      */
+    /** 问答池：只处理问答，命令再多也动不了它 */
+    private int chatPoolSize = 6;
+
+    /** 命令池：只处理以 / 开头的命令 */
+    private int commandPoolSize = 3;
+
     private int corePoolSize = 8;
 
     /** 最大线程数。保持和 core-pool-size 相同，避开上面说的扩容陷阱 */
     private int maxPoolSize = 8;
 
     /** 等待队列容量。队列满了之后新任务会被直接丢弃（不是阻塞调用者） */
-    private int queueCapacity = 100;
+    /** 每个池子的排队位。命令风暴只挤占命令池，问答池有自己的队列 */
+    private int queueCapacity = 500;
 
     /** 空闲线程的存活时间（秒） */
     private int keepAliveSeconds = 60;
@@ -43,7 +50,23 @@ public class AsyncProperties implements AsyncPolicy {
      * 轮到你时可能已经过了 30 秒 —— 那时候再回复「你好」已经毫无意义，
      * 还会让人觉得机器人卡了。宁可说一句「刚才太挤了，你再说一遍」。
      */
-    private int maxQueueWaitSeconds = 20;
+    private int maxQueueWaitSeconds = 60;
+
+    public int getChatPoolSize() {
+        return chatPoolSize;
+    }
+
+    public void setChatPoolSize(int chatPoolSize) {
+        this.chatPoolSize = chatPoolSize;
+    }
+
+    public int getCommandPoolSize() {
+        return commandPoolSize;
+    }
+
+    public void setCommandPoolSize(int commandPoolSize) {
+        this.commandPoolSize = commandPoolSize;
+    }
 
     public int getCorePoolSize() {
         return corePoolSize;

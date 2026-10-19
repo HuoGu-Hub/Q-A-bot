@@ -200,18 +200,18 @@ app:
   # ============================ 事件线程池 ============================
   # 并发能力直接决定「50 个人同时 @ 时多久能收到回复」。
   async:
-    # ⚠️ core 和 max 必须相同！
-    # Java 线程池的规则是「core 满了先入队，队列满了才扩容到 max」，
-    # 队列一大，max 就永远不生效（之前 core=2/max=4/queue=200 时，实际并发永远是 2）。
-    core-pool-size: 8
-    max-pool-size: 8
-    queue-capacity: 100
+    # 两个池子，各管各的：命令风暴挤不动问答。
+    # ⚠️ 每池 core 和 max 必须相同（Java 线程池 core 满了先入队，队列大了 max 永远不生效）。
+    # 6 + 3 是按 2 核 2G、NapCat 同机定的。
+    chat-pool-size: 6
+    command-pool-size: 3
+    queue-capacity: 500
     # 空闲线程回收：没人用的时候线程自己退出，闲置成本归零
     keep-alive-seconds: 60
     allow-core-thread-time-out: true
     # 任务在队列里等待超过这个秒数就直接丢弃。
-    # 宁可说一句「刚才太挤了」，也不要让人等 30 秒才收到一句没意义的「你好」。
-    max-queue-wait-seconds: 20
+    # 宁可说一句「刚才太挤了」，也不要让人等一分钟才收到一句没意义的「你好」。
+    max-queue-wait-seconds: 60
 
   # ============================ 协议层（NapCat）============================
   onebot:

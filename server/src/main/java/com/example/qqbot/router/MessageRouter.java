@@ -21,7 +21,6 @@ import com.example.qqbot.qa.QaCollector;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -109,14 +108,19 @@ public class MessageRouter {
      *
      * @param enqueuedAt 任务**提交前**的时间戳（由 Controller 传进来）
      */
-    @Async("botExecutor")
-    public void handleAsync(OneBotEvent event, long enqueuedAt) {
+    /**
+     * 处理一条**已经排到队**的事件。
+     *
+     * <p>这里不再自己开线程：{@link EventDispatcher} 已经按类型把它投进了问答池或命令池。
+     * 队列等待超时的判断留在这里，因为它需要知道"提交前"的时间戳。
+     */
+    public void processQueued(OneBotEvent event, long enqueuedAt) {
         long waitedMs = System.currentTimeMillis() - enqueuedAt;
         long limitMs = asyncProperties.getMaxQueueWaitSeconds() * 1000L;
         if (waitedMs > limitMs) {
             log.warn("[ASYNC] 事件在队列里等了 {} ms（上限 {} s），已丢弃：{}",
                     waitedMs, asyncProperties.getMaxQueueWaitSeconds(), event);
-            notifyQueueTimeout(event);
+            notifyOverload(event);
             return;
         }
         try {
@@ -126,8 +130,12 @@ public class MessageRouter {
         }
     }
 
-    /** 排队超时被丢弃时，礼貌地告诉用户一声（同样受提示限流保护） */
-    private void notifyQueueTimeout(OneBotEvent event) {
+    /**
+     * 被丢弃时礼貌地告诉用户一声（同样受提示限流保护）。
+     *
+     * <p>两个来源都走它：排太久被丢，和池子满了直接被拒。
+     */
+    public void notifyOverload(OneBotEvent event) {
         if (!event.isMessageEvent() || identity.isSelf(event.getUserId())) {
             return;
         }

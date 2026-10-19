@@ -31,28 +31,39 @@ public class AsyncConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncConfig.class);
 
-    @Bean("botExecutor")
-    public Executor botExecutor(AsyncProperties props) {
+    /**
+     * 问答池 —— 只处理问答，命令再多也动不了它。
+     *
+     * <p>这正是"按类型分池"的意义：一条刷屏的命令风暴不该把提问的人饿死。
+     */
+    @Bean("chatExecutor")
+    public Executor chatExecutor(AsyncProperties props) {
+        return pool("chat-", props.getChatPoolSize(), props);
+    }
+
+    /** 命令池 —— 只处理以 / 开头的命令 */
+    @Bean("commandExecutor")
+    public Executor commandExecutor(AsyncProperties props) {
+        return pool("cmd-", props.getCommandPoolSize(), props);
+    }
+
+    /**
+     * 建一个池子。
+     *
+     * <p>拒绝策略用默认的抛出：由调用方 {@code EventDispatcher} 接住、回一句「人多稍等」。
+     * 放在这里做的话，配置类就得依赖发送器，方向反了。
+     */
+    private Executor pool(String prefix, int size, AsyncProperties props) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(props.getCorePoolSize());
-        executor.setMaxPoolSize(props.getMaxPoolSize());
+        executor.setCorePoolSize(size);
+        executor.setMaxPoolSize(size);
         executor.setQueueCapacity(props.getQueueCapacity());
         executor.setKeepAliveSeconds(props.getKeepAliveSeconds());
         executor.setAllowCoreThreadTimeOut(props.isAllowCoreThreadTimeOut());
-        executor.setThreadNamePrefix("bot-");
-
-        AtomicLong rejected = new AtomicLong();
-        executor.setRejectedExecutionHandler((task, pool) -> {
-            long total = rejected.incrementAndGet();
-            log.error("[ASYNC] 队列已满（容量 {}），任务被丢弃。累计丢弃 {} 条。"
-                            + "说明负载已超过处理能力，考虑调大 app.async.core-pool-size",
-                    props.getQueueCapacity(), total);
-        });
-
+        executor.setThreadNamePrefix(prefix);
         executor.initialize();
-        log.info("[ASYNC] 事件线程池：core={} max={} queue={} 空闲回收={} 队列等待上限={}s",
-                props.getCorePoolSize(), props.getMaxPoolSize(), props.getQueueCapacity(),
-                props.isAllowCoreThreadTimeOut(), props.getMaxQueueWaitSeconds());
+        log.info("[ASYNC] {}池：{} 线程，队列 {}，等待上限 {}s",
+                prefix, size, props.getQueueCapacity(), props.getMaxQueueWaitSeconds());
         return executor;
     }
 }

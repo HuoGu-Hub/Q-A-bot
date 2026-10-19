@@ -2,7 +2,7 @@ package com.example.qqbot.incoming;
 
 import com.example.qqbot.guard.MessageDeduplicator;
 import com.example.qqbot.onebot.model.OneBotEvent;
-import com.example.qqbot.router.MessageRouter;
+import com.example.qqbot.router.EventDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -25,11 +25,11 @@ public class OneBotEventController {
 
     private static final Logger log = LoggerFactory.getLogger(OneBotEventController.class);
 
-    private final MessageRouter router;
+    private final EventDispatcher dispatcher;
     private final MessageDeduplicator deduplicator;
 
-    public OneBotEventController(MessageRouter router, MessageDeduplicator deduplicator) {
-        this.router = router;
+    public OneBotEventController(EventDispatcher dispatcher, MessageDeduplicator deduplicator) {
+        this.dispatcher = dispatcher;
         this.deduplicator = deduplicator;
     }
 
@@ -40,7 +40,7 @@ public class OneBotEventController {
             return ResponseEntity.noContent().build();
         }
         // 把「提交前」的时间戳传进去，让 worker 能判断自己在队列里排了多久
-        router.handleAsync(event, System.currentTimeMillis());
+        dispatcher.dispatch(event, System.currentTimeMillis());
         // 204：告诉 NapCat「收到了」
         return ResponseEntity.noContent().build();
     }
