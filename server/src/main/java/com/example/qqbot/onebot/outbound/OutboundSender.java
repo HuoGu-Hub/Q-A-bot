@@ -67,6 +67,7 @@ public class OutboundSender {
     private final Outbound config;
     private final OutboundFilter filter;
     private final ImageLibrary images;
+    private final SendQueue queue;
 
     public OutboundSender(OneBotApiClient apiClient,
                           MessageCodec codec,
@@ -74,7 +75,8 @@ public class OutboundSender {
                           BotIdentity identity,
                           Outbound outbound,
                           OutboundFilter filter,
-                          ImageLibrary images) {
+                          ImageLibrary images,
+                          SendQueue queue) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.pacer = pacer;
@@ -82,6 +84,7 @@ public class OutboundSender {
         this.config = outbound;
         this.filter = filter;
         this.images = images;
+        this.queue = queue;
     }
 
     /**
@@ -112,6 +115,26 @@ public class OutboundSender {
     }
 
     /**
+     * 发送队列当前积压多少条 —— 后台与日志用。
+     */
+    public int backlog() {
+        return queue == null ? 0 : queue.backlog();
+    }
+
+    /**
+     * 把一个已处理好的条目真正发出去。**发送线程**调它；同步模式下由 {@link #dispatch} 直接调。
+     */
+    public void deliver(PreparedSend send) {
+        Target target = new Target(send.group(), send.targetId(), send.atUserId());
+        // 有图不合并：图片塞进「聊天记录」卡片里得点开才看得见
+        if (send.images().isEmpty() && shouldMerge(send.parts(), send.safe())
+                && sendMerged(target, send.parts())) {
+            return;
+        }
+        sendParts(target, send.parts(), true, send.images());
+    }
+
+    /**
      * 按群号直接发 —— 给**没有入站事件**的调用方（广场的群内求助）。
      *
      * <p>这个方法存在的意义就是**不让任何人绕过出站路径**：
@@ -119,7 +142,7 @@ public class OutboundSender {
      * 于是出站敏感词过滤与节流**都被跳过了**（实测漏洞，不只是分层洁癖）。
      */
     public String sendToGroup(long groupId, String text) {
-        return dispatch(new Target(true, groupId, 0), text, false);
+        return dispatchSync(new Target(true, groupId, 0), text);
     }
 
     /**
@@ -130,7 +153,21 @@ public class OutboundSender {
      * 这里刻意只走这一条路。
      */
     public String sendToPrivate(long userId, String text) {
-        return dispatch(new Target(false, userId, 0), text, false);
+        return dispatchSync(new Target(false, userId, 0), text);
+    }
+
+    /**
+     * 同步发送：调用方需要知道"到底发没发出去"时用它。
+     *
+     * <p>定时任务就是这种调用方 —— 发失败要重试、要标状态，不能投进队列就不管了。
+     */
+    private String dispatchSync(Target target, String text) {
+        PreparedSend prepared = prepare(target, text, false);
+        if (prepared == null) {
+            return "";
+        }
+        deliver(prepared);
+        return prepared.safe();
     }
 
     /**
@@ -151,6 +188,25 @@ public class OutboundSender {
      *         调用方要记的是"机器人说了什么"，而图片有它自己的日志。
      */
     private String dispatch(Target target, String text, boolean split) {
+        PreparedSend prepared = prepare(target, text, split);
+        if (prepared == null) {
+            return "";
+        }
+        if (config.isAsyncSend()) {
+            // 处理线程把活交出去就走，不再陪着等发车位
+            queue.offer(prepared);
+        } else {
+            deliver(prepared);
+        }
+        return prepared.safe();
+    }
+
+    /**
+     * 处理阶段：摘标记、解析图片、过滤、切分。**不发任何东西**。
+     *
+     * @return null 表示处理完发现没内容可发
+     */
+    private PreparedSend prepare(Target target, String text, boolean split) {
         // 工具调用标记先摘：它是模型的协议细节，发到群里就是事故（2026-10-15 实测）
         String raw = text;
         if (ToolCallMarkup.hasMarkup(raw)) {
@@ -164,24 +220,19 @@ public class OutboundSender {
 
         if (!StringUtils.hasText(body) && attached.isEmpty()) {
             log.warn("[OUT] 回复内容为空，跳过发送（避免发出空白消息）");
-            return "";
+            return null;
         }
         // 出站敏感词过滤放在**发送器内部**，而不是各个调用方 ——
         // 放在调用方就得靠每个人记得调，实测广场那条路就漏了。
         String safe = filter.filter(body);
         if (!StringUtils.hasText(safe) && attached.isEmpty()) {
             log.warn("[OUT] 出站过滤后内容为空，跳过发送");
-            return "";
+            return null;
         }
         // 只有问答回复才按句子切。命令回执就一两行，公告本来就是完整的一段 ——
         // 切了反而把一件事拆成两条互不相干的消息。
         List<String> parts = split && StringUtils.hasText(safe) ? pacer.split(safe) : List.of(safe);
-        // 有图就不合并转发：图片塞进「聊天记录」卡片里得点开才看得见
-        if (attached.isEmpty() && shouldMerge(parts, safe) && sendMerged(target, parts)) {
-            return safe;
-        }
-        sendParts(target, parts, true, attached);
-        return safe;
+        return new PreparedSend(target.group(), target.id(), target.atUserId(), safe, parts, attached);
     }
 
     /**

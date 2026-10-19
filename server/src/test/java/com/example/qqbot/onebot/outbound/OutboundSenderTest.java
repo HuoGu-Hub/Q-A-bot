@@ -100,8 +100,9 @@ class OutboundSenderTest {
         media = new MediaProperties();
         images = new ImageLibrary(media, List.of(new FakeSource()));
 
+        // asyncSend 默认关，所以这个发送器是同步的 —— 测试要断言"发出了什么"，必须同步
         sender = new OutboundSender(api, new MessageCodec(mapper), new OutboundPacer(config), identity, config,
-                filter, images);
+                filter, images, new SendQueue(config));
     }
 
     private OneBotEvent groupEvent() {

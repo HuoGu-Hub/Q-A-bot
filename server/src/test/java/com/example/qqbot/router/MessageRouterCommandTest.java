@@ -30,6 +30,7 @@ import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.OutboundFilter;
 import com.example.qqbot.guard.OutboundPacer;
 import com.example.qqbot.onebot.outbound.OutboundSender;
+import com.example.qqbot.onebot.outbound.SendQueue;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
@@ -200,7 +201,7 @@ class MessageRouterCommandTest {
         // 真的 OutboundSender（而不是 mock）：这个测试要断言"到底发出去了什么"，
         // 发送逻辑被 mock 掉就没得断了。它内部只用到下面这几个 mock。
         outboundSender = new OutboundSender(apiClient, codec, outboundPacer, identity, new Outbound(), outboundFilter,
-                new ImageLibrary(new MediaProperties(), List.of()));
+                new ImageLibrary(new MediaProperties(), List.of()), new SendQueue(new Outbound()));
         // 指令那一路住在 CommandHandler 里 —— 这里装真的，测试才是在验真实的那条链
         CommandHandler commandHandler = newHandler();
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
