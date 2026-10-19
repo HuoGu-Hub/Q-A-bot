@@ -108,7 +108,7 @@ public class OutboundSender {
      *         而不是自己再过滤一遍 —— 那会出现两处过滤、两份可能不一致的文本。
      */
     public String send(OneBotEvent event, String text) {
-        return dispatch(Target.of(event), text);
+        return dispatch(Target.of(event), text, true);
     }
 
     /**
@@ -119,7 +119,7 @@ public class OutboundSender {
      * 于是出站敏感词过滤与节流**都被跳过了**（实测漏洞，不只是分层洁癖）。
      */
     public String sendToGroup(long groupId, String text) {
-        return dispatch(new Target(true, groupId, 0), text);
+        return dispatch(new Target(true, groupId, 0), text, false);
     }
 
     /**
@@ -130,7 +130,7 @@ public class OutboundSender {
      * 这里刻意只走这一条路。
      */
     public String sendToPrivate(long userId, String text) {
-        return dispatch(new Target(false, userId, 0), text);
+        return dispatch(new Target(false, userId, 0), text, false);
     }
 
     /**
@@ -150,7 +150,7 @@ public class OutboundSender {
      * @return **实际发出的文本**（已摘标记、已过滤）。图片不进这个返回值：
      *         调用方要记的是"机器人说了什么"，而图片有它自己的日志。
      */
-    private String dispatch(Target target, String text) {
+    private String dispatch(Target target, String text, boolean split) {
         // 工具调用标记先摘：它是模型的协议细节，发到群里就是事故（2026-10-15 实测）
         String raw = text;
         if (ToolCallMarkup.hasMarkup(raw)) {
@@ -173,7 +173,9 @@ public class OutboundSender {
             log.warn("[OUT] 出站过滤后内容为空，跳过发送");
             return "";
         }
-        List<String> parts = StringUtils.hasText(safe) ? pacer.split(safe) : List.of();
+        // 只有问答回复才按句子切。命令回执就一两行，公告本来就是完整的一段 ——
+        // 切了反而把一件事拆成两条互不相干的消息。
+        List<String> parts = split && StringUtils.hasText(safe) ? pacer.split(safe) : List.of(safe);
         // 有图就不合并转发：图片塞进「聊天记录」卡片里得点开才看得见
         if (attached.isEmpty() && shouldMerge(parts, safe) && sendMerged(target, parts)) {
             return safe;
@@ -224,17 +226,18 @@ public class OutboundSender {
         boolean introSent = false;
         try {
             if (target.group()) {
-                sleepQuietly(pacer.reserveGroupSlot(target.id()));
+                sleepQuietly(pacer.reserve(true, target.id()));
                 apiClient.sendGroupMsg(target.id(), target.atUserId() > 0
                         ? codec.atPlusText(target.atUserId(), intro(parts.size()))
                         : codec.textMessage(intro(parts.size())));
                 introSent = true;
 
-                sleepQuietly(pacer.reserveGroupSlot(target.id()));
+                sleepQuietly(pacer.reserve(true, target.id()));
                 long id = apiClient.sendGroupForwardMsg(target.id(), nodes);
                 log.info("[OUT] 已合并转发到群 {}，message_id={}（{} 段打包成 1 条）",
                         target.id(), id, parts.size());
             } else {
+                sleepQuietly(pacer.reserve(false, 0L));
                 long id = apiClient.sendPrivateForwardMsg(target.id(), nodes);
                 log.info("[OUT] 已合并转发给 {}，message_id={}（{} 段打包成 1 条）",
                         target.id(), id, parts.size());
@@ -266,11 +269,12 @@ public class OutboundSender {
                 JsonNode message = first && atFirst && target.atUserId() > 0
                         ? codec.atTextWithImages(target.atUserId(), part, attached)
                         : codec.textWithImages(part, attached);
-                sleepQuietly(pacer.reserveGroupSlot(target.id()));
+                sleepQuietly(pacer.reserve(true, target.id()));
                 long messageId = apiClient.sendGroupMsg(target.id(), message);
                 log.info("[OUT] 已回复到群 {}，message_id={}（第 {}/{} 段{}）",
                         target.id(), messageId, i + 1, out.size(), imageNote(attached));
             } else {
+                sleepQuietly(pacer.reserve(false, 0L));
                 long messageId = apiClient.sendPrivateMsg(target.id(),
                         codec.textWithImages(part, attached));
                 log.info("[OUT] 已回复给 {}，message_id={}（第 {}/{} 段{}）",

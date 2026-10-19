@@ -185,7 +185,7 @@ class MessageRouterCommandTest {
 
         when(outboundPacer.split(anyString()))
                 .thenAnswer(inv -> java.util.Collections.singletonList((String) inv.getArgument(0)));
-        when(outboundPacer.reserveGroupSlot(anyLong())).thenReturn(0L);
+        when(outboundPacer.reserve(anyBoolean(), anyLong())).thenReturn(0L);
         when(outboundFilter.filter(anyString())).thenAnswer(inv -> inv.getArgument(0));
 
         // 渲染器是 mock，但上下文必须是真对象：CommandHandler 会把它交给解析器做变量展开

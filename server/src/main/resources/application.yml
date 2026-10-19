@@ -278,9 +278,19 @@ app:
     outbound:
       enabled: true
       # 同一个群两条消息之间的最小间隔（毫秒）
-      group-min-interval-millis: 800
-      # 间隔上的随机抖动（毫秒，±这个值）—— 固定间隔一眼就能看出是机器人
-      group-jitter-millis: 400
+      group-min-interval-millis: 500
+      # 群级抖动的下限与上限（毫秒）。不对称：偶尔早一点，常常晚一点，更像人
+      group-jitter-min-millis: -100
+      group-jitter-max-millis: 400
+      # 账号级总闸：整个 QQ 号两条消息之间的最小间隔。防的是"十个群同时到点"
+      # 群级那道拦不住跨群 —— 每个群都觉得自己只发了一条
+      global-min-interval-millis: 500
+      global-jitter-min-millis: -100
+      global-jitter-max-millis: 400
+      # 是否把发送切成异步：处理线程只管投队列，由发送线程按节奏发
+      async-send: true
+      # 发送队列容量。满了只降级实时回复；定时任务走数据库队列，不受影响
+      send-queue-capacity: 2000
       # 单条消息软上限（字），超过就按句子切成多条。0 = 不切
       max-chars-per-message: 300
 

@@ -7,28 +7,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 出站节奏 —— 安全中间层 D7 的剩余项（{@link RateLimiter} 管"回不回"，这里管"发得多快"）。
+ * 出站节奏：两道闸 + 长回复切分。
  *
- * <p>解决两个观感问题：
- * <ol>
- *   <li><b>同群连发</b>：两条消息挨着发出去，看起来就是刷屏。这里给每个群一个
- *       最小间隔（默认 800ms）加随机抖动（±400ms）。</li>
- *   <li><b>长回复</b>：一条 800 字的回复在手机上是一整屏，没人看得完。超过
- *       {@code max-chars-per-message}（默认 300 字）就按<b>句子边界</b>切成几条，
- *       配合上面的间隔一条条发，读起来像人在分几段说。</li>
- * </ol>
+ * <h2>两道闸为什么不分开睡</h2>
+ * 如果先睡群级、再睡账号级，两条间隔会叠加，实际发车间隔变成两者之和。
+ * 正确做法是<b>取两者中较晚的那个时刻</b>，一次睡到点，两条时间线同时推进。
  *
- * <p><b>为什么"先占位再睡"</b>：{@link #reserveGroupSlot} 在 {@code compute} 里
- * 决定本条消息的发车时刻并立刻把"下一班"往后推，然后调用方才 sleep。
- * 睡觉时不持锁 —— 否则一个群在等间隔，会把所有群的发送一起卡住。
+ * <h2>为什么"先占位再睡"</h2>
+ * {@link #reserve} 在锁内决定本次的发车时刻并立刻把下一次推后，然后调用方才 sleep。
+ * 睡觉时<b>不持锁</b>，否则一个群在等间隔会把所有群的发送一起卡住。
  */
 @Component
 public class OutboundPacer {
 
-    /** 群 → 下一条消息允许发出的最早时刻（毫秒时间戳） */
-    private final Map<Long, Long> nextSlotAt = new ConcurrentHashMap<>();
+    /** 群 → 该群下一条消息允许发出的最早时刻（毫秒时间戳） */
+    private final Map<Long, Long> nextGroupSlotAt = new ConcurrentHashMap<>();
+
+    /** 账号级：下一条消息允许发出的最早时刻。跨群共用这一条时间线 */
+    private final AtomicLong nextGlobalSlotAt = new AtomicLong(0);
 
     private final Outbound config;
 
@@ -37,32 +36,51 @@ public class OutboundPacer {
     }
 
     /**
-     * 占一个发车位。
+     * 占一个发车位，两道闸一起算。
      *
      * @return 本条消息还要等多少毫秒（0 = 立刻可发）。调用方负责 sleep。
      */
-    public long reserveGroupSlot(long groupId) {
-        if (!config.isEnabled() || config.getGroupMinIntervalMillis() <= 0) {
+    public synchronized long reserve(boolean group, long groupId) {
+        if (!config.isEnabled()) {
             return 0L;
         }
         long now = System.currentTimeMillis();
-        long delta = config.getGroupMinIntervalMillis() + jitter();
-        long[] wait = new long[1];
-        nextSlotAt.compute(groupId, (key, next) -> {
-            long at = (next == null || next < now) ? now : next;
-            wait[0] = at - now;
-            return at + delta;
-        });
-        if (nextSlotAt.size() > 5000) {
-            // 群很多时清掉早就不活跃的条目，避免这张表无限长大
-            nextSlotAt.entrySet().removeIf(e -> now - e.getValue() > 600_000L);
+
+        // 本次最早能发的时刻：现在、账号级下一班、该群下一班，三者取最晚
+        long at = Math.max(now, nextGlobalSlotAt.get());
+        if (group) {
+            Long groupNext = nextGroupSlotAt.get(groupId);
+            if (groupNext != null) {
+                at = Math.max(at, groupNext);
+            }
         }
-        return Math.max(0L, wait[0]);
+
+        // 两条时间线同时推进到"本次 + 各自的间隔"
+        long globalDelta = interval(config.getGlobalMinIntervalMillis(),
+                config.getGlobalJitterMinMillis(), config.getGlobalJitterMaxMillis());
+        nextGlobalSlotAt.set(at + globalDelta);
+        if (group) {
+            long groupDelta = interval(config.getGroupMinIntervalMillis(),
+                    config.getGroupJitterMinMillis(), config.getGroupJitterMaxMillis());
+            nextGroupSlotAt.put(groupId, at + groupDelta);
+        }
+
+        if (nextGroupSlotAt.size() > 5000) {
+            // 群很多时清掉早就不活跃的条目，避免这张表无限长大
+            nextGroupSlotAt.entrySet().removeIf(e -> now - e.getValue() > 600_000L);
+        }
+        return Math.max(0L, at - now);
     }
 
-    private long jitter() {
-        long j = config.getGroupJitterMillis();
-        return j <= 0 ? 0L : ThreadLocalRandom.current().nextLong(-j, j + 1);
+    /** 基础间隔加区间抖动。间隔 <= 0 表示这道闸关着。包级可见：便于单独验证区间边界 */
+    static long interval(long base, long jitterMin, long jitterMax) {
+        if (base <= 0) {
+            return 0L;
+        }
+        long lo = Math.min(jitterMin, jitterMax);
+        long hi = Math.max(jitterMin, jitterMax);
+        long jitter = (lo == hi) ? lo : ThreadLocalRandom.current().nextLong(lo, hi + 1);
+        return Math.max(0L, base + jitter);
     }
 
     /**
@@ -90,7 +108,6 @@ public class OutboundPacer {
                 parts.add(current.toString().strip());
                 current.setLength(0);
             }
-            // 单句本身就超长（比如一大段没有标点的输出）→ 硬切，保证不会发出一条巨长的消息
             while (sentence.length() > max) {
                 if (current.length() > 0) {
                     parts.add(current.toString().strip());

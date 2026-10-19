@@ -79,7 +79,11 @@ class OutboundSenderTest {
         api = mock(OneBotApiClient.class);
         config = new Outbound();
         config.setGroupMinIntervalMillis(0);   // 测试里不睡觉
-        config.setGroupJitterMillis(0);
+        config.setGroupJitterMinMillis(0);
+        config.setGroupJitterMaxMillis(0);
+        config.setGlobalMinIntervalMillis(0);
+        config.setGlobalJitterMinMillis(0);
+        config.setGlobalJitterMaxMillis(0);
         config.setMaxCharsPerMessage(10);      // 10 字一段，方便切出多段
         config.setForwardMerged(true);
         config.setForwardIntroText("太长啦（{parts} 段）");
