@@ -18,10 +18,9 @@ const auth = useAuth()
  */
 const hasBar = computed(() => route.name !== 'login')
 const nav = [
-  { to: '/dashboard', label: '看板' },
-  { to: '/records', label: '记录' },
+  { to: '/stats', label: '统计' },
   { to: '/kb', label: '知识库' },
-  { to: '/map', label: '地图标注' },
+  { to: '/map', label: '地图' },
   { to: '/system', label: '系统' },
   { to: '/bot', label: 'Bot 配置' },
   { to: '/plaza', label: '广场' },
@@ -51,7 +50,7 @@ async function logout() {
   <div class="admin texture-grain" :class="{ 'has-bar': hasBar }">
     <header v-if="hasBar" class="bar">
       <div class="bar-inner">
-        <RouterLink to="/dashboard" class="brand">
+        <RouterLink to="/stats" class="brand">
           <Icon name="flame" class="mark" :size="18" />
           <span class="brand-txt">飘雪喵</span>
           <span class="brand-sub">管理</span>

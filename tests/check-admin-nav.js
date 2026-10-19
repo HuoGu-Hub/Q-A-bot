@@ -1,6 +1,6 @@
 /**
- * 验证管理后台的顶端导航栏：非登录页处处都在，且「大屏 → 看板」合并后
- * 旧地址 /screen 仍然指得到地方。
+ * 验证管理后台的顶端导航栏：非登录页处处都在，且旧地址 /screen、/dashboard
+ * 合并进「统计」后仍然指得到地方。
  * 用法：ADMIN_PASSWORD=xxx node tests/check-admin-nav.js
  * 只新开一个标签页，跑完关掉，不碰你正在看的页面。
  */
@@ -56,7 +56,7 @@ async function snap(page, url) {
 
     const dash = await snap(page, BASE + 'dashboard')
     console.log('宽屏 /dashboard ->', JSON.stringify(dash))
-    await page.screenshot({ path: OUT + '/admin-dashboard.png' })
+    await page.screenshot({ path: OUT + '/admin-stats.png' })
 
     await page.setViewportSize({ width: 390, height: 780 })
     const narrow = await snap(page, BASE)
@@ -64,8 +64,8 @@ async function snap(page, url) {
     await page.screenshot({ path: OUT + '/admin-narrow.png' })
 
     console.log('\n结论：')
-    console.log('  /admin/ 重定向到看板          :', /\/dashboard$/.test(new URL(wide.href).pathname) ? '✅' : '❌ ' + wide.href)
-    console.log('  看板(1440) 有导航栏且高亮正确 :', wide.hasBar && wide.active === '看板' && dash.hasBar && dash.active === '看板' ? '✅' : '❌ ' + wide.active + ' / ' + dash.active)
+    console.log('  /admin/ 重定向到统计          :', /\/stats$/.test(new URL(wide.href).pathname) ? '✅' : '❌ ' + wide.href)
+    console.log('  统计(1440) 有导航栏且高亮正确 :', wide.hasBar && wide.active === '统计' && dash.hasBar && dash.active === '统计' ? '✅' : '❌ ' + wide.active + ' / ' + dash.active)
     console.log('  导航已无「大屏」这一项        :', wide.links.includes('大屏') ? '❌ 还在' : '✅（本页 ' + wide.links.length + ' 个 tab）')
     console.log('  窄屏 390px 无横向溢出        :', narrow.docOverflowX ? '❌ 仍有溢出' : '✅')
     console.log('  窄屏 tab 可横向滑动          :', narrow.navScrollW > narrow.navClientW ? '✅ 需要滑动(符合预期)' : '（一层放得下）')

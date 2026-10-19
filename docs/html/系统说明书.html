@@ -1164,7 +1164,7 @@ MessageRouter.handle(event)
 <p><strong>三级降级刻意不直接发消息</strong>：网页访客无法证明自己属于某个群，若能指定群号就成了&quot;向任意群广播&quot;的漏洞。所以网页只生成一句待办文案，由用户<strong>复制到群里 @ 机器人</strong>，群号取自<strong>群聊上下文</strong>。</p>
 </blockquote>
 <h3 id="53-管理后台websrcadmin"><a class="anchor" href="#53-管理后台websrcadmin">5.3 管理后台（<code>web/src/admin/</code>）</a></h3>
-<p>导航 <strong>7 项</strong>（早期设计是 9 项，后把&quot;大屏&quot;并入看板、&quot;关键词/术语表/分类&quot;并入知识库、&quot;模型/日志&quot;并入系统、&quot;设置/指令&quot;并入 Bot 配置，旧路径全部保留重定向）：</p>
+<p>导航 <strong>7 项</strong>（早期设计是 9 项，后把&quot;看板/记录&quot;合并为统计、&quot;关键词/术语表/分类&quot;并入知识库、&quot;模型/日志&quot;并入系统、&quot;设置/指令&quot;并入 Bot 配置，旧路径全部保留重定向）：</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1174,19 +1174,19 @@ MessageRouter.handle(event)
 </tr>
 </thead>
 <tbody><tr>
-<td><strong>数据看板</strong></td>
-<td><code>/dashboard</code></td>
-<td>KPI（问答总量、命中率、独立用户/群、实际作答…）、未命中·该补什么、关键词排行、检索来源/标注、最高余弦分布、每日提问量</td>
-</tr>
-<tr>
-<td><strong>问答记录</strong></td>
-<td><code>/records</code></td>
-<td>历史问答列表（可切&quot;只看提问/全部消息&quot;，7/30/90 天/全部）；字段通俗化 + 悬浮解释；人工标注 good / bad / no_source / hallucination</td>
+<td><strong>统计</strong></td>
+<td><code>/stats</code></td>
+<td>两个 tab：<strong>总览</strong>（KPI、未命中·该补什么、关键词排行、检索来源/标注、最高余弦分布、每日提问量）+ <strong>记录</strong>（历史问答列表，可切&quot;只看提问/全部消息&quot;；字段通俗化 + 悬浮解释；人工标注 good / bad / no_source / hallucination）。7/30/90 天/全部 的时间范围由两个 tab 共用</td>
 </tr>
 <tr>
 <td><strong>知识库</strong></td>
 <td><code>/kb</code></td>
 <td>四个 tab：<strong>文档 / 词条 / 分类 / 提案</strong>（详见 5.4）</td>
+</tr>
+<tr>
+<td><strong>地图</strong></td>
+<td><code>/map</code></td>
+<td>公开站地图的管理端：点位标注、同步 wiki 地图、默认图层、底图缓存、待复核点位</td>
 </tr>
 <tr>
 <td><strong>系统</strong></td>

@@ -27,7 +27,7 @@ A member mentions the bot, the bot searches its own knowledge base, and an LLM p
 |---|---|---|
 | QQ groups | Members | Mention the bot, or use `/commands` |
 | Public site | Members and visitors | `public.html`, browse the library and the Q&A plaza |
-| Admin console | Maintainer | `admin.html`, dashboard, knowledge base, settings |
+| Admin console | Maintainer | `admin.html`, stats, knowledge base, settings |
 
 | Dimension | Currently | What to change |
 |---|---|---|

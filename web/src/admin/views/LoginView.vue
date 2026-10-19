@@ -36,9 +36,9 @@ async function submit() {
   error.value = ''
   try {
     await auth.login(password.value)
-    // 合并后默认落点是看板（原来是大屏，现在 /screen 会重定向到 /dashboard）
-    const r = String(route.query.r ?? '/dashboard')
-    router.replace(r.startsWith('/') ? r : '/dashboard')
+    // 合并后默认落点是统计（原来是大屏，现在 /screen、/dashboard 都会重定向到 /stats）
+    const r = String(route.query.r ?? '/stats')
+    router.replace(r.startsWith('/') ? r : '/stats')
   } catch (e) {
     error.value = describeError(e)
   } finally {

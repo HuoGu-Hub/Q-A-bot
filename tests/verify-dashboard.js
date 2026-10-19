@@ -5,8 +5,8 @@
  * 四块图完全一样。本次把两者并成一张页面，并重做了最高余弦分布。
  *
  * 本脚本逐条给可观察证据：
- *   ① 旧地址 /screen 仍指得到 —— 重定向到 /dashboard
- *   ② 导航不再有「大屏」这一项，看板高亮正确
+ *   ① 旧地址 /screen 仍指得到 —— 重定向到 /stats?tab=overview
+ *   ② 导航不再有「大屏 / 看板」这两项，「统计」高亮正确
  *   ③ 合并进来的能力还在：自动刷新开关 + 「更新于 HH:MM:SS」
  *      （SLOW=1 时真的等一个 60 秒周期，数一次接口调用）
  *   ④ 最高余弦：画出阈值线（0.45 落在横轴 45% 处）
@@ -267,13 +267,14 @@ async function main() {
   const landed = await page.evaluate(() => location.pathname)
   await tagPanels(page)
   const s = await snap(page)
-  check('① 旧地址 /screen 仍指得到：重定向到 /dashboard',
-    landed === '/admin/dashboard' || landed.endsWith('/dashboard'),
-    '最终地址 ' + landed)
+  check('① 旧地址 /screen 仍指得到：重定向到 /stats 的总览',
+    landed === '/admin/stats' && new URL(page.url()).searchParams.get('tab') !== 'records',
+    '最终地址 ' + page.url())
 
   // ---------- ② 导航 ----------
-  check('② 导航里「大屏」已收掉、看板高亮正确',
-    !s.navLinks.includes('大屏') && s.navLinks.includes('看板') && s.activeNav === '看板',
+  check('② 导航里「大屏」「看板」已收掉、统计高亮正确',
+    !s.navLinks.includes('大屏') && !s.navLinks.includes('看板') &&
+      s.navLinks.includes('统计') && s.activeNav === '统计',
     'tab = [' + s.navLinks.join(' / ') + ']，当前高亮「' + s.activeNav + '」')
 
   // ---------- ③ 自动刷新 / 更新于 ----------

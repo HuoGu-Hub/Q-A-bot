@@ -51,17 +51,17 @@ hr{border:none;border-top:1px solid var(--bd2);margin:40px 0}
 <tr><th>能力</th><th>入口</th><th>说明</th></tr>
 <tr><td>全地图查看器</td><td>公开站 <code>/map</code></td><td>与 wiki 同源的底图与 1703 个点位；canvas 打点、CSS transform 平移缩放、缩略图分级</td></tr>
 <tr><td>找地方</td><td>公开站 <code>/map</code> 左侧搜索</td><td>输入「铁矿」，给出它相对最近地标的方位、距离、坐标，并在地图上画出方位线</td></tr>
-<tr><td>地图标注</td><td>管理端 <code>/admin/map</code></td><td>点地图空白处新增点位（名称/分类/备注/别名/是否地标/是否公开）；点 wiki 点位补中文名与说明</td></tr>
+<tr><td>地图</td><td>管理端 <code>/admin/map</code></td><td>点地图空白处新增点位（名称/分类/备注/别名/是否地标/是否公开）；点 wiki 点位补中文名与说明</td></tr>
 <tr><td>大模型工具</td><td><code>locate</code></td><td>问「哪里有铁矿」时由模型调用，拿到**算好的**方位描述而不是让它自己猜</td></tr>
 <tr><td>运维入口</td><td>管理端「同步与状态」</td><td>触发 wiki 同步与地点语料派生；查看画布、页、缓存与任务状态</td></tr>
 </table>
 
 <h2>二、怎么用起来</h2>
 <pre><code># 1. 重启后端（新接口与新表要加载）
-# 2. 管理端 → 地图标注 → 同步与状态 → 「同步 wiki 地图」
+# 2. 管理端 → 地图 → 同步与状态 → 「同步 wiki 地图」
 #    首次约 7 秒：32 页 / 1703 个点位 / 0 失败
 # 3. 打开公开站 /map
-# 4. 管理端 → 地图标注 → 在地图上点一下，起个名（例如「铁矿」），保存
+# 4. 管理端 → 地图 → 在地图上点一下，起个名（例如「铁矿」），保存
 # 5. 回公开站搜「铁矿」，或在群里问「哪里有铁矿」</code></pre>
 <p>同步是增量的：只拉 <code>revid</code> 变过的页，常态下几乎瞬间完成。
 底图瓦片按需从 wiki 拉取并缓存在 <code>server/data/map-tiles/</code>，同一张只下一次。</p>

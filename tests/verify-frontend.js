@@ -67,9 +67,9 @@ const PAGES = [
   { group: 'public', name: '404 兜底', path: '/this-page-does-not-exist', mobile: false, tolerantStatus: true },
   // ---- 管理后台 ----
   { group: 'admin', name: '登录页', path: '/admin/login', noAuth: true },
-  // 「数据大屏」已并入看板（/screen 重定向到 /dashboard），不再单独列一条
-  { group: 'admin', name: '看板', path: '/admin/dashboard' },
-  { group: 'admin', name: '问答记录', path: '/admin/records' },
+  // 「看板」「记录」已合并为统计页（/dashboard、/records 均重定向到 /stats），两个 tab 各测一次
+  { group: 'admin', name: '统计 · 总览', path: '/admin/stats?tab=overview' },
+  { group: 'admin', name: '统计 · 记录', path: '/admin/stats?tab=records' },
   { group: 'admin', name: '词条', path: '/admin/kb?tab=terms' },
   { group: 'admin', name: '日志', path: '/admin/logs' },
   { group: 'admin', name: '指令', path: '/admin/commands' },

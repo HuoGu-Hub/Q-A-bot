@@ -56,7 +56,7 @@ export const publicApi = {
 /**
  * 管理接口：401 交给调用方处理（通常会跳登录页）。
  *
- * put / del 是地图标注加进来的：点位要能改与删，只用 post 表达不了。
+ * put / del 是地图页加进来的：点位要能改与删，只用 post 表达不了。
  * 保持同一套错误处理，所以走的还是上面那个 request。
  */
 export const adminApi = {

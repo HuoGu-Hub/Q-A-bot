@@ -1,32 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { RecordRow } from '@shared/api/types'
 import { cosine as fmtCosine, ms, shortTime, VERDICT_LABEL, verdictTone } from '@shared/utils/format'
 import { guardLabel } from '@shared/utils/guard'
 import { sourceHint, sourceLabel } from '@shared/utils/source'
-import AdminPage from '@shared/ui/AdminPage.vue'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
-import Select from '@shared/ui/Select.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Button from '@shared/ui/Button.vue'
 
 /**
- * 记录范围。
+ * 「统计 → 记录」面板。
+ *
+ * <p>原「问答记录」页并入统计页后，时间窗口由外层统一持有；这里只保留
+ * 记录自己的范围开关（只看提问 / 全部消息）。
  *
  * ⚠️ 这个页面原来列出的是【全部群消息】，其中 93% 是群里没 @ 机器人的闲聊，
  * 却顶着「去群里 @ 机器人问几个问题」的提示语 —— 自相矛盾。
  * 现在默认只看提问：@ 了机器人 + 机器人有效回应且未被拦截。
  * 想看全部消息（排查「为什么没回我」）可以切到 all。
  */
+const props = defineProps<{ days: number }>()
 const scope = ref<'questions' | 'all'>('questions')
-const SCOPE_OPTIONS = [
-  { value: 'questions', label: '只看提问' },
-  { value: 'all', label: '全部消息' },
-]
-const days = ref(30)
 const rows = ref<RecordRow[]>([])
 const total = ref(0)
 
@@ -38,22 +35,6 @@ const busyId = ref<number | null>(null)
 
 /** 展开的详情行 —— 列表太窄，需要看全问题和答案 */
 const expanded = ref<number | null>(null)
-
-/**
- * 天数下拉。Select 的值来自原生 select，本来就是字符串；
- * 但 `days` 要原样拼进 `?days=`，所以在这里换算。
- * 先落值、再请求 —— 保持原来 `v-model` + `@change` 的时序。
- */
-const DAY_OPTIONS = [
-  { value: '7', label: '最近 7 天' },
-  { value: '30', label: '最近 30 天' },
-  { value: '90', label: '最近 90 天' },
-  { value: '0', label: '全部' },
-]
-function onDays(v: string) {
-  days.value = Number(v)
-  load()
-}
 
 /**
  * 首次加载还没回来时只画表头，不显示空态：
@@ -71,7 +52,7 @@ async function load() {
     adminApi.get<{ threshold: number; pendingGood: number; canAnalyze: boolean }>(
       '/kb/proposals/stats').then(r => { prop.value = r }).catch(() => {})
     const r = await adminApi.get<{ rows: RecordRow[]; total: number; scope: string }>(
-      `/records?days=${days.value}&limit=100&scope=${scope.value}`)
+      `/records?days=${props.days}&limit=100&scope=${scope.value}`)
     rows.value = r.rows
     total.value = r.total
   } catch (e) {
@@ -98,37 +79,60 @@ function toggle(id: number) {
   expanded.value = expanded.value === id ? null : id
 }
 
+/**
+ * 记录没有自动刷新：切走之后不轮询；范围变更发生在不可见期间时，
+ * 先记一笔，切回来再补拉，避免两个 tab 的后台请求叠在一起。
+ */
+let active = true
+let dirty = false
+
+function setScope(v: string) {
+  const next = v === 'all' ? 'all' : 'questions'
+  if (next === scope.value) return
+  scope.value = next
+  if (active) load()
+  else dirty = true
+}
+
+watch(() => props.days, () => {
+  if (active) load()
+  else dirty = true
+})
+
+onActivated(() => {
+  active = true
+  if (dirty) {
+    dirty = false
+    load()
+  }
+})
+
+onDeactivated(() => {
+  active = false
+})
+
+/**
+ * 页面栏（StatsView）要用的读数与动作。
+ * 以函数形式暴露，视图渲染时调用即可把面板内部状态计入渲染依赖。
+ */
+defineExpose({
+  reload: load,
+  isLoading: () => loading.value,
+  scopeValue: () => scope.value,
+  setScope,
+})
+
 onMounted(load)
 </script>
 
 <template>
-  <AdminPage width="wide">
-    <template #actions>
-      <Select
-        class="scope"
-        :model-value="scope"
-        :options="SCOPE_OPTIONS"
-        aria-label="记录范围"
-        @update:model-value="(v: string) => { scope = v as 'questions' | 'all'; load() }"
-      />
-      <Select
-        class="days"
-        :model-value="String(days)"
-        :options="DAY_OPTIONS"
-        aria-label="时间范围"
-        @update:model-value="onDays"
-      />
-      <Button size="sm" :disabled="loading" @click="load">{{ loading ? '读取中…' : '刷新' }}</Button>
-    </template>
-
-    <template #notice>
-      <Notice v-if="error" tone="error">{{ error }}</Notice>
-      <Notice v-else-if="scope === 'questions'" tone="info">
-        共 {{ total }} 条提问<template v-if="prop"> · 标记「有帮助」的回答累计
-        <strong class="num">{{ prop.pendingGood }}</strong>/<span class="num">{{ prop.threshold }}</span> 条后，
-        可在「知识库 → 提案」让 agent 分析并给出改进建议</template>
-      </Notice>
-    </template>
+  <div class="panel-wrap">
+    <Notice v-if="error" tone="error">{{ error }}</Notice>
+    <Notice v-else-if="scope === 'questions'" tone="info">
+      共 {{ total }} 条提问<template v-if="prop"> · 标记「有帮助」的回答累计
+      <strong class="num">{{ prop.pendingGood }}</strong>/<span class="num">{{ prop.threshold }}</span> 条后，
+      可在「知识库 → 提案」让 agent 分析并给出改进建议</template>
+    </Notice>
 
     <Panel>
       <DataTable
@@ -204,14 +208,12 @@ onMounted(load)
         </tbody>
       </DataTable>
     </Panel>
-  </AdminPage>
+  </div>
 </template>
 
 <style scoped>
-/* 头部下拉定宽。共享控件自带 width:100%，用 flex-basis 才压得住，
-   也不受两个单文件样式谁先注入的影响（width 会打成平手）。 */
-.days { flex: 0 0 128px; }
-.scope { flex: 0 0 128px; }
+/* 面板之间留出整页统一的竖向节奏 */
+.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
 /* 展开详情改挂在问题按钮上（见模板注释）。按钮长得像文本 ——
    它是"标题"不是"控件"，画成按钮会在七列里显得很吵。 */

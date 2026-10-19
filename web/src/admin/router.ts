@@ -10,13 +10,15 @@ import { useAuth } from './useAuth'
 export const router = createRouter({
   history: createWebHistory('/admin/'),
   routes: [
-    { path: '/', redirect: '/dashboard' },
+    { path: '/', redirect: { path: '/stats', query: { tab: 'overview' } } },
     { path: '/login', name: 'login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
-    // 「大屏」和「看板」合并成一张页面（指标 8 个里 6 个重复、四块图完全一样）。
-    // 旧路径保留重定向 —— 书签、肌肉记忆和挂在墙上的那个地址都不该因为一次合并失效。
-    { path: '/screen', redirect: { path: '/dashboard' } },
-    { path: '/dashboard', name: 'dashboard', component: () => import('./views/DashboardView.vue') },
-    { path: '/records', name: 'records', component: () => import('./views/RecordsView.vue') },
+    // 「看板」与「记录」合并成「统计」页，页内用二级目录切换。
+    // 更早的「大屏」也已并入这里。旧路径全部保留重定向 ——
+    // 书签、肌肉记忆和挂在墙上的那个地址都不该因为一次合并失效。
+    { path: '/stats', name: 'stats', component: () => import('./views/StatsView.vue') },
+    { path: '/screen', redirect: { path: '/stats', query: { tab: 'overview' } } },
+    { path: '/dashboard', redirect: { path: '/stats', query: { tab: 'overview' } } },
+    { path: '/records', redirect: { path: '/stats', query: { tab: 'records' } } },
     // 「关键词」「术语表」「分类」已合并为知识库页，用二级目录切换。
     // 旧的 /glossary 与 /keywords 都指向同一个 tab —— 后端把术语表收成 kb_term
     // 单表后，这两块本来就是同一批对象，redirect 到同一处正好说明这一点。
@@ -35,7 +37,7 @@ export const router = createRouter({
     { path: '/settings', redirect: { path: '/bot', query: { tab: 'settings' } } },
     { path: '/commands', redirect: { path: '/bot', query: { tab: 'commands' } } },
     { path: '/plaza', name: 'plaza', component: () => import('./views/PlazaAdminView.vue') },
-    // 地图标注：公开站地图的"管理员那一半"，点位与备注都在这里写
+    // 地图：公开站地图的"管理员那一半"，点位与备注都在这里写
     { path: '/map', name: 'map', component: () => import('./views/MapAdminView.vue') },
     // 公开站的固定文案（首页标语、关于页正文、页脚、404 等）
     { path: '/pages', name: 'pages', component: () => import('./views/PagesView.vue') },

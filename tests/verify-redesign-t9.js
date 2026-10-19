@@ -227,8 +227,8 @@ function readPassword() {
 const PAGES = [
   { name: 'bot', path: '/admin/bot' },
   { name: 'kb', path: '/admin/kb' },
-  { name: 'dashboard', path: '/admin/dashboard' },
-  { name: 'records', path: '/admin/records' },
+  { name: 'stats-overview', path: '/admin/stats?tab=overview' },
+  { name: 'stats-records', path: '/admin/stats?tab=records' },
   { name: 'logs', path: '/admin/logs' },
   { name: 'models', path: '/admin/models' },
   { name: 'plaza', path: '/admin/plaza' },
@@ -335,7 +335,7 @@ async function domClick(page, selector, containsText) {
       check(`${spec.name}: 无 page-head`, snap.pageHead === 0, `page-head 数 = ${snap.pageHead}`)
 
       // 工具栏唯一性：有内容的页面必须恰好一条 page-bar，且没有遗留的面板工具栏
-      const expectBar = ['bot', 'kb', 'dashboard', 'records', 'logs', 'models', 'plaza', 'screen', 'pages'].includes(spec.name)
+      const expectBar = ['bot', 'kb', 'stats-overview', 'stats-records', 'logs', 'models', 'plaza', 'screen', 'pages'].includes(spec.name)
       check(`${spec.name}: 只有一条工具栏`,
         snap.pageBar === (expectBar ? 1 : 0) && snap.legacyToolbar === 0,
         `page-bar = ${snap.pageBar}，遗留 .panel-bar/.tab-actions = ${snap.legacyToolbar}`)

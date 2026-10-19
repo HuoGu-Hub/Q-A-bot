@@ -1,32 +1,28 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   Overview, KeywordStat, MissResponse, Bucket, SourcesResponse, VisitSummary,
 } from '@shared/api/types'
 import { cosine as fmtCosine, ms, num, pct, shortTime } from '@shared/utils/format'
 import { sourceLabel } from '@shared/utils/source'
-import AdminPage from '@shared/ui/AdminPage.vue'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
 import Notice from '@shared/ui/Notice.vue'
-import Select from '@shared/ui/Select.vue'
 import Stat from '@shared/ui/Stat.vue'
 import Bar from '@shared/ui/Bar.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Empty from '@shared/ui/Empty.vue'
-import Button from '@shared/ui/Button.vue'
-import Switch from '@shared/ui/Switch.vue'
 
 /**
- * 数据看板 —— 「大屏」和「看板」两张页面合并后的唯一入口。
+ * 「统计 → 总览」面板。
  *
- * <p>合并的理由：两张页面 8 个指标里有 6 个一样，每日提问量 / 关键词排行 /
- * 检索来源 / 最高余弦分布 四块图完全重复，差别只是大屏固定 7 天、看板能选范围。
- * 现在一张页面看全，大屏那两处**有能力差异**的东西保留下来：
+ * <p>原「数据看板」页（更早还与「大屏」合并过）现在收进统计页的二级目录，
+ * 时间范围由外层统一持有 —— 总览与记录看的是同一个窗口，切 tab 不该重置。
+ * 大屏那两处**有能力差异**的东西保留在这里：
  *   · 自动刷新（60 秒）—— 挂在墙上当时钟看时不用手动点
  *   · 「更新于 HH:MM:SS」—— 判断屏幕上的数据是不是陈的
- * 旧地址 /screen 走重定向（见 router.ts），书签不会失效。
+ * 副 tab 不可见时暂停轮询，切回来再继续，避免在记录页后台空打接口。
  */
 const REFRESH_MS = 60_000
 
@@ -37,12 +33,8 @@ const REFRESH_MS = 60_000
  */
 const MIN_SCORE = 0.45
 
-/**
- * 统计窗口。默认 **0 = 全部**（不按时间过滤）——
- * 默认要看的是"到现在为止一共多少"，而不是"最近 30 天"。
- * 需要看近期趋势时再从右上角切 7/30/90 天。
- */
-const days = ref(0)
+/** 统计窗口由 StatsView 统一持有：默认 0 = 全部（不按时间过滤） */
+const props = defineProps<{ days: number }>()
 const loading = ref(false)
 const error = ref('')
 const auto = ref(false)
@@ -54,17 +46,6 @@ const misses = ref<MissResponse>({ withKeyword: [], unmatched: [] })
 const cosineDist = ref<Bucket[]>([])
 const src = ref<SourcesResponse>({ sources: [], verdicts: [] })
 const visits = ref<VisitSummary | null>(null)
-
-/**
- * 日期范围选项。Select 组件的 v-model 是 string（原生 select 的值本来也是字符串），
- * 而接口要的是数字，所以这里存字符串、出口处转 number，转换点只有一个。
- */
-const DAY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '7', label: '最近 7 天' },
-  { value: '30', label: '最近 30 天' },
-  { value: '90', label: '最近 90 天' },
-  { value: '0', label: '全部' },
-]
 
 /** 「更新于」：只保留时分秒 —— 判断数据新不新用不到日期 */
 const updatedAt = computed(() => {
@@ -148,26 +129,48 @@ const daily = computed(() => {
   }
 })
 
-/** 原来挂在 select 的 @change 上：改范围即重新拉数 */
-function onDays(v: string) {
-  days.value = Number(v)
-  load()
-}
-
 let timer: number | undefined
+/** 面板当前是否可见（被 KeepAlive 切走后为 false） */
+let active = true
+/** 不可见期间时间范围变过 —— 切回来要补拉一次 */
+let dirty = false
 
 /**
- * 自动刷新开关。打开时每 60 秒重取一次（合并大屏后保留的能力）；
- * 关掉时必须 clearInterval —— 否则开关关了，后台还在打接口。
+ * 只在可见时轮询：切到记录 tab 后后台不该继续打接口。
+ * 关掉开关时也必须 clearInterval —— 否则开关关了，后台还在打接口。
  */
-function toggleAuto(v: boolean) {
-  auto.value = v
+function syncTimer() {
   if (timer !== undefined) {
     window.clearInterval(timer)
     timer = undefined
   }
-  if (v) timer = window.setInterval(load, REFRESH_MS)
+  if (active && auto.value) timer = window.setInterval(load, REFRESH_MS)
 }
+
+function toggleAuto(v: boolean) {
+  auto.value = v
+  syncTimer()
+}
+
+// 范围由外层持有；总览不可见时先记一笔，切回来再拉，避免后台白跑六次请求
+watch(() => props.days, () => {
+  if (active) load()
+  else dirty = true
+})
+
+onDeactivated(() => {
+  active = false
+  syncTimer()
+})
+
+onActivated(() => {
+  active = true
+  if (dirty) {
+    dirty = false
+    load()
+  }
+  syncTimer()
+})
 
 onBeforeUnmount(() => {
   if (timer !== undefined) window.clearInterval(timer)
@@ -176,7 +179,7 @@ onBeforeUnmount(() => {
 async function load() {
   loading.value = true
   error.value = ''
-  const q = `?days=${days.value}`
+  const q = `?days=${props.days}`
   try {
     const [o, k, m, c, s, v] = await Promise.all([
       adminApi.get<Overview>(`/overview${q}`),
@@ -202,30 +205,24 @@ async function load() {
 }
 
 onMounted(load)
+
+/**
+ * 页面栏（StatsView）要用的读数与动作。
+ * 全部以函数形式暴露：视图渲染时调用，读到的响应式依赖会计入渲染副作用，
+ * 「更新于」和开关状态才会跟着面板内部状态更新。
+ */
+defineExpose({
+  reload: load,
+  isLoading: () => loading.value,
+  autoValue: () => auto.value,
+  toggleAuto,
+  updatedAt: () => updatedAt.value,
+})
 </script>
 
 <template>
-  <AdminPage width="wide">
-    <template #actions>
-      <div class="days">
-        <Select
-          :model-value="String(days)"
-          :options="DAY_OPTIONS"
-          aria-label="统计范围"
-          @update:model-value="onDays"
-        />
-      </div>
-      <label class="auto">
-        <Switch :model-value="auto" aria-label="自动刷新" @update:model-value="toggleAuto" />
-        <span>自动刷新 60s</span>
-      </label>
-      <span v-if="updatedAt" class="stamp faint num">更新于 {{ updatedAt }}</span>
-      <Button size="sm" :disabled="loading" @click="load">{{ loading ? '读取中…' : '刷新' }}</Button>
-    </template>
-
-    <template #notice>
-      <Notice v-if="error" tone="error">{{ error }}</Notice>
-    </template>
+  <div class="panel-wrap">
+    <Notice v-if="error" tone="error">{{ error }}</Notice>
 
     <template v-if="ov">
       <div class="kpis">
@@ -414,21 +411,14 @@ onMounted(load)
     </template>
 
     <div v-else-if="!error && loading" class="muted">读取中…</div>
-  </AdminPage>
+  </div>
 </template>
 
 <style scoped>
-/* 这里只剩「本页特有」的东西：网格布局、图表、少量排版修饰。
+/* 这里只剩「本页特有」的东西：面板间距、网格布局、图表、少量排版修饰。
    .page / .toolbar / .sel / .err / .hint / .tbl / .num 已由共享组件层接管，
    页面不再各写一份 —— 否则又是 12 份互相漂移的副本。 */
-
-/* Select 默认 100% 宽，放进 AdminPage 的 actions 槽会被拉满整行 */
-.days { width: 132px; flex: none; }
-.auto {
-  display: inline-flex; align-items: center; gap: var(--sp-2);
-  font-size: var(--fs-xs); color: var(--ink-dim); white-space: nowrap;
-}
-.stamp { font-size: var(--fs-xs); white-space: nowrap; }
+.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
 /* 8 个指标：150px 下限刚好让宽屏一行铺满 8 张。
    原先 160px → 实际只排得下 7 张，第 8 张「后台访问」孤零零换行、左边空一大块。
