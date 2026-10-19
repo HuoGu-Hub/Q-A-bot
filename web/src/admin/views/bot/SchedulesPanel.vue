@@ -99,9 +99,7 @@ function targetOf(t: AdminScheduleTask) {
   return t.groupId > 0 ? '群 ' + t.groupId : '私聊'
 }
 
-function repeatOf(t: AdminScheduleTask) {
-  return t.repeatRule === 'daily' ? '每天' : '一次'
-}
+
 
 const counts = computed(() => data.value?.counts ?? {})
 
@@ -167,8 +165,8 @@ onMounted(load)
             <th>编号</th>
             <th>目标</th>
             <th>内容</th>
-            <th>到点</th>
-            <th>周期</th>
+            <th>什么时候发</th>
+            <th>下一次</th>
             <th>创建者</th>
             <th>状态</th>
             <th>最近错误</th>
@@ -180,8 +178,8 @@ onMounted(load)
             <td class="id">#{{ t.id }}</td>
             <td class="muted">{{ targetOf(t) }}</td>
             <td class="content">{{ t.content }}</td>
+            <td class="when">{{ t.when }}</td>
             <td class="mono">{{ fmt(t.fireAt) }}</td>
-            <td class="muted">{{ repeatOf(t) }}</td>
             <td class="muted">{{ t.nickname || t.userId }}</td>
             <td>
               <Tag :tone="statusOf(t).tone">{{ statusOf(t).label }}</Tag>
@@ -212,6 +210,7 @@ onMounted(load)
 .id { font-family: var(--font-mono); color: var(--flame); }
 .mono { font-family: var(--font-mono); font-size: var(--fs-meta); white-space: nowrap; }
 .content { max-width: 260px; overflow-wrap: anywhere; }
+.when { font-size: var(--fs-meta); white-space: nowrap; color: var(--ink-2); }
 /* 错误原文可能很长，限宽 + 可换行，别把表格撑爆 */
 .err { max-width: 260px; font-size: var(--fs-meta); color: var(--rust); overflow-wrap: anywhere; }
 

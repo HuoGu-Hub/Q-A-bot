@@ -57,6 +57,15 @@ const KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'action', label: '动作（写库 / 查库，不调模型）' },
 ]
 
+/** 准入档位。五选一，值直接落库 */
+const ACCESS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'all', label: '全体' },
+  { value: 'admin', label: '管理员' },
+  { value: 'owner', label: '群主' },
+  { value: 'whitelist', label: '白名单（只对名单里的人）' },
+  { value: 'blacklist', label: '黑名单（名单里的人不能用）' },
+]
+
 /** 参数类型。与后端 ParamType 一一对应 */
 const PARAM_TYPES: Array<{ value: string; label: string }> = [
   { value: 'text', label: '文本' },
@@ -106,7 +115,7 @@ async function load() {
 function newCommand() {
   editing.value = {
     trigger: '', reply: '', description: '', scope: 'all', enabled: true, sortOrder: 0,
-    kind: 'template', mode: 'kb', params: [], help: '', action: null,
+    kind: 'template', mode: 'kb', params: [], help: '', action: null, access: 'all',
   }
   preview.value = ''
   sampleArgs.value = ''
@@ -282,6 +291,15 @@ onMounted(load)
           placeholder="用途说明（{cmd.list} 会显示它）"
           aria-label="说明"
           @update:model-value="patch({ description: $event })"
+        />
+      </Field>
+
+      <Field label="谁能用" control-width="360px">
+        <Select
+          :model-value="editing.access ?? 'all'"
+          :options="ACCESS_OPTIONS"
+          aria-label="谁能用"
+          @update:model-value="patch({ access: $event })"
         />
       </Field>
 

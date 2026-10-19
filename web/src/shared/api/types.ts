@@ -270,7 +270,8 @@ export interface BotCommand {
   description: string
   scope: string
   groupIds: number[]
-  minRole: string
+  /** 准入档位：all / admin / owner / whitelist / blacklist */
+  access: string
   enabled: boolean
   sortOrder: number
   builtin: boolean
@@ -310,8 +311,37 @@ export interface AdminScheduleTask {
   attempts: number
   lastError?: string | null
   fireAt: string
+  /** 「什么时候发」的人话：每天 07:00、14:00 或 2026-10-20 21:30 */
+  when: string
+  /** 时刻组：周期是 HH:mm，一次性是 ISO 串 */
+  times: string[]
   createdAt: string
   sentAt?: string | null
+}
+
+/** 一条命令的数据策略：能读哪些群、跨群时标多少 */
+export interface CommandPolicy {
+  id: number
+  /** GROUP = 只本群；SOME = 指定群；ALL = 全部群 */
+  scope: string
+  groups: number[]
+  showGroup: boolean
+  showUser: boolean
+}
+
+export interface CommandPolicies {
+  policies: CommandPolicy[]
+}
+
+/** 名单条目：uid = QQ 号，gid = 群号 */
+export interface AclItem {
+  type: string
+  value: number
+}
+
+export interface CommandAcl {
+  white: AclItem[]
+  black: AclItem[]
 }
 
 export interface ScheduleList {

@@ -32,15 +32,18 @@ public class CommandController {
     private final VariableRenderer renderer;
     private final CommandPolicy props;
     private final ActionRegistry actionRegistry;
+    private final CommandPolicyStore policyStore;
     /** 只用来把后台传来的参数表 JSON 转成 ParamSpec，不承担别的语义 */
     private final ObjectMapper mapper;
 
     public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props,
-                             ActionRegistry actionRegistry, ObjectMapper mapper) {
+                             ActionRegistry actionRegistry, CommandPolicyStore policyStore,
+                             ObjectMapper mapper) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;
         this.actionRegistry = actionRegistry;
+        this.policyStore = policyStore;
         this.mapper = mapper;
     }
 
@@ -53,6 +56,28 @@ public class CommandController {
         out.put("rateLimitPerMinute", props.getRateLimitPerMinute());
         out.put("allowUserIds", props.isAllowUserIds());
         return out;
+    }
+
+    /**
+     * 所有命令的数据策略。
+     *
+     * <p>单独一条而不是塞进指令列表：策略是后加的维度，老前端不认这个字段也不该因此坏掉；
+     * 权限总览页把两条响应按 id 合起来看。
+     */
+    @GetMapping("/policies")
+    public Map<String, Object> policies() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (BotCommand cmd : store.listAll()) {
+            DataPolicy policy = policyStore.of(cmd.id());
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", cmd.id());
+            item.put("scope", policy.scope().name());
+            item.put("groups", policy.groups());
+            item.put("showGroup", policy.showGroup());
+            item.put("showUser", policy.showUser());
+            out.add(item);
+        }
+        return Map.of("policies", out);
     }
 
     /** 可用变量（配置界面靠它渲染"点击插入"按钮，变量页靠它列清单） */

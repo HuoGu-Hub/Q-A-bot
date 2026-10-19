@@ -53,7 +53,14 @@ function sourceOf(v: CommandVariable) {
   return '会话'
 }
 
+/** 这几个变量的含义是"谁发的、哪个群"，管理端没有会话，取不到真值 */
+const SESSION_SCOPED = ['user', 'group', 'user.id', 'group.id']
+
 function valueOf(v: CommandVariable) {
+  // 取当前值时，会话相关的直接说"去群里看"，不给"朋友""私聊""0"这种看着像真值的占位
+  if (showCurrent.value && SESSION_SCOPED.includes(v.name)) {
+    return '需在群里看'
+  }
   const table = showCurrent.value ? data.value?.current : data.value?.preview
   return table?.[v.name] ?? '—'
 }
@@ -136,7 +143,7 @@ onMounted(load)
 
       <p class="faint note">
         没有会话的变量（{user} {group} {user.id} {group.id}）在管理端取不到真实值，
-        两栏显示的都是占位 —— 它们在群里才有意义。
+        点「取当前值」时它们显示「需在群里看」—— 它们在群里才有意义。
         {{ data?.allowUserIds ? '' : '高级变量当前未启用，在「Bot 设置」里打开。' }}
       </p>
     </Panel>

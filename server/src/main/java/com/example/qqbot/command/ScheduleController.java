@@ -49,12 +49,13 @@ public class ScheduleController {
     /** 给管理端看的形状：不带 paramsJson（前端用不到），时刻用 ISO 串 */
     public record ScheduleView(long id, long groupId, long userId, String nickname, String content,
                                Instant fireAt, String repeatRule, String status, int attempts,
-                               String lastError, Instant createdAt, Instant sentAt) {
+                               String lastError, Instant createdAt, Instant sentAt,
+                               String when, List<String> times) {
 
         static ScheduleView of(ScheduleTask t) {
             return new ScheduleView(t.id(), t.groupId(), t.userId(), t.nickname(), t.content(),
                     t.fireAt(), t.repeatRule(), t.status(), t.attempts(), t.lastError(),
-                    t.createdAt(), t.sentAt());
+                    t.createdAt(), t.sentAt(), t.whenText(), t.times());
         }
     }
 
