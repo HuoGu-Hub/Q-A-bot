@@ -144,7 +144,7 @@ public class CommandHandler {
         if (!role.atLeast(required)) {
             log.info("[CMD] 权限不足：用户 {} 在群 {} 触发 /{}（需要 {}，实为 {}）",
                     userId, groupId, cmd.trigger(), required, role);
-            reply(event, cmd, tail, required.describe(), t0);
+            reply(event, cmd, tail, required.describe(inGroup), t0);
             return Outcome.HANDLED;
         }
 

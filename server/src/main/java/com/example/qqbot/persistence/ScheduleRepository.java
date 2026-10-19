@@ -2,7 +2,10 @@ package com.example.qqbot.persistence;
 
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 定时输出表（{@code bot_schedule}）的**数据访问**。
@@ -147,6 +150,51 @@ public class ScheduleRepository {
     public int close(long id, String status, String error) {
         return jdbc.update("UPDATE bot_schedule SET status = ?, last_error = ? WHERE id = ?",
                 status, error, id);
+    }
+
+    // ==================== 管理端 ====================
+
+    /**
+     * 管理端列表：按状态与群号筛，不筛的参数传空。
+     *
+     * <p>排序是 {@code fire_at DESC}：管理端最关心的是"最近要发的"与"刚刚发过的"，
+     * 群内列表才需要正序。
+     */
+    public List<Row> adminQuery(String status, long groupId, int limit) {
+        StringBuilder sql = new StringBuilder("SELECT " + COLUMNS + " FROM bot_schedule WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND status = ?");
+            args.add(status);
+        }
+        if (groupId > 0) {
+            sql.append(" AND group_id = ?");
+            args.add(groupId);
+        }
+        sql.append(" ORDER BY fire_at DESC LIMIT ?");
+        args.add(limit);
+        return jdbc.query(sql.toString(), MAP, args.toArray());
+    }
+
+    /**
+     * 各状态条数。
+     *
+     * <p>一次 GROUP BY 拿全，而不是每种状态查一次 —— 概览上要显示五个数字，
+     * 分成五条 SQL 只是把同一份扫描做五遍。
+     */
+    public Map<String, Long> countByStatus() {
+        Map<String, Long> out = new LinkedHashMap<>();
+        for (Map<String, Object> row : jdbc.query(
+                "SELECT status, COUNT(*) c FROM bot_schedule GROUP BY status",
+                r -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("status", r.str("status"));
+                    m.put("c", r.longOf("c"));
+                    return m;
+                })) {
+            out.put(String.valueOf(row.get("status")), (Long) row.get("c"));
+        }
+        return out;
     }
 
     /** 待发计数：用于"每人最多几条" */

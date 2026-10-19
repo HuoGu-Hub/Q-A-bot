@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +49,8 @@ public class ScheduleStore {
             .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
 
     public static final String STATUS_PENDING = "pending";
+    /** 抢行中的瞬时状态，正常一轮之内就会离开它 */
+    public static final String STATUS_SENDING = "sending";
     public static final String STATUS_SENT = "sent";
     public static final String STATUS_FAILED = "failed";
     public static final String STATUS_EXPIRED = "expired";
@@ -149,6 +152,33 @@ public class ScheduleStore {
 
     public List<ScheduleTask> pendingForUser(long userId, int limit) {
         return available ? toTasks(repo.pendingByUser(userId, limit)) : List.of();
+    }
+
+    // ==================== 管理端 ====================
+
+    /** 管理端列表：按状态与群号筛 */
+    public List<ScheduleTask> adminList(String status, long groupId, int limit) {
+        return available ? toTasks(repo.adminQuery(status, groupId, limit)) : List.of();
+    }
+
+    /**
+     * 各状态条数，给概览用。
+     *
+     * <p><b>没有行的状态也补 0</b>：SQL 的 GROUP BY 只会返回出现过的状态，
+     * 于是"撤销掉最后一条待发之后，概览里待发那一格整块消失" ——
+     * 前端得靠 {@code ?? 0} 兜，换个消费方又会踩一次。这里补全，接口形状就稳定了。
+     */
+    public Map<String, Long> statusCounts() {
+        if (!available) {
+            return Map.of();
+        }
+        Map<String, Long> raw = repo.countByStatus();
+        Map<String, Long> out = new LinkedHashMap<>();
+        for (String status : List.of(STATUS_PENDING, STATUS_SENDING, STATUS_SENT,
+                STATUS_FAILED, STATUS_EXPIRED, STATUS_CANCELED)) {
+            out.put(status, raw.getOrDefault(status, 0L));
+        }
+        return out;
     }
 
     // ==================== 扫描器专用 ====================

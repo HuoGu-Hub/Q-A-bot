@@ -31,6 +31,7 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import SettingsPanel from './bot/SettingsPanel.vue'
 import CommandsPanel from './bot/CommandsPanel.vue'
+import SchedulesPanel from './bot/SchedulesPanel.vue'
 import VariablesPanel from './bot/VariablesPanel.vue'
 
 const route = useRoute()
@@ -39,6 +40,8 @@ const router = useRouter()
 const TABS = [
   { key: 'settings', label: '设置' },
   { key: 'commands', label: '指令' },
+  // 定时任务排在指令后面：它就是"指令做出来的东西"，看完成员自然想看结果
+  { key: 'schedules', label: '定时任务' },
   // 只读：系统变量由代码决定，做成可编辑的配置只会多出「配了但代码里没有」
   { key: 'variables', label: '变量' },
 ]
@@ -65,10 +68,12 @@ function setTab(k: string) {
  */
 const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const commandsRef = ref<InstanceType<typeof CommandsPanel> | null>(null)
+const schedulesRef = ref<InstanceType<typeof SchedulesPanel> | null>(null)
 const variablesRef = ref<InstanceType<typeof VariablesPanel> | null>(null)
 
 const settings = computed(() => (tab.value === 'settings' ? settingsRef.value : null))
 const commands = computed(() => (tab.value === 'commands' ? commandsRef.value : null))
+const schedules = computed(() => (tab.value === 'schedules' ? schedulesRef.value : null))
 const variables = computed(() => (tab.value === 'variables' ? variablesRef.value : null))
 </script>
 
@@ -90,6 +95,9 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
         <Button size="sm" :disabled="commands?.isLoading()" @click="commands?.reload()">刷新</Button>
         <Button size="sm" variant="primary" @click="commands?.newCommand()">+ 新建指令</Button>
       </template>
+      <template v-else-if="tab === 'schedules'">
+        <Button size="sm" :disabled="schedules?.isLoading()" @click="schedules?.reload()">刷新</Button>
+      </template>
       <template v-else>
         <Button size="sm" :disabled="variables?.isLoading()" @click="variables?.reload()">刷新</Button>
       </template>
@@ -102,6 +110,7 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
     <KeepAlive>
       <SettingsPanel v-if="tab === 'settings'" ref="settingsRef" />
       <CommandsPanel v-else-if="tab === 'commands'" ref="commandsRef" />
+      <SchedulesPanel v-else-if="tab === 'schedules'" ref="schedulesRef" />
       <VariablesPanel v-else ref="variablesRef" />
     </KeepAlive>
   </AdminPage>

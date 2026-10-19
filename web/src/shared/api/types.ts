@@ -296,6 +296,31 @@ export interface CommandActions {
   actions: CommandActionInfo[]
 }
 
+/** 一行定时输出。时刻是 ISO 串，展示时按东八区格式化 */
+export interface AdminScheduleTask {
+  id: number
+  /** 0 = 私聊 */
+  groupId: number
+  userId: number
+  nickname: string
+  content: string
+  repeatRule: string
+  /** pending / sending / sent / failed / expired / canceled */
+  status: string
+  attempts: number
+  lastError?: string | null
+  fireAt: string
+  createdAt: string
+  sentAt?: string | null
+}
+
+export interface ScheduleList {
+  available: boolean
+  /** 各状态条数，键就是状态名 */
+  counts: Record<string, number>
+  tasks: AdminScheduleTask[]
+}
+
 export interface CommandList {
   available: boolean
   commands: BotCommand[]

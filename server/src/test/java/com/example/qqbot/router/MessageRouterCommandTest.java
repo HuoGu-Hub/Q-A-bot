@@ -504,7 +504,8 @@ class MessageRouterCommandTest {
 
         ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
         verify(apiClient).sendPrivateMsg(eq(USER), captor.capture());
-        assertThat(captor.getValue().path("text").asText()).contains("只有群主或管理员");
+        // 私聊里说「只有群主或管理员」会让人以为私聊也能当管理员，所以要照实说"去群里用"
+        assertThat(captor.getValue().path("text").asText()).contains("要在群里用");
     }
 
     @Test

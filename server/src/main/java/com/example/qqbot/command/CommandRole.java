@@ -64,8 +64,17 @@ public enum CommandRole {
         };
     }
 
-    /** 给群友看的拒绝理由；{@link #MEMBER} 用不到（它是地板） */
-    public String describe() {
+    /**
+     * 给群友看的拒绝理由；{@link #MEMBER} 用不到（它是地板）。
+     *
+     * <p><b>私聊要单独说</b>：那里根本没有群角色，回一句「只有群主或管理员能用」
+     * 会让人以为自己在私聊里也能当上管理员。这种情况的真实原因是
+     * 「这条命令只能在群里用」，就该照实说。
+     */
+    public String describe(boolean inGroup) {
+        if (!inGroup) {
+            return "这条命令要在群里用，私聊里没有群角色";
+        }
         return switch (this) {
             case OWNER -> "这条命令只有群主能用";
             case ADMIN -> "这条命令只有群主或管理员能用";
