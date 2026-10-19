@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,13 +71,15 @@ class ScheduleActionsTest {
         return new ActionContext(userId, GROUP, true, role, "张三", "set/output", text);
     }
 
-    private static CommandArgs withMoment(String raw, Instant at) {
-        return new CommandArgs(Map.of("time", raw), Map.of("time", at));
+    /** 新参数形状：#重复# 是文本，#时间# 是时刻列表（可多值） */
+    private static CommandArgs withTimes(String repeat, String raw, List<Instant> times) {
+        // TEXT 参数在 typed 里也是文本，所以"重复"两边都要放
+        return new CommandArgs(Map.of("重复", repeat, "时间", raw),
+                Map.of("重复", repeat, "时间", times));
     }
 
-    private static CommandArgs withMomentAndDate(String raw, Instant at, LocalDate date) {
-        return new CommandArgs(Map.of("time", raw, "date", "10-20"),
-                Map.of("time", at, "date", date));
+    private static CommandArgs withMoment(String raw, Instant at) {
+        return withTimes("每天", raw, List.of(at));
     }
 
     private static CommandArgs withId(long id) {
@@ -101,19 +104,36 @@ class ScheduleActionsTest {
     }
 
     @Test
-    @DisplayName("★ 带日期：只发一次，时刻取 #time# 的钟点配那一天")
-    void createOnceWithDate() throws Exception {
-        LocalDate date = LocalDate.now(AppTime.ZONE).plusDays(5);
+    @DisplayName("★ 重复写「一次」：只发一次，时刻就是 #时间# 给的那个绝对时刻")
+    void createOnce() throws Exception {
         Instant clock = Instant.now().plus(Duration.ofHours(3));
 
         String reply = create.execute(groupCtx(USER, CommandRole.MEMBER, "集合"),
-                withMomentAndDate("21:30", clock, date));
+                withTimes("一次", "21:30", List.of(clock)));
 
-        assertThat(reply).contains("输出一次").doesNotContain("每天");
+        assertThat(reply).contains("只发一次").doesNotContain("每天");
         var task = store.pendingForGroup(GROUP, 10).get(0);
         assertThat(task.isDaily()).isFalse();
-        assertThat(LocalDateTime.ofInstant(task.fireAt(), AppTime.ZONE).toLocalDate())
-                .as("日期来自 #date#，钟点来自 #time#").isEqualTo(date);
+        // 时间列存的是定长毫秒 ISO，纳秒会被截掉
+        assertThat(task.fireAt()).as("一次性存的是绝对时刻")
+                .isEqualTo(clock.truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
+    }
+
+    @Test
+    @DisplayName("★ 一天三个时刻：一条公告，三个时刻都记下来")
+    void createWithSeveralTimes() throws Exception {
+        // 用整点构造，验证回执显示的是"07:00"而不是"07:51:28"
+        var zone = AppTime.ZONE;
+        Instant base = java.time.ZonedDateTime.now(zone).plusDays(1)
+                .withHour(7).withMinute(0).withSecond(0).withNano(0).toInstant();
+
+        String reply = create.execute(groupCtx(USER, CommandRole.MEMBER, "打本集合"),
+                withTimes("每天", "07:00、14:00、21:30",
+                        List.of(base, base.plusSeconds(7 * 3600), base.plusSeconds(14 * 3600 + 1800))));
+
+        assertThat(reply).contains("每天").contains("07:00").contains("14:00").contains("21:30");
+        var task = store.pendingForGroup(GROUP, 10).get(0);
+        assertThat(task.times()).as("三个时刻都存着，撤销时一起停").hasSize(3);
     }
 
     @Test
@@ -142,8 +162,9 @@ class ScheduleActionsTest {
     @Test
     @DisplayName("★ 过去的时间不接")
     void createRejectsPast() {
+        // 周期任务会自己往后滚，所以只有"一次"才存在"已经过去"
         assertThatThrownBy(() -> create.execute(groupCtx(USER, CommandRole.MEMBER, "内容"),
-                withMoment("08:00", Instant.now().minus(Duration.ofHours(1)))))
+                withTimes("一次", "08:00", List.of(Instant.now().minus(Duration.ofHours(1))))))
                 .isInstanceOf(ActionException.class)
                 .hasMessageContaining("已经过去");
     }
@@ -154,8 +175,9 @@ class ScheduleActionsTest {
         props.setMaxFutureDays(1);
         Instant fire = Instant.now().plus(Duration.ofDays(5));
 
+        // 只有"一次"才有"最远多少天"这回事，周期任务永远滚在近期
         assertThatThrownBy(() -> create.execute(groupCtx(USER, CommandRole.MEMBER, "内容"),
-                withMoment("21:30", fire)))
+                withTimes("一次", "21:30", List.of(fire))))
                 .isInstanceOf(ActionException.class)
                 .hasMessageContaining("天以内");
     }

@@ -5,6 +5,7 @@ import com.example.qqbot.time.AppTime;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * 一行定时输出。
@@ -28,10 +29,31 @@ public record ScheduleTask(
         int attempts,
         String lastError,
         Instant createdAt,
-        Instant sentAt) {
+        Instant sentAt,
+        List<String> times,
+        Instant anchorAt) {
 
     public static final String REPEAT_ONCE = "once";
     public static final String REPEAT_DAILY = "daily";
+
+    public ScheduleTask {
+        times = times == null ? List.of() : List.copyOf(times);
+    }
+
+    /**
+     * 还原成"规则 + 时刻组"，交给它算下一次。
+     *
+     * <p>库里那一列读不懂时退回"一次"而不是抛异常：一条脏记录不该让整轮扫描停下。
+     */
+    public RepeatSchedule schedule() {
+        RepeatRule rule;
+        try {
+            rule = RepeatRule.parse(repeatRule);
+        } catch (CommandParseException e) {
+            rule = RepeatRule.once();
+        }
+        return new RepeatSchedule(rule, times, anchorAt);
+    }
 
     public boolean isGroup() {
         return groupId > 0;
@@ -39,6 +61,16 @@ public record ScheduleTask(
 
     public boolean isDaily() {
         return REPEAT_DAILY.equalsIgnoreCase(repeatRule);
+    }
+
+    /** 还会再发吗（不是一次性） */
+    public boolean isRepeating() {
+        return schedule().rule().kind() != RepeatRule.Kind.ONCE;
+    }
+
+    /** 列表里那句"多久一次" */
+    public String repeatLabel() {
+        return schedule().rule().describe();
     }
 
     /**

@@ -52,6 +52,13 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
             throw new CommandParseException("重复", "缺少 #重复#，可以写：一次 / 每天 / 每周三 / 每3天");
         }
         String s = raw.trim().toLowerCase(Locale.ROOT);
+        // 先认落库形态，再认群友手写的说法
+        if (s.startsWith("weekly:")) {
+            return new RepeatRule(Kind.WEEKLY, 0, DayOfWeek.of(numberOf(s.substring(7), 1, 7, raw)));
+        }
+        if (s.startsWith("every:")) {
+            return new RepeatRule(Kind.EVERY_N_DAYS, numberOf(s.substring(6), 2, 30, raw), null);
+        }
         if (s.equals("一次") || s.equals("只一次") || s.equals("once")) {
             return once();
         }
@@ -133,6 +140,33 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
             }
         }
         return -1;
+    }
+
+    /**
+     * 落库形态。
+     *
+     * <p>{@code weekly:3} / {@code every:3} 这种能原样读回来，
+     * 而群友写的中文只用来输入 —— 库里存的东西必须机器读得懂。
+     */
+    public String toStorage() {
+        return switch (kind) {
+            case ONCE -> "once";
+            case DAILY -> "daily";
+            case WEEKLY -> "weekly:" + dayOfWeek.getValue();
+            case EVERY_N_DAYS -> "every:" + everyDays;
+        };
+    }
+
+    private static int numberOf(String s, int min, int max, String raw) throws CommandParseException {
+        try {
+            int n = Integer.parseInt(s.trim());
+            if (n >= min && n <= max) {
+                return n;
+            }
+        } catch (NumberFormatException ignored) {
+            // 落到下面统一报错
+        }
+        throw new CommandParseException("重复", "没看懂「" + raw + "」");
     }
 
     /** 回执里那句人话 */

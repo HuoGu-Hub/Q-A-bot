@@ -94,6 +94,18 @@ public class ScheduleStore {
         return ISO.format(at.truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
     }
 
+    /** 时刻组那一列的 JSON 原文 → 列表；读坏了就当空表，不让一条脏记录卡住整轮扫描 */
+    private List<String> parseTimes(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return mapper.readValue(json, new TypeReference<List<String>>() { });
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     private static Instant parse(String iso) {
         return iso == null || iso.isBlank() ? null : Instant.parse(iso);
     }
@@ -108,6 +120,18 @@ public class ScheduleStore {
      */
     public long create(long groupId, long userId, String nickname, String content,
                        Map<String, String> args, Instant fireAt, String repeatRule) throws IOException {
+        return create(groupId, userId, nickname, content, args, fireAt, repeatRule, List.of(), null);
+    }
+
+    /**
+     * 记一条定时输出。
+     *
+     * @param times  时刻组；一次性放绝对时刻，周期放 HH:mm
+     * @param anchor 创建时刻，{@code 每N天} 从它起算
+     */
+    public long create(long groupId, long userId, String nickname, String content,
+                       Map<String, String> args, Instant fireAt, String repeatRule,
+                       List<String> times, Instant anchor) throws IOException {
         if (!available) {
             throw new IOException("定时输出不可用");
         }
@@ -117,10 +141,17 @@ public class ScheduleStore {
         } catch (Exception e) {
             throw new IOException("参数序列化失败：" + e.getMessage(), e);
         }
+        String timesJson;
+        try {
+            timesJson = mapper.writeValueAsString(times == null ? List.of() : times);
+        } catch (Exception e) {
+            throw new IOException("时刻序列化失败：" + e.getMessage(), e);
+        }
         String now = iso(Instant.now());
         return repo.insert(new ScheduleRepository.Row(0, groupId, userId,
                 nickname == null ? "" : nickname, content, paramsJson,
-                iso(fireAt), repeatRule, STATUS_PENDING, 0, null, now, null));
+                iso(fireAt), repeatRule, STATUS_PENDING, 0, null, now, null,
+                timesJson, anchor == null ? null : iso(anchor)));
     }
 
     /** 撤销：不是删除，保留是谁、何时撤的，便于事后看"发过的都去哪了" */
@@ -195,11 +226,23 @@ public class ScheduleStore {
         }
         List<ScheduleTask> claimed = new ArrayList<>();
         for (ScheduleRepository.Row row : repo.due(iso(now), limit)) {
-            if (repo.markSending(row.id()) == 1) {
+            if (repo.markSending(row.id(), iso(now)) == 1) {
                 claimed.add(toTask(row));
             }
         }
         return claimed;
+    }
+
+    /**
+     * 把卡在「发送中」超过 {@code minutes} 分钟的行放回待发。
+     *
+     * @return 放回了几行
+     */
+    public int reclaimStale(Instant now, int minutes) {
+        if (!available) {
+            return 0;
+        }
+        return repo.reclaimStaleSending(iso(now.minusSeconds(minutes * 60L)));
     }
 
     public void markSent(ScheduleTask task, Instant now) {
@@ -236,7 +279,8 @@ public class ScheduleStore {
     private ScheduleTask toTask(ScheduleRepository.Row r) {
         return new ScheduleTask(r.id(), r.groupId(), r.userId(), r.nickname(), r.content(),
                 r.paramsJson(), parse(r.fireAt()), r.repeatRule(), r.status(), r.attempts(),
-                r.lastError(), parse(r.createdAt()), parse(r.sentAt()));
+                r.lastError(), parse(r.createdAt()), parse(r.sentAt()),
+                parseTimes(r.timesJson()), parse(r.anchorAt()));
     }
 
     /**

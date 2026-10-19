@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,7 +83,12 @@ class ScheduleRunnerTest {
 
     private long createGroupTask(String content, Map<String, String> args, Instant fireAt, String repeat)
             throws Exception {
-        return store.create(GROUP, USER, "张三", content, args, fireAt, repeat);
+        // 周期任务要把"几点发"存成时刻组，否则算不出下一次；一次性任务存绝对时刻
+        List<String> times = ScheduleStore.REPEAT_ONCE.equals(repeat)
+                ? List.of(fireAt.toString())
+                : List.of(LocalDateTime.ofInstant(fireAt, AppTime.ZONE).toLocalTime()
+                        .truncatedTo(java.time.temporal.ChronoUnit.MINUTES).toString());
+        return store.create(GROUP, USER, "张三", content, args, fireAt, repeat, times, fireAt);
     }
 
     @Test
@@ -143,7 +149,8 @@ class ScheduleRunnerTest {
     @Test
     @DisplayName("★ 周期任务：发完推下一个时刻，且保持原来那个钟点")
     void dailyTaskRearms() throws Exception {
-        Instant scheduled = NOW.minusSeconds(5);
+        // 整分钟：周期任务只保留到分钟，用带秒的时刻会差出几十秒来
+        Instant scheduled = NOW.minus(Duration.ofMinutes(1));
         long id = createGroupTask("每天提醒", Map.of(), scheduled, ScheduleStore.REPEAT_DAILY);
 
         runner.runOnce(NOW);

@@ -39,6 +39,14 @@ public class ScheduleRunner {
     /** 一个 tick 最多处理几条，防止积压时长时间占着调度线程 */
     private static final int BATCH = 20;
 
+    /**
+     * 一行停在「发送中」超过多少分钟就认定是卡住了。
+     *
+     * <p>2 分钟远大于一次发送的最坏耗时（等发车位加一次 HTTP），
+     * 所以正常情况绝不会误判；而进程崩在这个窗口里时，最多 2 分钟它就会自己回来。
+     */
+    private static final int STALE_SENDING_MINUTES = 2;
+
     private final ScheduleStore store;
     private final SchedulePolicy policy;
     private final VariableRenderer renderer;
@@ -75,6 +83,13 @@ public class ScheduleRunner {
         if (!policy.isEnabled() || !store.isAvailable()) {
             return 0;
         }
+        // 先把卡在"发送中"太久的放回待发：进程停在半路时，那一行会永远扫不到
+        int reclaimed = store.reclaimStale(now, STALE_SENDING_MINUTES);
+        if (reclaimed > 0) {
+            log.warn("[SCHED] {} 条卡在发送中超过 {} 分钟，已放回待发",
+                    reclaimed, STALE_SENDING_MINUTES);
+        }
+
         List<ScheduleTask> due = store.claimDue(now, BATCH);
         for (ScheduleTask task : due) {
             deliver(task, now);
@@ -109,13 +124,15 @@ public class ScheduleRunner {
             return;
         }
 
-        if (task.isDaily()) {
-            Instant next = nextDaily(task, now);
+        // 下一次由"规则 + 时刻组"推导，而不是"上次 + 一个周期"：
+        // 一天三个时刻的公告，7:00 发完就该轮到 14:00
+        Instant next = task.schedule().nextAfter(now);
+        if (next != null) {
             store.rearm(task, next, now);
-            log.info("[SCHED] #{} 已发出（每天），下次 {}", task.id(), next);
+            log.info("[SCHED] #{} 已发出（{}），下次 {}", task.id(), task.repeatLabel(), next);
         } else {
             store.markSent(task, now);
-            log.info("[SCHED] #{} 已发出", task.id());
+            log.info("[SCHED] #{} 已发出（最后一次）", task.id());
         }
     }
 
@@ -130,16 +147,6 @@ public class ScheduleRunner {
         RenderContext ctx = RenderContext.scheduled(task.userId(), task.groupId(), task.isGroup(),
                 task.nickname(), "", args, "", now);
         return renderer.render(task.content(), ctx);
-    }
-
-    /** 下一个同一钟点的时刻；跨过 now 为止，所以停机久了也不会连发几条 */
-    private static Instant nextDaily(ScheduleTask task, Instant now) {
-        ZonedDateTime at = task.fireAt().atZone(AppTime.ZONE);
-        ZonedDateTime next = at;
-        do {
-            next = next.plusDays(1);
-        } while (!next.toInstant().isAfter(now));
-        return next.toInstant();
     }
 
     private void retryOrFail(ScheduleTask task, Instant now, String error) {

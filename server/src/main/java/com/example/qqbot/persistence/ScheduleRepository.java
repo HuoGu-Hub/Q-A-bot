@@ -27,17 +27,19 @@ public class ScheduleRepository {
     /** 一行定时输出（{@code params} 是 JSON 原文，解析留给业务侧） */
     public record Row(long id, long groupId, long userId, String nickname, String content,
                       String paramsJson, String fireAt, String repeatRule, String status,
-                      int attempts, String lastError, String createdAt, String sentAt) {
+                      int attempts, String lastError, String createdAt, String sentAt,
+                      String timesJson, String anchorAt) {
     }
 
     private static final String COLUMNS =
             "id, group_id, user_id, nickname, content, params, fire_at, repeat_rule, status,"
-                    + " attempts, last_error, created_at, sent_at";
+                    + " attempts, last_error, created_at, sent_at, times, anchor_at";
 
     private static final Jdbc.RowMapper<Row> MAP = r -> new Row(
             r.longOf("id"), r.longOf("group_id"), r.longOf("user_id"), r.str("nickname"),
             r.str("content"), r.str("params"), r.str("fire_at"), r.str("repeat_rule"), r.str("status"),
-            r.intOf("attempts"), r.str("last_error"), r.str("created_at"), r.str("sent_at"));
+            r.intOf("attempts"), r.str("last_error"), r.str("created_at"), r.str("sent_at"),
+            r.str("times"), r.str("anchor_at"));
 
     private final Jdbc jdbc;
 
@@ -63,8 +65,15 @@ public class ScheduleRepository {
                 + " attempts    INTEGER NOT NULL DEFAULT 0,"
                 + " last_error  TEXT,"
                 + " created_at  TEXT NOT NULL,"
-                + " sent_at     TEXT"
+                + " sent_at     TEXT,"
+                + " times       TEXT NOT NULL DEFAULT '[]',"
+                + " anchor_at   TEXT,"
+                + " sending_at  TEXT"
                 + " )");
+        // 老库补列：一条公告从"一个时刻"变成"一组时刻"
+        ensureColumn("bot_schedule", "times", "TEXT NOT NULL DEFAULT '[]'");
+        ensureColumn("bot_schedule", "anchor_at", "TEXT");
+        ensureColumn("bot_schedule", "sending_at", "TEXT");
         // 扫描只走这一条：待发 + 到点
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_schedule_due ON bot_schedule(status, fire_at)");
         // 列表与每人上限按这个查
@@ -75,10 +84,25 @@ public class ScheduleRepository {
     public long insert(Row row) {
         return jdbc.insert("INSERT INTO bot_schedule"
                         + " (group_id, user_id, nickname, content, params, fire_at, repeat_rule,"
-                        + "  status, attempts, created_at)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        + "  status, attempts, created_at, times, anchor_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 row.groupId(), row.userId(), row.nickname(), row.content(), row.paramsJson(),
-                row.fireAt(), row.repeatRule(), row.status(), row.attempts(), row.createdAt());
+                row.fireAt(), row.repeatRule(), row.status(), row.attempts(), row.createdAt(),
+                row.timesJson() == null ? "[]" : row.timesJson(), row.anchorAt());
+    }
+
+    /**
+     * 补列。SQLite 没有 {@code ADD COLUMN IF NOT EXISTS}，直接加会抛
+     * {@code duplicate column name}，所以先查 {@code PRAGMA table_info}。
+     *
+     * <p>少了它，建过库的机器升级后会一直报 {@code no such column: times}。
+     */
+    private void ensureColumn(String table, String column, String ddl) {
+        List<String> existing = jdbc.query("PRAGMA table_info(" + table + ")", r -> r.str("name"));
+        if (existing.contains(column)) {
+            return;
+        }
+        jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + ddl);
     }
 
     public Row findById(long id) {
@@ -106,10 +130,25 @@ public class ScheduleRepository {
                 + " ORDER BY fire_at LIMIT ?", MAP, nowIso, limit);
     }
 
+    /**
+     * 把卡在「发送中」太久的行为放回待发。
+     *
+     * <p>进程正好停在"已抢走、还没发完"之间时，那一行会永远停在 sending，
+     * 之后再也不会被扫到 —— 这是最隐蔽的一种漏发：数据还在，但永远不会发。
+     *
+     * @param before 早于这个时刻进入 sending 的才算卡住
+     * @return 放回了几行
+     */
+    public int reclaimStaleSending(String before) {
+        // 老数据没有 sending_at，一律视为卡住的 —— 它们本来就不该停在 sending
+        return jdbc.update("UPDATE bot_schedule SET status = 'pending'"
+                + " WHERE status = 'sending' AND (sending_at IS NULL OR sending_at < ?)", before);
+    }
+
     /** 抢行：只有仍是 pending 才会被更新到。返回 0 表示被别人抢了 */
-    public int markSending(long id) {
-        return jdbc.update("UPDATE bot_schedule SET status = 'sending'"
-                + " WHERE id = ? AND status = 'pending'", id);
+    public int markSending(long id, String nowIso) {
+        return jdbc.update("UPDATE bot_schedule SET status = 'sending', sending_at = ?"
+                + " WHERE id = ? AND status = 'pending'", nowIso, id);
     }
 
     /** 一次性任务发完：进入终态 */

@@ -87,14 +87,15 @@ public class CommandStore {
                 // ---------- 定时输出：一条命令一个动作，用路径分层 ----------
                 // 参数表直接引用动作声明的常量：两处各写一遍迟早会漂移
                 new CommandRepository.Seed("set/output",
-                        "写法：/set /output #time-21:30# 要发的内容",
+                        "写法：/set /output #重复-每天# #时间-21:30# 要发的内容"
+                                + "（#时间# 可以写多个，用顿号隔开）",
                         "设置一条定时输出", 10,
-                        paramsJson(ScheduleCreateAction.TIME, ScheduleCreateAction.DATE),
+                        paramsJson(ScheduleCreateAction.REPEAT, ScheduleCreateAction.TIME),
                         ScheduleCreateAction.ID),
                 new CommandRepository.Seed("list/output", "",
                         "查看本群待发的定时输出", 11, "[]", ScheduleListAction.ID),
                 new CommandRepository.Seed("del/output",
-                        "写法：/del /output #id-3#",
+                        "写法：/del /output #编号-3#",
                         "撤销一条定时输出", 12,
                         paramsJson(ScheduleDeleteAction.ID_PARAM),
                         ScheduleDeleteAction.ID));
