@@ -2,6 +2,7 @@ package com.example.qqbot.command;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,28 +37,73 @@ public final class CommandArgs {
         return raw.get(name);
     }
 
-    /** TEXT / ENUM 的值 */
+    /** TEXT / ENUM 的值。可多值时取第一个 */
     public String text(String name) {
-        Object v = typed.get(name);
-        return v instanceof String s ? s : null;
+        List<String> all = texts(name);
+        return all.isEmpty() ? null : all.get(0);
     }
 
-    /** INT 的值 */
+    /** INT 的值。可多值时取第一个 */
     public Long number(String name) {
-        Object v = typed.get(name);
-        return v instanceof Long n ? n : null;
+        List<Long> all = numbers(name);
+        return all.isEmpty() ? null : all.get(0);
     }
 
-    /** MOMENT 的值 */
+    /** MOMENT 的值。可多值时取第一个 */
     public Instant moment(String name) {
-        Object v = typed.get(name);
-        return v instanceof Instant i ? i : null;
+        List<Instant> all = moments(name);
+        return all.isEmpty() ? null : all.get(0);
     }
 
-    /** DATE 的值 */
+    /** DATE 的值。可多值时取第一个 */
     public LocalDate date(String name) {
+        List<LocalDate> all = dates(name);
+        return all.isEmpty() ? null : all.get(0);
+    }
+
+    /**
+     * 多值取法。单值参数也会返回一个元素的列表，动作侧不用分两种情况写。
+     *
+     * <p>返回的永远是列表而不是 null，少一层判空 —— 空列表的语义就是"没给"。
+     */
+    public List<Instant> moments(String name) {
+        return collect(name, Instant.class);
+    }
+
+    public List<LocalDate> dates(String name) {
+        return collect(name, LocalDate.class);
+    }
+
+    public List<Long> numbers(String name) {
+        return collect(name, Long.class);
+    }
+
+    public List<String> texts(String name) {
+        return collect(name, String.class);
+    }
+
+    /**
+     * 把某个名字下的值收成列表。
+     *
+     * <p>单值参数在 {@code typed} 里存的是裸对象，多值参数存的是列表，
+     * 这里把两种形状抹平。类型对不上的元素直接跳过，不抛异常 ——
+     * 动作侧按类型取，取不到就是空，比在运行时炸掉好。
+     */
+    private <T> List<T> collect(String name, Class<T> type) {
         Object v = typed.get(name);
-        return v instanceof LocalDate d ? d : null;
+        if (v == null) {
+            return List.of();
+        }
+        if (v instanceof List<?> list) {
+            List<T> out = new java.util.ArrayList<>(list.size());
+            for (Object item : list) {
+                if (type.isInstance(item)) {
+                    out.add(type.cast(item));
+                }
+            }
+            return List.copyOf(out);
+        }
+        return type.isInstance(v) ? List.of(type.cast(v)) : List.of();
     }
 
     /** 全部原样值，渲染 {@code {arg.x}} 用 */

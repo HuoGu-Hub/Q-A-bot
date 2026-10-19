@@ -18,6 +18,9 @@ import java.util.List;
  * @param description  帮助里那一行说明
  * @param example      用法提示与帮助里的样例
  * @param options      ENUM 的候选值
+ * @param multiple     能不能一次给多个值。开了之后 {@code #时间-7:00、14:00#}
+ *                     会被切成两个值逐个校验；不开就整段当一个值，
+ *                     所以文本参数里的顿号仍然是顿号
  */
 public record ParamSpec(
         String name,
@@ -27,16 +30,33 @@ public record ParamSpec(
         int maxChars,
         String description,
         String example,
-        List<String> options) {
+        List<String> options,
+        boolean multiple) {
 
     /** 文本参数的默认长度上限 —— 与出站单条上限同一个量级，防止一条参数把群刷屏 */
     public static final int DEFAULT_MAX_CHARS = 200;
+
+    /** 一个参数最多收几个值。再多就该拆成两条命令了 */
+    public static final int MAX_VALUES = 10;
 
     public ParamSpec {
         name = name == null ? "" : name.trim();
         type = type == null ? ParamType.TEXT : type;
         maxChars = maxChars > 0 ? maxChars : DEFAULT_MAX_CHARS;
         options = options == null ? List.of() : List.copyOf(options);
+    }
+
+    /** 老写法的兼容构造：单值 */
+    public ParamSpec(String name, ParamType type, boolean required, String defaultValue,
+                     int maxChars, String description, String example, List<String> options) {
+        this(name, type, required, defaultValue, maxChars, description, example, options, false);
+    }
+
+    /** 便捷构造：可多值、无候选值 */
+    public static ParamSpec multi(String name, ParamType type, boolean required, String defaultValue,
+                                  int maxChars, String description, String example) {
+        return new ParamSpec(name, type, required, defaultValue, maxChars, description, example,
+                List.of(), true);
     }
 
     /** 便捷构造：不带默认值与候选值 */

@@ -37,6 +37,14 @@ public class CommandParser {
     private static final String DASHES = "-－—";
 
     /**
+     * 多值参数的分隔符。
+     *
+     * <p>三种都认：顿号、全角逗号、半角逗号 —— 中文输入法下打出来哪个都不奇怪。
+     * 只有声明了「可多值」的参数才会被切，所以文本参数里的顿号仍然是顿号。
+     */
+    private static final Pattern MULTI_SEP = Pattern.compile("[、，,]");
+
+    /**
      * 解析结果。
      *
      * @param args 按名字取到的参数
@@ -251,15 +259,56 @@ public class CommandParser {
             if (expanded == null) {
                 expanded = "";
             }
+            if (s.multiple()) {
+                // 多值：切开、逐个校验。raw 存整段，{arg.时间} 显示的就是群友打的那一串
+                List<String> pieces = splitMulti(s, expanded);
+                List<Object> typedValues = new ArrayList<>(pieces.size());
+                for (String piece : pieces) {
+                    typedValues.add(convertOne(s, truncate(s, piece), now));
+                }
+                raw.put(s.name(), expanded);
+                typed.put(s.name(), List.copyOf(typedValues));
+                continue;
+            }
             // 截断要在存 raw 之前做：模板取值的 {arg.x} 与动作拿到的必须是同一份值，
             // 否则长度保护只在动作那一侧生效，模板仍旧能把超长参数放出去
-            if (s.type() == ParamType.TEXT && s.maxChars() > 0 && expanded.length() > s.maxChars()) {
-                expanded = expanded.substring(0, s.maxChars());
-            }
-            raw.put(s.name(), expanded);
-            typed.put(s.name(), convertOne(s, expanded, now));
+            String cut = truncate(s, expanded);
+            raw.put(s.name(), cut);
+            typed.put(s.name(), convertOne(s, cut, now));
         }
         return new CommandArgs(raw, typed);
+    }
+
+    /**
+     * 把一段值切成多个。空片段直接丢掉，「7:00、、14:00」这种手抖不算错。
+     *
+     * <p>切完一个都不剩才报错 —— 那说明他写了个只有逗号的东西。
+     */
+    private static List<String> splitMulti(ParamSpec spec, String value) throws CommandParseException {
+        List<String> pieces = new ArrayList<>();
+        for (String piece : MULTI_SEP.split(value)) {
+            String p = piece.trim();
+            if (!p.isEmpty()) {
+                pieces.add(p);
+            }
+        }
+        if (pieces.isEmpty()) {
+            throw new CommandParseException(spec.name(), "#" + spec.name() + "# 没有值");
+        }
+        if (pieces.size() > ParamSpec.MAX_VALUES) {
+            throw new CommandParseException(spec.name(),
+                    "#" + spec.name() + "# 最多 " + ParamSpec.MAX_VALUES + " 个值，这次给了 "
+                            + pieces.size() + " 个");
+        }
+        return pieces;
+    }
+
+    /** 文本参数超长截断；其余类型不截 */
+    private static String truncate(ParamSpec spec, String value) {
+        if (spec.type() == ParamType.TEXT && spec.maxChars() > 0 && value.length() > spec.maxChars()) {
+            return value.substring(0, spec.maxChars());
+        }
+        return value;
     }
 
     private Object convertOne(ParamSpec spec, String value, Instant now) throws CommandParseException {
