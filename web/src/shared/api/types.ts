@@ -392,6 +392,36 @@ export interface CommandCatalog {
   entries: CommandCatalogEntry[]
 }
 
+/** 后台编辑用的一条板块（/admin/api/boards） */
+export interface AdminBoard {
+  id: number
+  path: string
+  title: string
+  params: AdminParamSpec[]
+  /** direct / scheduled */
+  delivery: string
+  access: string
+  /** GROUP / SOME / ALL */
+  scope: string
+  groups: number[]
+  showGroup: boolean
+  showUser: boolean
+  allowPrivate: boolean
+  enabled: boolean
+  sortOrder: number
+  builtin: boolean
+  usage: string
+}
+
+export interface AdminBoardList {
+  boards: AdminBoard[]
+}
+
+/** 提交给后端的板块草稿：originalPath 只在编辑时给，用来确认改的是哪一条 */
+export interface BoardDraft extends AdminBoard {
+  originalPath?: string | null
+}
+
 export interface CommandList {
   available: boolean
   commands: BotCommand[]

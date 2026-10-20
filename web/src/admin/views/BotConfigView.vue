@@ -88,6 +88,7 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
       </template>
       <template v-else-if="tab === 'commands'">
         <Button size="sm" :disabled="commands?.isLoading()" @click="commands?.reload()">刷新</Button>
+        <Button size="sm" @click="commands?.newBoard()">+ 新建板块</Button>
         <Button size="sm" variant="primary" @click="commands?.newCommand()">+ 新建指令</Button>
       </template>
       <template v-else>

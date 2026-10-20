@@ -117,9 +117,15 @@ public class BoardStore {
         return row == null ? null : toBoard(row);
     }
 
+    /**
+     * 保存板块。
+     *
+     * @throws IllegalStateException 板块库不可用
+     * @throws IllegalArgumentException 参数表序列化失败
+     */
     public void save(Board board) {
         if (!available) {
-            return;
+            throw new IllegalStateException("板块库不可用");
         }
         String groupsJson;
         String paramsJson;
@@ -127,7 +133,7 @@ public class BoardStore {
             groupsJson = mapper.writeValueAsString(board.policy().groups());
             paramsJson = mapper.writeValueAsString(board.params());
         } catch (Exception e) {
-            return;
+            throw new IllegalArgumentException("板块参数序列化失败：" + e.getMessage(), e);
         }
         repo.save(new BoardRepository.Row(0, board.path(), board.title(), paramsJson,
                 board.delivery(), board.access(), board.policy().scope().name(), groupsJson,
@@ -136,10 +142,13 @@ public class BoardStore {
                 board.builtin()));
     }
 
-    public void delete(String path) {
-        if (available) {
-            repo.delete(path);
-        }
+    /**
+     * 删除板块。
+     *
+     * <p>仓储层只删 {@code builtin=0} 的行；内置板块返回 false，由调用方给提示。
+     */
+    public boolean delete(String path) {
+        return available && repo.delete(path) > 0;
     }
 
     // ==================== 转换 ====================

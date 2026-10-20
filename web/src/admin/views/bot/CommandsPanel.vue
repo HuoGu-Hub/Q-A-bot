@@ -5,31 +5,35 @@
  * 为什么是面板而不是页面：管理端要把「设置」和「指令」并进同一个「Bot 配置」页，
  * 页面内用二级目录切换。页面级外壳（AdminPage、Tabs、页面标题）由父页面提供，
  * 所以这里不接收 props、不 emit 事件，也不渲染 AdminPage ——
- * 只负责本 tab 的内容。页面栏上的「刷新」「+ 新建指令」由父页面 BotConfigView
- * 渲染，动作经 defineExpose 抛出（按钮调的是面板内部状态，视图拿不到）。
+ * 只负责本 tab 的内容。页面栏上的「刷新」「+ 新建板块」「+ 新建指令」由父页面
+ * BotConfigView 渲染，动作经 defineExpose 抛出（按钮调的是面板内部状态，视图拿不到）。
  *
- * 接口调用（/commands 系列）与重构前逐个字段一致，本次是纯结构与外观迁移。
+ * 接口：/commands 管普通指令，/boards 管板块；两者共用一套编辑器与参数表组件。
  */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
-  CommandPolicy, CommandPolicies, CommandAcl, CommandCatalog, CommandCatalogEntry,
+  CommandPolicy, CommandPolicies, CommandAcl, AdminBoard, AdminBoardList, BoardDraft,
 } from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
-import Field from '@shared/ui/Field.vue'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
+import ParamTable from './ParamTable.vue'
+import BoardEditor from './BoardEditor.vue'
+import {
+  KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
+} from './commandOptions'
 
 const loading = ref(false)
 const error = ref('')
 const data = ref<CommandList | null>(null)
-/** 板块 + 指令的统一目录：后台列表与群里 /list 读同一份 */
-const catalog = ref<CommandCatalog | null>(null)
+/** 板块（含停用的）。与群里 /list 读同一个 BoardStore */
+const boards = ref<AdminBoard[]>([])
 const vars = ref<CommandVariables | null>(null)
 const stats = ref<CommandStats | null>(null)
 /** 已注册的动作：只有 action 类命令才用得上 */
@@ -37,45 +41,16 @@ const actions = ref<CommandActions | null>(null)
 
 /** 编辑中的指令（null = 没在编辑） */
 const editing = ref<Partial<BotCommand> | null>(null)
+/** 板块编辑状态：undefined = 没在编辑，null = 新建，对象 = 编辑这一条 */
+const boardEditing = ref<AdminBoard | null | undefined>(undefined)
+const boardSaving = ref(false)
+const boardError = ref('')
 /** 实时预览结果 */
 const preview = ref('')
 /** 预览 {args} 用的示例参数 */
 const sampleArgs = ref('')
 
-/**
- * 指令类型 —— 这个选择决定了"会不会花钱"：
- *   template 即时回话术，不调模型、不计费，所以跑在 Guard 之前秒回；
- *   agent    交给大模型，会走 Guard 与成本预算。
- */
-const KIND_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'template', label: '话术（直接回复，不调模型）' },
-  { value: 'agent', label: '智能问答（调模型，计入预算）' },
-  { value: 'action', label: '动作（写库 / 查库，不调模型）' },
-]
-
-/** 准入档位。五选一，值直接落库 */
-const ACCESS_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: '全体' },
-  { value: 'admin', label: '管理员' },
-  { value: 'owner', label: '群主' },
-  { value: 'whitelist', label: '白名单（只对名单里的人）' },
-  { value: 'blacklist', label: '黑名单（名单里的人不能用）' },
-]
-
-/** 参数类型。与后端 ParamType 一一对应 */
-const PARAM_TYPES: Array<{ value: string; label: string }> = [
-  { value: 'text', label: '文本' },
-  { value: 'int', label: '整数' },
-  { value: 'moment', label: '时间点' },
-  { value: 'date', label: '日期' },
-  { value: 'enum', label: '枚举' },
-]
-
-/** agent 类的知识来源。命名上刻意说"走/不走知识库"，而不是"温度""权重"这种看不出效果的词 */
-const MODE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'kb', label: '走知识库（默认）' },
-  { value: 'none', label: '不用知识库（纯模型回答）' },
-]
+/* 指令类型与准入选项在 commandOptions.ts —— 板块编辑器也要用同一份 */
 
 const isAgent = computed(() => editing.value?.kind === 'agent')
 const isAction = computed(() => editing.value?.kind === 'action')
@@ -106,9 +81,8 @@ async function load() {
   error.value = ''
   try {
     data.value = await adminApi.get<CommandList>('/commands')
-    // 目录接口是后加的：后端还没重启时先不求全，别让整页跟着 404
-    try { catalog.value = await adminApi.get<CommandCatalog>('/commands/catalog') }
-    catch { catalog.value = null }
+    try { boards.value = (await adminApi.get<AdminBoardList>('/boards')).boards }
+    catch { boards.value = [] }
     vars.value = await adminApi.get<CommandVariables>('/commands/variables')
     stats.value = await adminApi.get<CommandStats>('/commands/stats?days=30')
     actions.value = await adminApi.get<CommandActions>('/commands/actions')
@@ -121,6 +95,7 @@ async function load() {
 }
 
 function newCommand() {
+  boardEditing.value = undefined
   editing.value = {
     trigger: '', reply: '', description: '', scope: 'all', enabled: true, sortOrder: 0,
     kind: 'template', mode: 'kb', params: [], help: '', action: null, access: 'all',
@@ -132,6 +107,7 @@ function newCommand() {
 }
 
 function edit(c: BotCommand) {
+  boardEditing.value = undefined
   editing.value = { ...c }
   sampleArgs.value = ''
   updatePreview()
@@ -160,17 +136,11 @@ function usageOf(c: BotCommand) {
   return c.usage && c.usage !== displayOf(c) ? c.usage : ''
 }
 
-/** 板块行：目录里 source=board 的条目 */
-const boardRows = computed<CommandCatalogEntry[]>(
-  () => (catalog.value?.entries ?? []).filter((e) => e.source === 'board')
-)
-
-const SCOPE_LABEL: Record<string, string> = {
-  GROUP: '本群', SOME: '指定群', ALL: '全部群',
-}
+/** 板块行：/boards 返回的全部板块（含停用） */
+const boardRows = computed<AdminBoard[]>(() => boards.value)
 
 /** 板块的规则一栏：谁能用、怎么投递、数据范围 */
-function boardRuleTags(b: CommandCatalogEntry) {
+function boardRuleTags(b: AdminBoard) {
   const tags: Array<{ label: string; tone: 'neutral' | 'good' | 'warn' | 'bad' }> = [
     { label: ACCESS_LABEL[b.access] ?? b.access, tone: 'neutral' },
     { label: b.delivery === 'scheduled' ? '到点发' : '立即展示', tone: b.delivery === 'scheduled' ? 'warn' : 'good' },
@@ -185,34 +155,6 @@ function boardRuleTags(b: CommandCatalogEntry) {
 
 function setParams(list: AdminParamSpec[]) {
   patch({ params: list })
-}
-
-function patchParam(i: number, p: Partial<AdminParamSpec>) {
-  const list = paramRows.value.slice()
-  list[i] = { ...list[i], ...p }
-  setParams(list)
-}
-
-function addParam() {
-  setParams([...paramRows.value, { name: '', type: 'text', required: false, default: '', example: '', description: '', multiple: false }])
-}
-
-function removeParam(i: number) {
-  setParams(paramRows.value.filter((_, idx) => idx !== i))
-}
-
-/** checkbox 的 change 事件要读 target.checked，模板里直接转型不好读，收成一个函数 */
-function onRequiredChange(i: number, e: Event) {
-  patchParam(i, { required: (e.target as HTMLInputElement).checked })
-}
-
-/** enum 的候选值在表单里是逗号分隔的文本 */
-function optionsText(p: AdminParamSpec) {
-  return (p.options ?? []).join(', ')
-}
-
-function onOptionsChange(i: number, v: string) {
-  patchParam(i, { options: v.split(/[,，]/).map((s) => s.trim()).filter(Boolean) })
 }
 
 /**
@@ -312,17 +254,55 @@ async function toggle(c: BotCommand) {
   } catch (e) { error.value = describeError(e) }
 }
 
-// ==================== 权限与名单 ====================
+// ==================== 板块编辑 ====================
 
-const ACCESS_LABEL: Record<string, string> = {
-  all: '全体', admin: '管理员', owner: '群主', whitelist: '白名单', blacklist: '黑名单',
+function newBoard() {
+  editing.value = null
+  boardEditing.value = null
+  boardError.value = ''
 }
 
-const DATA_SCOPES: Array<{ value: string; label: string }> = [
-  { value: 'GROUP', label: '只看本群' },
-  { value: 'SOME', label: '只在这几个群之间' },
-  { value: 'ALL', label: '所有群' },
-]
+function editBoard(b: AdminBoard) {
+  editing.value = null
+  boardEditing.value = b
+  boardError.value = ''
+}
+
+function cancelBoard() {
+  boardEditing.value = undefined
+  boardError.value = ''
+}
+
+async function saveBoard(draft: BoardDraft) {
+  boardSaving.value = true
+  boardError.value = ''
+  try {
+    await adminApi.post('/boards', draft)
+    boardEditing.value = undefined
+    await load()
+  } catch (e) {
+    boardError.value = describeError(e)
+  } finally {
+    boardSaving.value = false
+  }
+}
+
+async function removeBoard(b: AdminBoard) {
+  if (!window.confirm('确定删除板块 /' + b.path + ' ？板块里的记录不会被删除。')) return
+  try {
+    await adminApi.post('/boards/delete', { path: b.path })
+    await load()
+  } catch (e) { error.value = describeError(e) }
+}
+
+async function toggleBoard(b: AdminBoard) {
+  try {
+    await adminApi.post('/boards/toggle', { path: b.path, enabled: !b.enabled })
+    await load()
+  } catch (e) { error.value = describeError(e) }
+}
+
+// ==================== 权限与名单 ====================
 
 /** 命令 id → 数据策略。没配过就没有这个键，读的时候回默认 */
 const policies = ref<Record<number, CommandPolicy>>({})
@@ -410,10 +390,6 @@ function onActionPicked(id: string) {
   }
 }
 
-function onMultipleChange(i: number, e: Event) {
-  patchParam(i, { multiple: (e.target as HTMLInputElement).checked })
-}
-
 function parseIds(text: string): number[] {
   return text.split(/[\s,，、]+/).map((s) => s.trim()).filter(Boolean)
     .map(Number).filter((n) => Number.isFinite(n) && n > 0)
@@ -466,6 +442,7 @@ const advVars = computed(() => (vars.value?.variables ?? []).filter(v => v.advan
 defineExpose({
   reload: load,
   newCommand,
+  newBoard,
   /** 读数式暴露：视图在渲染时调用，读到 loading 变化会重渲染，按钮的禁用态才跟得上 */
   isLoading: () => loading.value,
 })
@@ -642,34 +619,15 @@ onMounted(load)
               <span class="faint">{{ paramRows.length ? paramRows.length + ' 个' : '没有' }}</span>
             </button>
             <div v-if="openBlocks.params" class="block-body">
-              <p v-if="!paramRows.length" class="faint note">群友发过来的整段都当文本，模板里用 {args} 取。</p>
-              <div v-for="(p, i) in paramRows" :key="i" class="param-row">
-                <Input :model-value="p.name" placeholder="名字" aria-label="参数名" @update:model-value="patchParam(i, { name: $event })" />
-                <Select :model-value="p.type" :options="PARAM_TYPES" aria-label="参数类型" @update:model-value="patchParam(i, { type: $event })" />
-                <label class="req">
-                  <input type="checkbox" :checked="p.required" @change="onRequiredChange(i, $event)" />
-                  必填
-                </label>
-                <Input :model-value="p.example ?? ''" placeholder="示例" aria-label="示例" @update:model-value="patchParam(i, { example: $event })" />
-                <Input :model-value="p.description ?? ''" placeholder="说明" aria-label="说明" @update:model-value="patchParam(i, { description: $event })" />
-                <label class="req">
-                  <input type="checkbox" :checked="p.multiple" @change="onMultipleChange(i, $event)" />
-                  可多值
-                </label>
-                <Button size="sm" variant="danger" @click="removeParam(i)">删</Button>
-                <Input
-                  v-if="p.type === 'enum'"
-                  class="enum-opts"
-                  :model-value="optionsText(p)"
-                  placeholder="候选值，逗号分开"
-                  aria-label="候选值"
-                  @update:model-value="onOptionsChange(i, $event)"
-                />
-              </div>
-              <div class="block-actions">
-                <Button size="sm" @click="addParam">+ 加参数</Button>
-                <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入该动作的参数表</Button>
-              </div>
+              <ParamTable
+                :params="paramRows"
+                empty-hint="群友发过来的整段都当文本，模板里用 {args} 取。"
+                @update:params="setParams"
+              >
+                <template #actions>
+                  <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入该动作的参数表</Button>
+                </template>
+              </ParamTable>
             </div>
           </div>
 
@@ -724,8 +682,19 @@ onMounted(load)
     </div>
 
 
-    <!-- 板块：与 QQ 的 /list 同一份目录。先让后台"看得见"，编辑入口后续再补 -->
-    <Panel v-if="!editing && catalog" title="板块" :count="boardRows.length">
+    <!-- 板块编辑器：与指令编辑器互斥，都是"整块替换列表" -->
+    <BoardEditor
+      v-if="boardEditing !== undefined"
+      :board="boardEditing"
+      :saving="boardSaving"
+      :error="boardError"
+      @save="saveBoard"
+      @cancel="cancelBoard"
+      @remove="removeBoard"
+    />
+
+    <!-- 板块：与 QQ 的 /list 同一份目录 -->
+    <Panel v-if="!editing && boardEditing === undefined" title="板块" :count="boardRows.length">
       <p class="panel-note">
         群里发 <span class="path-demo">/板块</span> 查看、<span class="path-demo">/板块 /create</span> 添加。
         这里的清单与 QQ 里 <span class="path-demo">/list</span> 读的是同一份数据。
@@ -742,6 +711,7 @@ onMounted(load)
             <th>参数</th>
             <th>规则</th>
             <th>状态</th>
+            <th class="ops">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -766,13 +736,20 @@ onMounted(load)
             <td>
               <Tag :tone="b.enabled ? 'good' : 'neutral'">{{ b.enabled ? '启用' : '停用' }}</Tag>
             </td>
+            <td class="ops">
+              <div class="ops-btns">
+                <Button size="sm" @click="editBoard(b)">编辑</Button>
+                <Button size="sm" @click="toggleBoard(b)">{{ b.enabled ? '停用' : '启用' }}</Button>
+                <Button v-if="!b.builtin" size="sm" variant="danger" @click="removeBoard(b)">删除</Button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </DataTable>
     </Panel>
 
     <!-- 指令列表 -->
-    <Panel v-if="!editing" title="已有指令" :count="data?.commands?.length">
+    <Panel v-if="!editing && boardEditing === undefined" title="已有指令" :count="data?.commands?.length">
       <DataTable
         :rows="data?.commands?.length ?? 0"
         empty="还没有指令"
@@ -819,7 +796,7 @@ onMounted(load)
     </Panel>
 
     <!-- 全局名单：对每条命令都生效，压过单命令的判定 -->
-    <Panel v-if="!editing" title="全局名单">
+    <Panel v-if="!editing && boardEditing === undefined" title="全局名单">
       <div class="acl-grid">
         <div>
           <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
@@ -858,7 +835,7 @@ onMounted(load)
     </Panel>
 
     <!-- C6：统计 -->
-    <Panel v-if="!editing" title="指令使用情况（近 30 天）">
+    <Panel v-if="!editing && boardEditing === undefined" title="指令使用情况（近 30 天）">
       <div class="two">
         <div class="col">
           <div class="faint sub">最常用</div>
@@ -981,7 +958,6 @@ onMounted(load)
 .block-head:hover { color: var(--ink); }
 .caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
-.block-actions { display: flex; gap: var(--sp-2); }
 .preview-line { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); color: var(--moss); font-family: var(--font-mono); white-space: pre-wrap; }
 .path-hint { margin: var(--sp-1) 0 0 88px; font-size: var(--fs-meta); color: var(--ink-4); }
 .path-demo { font-family: var(--font-mono); color: var(--flame); }
@@ -1003,27 +979,6 @@ onMounted(load)
 .acl-k { margin-bottom: var(--sp-1); }
 .global-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); margin-top: var(--sp-3); }
 @media (max-width: 900px) { .acl-grid { grid-template-columns: 1fr; } }
-
-/* 参数表：一行一个参数。列宽固定，枚举的候选值另起一行 ——
-   它只在 type=enum 时出现，混在行里会把其余控件挤变形。 */
-.params { display: flex; flex-direction: column; gap: var(--sp-2); }
-.param-row {
-  display: grid;
-  grid-template-columns: 130px 108px 62px 118px 118px minmax(120px, 1fr) auto;
-  gap: var(--sp-2);
-  align-items: center;
-}
-.param-row .enum-opts { grid-column: 1 / -1; }
-.req {
-  display: flex; align-items: center; gap: 6px;
-  font-size: var(--fs-meta); color: var(--mist); white-space: nowrap;
-}
-.req input[type='checkbox'] { accent-color: var(--flame); }
-.param-actions { display: flex; gap: var(--sp-2); }
-@media (max-width: 1100px) {
-  .param-row { grid-template-columns: 1fr 1fr; }
-  .param-row .enum-opts { grid-column: 1 / -1; }
-}
 
 /* 触发词列：等宽 + 灵火色，一眼能和说明文字分开 */
 .trig { font-family: var(--font-mono); color: var(--flame); }
