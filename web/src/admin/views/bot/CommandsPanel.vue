@@ -162,7 +162,7 @@ function patchParam(i: number, p: Partial<AdminParamSpec>) {
 }
 
 function addParam() {
-  setParams([...paramRows.value, { name: '', type: 'text', required: false, default: '', example: '', description: '' }])
+  setParams([...paramRows.value, { name: '', type: 'text', required: false, default: '', example: '', description: '', multiple: false }])
 }
 
 function removeParam(i: number) {
@@ -336,6 +336,25 @@ function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
   policy.value[key] = (e.target as HTMLInputElement).checked
 }
 
+/** 低频区块折叠：改回复的人不该被参数表和名单挡路 */
+const openBlocks = ref({ params: false, acl: false, help: false })
+
+function toggleBlock(key: 'params' | 'acl' | 'help') {
+  openBlocks.value[key] = !openBlocks.value[key]
+}
+
+/** 名单里一共填了几个号，折叠时也要能看出"这里动过" */
+const aclCount = computed(() => {
+  const n = [acl.value.whiteUsers, acl.value.whiteGroups,
+    acl.value.blackUsers, acl.value.blackGroups]
+    .reduce((sum, text) => sum + parseIds(text).length, 0)
+  return n ? n + ' 条' : '空'
+})
+
+function onMultipleChange(i: number, e: Event) {
+  patchParam(i, { multiple: (e.target as HTMLInputElement).checked })
+}
+
 function parseIds(text: string): number[] {
   return text.split(/[\s,，、]+/).map((s) => s.trim()).filter(Boolean)
     .map(Number).filter((n) => Number.isFinite(n) && n > 0)
@@ -400,288 +419,258 @@ onMounted(load)
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
     <!-- 编辑区：原来就是插在列表上方的一块，位置与交互保留，只换成共享 Panel -->
-    <Panel v-if="editing" title="编辑指令">
-      <Field label="触发词" control-width="360px">
-        <div class="trigger-line">
-          <span class="slash">/</span>
-          <Input
-            :model-value="editing.trigger ?? ''"
-            placeholder="help（不要写斜杠）"
-            aria-label="触发词"
-            @update:model-value="patch({ trigger: $event })"
-          />
+    <!-- 编辑态：整块替换列表。表格上面压一个巨长表单，改一个字段要滚过一整屏 -->
+    <div v-if="editing" class="editor">
+      <div class="editor-head">
+        <div>
+          <div class="editor-eyebrow">编辑指令</div>
+          <div class="editor-path">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '新指令' }}</div>
         </div>
-      </Field>
-
-      <Field label="说明" control-width="520px">
-        <Input
-          :model-value="editing.description ?? ''"
-          placeholder="用途说明（{cmd.list} 会显示它）"
-          aria-label="说明"
-          @update:model-value="patch({ description: $event })"
-        />
-      </Field>
-
-      <Field label="谁能用" control-width="360px">
-        <Select
-          :model-value="editing.access ?? 'all'"
-          :options="ACCESS_OPTIONS"
-          aria-label="谁能用"
-          @update:model-value="patch({ access: $event })"
-        />
-      </Field>
-
-      <Field label="私聊" control-width="520px">
-        <label class="switch">
-          <input
-            type="checkbox"
-            :checked="policy.allowPrivate"
-            @change="onCheck('allowPrivate', $event)"
-          />
-          <span>允许在私聊里用这条命令</span>
-        </label>
-        <p class="faint note">私聊里没有群管的第二双眼睛，默认关闭。</p>
-      </Field>
-
-      <Field label="数据范围" control-width="360px">
-        <Select
-          :model-value="policy.scope"
-          :options="DATA_SCOPES"
-          aria-label="数据范围"
-          @update:model-value="policy.scope = $event"
-        />
-      </Field>
-      <div v-if="policy.scope === 'SOME'" class="field-extra">
-        <Input
-          :model-value="policy.groups"
-          multiline
-          :rows="3"
-          placeholder="一行一个群号，只在这些群之间互相可见"
-          aria-label="共享群号"
-          @update:model-value="policy.groups = $event"
-        />
-      </div>
-      <template v-if="policy.scope !== 'GROUP'">
-        <Field label="来源显示" control-width="520px">
-          <label class="switch">
-            <input
-              type="checkbox"
-              :checked="policy.showGroup"
-              @change="onCheck('showGroup', $event)"
-            />
-            <span>结果里标出来自哪个群</span>
-          </label>
-          <label class="switch">
-            <input
-              type="checkbox"
-              :checked="policy.showUser"
-              @change="onCheck('showUser', $event)"
-            />
-            <span>结果里标出对方 QQ 号</span>
-          </label>
-        </Field>
-      </template>
-
-      <Field label="名单" control-width="820px">
-        <div class="acl-grid">
-          <div>
-            <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
-            <Input
-              :model-value="acl.whiteUsers" multiline :rows="3" placeholder="一行一个"
-              aria-label="白名单 QQ 号" @update:model-value="acl.whiteUsers = $event"
-            />
-          </div>
-          <div>
-            <div class="acl-k"><Tag tone="good">白名单 · 群号</Tag></div>
-            <Input
-              :model-value="acl.whiteGroups" multiline :rows="3" placeholder="整个群"
-              aria-label="白名单群号" @update:model-value="acl.whiteGroups = $event"
-            />
-          </div>
-          <div>
-            <div class="acl-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
-            <Input
-              :model-value="acl.blackUsers" multiline :rows="3" placeholder="一行一个"
-              aria-label="黑名单 QQ 号" @update:model-value="acl.blackUsers = $event"
-            />
-          </div>
-          <div>
-            <div class="acl-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
-            <Input
-              :model-value="acl.blackGroups" multiline :rows="3" placeholder="整个群"
-              aria-label="黑名单群号" @update:model-value="acl.blackGroups = $event"
-            />
-          </div>
-        </div>
-      </Field>
-
-      <Field label="类型" control-width="360px">
-        <Select
-          :model-value="editing.kind ?? 'template'"
-          :options="KIND_OPTIONS"
-          aria-label="类型"
-          @update:model-value="patch({ kind: $event })"
-        />
-      </Field>
-      <p class="kind-note faint">{{ kindHint }}</p>
-
-      <Field v-if="isAction" label="绑定动作" control-width="360px">
-        <Select
-          :model-value="editing.action ?? ''"
-          :options="actionOptions"
-          aria-label="绑定动作"
-          @update:model-value="patch({ action: $event })"
-        />
-      </Field>
-
-      <Field v-if="isAgent" label="回答模式" control-width="360px">
-        <Select
-          :model-value="editing.mode ?? 'kb'"
-          :options="MODE_OPTIONS"
-          aria-label="回答模式"
-          @update:model-value="patch({ mode: $event })"
-        />
-      </Field>
-
-      <Field
-        :label="isAgent || isAction ? '用法提示（参数不合格时回这句）' : '回复'"
-        control-width="520px"
-      >
-        <Input
-          :model-value="editing.reply ?? ''"
-          multiline
-          :rows="6"
-          mono
-          :placeholder="isAgent
-            ? '用法：/qa 问题内容（群友只发 /qa 不带内容时回这句）'
-            : isAction
-              ? '用法：/set /output #time-21:30# <内容>（留空则按参数表自动生成）'
-              : '回复内容，支持 {变量} 与 {args}'"
-          :aria-label="isAgent || isAction ? '用法提示' : '回复'"
-          @update:model-value="onReplyInput"
-        />
-      </Field>
-
-      <Field label="参数表" control-width="820px">
-        <div class="params">
-          <p v-if="!paramRows.length" class="faint note">
-            没有参数：群友发过来的整段都当文本，模板里用 {<span></span>} 之外的 {args} 取。
-          </p>
-          <div v-for="(p, i) in paramRows" :key="i" class="param-row">
-            <Input
-              :model-value="p.name" placeholder="名字" aria-label="参数名"
-              @update:model-value="patchParam(i, { name: $event })"
-            />
-            <Select
-              :model-value="p.type" :options="PARAM_TYPES" aria-label="参数类型"
-              @update:model-value="patchParam(i, { type: $event })"
-            />
-            <label class="req">
-              <input type="checkbox" :checked="p.required" @change="onRequiredChange(i, $event)" />
-              必填
-            </label>
-            <Input
-              :model-value="p.default ?? ''" placeholder="默认值" aria-label="默认值"
-              @update:model-value="patchParam(i, { default: $event })"
-            />
-            <Input
-              :model-value="p.example ?? ''" placeholder="示例" aria-label="示例"
-              @update:model-value="patchParam(i, { example: $event })"
-            />
-            <Input
-              :model-value="p.description ?? ''" placeholder="说明" aria-label="说明"
-              @update:model-value="patchParam(i, { description: $event })"
-            />
-            <Button size="sm" variant="danger" @click="removeParam(i)">删</Button>
-            <Input
-              v-if="p.type === 'enum'"
-              class="enum-opts"
-              :model-value="optionsText(p)"
-              placeholder="候选值，用逗号分开，例：daily, once"
-              aria-label="候选值"
-              @update:model-value="onOptionsChange(i, $event)"
-            />
-          </div>
-          <div class="param-actions">
-            <Button size="sm" @click="addParam">+ 加一个参数</Button>
-            <Button
-              v-if="isAction && editing.action"
-              size="sm"
-              @click="loadActionParams"
-            >载入该动作的参数表</Button>
-          </div>
-          <p class="faint note">
-            群里写作 #名字-值#，顺序随意，值里可以有减号与空格。
-            名字只能用汉字、字母、数字、下划线；值里可以直接写变量，会在解析那一刻展开。
-          </p>
-        </div>
-      </Field>
-
-      <Field label="单命令帮助" control-width="520px">
-        <Input
-          :model-value="editing.help ?? ''"
-          multiline
-          :rows="4"
-          mono
-          placeholder="留空则按参数表自动生成；群里发「/路径 /help」看它"
-          aria-label="单命令帮助"
-          @update:model-value="patch({ help: $event })"
-        />
-      </Field>
-
-      <Field label="示例参数（预览用）" control-width="360px">
-        <Input
-          :model-value="sampleArgs"
-          placeholder="张三 18（预览 {args} / {args.1} 用）"
-          aria-label="示例参数"
-          @update:model-value="onArgsInput"
-        />
-      </Field>
-
-      <Field label="可用变量" control-width="520px">
-        <div class="vars">
-          <button
-            v-for="v in basicVars"
-            :key="v.name"
-            class="vchip"
-            type="button"
-            :title="v.label + '（例：' + v.example + '）'"
-            @click="insertVar(v.name)"
-          >{ {{ v.name }} }</button>
-        </div>
-      </Field>
-
-      <Field label="高级变量" control-width="520px">
-        <div v-if="advVars.length" class="vars">
-          <button
-            v-for="v in advVars"
-            :key="v.name"
-            class="vchip vchip--adv"
-            type="button"
-            @click="insertVar(v.name)"
-          >{ {{ v.name }} }</button>
-        </div>
-        <p v-else class="faint note">
-          高级变量（如 {user.id}）未启用 —— 回复会发到群里，默认不打 QQ 号。
-          可在「Bot 设置」里开启。
-        </p>
-      </Field>
-
-      <Field v-if="preview" label="预览" control-width="520px">
-        <pre class="preview">{{ preview }}</pre>
-      </Field>
-
-      <div class="form-actions">
-        <span class="faint note">预览用示例数据渲染，实际发送时会替换为真实值</span>
-        <div class="form-buttons">
+        <div class="editor-actions">
           <Button size="sm" @click="editing = null">取消</Button>
           <Button size="sm" variant="primary" @click="save">保存</Button>
         </div>
       </div>
-    </Panel>
+
+      <div class="editor-grid">
+        <!-- 左：这条命令说什么 -->
+        <section class="editor-col">
+          <div class="col-title">内容</div>
+
+          <label class="row">
+            <span class="row-label">路径</span>
+            <div class="trigger-line">
+              <span class="slash">/</span>
+              <Input
+                :model-value="editing.trigger ?? ''"
+                placeholder="set/output（用 / 分层）"
+                aria-label="路径"
+                @update:model-value="patch({ trigger: $event })"
+              />
+            </div>
+          </label>
+
+          <label class="row">
+            <span class="row-label">说明</span>
+            <Input
+              :model-value="editing.description ?? ''"
+              placeholder="一句话说清它干什么"
+              aria-label="说明"
+              @update:model-value="patch({ description: $event })"
+            />
+          </label>
+
+          <div class="row row--block">
+            <span class="row-label">{{ isAgent || isAction ? '用法提示' : '回复' }}</span>
+            <Input
+              :model-value="editing.reply ?? ''"
+              multiline
+              :rows="7"
+              mono
+              :placeholder="isAgent
+                ? '参数不合格时回这句'
+                : isAction
+                  ? '留空则按参数表自动生成'
+                  : '支持 {变量} 与 {args}'"
+              aria-label="回复"
+              @update:model-value="onReplyInput"
+            />
+            <div class="vars">
+              <button
+                v-for="v in basicVars"
+                :key="v.name"
+                class="vchip"
+                type="button"
+                :title="v.label + '（例：' + v.example + '）'"
+                @click="insertVar(v.name)"
+              >{ {{ v.name }} }</button>
+              <button
+                v-for="v in advVars"
+                :key="v.name"
+                class="vchip vchip--adv"
+                type="button"
+                @click="insertVar(v.name)"
+              >{ {{ v.name }} }</button>
+            </div>
+            <p v-if="preview" class="preview-line">{{ preview }}</p>
+          </div>
+        </section>
+
+        <!-- 右：这条命令的规则 -->
+        <section class="editor-col">
+          <div class="col-title">规则</div>
+
+          <label class="row">
+            <span class="row-label">类型</span>
+            <Select
+              :model-value="editing.kind ?? 'template'"
+              :options="KIND_OPTIONS"
+              aria-label="类型"
+              @update:model-value="patch({ kind: $event })"
+            />
+          </label>
+
+          <label v-if="isAction" class="row">
+            <span class="row-label">绑定动作</span>
+            <Select
+              :model-value="editing.action ?? ''"
+              :options="actionOptions"
+              aria-label="绑定动作"
+              @update:model-value="patch({ action: $event })"
+            />
+          </label>
+
+          <label v-if="isAgent" class="row">
+            <span class="row-label">回答来源</span>
+            <Select
+              :model-value="editing.mode ?? 'kb'"
+              :options="MODE_OPTIONS"
+              aria-label="回答来源"
+              @update:model-value="patch({ mode: $event })"
+            />
+          </label>
+
+          <label class="row">
+            <span class="row-label">谁能用</span>
+            <Select
+              :model-value="editing.access ?? 'all'"
+              :options="ACCESS_OPTIONS"
+              aria-label="谁能用"
+              @update:model-value="patch({ access: $event })"
+            />
+          </label>
+
+          <label class="row">
+            <span class="row-label">数据范围</span>
+            <Select
+              :model-value="policy.scope"
+              :options="DATA_SCOPES"
+              aria-label="数据范围"
+              @update:model-value="policy.scope = $event"
+            />
+          </label>
+
+          <div v-if="policy.scope === 'SOME'" class="row row--block">
+            <span class="row-label">共享群</span>
+            <Input
+              :model-value="policy.groups"
+              multiline
+              :rows="2"
+              placeholder="一行一个群号"
+              aria-label="共享群号"
+              @update:model-value="policy.groups = $event"
+            />
+          </div>
+
+          <div class="checks">
+            <label class="check">
+              <input type="checkbox" :checked="policy.allowPrivate" @change="onCheck('allowPrivate', $event)" />
+              <span>允许私聊</span>
+            </label>
+            <template v-if="policy.scope !== 'GROUP'">
+              <label class="check">
+                <input type="checkbox" :checked="policy.showGroup" @change="onCheck('showGroup', $event)" />
+                <span>标出来源群</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" :checked="policy.showUser" @change="onCheck('showUser', $event)" />
+                <span>标出来源 QQ</span>
+              </label>
+            </template>
+          </div>
+
+          <!-- 低频项折叠：改回复的人不该被参数表和名单挡路 -->
+          <div class="block">
+            <button class="block-head" type="button" @click="toggleBlock('params')">
+              <span class="caret">{{ openBlocks.params ? '−' : '+' }}</span>
+              参数表
+              <span class="faint">{{ paramRows.length ? paramRows.length + ' 个' : '没有' }}</span>
+            </button>
+            <div v-if="openBlocks.params" class="block-body">
+              <p v-if="!paramRows.length" class="faint note">群友发过来的整段都当文本，模板里用 {args} 取。</p>
+              <div v-for="(p, i) in paramRows" :key="i" class="param-row">
+                <Input :model-value="p.name" placeholder="名字" aria-label="参数名" @update:model-value="patchParam(i, { name: $event })" />
+                <Select :model-value="p.type" :options="PARAM_TYPES" aria-label="参数类型" @update:model-value="patchParam(i, { type: $event })" />
+                <label class="req">
+                  <input type="checkbox" :checked="p.required" @change="onRequiredChange(i, $event)" />
+                  必填
+                </label>
+                <Input :model-value="p.example ?? ''" placeholder="示例" aria-label="示例" @update:model-value="patchParam(i, { example: $event })" />
+                <Input :model-value="p.description ?? ''" placeholder="说明" aria-label="说明" @update:model-value="patchParam(i, { description: $event })" />
+                <label class="req">
+                  <input type="checkbox" :checked="p.multiple" @change="onMultipleChange(i, $event)" />
+                  可多值
+                </label>
+                <Button size="sm" variant="danger" @click="removeParam(i)">删</Button>
+                <Input
+                  v-if="p.type === 'enum'"
+                  class="enum-opts"
+                  :model-value="optionsText(p)"
+                  placeholder="候选值，逗号分开"
+                  aria-label="候选值"
+                  @update:model-value="onOptionsChange(i, $event)"
+                />
+              </div>
+              <div class="block-actions">
+                <Button size="sm" @click="addParam">+ 加参数</Button>
+                <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入该动作的参数表</Button>
+              </div>
+            </div>
+          </div>
+
+          <div class="block">
+            <button class="block-head" type="button" @click="toggleBlock('acl')">
+              <span class="caret">{{ openBlocks.acl ? '−' : '+' }}</span>
+              名单
+              <span class="faint">{{ aclCount }}</span>
+            </button>
+            <div v-if="openBlocks.acl" class="block-body">
+              <div class="acl-grid">
+                <div>
+                  <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
+                  <Input :model-value="acl.whiteUsers" multiline :rows="2" placeholder="一行一个" aria-label="白名单 QQ 号" @update:model-value="acl.whiteUsers = $event" />
+                </div>
+                <div>
+                  <div class="acl-k"><Tag tone="good">白名单 · 群号</Tag></div>
+                  <Input :model-value="acl.whiteGroups" multiline :rows="2" placeholder="整个群" aria-label="白名单群号" @update:model-value="acl.whiteGroups = $event" />
+                </div>
+                <div>
+                  <div class="acl-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
+                  <Input :model-value="acl.blackUsers" multiline :rows="2" placeholder="一行一个" aria-label="黑名单 QQ 号" @update:model-value="acl.blackUsers = $event" />
+                </div>
+                <div>
+                  <div class="acl-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
+                  <Input :model-value="acl.blackGroups" multiline :rows="2" placeholder="整个群" aria-label="黑名单群号" @update:model-value="acl.blackGroups = $event" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="block">
+            <button class="block-head" type="button" @click="toggleBlock('help')">
+              <span class="caret">{{ openBlocks.help ? '−' : '+' }}</span>
+              单命令帮助
+              <span class="faint">{{ editing.help ? '手写' : '自动生成' }}</span>
+            </button>
+            <div v-if="openBlocks.help" class="block-body">
+              <Input
+                :model-value="editing.help ?? ''"
+                multiline
+                :rows="4"
+                mono
+                placeholder="留空则按参数表自动生成；群里发「/路径 /help」看它"
+                aria-label="单命令帮助"
+                @update:model-value="patch({ help: $event })"
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
 
     <!-- 指令列表 -->
-    <Panel title="已有指令" :count="data?.commands?.length">
+    <Panel v-if="!editing" title="已有指令" :count="data?.commands?.length">
       <DataTable
         :rows="data?.commands?.length ?? 0"
         empty="还没有指令"
@@ -725,7 +714,7 @@ onMounted(load)
     </Panel>
 
     <!-- 全局名单：对每条命令都生效，压过单命令的判定 -->
-    <Panel title="全局名单">
+    <Panel v-if="!editing" title="全局名单">
       <div class="acl-grid">
         <div>
           <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
@@ -764,7 +753,7 @@ onMounted(load)
     </Panel>
 
     <!-- C6：统计 -->
-    <Panel title="指令使用情况（近 30 天）">
+    <Panel v-if="!editing" title="指令使用情况（近 30 天）">
       <div class="two">
         <div class="col">
           <div class="faint sub">最常用</div>
@@ -859,6 +848,42 @@ onMounted(load)
 .note { font-size: var(--fs-meta); margin: 0; }
 /* 类型说明紧跟在下拉后面：它决定"这条指令会不会花钱"，不适合塞进 placeholder */
 .kind-note { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); max-width: 620px; line-height: 1.7; }
+
+/* ---------- 编辑态 ----------
+   两栏：左边是"这条命令说什么"，右边是"它按什么规则运行"。
+   行内标签在左、控件在右，比一列 Field 更省纵向空间，也更容易扫读。 */
+.editor { background: var(--stone-300); border-radius: 10px; padding: 20px 22px; }
+.editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-5); }
+.editor-eyebrow { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
+.editor-path { font-family: var(--font-mono); font-size: 17px; color: var(--flame); margin-top: 2px; }
+.editor-actions { display: flex; gap: var(--sp-2); }
+.editor-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--sp-6); align-items: start; }
+.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.col-title { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--hairline); }
+
+.row { display: flex; align-items: center; gap: var(--sp-3); }
+.row-label { flex: 0 0 76px; font-size: var(--fs-meta); color: var(--ink-3); }
+.row > :not(.row-label) { flex: 1; min-width: 0; }
+.row--block { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+.row--block .row-label { flex: none; }
+
+.checks { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+.check { display: flex; align-items: center; gap: 6px; font-size: var(--fs-meta); color: var(--ink-2); }
+.check input { accent-color: var(--flame); }
+
+.block { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
+.block-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 6px 0; color: var(--ink-2); font-size: var(--fs-meta); cursor: pointer; text-align: left; }
+.block-head:hover { color: var(--ink); }
+.caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
+.block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
+.block-actions { display: flex; gap: var(--sp-2); }
+.preview-line { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); color: var(--moss); font-family: var(--font-mono); white-space: pre-wrap; }
+
+@media (max-width: 1000px) {
+  .editor-grid { grid-template-columns: 1fr; }
+  .row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .row-label { flex: none; }
+}
 
 /* 私聊与来源显示用勾选：它们是"开/关"而不是"选一个" */
 .switch { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: var(--ink-2); }

@@ -260,6 +260,8 @@ export interface AdminParamSpec {
   example?: string | null
   /** 仅 enum 用 */
   options?: string[]
+  /** 能不能一次给多个值，用顿号隔开 */
+  multiple?: boolean
 }
 
 export interface BotCommand {
