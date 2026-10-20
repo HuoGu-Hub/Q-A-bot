@@ -143,16 +143,11 @@ function edit(c: BotCommand) {
 /**
  * 列表里怎么显示这条指令。
  *
- * 路径每一层都补上斜杠，与群里写法一致；有参数表的把参数摆出来 ——
- * 否则群友看到 /set /output 直接发出去，只会收到一句用法提示。
+ * <p><b>只显示路径。</b>参数是使用时的输入，不是命令名的一部分 ——
+ * 把 {#time-21:30#} 拼在名字后面会让人以为命令本身长那样。
  */
 function displayOf(c: BotCommand) {
-  const path = '/' + c.trigger.split('/').join(' /')
-  const ps = c.params ?? []
-  if (ps.length) {
-    return path + ' ' + ps.map((p) => '#' + p.name + '-' + (p.example || p.name) + '#').join(' ')
-  }
-  return path + (c.kind === 'agent' ? ' <问题>' : '')
+  return '/' + c.trigger.split('/').join(' /')
 }
 
 /* ==================== 参数表编辑 ==================== */
