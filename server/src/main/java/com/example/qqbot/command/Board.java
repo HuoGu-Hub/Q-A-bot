@@ -37,6 +37,8 @@ public record Board(
 
     /** 立即展示：收下就出现在结果里 */
     public static final String DIRECT = "direct";
+    /** {@link BoardRecord} 里引用的同名字面量，避免两处各写一遍 */
+    public static final String DELIVERY_SCHEDULED = "scheduled";
     /** 到点发：收下之后等时间到了再发出去 */
     public static final String SCHEDULED = "scheduled";
 

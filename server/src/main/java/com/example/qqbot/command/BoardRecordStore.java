@@ -1,0 +1,262 @@
+package com.example.qqbot.command;
+
+import com.example.qqbot.persistence.BoardRecordRepository;
+import com.example.qqbot.time.AppTime;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 板块记录的业务侧：增、查、软删、恢复。
+ *
+ * <h2>板块之间只有数据不同，行为一模一样</h2>
+ * 所以四个动作由框架统一实现，板块只声明"存什么、投递方式、三把锁"。
+ * 加一个板块 = 填一张表，不写代码。
+ *
+ * <h2>定时板块的约定</h2>
+ * 板块的参数表里如果有名为 {@code 时间} 的 MOMENT 参数，就按"到点发"处理：
+ * 它的每个值都是一个发送时刻；名为 {@code 重复} 的参数交给 {@link RepeatRule} 解析。
+ * 这条约定写在 {@link Board} 的说明里，后台改参数名时要一起改。
+ */
+@Component
+public class BoardRecordStore {
+
+    private static final Logger log = LoggerFactory.getLogger(BoardRecordStore.class);
+
+    /** 定时板块里"什么时候发"的参数名 */
+    public static final String PARAM_TIME = "时间";
+    /** 定时板块里"多久一次"的参数名 */
+    public static final String PARAM_REPEAT = "重复";
+
+    private static final String STATUS_PENDING = "pending";
+
+    private final BoardRecordRepository repo;
+    private final ObjectMapper mapper;
+
+    private volatile boolean available;
+
+    public BoardRecordStore(BoardRecordRepository repo, ObjectMapper mapper) {
+        this.repo = repo;
+        this.mapper = mapper;
+    }
+
+    @PostConstruct
+    void init() {
+        try {
+            if (!repo.isAvailable()) {
+                available = false;
+                return;
+            }
+            repo.initSchema();
+            available = true;
+            log.info("[RECORD] 板块记录库就绪");
+        } catch (Exception e) {
+            log.warn("[RECORD] 初始化失败：{}", e.getMessage());
+            available = false;
+        }
+    }
+
+    public boolean isAvailable() {
+        return available;
+    }
+
+    // ==================== 增 ====================
+
+    /**
+     * 收一条记录。
+     *
+     * <p>立即展示的板块直接落一条 direct 记录；到点发的板块顺便把"下次什么时候发"算好。
+     *
+     * @return 编号（全系统唯一，跨板块共用）
+     * @throws CommandParseException 时间或重复写错
+     */
+    public long create(Board board, long groupId, long userId, String nickname,
+                       String text, Map<String, String> params, List<Instant> moments,
+                       Instant now) throws CommandParseException {
+        if (!available) {
+            throw new CommandParseException("记录", "暂时存不了，稍后再试");
+        }
+        if (!board.isScheduled()) {
+            return repo.insert(new BoardRecordRepository.Row(0, board.path(), groupId, userId,
+                    safe(nickname), safe(text), toJson(params), BoardRecordRepository.DIRECT,
+                    null, null, "[]", null, STATUS_PENDING, 0, null,
+                    iso(now), null, null));
+        }
+        // 到点发：时刻 -> 时刻组的两种存法，与 RepeatSchedule 的约定一致
+        RepeatRule rule = RepeatRule.parse(params.get(PARAM_REPEAT));
+        List<String> times = new ArrayList<>();
+        for (Instant moment : moments) {
+            times.add(rule.kind() == RepeatRule.Kind.ONCE
+                    ? moment.toString()
+                    : LocalDateTime.ofInstant(moment, AppTime.ZONE).toLocalTime()
+                            .truncatedTo(ChronoUnit.MINUTES).toString());
+        }
+        RepeatSchedule schedule = new RepeatSchedule(rule, times, now);
+        Instant fireAt = schedule.nextAfter(now);
+        if (fireAt == null) {
+            throw new CommandParseException("时间", "那个时间已经过去了，换个时间");
+        }
+        return repo.insert(new BoardRecordRepository.Row(0, board.path(), groupId, userId,
+                safe(nickname), safe(text), toJson(params), BoardRecordRepository.SCHEDULED,
+                iso(fireAt), rule.toStorage(), toJsonList(times), iso(now), STATUS_PENDING, 0,
+                null, iso(now), null, null));
+    }
+
+    // ==================== 查 ====================
+
+    public List<BoardRecord> query(Board board, long groupId, int limit) {
+        return available ? toRecords(repo.listByBoard(board.path(), groupId, false, limit)) : List.of();
+    }
+
+    /** 后台用：连已删的一起看，方便恢复 */
+    public List<BoardRecord> queryWithDeleted(Board board, long groupId, int limit) {
+        return available ? toRecords(repo.listByBoard(board.path(), groupId, true, limit)) : List.of();
+    }
+
+    public BoardRecord find(long id) {
+        if (!available) {
+            return null;
+        }
+        BoardRecordRepository.Row row = repo.findById(id);
+        return row == null ? null : toRecord(row);
+    }
+
+    // ==================== 删与恢复 ====================
+
+    /**
+     * 软删。行还在，只是打了个标记 —— 删错了能恢复。
+     *
+     * @return false = 没有这条，或者本来就已经删过
+     */
+    public boolean softDelete(long id, Instant now) {
+        return available && repo.softDelete(id, iso(now)) > 0;
+    }
+
+    public boolean restore(long id) {
+        return available && repo.restore(id) > 0;
+    }
+
+    // ==================== 扫描器 ====================
+
+    public List<BoardRecord> due(Instant now, int limit) {
+        if (!available) {
+            return List.of();
+        }
+        List<BoardRecord> out = new ArrayList<>();
+        for (BoardRecordRepository.Row row : repo.due(iso(now), limit)) {
+            if (repo.markSending(row.id(), iso(now)) == 1) {
+                out.add(toRecord(row));
+            }
+        }
+        return out;
+    }
+
+    public int reclaimStale(Instant now, int minutes) {
+        return available ? repo.reclaimStaleSending(iso(now.minusSeconds(minutes * 60L))) : 0;
+    }
+
+    public void markSent(BoardRecord record, Instant now) {
+        repo.markSent(record.id(), iso(now));
+    }
+
+    public void rearm(BoardRecord record, Instant next, Instant sentAt) {
+        repo.rearm(record.id(), iso(next), iso(sentAt));
+    }
+
+    public void retryLater(BoardRecord record, String error, Instant nextTry) {
+        repo.retryLater(record.id(), iso(nextTry), error);
+    }
+
+    public void markFailed(BoardRecord record, String error) {
+        repo.close(record.id(), "failed", error);
+    }
+
+    public void markExpired(BoardRecord record) {
+        repo.close(record.id(), "expired", "错过补发宽限期");
+    }
+
+    // ==================== 转换 ====================
+
+    private List<BoardRecord> toRecords(List<BoardRecordRepository.Row> rows) {
+        List<BoardRecord> out = new ArrayList<>(rows.size());
+        for (BoardRecordRepository.Row row : rows) {
+            out.add(toRecord(row));
+        }
+        return out;
+    }
+
+    private BoardRecord toRecord(BoardRecordRepository.Row r) {
+        return new BoardRecord(r.id(), r.board(), r.groupId(), r.userId(), r.nickname(),
+                r.text(), parseMap(r.paramsJson()), r.delivery(),
+                parseInstant(r.fireAt()), r.repeatRule(), parseList(r.timesJson()),
+                parseInstant(r.anchorAt()), r.status(), r.attempts(), r.lastError(),
+                parseInstant(r.createdAt()), parseInstant(r.sentAt()),
+                parseInstant(r.deletedAt()));
+    }
+
+    // ==================== 小工具 ====================
+
+    static String iso(Instant at) {
+        return at == null ? null : DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+                .withZone(ZoneOffset.UTC).format(at);
+    }
+
+    private static Instant parseInstant(String iso) {
+        return iso == null || iso.isBlank() ? null : Instant.parse(iso);
+    }
+
+    private Map<String, String> parseMap(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return mapper.readValue(json, new TypeReference<LinkedHashMap<String, String>>() { });
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private List<String> parseList(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return mapper.readValue(json, new TypeReference<List<String>>() { });
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private String toJson(Map<String, String> map) {
+        try {
+            return mapper.writeValueAsString(map == null ? Map.of() : map);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private String toJsonList(List<String> list) {
+        try {
+            return mapper.writeValueAsString(list == null ? List.of() : list);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+}
