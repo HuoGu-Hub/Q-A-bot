@@ -24,6 +24,16 @@ public class BoardStore {
 
     private static final Logger log = LoggerFactory.getLogger(BoardStore.class);
 
+    /**
+     * 定时板块的两个基础参数。
+     *
+     * <p>名字是约定：{@link BoardRecordStore#PARAM_REPEAT} 与 {@link BoardRecordStore#PARAM_TIME}
+     * 就是靠这两个名字认出来的，改名字时要一起改。
+     */
+    private static final ParamSpec REPEAT = ParamSpec.of("重复", "text", true, "每天");
+    private static final ParamSpec TIME = ParamSpec.multi(
+            "时间", ParamType.MOMENT, true, null, 0, "几点发，可以写多个，用顿号隔开", "21:30");
+
     private final BoardRepository repo;
     private final ObjectMapper mapper;
 
@@ -60,13 +70,13 @@ public class BoardStore {
      */
     private void seedBuiltins() {
         repo.seed(new BoardRepository.Row(0, "公告", "公告",
-                params(ScheduleCreateAction.REPEAT, ScheduleCreateAction.TIME),
+                params(REPEAT, TIME),
                 Board.SCHEDULED, "admin", "GROUP", "[]",
                 false, false, false, true, 10, true));
 
         repo.seed(new BoardRepository.Row(0, "任务", "任务",
                 params(ParamSpec.of("事项", "text", true, "打卡"),
-                        ScheduleCreateAction.REPEAT, ScheduleCreateAction.TIME),
+                        REPEAT, TIME),
                 Board.SCHEDULED, "all", "GROUP", "[]",
                 false, false, false, true, 20, true));
 
