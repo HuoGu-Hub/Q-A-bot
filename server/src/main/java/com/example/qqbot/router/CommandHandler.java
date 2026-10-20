@@ -14,6 +14,7 @@ import com.example.qqbot.command.CommandParser;
 import com.example.qqbot.command.CommandPolicy;
 import com.example.qqbot.command.CommandRateLimiter;
 import com.example.qqbot.command.AccessRules;
+import com.example.qqbot.command.BoardRunner;
 import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.CommandAccess;
 import com.example.qqbot.command.CommandPolicyStore;
@@ -69,6 +70,7 @@ public class CommandHandler {
     private final QaCollector qaCollector;
     private final AclStore aclStore;
     private final CommandPolicyStore commandPolicyStore;
+    private final BoardRunner boardRunner;
 
     public CommandHandler(CommandPolicy commandProperties,
                           CommandMatcher commandMatcher,
@@ -81,7 +83,8 @@ public class CommandHandler {
                           OutboundSender outboundSender,
                           QaCollector qaCollector,
                           AclStore aclStore,
-                          CommandPolicyStore commandPolicyStore) {
+                          CommandPolicyStore commandPolicyStore,
+                          BoardRunner boardRunner) {
         this.commandProperties = commandProperties;
         this.commandMatcher = commandMatcher;
         this.commandParser = commandParser;
@@ -94,6 +97,7 @@ public class CommandHandler {
         this.qaCollector = qaCollector;
         this.aclStore = aclStore;
         this.commandPolicyStore = commandPolicyStore;
+        this.boardRunner = boardRunner;
     }
 
     /**
@@ -128,6 +132,17 @@ public class CommandHandler {
         boolean inGroup = event.isGroupMessage();
         long groupId = event.getGroupId() == null ? 0 : event.getGroupId();
         long userId = event.getUserId() == null ? 0 : event.getUserId();
+
+        // ---------- 板块命令优先：/板块 /动作 ----------
+        // 板块本身就是命令，不走命令表 —— 否则每个板块要生成五行配置，改一次就要同步一次
+        java.util.Optional<BoardRunner.Reply> board = boardRunner.tryRun(event, text);
+        if (board.isPresent()) {
+            String answer = board.get().text();
+            if (answer != null && !answer.isBlank()) {
+                outboundSender.send(event, answer);
+            }
+            return Outcome.HANDLED;
+        }
 
         CommandMatcher.Match match = commandMatcher.match(text, inGroup, groupId);
 

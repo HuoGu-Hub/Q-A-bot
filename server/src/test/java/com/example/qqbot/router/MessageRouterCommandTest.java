@@ -13,6 +13,7 @@ import com.example.qqbot.command.CommandHelp;
 import com.example.qqbot.command.CommandMatcher;
 import com.example.qqbot.command.CommandParser;
 import com.example.qqbot.command.CommandRateLimiter;
+import com.example.qqbot.command.BoardRunner;
 import com.example.qqbot.command.CommandPolicyStore;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.DataPolicy;
@@ -142,10 +143,13 @@ class MessageRouterCommandTest {
         // 策略默认值：只看本群、私聊不开放
         CommandPolicyStore policyStore = mock(CommandPolicyStore.class);
         when(policyStore.of(anyLong())).thenReturn(DataPolicy.DEFAULT);
+        // 板块分派在这组用例里不参与（它们验的是命令表那一路）
+        BoardRunner boardRunner = mock(BoardRunner.class);
+        when(boardRunner.tryRun(any(), any())).thenReturn(java.util.Optional.empty());
         return new CommandHandler(new CommandProperties(), commandMatcher, new CommandParser(),
                 new CommandHelp(variableRenderer), new ActionRegistry(List.of(ECHO, FAILING)),
                 commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector,
-                aclStore, policyStore);
+                aclStore, policyStore, boardRunner);
     }
 
     private static BotCommand actionCommand(String action, String minRole) {
