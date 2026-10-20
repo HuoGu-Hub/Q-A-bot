@@ -327,6 +327,8 @@ export interface CommandPolicy {
   groups: number[]
   showGroup: boolean
   showUser: boolean
+  /** 能不能在私聊里用。默认关 */
+  allowPrivate: boolean
 }
 
 export interface CommandPolicies {

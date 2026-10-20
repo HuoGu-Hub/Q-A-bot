@@ -104,9 +104,19 @@ class AccessControllerTest {
     }
 
     @Test
+    @DisplayName("★ 私聊开关默认关，配了之后读得回来")
+    void privateSwitchDefaultsOffAndRoundTrips() {
+        assertThat(policyStore.of(CMD).allowPrivate()).as("没配过就是关").isFalse();
+
+        controller.savePolicy(CMD, Map.of("allowPrivate", true));
+
+        assertThat(policyStore.of(CMD).allowPrivate()).isTrue();
+    }
+
+    @Test
     @DisplayName("本群策略下，两个显示开关都不生效 —— 没有来源可标")
     void groupScopeNeverMarksOrigin() {
-        DataPolicy policy = new DataPolicy(DataPolicy.DataScope.GROUP, List.of(), true, true);
+        DataPolicy policy = new DataPolicy(DataPolicy.DataScope.GROUP, List.of(), true, true, false);
 
         assertThat(policy.marksGroup()).isFalse();
         assertThat(policy.marksUser()).isFalse();

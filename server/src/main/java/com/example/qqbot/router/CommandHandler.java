@@ -16,7 +16,9 @@ import com.example.qqbot.command.CommandRateLimiter;
 import com.example.qqbot.command.AccessRules;
 import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.CommandAccess;
+import com.example.qqbot.command.CommandPolicyStore;
 import com.example.qqbot.command.CommandRole;
+import com.example.qqbot.command.DataPolicy;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.RenderContext;
 import com.example.qqbot.command.VariableRenderer;
@@ -66,6 +68,7 @@ public class CommandHandler {
     private final OutboundSender outboundSender;
     private final QaCollector qaCollector;
     private final AclStore aclStore;
+    private final CommandPolicyStore commandPolicyStore;
 
     public CommandHandler(CommandPolicy commandProperties,
                           CommandMatcher commandMatcher,
@@ -77,7 +80,8 @@ public class CommandHandler {
                           VariableRenderer variableRenderer,
                           OutboundSender outboundSender,
                           QaCollector qaCollector,
-                          AclStore aclStore) {
+                          AclStore aclStore,
+                          CommandPolicyStore commandPolicyStore) {
         this.commandProperties = commandProperties;
         this.commandMatcher = commandMatcher;
         this.commandParser = commandParser;
@@ -89,6 +93,7 @@ public class CommandHandler {
         this.outboundSender = outboundSender;
         this.qaCollector = qaCollector;
         this.aclStore = aclStore;
+        this.commandPolicyStore = commandPolicyStore;
     }
 
     /**
@@ -142,6 +147,14 @@ public class CommandHandler {
         if (!commandRateLimiter.allow(key)) {
             log.info("[CMD] 指令被限流：{} 触发 /{}", userId, cmd.trigger());
             return Outcome.HANDLED;   // 静默丢弃，不回复（避免"提示"本身变成刷屏）
+        }
+
+        // ---------- 私聊开关：按命令配，默认不开放 ----------
+        DataPolicy policy = commandPolicyStore.of(cmd.id());
+        if (!inGroup && !policy.allowPrivate()) {
+            log.info("[CMD] 私聊未开放：用户 {} 触发 /{}", userId, cmd.trigger());
+            reply(event, cmd, tail, "这条命令要在群里用", t0);
+            return Outcome.HANDLED;
         }
 
         // ---------- 准入：档位 + 单命令名单 + 全局名单 ----------

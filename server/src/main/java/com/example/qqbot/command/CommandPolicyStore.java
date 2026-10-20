@@ -61,7 +61,7 @@ public class CommandPolicyStore {
             return DataPolicy.DEFAULT;
         }
         return new DataPolicy(parseScope(row.scope()), parseGroups(row.groupsJson()),
-                row.showGroup(), row.showUser());
+                row.showGroup(), row.showUser(), row.allowPrivate());
     }
 
     public void save(long commandId, DataPolicy policy) {
@@ -69,7 +69,8 @@ public class CommandPolicyStore {
             return;
         }
         repo.save(commandId, new CommandPolicyRepository.Row(policy.scope().name(),
-                toJson(policy.groups()), policy.showGroup(), policy.showUser()));
+                toJson(policy.groups()), policy.showGroup(), policy.showUser(),
+                policy.allowPrivate()));
     }
 
     public void delete(long commandId) {

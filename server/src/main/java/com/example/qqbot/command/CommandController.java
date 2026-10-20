@@ -75,6 +75,7 @@ public class CommandController {
             item.put("groups", policy.groups());
             item.put("showGroup", policy.showGroup());
             item.put("showUser", policy.showUser());
+            item.put("allowPrivate", policy.allowPrivate());
             out.add(item);
         }
         return Map.of("policies", out);

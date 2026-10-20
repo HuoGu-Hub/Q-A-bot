@@ -14,6 +14,7 @@ import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
+  CommandPolicy, CommandPolicies, CommandAcl,
 } from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
@@ -38,13 +39,6 @@ const editing = ref<Partial<BotCommand> | null>(null)
 const preview = ref('')
 /** 预览 {args} 用的示例参数 */
 const sampleArgs = ref('')
-
-/** 范围候选。配合 Select 的 options 接口，值与原 <option> 完全一致 */
-const SCOPE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: '全部（群 + 私聊）' },
-  { value: 'group', label: '仅群聊' },
-  { value: 'private', label: '仅私聊' },
-]
 
 /**
  * 指令类型 —— 这个选择决定了"会不会花钱"：
@@ -107,6 +101,9 @@ async function load() {
     vars.value = await adminApi.get<CommandVariables>('/commands/variables')
     stats.value = await adminApi.get<CommandStats>('/commands/stats?days=30')
     actions.value = await adminApi.get<CommandActions>('/commands/actions')
+    const pol = await adminApi.get<CommandPolicies>('/commands/policies')
+    policies.value = Object.fromEntries(pol.policies.map((x) => [x.id, x]))
+    await loadGlobalAcl()
   } catch (e) { error.value = describeError(e) } finally {
     loading.value = false
   }
@@ -119,12 +116,22 @@ function newCommand() {
   }
   preview.value = ''
   sampleArgs.value = ''
+  policy.value = { scope: 'GROUP', groups: '', showGroup: false, showUser: false, allowPrivate: false }
+  acl.value = { whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' }
 }
 
 function edit(c: BotCommand) {
   editing.value = { ...c }
   sampleArgs.value = ''
   updatePreview()
+  const p = policyOf(c.id)
+  policy.value = {
+    scope: p.scope, groups: p.groups.join('\n'),
+    showGroup: p.showGroup, showUser: p.showUser, allowPrivate: p.allowPrivate,
+  }
+  adminApi.get<CommandAcl>('/commands/' + c.id + '/acl')
+    .then((a) => fillAcl(acl.value, a))
+    .catch(() => { /* 读不到名单不挡编辑 */ })
 }
 
 /**
@@ -232,7 +239,24 @@ function insertVar(name: string) {
 async function save() {
   if (!editing.value) return
   try {
-    await adminApi.post('/commands', editing.value)
+    // 旧字段 scope 由私聊开关推导，避免两个开关说同一件事
+    const body = { ...editing.value, scope: policy.value.allowPrivate ? 'all' : 'group' }
+    await adminApi.post('/commands', body)
+
+    // 命令刚建出来还没有 id，按触发词回头找一次
+    const list = await adminApi.get<CommandList>('/commands')
+    const saved = list.commands.find((c) => c.trigger === body.trigger)
+    if (saved) {
+      await adminApi.post('/commands/' + saved.id + '/policy', {
+        scope: policy.value.scope,
+        groups: parseIds(policy.value.groups),
+        showGroup: policy.value.showGroup,
+        showUser: policy.value.showUser,
+        allowPrivate: policy.value.allowPrivate,
+      })
+      await adminApi.post('/commands/' + saved.id + '/acl', aclBody(acl.value))
+    }
+
     editing.value = null
     await load()
   } catch (e) { error.value = describeError(e) }
@@ -251,6 +275,110 @@ async function toggle(c: BotCommand) {
     await adminApi.post('/commands/toggle', { trigger: c.trigger, enabled: !c.enabled })
     await load()
   } catch (e) { error.value = describeError(e) }
+}
+
+// ==================== 权限与名单 ====================
+
+const ACCESS_LABEL: Record<string, string> = {
+  all: '全体', admin: '管理员', owner: '群主', whitelist: '白名单', blacklist: '黑名单',
+}
+
+const DATA_SCOPES: Array<{ value: string; label: string }> = [
+  { value: 'GROUP', label: '只看本群' },
+  { value: 'SOME', label: '只在这几个群之间' },
+  { value: 'ALL', label: '所有群' },
+]
+
+/** 命令 id → 数据策略。没配过就没有这个键，读的时候回默认 */
+const policies = ref<Record<number, CommandPolicy>>({})
+const globalAcl = ref<CommandAcl>({ white: [], black: [] })
+
+/** 正在编辑的那条命令的策略与名单（保存时一起提交） */
+const policy = ref({ scope: 'GROUP', groups: '', showGroup: false, showUser: false, allowPrivate: false })
+const acl = ref({ whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' })
+
+const globalForm = ref({ whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' })
+const globalSaving = ref(false)
+const globalSaved = ref('')
+
+function policyOf(id: number): CommandPolicy {
+  return policies.value[id] ?? { id, scope: 'GROUP', groups: [], showGroup: false, showUser: false, allowPrivate: false }
+}
+
+/**
+ * 这条命令比"最保守的默认"松在哪。
+ *
+ * 这是这一页的核心读数：20 条命令里有 18 条是默认的，眼睛应该只落在剩下的 2 条上。
+ */
+function deviations(c: BotCommand): string[] {
+  const p = policyOf(c.id)
+  const out: string[] = []
+  if (c.access !== 'all') out.push(ACCESS_LABEL[c.access] ?? c.access)
+  if (p.scope !== 'GROUP') {
+    out.push(p.scope === 'ALL' ? '跨群' : '指定群')
+    if (p.showUser) out.push('露 QQ 号')
+    else if (p.showGroup) out.push('标群号')
+  }
+  if (p.allowPrivate) out.push('私聊开')
+  return out
+}
+
+/** 偏离里最"重"的那一档，决定标记的颜色 */
+function deviationTone(c: BotCommand) {
+  const d = deviations(c)
+  if (!d.length) return 'neutral'
+  if (d.includes('跨群') || d.includes('露 QQ 号')) return 'bad'
+  return 'warn'
+}
+
+/** 勾选框的 change 事件要读 target.checked，模板里转型不好读，收成一个函数 */
+function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
+  policy.value[key] = (e.target as HTMLInputElement).checked
+}
+
+function parseIds(text: string): number[] {
+  return text.split(/[\s,，、]+/).map((s) => s.trim()).filter(Boolean)
+    .map(Number).filter((n) => Number.isFinite(n) && n > 0)
+}
+
+function toLines(ids: number[]): string {
+  return ids.join('\n')
+}
+
+function aclBody(form: { whiteUsers: string; whiteGroups: string; blackUsers: string; blackGroups: string }) {
+  return {
+    white: [
+      ...parseIds(form.whiteUsers).map((v) => ({ type: 'uid', value: v })),
+      ...parseIds(form.whiteGroups).map((v) => ({ type: 'gid', value: v })),
+    ],
+    black: [
+      ...parseIds(form.blackUsers).map((v) => ({ type: 'uid', value: v })),
+      ...parseIds(form.blackGroups).map((v) => ({ type: 'gid', value: v })),
+    ],
+  }
+}
+
+function fillAcl(target: { whiteUsers: string; whiteGroups: string; blackUsers: string; blackGroups: string },
+                 source: CommandAcl) {
+  target.whiteUsers = toLines(source.white.filter((a) => a.type === 'uid').map((a) => a.value))
+  target.whiteGroups = toLines(source.white.filter((a) => a.type === 'gid').map((a) => a.value))
+  target.blackUsers = toLines(source.black.filter((a) => a.type === 'uid').map((a) => a.value))
+  target.blackGroups = toLines(source.black.filter((a) => a.type === 'gid').map((a) => a.value))
+}
+
+async function loadGlobalAcl() {
+  try { fillAcl(globalForm.value, await adminApi.get<CommandAcl>('/acl/global')) } catch { /* 读不到就留空 */ }
+}
+
+async function saveGlobalAcl() {
+  globalSaving.value = true
+  error.value = ''
+  try {
+    fillAcl(globalForm.value, await adminApi.post<CommandAcl>('/acl/global', aclBody(globalForm.value)))
+    globalSaved.value = '已保存'
+  } catch (e) { error.value = describeError(e) } finally {
+    globalSaving.value = false
+  }
 }
 
 const basicVars = computed(() => (vars.value?.variables ?? []).filter(v => !v.advanced))
@@ -301,6 +429,90 @@ onMounted(load)
           aria-label="谁能用"
           @update:model-value="patch({ access: $event })"
         />
+      </Field>
+
+      <Field label="私聊" control-width="520px">
+        <label class="switch">
+          <input
+            type="checkbox"
+            :checked="policy.allowPrivate"
+            @change="onCheck('allowPrivate', $event)"
+          />
+          <span>允许在私聊里用这条命令</span>
+        </label>
+        <p class="faint note">私聊里没有群管的第二双眼睛，默认关闭。</p>
+      </Field>
+
+      <Field label="数据范围" control-width="360px">
+        <Select
+          :model-value="policy.scope"
+          :options="DATA_SCOPES"
+          aria-label="数据范围"
+          @update:model-value="policy.scope = $event"
+        />
+      </Field>
+      <div v-if="policy.scope === 'SOME'" class="field-extra">
+        <Input
+          :model-value="policy.groups"
+          multiline
+          :rows="3"
+          placeholder="一行一个群号，只在这些群之间互相可见"
+          aria-label="共享群号"
+          @update:model-value="policy.groups = $event"
+        />
+      </div>
+      <template v-if="policy.scope !== 'GROUP'">
+        <Field label="来源显示" control-width="520px">
+          <label class="switch">
+            <input
+              type="checkbox"
+              :checked="policy.showGroup"
+              @change="onCheck('showGroup', $event)"
+            />
+            <span>结果里标出来自哪个群</span>
+          </label>
+          <label class="switch">
+            <input
+              type="checkbox"
+              :checked="policy.showUser"
+              @change="onCheck('showUser', $event)"
+            />
+            <span>结果里标出对方 QQ 号</span>
+          </label>
+        </Field>
+      </template>
+
+      <Field label="名单" control-width="820px">
+        <div class="acl-grid">
+          <div>
+            <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
+            <Input
+              :model-value="acl.whiteUsers" multiline :rows="3" placeholder="一行一个"
+              aria-label="白名单 QQ 号" @update:model-value="acl.whiteUsers = $event"
+            />
+          </div>
+          <div>
+            <div class="acl-k"><Tag tone="good">白名单 · 群号</Tag></div>
+            <Input
+              :model-value="acl.whiteGroups" multiline :rows="3" placeholder="整个群"
+              aria-label="白名单群号" @update:model-value="acl.whiteGroups = $event"
+            />
+          </div>
+          <div>
+            <div class="acl-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
+            <Input
+              :model-value="acl.blackUsers" multiline :rows="3" placeholder="一行一个"
+              aria-label="黑名单 QQ 号" @update:model-value="acl.blackUsers = $event"
+            />
+          </div>
+          <div>
+            <div class="acl-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
+            <Input
+              :model-value="acl.blackGroups" multiline :rows="3" placeholder="整个群"
+              aria-label="黑名单群号" @update:model-value="acl.blackGroups = $event"
+            />
+          </div>
+        </div>
       </Field>
 
       <Field label="类型" control-width="360px">
@@ -455,15 +667,6 @@ onMounted(load)
         </p>
       </Field>
 
-      <Field label="范围" control-width="360px">
-        <Select
-          :model-value="editing.scope ?? 'all'"
-          :options="SCOPE_OPTIONS"
-          aria-label="范围"
-          @update:model-value="patch({ scope: $event })"
-        />
-      </Field>
-
       <Field v-if="preview" label="预览" control-width="520px">
         <pre class="preview">{{ preview }}</pre>
       </Field>
@@ -486,10 +689,9 @@ onMounted(load)
       >
         <thead>
           <tr>
-            <th>触发词</th>
+            <th>命令</th>
             <th>说明</th>
-            <th>回复预览</th>
-            <th>范围</th>
+            <th>偏离默认</th>
             <th>状态</th>
             <th class="ops">操作</th>
           </tr>
@@ -498,8 +700,12 @@ onMounted(load)
           <tr v-for="c in data?.commands ?? []" :key="c.id">
             <td class="trig">{{ displayOf(c) }}</td>
             <td class="muted">{{ c.description }}</td>
-            <td class="reply">{{ (c.reply ?? "").slice(0, 60) }}{{ (c.reply ?? "").length > 60 ? "…" : "" }}</td>
-            <td class="muted">{{ c.scope }}</td>
+            <td>
+              <template v-if="deviations(c).length">
+                <Tag v-for="d in deviations(c)" :key="d" :tone="deviationTone(c)">{{ d }}</Tag>
+              </template>
+              <span v-else class="faint">默认</span>
+            </td>
             <td>
               <Tag :tone="c.enabled ? 'good' : 'neutral'">{{ c.enabled ? "启用" : "停用" }}</Tag>
               <Tag v-if="c.kind === 'agent'" tone="warn">问答·{{ c.mode === 'none' ? '不用知识库' : '知识库' }}</Tag>
@@ -516,6 +722,45 @@ onMounted(load)
           </tr>
         </tbody>
       </DataTable>
+    </Panel>
+
+    <!-- 全局名单：对每条命令都生效，压过单命令的判定 -->
+    <Panel title="全局名单">
+      <div class="acl-grid">
+        <div>
+          <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
+          <Input
+            :model-value="globalForm.whiteUsers" multiline :rows="3" placeholder="一行一个"
+            aria-label="全局白名单 QQ 号" @update:model-value="globalForm.whiteUsers = $event"
+          />
+        </div>
+        <div>
+          <div class="acl-k"><Tag tone="good">白名单 · 群号</Tag></div>
+          <Input
+            :model-value="globalForm.whiteGroups" multiline :rows="3" placeholder="整个群"
+            aria-label="全局白名单群号" @update:model-value="globalForm.whiteGroups = $event"
+          />
+        </div>
+        <div>
+          <div class="acl-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
+          <Input
+            :model-value="globalForm.blackUsers" multiline :rows="3" placeholder="一行一个"
+            aria-label="全局黑名单 QQ 号" @update:model-value="globalForm.blackUsers = $event"
+          />
+        </div>
+        <div>
+          <div class="acl-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
+          <Input
+            :model-value="globalForm.blackGroups" multiline :rows="3" placeholder="整个群"
+            aria-label="全局黑名单群号" @update:model-value="globalForm.blackGroups = $event"
+          />
+        </div>
+      </div>
+      <div class="global-actions">
+        <span class="faint note">名单里的 QQ 号优先于群号；单命令的名单优先于这一份。</span>
+        <span class="faint note">{{ globalSaved }}</span>
+        <Button size="sm" variant="primary" :disabled="globalSaving" @click="saveGlobalAcl">保存全局名单</Button>
+      </div>
     </Panel>
 
     <!-- C6：统计 -->
@@ -614,6 +859,16 @@ onMounted(load)
 .note { font-size: var(--fs-meta); margin: 0; }
 /* 类型说明紧跟在下拉后面：它决定"这条指令会不会花钱"，不适合塞进 placeholder */
 .kind-note { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); max-width: 620px; line-height: 1.7; }
+
+/* 私聊与来源显示用勾选：它们是"开/关"而不是"选一个" */
+.switch { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: var(--ink-2); }
+.switch input[type='checkbox'] { accent-color: var(--flame); }
+.field-extra { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); max-width: 520px; }
+
+.acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.acl-k { margin-bottom: var(--sp-1); }
+.global-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); margin-top: var(--sp-3); }
+@media (max-width: 900px) { .acl-grid { grid-template-columns: 1fr; } }
 
 /* 参数表：一行一个参数。列宽固定，枚举的候选值另起一行 ——
    它只在 type=enum 时出现，混在行里会把其余控件挤变形。 */

@@ -17,12 +17,14 @@ import java.util.List;
  * @param groups   {@link DataScope#SOME} 时互相可见的群
  * @param showGroup 跨群结果里是否标出"来自哪个群"
  * @param showUser  跨群结果里是否标出对方 QQ 号
+ * @param allowPrivate 能不能在私聊里用。默认<b>不能</b>：私聊里没有群管的第二双眼睛
  */
-public record DataPolicy(DataScope scope, List<Long> groups, boolean showGroup, boolean showUser) {
+public record DataPolicy(DataScope scope, List<Long> groups, boolean showGroup, boolean showUser,
+                         boolean allowPrivate) {
 
-    /** 默认：只看本群，什么都不标 —— 新建命令不加设置就是隔离的 */
+    /** 默认：只看本群、什么都不标、私聊不开放 —— 新建命令不加设置就是最保守的 */
     public static final DataPolicy DEFAULT =
-            new DataPolicy(DataScope.GROUP, List.of(), false, false);
+            new DataPolicy(DataScope.GROUP, List.of(), false, false, false);
 
     public DataPolicy {
         scope = scope == null ? DataScope.GROUP : scope;

@@ -87,7 +87,8 @@ public class AccessController {
             return bad("数据范围只能是 GROUP / SOME / ALL");
         }
         policyStore.save(id, new DataPolicy(scope, longs(body.get("groups")),
-                bool(body.get("showGroup")), bool(body.get("showUser"))));
+                bool(body.get("showGroup")), bool(body.get("showUser")),
+                bool(body.get("allowPrivate"))));
         return ResponseEntity.ok(viewOf(policyStore.of(id)));
     }
 
@@ -114,6 +115,7 @@ public class AccessController {
         out.put("groups", policy.groups());
         out.put("showGroup", policy.showGroup());
         out.put("showUser", policy.showUser());
+        out.put("allowPrivate", policy.allowPrivate());
         return out;
     }
 
