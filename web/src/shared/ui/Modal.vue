@@ -135,6 +135,9 @@ onBeforeUnmount(release)
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--hairline);
 }
+/* 标题与右侧动作之间的弹性空隙：没有它，#actions 会紧贴标题，
+   而关闭按钮靠 margin-left:auto 单独飞到最右，头部会显得断开。 */
+.head-spacer { flex: 1; }
 .title { font-size: var(--fs-section); font-weight: var(--fw-semi); }
 .x {
   flex: none;

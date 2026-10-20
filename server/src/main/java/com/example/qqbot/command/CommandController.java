@@ -261,8 +261,24 @@ public class CommandController {
         boolean real = Boolean.TRUE.equals(body.get("real"));
         // 预览也支持命令参数：配置界面填一个示例参数，就能看到 {args} 渲染成什么
         String args = str(body.get("args"));
-        String rendered = renderer.render(template == null ? "" : template, null, !real,
-                args == null ? "" : args);
+        List<ParamSpec> params = toParams(body.get("params"));
+
+        String rendered;
+        if (real) {
+            rendered = renderer.render(template == null ? "" : template, null, false,
+                    args == null ? "" : args);
+        } else {
+            // {arg.名字} 用参数表里的默认值/示例值，让预览与群里实际取值同形
+            Map<String, String> named = new LinkedHashMap<>();
+            for (ParamSpec param : params) {
+                String sample = param.hasDefault() ? param.defaultValue()
+                        : (param.example() != null && !param.example().isBlank()
+                        ? param.example() : param.name());
+                named.put(param.name(), sample);
+            }
+            rendered = renderer.render(template == null ? "" : template,
+                    RenderContext.preview(args == null ? "" : args, named));
+        }
         return Map.of("rendered", rendered, "length", rendered.length());
     }
 

@@ -25,6 +25,7 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import ParamTable from './ParamTable.vue'
 import BoardEditor from './BoardEditor.vue'
+import BoardRecordsModal from './BoardRecordsModal.vue'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
 } from './commandOptions'
@@ -45,6 +46,8 @@ const editing = ref<Partial<BotCommand> | null>(null)
 const boardEditing = ref<AdminBoard | null | undefined>(undefined)
 const boardSaving = ref(false)
 const boardError = ref('')
+/** 正在看记录的板块；null = 弹窗关闭 */
+const recordsBoard = ref<AdminBoard | null>(null)
 /** 实时预览结果 */
 const preview = ref('')
 /** 预览 {args} 用的示例参数 */
@@ -109,7 +112,7 @@ function newCommand() {
 function edit(c: BotCommand) {
   boardEditing.value = undefined
   editing.value = { ...c }
-  sampleArgs.value = ''
+  sampleArgs.value = sampleArgsOf(c.params ?? [])
   updatePreview()
   const p = policyOf(c.id)
   policy.value = {
@@ -129,6 +132,11 @@ function edit(c: BotCommand) {
  */
 function displayOf(c: BotCommand) {
   return '/' + c.trigger.split('/').join(' /')
+}
+
+/** 用参数表的示例值拼一段示例参数，编辑时预览立刻有东西可看 */
+function sampleArgsOf(params: AdminParamSpec[]) {
+  return params.map((p) => '#' + p.name + '-' + (p.example || p.name) + '#').join(' ')
 }
 
 /** 路径之外的完整用法（带参数示例）；与路径相同时不重复显示 */
@@ -155,6 +163,8 @@ function boardRuleTags(b: AdminBoard) {
 
 function setParams(list: AdminParamSpec[]) {
   patch({ params: list })
+  // 参数表的示例值会进 {arg.名字} 的预览，改完立刻重算
+  updatePreview()
 }
 
 /**
@@ -186,6 +196,7 @@ async function updatePreview() {
     const r = await adminApi.post<{ rendered: string }>('/commands/preview', {
       template: editing.value.reply ?? '',
       args: sampleArgs.value,
+      params: editing.value.params ?? [],
     })
     preview.value = r.rendered
   } catch { /* 预览失败不阻塞 */ }
@@ -271,6 +282,10 @@ function editBoard(b: AdminBoard) {
 function cancelBoard() {
   boardEditing.value = undefined
   boardError.value = ''
+}
+
+function openRecords(b: AdminBoard) {
+  recordsBoard.value = b
 }
 
 async function saveBoard(draft: BoardDraft) {
@@ -522,6 +537,15 @@ onMounted(load)
                 <span class="vlabel">{{ v.label }}</span>
               </span>
             </div>
+            <div class="preview-tools">
+              <Input
+                :model-value="sampleArgs"
+                placeholder="示例参数：张三 18，或 #时间-21:30# 文本"
+                aria-label="示例参数"
+                @update:model-value="onArgsInput"
+              />
+              <span class="faint note">只用于预览，不保存</span>
+            </div>
             <p v-if="preview" class="preview-line">{{ preview }}</p>
           </div>
         </section>
@@ -739,6 +763,7 @@ onMounted(load)
             <td class="ops">
               <div class="ops-btns">
                 <Button size="sm" @click="editBoard(b)">编辑</Button>
+                <Button size="sm" @click="openRecords(b)">记录</Button>
                 <Button size="sm" @click="toggleBoard(b)">{{ b.enabled ? '停用' : '启用' }}</Button>
                 <Button v-if="!b.builtin" size="sm" variant="danger" @click="removeBoard(b)">删除</Button>
               </div>
@@ -861,6 +886,12 @@ onMounted(load)
         </div>
       </div>
     </Panel>
+
+    <BoardRecordsModal
+      :open="recordsBoard !== null"
+      :board="recordsBoard"
+      @close="recordsBoard = null"
+    />
   </div>
 </template>
 
@@ -958,6 +989,8 @@ onMounted(load)
 .block-head:hover { color: var(--ink); }
 .caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
+.preview-tools { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.preview-tools .note { white-space: nowrap; }
 .preview-line { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); color: var(--moss); font-family: var(--font-mono); white-space: pre-wrap; }
 .path-hint { margin: var(--sp-1) 0 0 88px; font-size: var(--fs-meta); color: var(--ink-4); }
 .path-demo { font-family: var(--font-mono); color: var(--flame); }

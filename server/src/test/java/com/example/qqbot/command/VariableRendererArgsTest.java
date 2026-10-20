@@ -88,6 +88,22 @@ class VariableRendererArgsTest {
         assertThat(renderer.render("{args.2}", null, true, "")).isEqualTo("18");
     }
 
+    @Test
+    @DisplayName("★ 预览填了示例参数时，{args} 按填的来")
+    void previewUsesProvidedArgs() {
+        assertThat(renderer.render("{args}", null, true, "李四 20")).isEqualTo("李四 20");
+        assertThat(renderer.render("{args.1}-{args.2}", null, true, "李四 20"))
+                .isEqualTo("李四-20");
+    }
+
+    @Test
+    @DisplayName("★ 预览的 {arg.名字} 用参数表里的示例值")
+    void previewUsesNamedExamples() {
+        RenderContext ctx = RenderContext.preview("", Map.of("时间", "21:30"));
+
+        assertThat(renderer.render("{arg.时间}", ctx)).isEqualTo("21:30");
+    }
+
     /* ==================== 井号参数：{arg.名字} ==================== */
 
     @Test

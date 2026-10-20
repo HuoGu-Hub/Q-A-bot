@@ -48,6 +48,21 @@ public record RenderContext(
     }
 
     /**
+     * 配置界面的预览，但带上管理员填的示例参数。
+     *
+     * <p>没有这段参数时回落到 {@link #sample()} 的占位值 —— 至少预览框里
+     * 不会因为参数为空而只剩一个 {@code {args}}。
+     *
+     * @param argsText  示例参数原文，{@code {args}} 用它
+     * @param namedArgs 参数名 → 示例值，{@code {arg.名字}} 用它
+     */
+    public static RenderContext preview(String argsText, Map<String, String> namedArgs) {
+        return new RenderContext(100000005L, 100000004L, true, "示例用户",
+                argsText == null || argsText.isBlank() ? "张三 18" : argsText,
+                namedArgs, "示例文本", true, Instant.now());
+    }
+
+    /**
      * 没有入站事件时用 —— 定时任务按创建者与会话重建。
      *
      * <p>{@code {user}} 在定时发送里是<b>创建者</b>，不是收消息的人；

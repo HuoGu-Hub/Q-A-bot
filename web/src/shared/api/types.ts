@@ -422,6 +422,37 @@ export interface BoardDraft extends AdminBoard {
   originalPath?: string | null
 }
 
+/** 一条板块记录（/admin/api/board-records） */
+export interface AdminBoardRecord {
+  id: number
+  board: string
+  groupId: number
+  userId: number
+  nickname: string
+  text: string
+  params: Record<string, string>
+  delivery: string
+  /** 人话时间：定时的是「每天 21:30」，立即展示的是「立即展示」 */
+  when: string
+  /** 与群里 /板块 列表同一行格式 */
+  line: string
+  /** pending / sending / sent / failed / expired / canceled */
+  status: string
+  attempts: number
+  lastError?: string | null
+  fireAt?: string | null
+  createdAt?: string | null
+  sentAt?: string | null
+  deletedAt?: string | null
+  deleted: boolean
+}
+
+export interface AdminBoardRecordsResponse {
+  board: string
+  records: AdminBoardRecord[]
+  count: number
+}
+
 export interface CommandList {
   available: boolean
   commands: BotCommand[]

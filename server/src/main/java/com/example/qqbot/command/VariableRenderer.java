@@ -197,7 +197,8 @@ public class VariableRenderer {
     public RenderContext contextOf(OneBotEvent event, Map<String, String> namedArgs, String text,
                                    String argsText, boolean preview) {
         if (event == null) {
-            return preview ? RenderContext.sample()
+            // 预览也要保留管理员填的示例参数：{args} / {args.N} / {arg.名字} 才有东西可看
+            return preview ? RenderContext.preview(argsText, namedArgs)
                     : RenderContext.scheduled(0L, 0L, false, "朋友", argsText, namedArgs, text,
                             Instant.now());
         }
@@ -215,7 +216,9 @@ public class VariableRenderer {
 
         // 命令参数：{args} 取全部原文，{args.N} 取第 N 个词（老命令靠它）
         if (name.equals("args")) {
-            return ctx.preview() ? "张三 18" : argsTrimmed(ctx.argsText());
+            String raw = argsTrimmed(ctx.argsText());
+            // 预览没填示例参数时才用占位值，填了就按填的来
+            return raw.isEmpty() && ctx.preview() ? "张三 18" : raw;
         }
         if (name.startsWith("args.")) {
             int idx = parseIndex(name.substring("args.".length()));
@@ -224,10 +227,11 @@ public class VariableRenderer {
                 // 方便在群里一眼看出拼错了（返回空串会让它静默消失，最难查）
                 return null;
             }
-            if (ctx.preview()) {
+            String raw = argsTrimmed(ctx.argsText());
+            if (raw.isEmpty() && ctx.preview()) {
                 return idx == 1 ? "张三" : idx == 2 ? "18" : "参数" + idx;
             }
-            String[] words = argsTrimmed(ctx.argsText()).split("\\s+");
+            String[] words = raw.split("\\s+");
             return idx <= words.length && !words[idx - 1].isBlank() ? words[idx - 1] : "";
         }
 
@@ -244,16 +248,17 @@ public class VariableRenderer {
                     return e.getValue();
                 }
             }
-            return ctx.preview() && key.equals("名称") ? "21:30" : null;
+            // 取不到就原样保留；预览也不猜，免得把拼错的参数名藏起来
+            return null;
         }
 
         if (name.equals("text")) {
-            if (ctx.preview()) {
-                return "示例文本";
+            if (ctx.text() != null) {
+                return ctx.text();
             }
             // text 为 null 表示"还没算出来"（正在展开参数值的那一趟）。
             // 这时返回 null 让它原样保留，而不是静默变成空串 —— 后者最难查。
-            return ctx.text();
+            return ctx.preview() ? "示例文本" : null;
         }
 
         return switch (name) {
