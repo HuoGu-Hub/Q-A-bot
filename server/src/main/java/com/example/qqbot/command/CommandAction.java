@@ -24,6 +24,30 @@ public interface CommandAction {
     String id();
 
     /**
+     * 给人看的名字，后台下拉里显示这个。
+     *
+     * <p>没有它的话，管理员看到的是一串英文标识 —— 他不知道该选哪个。
+     */
+    default String label() {
+        return id();
+    }
+
+    /** 一句话说清这个动作干了什么，只有真选中时才显示 */
+    default String description() {
+        return "";
+    }
+
+    /**
+     * 这个动作最自然的命令路径。
+     *
+     * <p>新建命令时选了这个动作，路径就自动填上 —— 新手不用先搞懂"路径怎么分层"
+     * 才能用上一个功能。填空是可改的，懂的人照样能改成别的。
+     */
+    default String defaultPath() {
+        return "";
+    }
+
+    /**
      * 这个动作期望的参数表。
      *
      * <p>只用于<b>内置命令的种子</b>与后台的「载入该动作参数」按钮；

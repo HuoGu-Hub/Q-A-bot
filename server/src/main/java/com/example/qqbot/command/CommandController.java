@@ -106,6 +106,9 @@ public class CommandController {
         for (CommandAction action : actionRegistry.all()) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", action.id());
+            item.put("label", action.label());
+            item.put("description", action.description());
+            item.put("defaultPath", action.defaultPath());
             item.put("params", action.params());
             out.add(item);
         }

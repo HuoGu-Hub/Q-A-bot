@@ -35,6 +35,21 @@ public class ScheduleDeleteAction implements CommandAction {
     }
 
     @Override
+    public String label() {
+        return "撤销定时输出";
+    }
+
+    @Override
+    public String defaultPath() {
+        return "del/output";
+    }
+
+    @Override
+    public String description() {
+        return "按编号撤掉一条还没发出去的";
+    }
+
+    @Override
     public List<ParamSpec> params() {
         return List.of(ID_PARAM);
     }

@@ -292,6 +292,12 @@ export interface BotCommand {
 /** 一个已注册的动作：配置界面用它渲染下拉与「载入参数表」 */
 export interface CommandActionInfo {
   id: string
+  /** 给人看的名字，下拉里显示它 */
+  label: string
+  /** 一句话说明它干什么 */
+  description: string
+  /** 选中它时自动填的命令路径 */
+  defaultPath: string
   params: AdminParamSpec[]
 }
 

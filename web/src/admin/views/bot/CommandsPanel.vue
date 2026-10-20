@@ -79,8 +79,14 @@ const isAgent = computed(() => editing.value?.kind === 'agent')
 const isAction = computed(() => editing.value?.kind === 'action')
 /** 动作下拉：值是动作 id，直接存进库里那一列 */
 const actionOptions = computed(() =>
-  (actions.value?.actions ?? []).map((a) => ({ value: a.id, label: a.id }))
+  (actions.value?.actions ?? []).map((a) => ({ value: a.id, label: a.label || a.id }))
 )
+
+/** 选中动作的那一句说明 —— 只有真选了才出现，不占常态版面 */
+const actionHint = computed(() => {
+  const id = editing.value?.action
+  return (actions.value?.actions ?? []).find((a) => a.id === id)?.description ?? ''
+})
 /** 编辑中的参数表。新建时是空数组，模板里靠它渲染行 */
 const paramRows = computed<AdminParamSpec[]>(() => editing.value?.params ?? [])
 
@@ -224,6 +230,9 @@ function onArgsInput(v: string) {
 }
 
 /** 回复内容每次改动都重算预览（原来挂在 textarea 的 @input 上） */
+/** 类型改成"动作"但没有绑定时，提示他选一个 —— 空下拉是最容易卡住的地方 */
+const needsAction = computed(() => isAction.value && !editing.value?.action)
+
 function onReplyInput(v: string) {
   patch({ reply: v })
   updatePreview()
@@ -339,6 +348,11 @@ function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
 /** 低频区块折叠：改回复的人不该被参数表和名单挡路 */
 const openBlocks = ref({ params: false, acl: false, help: false })
 
+/** 只有"白名单/黑名单"两档才需要录名单，其余档位下这一块根本不该出现 */
+const needsList = computed(() =>
+  ['whitelist', 'blacklist'].includes(editing.value?.access ?? 'all')
+)
+
 function toggleBlock(key: 'params' | 'acl' | 'help') {
   openBlocks.value[key] = !openBlocks.value[key]
 }
@@ -350,6 +364,25 @@ const aclCount = computed(() => {
     .reduce((sum, text) => sum + parseIds(text).length, 0)
   return n ? n + ' 条' : '空'
 })
+
+/**
+ * 选了一个动作之后把能自动填的都填上。
+ *
+ * <p>新手不需要先搞懂"路径怎么分层""参数表怎么写"才能用上定时输出 ——
+ * 选个动作，路径与参数就位，他只管写要发的话。填进去的都是可改的。
+ */
+function onActionPicked(id: string) {
+  patch({ action: id })
+  const found = (actions.value?.actions ?? []).find((a) => a.id === id)
+  if (!found) return
+  if (!(editing.value?.trigger ?? '').trim() && found.defaultPath) {
+    patch({ trigger: found.defaultPath })
+  }
+  if (!paramRows.value.length && found.params.length) {
+    setParams(found.params.map((x) => ({ ...x })))
+    openBlocks.value.params = true
+  }
+}
 
 function onMultipleChange(i: number, e: Event) {
   patchParam(i, { multiple: (e.target as HTMLInputElement).checked })
@@ -449,6 +482,7 @@ onMounted(load)
               />
             </div>
           </label>
+          <p class="path-hint">群里发 <span class="path-demo">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '…' }}</span></p>
 
           <label class="row">
             <span class="row-label">说明</span>
@@ -476,21 +510,14 @@ onMounted(load)
               @update:model-value="onReplyInput"
             />
             <div class="vars">
-              <button
-                v-for="v in basicVars"
-                :key="v.name"
-                class="vchip"
-                type="button"
-                :title="v.label + '（例：' + v.example + '）'"
-                @click="insertVar(v.name)"
-              >{ {{ v.name }} }</button>
-              <button
-                v-for="v in advVars"
-                :key="v.name"
-                class="vchip vchip--adv"
-                type="button"
-                @click="insertVar(v.name)"
-              >{ {{ v.name }} }</button>
+              <span v-for="v in basicVars" :key="v.name" class="vitem">
+                <button class="vchip" type="button" :title="'例：' + v.example" @click="insertVar(v.name)">{ {{ v.name }} }</button>
+                <span class="vlabel">{{ v.label }}</span>
+              </span>
+              <span v-for="v in advVars" :key="v.name" class="vitem">
+                <button class="vchip vchip--adv" type="button" :title="'例：' + v.example" @click="insertVar(v.name)">{ {{ v.name }} }</button>
+                <span class="vlabel">{{ v.label }}</span>
+              </span>
             </div>
             <p v-if="preview" class="preview-line">{{ preview }}</p>
           </div>
@@ -516,9 +543,11 @@ onMounted(load)
               :model-value="editing.action ?? ''"
               :options="actionOptions"
               aria-label="绑定动作"
-              @update:model-value="patch({ action: $event })"
+              @update:model-value="onActionPicked"
             />
           </label>
+          <p v-if="actionHint" class="path-hint">{{ actionHint }}</p>
+          <p v-if="needsAction" class="path-hint">选一个动作，路径与参数会自动填好</p>
 
           <label v-if="isAgent" class="row">
             <span class="row-label">回答来源</span>
@@ -618,7 +647,7 @@ onMounted(load)
             </div>
           </div>
 
-          <div class="block">
+          <div v-if="needsList" class="block">
             <button class="block-head" type="button" @click="toggleBlock('acl')">
               <span class="caret">{{ openBlocks.acl ? '−' : '+' }}</span>
               名单
@@ -878,6 +907,10 @@ onMounted(load)
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
 .block-actions { display: flex; gap: var(--sp-2); }
 .preview-line { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); color: var(--moss); font-family: var(--font-mono); white-space: pre-wrap; }
+.path-hint { margin: var(--sp-1) 0 0 88px; font-size: var(--fs-meta); color: var(--ink-4); }
+.path-demo { font-family: var(--font-mono); color: var(--flame); }
+.vitem { display: inline-flex; align-items: center; gap: 4px; }
+.vlabel { font-size: 11px; color: var(--ink-4); }
 
 @media (max-width: 1000px) {
   .editor-grid { grid-template-columns: 1fr; }

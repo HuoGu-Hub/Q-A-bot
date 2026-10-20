@@ -29,6 +29,21 @@ public class ScheduleListAction implements CommandAction {
     }
 
     @Override
+    public String label() {
+        return "查看定时输出";
+    }
+
+    @Override
+    public String defaultPath() {
+        return "list/output";
+    }
+
+    @Override
+    public String description() {
+        return "列出本群还没发出去的那些";
+    }
+
+    @Override
     public List<ParamSpec> params() {
         return List.of();
     }

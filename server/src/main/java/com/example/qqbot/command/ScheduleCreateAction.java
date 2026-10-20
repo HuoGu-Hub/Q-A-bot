@@ -48,6 +48,21 @@ public class ScheduleCreateAction implements CommandAction {
     }
 
     @Override
+    public String label() {
+        return "定时输出";
+    }
+
+    @Override
+    public String defaultPath() {
+        return "set/output";
+    }
+
+    @Override
+    public String description() {
+        return "在指定时间把这些字发到群里，可重复";
+    }
+
+    @Override
     public List<ParamSpec> params() {
         return List.of(REPEAT, TIME);
     }
