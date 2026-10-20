@@ -287,6 +287,8 @@ export interface BotCommand {
   help?: string | null
   /** action 类绑定的执行器 id，其余类型为空 */
   action?: string | null
+  /** 后端算好的完整用法，带参数示例（与群里 {cmd.list} 的写法一致） */
+  usage: string
 }
 
 /** 一个已注册的动作：配置界面用它渲染下拉与「载入参数表」 */
@@ -359,6 +361,35 @@ export interface ScheduleList {
   /** 各状态条数，键就是状态名 */
   counts: Record<string, number>
   tasks: AdminScheduleTask[]
+}
+
+/** 命令目录的一条：板块或普通指令。后台列表与 QQ 的 /list 共用这一份数据 */
+export interface CommandCatalogEntry {
+  source: 'board' | 'command'
+  id: number
+  /** 不含开头斜杠；板块就是板块名 */
+  path: string
+  title: string
+  description: string
+  /** board / template / agent / action */
+  kind: string
+  params: AdminParamSpec[]
+  /** 完整用法，带参数示例 */
+  usage: string
+  /** 归一化后的准入档位 all / admin / owner / whitelist / blacklist */
+  access: string
+  /** 板块的数据范围 GROUP / SOME / ALL；指令为 null */
+  scope?: string | null
+  /** 板块的投递方式 direct / scheduled；指令为 null */
+  delivery?: string | null
+  enabled: boolean
+  builtin: boolean
+  /** 板块支持的四个动作；指令为空 */
+  actions: string[]
+}
+
+export interface CommandCatalog {
+  entries: CommandCatalogEntry[]
 }
 
 export interface CommandList {
@@ -710,4 +741,3 @@ export interface CarouselItemsResponse {
   ok: boolean
   items: CarouselItem[]
 }
-

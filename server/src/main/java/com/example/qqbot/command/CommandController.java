@@ -33,29 +33,48 @@ public class CommandController {
     private final CommandPolicy props;
     private final ActionRegistry actionRegistry;
     private final CommandPolicyStore policyStore;
+    private final CommandCatalog catalog;
+    private final BoardStore boards;
     /** 只用来把后台传来的参数表 JSON 转成 ParamSpec，不承担别的语义 */
     private final ObjectMapper mapper;
 
     public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props,
                              ActionRegistry actionRegistry, CommandPolicyStore policyStore,
-                             ObjectMapper mapper) {
+                             CommandCatalog catalog, BoardStore boards, ObjectMapper mapper) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;
         this.actionRegistry = actionRegistry;
         this.policyStore = policyStore;
+        this.catalog = catalog;
+        this.boards = boards;
         this.mapper = mapper;
     }
 
     /** 指令列表 */
     @GetMapping("")
     public Map<String, Object> list() {
+        List<CommandView> views = new ArrayList<>();
+        for (BotCommand command : store.listAll()) {
+            views.add(CommandView.of(command));
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("available", store.isAvailable());
-        out.put("commands", store.listAll());
+        out.put("commands", views);
         out.put("rateLimitPerMinute", props.getRateLimitPerMinute());
         out.put("allowUserIds", props.isAllowUserIds());
         return out;
+    }
+
+    /**
+     * 全部命令目录：板块 + 指令。
+     *
+     * <p>后台的列表与群里的 {@code /list} 读同一份条目 —— 这里是"两边看到的东西
+     * 必须一样"的落点。{@code includeDisabled=true} 供后台显示停用项。
+     */
+    @GetMapping("/catalog")
+    public Map<String, Object> catalog(@RequestParam(defaultValue = "true") boolean includeDisabled) {
+        return Map.of("entries", catalog.entries(includeDisabled));
     }
 
     /**
@@ -135,8 +154,18 @@ public class CommandController {
             }
         }
         // help 是保留字：/路径 /help 要留给单命令帮助
-        if (t.equalsIgnoreCase("help") || t.toLowerCase(java.util.Locale.ROOT).endsWith("/help")) {
-            return bad("help 是保留字，不能作为命令名或子命令名");
+        String first = t.split("/")[0];
+        if ("help".equalsIgnoreCase(first) || "list".equalsIgnoreCase(first)) {
+            return bad("help 与 list 由板块系统接管，不能作为指令路径的第一段");
+        }
+        if (t.toLowerCase(java.util.Locale.ROOT).endsWith("/help")) {
+            return bad("help 是保留字，不能作为子命令名");
+        }
+        // 启用的板块在 BoardRunner 里优先匹配，同名的指令永远发不出去；
+        // 停用的板块不拦，指令还能正常用
+        var shadowing = boards.find(first);
+        if (shadowing != null && shadowing.enabled()) {
+            return bad("「" + first + "」是板块名，指令路径不能和板块重名");
         }
 
         // 类型与回答模式：只有 agent 类才有"模式"，其余一律回落成 kb（无意义）
@@ -235,6 +264,31 @@ public class CommandController {
         String rendered = renderer.render(template == null ? "" : template, null, !real,
                 args == null ? "" : args);
         return Map.of("rendered", rendered, "length", rendered.length());
+    }
+
+    /**
+     * 指令的对外形状。
+     *
+     * <p>不直接序列化 {@link BotCommand}：它同时有 {@code action} 字段与
+     * {@code isAction()} 方法，Jackson 会把后者也当成名为 action 的属性，
+     * 结果是绑定的动作 id 被一个 boolean 顶掉 —— 后台既看不到也存不回。
+     * 这里显式列出要给的字段，顺便把老值 {@code member} 归一成 {@code all}。
+     */
+    public record CommandView(long id, String trigger, String reply, String description,
+                              String scope, List<Long> groupIds, String access,
+                              boolean enabled, int sortOrder, boolean builtin,
+                              String kind, String mode, List<ParamSpec> params,
+                              String help, String action, String usage) {
+
+        static CommandView of(BotCommand command) {
+            return new CommandView(
+                    command.id(), command.trigger(), command.reply(), command.description(),
+                    command.scope(), command.groupIds(),
+                    CommandAccess.of(command.access()).code(), command.enabled(),
+                    command.sortOrder(), command.builtin(), command.kindName(),
+                    command.modeName(), command.params(), command.help(),
+                    command.action(), command.display());
+        }
     }
 
     // ==================== C6：使用统计 ====================

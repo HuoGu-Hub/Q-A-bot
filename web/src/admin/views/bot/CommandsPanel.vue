@@ -14,7 +14,7 @@ import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
-  CommandPolicy, CommandPolicies, CommandAcl,
+  CommandPolicy, CommandPolicies, CommandAcl, CommandCatalog, CommandCatalogEntry,
 } from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
@@ -28,6 +28,8 @@ import Tag from '@shared/ui/Tag.vue'
 const loading = ref(false)
 const error = ref('')
 const data = ref<CommandList | null>(null)
+/** 板块 + 指令的统一目录：后台列表与群里 /list 读同一份 */
+const catalog = ref<CommandCatalog | null>(null)
 const vars = ref<CommandVariables | null>(null)
 const stats = ref<CommandStats | null>(null)
 /** 已注册的动作：只有 action 类命令才用得上 */
@@ -104,6 +106,9 @@ async function load() {
   error.value = ''
   try {
     data.value = await adminApi.get<CommandList>('/commands')
+    // 目录接口是后加的：后端还没重启时先不求全，别让整页跟着 404
+    try { catalog.value = await adminApi.get<CommandCatalog>('/commands/catalog') }
+    catch { catalog.value = null }
     vars.value = await adminApi.get<CommandVariables>('/commands/variables')
     stats.value = await adminApi.get<CommandStats>('/commands/stats?days=30')
     actions.value = await adminApi.get<CommandActions>('/commands/actions')
@@ -148,6 +153,32 @@ function edit(c: BotCommand) {
  */
 function displayOf(c: BotCommand) {
   return '/' + c.trigger.split('/').join(' /')
+}
+
+/** 路径之外的完整用法（带参数示例）；与路径相同时不重复显示 */
+function usageOf(c: BotCommand) {
+  return c.usage && c.usage !== displayOf(c) ? c.usage : ''
+}
+
+/** 板块行：目录里 source=board 的条目 */
+const boardRows = computed<CommandCatalogEntry[]>(
+  () => (catalog.value?.entries ?? []).filter((e) => e.source === 'board')
+)
+
+const SCOPE_LABEL: Record<string, string> = {
+  GROUP: '本群', SOME: '指定群', ALL: '全部群',
+}
+
+/** 板块的规则一栏：谁能用、怎么投递、数据范围 */
+function boardRuleTags(b: CommandCatalogEntry) {
+  const tags: Array<{ label: string; tone: 'neutral' | 'good' | 'warn' | 'bad' }> = [
+    { label: ACCESS_LABEL[b.access] ?? b.access, tone: 'neutral' },
+    { label: b.delivery === 'scheduled' ? '到点发' : '立即展示', tone: b.delivery === 'scheduled' ? 'warn' : 'good' },
+  ]
+  if (b.scope && b.scope !== 'GROUP') {
+    tags.push({ label: SCOPE_LABEL[b.scope] ?? b.scope, tone: 'bad' })
+  }
+  return tags
 }
 
 /* ==================== 参数表编辑 ==================== */
@@ -693,6 +724,53 @@ onMounted(load)
     </div>
 
 
+    <!-- 板块：与 QQ 的 /list 同一份目录。先让后台"看得见"，编辑入口后续再补 -->
+    <Panel v-if="!editing && catalog" title="板块" :count="boardRows.length">
+      <p class="panel-note">
+        群里发 <span class="path-demo">/板块</span> 查看、<span class="path-demo">/板块 /create</span> 添加。
+        这里的清单与 QQ 里 <span class="path-demo">/list</span> 读的是同一份数据。
+      </p>
+      <DataTable
+        :rows="boardRows.length"
+        empty="还没有板块"
+        empty-hint="板块由后端种子提供"
+      >
+        <thead>
+          <tr>
+            <th>命令</th>
+            <th>说明</th>
+            <th>参数</th>
+            <th>规则</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="b in boardRows" :key="'board-' + b.id">
+            <td class="trig">
+              <div>/{{ b.path }}</div>
+              <div v-if="b.params.length" class="usage">{{ b.usage }}</div>
+            </td>
+            <td class="muted">
+              {{ b.title }}
+              <Tag v-if="b.builtin" tone="flame">内置</Tag>
+            </td>
+            <td>
+              <span v-for="p in b.params" :key="p.name" class="param-chip">
+                #{{ p.name }}-{{ p.example || p.name }}#
+              </span>
+              <span v-if="!b.params.length" class="faint">无</span>
+            </td>
+            <td>
+              <Tag v-for="t in boardRuleTags(b)" :key="t.label" :tone="t.tone">{{ t.label }}</Tag>
+            </td>
+            <td>
+              <Tag :tone="b.enabled ? 'good' : 'neutral'">{{ b.enabled ? '启用' : '停用' }}</Tag>
+            </td>
+          </tr>
+        </tbody>
+      </DataTable>
+    </Panel>
+
     <!-- 指令列表 -->
     <Panel v-if="!editing" title="已有指令" :count="data?.commands?.length">
       <DataTable
@@ -711,7 +789,10 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="c in data?.commands ?? []" :key="c.id">
-            <td class="trig">{{ displayOf(c) }}</td>
+            <td class="trig">
+              <div>{{ displayOf(c) }}</div>
+              <div v-if="usageOf(c)" class="usage">{{ usageOf(c) }}</div>
+            </td>
             <td class="muted">{{ c.description }}</td>
             <td>
               <template v-if="deviations(c).length">
@@ -946,6 +1027,20 @@ onMounted(load)
 
 /* 触发词列：等宽 + 灵火色，一眼能和说明文字分开 */
 .trig { font-family: var(--font-mono); color: var(--flame); }
+/* 路径下面的完整用法：参数示例与 QQ 里 /help 的写法一致 */
+.usage { margin-top: 2px; font-size: 11.5px; color: var(--ink-4); font-family: var(--font-mono); line-height: 1.5; overflow-wrap: anywhere; }
+.param-chip {
+  display: inline-block;
+  margin: 0 4px 3px 0;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--surface-inset);
+  border: 1px solid var(--edge-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.panel-note { margin: 0 0 var(--sp-3); font-size: var(--fs-meta); color: var(--ink-4); }
 .trig--miss { color: var(--rust); }
 .reply { font-size: var(--fs-meta); }
 

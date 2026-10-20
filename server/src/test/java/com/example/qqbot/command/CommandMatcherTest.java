@@ -64,34 +64,41 @@ class CommandMatcherTest {
     /* ==================== 该触发的 ==================== */
 
     @Test
-    @DisplayName("/help → 命中一级命令")
+    @DisplayName("/ping → 命中一级命令")
     void triggersOnRootCommand() {
-        CommandMatcher.Match m = matcher.match("/help", true, 100L);
+        CommandMatcher.Match m = matcher.match("/ping", true, 100L);
 
         assertThat(m.hit()).isTrue();
-        assertThat(m.command().trigger()).isEqualTo("help");
+        assertThat(m.command().trigger()).isEqualTo("ping");
     }
 
     @Test
-    @DisplayName("大小写不敏感：/HELP 和 /Help 都触发")
+    @DisplayName("大小写不敏感：/PING 和 /Ping 都触发")
     void caseInsensitive() {
-        assertThat(matcher.match("/HELP", true, 1L).hit()).isTrue();
-        assertThat(matcher.match("/Help", true, 1L).hit()).isTrue();
+        assertThat(matcher.match("/PING", true, 1L).hit()).isTrue();
+        assertThat(matcher.match("/Ping", true, 1L).hit()).isTrue();
     }
 
     @Test
     @DisplayName("私聊也能命中（能不能用由 scope 决定，与在哪聊无关）")
     void privateMatchWorks() {
-        assertThat(matcher.match("/help", false, 0L).hit()).isTrue();
+        assertThat(matcher.match("/ping", false, 0L).hit()).isTrue();
     }
 
     @Test
-    @DisplayName("内置指令已就绪：/help /list /ping /stats")
+    @DisplayName("内置指令已就绪：/ping /stats")
     void builtinsSeeded() {
-        for (String t : new String[]{"help", "list", "ping", "stats"}) {
+        for (String t : new String[]{"ping", "stats"}) {
             assertThat(matcher.match("/" + t, true, 1L).hit())
                     .as("/%s 应当存在", t).isTrue();
         }
+    }
+
+    @Test
+    @DisplayName("★ /help 与 /list 交给板块系统，不再占用指令表")
+    void helpAndListAreOwnedByBoards() {
+        assertThat(store.findByTrigger("help")).isNull();
+        assertThat(store.findByTrigger("list")).isNull();
     }
 
     /* ==================== 多级路径 ==================== */
@@ -302,21 +309,21 @@ class CommandMatcherTest {
     @Test
     @DisplayName("内置指令不能删除，但能改回复")
     void builtinCannotBeDeleted() {
-        assertThatThrownBy(() -> store.delete("help"))
+        assertThatThrownBy(() -> store.delete("ping"))
                 .hasMessageContaining("内置指令不能删除");
     }
 
     @Test
     @DisplayName("★ 改过内置指令后重启，不会被覆盖回去（INSERT OR IGNORE）")
     void builtinEditsSurviveReseed() throws Exception {
-        store.upsert(new BotCommand(0, "help", "我改过的内容 {cmd.total}", "改过的说明",
+        store.upsert(new BotCommand(0, "ping", "我改过的内容 {cmd.total}", "改过的说明",
                 "all", List.of(), "member", true, 1, true,
                 BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null));
 
         CommandStore reopened = new CommandStore(new CommandRepository(new Jdbc(db)), new ObjectMapper());
         reopened.init();
 
-        BotCommand after = reopened.findByTrigger("help");
+        BotCommand after = reopened.findByTrigger("ping");
         assertThat(after.reply()).as("★ 重启不能把用户的修改覆盖回去")
                 .isEqualTo("我改过的内容 {cmd.total}");
     }
@@ -326,7 +333,7 @@ class CommandMatcherTest {
     void unmatchedCommandsAreLogged() {
         store.logUsage("不存在的命令", 1L, 2L, false);
         store.logUsage("不存在的命令", 1L, 3L, false);
-        store.logUsage("help", 1L, 2L, true);
+        store.logUsage("ping", 1L, 2L, true);
 
         var unmatched = store.unmatched(30, 10);
         assertThat(unmatched).hasSize(1);

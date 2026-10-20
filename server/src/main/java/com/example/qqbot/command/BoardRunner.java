@@ -33,14 +33,16 @@ public class BoardRunner {
     private final CommandParser parser;
     private final VariableRenderer renderer;
     private final AclStore aclStore;
+    private final CommandCatalog catalog;
 
     public BoardRunner(BoardStore boards, BoardRecordStore records, CommandParser parser,
-                       VariableRenderer renderer, AclStore aclStore) {
+                       VariableRenderer renderer, AclStore aclStore, CommandCatalog catalog) {
         this.boards = boards;
         this.records = records;
         this.parser = parser;
         this.renderer = renderer;
         this.aclStore = aclStore;
+        this.catalog = catalog;
     }
 
     /** 一句话结果：要么回一段文本，要么表示"这不是板块命令" */
@@ -71,12 +73,13 @@ public class BoardRunner {
         String[] parts = trimmed.substring(1).split("\\s+", 2);
         String boardPath = parts[0];
 
-        // /help 只说"怎么用"，/list 才列全部 —— 两者分工写在这里
+        // /help 只说"怎么用"，/list 才列全部 —— 两份文案都由 CommandCatalog 生成，
+        // 后台看到的目录与群里收到的是同一份数据，避免各写一套后漂移。
         if ("help".equalsIgnoreCase(boardPath)) {
-            return Optional.of(new Reply(globalHelp()));
+            return Optional.of(new Reply(catalog.helpText()));
         }
         if ("list".equalsIgnoreCase(boardPath)) {
-            return Optional.of(new Reply(listAll()));
+            return Optional.of(new Reply(catalog.listText()));
         }
 
         Board board = boards.find(boardPath);
@@ -211,42 +214,6 @@ public class BoardRunner {
             }
         }
         return sb.toString();
-    }
-
-    // ==================== 全局 ====================
-
-    private String globalHelp() {
-        return """
-                指令都按「/板块 /动作」使用：
-                  /板块            查看这个板块有什么
-                  /板块 /create    添加一条
-                  /板块 /delete    撤销一条
-                  /板块 /help      这个板块收什么参数
-                发 /list 看全部板块。
-                """.strip();
-    }
-
-    private String listAll() {
-        List<Board> enabled = boards.listEnabled();
-        if (enabled.isEmpty()) {
-            return "还没有任何板块";
-        }
-        StringBuilder sb = new StringBuilder("全部板块：\n");
-        for (Board board : enabled) {
-            sb.append("/").append(board.path()).append("  ").append(board.displayTitle());
-            if (!board.params().isEmpty()) {
-                sb.append("  （");
-                for (int i = 0; i < board.params().size(); i++) {
-                    if (i > 0) {
-                        sb.append("、");
-                    }
-                    sb.append(board.params().get(i).name());
-                }
-                sb.append("）");
-            }
-            sb.append('\n');
-        }
-        return sb.append("用 /板块 /help 看某一项怎么用。").toString();
     }
 
     // ==================== 小工具 ====================

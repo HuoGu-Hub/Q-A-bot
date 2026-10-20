@@ -189,6 +189,16 @@ public class CommandRepository {
         return jdbc.update("DELETE FROM bot_command WHERE id = ?", id) > 0;
     }
 
+    /**
+     * 删一条内置指令（迁移用）。
+     *
+     * <p>带 {@code builtin = 1} 条件：管理员自建的同名指令不该被迁移顺手带走。
+     */
+    public int deleteBuiltin(String trigger) {
+        return jdbc.update("DELETE FROM bot_command WHERE builtin = 1 AND LOWER(trigger) = LOWER(?)",
+                trigger);
+    }
+
     public boolean setEnabled(String trigger, boolean enabled, String now) {
         return jdbc.update("UPDATE bot_command SET enabled=?, updated_at=? WHERE LOWER(trigger)=LOWER(?)",
                 enabled, now, trigger) > 0;

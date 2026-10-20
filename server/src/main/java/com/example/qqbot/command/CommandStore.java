@@ -59,6 +59,7 @@ public class CommandStore {
             }
             repo.initSchema();
             seedBuiltins();
+            retireLegacyBuiltins();
             available = true;
             log.info("[CMD] 指令库就绪：{} 条指令", count());
         } catch (Exception e) {
@@ -74,9 +75,9 @@ public class CommandStore {
      * 所以你**改过内置指令的回复后，重启不会被覆盖回去**。
      */
     private void seedBuiltins() {
+        // help / list 已经由板块系统接管（BoardRunner 先于指令表匹配），
+        // 再种进指令表只会得到两条永远发不出去、后台却看得见的"死指令"。
         List<CommandRepository.Seed> builtins = List.of(
-                new CommandRepository.Seed("help", "{cmd.list}", "查看所有指令", 1, "[]", null),
-                new CommandRepository.Seed("list", "{cmd.list}", "列出所有指令", 2, "[]", null),
                 new CommandRepository.Seed("ping", "在的～（已运行 {uptime}）", "看看我在不在", 3, "[]", null),
                 new CommandRepository.Seed("stats", """
                         知识库：{kb.count} 条资料
@@ -84,8 +85,32 @@ public class CommandStore {
                         累计问答：{qa.total} 次（命中率 {qa.hitrate}）
                         今天已回答：{qa.today} 次""", "查看知识库统计", 4, "[]", null));
 
-
         repo.seedBuiltins(builtins, Instant.now().toString());
+    }
+
+    /**
+     * 清掉两类历史内置指令。
+     *
+     * <h2>为什么必须在启动时做</h2>
+     * ① {@code help} / {@code list}：板块系统接管后，BoardRunner 在指令表之前匹配，
+     *    这两条永远轮不到；后台却还显示、还能编辑，改了也没有任何效果。
+     * ② {@code set/list/del output}：旧定时任务链路已经移除，它们的 action 指向
+     *    已不存在的执行器，{@code kind} 又停在 template，实际只剩一句"写法"提示。
+     *    新的定时能力在「公告 / 任务」板块里。
+     *
+     * <p>只删 {@code builtin=1} 的行：管理员自己建的、恰好叫这些名字的指令不动。
+     */
+    private void retireLegacyBuiltins() {
+        List<String> retired = List.of("help", "list", "set/output", "list/output", "del/output");
+        for (String trigger : retired) {
+            try {
+                if (repo.deleteBuiltin(trigger) > 0) {
+                    log.info("[CMD] 已移除被板块接管/旧定时链路的内置指令：/{}", trigger);
+                }
+            } catch (Exception e) {
+                log.warn("[CMD] 移除历史内置指令 /{} 失败（不影响启动）：{}", trigger, e.getMessage());
+            }
+        }
     }
 
     /** 把内置命令的参数表序列化成库里那一列 */
