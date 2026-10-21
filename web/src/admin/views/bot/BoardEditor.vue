@@ -5,7 +5,7 @@
  * <p>命令名就是群里的调用名：没有单独的"显示名"。自建命令可以改名，
  * 历史记录会在同一事务里迁到新名字下；内置命令的路径是代码约定，不能改。
  */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import type { AdminBoard, AdminParamSpec, BoardDraft } from '@shared/api/types'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
@@ -51,6 +51,14 @@ const form = reactive<FormState>({
 })
 const groupsText = ref('')
 const openParams = ref(true)
+const openOutput = ref(true)
+const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
+
+/** 参数块的“+ 参数”在标题行：先展开，再让参数表插入一行 */
+function addParam() {
+  openParams.value = true
+  nextTick(() => paramTableRef.value?.addParam())
+}
 
 /** 内置命令的路径由代码约定，不能改名；自建命令可以改名并迁移记录 */
 const pathLocked = computed(() => props.board?.builtin === true)
@@ -76,6 +84,7 @@ function reset() {
   form.listLimit = b?.listLimit ?? 20
   groupsText.value = (b?.groups ?? []).join('\n')
   openParams.value = true
+  openOutput.value = true
 }
 
 watch(() => props.board, reset, { immediate: true })
@@ -218,13 +227,17 @@ function submit() {
         </label>
 
         <div class="block">
-          <button class="block-head" type="button" :aria-expanded="openParams" @click="openParams = !openParams">
-            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openParams }" />
-            <span>参数</span>
-            <span class="block-count">{{ form.params.length }}</span>
-          </button>
+          <div class="block-head block-head--with-action">
+            <button class="block-toggle" type="button" :aria-expanded="openParams" @click="openParams = !openParams">
+              <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openParams }" />
+              <span>参数</span>
+              <span class="block-count">{{ form.params.length }}</span>
+            </button>
+            <button class="head-add" type="button" @click="addParam">+ 参数</button>
+          </div>
           <div v-if="openParams" class="block-body">
             <ParamTable
+              ref="paramTableRef"
               :params="form.params"
               empty-hint="无参数"
               @update:params="form.params = $event"
@@ -236,8 +249,13 @@ function submit() {
           </div>
         </div>
 
-        <div class="format-block">
-          <div class="col-title">输出</div>
+        <div class="block">
+          <button class="block-head" type="button" :aria-expanded="openOutput" @click="openOutput = !openOutput">
+            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openOutput }" />
+            <span>输出</span>
+            <span class="block-count">3</span>
+          </button>
+          <div v-if="openOutput" class="block-body output-body">
           <label class="row">
             <span class="row-label">列表头</span>
             <Input
@@ -285,6 +303,7 @@ function submit() {
           <div class="preview-box">
             <div class="col-title">预览</div>
             <pre class="format-preview">{{ previewText }}</pre>
+          </div>
           </div>
         </div>
       </section>
@@ -408,12 +427,23 @@ function submit() {
 .block-chev.open { transform: rotate(90deg); }
 .block-count { margin-left: auto; color: var(--ink-4); font-family: var(--font-mono); }
 .block-head:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
+.block-head--with-action { padding: 0; cursor: default; }
+.block-toggle {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  padding: 9px 10px; background: none; border: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.block-toggle:focus-visible { outline: 2px solid var(--flame); outline-offset: -2px; }
+.head-add {
+  margin-right: 8px; padding: 2px 7px;
+  background: none; border: 1px solid transparent; border-radius: var(--r-xs);
+  color: var(--ember); font-size: 11px; cursor: pointer;
+}
+.head-add:hover { background: var(--stone-500); border-color: var(--edge); }
+.head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
 
-.format-block {
-  display: flex; flex-direction: column; gap: var(--sp-2);
-  border-top: 1px solid var(--hairline); padding-top: var(--sp-3);
-}
+.output-body { gap: var(--sp-3); }
 .limit-line { display: flex; align-items: center; gap: var(--sp-3); }
 .limit-line :deep(.inp) { max-width: 120px; }
 .format-vars {

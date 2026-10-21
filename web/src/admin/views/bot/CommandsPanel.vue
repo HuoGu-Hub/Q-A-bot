@@ -11,7 +11,7 @@
  * 板块和指令是同一件事的两种形态：对外只有一张命令表，类型列区分
  * 「板块 / 话术 / 问答 / 动作」；底层仍分两张表 —— 板块多一层投递与记录。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
@@ -526,6 +526,13 @@ function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
 
 /** 低频区块折叠：改回复的人不该被参数表和名单挡路 */
 const openBlocks = ref({ params: false, acl: false, help: false })
+const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
+
+/** “+ 参数”在参数标题行：展开后让参数表插入一行 */
+function addParamRow() {
+  openBlocks.value.params = true
+  nextTick(() => paramTableRef.value?.addParam())
+}
 
 /** 只有"白名单/黑名单"两档才需要录名单，其余档位下这一块根本不该出现 */
 const needsList = computed(() =>
@@ -810,13 +817,17 @@ onMounted(load)
 
           <!-- 低频项折叠：改回复的人不该被参数表和名单挡路 -->
           <div class="block">
-            <button class="block-head" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
-              <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
-              <span>参数</span>
-              <span class="block-count">{{ paramRows.length }}</span>
-            </button>
+            <div class="block-head block-head--with-action">
+              <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
+                <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
+                <span>参数</span>
+                <span class="block-count">{{ paramRows.length }}</span>
+              </button>
+              <button class="head-add" type="button" @click="addParamRow">+ 参数</button>
+            </div>
             <div v-if="openBlocks.params" class="block-body">
               <ParamTable
+                ref="paramTableRef"
                 :params="paramRows"
                 empty-hint="无参数"
                 @update:params="setParams"
@@ -1487,6 +1498,20 @@ onMounted(load)
 .block-chev { color: var(--ember); transition: transform var(--dur-fast) var(--ease); }
 .block-chev.open { transform: rotate(90deg); }
 .block-count { margin-left: auto; color: var(--ink-4); font-family: var(--font-mono); }
+.block-head--with-action { padding: 0; cursor: default; }
+.block-toggle {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  padding: 9px 10px; background: none; border: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.block-toggle:focus-visible { outline: 2px solid var(--flame); outline-offset: -2px; }
+.head-add {
+  margin-right: 8px; padding: 2px 7px;
+  background: none; border: 1px solid transparent; border-radius: var(--r-xs);
+  color: var(--ember); font-size: 11px; cursor: pointer;
+}
+.head-add:hover { background: var(--stone-500); border-color: var(--edge); }
+.head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
 
 .acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }

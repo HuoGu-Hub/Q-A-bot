@@ -14,9 +14,8 @@ import { PARAM_TYPES } from './commandOptions'
 
 const props = withDefaults(defineProps<{
   params: AdminParamSpec[]
-  addLabel?: string
   emptyHint?: string
-}>(), { addLabel: '+ 参数', emptyHint: '' })
+}>(), { emptyHint: '' })
 
 const emit = defineEmits<{ 'update:params': [AdminParamSpec[]] }>()
 
@@ -40,6 +39,8 @@ function addParam() {
 function removeParam(i: number) {
   setParams(props.params.filter((_, idx) => idx !== i))
 }
+
+defineExpose({ addParam })
 
 /** checkbox 的 change 事件要读 target.checked，模板里直接转型不好读，收成一个函数 */
 function onRequiredChange(i: number, e: Event) {
@@ -112,8 +113,7 @@ function onOptionsChange(i: number, v: string) {
         />
       </div>
     </div>
-    <div class="param-actions">
-      <Button size="sm" @click="addParam">{{ addLabel }}</Button>
+    <div v-if="$slots.actions" class="param-actions">
       <slot name="actions" />
     </div>
   </div>
