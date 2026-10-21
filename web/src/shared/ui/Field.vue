@@ -2,18 +2,9 @@
 /**
  * 表单行：左侧「标签 + 说明」，右侧控件。
  *
- * 抽它的原因：这个结构在设置页、分类页、模型页、知识库页各写了一遍，
- * 而且都用了「负 margin 贴边 + 2px 火焰左边线」来表示"已改动"——
- * 副作用是改动行会整体左移 12px，行宽随"是否改动"跳动。
- * 这里改成背景 + 内阴影，不动布局。
- *
- * ⚠️ 根元素是 **<label>** 而不是 <div>。
- * 上一版视觉上看着像标签（左边一行字、右边一个控件），但两者在无障碍树里
- * 毫无关系：读屏念到输入框只会说"编辑框"，不说这是"提问量"还是"检索阈值"。
- * 用 <label> 把控件包进来就有了隐式关联，**不需要**去给每个调用点的控件编 id。
- * 代价是标签文字与说明文字都会进入控件的可访问名（这反而是好事：说明本来就在
- * 解释这个字段该填什么）。子元素一律用 <span>：<label> 的内容模型只允许短语内容，
- * 里面塞 <div> 是无效 HTML —— 布局靠 display:grid/block 就行。
+ * ⚠️ 根元素是 label 而不是 div：读屏念到输入框时才会一起念出「提问量」「检索阈值」。
+ * 用 label 把控件包进来就有了隐式关联，不需要给每个调用点的控件编 id。
+ * 子元素一律用 span：label 的内容模型只允许短语内容，里面塞 div 是无效 HTML。
  */
 withDefaults(
   defineProps<{
@@ -45,8 +36,7 @@ withDefaults(
 </template>
 
 <style scoped>
-/* 同级之间用发丝线分隔，而不是给每一行再套一个框。
-   线要看得见；但"两两能不能一眼分开"主要靠上下留白。 */
+/* 同级之间用发丝线分隔，而不是给每一行再套一个框 */
 .field + .field { border-top: 1px solid var(--hairline); }
 
 .field {
@@ -54,7 +44,7 @@ withDefaults(
   grid-template-columns: minmax(0, 1fr) minmax(0, v-bind(controlWidth));
   gap: var(--sp-4);
   align-items: start;
-  padding: var(--sp-3) var(--sp-3);
+  padding: var(--sp-3);
   border-radius: var(--r-sm);
   transition: background var(--dur-fast) var(--ease);
 }
@@ -67,13 +57,10 @@ withDefaults(
 }
 
 .meta { min-width: 0; }
-/* ⚠️ 根元素从 <div> 换成 <label> 之后，里面的 .label / .hint 也必须是 <span>
-   （label 的内容模型只允许短语内容），于是它们默认成了**行内**元素 ——
-   标签和说明会挤在同一行上（"启用首页轮播关掉后公开站首页不显示轮播…"）。
-   这里显式恢复成块级，版面与改造前完全一致。 */
+/* 根元素是 label，里面的 .label / .hint 必须是 span，于是默认是行内元素 ——
+   这里显式恢复成块级，否则标签和说明会挤在同一行。 */
 .label { display: block; font-size: var(--fs-base); color: var(--ink); }
-/* 改动标记从"●"字符换成 6px 的圆点：字符的基线和大小随字体变，
-   并排看会跟着系统字体忽大忽小忽高忽低。 */
+/* 改动标记用 6px 圆点：字符的基线和大小随字体变，会忽大忽小忽高忽低 */
 .dot {
   display: inline-block;
   width: 6px;
@@ -83,10 +70,11 @@ withDefaults(
   background: var(--ember);
   vertical-align: 2px;
 }
-.hint { display: block; font-size: var(--fs-xs); color: var(--ink-3); margin-top: 3px; line-height: 1.65; }
+.hint { display: block; font-size: var(--fs-xs); color: var(--ink-3); margin-top: 2px; line-height: 1.65; }
 .ctrl { display: block; min-width: 0; }
 
 @media (max-width: 760px) {
-  .field { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .field { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); padding: var(--sp-3) 0; }
+  .field + .field { border-top: 1px solid var(--hairline); }
 }
 </style>

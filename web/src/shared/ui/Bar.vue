@@ -18,7 +18,7 @@ const width = () => {
 <template>
   <div class="bar-row">
     <span class="lbl">{{ label }}</span>
-    <span class="track"><span class="fill" :class="`t-${tone}`" :style="{ width: width() }" /></span>
+    <span class="track"><span class="fill" :class="'t-' + tone" :style="{ width: width() }" /></span>
     <span v-if="showValue" class="val num">{{ value }}</span>
   </div>
 </template>
@@ -26,7 +26,7 @@ const width = () => {
 <style scoped>
 .bar-row {
   display: grid;
-  grid-template-columns: minmax(70px, 22%) 1fr auto;
+  grid-template-columns: minmax(64px, 22%) 1fr auto;
   align-items: center;
   gap: var(--sp-3);
   font-size: var(--fs-xs);
@@ -34,7 +34,7 @@ const width = () => {
 .lbl { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 轨道是刻进去的槽：底色更深 + 内阴影 */
 .track {
-  height: 8px;
+  height: 7px;
   background: var(--stone-void);
   border-radius: var(--r-pill);
   overflow: hidden;
@@ -44,11 +44,11 @@ const width = () => {
   display: block;
   height: 100%;
   border-radius: var(--r-pill);
-  background: linear-gradient(90deg, var(--ember-deep), var(--ember));
+  background: var(--ember);
   transition: width var(--dur-slow) var(--ease);
 }
-.t-moss { background: linear-gradient(90deg, var(--vital-deep), var(--vital)); }
-.t-rust { background: linear-gradient(90deg, var(--blight-deep), var(--blight)); }
-.t-mist { background: linear-gradient(90deg, var(--stone-600), var(--mist)); }
-.val { color: var(--ink-2); min-width: 30px; text-align: right; }
+.t-moss { background: var(--vital); }
+.t-rust { background: var(--blight); }
+.t-mist { background: var(--mist); }
+.val { color: var(--ink-2); min-width: 28px; text-align: right; }
 </style>

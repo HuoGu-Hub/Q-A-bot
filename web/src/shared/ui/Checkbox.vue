@@ -1,10 +1,9 @@
 <script setup lang="ts">
 /**
- * 复选框 —— 给**多选清单**用。
+ * 复选框 —— 给多选清单用。
  *
- * 为什么不用 {@link Switch}：开关表达的是"这个功能开着还是关着"（一个状态），
- * 多选清单要表达的是"这一项在这次操作里选没选中"（一次选择）。语义不同，
- * 视觉也不该一样 —— 复选框要能一眼扫出"选了哪几行"。
+ * 为什么不用 Switch：开关表达「这个功能开着还是关着」，多选清单表达
+ * 「这一项在这次操作里选没选中」。语义不同，视觉也不该一样。
  */
 withDefaults(defineProps<{
   modelValue: boolean
@@ -42,19 +41,21 @@ defineEmits<{ 'update:modelValue': [boolean] }>()
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   border: 1px solid var(--edge);
-  border-radius: 3px;
-  background: var(--surface-inset);
+  border-radius: var(--r-xs);
+  background: var(--stone-void);
   color: transparent;
+  box-shadow: var(--bevel-inset);
   transition: background var(--dur-fast) var(--ease),
               border-color var(--dur-fast) var(--ease),
               color var(--dur-fast) var(--ease);
 }
 .cb:hover .box { border-color: var(--ember); }
 .cb input:focus-visible + .box { outline: 2px solid var(--ember); outline-offset: 2px; }
-.cb.on .box { background: var(--ember); border-color: var(--ember); color: var(--stone-void); }
+/* 勾的颜色必须是 --ink-on-ember：日间主题的 --stone-void 是深赭，勾在深棕底上看不见 */
+.cb.on .box { background: var(--ember); border-color: var(--ember); color: var(--ink-on-ember); }
 .cb.dis { cursor: not-allowed; opacity: .45; }
 
 @media (prefers-reduced-motion: reduce) {

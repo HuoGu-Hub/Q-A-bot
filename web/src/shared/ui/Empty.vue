@@ -11,9 +11,10 @@ withDefaults(defineProps<{ text?: string; hint?: string; icon?: string }>(), {
 
 <template>
   <div class="empty">
-    <span class="glyph" aria-hidden="true"><Icon :name="icon" :size="22" /></span>
+    <span class="glyph" aria-hidden="true"><Icon :name="icon" :size="21" /></span>
     <div class="t">{{ text }}</div>
     <div v-if="hint" class="h">{{ hint }}</div>
+    <slot />
   </div>
 </template>
 
@@ -22,8 +23,8 @@ withDefaults(defineProps<{ text?: string; hint?: string; icon?: string }>(), {
 .glyph {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   margin: 0 auto var(--sp-3);
   border-radius: 50%;
   background: var(--stone-void);

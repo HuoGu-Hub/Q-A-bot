@@ -1,26 +1,25 @@
 <script setup lang="ts">
 /**
- * 居中弹窗。
+ * 居中弹窗 / 手机底部抽屉。
  *
- * 与抽屉保持同一套约定：
- *   - **Teleport 到 body**：固定定位的祖先只要带 transform / overflow，弹窗会被裁在面板里
- *   - role="dialog" + aria-modal，Esc 关闭，点遮罩关闭
- *   - 打开时把焦点移进弹窗，关闭时还给原来那个元素（键盘用户不会掉回页面顶部）
+ * 约定：
+ *   - Teleport 到 body：固定定位的祖先只要带 transform 或 overflow，弹窗会被裁在面板里
+ *   - role=dialog + aria-modal，Esc 关闭，点遮罩关闭
+ *   - 打开时把焦点移进弹窗，关闭时还给原来那个元素
  *   - 打开期间锁 body 滚动
- *   - 窄屏（<560px）自动贴底变成"底部抽屉"：手机上居中弹窗的手指覆盖面积太尴尬
+ *   - 窄屏（≤560px）自动贴底：手机上居中弹窗的手指覆盖面积太尴尬
  *
- * 内容长度由调用方决定，超出高度时**只有内容区滚动**，标题栏与关闭按钮始终在。
+ * 内容超长时只有内容区滚动，标题栏与关闭按钮始终在。
  */
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 
 const props = withDefaults(defineProps<{
   open: boolean
-  /** 标题栏文字；空则只显示关闭按钮（此时必须由调用方给 ariaLabel） */
+  /** 标题栏文字；空则只显示关闭按钮，此时必须由调用方给 ariaLabel */
   title?: string
-  /** 标题为空时的无障碍名字 */
   ariaLabel?: string
-  /** 弹窗宽度，默认 560px（窄屏自动收成 100%） */
+  /** 弹窗宽度，默认 560px（窄屏自动满宽） */
   width?: string
 }>(), { title: '', ariaLabel: '', width: '560px' })
 
@@ -62,7 +61,6 @@ onBeforeUnmount(release)
 <template>
   <Teleport to="body">
     <div v-if="open" class="layer">
-      <!-- 遮罩：点它等于关闭。放在弹窗下面（DOM 顺序在前），不挡弹窗自己的点击 -->
       <div class="mask" @click="emit('close')" />
       <div
         ref="box"
@@ -73,13 +71,11 @@ onBeforeUnmount(release)
         tabindex="-1"
         :style="{ width }"
       >
+        <!-- 手机上的一道把手：明确「这张纸可以往下推走」 -->
+        <span class="grab" aria-hidden="true" />
         <header class="head">
           <span class="title">{{ title }}</span>
           <span class="head-spacer" />
-          <!--
-            头部动作区。放在标题栏而不是内容底部：内容长了要滚到底才点得到保存，
-            而"保存/取消"这类动作必须**永远在手边**。
-          -->
           <div class="head-actions"><slot name="actions" /></div>
           <button type="button" class="x" aria-label="关闭" @click="emit('close')">
             <Icon name="close" :size="16" />
@@ -106,12 +102,11 @@ onBeforeUnmount(release)
 .mask {
   position: absolute;
   inset: 0;
-  background: rgba(3, 4, 6, .62);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: var(--backdrop-mask);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
-/* 弹窗本体：抬到 --stone-400（--stone-300 与页面底几乎同色，会糊在一起），
-   靠 --shadow-pop 说明它比页面高一层，不再多描一圈重边。 */
+/* 弹窗本体：抬到 stone-400，靠 shadow-pop 说明它比页面高一层，不多描一圈重边 */
 .box {
   position: relative;
   max-width: 100%;
@@ -122,30 +117,30 @@ onBeforeUnmount(release)
   border: 1px solid var(--edge);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-pop);
-  /* 弹窗容器是 tabindex="-1" 的程序化焦点落点，不是可操作控件：
-     这里去掉 outline 是**有意**的 —— 弹窗自己的边框 + 大投影已经清楚表明焦点进来了，
-     再套一圈键盘焦点环只会让人以为整个弹窗是个大按钮。
-     真正的可操作控件（关闭按钮、内容里的输入框）各自都有独立的焦点样式。 */
+  /* tabindex=-1 的程序化焦点落点，不是可操作控件：
+     弹窗自己的边框与投影已经表明焦点进来了，再套一圈键盘焦点环会像「整个弹窗是个按钮」 */
   outline: none;
 }
+.grab { display: none; }
 .head {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--hairline);
+  min-height: 56px;
 }
-/* 标题与右侧动作之间的弹性空隙：没有它，#actions 会紧贴标题，
-   而关闭按钮靠 margin-left:auto 单独飞到最右，头部会显得断开。 */
+/* 标题与右侧动作之间的弹性空隙：#actions 才不会紧贴标题 */
 .head-spacer { flex: 1; }
-.title { font-size: var(--fs-section); font-weight: var(--fw-semi); }
+.title { font-size: var(--fs-lg); font-weight: var(--fw-semi); }
+.head-actions { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
 .x {
   flex: none;
   display: grid;
   place-items: center;
   margin-left: auto;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background: none;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
@@ -155,8 +150,7 @@ onBeforeUnmount(release)
               color var(--dur-fast) var(--ease);
 }
 .x:hover { background: var(--stone-500); border-color: var(--edge); color: var(--ink); }
-/* overscroll-behavior: contain —— 滚到弹窗内容的两端时，滚轮/手势不应该继续传给后面的页面
-   （否则会出现"弹窗已经到头了，页面却在背后滚动"）。 */
+/* overscroll-behavior: contain —— 滚到两端时不要把滚动传给后面的页面 */
 .body { padding: var(--sp-4); overflow: auto; overscroll-behavior: contain; }
 
 @media (max-width: 560px) {
@@ -169,6 +163,15 @@ onBeforeUnmount(release)
     border-bottom: 0;
     padding-bottom: var(--safe-b);
   }
+  .grab {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: var(--r-pill);
+    background: var(--edge-hover);
+  }
+  .head { padding-top: var(--sp-2); min-height: 48px; }
   .body { padding: var(--sp-4) var(--sp-4) var(--sp-5); }
 }
 </style>

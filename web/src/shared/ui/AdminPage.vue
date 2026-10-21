@@ -1,18 +1,15 @@
 <script setup lang="ts">
 /**
- * 管理页外壳。结构只有两段：**一条吸顶栏** + 页面内容。
+ * 管理页外壳。结构只有两段：一条吸顶栏 + 页面内容。
  *
- * <p><b>为什么是一行而不是两行</b>：原先这里有一个 page-head（页面标题 + 一句说明），
- * 下面各面板又各自带一条 panel-bar（放刷新/保存/新建这类按钮）。结果是
- * 页面上并排堆着两条工具栏，而 tabs 那一行右边明明空着 —— 既浪费竖向空间，
- * 又让「保存在哪」随页面而变。
+ * <p>为什么是一行而不是两行：原先这里有一个 page-head（页面标题 + 说明），
+ * 下面各面板又各自带一条 panel-bar（刷新/保存/新建）。结果是并排堆着两条工具栏，
+ * 而 tabs 那行右边明明空着 —— 既浪费竖向空间，又让「保存在哪」随页面而变。
  *
- * <p>现在合成一条：左边是二级目录（tabs），右边是本页动作按钮，整条**吸顶**。
- * 这样滚到任何位置，「切换 tab」和「保存」都在同一个地方。
+ * <p>现在合成一条：左边二级目录，右边本页动作，整条吸顶。
  *
- * <p><b>页面标题也去掉了</b>：顶端导航已经标出你在哪个页面，再写一遍是重复。
- *
- * <p>宽度只有两档：narrow 1100（表单类）、wide 1400（默认）。
+ * <p>手机端：目录一行、动作一行，都不换行。动作行可横滚，
+ * 但不会再折成三行把吸顶栏撑高一倍。
  */
 import { computed, useSlots } from 'vue'
 
@@ -29,7 +26,7 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
 </script>
 
 <template>
-  <div class="page" :class="`w-${width}`">
+  <div class="page" :class="'w-' + width">
     <div v-if="hasBar" class="page-bar">
       <div class="bar-tabs"><slot name="tabs" /></div>
       <span class="spacer" />
@@ -52,12 +49,10 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
 .w-wide { max-width: 1400px; }
 
 /*
-  吸顶栏。
-  - top 用 --admin-bar-h（顶端导航的高度）：导航本身也是 sticky 的，两层的偏移必须对齐，
-    否则滚动时栏目会钻到导航底下去。
-  - 背景用**不透明**的页面底，不是半透明 —— 半透明会让下面的内容透出来，滚动时看着像重影。
-  - 下边缘就是 tabs 那条线（tabs 自带 border-bottom），两者位置重合、颜色一致，
-    所以不会出现双线；没有 tabs 的页面则靠这条 border 分隔。
+  吸顶栏：
+  - top 用 --admin-bar-h：顶端导航也是 sticky，两层偏移必须对齐
+  - 背景用不透明的页面底，半透明会让滚动内容透出来像重影
+  - 下边缘就是 tabs 那条线，位置与颜色重合，所以不会出现双线
 */
 .page-bar {
   position: sticky;
@@ -70,17 +65,13 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
   padding-top: var(--sp-3);
   border-bottom: 1px solid var(--hairline);
   min-height: 0;
-  /* 两端只留内衬刻痕的一点点余量，不做整圈边框 */
-  box-shadow: 0 8px 16px -14px rgba(0, 0, 0, .9);
 }
 .spacer { flex: 1; }
-/* 目录吃掉剩余宽度；不够时**它自己横向滚**（Tabs 内部 overflow-x） */
+/* 目录吃掉剩余宽度；不够时它自己横向滚 */
 .bar-tabs { min-width: 0; flex: 0 1 auto; }
 /*
-  动作按钮**不参与压缩，也不换行**。
-  原来是 flex-wrap: wrap 且默认可压缩：目录一长，这一格被压到内容宽度以下，
-  四个按钮就折成两行 —— 吸顶栏凭空高一倍，看着像坏了。
-  腾地方是目录的事（它本来就能横向滚），按钮只负责待在一条线上。
+  动作按钮不参与压缩，也不换行。
+  腾地方是目录的事，按钮只负责待在一条线上。
 */
 .bar-actions {
   display: flex;
@@ -92,11 +83,22 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
 }
 
 @media (max-width: 760px) {
-  /* 窄屏：目录与按钮分两行，否则按钮会被挤到看不见 */
-  .page { padding: 0 var(--sp-3) var(--sp-8); }
-  .page-bar { flex-wrap: wrap; align-items: center; }
+  .page { padding: 0 var(--sp-3) var(--sp-6); gap: var(--sp-3); }
+  /* 窄屏：目录与动作各占一行；动作行自身可横滚，绝不折行 */
+  .page-bar { flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding-top: var(--sp-2); }
   .spacer { display: none; }
   .bar-tabs { flex: 1 1 100%; }
-  .bar-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; }
+  /*
+    动作行允许换行，但**不允许横滚**。
+    横滚 + 右对齐会让第一颗按钮被裁在屏幕外（实测「全部展开」只剩「部展开」），
+    用户既看不到开头、也不知道能滑。按钮在手机上已经收小，四颗通常正好一行，
+    五个以上的页面折成两行 —— 比被裁掉一颗好。
+  */
+  .bar-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    padding-bottom: var(--sp-2);
+  }
 }
 </style>

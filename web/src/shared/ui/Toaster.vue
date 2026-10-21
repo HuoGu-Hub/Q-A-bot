@@ -14,7 +14,7 @@ const { items } = useToasts()
 <template>
   <div class="toaster" aria-live="polite">
     <TransitionGroup name="toast">
-      <div v-for="t in items" :key="t.id" class="toast" :class="`t-${t.tone}`" role="status">
+      <div v-for="t in items" :key="t.id" class="toast" :class="'t-' + t.tone" role="status">
         <span class="mark" aria-hidden="true" />
         <span class="body">{{ t.text }}</span>
         <button type="button" class="x" aria-label="关闭" @click="dismiss(t.id)">
@@ -37,6 +37,8 @@ const { items } = useToasts()
   align-items: center;
   gap: var(--sp-2);
   pointer-events: none;
+  width: max-content;
+  max-width: 100%;
 }
 .toast {
   pointer-events: auto;
@@ -44,17 +46,17 @@ const { items } = useToasts()
   align-items: center;
   gap: var(--sp-3);
   min-width: 220px;
-  max-width: min(560px, 90vw);
+  max-width: min(560px, 92vw);
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-md);
   background: var(--stone-400);
   border: 1px solid var(--edge);
   box-shadow: var(--shadow-pop);
-  font-size: var(--fs-base);
+  font-size: var(--fs-sm);
   color: var(--ink);
 }
 /* 左侧状态竖条 —— 与站内其它状态色用法一致 */
-.mark { width: 2px; align-self: stretch; border-radius: var(--r-pill); background: var(--ink-3); }
+.mark { width: 3px; align-self: stretch; border-radius: var(--r-pill); background: var(--ink-3); }
 .t-ok .mark { background: var(--vital); }
 .t-error .mark { background: var(--blight); }
 .t-warn .mark { background: var(--ember); }
@@ -76,4 +78,9 @@ const { items } = useToasts()
 
 .toast-enter-active, .toast-leave-active { transition: opacity .18s ease, transform .18s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-8px); }
+
+@media (max-width: 760px) {
+  .toaster { top: calc(var(--admin-bar-h, 0px) + var(--sp-3)); }
+  .toast { min-width: 0; }
+}
 </style>

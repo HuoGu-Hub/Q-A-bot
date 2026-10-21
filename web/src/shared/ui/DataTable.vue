@@ -2,38 +2,54 @@
 /**
  * 数据表格。
  *
- * 抽它的原因：6 个 view 各写一份 .tbl（cell padding 7/8 与 6/8 之别），
- * 行高、表头色、hover 全都不一致。这里统一一套，并补上原先普遍缺失的：
- * 表头吸顶、数字列等宽对齐、行悬浮反馈、空态。
+ * 统一原先 6 份各写一遍的 .tbl：表头吸顶、数字列等宽、行悬浮、空态。
  *
- * 用法（表结构留在调用方，样式由这里统一）：
- *   <DataTable :rows="list" :empty="'还没有记录'">
- *     <thead><tr><th>时间</th><th class="num">命中</th></tr></thead>
- *     <tbody><tr v-for="r in list"><td>…</td><td class="num">…</td></tr></tbody>
- *   </DataTable>
+ * cards 模式：窄屏（≤680px）下把每行变成一张卡，用表头的 th 文本做字段名。
+ * ⚠️ 需要调用方在 td 上写 data-label，否则卡片里只有值、没有「这是什么」。
+ * 没写 data-label 的表不要开 cards —— 宁可横向滚动，也不要一张看不懂的卡。
  */
-withDefaults(
+import { computed } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     /** 行数 —— 为 0 时显示空态。不想用空态就传 undefined */
     rows?: number
     empty?: string
-    /** 空态的补充说明（怎么才能有数据） */
     emptyHint?: string
-    /** 无障碍名字。默认「数据表」，同一个页面有多张表时给具体的名字 */
+    /** 无障碍名字。同一页多张表时给具体的名字 */
     label?: string
+    /** 窄屏下转为卡片列表 */
+    cards?: boolean
+    /** 无视 30 行上限，强制卡片化。只给「行内容短、且已经有筛选/分页」的表用 */
+    forceCards?: boolean
   }>(),
-  { rows: undefined, empty: '暂无数据', emptyHint: '', label: '数据表' }
+  { rows: undefined, empty: '暂无数据', emptyHint: '', label: '数据表', cards: false, forceCards: false }
 )
+
+/**
+ * 卡片模式的上限：30 行。
+ *
+ * <p>小程序卡只在「一屏能看完」的表上划算。100 条记录、198 份文档这种长表，
+ * 每行一张卡会变成一万多像素的页面 —— 比横向滚动难用得多。
+ * 所以调用方可以无脑开 cards，由这里按行数兜底：长表自动回到表格 + 横向滚动。
+ */
+const CARD_ROW_LIMIT = 30
+const useCards = computed(() =>
+  props.cards && (props.forceCards || props.rows === undefined || props.rows <= CARD_ROW_LIMIT))
 </script>
 
 <template>
   <!--
-    ⚠️ tabindex="0" 是给键盘用户的。
-    宽表在窄屏上只能横向滚动，而 scrollable 区域如果不可聚焦，键盘就**永远滚不动它**
-    —— 最后几列对键盘用户等于不存在（axe 判 serious：scrollable-region-focusable）。
-    role="group" + aria-label 让这一块在读屏里有个名字，也不至于变成一个大 landmark。
+    ⚠️ tabindex="0" 是给键盘用户的：宽表在窄屏上只能横向滚动，
+    而可滚动区域如果不可聚焦，键盘就永远滚不动它。
   -->
-  <div class="tbl-wrap" role="group" :aria-label="label" tabindex="0">
+  <div
+    class="tbl-wrap"
+    :class="{ 'is-cards': useCards }"
+    role="group"
+    :aria-label="label"
+    tabindex="0"
+  >
     <table v-if="rows === undefined || rows > 0" class="tbl">
       <slot />
     </table>
@@ -45,8 +61,6 @@ withDefaults(
 </template>
 
 <style scoped>
-/* 横向可滚 + 到边提示：手机上宽表格必然溢出，所以必须有横向滚动，
-   但不能让整页跟着横滚（overflow-x:auto 建了独立的滚动上下文）。 */
 .tbl-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
 
 .tbl {
@@ -58,7 +72,7 @@ withDefaults(
   text-align: left;
   font-weight: var(--fw-medium);
   font-size: var(--fs-xs);
-  letter-spacing: var(--tracking-label);
+  letter-spacing: .04em;
   color: var(--ink-3);
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--edge);
@@ -77,10 +91,8 @@ withDefaults(
 .tbl :deep(tbody tr:last-child td) { border-bottom: 0; }
 /*
   ⚠️ 行必须钉死成 table-row。
-  调用方的模板里 <tr> 常被顺手写上 class="row"，而它们自己那份 .row 多半是
-  display: flex（给卡片内的横排用的）—— 落到 <tr> 上就把整张表拆了：
-  行不再是表格行，单元格各排各的，列跟表头对不上，而且每行偏得还不一样。
-  这里用父级选择器比调用方的 .row[data-v] 高一级，把 display 钉住。
+  调用方的 <tr> 常被顺手写上 class="row"，而它们自己那份 .row 多半是
+  display:flex —— 落到 <tr> 上就把整张表拆了。
 */
 .tbl :deep(tr) { display: table-row; }
 .tbl :deep(td) { display: table-cell; }
@@ -107,4 +119,46 @@ withDefaults(
 }
 .empty-title { color: var(--ink-2); font-size: var(--fs-base); }
 .empty-hint { color: var(--ink-3); font-size: var(--fs-xs); }
+
+@media (max-width: 760px) {
+  .tbl { font-size: var(--fs-xs); }
+  .tbl :deep(th) { padding: var(--sp-2); }
+  .tbl :deep(td) { padding: var(--sp-2); }
+}
+
+/* ==================== 卡片模式 ====================
+   每行一条。字段名来自 td 的 data-label，值单独一行 —— 手机上横着扫一行
+   五个字段是不可能的，竖着读才读得下去。 */
+@media (max-width: 680px) {
+  .is-cards { overflow-x: visible; }
+  .is-cards .tbl,
+  .is-cards .tbl :deep(tbody),
+  .is-cards .tbl :deep(tr),
+  .is-cards .tbl :deep(td) { display: block; }
+  .is-cards .tbl :deep(thead) { display: none; }
+  .is-cards .tbl :deep(tbody tr) {
+    background: var(--stone-300);
+    border-radius: var(--r-md);
+    box-shadow: var(--bevel-raised);
+    padding: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-2);
+  }
+  .is-cards .tbl :deep(tbody tr:hover) { background: var(--stone-400); }
+  .is-cards .tbl :deep(td) {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: var(--sp-2);
+    padding: 3px 0;
+    border: 0;
+    text-align: left !important;
+  }
+  .is-cards .tbl :deep(td)::before {
+    content: attr(data-label);
+    color: var(--ink-3);
+    font-size: var(--fs-xs);
+    line-height: 1.6;
+  }
+  .is-cards .tbl :deep(td:not([data-label])) { grid-template-columns: 1fr; }
+  .is-cards .tbl :deep(td:not([data-label]))::before { display: none; }
+}
 </style>

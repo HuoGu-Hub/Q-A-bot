@@ -2,14 +2,10 @@
 /**
  * 二级目录（Tab）。
  *
- * 抽它的原因：项目里原有 **3 套**互不相同的 Tab 写法 —— 知识库页与广场页是下划线式，
- * 日志页是分段控件式，还有的页面直接没有。
+ * 下划线式：激活项下方一道 2px 灵火线。比 segmented 控件轻，也不和面板边缘打架。
+ * 键盘左右键可在 tab 之间移动 —— role=tablist 的应有行为。
  *
- * 统一成下划线式：激活项下方一道灵火线。理由 —— 下划线式在深色底上比分段控件更轻，
- * 也不会和面板边缘打架。
- *
- * v2：+ 键盘左右键可以在 tab 之间移动（role="tablist" 的应有行为，
- * 上一版只有 role 没有键盘实现，读屏会告诉用户"这是 tablist"然后什么也做不了）。
+ * <p>手机上 7 个 tab 横排会被截断，所以：可横向滚动 + 右缘渐隐提示「还有」。
  */
 import { ref } from 'vue'
 
@@ -101,4 +97,14 @@ function onKey(e: KeyboardEvent) {
   margin-left: var(--sp-2);
 }
 .tab.active .count { color: var(--ember); }
+
+@media (max-width: 760px) {
+  .tab { min-height: 44px; padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); }
+  /* 右缘渐隐：告诉用户「右边还有」。
+     遮罩作用在整个滚动容器上，所以只在窄屏生效，桌面端最后一项不会被虚化。 */
+  .tabs {
+    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+  }
+}
 </style>

@@ -2,13 +2,16 @@
 /**
  * 面板 —— 基础容器。
  *
- * 视觉身份：**默认不描边框**，层级靠背景明度阶梯（tokens 的 --stone-*）表达。
- * 盒子本体样式在 theme/texture.css 的 .panel；这里只管标题区与折叠。
+ * 视觉身份：默认不描边框，层级靠背景明度阶梯表达。盒子本体在 theme/texture.css 的 .panel。
+ * 这里只管标题区与折叠。
  *
- * 折叠：collapsible + default-open。默认收起时要给 hint 或 count，
+ * 折叠：collapsible + defaultOpen。默认收起时要给 hint 或 count，
  * 否则收起来只剩一个标题，用户不知道里面有什么。
+ *
+ * mobileCollapsed：手机端默认收起。管理端一屏十几个分组，全展开的结果是
+ * 手机上一万四千像素的长页 —— 这不是「信息全」，是「什么都找不到」。
  */
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 
 const props = withDefaults(
@@ -22,10 +25,11 @@ const props = withDefaults(
     corners?: boolean
     stone?: boolean
     sunken?: boolean
-    /** 灵火光。⚠️ 与 corners 争用 ::after，别同时开 */
     glow?: boolean
     collapsible?: boolean
     defaultOpen?: boolean
+    /** 窄屏（≤760px）下初始为收起 */
+    mobileCollapsed?: boolean
   }>(),
   {
     corners: false,
@@ -34,10 +38,18 @@ const props = withDefaults(
     glow: false,
     collapsible: false,
     defaultOpen: true,
+    mobileCollapsed: false,
   }
 )
 
 const open = ref(props.collapsible ? props.defaultOpen : true)
+
+onMounted(() => {
+  if (props.collapsible && props.mobileCollapsed && window.matchMedia('(max-width: 760px)').matches) {
+    open.value = false
+  }
+})
+
 function toggle() {
   if (props.collapsible) open.value = !open.value
 }
@@ -86,9 +98,7 @@ function toggle() {
 <style scoped>
 .panel-title {
   font-family: var(--font-body);
-  /* 17px：原来这里是 14px，和正文一样大 ——
-     "标题不成为标题"是上一版"满屏线条框"观感的根源之一。
-     层级由字号 + 字重 + 字距共同决定，不要只调字号。 */
+  /* 17px：和正文拉开一档。标题不成为标题，是「满屏线条框」观感的根源之一 */
   font-size: var(--fs-section);
   font-weight: var(--fw-semi);
   letter-spacing: .01em;
@@ -96,11 +106,11 @@ function toggle() {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+  min-height: 28px;
 }
 .panel--collapsible .panel-title { margin-bottom: 0; }
 .panel--collapsible .panel-body { margin-top: var(--sp-4); }
-/* 收起时收窄内边距：展开态用 24px 是为了给内容呼吸，但收起的行只有一行字，
-   沿用 24px 会让 12 个分组白白占掉一屏。 */
+/* 收起时收窄内边距：展开态用 24px 是为了给内容呼吸，收起的行只有一行字 */
 .panel--closed { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
 
 .head {
@@ -110,7 +120,7 @@ function toggle() {
   flex: 1;
   min-width: 0;
 }
-/* 可点区域铺满标题行，别只让文字可点 */
+/* 可点区域：整行都能点，且手机端够 44 */
 .head--btn {
   background: none;
   border: 0;
@@ -131,7 +141,7 @@ function toggle() {
 .head--btn:active { background: var(--surface-active); }
 .head--btn:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
 
-/* 灵火刻痕：区块标题的标识，全站只有它用这道竖线（页面标题走 .section-title）。 */
+/* 余烬刻痕：区块标题的标识。全站只有它和页面标题用这道竖线。 */
 .head-text {
   position: relative;
   padding-left: var(--sp-4);
@@ -147,7 +157,7 @@ function toggle() {
   width: 3px;
   height: 15px;
   border-radius: 1px;
-  background: linear-gradient(180deg, var(--ember-hot), var(--ember-deep));
+  background: var(--ember);
 }
 
 .chev {
@@ -183,5 +193,8 @@ function toggle() {
 
 @media (max-width: 760px) {
   .panel { padding: var(--sp-4); }
+  .head--btn { min-height: 44px; }
+  /* 手机上说明会挤掉标题：只保留标题与计数 */
+  .head-hint { display: none; }
 }
 </style>
