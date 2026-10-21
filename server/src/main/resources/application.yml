@@ -139,6 +139,10 @@ app:
     # 投票者哈希的盐。留空用默认值（开发环境够用）
     vote-salt: ${PLAZA_VOTE_SALT:}
 
+  # 板块示例种子：新库默认不建公告/任务/开黑，由管理员按需创建
+  boards:
+    seed-defaults: false
+
   # ============================ 指令系统 ============================
   # 命令一律以 "/" 开头，命令名就是路径：/set /output。
   # 群里是否必须 @ 机器人【不在这里配】—— 见 app.guard.access.require-mention-in-group，
@@ -146,6 +150,8 @@ app:
   # ⚠️ 这些配置都是【热生效】的 —— 后台改完立即起作用，不用重启。
   commands:
     enabled: true
+    # 新库默认不种 ping/stats；需要示例时改成 true
+    seed-defaults: false
     # 指令的独立限流（每人每分钟几次）。
     # 刻意和问答限流分开：问答是"每分钟一次"，指令也受它管的话 /help 就没法用了。
     rate-limit-per-minute: 10
@@ -837,4 +843,3 @@ logging:
       # ★ 总量上限，防止日志写爆磁盘
       total-size-cap: 200MB
       clean-history-on-start: false
-

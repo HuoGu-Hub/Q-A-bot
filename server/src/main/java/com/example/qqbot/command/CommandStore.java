@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -44,9 +46,20 @@ public class CommandStore {
 
     private volatile boolean available;
 
-    public CommandStore(CommandRepository repo, ObjectMapper mapper) {
+    /** 新库是否种内置指令；后台/生产默认关，测试直接构造时保留种子 */
+    private final boolean seedDefaults;
+
+    @Autowired
+    public CommandStore(CommandRepository repo, ObjectMapper mapper,
+                        @Value("${app.commands.seed-defaults:false}") boolean seedDefaults) {
         this.repo = repo;
         this.mapper = mapper;
+        this.seedDefaults = seedDefaults;
+    }
+
+    /** 测试用：默认允许种子，保证原有的种子/目录用例不必自己造数据 */
+    CommandStore(CommandRepository repo, ObjectMapper mapper) {
+        this(repo, mapper, true);
     }
 
     @PostConstruct
@@ -59,7 +72,7 @@ public class CommandStore {
             }
             repo.initSchema();
             // 种子只播一次：清空命令库后重启不能再把旧内置命令塞回来
-            if (!repo.hasMeta("command-seed-retired")) {
+            if (seedDefaults && !repo.hasMeta("command-seed-retired")) {
                 seedBuiltins();
                 repo.setMeta("command-seed-retired", Instant.now().toString());
             }

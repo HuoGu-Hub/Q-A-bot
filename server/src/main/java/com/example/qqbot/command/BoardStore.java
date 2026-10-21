@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -40,9 +42,20 @@ public class BoardStore {
 
     private volatile boolean available;
 
-    public BoardStore(BoardRepository repo, ObjectMapper mapper) {
+    /** 新库是否种三个示例板块；后台/生产默认关，测试直接构造时保留种子 */
+    private final boolean seedDefaults;
+
+    @Autowired
+    public BoardStore(BoardRepository repo, ObjectMapper mapper,
+                      @Value("${app.boards.seed-defaults:false}") boolean seedDefaults) {
         this.repo = repo;
         this.mapper = mapper;
+        this.seedDefaults = seedDefaults;
+    }
+
+    /** 测试用：默认允许种子，保证原有的板块用例不必自己造数据 */
+    BoardStore(BoardRepository repo, ObjectMapper mapper) {
+        this(repo, mapper, true);
     }
 
     @PostConstruct
@@ -55,7 +68,7 @@ public class BoardStore {
             }
             repo.initSchema();
             // 种子只播一次：清空板块后重启不能再把三个内置板块塞回来
-            if (!repo.hasMeta("board-seed-retired")) {
+            if (seedDefaults && !repo.hasMeta("board-seed-retired")) {
                 seedBuiltins();
                 repo.setMeta("board-seed-retired", Instant.now().toString());
             }
