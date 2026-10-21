@@ -121,6 +121,13 @@ public class BoardRecordStore {
         return available ? toRecords(repo.listByBoard(board.path(), groupId, false, limit)) : List.of();
     }
 
+    /** 指定群列表；板块数据范围 SOME 用 */
+    public List<BoardRecord> query(Board board, List<Long> groupIds, int limit) {
+        return available
+                ? toRecords(repo.listByBoard(board.path(), groupIds, false, limit))
+                : List.of();
+    }
+
     /** 后台用：连已删的一起看，方便恢复 */
     public List<BoardRecord> queryWithDeleted(Board board, long groupId, int limit) {
         return available ? toRecords(repo.listByBoard(board.path(), groupId, true, limit)) : List.of();

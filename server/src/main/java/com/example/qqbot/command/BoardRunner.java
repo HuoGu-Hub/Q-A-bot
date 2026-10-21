@@ -25,9 +25,6 @@ public class BoardRunner {
 
     private static final Logger log = LoggerFactory.getLogger(BoardRunner.class);
 
-    /** 一次最多列几条，防止把群刷屏 */
-    private static final int LIST_LIMIT = 20;
-
     private final BoardStore boards;
     private final BoardRecordStore records;
     private final CommandParser parser;
@@ -179,17 +176,24 @@ public class BoardRunner {
     // ==================== 查 ====================
 
     private String query(Board board, long groupId) {
-        List<BoardRecord> list = records.query(board, groupId, LIST_LIMIT);
-        if (list.isEmpty()) {
-            return "「" + board.displayTitle() + "」还没有内容。要添加就用 /"
-                    + board.path() + " /create";
+        int limit = board.listLimit() <= 0
+                ? BoardListFormatter.MAX_LIMIT
+                : Math.min(board.listLimit(), BoardListFormatter.MAX_LIMIT);
+
+        List<BoardRecord> list;
+        DataPolicy.DataScope scope = board.policy().scope();
+        if (scope == DataPolicy.DataScope.ALL) {
+            // 0 = 不按群过滤，跨群预约列表靠这个
+            list = records.query(board, 0L, limit);
+        } else if (scope == DataPolicy.DataScope.SOME) {
+            list = records.query(board, board.policy().groups(), limit);
+        } else {
+            if (groupId <= 0) {
+                return "这个板块要在群里看";
+            }
+            list = records.query(board, groupId, limit);
         }
-        StringBuilder sb = new StringBuilder("「").append(board.displayTitle()).append("」共 ")
-                .append(list.size()).append(" 条：\n");
-        for (BoardRecord record : list) {
-            sb.append(record.displayLine()).append('\n');
-        }
-        return sb.toString().stripTrailing();
+        return BoardListFormatter.render(board, list);
     }
 
     // ==================== 删 ====================

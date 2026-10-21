@@ -157,7 +157,8 @@ public class BoardStore {
                 board.delivery(), board.access(), board.policy().scope().name(), groupsJson,
                 board.policy().showGroup(), board.policy().showUser(),
                 board.policy().allowPrivate(), board.enabled(), board.sortOrder(),
-                board.builtin()));
+                board.builtin(), board.listHeader(), board.listItem(), board.listEmpty(),
+                board.listLimit()));
     }
 
     /**
@@ -189,7 +190,8 @@ public class BoardStore {
                 r.access(),
                 new DataPolicy(parseScope(r.scope()), parseGroups(r.groupsJson()),
                         r.showGroup(), r.showUser(), r.allowPrivate()),
-                r.enabled(), r.sortOrder(), r.builtin());
+                r.enabled(), r.sortOrder(), r.builtin(),
+                r.listHeader(), r.listItem(), r.listEmpty(), r.listLimit());
     }
 
     private List<ParamSpec> parseParams(String json) {

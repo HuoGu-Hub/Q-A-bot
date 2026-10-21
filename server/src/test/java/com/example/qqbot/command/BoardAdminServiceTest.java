@@ -186,6 +186,28 @@ class BoardAdminServiceTest {
     }
 
     @Test
+    @DisplayName("★ 列表格式能保存，停用/启用不会丢")
+    void listFormatPersistsAndSurvivesToggle() {
+        BoardAdminService.BoardView view = service.save(new BoardAdminService.BoardInput(
+                "预约开黑", "预约开黑", List.of(), Board.DIRECT, "all", "GROUP", List.of(),
+                false, false, false, true, 0, null,
+                "预约开黑 · 共 {count} 条", "#{id} {params.时间} {text}（{nickname}）",
+                "还没有预约", 0));
+
+        assertThat(view.listHeader()).isEqualTo("预约开黑 · 共 {count} 条");
+        assertThat(view.listItem()).contains("{params.时间}");
+        assertThat(view.listLimit()).isZero();
+
+        service.toggle("预约开黑", false);
+        Board toggled = boards.find("预约开黑");
+
+        assertThat(toggled.enabled()).isFalse();
+        assertThat(toggled.listHeader()).isEqualTo("预约开黑 · 共 {count} 条");
+        assertThat(toggled.listItem()).contains("{nickname}");
+        assertThat(toggled.listLimit()).isZero();
+    }
+
+    @Test
     @DisplayName("create/delete 是板块动作，不能当板块名")
     void reservedActionNamesRejected() {
         assertThatThrownBy(() -> service.save(input("create", Board.DIRECT, List.of())))

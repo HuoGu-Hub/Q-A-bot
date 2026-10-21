@@ -83,6 +83,36 @@ class BoardRunnerUsageTest {
         assertThat(reply.get().text()).contains("支持 1 个参数", "#内容#", "例 示例");
     }
 
+    @Test
+    @DisplayName("★ 自定义列表格式：ALL 范围跨群查，0 条限制按 200 兜底")
+    void customListFormatAndAllScope() {
+        BoardStore boards = mock(BoardStore.class);
+        BoardRecordStore records = mock(BoardRecordStore.class);
+        Board board = new Board(1, "预约开黑", "预约开黑", List.of(),
+                Board.DIRECT, "all",
+                new DataPolicy(DataPolicy.DataScope.ALL, List.of(), false, false, false),
+                true, 0, false,
+                "预约开黑 · 共 {count} 条", "#{id} {params.时间} {text}（{nickname}）",
+                "还没有预约", 0);
+        BoardRecord record = new BoardRecord(1, "预约开黑", 100L, 200L, "阿明", "缺打野",
+                java.util.Map.of("时间", "今晚8点"), Board.DIRECT, null, "once",
+                List.of(), null, "pending", 0, null, java.time.Instant.now(), null, null);
+        when(boards.find("预约开黑")).thenReturn(board);
+        when(records.isAvailable()).thenReturn(true);
+        when(records.query(board, 0L, 200)).thenReturn(List.of(record));
+
+        BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
+                mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
+                mock(CommandStore.class));
+
+        var reply = runner.tryRun(event(), "/预约开黑");
+
+        assertThat(reply).isPresent();
+        assertThat(reply.get().text())
+                .contains("预约开黑 · 共 1 条")
+                .contains("#1 今晚8点 缺打野（阿明）");
+    }
+
     private static OneBotEvent event() {
         OneBotEvent event = mock(OneBotEvent.class);
         when(event.getUserId()).thenReturn(200L);

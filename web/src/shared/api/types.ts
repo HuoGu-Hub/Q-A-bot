@@ -411,6 +411,14 @@ export interface AdminBoard {
   sortOrder: number
   builtin: boolean
   usage: string
+  /** 列表头，支持 {count} {path}；空 = 框架默认 */
+  listHeader: string
+  /** 每条格式，支持 {id} {when} {text} {nickname} {group} {params.参数名} */
+  listItem: string
+  /** 空列表文案；空 = 框架默认 */
+  listEmpty: string
+  /** 最多显示几条；0 = 全部，上限 200 */
+  listLimit: number
 }
 
 export interface AdminBoardList {

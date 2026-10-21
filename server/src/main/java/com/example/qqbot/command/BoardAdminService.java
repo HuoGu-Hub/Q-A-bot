@@ -41,7 +41,8 @@ public class BoardAdminService {
     public record BoardView(long id, String path, String title, List<ParamSpec> params,
                             String delivery, String access, String scope, List<Long> groups,
                             boolean showGroup, boolean showUser, boolean allowPrivate,
-                            boolean enabled, int sortOrder, boolean builtin, String usage) {
+                            boolean enabled, int sortOrder, boolean builtin, String usage,
+                            String listHeader, String listItem, String listEmpty, int listLimit) {
     }
 
     /**
@@ -53,7 +54,19 @@ public class BoardAdminService {
     public record BoardInput(String path, String title, List<ParamSpec> params,
                              String delivery, String access, String scope, List<Long> groups,
                              Boolean showGroup, Boolean showUser, Boolean allowPrivate,
-                             Boolean enabled, Integer sortOrder, String originalPath) {
+                             Boolean enabled, Integer sortOrder, String originalPath,
+                             String listHeader, String listItem, String listEmpty,
+                             Integer listLimit) {
+
+        /** 兼容旧调用：没有列表格式时沿用默认 */
+        public BoardInput(String path, String title, List<ParamSpec> params,
+                          String delivery, String access, String scope, List<Long> groups,
+                          Boolean showGroup, Boolean showUser, Boolean allowPrivate,
+                          Boolean enabled, Integer sortOrder, String originalPath) {
+            this(path, title, params, delivery, access, scope, groups,
+                    showGroup, showUser, allowPrivate, enabled, sortOrder, originalPath,
+                    null, null, null, null);
+        }
     }
 
     public List<BoardView> list() {
@@ -150,9 +163,23 @@ public class BoardAdminService {
                 : input.sortOrder();
         boolean builtin = existing != null && existing.builtin();
 
+        String listHeader = input.listHeader() == null
+                ? (existing == null ? "" : existing.listHeader())
+                : clip(input.listHeader(), 200);
+        String listItem = input.listItem() == null
+                ? (existing == null ? "" : existing.listItem())
+                : clip(input.listItem(), 500);
+        String listEmpty = input.listEmpty() == null
+                ? (existing == null ? "" : existing.listEmpty())
+                : clip(input.listEmpty(), 200);
+        int listLimit = input.listLimit() == null
+                ? (existing == null ? 20 : existing.listLimit())
+                : Math.max(0, Math.min(200, input.listLimit()));
+
         Board board = new Board(
                 existing == null ? 0 : existing.id(), path, title, params, delivery, access, policy,
-                input.enabled() == null || input.enabled(), sortOrder, builtin);
+                input.enabled() == null || input.enabled(), sortOrder, builtin,
+                listHeader, listItem, listEmpty, listLimit);
         if (renaming && !boards.rename(originalPath, path)) {
             throw new IllegalArgumentException("改名失败：旧板块不存在或不允许改名");
         }
@@ -164,7 +191,8 @@ public class BoardAdminService {
         Board board = require(path);
         boards.save(new Board(board.id(), board.path(), board.title(), board.params(),
                 board.delivery(), board.access(), board.policy(), enabled, board.sortOrder(),
-                board.builtin()));
+                board.builtin(), board.listHeader(), board.listItem(), board.listEmpty(),
+                board.listLimit()));
     }
 
     public void delete(String path) {
@@ -278,6 +306,12 @@ public class BoardAdminService {
         return out;
     }
 
+    /** 列表格式只做长度保护，允许换行与空串；空串表示走框架默认排版 */
+    private static String clip(String s, int max) {
+        String t = s == null ? "" : s.trim();
+        return t.length() <= max ? t : t.substring(0, max);
+    }
+
     private static String trim(String s) {
         if (s == null) {
             return null;
@@ -292,6 +326,7 @@ public class BoardAdminService {
                 board.policy().scope().name(), board.policy().groups(),
                 board.policy().showGroup(), board.policy().showUser(),
                 board.policy().allowPrivate(), board.enabled(), board.sortOrder(),
-                board.builtin(), CommandCatalog.boardUsage(board));
+                board.builtin(), CommandCatalog.boardUsage(board),
+                board.listHeader(), board.listItem(), board.listEmpty(), board.listLimit());
     }
 }

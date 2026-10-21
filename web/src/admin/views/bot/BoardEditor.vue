@@ -37,11 +37,16 @@ interface FormState {
   showUser: boolean
   allowPrivate: boolean
   enabled: boolean
+  listHeader: string
+  listItem: string
+  listEmpty: string
+  listLimit: number
 }
 
 const form = reactive<FormState>({
   path: '', params: [], delivery: 'direct', access: 'all', scope: 'GROUP',
   showGroup: false, showUser: false, allowPrivate: false, enabled: true,
+  listHeader: '', listItem: '', listEmpty: '', listLimit: 20,
 })
 const groupsText = ref('')
 const openParams = ref(true)
@@ -65,6 +70,10 @@ function reset() {
   form.showUser = b?.showUser ?? false
   form.allowPrivate = b?.allowPrivate ?? false
   form.enabled = b?.enabled ?? true
+  form.listHeader = b?.listHeader ?? ''
+  form.listItem = b?.listItem ?? ''
+  form.listEmpty = b?.listEmpty ?? ''
+  form.listLimit = b?.listLimit ?? 20
   groupsText.value = (b?.groups ?? []).join('\n')
   openParams.value = true
 }
@@ -86,6 +95,59 @@ function ensureScheduleParams() {
     })
   }
 }
+
+interface PreviewRecord {
+  id: number
+  when: string
+  text: string
+  nickname: string
+  group: string
+  params: Record<string, string>
+}
+
+const previewRecords: PreviewRecord[] = [
+  { id: 1, when: '立即展示', text: '今晚8点缺打野', nickname: '阿明', group: '123456', params: { 时间: '今晚8点', 人数: '5' } },
+  { id: 2, when: '立即展示', text: '明天8点满员', nickname: '小红', group: '123456', params: { 时间: '明天8点', 人数: '10' } },
+]
+
+function renderTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{([^{}]+)}/g, (all, raw) => {
+    const key = String(raw).trim()
+    return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : all
+  })
+}
+
+function previewVars(record: PreviewRecord, count: string): Record<string, string> {
+  const vars: Record<string, string> = {
+    id: String(record.id),
+    when: record.when,
+    text: record.text,
+    nickname: record.nickname,
+    group: record.group,
+    count,
+    path: form.path || '命令',
+  }
+  for (const [key, value] of Object.entries(record.params)) vars['params.' + key] = value
+  return vars
+}
+
+const previewText = computed(() => {
+  const path = form.path || '命令'
+  const header = form.listHeader.trim()
+    ? renderTemplate(form.listHeader, { count: String(previewRecords.length), path })
+    : `「${path}」共 ${previewRecords.length} 条：`
+  const items = previewRecords.map((record) => form.listItem.trim()
+    ? renderTemplate(form.listItem, previewVars(record, String(previewRecords.length)))
+    : `#${record.id}  ${record.when}  ${record.text}`)
+  return [header, ...items].join('\n')
+})
+
+const previewEmpty = computed(() => {
+  const path = form.path || '命令'
+  return form.listEmpty.trim()
+    ? renderTemplate(form.listEmpty, { count: '0', path })
+    : `「${path}」还没有内容。要添加就用 /${path} /create`
+})
 
 function onScopeChange(value: string) {
   form.scope = value
@@ -118,6 +180,10 @@ function submit() {
     sortOrder: props.board?.sortOrder ?? 0,
     builtin: props.board?.builtin ?? false,
     usage: props.board?.usage ?? '',
+    listHeader: form.listHeader.trim(),
+    listItem: form.listItem.trim(),
+    listEmpty: form.listEmpty.trim(),
+    listLimit: form.listLimit,
     originalPath: props.board?.path ?? null,
   }
   emit('save', draft)
@@ -178,6 +244,59 @@ function submit() {
               <span>到点发送需要 <span class="path-demo">#重复#</span> 与 <span class="path-demo">#时间#</span> 两个参数。</span>
               <Button v-if="!hasRepeat || !hasTime" size="sm" @click="ensureScheduleParams">补上定时参数</Button>
             </div>
+          </div>
+        </div>
+
+        <div class="format-block">
+          <div class="col-title">列表格式</div>
+          <label class="row">
+            <span class="row-label">列表头</span>
+            <Input
+              v-model="form.listHeader"
+              placeholder="预约开黑 · 共 {count} 条"
+              aria-label="列表头"
+            />
+          </label>
+          <label class="row row--block">
+            <span class="row-label">每条</span>
+            <Input
+              v-model="form.listItem"
+              multiline
+              :rows="2"
+              placeholder="#{id} {params.时间} {text}（{nickname}）"
+              aria-label="每条格式"
+            />
+          </label>
+          <label class="row row--block">
+            <span class="row-label">空列表</span>
+            <Input
+              v-model="form.listEmpty"
+              :placeholder="'还没有内容，发 /' + (form.path || '命令') + ' /create 添加'"
+              aria-label="空列表文案"
+            />
+          </label>
+          <label class="row">
+            <span class="row-label">显示条数</span>
+            <div class="limit-line">
+              <Input
+                :model-value="String(form.listLimit)"
+                type="number"
+                aria-label="显示条数"
+                @update:model-value="form.listLimit = Math.max(0, Math.min(200, Number($event) || 0))"
+              />
+              <span class="faint">0 = 全部，最多 200</span>
+            </div>
+          </label>
+          <p class="format-hint">
+            列表头可用 <code>{count}</code> <code>{path}</code>；每条可用
+            <code>{id}</code> <code>{when}</code> <code>{text}</code>
+            <code>{nickname}</code> <code>{group}</code>
+            <code>{params.参数名}</code>。不认识的变量会原样保留。
+          </p>
+          <div class="preview-box">
+            <div class="col-title">预览</div>
+            <pre class="format-preview">{{ previewText }}</pre>
+            <div class="faint preview-empty">空列表：{{ previewEmpty }}</div>
           </div>
         </div>
       </section>
@@ -279,6 +398,28 @@ function submit() {
 .block-head:hover { color: var(--ink); }
 .caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.format-block {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  border-top: 1px solid var(--hairline); padding-top: var(--sp-3);
+}
+.limit-line { display: flex; align-items: center; gap: var(--sp-3); }
+.limit-line :deep(.inp) { max-width: 120px; }
+.format-hint { margin: 0; font-size: var(--fs-meta); color: var(--ink-4); line-height: 1.7; }
+.format-hint code {
+  font-family: var(--font-mono); color: var(--flame);
+  background: var(--surface-inset); border: 1px solid var(--edge-soft);
+  border-radius: 4px; padding: 0 4px;
+}
+.preview-box { display: flex; flex-direction: column; gap: 6px; }
+.format-preview {
+  margin: 0; padding: var(--sp-3); max-height: 220px; overflow: auto;
+  background: var(--stone-void); border: 1px solid var(--edge);
+  border-radius: var(--r-sm); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--fs-meta);
+  line-height: 1.7; white-space: pre-wrap;
+}
+.preview-empty { font-size: var(--fs-meta); }
 
 .path-hint { margin: var(--sp-1) 0 0 88px; font-size: var(--fs-meta); color: var(--ink-4); line-height: 1.7; }
 .path-demo { font-family: var(--font-mono); color: var(--flame); }

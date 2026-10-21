@@ -122,6 +122,29 @@ public class BoardRecordRepository {
         return jdbc.query(sql, MAP, args.toArray());
     }
 
+    /** 指定多个群的记录；用于板块数据范围 = SOME。 */
+    public List<Row> listByBoard(String board, List<Long> groupIds, boolean withDeleted, int limit) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return List.of();
+        }
+        StringBuilder in = new StringBuilder();
+        for (int i = 0; i < groupIds.size(); i++) {
+            if (i > 0) {
+                in.append(',');
+            }
+            in.append('?');
+        }
+        String sql = "SELECT " + COLUMNS + " FROM bot_record WHERE board = ?"
+                + " AND group_id IN (" + in + ")"
+                + (withDeleted ? "" : " AND deleted_at IS NULL")
+                + " ORDER BY id DESC LIMIT ?";
+        List<Object> args = new ArrayList<>();
+        args.add(board);
+        args.addAll(groupIds);
+        args.add(limit);
+        return jdbc.query(sql, MAP, args.toArray());
+    }
+
     /**
      * 软删。只打标记，行还在 —— 删错了能恢复，也留得住"谁在什么时候删了什么"。
      *

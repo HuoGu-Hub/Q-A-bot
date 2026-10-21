@@ -23,20 +23,33 @@ public class BoardRepository {
     public record Row(long id, String path, String title, String paramsJson, String delivery,
                       String access, String scope, String groupsJson,
                       boolean showGroup, boolean showUser, boolean allowPrivate,
-                      boolean enabled, int sortOrder, boolean builtin) {
+                      boolean enabled, int sortOrder, boolean builtin,
+                      String listHeader, String listItem, String listEmpty, int listLimit) {
+
+        /** 兼容旧构造：没有列表格式时由 Board 的默认排版兜底 */
+        public Row(long id, String path, String title, String paramsJson, String delivery,
+                   String access, String scope, String groupsJson,
+                   boolean showGroup, boolean showUser, boolean allowPrivate,
+                   boolean enabled, int sortOrder, boolean builtin) {
+            this(id, path, title, paramsJson, delivery, access, scope, groupsJson,
+                    showGroup, showUser, allowPrivate, enabled, sortOrder, builtin,
+                    "", "", "", 20);
+        }
     }
 
     private static final String COLUMNS =
             "id, path, title, params, delivery, access, data_scope, data_groups,"
                     + " show_origin_group, show_origin_user, allow_private,"
-                    + " enabled, sort_order, builtin";
+                    + " enabled, sort_order, builtin,"
+                    + " list_header, list_item, list_empty, list_limit";
 
     private static final Jdbc.RowMapper<Row> MAP = r -> new Row(
             r.longOf("id"), r.str("path"), r.str("title"), r.str("params"), r.str("delivery"),
             r.str("access"), r.str("data_scope"), r.str("data_groups"),
             r.intOf("show_origin_group") == 1, r.intOf("show_origin_user") == 1,
             r.intOf("allow_private") == 1, r.intOf("enabled") == 1, r.intOf("sort_order"),
-            r.intOf("builtin") == 1);
+            r.intOf("builtin") == 1, r.str("list_header"), r.str("list_item"),
+            r.str("list_empty"), r.intOf("list_limit"));
 
     private final Jdbc jdbc;
 
@@ -67,8 +80,27 @@ public class BoardRepository {
                 + " allow_private     INTEGER NOT NULL DEFAULT 0,"
                 + " enabled     INTEGER NOT NULL DEFAULT 1,"
                 + " sort_order  INTEGER NOT NULL DEFAULT 0,"
-                + " builtin     INTEGER NOT NULL DEFAULT 0"
+                + " builtin     INTEGER NOT NULL DEFAULT 0,"
+                + " list_header TEXT NOT NULL DEFAULT '',"
+                + " list_item   TEXT NOT NULL DEFAULT '',"
+                + " list_empty  TEXT NOT NULL DEFAULT '',"
+                + " list_limit  INTEGER NOT NULL DEFAULT 20"
                 + " )");
+        // 老库升级：CREATE TABLE IF NOT EXISTS 不会补列
+        addColumnIfMissing("list_header", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing("list_item", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing("list_empty", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing("list_limit", "INTEGER NOT NULL DEFAULT 20");
+    }
+
+    private void addColumnIfMissing(String column, String ddl) {
+        boolean exists = jdbc.query("PRAGMA table_info(bot_board)", r -> r.str("name")).stream()
+                .anyMatch(n -> column.equalsIgnoreCase(n));
+        if (exists) {
+            return;
+        }
+        jdbc.execute("ALTER TABLE bot_board ADD COLUMN " + column + " " + ddl);
+        log.info("[BOARD] bot_board 补列：{} {}", column, ddl);
     }
 
     /** 种子：已经有了就不动，管理员改过的配置不能被重启覆盖 */
@@ -79,12 +111,14 @@ public class BoardRepository {
         jdbc.insert("INSERT INTO bot_board"
                         + " (path, title, params, delivery, access, data_scope, data_groups,"
                         + "  show_origin_group, show_origin_user, allow_private,"
-                        + "  enabled, sort_order, builtin)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        + "  enabled, sort_order, builtin,"
+                        + "  list_header, list_item, list_empty, list_limit)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 row.path(), row.title(), row.paramsJson(), row.delivery(), row.access(),
                 row.scope(), row.groupsJson(),
                 row.showGroup() ? 1 : 0, row.showUser() ? 1 : 0, row.allowPrivate() ? 1 : 0,
-                row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0);
+                row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0,
+                row.listHeader(), row.listItem(), row.listEmpty(), row.listLimit());
     }
 
     public boolean hasMeta(String key) {
@@ -113,8 +147,9 @@ public class BoardRepository {
         jdbc.update("INSERT INTO bot_board"
                         + " (path, title, params, delivery, access, data_scope, data_groups,"
                         + "  show_origin_group, show_origin_user, allow_private,"
-                        + "  enabled, sort_order, builtin)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                        + "  enabled, sort_order, builtin,"
+                        + "  list_header, list_item, list_empty, list_limit)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                         + " ON CONFLICT(path) DO UPDATE SET"
                         + "  title=excluded.title, params=excluded.params, delivery=excluded.delivery,"
                         + "  access=excluded.access, data_scope=excluded.data_scope,"
@@ -122,11 +157,14 @@ public class BoardRepository {
                         + "  show_origin_group=excluded.show_origin_group,"
                         + "  show_origin_user=excluded.show_origin_user,"
                         + "  allow_private=excluded.allow_private, enabled=excluded.enabled,"
-                        + "  sort_order=excluded.sort_order",
+                        + "  sort_order=excluded.sort_order,"
+                        + "  list_header=excluded.list_header, list_item=excluded.list_item,"
+                        + "  list_empty=excluded.list_empty, list_limit=excluded.list_limit",
                 row.path(), row.title(), row.paramsJson(), row.delivery(), row.access(),
                 row.scope(), row.groupsJson(),
                 row.showGroup() ? 1 : 0, row.showUser() ? 1 : 0, row.allowPrivate() ? 1 : 0,
-                row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0);
+                row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0,
+                row.listHeader(), row.listItem(), row.listEmpty(), row.listLimit());
     }
 
     public int delete(String path) {
