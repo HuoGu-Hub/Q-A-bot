@@ -191,6 +191,14 @@ public class CommandHandler {
             return Outcome.HANDLED;
         }
 
+        // ---------- 单命令帮助：/路径 /help ----------
+        // 也必须放在解析之前：带必填参数的命令，/help 不该先报"缺参数"。
+        if (match.helpRequested()) {
+            RenderContext helpCtx = variableRenderer.contextOf(event, Map.of(), "", tail);
+            reply(event, cmd, tail, commandHelp.render(cmd, helpCtx), t0);
+            return Outcome.HANDLED;
+        }
+
         // ---------- 参数解析：先展开变量，再按类型校验 ----------
         // text 传 null 而不是 ""：这一趟只是给参数值展开变量，
         // 自由文本还没算出来，{text} 必须原样保留而不是变成空串
@@ -209,12 +217,6 @@ public class CommandHandler {
         }
 
         RenderContext ctx = variableRenderer.contextOf(event, args.rawValues(), body, tail);
-
-        // ---------- 单命令帮助：/路径 /help ----------
-        if (match.helpRequested()) {
-            reply(event, cmd, tail, commandHelp.render(cmd, ctx), t0);
-            return Outcome.HANDLED;
-        }
 
         // ---------- 智能问答类：登记后继续走 Guard + 预算，不在这里回 ----------
         if (cmd.isAgent()) {

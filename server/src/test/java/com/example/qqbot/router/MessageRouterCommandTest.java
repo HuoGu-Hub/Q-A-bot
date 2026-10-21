@@ -425,6 +425,19 @@ class MessageRouterCommandTest {
     }
 
     @Test
+    @DisplayName("★ 带必填参数的命令，/help 也先回帮助而不是报缺参数")
+    void helpWithRequiredParamsStillWorks() {
+        BotCommand report = new BotCommand(1, "举报", "收到", "举报", "all", List.of(), "member",
+                true, 1, true, BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB,
+                List.of(ParamSpec.of("对象", "text", true, "某人")), null, null);
+        matchHelp(report);
+
+        router.handle(groupEvent("/举报 /help"));
+
+        assertThat(sentText()).contains("/举报").contains("#对象#").contains("必填");
+    }
+
+    @Test
     @DisplayName("★ /路径 /list：回参数表，不执行命令")
     void listRequestRepliesParamTable() {
         BotCommand report = new BotCommand(1, "举报", "收到", "举报", "all", List.of(), "member",
