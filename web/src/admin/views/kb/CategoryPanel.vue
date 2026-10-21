@@ -197,7 +197,7 @@ defineExpose({
         hint="问答库没就绪，先检查后端日志"
       />
       <template v-else>
-        <DataTable :rows="items.length" empty="还没有任何分类" empty-hint="用上面的表单新增一个">
+        <DataTable cards :rows="items.length" empty="还没有任何分类" empty-hint="用上面的表单新增一个">
           <thead>
             <tr>
               <th>分类名</th>
@@ -208,8 +208,8 @@ defineExpose({
           </thead>
           <tbody>
             <tr v-for="c in items" :key="c.name">
-              <td><code class="mono">{{ c.name }}</code></td>
-              <td>
+              <td data-label="分类名"><code class="mono">{{ c.name }}</code></td>
+              <td data-label="显示名">
                 <Input
                   :model-value="labelOf(c)"
                   placeholder="显示名（留空 = 同分类名）"
@@ -217,7 +217,7 @@ defineExpose({
                   @update:model-value="(v: string) => onLabel(c, v)"
                 />
               </td>
-              <td class="c-count">
+              <td class="c-count" data-label="词条数">
                 <button
                   type="button"
                   class="count-btn num"
@@ -228,7 +228,7 @@ defineExpose({
                   {{ num(c.count) }}
                 </button>
               </td>
-              <td class="c-ops">
+              <td class="c-ops" data-label="操作">
                 <template v-if="isDirty(c)">
                   <Button size="sm" variant="primary" @click="saveLabel(c)">保存</Button>
                   <Button size="sm" @click="revert(c)">撤销</Button>

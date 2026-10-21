@@ -476,6 +476,7 @@ defineExpose({
       />
       <DataTable
         v-else
+        cards
         label="词条表"
         :rows="items.length"
         empty="没有匹配的词条"
@@ -492,7 +493,7 @@ defineExpose({
         <tbody>
           <template v-for="e in items" :key="e.id">
             <tr :class="{ 'row-open': isOpen(e) }">
-              <td>
+              <td data-label="标题">
                 <div class="title">{{ e.title || '（无标题）' }}</div>
                 <div class="meta">
                   <span v-if="e.docId" class="doc">{{ e.docId }}</span>
@@ -501,14 +502,14 @@ defineExpose({
                 </div>
               </td>
 
-              <td class="c-alias">
+              <td class="c-alias" data-label="别名">
                 <span v-if="e.alias" class="alias">{{ e.alias }}</span>
                 <span v-else class="faint">无别名</span>
               </td>
 
               <!-- ⚠️ 标签必须包在 div 里，不能给 <th>/<td> 加 display:flex ——
                    那会让单元格不再是 table-cell，表头那根线会断、列也跟标题对不上。 -->
-              <td class="c-cat">
+              <td class="c-cat" data-label="分类">
                 <div class="cats">
                   <Tag v-if="e.uncategorized" tone="neutral">{{ UNCATEGORIZED }}</Tag>
                   <template v-else>
@@ -517,7 +518,7 @@ defineExpose({
                 </div>
               </td>
 
-              <td class="c-ops">
+              <td class="c-ops" data-label="操作">
                 <div class="ops">
                   <Button
                     size="sm"

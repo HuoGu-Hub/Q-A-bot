@@ -257,27 +257,28 @@ defineExpose({
         <div class="miss">
           <div>
             <div class="sub faint">认出了词，但知识库没有资料</div>
-            <DataTable :rows="misses.withKeyword.length" empty="很好，没有这类问题">
+            <DataTable cards :rows="misses.withKeyword.length" empty="很好，没有这类问题">
               <thead>
                 <tr><th>关键词</th><th>英文名</th><th class="num">次数</th><th class="num">A 路余弦</th></tr>
               </thead>
               <tbody>
                 <tr v-for="m in misses.withKeyword" :key="m.zh">
-                  <td>{{ m.zh }}</td><td class="muted">{{ m.en }}</td><td class="num">{{ m.count }}</td>
-                  <td class="num" :class="{ near: m.bestCosineRaw >= 0.35 }">{{ fmtCosine(m.bestCosineRaw) }}</td>
+                  <td data-label="关键词">{{ m.zh }}</td><td class="muted" data-label="英文名">{{ m.en }}</td>
+                  <td class="num" data-label="次数">{{ m.count }}</td>
+                  <td class="num" :class="{ near: m.bestCosineRaw >= 0.35 }" data-label="A 路余弦">{{ fmtCosine(m.bestCosineRaw) }}</td>
                 </tr>
               </tbody>
             </DataTable>
           </div>
           <div>
             <div class="sub faint">连词都没认出来（术语表里没有）</div>
-            <DataTable :rows="misses.unmatched.length" empty="很好，没有这类问题">
+            <DataTable cards :rows="misses.unmatched.length" empty="很好，没有这类问题">
               <thead><tr><th>时间</th><th>问题</th><th class="num">A 路余弦</th></tr></thead>
               <tbody>
                 <tr v-for="(m, i) in misses.unmatched" :key="i">
-                  <td class="muted nowrap">{{ shortTime(m.ts) }}</td>
-                  <td class="q">{{ m.question }}</td>
-                  <td class="num" :class="{ near: m.bestCosineRaw >= 0.35 }">{{ fmtCosine(m.bestCosineRaw) }}</td>
+                  <td class="muted nowrap" data-label="时间">{{ shortTime(m.ts) }}</td>
+                  <td class="q" data-label="问题">{{ m.question }}</td>
+                  <td class="num" :class="{ near: m.bestCosineRaw >= 0.35 }" data-label="A 路余弦">{{ fmtCosine(m.bestCosineRaw) }}</td>
                 </tr>
               </tbody>
             </DataTable>
@@ -302,11 +303,12 @@ defineExpose({
 
         <Panel title="检索来源 / 标注">
           <div class="sub faint">来源</div>
-          <DataTable :rows="src.sources.length" empty="这段时间还没有检索记录">
+          <DataTable cards :rows="src.sources.length" empty="这段时间还没有检索记录">
             <thead><tr><th>来源</th><th class="num">次数</th><th class="num">命中率</th></tr></thead>
             <tbody>
               <tr v-for="s in src.sources" :key="s.source">
-                <td>{{ sourceLabel(s.source) }}</td><td class="num">{{ s.count }}</td><td class="num">{{ pct(s.hitRate) }}</td>
+                <td data-label="来源">{{ sourceLabel(s.source) }}</td><td class="num" data-label="次数">{{ s.count }}</td>
+                <td class="num" data-label="命中率">{{ pct(s.hitRate) }}</td>
               </tr>
             </tbody>
           </DataTable>
@@ -449,6 +451,7 @@ defineExpose({
 .near { color: var(--rust); }
 .nowrap { white-space: nowrap; }
 .q { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 
 .bars { display: flex; flex-direction: column; gap: var(--sp-2); }
 .verdicts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }

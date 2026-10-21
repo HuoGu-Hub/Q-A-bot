@@ -155,4 +155,12 @@ const scope = computed(() => records.value?.scopeValue() ?? 'questions')
   white-space: nowrap;
 }
 .stamp { font-size: var(--fs-xs); white-space: nowrap; }
+
+/* 手机上动作行只留「范围 + 刷新」：自动刷新的说明文字与更新时间属于桌面信息，
+   挤在 390px 的一行里会把两个下拉挤出屏幕。 */
+@media (max-width: 760px) {
+  .auto span { display: none; }
+  .stamp { display: none; }
+  .w-days, .w-scope { flex: 0 0 112px; }
+}
 </style>

@@ -6,6 +6,8 @@ import { describeError } from '@shared/api/client'
 import Button from '@shared/ui/Button.vue'
 import Input from '@shared/ui/Input.vue'
 import Notice from '@shared/ui/Notice.vue'
+import ThemeToggle from '@shared/ui/ThemeToggle.vue'
+import Icon from '@shared/ui/Icon.vue'
 
 const auth = useAuth()
 const route = useRoute()
@@ -16,11 +18,9 @@ const busy = ref(false)
 const error = ref('')
 
 /**
- * 自动聚焦：**只在精确指针（桌面）上做**。
- *
- * <p>原来是无条件的 autofocus。手机上会立刻弹出软键盘：视口被顶掉一半、
- * 页面自己滚一段、"登录"按钮跑到键盘底下 —— 用户第一眼看到的是一个被推歪的页面。
- * 桌面端只有一个输入框，自动聚焦确实省一次点击，所以留着。
+ * 自动聚焦：只在精确指针（桌面）上做。
+ * 手机上会立刻弹出软键盘：视口被顶掉一半、页面自己滚一段、
+ * 「登录」按钮跑到键盘底下 —— 用户第一眼看到的是一个被推歪的页面。
  */
 const formEl = ref<HTMLFormElement | null>(null)
 onMounted(() => {
@@ -36,7 +36,6 @@ async function submit() {
   error.value = ''
   try {
     await auth.login(password.value)
-    // 合并后默认落点是统计（原来是大屏，现在 /screen、/dashboard 都会重定向到 /stats）
     const r = String(route.query.r ?? '/stats')
     router.replace(r.startsWith('/') ? r : '/stats')
   } catch (e) {
@@ -49,15 +48,18 @@ async function submit() {
 
 <template>
   <!--
-    登录页【故意】不用 AdminPage：这里没有顶端导航，也不需要页面标题栏，
+    登录页故意不用 AdminPage：这里没有顶端导航，也不需要页面标题栏，
     套上页面外壳只会多出一圈没意义的标题与留白。它是一张居中的卡片。
   -->
   <div class="wrap">
     <div class="card">
+      <div class="card-top">
+        <span class="mark" aria-hidden="true"><Icon name="flame" :size="20" /></span>
+        <ThemeToggle />
+      </div>
       <h1 class="t">管理员登录</h1>
-      <p class="muted sub">后台能看到群里的提问记录，因此需要密码</p>
+      <p class="hint sub">后台能看到群里的提问记录，因此需要密码</p>
       <form ref="formEl" @submit.prevent="submit">
-        <!-- Input / Button 自带悬浮反馈（背景 + 边缘同时变），不再自写 .pwd -->
         <Input
           v-model="password"
           type="password"
@@ -65,7 +67,7 @@ async function submit() {
           placeholder="密码"
           autocomplete="current-password"
         />
-        <Button variant="primary" type="submit" :disabled="busy">
+        <Button variant="primary" type="submit" block :disabled="busy">
           {{ busy ? '登录中…' : '登录' }}
         </Button>
       </form>
@@ -79,13 +81,13 @@ async function submit() {
 <style scoped>
 .wrap {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--sp-4);
 }
-/* 卡片是这一页唯一的实体，所以给它"凸出来的石板"：明度阶梯 + 上下内阴影。
-   上一版同时写了 border 和 box-shadow（两套分层语言混用）。 */
+/* 卡片是这一页唯一的实体，所以给它「凸出来的石板」：明度阶梯 + 上下内阴影 */
 .card {
   width: min(400px, 100%);
   display: flex;
@@ -95,8 +97,19 @@ async function submit() {
   border-radius: var(--r-lg);
   box-shadow: var(--bevel-raised), var(--shadow-pop);
 }
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+}
+.mark { color: var(--ember); filter: drop-shadow(0 0 8px var(--ember-glow)); }
 .t { font-size: var(--fs-2xl); letter-spacing: var(--tracking-ink); }
-.sub { font-size: var(--fs-sm); color: var(--ink-3); margin: var(--sp-2) 0 var(--sp-5); }
+.sub { margin: var(--sp-2) 0 var(--sp-5); }
 form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .err-slot { margin-top: var(--sp-3); }
+
+@media (max-width: 760px) {
+  .card { padding: var(--sp-4); }
+}
 </style>

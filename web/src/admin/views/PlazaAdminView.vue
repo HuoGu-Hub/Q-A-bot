@@ -163,7 +163,7 @@ onMounted(load)
       <p class="faint note">
         「待确认」= 有人在网页上申请了但还没发到群里；「已发送」= 已经在群里问过了。
       </p>
-      <DataTable :rows="help.length" empty="还没有求助记录">
+      <DataTable cards :rows="help.length" empty="还没有求助记录">
         <thead>
           <tr>
             <th>时间</th><th>关键词</th><th>问题</th>
@@ -172,12 +172,12 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="(h, i) in help" :key="i">
-            <td class="faint mono">{{ (h.ts ?? "").slice(5, 16).replace("T", " ") }}</td>
-            <td class="mono">{{ h.keyword || "-" }}</td>
-            <td>{{ (h.question ?? "").slice(0, 50) }}</td>
-            <td class="num">{{ h.groupId || "-" }}</td>
-            <td class="num">{{ h.userId || "-" }}</td>
-            <td>
+            <td class="faint mono" data-label="时间">{{ (h.ts ?? "").slice(5, 16).replace("T", " ") }}</td>
+            <td class="mono" data-label="关键词">{{ h.keyword || "-" }}</td>
+            <td data-label="问题">{{ (h.question ?? "").slice(0, 50) }}</td>
+            <td class="num" data-label="群">{{ h.groupId || "-" }}</td>
+            <td class="num" data-label="用户">{{ h.userId || "-" }}</td>
+            <td data-label="状态">
               <Tag :tone="h.status === 'sent' ? 'good' : 'warn'">
                 {{ h.status === "sent" ? "已发送" : "待确认" }}
               </Tag>

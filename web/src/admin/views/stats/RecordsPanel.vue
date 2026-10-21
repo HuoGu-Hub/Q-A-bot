@@ -137,6 +137,7 @@ onMounted(load)
     <Panel>
       <DataTable
         class="records"
+        cards
         :rows="tableRows"
         :empty="scope === 'questions' ? '还没有提问记录' : '还没有任何消息记录'"
         empty-hint="去群里 @ 机器人问几个问题（@ 了并且被有效回应才算提问）"
@@ -158,8 +159,8 @@ onMounted(load)
         <tbody>
           <template v-for="r in rows" :key="r.id">
             <tr class="row">
-              <td class="muted nowrap">{{ shortTime(r.ts) }}</td>
-              <td class="q">
+              <td class="muted nowrap" data-label="时间">{{ shortTime(r.ts) }}</td>
+              <td class="q" data-label="问题">
                 <!--
                   ⚠️ 原来展开详情挂在 <tr @click> 上：鼠标能用，键盘用户进不去
                   （<tr> 不是可聚焦控件，读屏也不会把整行当按钮念）。
@@ -175,18 +176,18 @@ onMounted(load)
                   @click="toggle(r.id)"
                 >{{ r.question || '(原文已清理)' }}</button>
               </td>
-              <td class="num" :class="{ miss: r.hitCount === 0 }">{{ r.hitCount }}</td>
-              <td class="num">{{ fmtCosine(r.bestCosine) }}</td>
-              <td class="muted" :title="sourceHint(r.sources)">{{ sourceLabel(r.sources) }}</td>
-              <td>
+              <td class="num" :class="{ miss: r.hitCount === 0 }" data-label="查到资料">{{ r.hitCount }}</td>
+              <td class="num" data-label="相关度">{{ fmtCosine(r.bestCosine) }}</td>
+              <td class="muted" :title="sourceHint(r.sources)" data-label="怎么找到的">{{ sourceLabel(r.sources) }}</td>
+              <td data-label="质量评价">
                 <Tag :tone="verdictTone(r.verdict)">{{ VERDICT_LABEL[r.verdict ?? 'unknown'] ?? r.verdict }}</Tag>
               </td>
-              <td class="right" @click.stop>
+              <td class="right" data-label="标记" @click.stop>
                 <Button size="sm" :disabled="busyId === r.id" @click="annotate(r.id, 'good')">对</Button>
                 <Button size="sm" variant="danger" :disabled="busyId === r.id" @click="annotate(r.id, 'bad')">错</Button>
               </td>
             </tr>
-            <tr v-if="expanded === r.id">
+            <tr v-if="expanded === r.id" class="detail-row">
               <td colspan="7">
                 <div class="dpanel">
                   <div>

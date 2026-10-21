@@ -17,7 +17,7 @@
  * ⚠️ 改正文会重算向量，所以每次保存都有一次 embedding 调用 —— 这是有意的：
  *    只改文本不重算向量，检索会按旧正文匹配，改了等于没改。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   KbBlockStats, KbDocSummary, KbBlockView, KbImportPreview, KbImportResult,
@@ -36,6 +36,24 @@ const okMsg = ref('')
 
 const stats = ref<KbBlockStats | null>(null)
 const docs = ref<KbDocSummary[]>([])
+
+/**
+ * 文档列表的筛选与分批。
+ *
+ * <p>实测 198 份文档在手机上一张卡一张卡铺开是一万两千像素 ——
+ * 用户既找不到想看的，也翻不到底部。这里先按名字筛，再每批 30 份，
+ * 下方「加载更多」续读。数据仍然是一次拉全的，只是**渲染**分批，
+ * 不改任何接口与操作。
+ */
+const docKw = ref('')
+const docLimit = ref(30)
+const DOC_STEP = 30
+const matchedDocs = computed(() => {
+  const kw = docKw.value.trim().toLowerCase()
+  return kw ? docs.value.filter(d => d.docId.toLowerCase().includes(kw)) : docs.value
+})
+const shownDocs = computed(() => matchedDocs.value.slice(0, docLimit.value))
+watch(docKw, () => { docLimit.value = DOC_STEP })
 
 /** 待导入的文档全文 */
 const docText = ref('')
@@ -435,7 +453,7 @@ onMounted(load)
     <Notice v-else-if="okMsg" tone="ok">{{ okMsg }}</Notice>
 
     <!-- 概览 -->
-    <Panel title="块存储" hint="文档导入之后的新模型：一切按块 id">
+    <Panel title="块存储" hint="文档导入之后的新模型：一切按块 id" collapsible mobile-collapsed default-open>
       <div v-if="stats" class="stats">
         <span class="st"><b class="num">{{ stats.blocks }}</b> 块</span>
         <span class="st"><b class="num">{{ stats.documents }}</b> 份文档</span>
@@ -463,7 +481,7 @@ onMounted(load)
     </Panel>
 
     <!-- 导入 -->
-    <Panel title="导入文档" hint="先预览，再决定导不导">
+    <Panel title="导入文档" hint="先预览，再决定导不导" collapsible mobile-collapsed default-open>
       <!-- 拖拽批量导入：拖文件、拖文件夹都行 -->
       <div
         class="drop"
@@ -595,17 +613,26 @@ onMounted(load)
     <!-- 文档列表 -->
     <Panel title="文档" :count="docs.length">
       <div v-if="!docs.length"><Empty text="还没有任何文档" hint="用上面的「确认导入」加第一份" /></div>
-      <DataTable v-else :rows="docs.length">
+      <template v-else>
+        <div class="doc-filter">
+          <Input
+            v-model="docKw"
+            placeholder="按文档名筛选…"
+            aria-label="按文档名筛选"
+          />
+          <span class="hint">{{ matchedDocs.length }} / {{ docs.length }} 份</span>
+        </div>
+      <DataTable cards force-cards :rows="matchedDocs.length" label="文档列表" empty="没有匹配的文档">
         <thead>
           <tr><th>文档</th><th class="num">块数</th><th class="num">已下架</th><th class="ops">操作</th></tr>
         </thead>
         <tbody>
-          <template v-for="d in docs" :key="d.docId">
+          <template v-for="d in shownDocs" :key="d.docId">
             <tr class="row">
-              <td><button class="docname" type="button" @click="toggleDoc(d.docId)">{{ d.docId }}</button></td>
-              <td class="num">{{ d.blocks }}</td>
-              <td class="num">{{ d.retired }}</td>
-              <td class="ops">
+              <td data-label="文档"><button class="docname" type="button" @click="toggleDoc(d.docId)">{{ d.docId }}</button></td>
+              <td class="num" data-label="块数">{{ d.blocks }}</td>
+              <td class="num" data-label="已下架">{{ d.retired }}</td>
+              <td class="ops" data-label="操作">
                 <div class="ops-btns">
                   <Button size="sm" @click="toggleDoc(d.docId)">{{ openDoc === d.docId ? '收起' : '查看块' }}</Button>
                   <Button size="sm" @click="retireDoc(d.docId, true)">整份下架</Button>
@@ -615,7 +642,7 @@ onMounted(load)
             </tr>
 
             <!-- 展开：这份文档的块 -->
-            <tr v-if="openDoc === d.docId" class="expand">
+            <tr v-if="openDoc === d.docId" class="expand detail-row">
               <td colspan="4">
                 <table class="blk">
                   <thead>
@@ -666,11 +693,33 @@ onMounted(load)
           </template>
         </tbody>
       </DataTable>
+        <div v-if="shownDocs.length < matchedDocs.length" class="doc-more">
+          <Button size="sm" @click="docLimit += DOC_STEP">加载更多</Button>
+          <span class="hint">已显示 {{ shownDocs.length }} / {{ matchedDocs.length }}</span>
+        </div>
+      </template>
     </Panel>
   </div>
 </template>
 
 <style scoped>
+/* 文档筛选：一行输入 + 命中数。手机上这是「198 份文档」唯一能用的入口 */
+.doc-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.doc-filter :deep(.inp) { flex: 1; }
+.doc-filter .hint { flex: none; white-space: nowrap; }
+.doc-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+
 .doc-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
 .stats { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4); margin-bottom: var(--sp-3); }
@@ -698,6 +747,7 @@ onMounted(load)
 
 .mono { font-family: var(--font-mono); }
 .docname {
+  min-height: 32px;
   background: none; border: 0; padding: 0; cursor: pointer;
   color: var(--flame); font-size: inherit; text-align: left;
 }
