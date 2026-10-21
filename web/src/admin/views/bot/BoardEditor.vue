@@ -2,8 +2,8 @@
 /**
  * 板块编辑器 —— 与指令编辑器同一套两栏布局，整块替换列表。
  *
- * <p>板块名不可改：记录按板块名归属，改名会让历史记录失去来源。
- * 要换名字就新建一个，旧记录留在旧板块里。
+ * <p>命令名就是群里的调用名：没有单独的"显示名"。自建命令可以改名，
+ * 历史记录会在同一事务里迁到新名字下；内置命令的路径是代码约定，不能改。
  */
 import { computed, reactive, ref, watch } from 'vue'
 import type { AdminBoard, AdminParamSpec, BoardDraft } from '@shared/api/types'
@@ -29,7 +29,6 @@ const emit = defineEmits<{
 
 interface FormState {
   path: string
-  title: string
   params: AdminParamSpec[]
   delivery: string
   access: string
@@ -41,13 +40,15 @@ interface FormState {
 }
 
 const form = reactive<FormState>({
-  path: '', title: '', params: [], delivery: 'direct', access: 'all', scope: 'GROUP',
+  path: '', params: [], delivery: 'direct', access: 'all', scope: 'GROUP',
   showGroup: false, showUser: false, allowPrivate: false, enabled: true,
 })
 const groupsText = ref('')
 const openParams = ref(true)
 
 const isEditing = computed(() => props.board !== null)
+/** 内置命令的路径由代码约定，不能改名；自建命令可以改名并迁移记录 */
+const pathLocked = computed(() => props.board?.builtin === true)
 
 const hasRepeat = computed(() => form.params.some((p) => p.name === '重复'))
 const hasTime = computed(() => form.params.some((p) => p.name === '时间'))
@@ -56,7 +57,6 @@ const scheduled = computed(() => form.delivery === 'scheduled')
 function reset() {
   const b = props.board
   form.path = b?.path ?? ''
-  form.title = b?.title ?? ''
   form.params = (b?.params ?? []).map((p) => ({ ...p }))
   form.delivery = b?.delivery ?? 'direct'
   form.access = b?.access ?? 'all'
@@ -104,7 +104,8 @@ function submit() {
   const draft: BoardDraft = {
     id: props.board?.id ?? 0,
     path: form.path.trim(),
-    title: form.title.trim(),
+    // 命令名就是调用名，title 只作为历史字段跟着 path 走
+    title: form.path.trim(),
     params: form.params.map((p) => ({ ...p })),
     delivery: form.delivery,
     access: form.access,
@@ -127,7 +128,7 @@ function submit() {
   <section class="editor">
     <div class="editor-head">
       <div>
-        <div class="editor-eyebrow">编辑板块</div>
+        <div class="editor-eyebrow">编辑命令 · 板块</div>
         <div class="editor-path">/{{ form.path || '新板块' }}</div>
       </div>
       <div class="editor-actions">
@@ -145,24 +146,21 @@ function submit() {
         <div class="col-title">内容</div>
 
         <label class="row">
-          <span class="row-label">板块名</span>
+          <span class="row-label">命令名</span>
           <Input
             v-model="form.path"
-            :disabled="isEditing"
-            placeholder="公告（一级路径，不带斜杠）"
-            aria-label="板块名"
+            :disabled="pathLocked"
+            placeholder="公告（群里的调用名，不带斜杠）"
+            aria-label="命令名"
           />
         </label>
         <p class="path-hint">
           群友发 <span class="path-demo">/{{ form.path || '…' }}</span> 查看，
           发 <span class="path-demo">/{{ form.path || '…' }} /create</span> 添加。
-          <template v-if="isEditing">板块名不可改；要换名字请新建一个。</template>
+          命令名就是调用名。
+          <template v-if="pathLocked">内置命令不能改名。</template>
+          <template v-else-if="isEditing">改名会把已有记录一起迁到新名字下。</template>
         </p>
-
-        <label class="row">
-          <span class="row-label">名称</span>
-          <Input v-model="form.title" placeholder="群友看到的名字；留空就用板块名" aria-label="板块名称" />
-        </label>
 
         <div class="block">
           <button class="block-head" type="button" @click="openParams = !openParams">
@@ -241,8 +239,8 @@ function submit() {
         </div>
 
         <div v-if="board && !board.builtin" class="delete-line">
-          <Button size="sm" variant="danger" @click="emit('remove', board)">删除板块</Button>
-          <span class="faint note">板块里的记录不会被删除。</span>
+          <Button size="sm" variant="danger" @click="emit('remove', board)">删除命令</Button>
+          <span class="faint note">板块记录不会被删除。</span>
         </div>
       </section>
     </div>

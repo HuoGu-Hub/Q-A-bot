@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 指令表（{@code bot_command}）与使用记录表（{@code bot_command_log}）的**数据访问**。
@@ -149,6 +150,10 @@ public class CommandRepository {
                 + " FROM bot_command WHERE LOWER(trigger) = LOWER(?)", MAP, trigger);
     }
 
+    public Row findById(long id) {
+        return jdbc.queryOne("SELECT " + COLUMNS + " FROM bot_command WHERE id = ?", MAP, id);
+    }
+
     public long count() {
         return jdbc.count("SELECT COUNT(*) FROM bot_command");
     }
@@ -185,6 +190,22 @@ public class CommandRepository {
         });
     }
 
+    /**
+     * 按主键更新，**允许改 trigger**。
+     *
+     * <p>这是"改名"和"保存"共用的一条路：命令名就是调用名，改名必须原地改，
+     * 另起一条新行会让旧调用名继续生效、后台出现两条几乎一样的命令。
+     */
+    public int updateById(long id, Row row, String now) {
+        return jdbc.update("UPDATE bot_command SET trigger=?, reply=?, description=?, scope=?,"
+                        + " group_ids=?, min_role=?, enabled=?, sort_order=?, kind=?, mode=?,"
+                        + " params=?, help=?, action=?, updated_at=?"
+                        + " WHERE id=?",
+                row.trigger(), row.reply(), row.description(), row.scope(), row.groupIdsJson(),
+                row.access(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
+                row.paramsJson(), row.help(), row.action(), now, id);
+    }
+
     public boolean deleteById(long id) {
         return jdbc.update("DELETE FROM bot_command WHERE id = ?", id) > 0;
     }
@@ -212,10 +233,24 @@ public class CommandRepository {
                 + " VALUES (?,?,?,?,?)", ts, trigger, groupId, userId, matched);
     }
 
-    /** 使用排行：命中次数 */
+    /** 把历史使用记录里的旧命令名改成新名字；改名后统计才不会断成两截 */
+    public int renameUsage(String oldTrigger, String newTrigger) {
+        return jdbc.update("UPDATE bot_command_log SET trigger = ? WHERE LOWER(trigger) = LOWER(?)",
+                newTrigger.toLowerCase(Locale.ROOT), oldTrigger);
+    }
+
+    /**
+     * 使用排行：命中次数。
+     *
+     * <p>历史日志里还留着已退休的 {@code help} / {@code list} / 旧定时命令；
+     * 它们已经不在命令表里，继续显示会让"使用情况"和上面那张命令表对不上，
+     * 所以在查询层直接排除。
+     */
     public List<UsageStat> topUsed(int days, int limit) {
         return statQuery("SELECT trigger, COUNT(*) c FROM bot_command_log"
-                + " WHERE matched=1" + daysClause(days) + " GROUP BY trigger ORDER BY c DESC LIMIT ?", limit);
+                + " WHERE matched=1"
+                + " AND LOWER(trigger) NOT IN ('help','list','set/output','list/output','del/output')"
+                + daysClause(days) + " GROUP BY trigger ORDER BY c DESC LIMIT ?", limit);
     }
 
     /** ★ 未配置的命令排行：群友发了但没配 —— 直接告诉你该加什么 */

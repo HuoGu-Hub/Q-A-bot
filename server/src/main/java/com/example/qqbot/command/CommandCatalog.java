@@ -137,7 +137,8 @@ public class CommandCatalog {
         if (!boardList.isEmpty()) {
             sb.append("板块：\n");
             for (Entry board : boardList) {
-                sb.append('/').append(board.path()).append("  ").append(board.title());
+                // 命令名就是调用名，不再重复打印一遍 title
+                sb.append('/').append(board.path());
                 if (!board.params().isEmpty()) {
                     sb.append("  （");
                     for (int i = 0; i < board.params().size(); i++) {
@@ -152,7 +153,7 @@ public class CommandCatalog {
             }
         }
         if (!commandList.isEmpty()) {
-            sb.append("指令：\n");
+            sb.append("普通命令：\n");
             for (Entry command : commandList) {
                 sb.append('/').append(command.path());
                 if (command.title() != null && !command.title().isBlank()) {
@@ -180,7 +181,7 @@ public class CommandCatalog {
         sb.append("  /板块 /delete    撤销一条\n");
         sb.append("  /板块 /help      看这个板块收什么参数\n");
         if (!commandList.isEmpty()) {
-            sb.append("普通指令直接发：");
+            sb.append("普通命令直接发：");
             for (int i = 0; i < commandList.size(); i++) {
                 if (i > 0) {
                     sb.append('、');
@@ -189,7 +190,7 @@ public class CommandCatalog {
             }
             sb.append('\n');
         }
-        return sb.append("发 /list 看全部板块与指令。").toString();
+        return sb.append("发 /list 看全部命令。").toString();
     }
 
     /** 板块的完整创建写法，参数用示例值 —— 与指令的 display() 保持同一种形状 */

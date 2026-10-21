@@ -18,8 +18,8 @@ import java.util.List;
  *
  * <p>四个动作（增删查、帮助）由框架统一实现，板块不写代码。
  *
- * @param path    板块名，不含斜杠。中英皆可
- * @param title   给群友看的名字；为空时用 {@link #path}
+ * @param path    命令名，也是群里的调用名，不含斜杠。中英皆可
+ * @param title   历史列，**永远等于 {@link #path}**；不再允许"显示名"和调用名分开
  * @param params  这个板块的数据形状
  * @param delivery {@link #DIRECT} 立即展示 / {@link #SCHEDULED} 到点发
  */
@@ -55,14 +55,17 @@ public record Board(
             List.of(ACT_CREATE, ACT_QUERY, ACT_DELETE, ACT_HELP);
 
     public Board {
+        path = path == null ? "" : path.trim();
+        // 命令名与调用名强绑定：title 列保留只为兼容老库，任何地方都不再能把它写成另一个名字
+        title = path;
         params = params == null ? List.of() : List.copyOf(params);
         policy = policy == null ? DataPolicy.DEFAULT : policy;
         delivery = SCHEDULED.equals(delivery) ? SCHEDULED : DIRECT;
     }
 
-    /** 群友看到的名字 */
+    /** 群友看到的名字 = 调用名 */
     public String displayTitle() {
-        return title == null || title.isBlank() ? path : title;
+        return path;
     }
 
     public boolean isScheduled() {

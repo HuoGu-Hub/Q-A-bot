@@ -151,6 +151,11 @@ public class BoardStore {
         return available && repo.delete(path) > 0;
     }
 
+    /** 改板块名；历史记录由仓储层在同一事务里迁移 */
+    public boolean rename(String oldPath, String newPath) {
+        return available && repo.rename(oldPath, newPath);
+    }
+
     // ==================== 转换 ====================
 
     private List<Board> toBoards(List<BoardRepository.Row> rows) {

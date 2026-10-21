@@ -119,4 +119,23 @@ public class BoardRepository {
     public int delete(String path) {
         return jdbc.update("DELETE FROM bot_board WHERE path = ? AND builtin = 0", path);
     }
+
+    /**
+     * 改板块名，并把 {@code bot_record} 里引用旧名的行一起迁走。
+     *
+     * <p>为什么跨表：记录按板块名归属。只改配置、不迁记录，历史数据会变成
+     * 一个谁都查不到的孤儿。两步必须在同一个事务里，不能出现"板改了、记录没改"。
+     */
+    public boolean rename(String oldPath, String newPath) {
+        return jdbc.transaction(() -> {
+            int board = jdbc.update(
+                    "UPDATE bot_board SET path = ? WHERE path = ? AND builtin = 0",
+                    newPath, oldPath);
+            if (board == 0) {
+                return false;
+            }
+            jdbc.update("UPDATE bot_record SET board = ? WHERE board = ?", newPath, oldPath);
+            return true;
+        });
+    }
 }

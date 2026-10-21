@@ -47,6 +47,7 @@ public class BoardAdminService {
     /**
      * 保存请求。
      *
+     * @param title        历史字段，传什么都忽略；命令名固定等于 path
      * @param originalPath 编辑时必填：用来确认"改的是哪一条"。为空表示新建
      */
     public record BoardInput(String path, String title, List<ParamSpec> params,
@@ -87,17 +88,26 @@ public class BoardAdminService {
         }
 
         String originalPath = trim(input.originalPath());
-        Board existing = boards.find(path);
+        Board existing;
+        boolean renaming = false;
         if (originalPath == null) {
+            existing = boards.find(path);
             if (existing != null) {
                 throw new IllegalArgumentException("已经有同名板块：/" + path);
             }
         } else {
-            if (!originalPath.equals(path)) {
-                throw new IllegalArgumentException("板块名不能修改；要换名字请新建一个板块");
-            }
+            existing = boards.find(originalPath);
             if (existing == null) {
                 throw new IllegalArgumentException("板块不存在：/" + originalPath);
+            }
+            if (!originalPath.equals(path)) {
+                if (existing.builtin()) {
+                    throw new IllegalArgumentException("内置板块不能改名");
+                }
+                if (boards.find(path) != null) {
+                    throw new IllegalArgumentException("已经有同名板块：/" + path);
+                }
+                renaming = true;
             }
         }
 
@@ -131,10 +141,8 @@ public class BoardAdminService {
                 !groupScope && Boolean.TRUE.equals(input.showUser()),
                 Boolean.TRUE.equals(input.allowPrivate()));
 
-        String title = trim(input.title());
-        if (title == null) {
-            title = path;
-        }
+        // 命令名就是调用名：title 不再接受独立输入，构造器也会强制回 path
+        String title = path;
         int sortOrder = input.sortOrder() == null
                 ? (existing == null ? 0 : existing.sortOrder())
                 : input.sortOrder();
@@ -143,6 +151,9 @@ public class BoardAdminService {
         Board board = new Board(
                 existing == null ? 0 : existing.id(), path, title, params, delivery, access, policy,
                 input.enabled() == null || input.enabled(), sortOrder, builtin);
+        if (renaming && !boards.rename(originalPath, path)) {
+            throw new IllegalArgumentException("改名失败：旧板块不存在或不允许改名");
+        }
         boards.save(board);
         return view(boards.find(path));
     }

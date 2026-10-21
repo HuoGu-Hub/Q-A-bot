@@ -488,6 +488,8 @@ export interface CommandUsage {
 
 export interface CommandStats {
   topUsed: CommandUsage[]
+  /** 全部命中过的命令（不限 20 条），统一命令表按行显示次数 */
+  usage: CommandUsage[]
   unmatched: CommandUsage[]
   total: number
 }

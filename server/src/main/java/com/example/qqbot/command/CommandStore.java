@@ -170,6 +170,19 @@ public class CommandStore {
         }
     }
 
+    public BotCommand findById(long id) {
+        if (!available || id <= 0) {
+            return null;
+        }
+        try {
+            CommandRepository.Row r = repo.findById(id);
+            return r == null ? null : toCommand(r);
+        } catch (Exception e) {
+            log.warn("[CMD] 按 id 查询指令失败：{}", e.getMessage());
+            return null;
+        }
+    }
+
     private List<BotCommand> toCommands(List<CommandRepository.Row> rows) {
         List<BotCommand> out = new ArrayList<>(rows.size());
         for (CommandRepository.Row r : rows) {
@@ -260,6 +273,48 @@ public class CommandStore {
     }
 
     /**
+     * 按主键保存，允许改 trigger。
+     *
+     * <p>命令名就是调用名：改名必须原地改。走 {@link #upsert} 会因为新 trigger
+     * 查不到而 INSERT 一条新命令，旧调用名继续生效。
+     */
+    public long saveExisting(long id, BotCommand cmd) throws IOException {
+        if (!available) {
+            throw new IOException("指令库不可用");
+        }
+        if (id <= 0) {
+            throw new IOException("缺少指令 id");
+        }
+        String now = Instant.now().toString();
+        String groupsJson;
+        try {
+            groupsJson = mapper.writeValueAsString(cmd.groupIds() == null ? List.of() : cmd.groupIds());
+        } catch (Exception e) {
+            throw new IOException("群列表序列化失败：" + e.getMessage(), e);
+        }
+        String paramsJson;
+        try {
+            paramsJson = mapper.writeValueAsString(cmd.params() == null ? List.of() : cmd.params());
+        } catch (Exception e) {
+            throw new IOException("参数表序列化失败：" + e.getMessage(), e);
+        }
+        try {
+            int updated = repo.updateById(id, new CommandRepository.Row(0, cmd.trigger(), cmd.reply(),
+                    cmd.description(), cmd.scope(), groupsJson, cmd.access(), cmd.enabled(),
+                    cmd.sortOrder(), false, cmd.kindName(), cmd.modeName(),
+                    paramsJson, cmd.help(), cmd.action()), now);
+            if (updated == 0) {
+                throw new IOException("指令不存在：id=" + id);
+            }
+            return id;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("写入指令失败：" + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 删除。
      *
      * <p><b>内置命令不允许删</b>：它们是 {@code {cmd.list}} 之类变量的数据源，
@@ -314,6 +369,18 @@ public class CommandStore {
                     groupId, userId, matched, Instant.now().toString());
         } catch (Exception e) {
             log.debug("[CMD] 记录使用失败（不影响回复）：{}", e.getMessage());
+        }
+    }
+
+    /** 改名后把历史使用记录也迁到新名字下面 */
+    public void renameUsage(String oldTrigger, String newTrigger) {
+        if (!available || oldTrigger == null || newTrigger == null) {
+            return;
+        }
+        try {
+            repo.renameUsage(oldTrigger, newTrigger.toLowerCase(Locale.ROOT));
+        } catch (Exception e) {
+            log.warn("[CMD] 迁移使用记录失败（不影响改名）：{}", e.getMessage());
         }
     }
 

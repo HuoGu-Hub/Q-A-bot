@@ -12,7 +12,7 @@
  *   ② 链接可分享、刷新后不跳回默认 tab
  *
  * 页面栏（吸顶）左边是二级目录、右边是本 tab 的动作按钮；按钮调的是面板
- * 内部状态（保存并生效、新建指令），所以面板用 defineExpose 把动作抛出来，
+ * 内部状态（保存并生效、新建命令），所以面板用 defineExpose 把动作抛出来，
  * 这里按当前 tab 调对应的那个。
  *
  * ⚠️ **两个面板各用一个 ref，不能共用一个**。实测踩到的坑：Vue 3.5 把模板 ref
@@ -88,8 +88,7 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
       </template>
       <template v-else-if="tab === 'commands'">
         <Button size="sm" :disabled="commands?.isLoading()" @click="commands?.reload()">刷新</Button>
-        <Button size="sm" @click="commands?.newBoard()">+ 新建板块</Button>
-        <Button size="sm" variant="primary" @click="commands?.newCommand()">+ 新建指令</Button>
+        <Button size="sm" variant="primary" @click="commands?.openNewMenu()">+ 新建命令</Button>
       </template>
       <template v-else>
         <Button size="sm" :disabled="variables?.isLoading()" @click="variables?.reload()">刷新</Button>

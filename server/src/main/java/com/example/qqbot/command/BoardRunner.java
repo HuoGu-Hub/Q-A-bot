@@ -34,15 +34,18 @@ public class BoardRunner {
     private final VariableRenderer renderer;
     private final AclStore aclStore;
     private final CommandCatalog catalog;
+    private final CommandStore commandStore;
 
     public BoardRunner(BoardStore boards, BoardRecordStore records, CommandParser parser,
-                       VariableRenderer renderer, AclStore aclStore, CommandCatalog catalog) {
+                       VariableRenderer renderer, AclStore aclStore, CommandCatalog catalog,
+                       CommandStore commandStore) {
         this.boards = boards;
         this.records = records;
         this.parser = parser;
         this.renderer = renderer;
         this.aclStore = aclStore;
         this.catalog = catalog;
+        this.commandStore = commandStore;
     }
 
     /** 一句话结果：要么回一段文本，要么表示"这不是板块命令" */
@@ -76,9 +79,11 @@ public class BoardRunner {
         // /help 只说"怎么用"，/list 才列全部 —— 两份文案都由 CommandCatalog 生成，
         // 后台看到的目录与群里收到的是同一份数据，避免各写一套后漂移。
         if ("help".equalsIgnoreCase(boardPath)) {
+            logUsage(event, "help");
             return Optional.of(new Reply(catalog.helpText()));
         }
         if ("list".equalsIgnoreCase(boardPath)) {
+            logUsage(event, "list");
             return Optional.of(new Reply(catalog.listText()));
         }
 
@@ -99,6 +104,9 @@ public class BoardRunner {
         long groupId = event.getGroupId() == null ? 0L : event.getGroupId();
         boolean inGroup = event.isGroupMessage();
 
+        // 板块也是命令：使用情况与普通指令记在同一张表里，后台才能按命令看总次数
+        logUsage(event, board.path());
+
         if (!inGroup && !board.policy().allowPrivate()) {
             return Optional.of(new Reply("这条命令要在群里用"));
         }
@@ -117,6 +125,13 @@ public class BoardRunner {
             case Board.ACT_HELP -> help(board);
             default -> query(board, groupId);
         }));
+    }
+
+    /** 记一次命令使用（含被权限拦下的），与 CommandHandler 的记账口径一致 */
+    private void logUsage(OneBotEvent event, String trigger) {
+        long userId = event.getUserId() == null ? 0L : event.getUserId();
+        long groupId = event.getGroupId() == null ? 0L : event.getGroupId();
+        commandStore.logUsage(trigger, groupId, userId, true);
     }
 
     // ==================== 增 ====================

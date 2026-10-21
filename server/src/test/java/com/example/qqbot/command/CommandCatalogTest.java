@@ -65,7 +65,7 @@ class CommandCatalogTest {
         String text = catalog.listText();
 
         assertThat(text).contains("板块：", "/公告", "/任务", "/开黑");
-        assertThat(text).contains("指令：", "/ping", "/stats");
+        assertThat(text).contains("普通命令：", "/ping", "/stats");
         assertThat(text).contains("用 /板块 /help");
     }
 
@@ -75,7 +75,7 @@ class CommandCatalogTest {
         String text = catalog.helpText();
 
         assertThat(text).contains("/板块 /create", "/板块 /delete", "/板块 /help");
-        assertThat(text).contains("普通指令直接发", "/ping", "/stats");
+        assertThat(text).contains("普通命令直接发", "/ping", "/stats");
         assertThat(text).contains("发 /list");
     }
 

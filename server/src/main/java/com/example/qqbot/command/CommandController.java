@@ -192,23 +192,49 @@ public class CommandController {
         mode = BotCommand.MODE_NONE.equalsIgnoreCase(mode == null ? "" : mode)
                 ? BotCommand.MODE_NONE : BotCommand.MODE_KB;
 
+        BotCommand cmd = new BotCommand(
+                0, t, reply,
+                str(body.get("description")) == null ? "" : str(body.get("description")),
+                str(body.get("scope")) == null ? "all" : str(body.get("scope")),
+                toLongList(body.get("groupIds")),
+                str(body.get("minRole")) == null ? "member" : str(body.get("minRole")),
+                !Boolean.FALSE.equals(body.get("enabled")),
+                body.get("sortOrder") instanceof Number n ? n.intValue() : 0,
+                false,
+                kind,
+                mode,
+                params,
+                str(body.get("help")),
+                action);
+
+        Long id = longOrNull(body.get("id"));
         try {
-            long id = store.upsert(new BotCommand(
-                    0, t, reply,
-                    str(body.get("description")) == null ? "" : str(body.get("description")),
-                    str(body.get("scope")) == null ? "all" : str(body.get("scope")),
-                    toLongList(body.get("groupIds")),
-                    str(body.get("minRole")) == null ? "member" : str(body.get("minRole")),
-                    !Boolean.FALSE.equals(body.get("enabled")),
-                    body.get("sortOrder") instanceof Number n ? n.intValue() : 0,
-                    false,
-                    kind,
-                    mode,
-                    params,
-                    str(body.get("help")),
-                    action));
-            log.info("[CMD] 保存指令 /{}（id={}，类型={}，模式={}）", t, id, kind, mode);
-            return ResponseEntity.ok(Map.of("ok", true, "id", id));
+            long savedId;
+            if (id != null && id > 0) {
+                BotCommand existing = store.findById(id);
+                if (existing == null) {
+                    return bad("指令不存在：id=" + id);
+                }
+                // 命令名就是调用名：内置命令的调用名是代码约定的，不允许改名
+                if (existing.builtin() && !existing.trigger().equalsIgnoreCase(t)) {
+                    return bad("内置指令不能改名");
+                }
+                BotCommand sameName = store.findByTrigger(t);
+                if (sameName != null && sameName.id() != id.longValue()) {
+                    return bad("命令名 /" + t + " 已经被占用");
+                }
+                savedId = store.saveExisting(id, cmd);
+                if (!existing.trigger().equalsIgnoreCase(t)) {
+                    store.renameUsage(existing.trigger(), t);
+                }
+            } else {
+                if (store.findByTrigger(t) != null) {
+                    return bad("命令名 /" + t + " 已经存在；要修改请从列表里点编辑");
+                }
+                savedId = store.upsert(cmd);
+            }
+            log.info("[CMD] 保存指令 /{}（id={}，类型={}，模式={}）", t, savedId, kind, mode);
+            return ResponseEntity.ok(Map.of("ok", true, "id", savedId));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", e.getMessage()));
@@ -313,6 +339,8 @@ public class CommandController {
     public Map<String, Object> stats(@RequestParam(defaultValue = "30") int days) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("topUsed", store.topUsed(days, 20));
+        // 全部命中过的命令（不限 20 条）：统一命令表按行显示使用次数
+        out.put("usage", store.topUsed(days, 1000));
         // ★ 未配置的命令 —— 直接告诉你该加什么
         out.put("unmatched", store.unmatched(days, 20));
         out.put("total", store.count());
@@ -323,6 +351,20 @@ public class CommandController {
 
     private static ResponseEntity<Map<String, Object>> bad(String msg) {
         return ResponseEntity.badRequest().body(Map.of("error", msg));
+    }
+
+    private static Long longOrNull(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String str(Object o) {

@@ -87,19 +87,21 @@ class BoardStoreTest {
     }
 
     @Test
-    @DisplayName("★ 管理员改过的板块不会被重启覆盖")
+    @DisplayName("★ 管理员改过的板块不会被重启覆盖，且名称始终等于调用名")
     void editedBoardSurvivesRestart() {
         Board edited = new Board(0, "公告", "群公告",
                 List.of(ParamSpec.of("时间", "moment", true, "21:30")),
                 Board.SCHEDULED, "owner", DataPolicy.DEFAULT, true, 10, true);
+        assertThat(edited.title()).as("构造时就把显示名拉回调用名").isEqualTo("公告");
         store.save(edited);
 
         // 重新初始化 = 模拟重启
         store.init();
 
         Board after = store.find("公告");
-        assertThat(after.title()).as("改过的标题保住了").isEqualTo("群公告");
-        assertThat(after.access()).isEqualTo("owner");
+        assertThat(after.title()).as("title 不能脱离调用名").isEqualTo("公告");
+        assertThat(after.displayTitle()).isEqualTo("公告");
+        assertThat(after.access()).as("改过的权限保住了").isEqualTo("owner");
     }
 
     @Test

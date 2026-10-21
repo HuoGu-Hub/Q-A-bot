@@ -1,6 +1,7 @@
 package com.example.qqbot.command;
 
 import com.example.qqbot.config.PersistenceProperties;
+import com.example.qqbot.persistence.BoardRecordRepository;
 import com.example.qqbot.persistence.BoardRepository;
 import com.example.qqbot.persistence.CommandRepository;
 import com.example.qqbot.persistence.Jdbc;
@@ -13,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,6 +34,7 @@ class BoardAdminServiceTest {
 
     private SqliteDatabase db;
     private BoardStore boards;
+    private BoardRecordStore records;
     private CommandStore commands;
     private BoardAdminService service;
 
@@ -44,6 +48,8 @@ class BoardAdminServiceTest {
         ObjectMapper mapper = new ObjectMapper();
         boards = new BoardStore(new BoardRepository(jdbc), mapper);
         boards.init();
+        records = new BoardRecordStore(new BoardRecordRepository(jdbc), mapper);
+        records.init();
         commands = new CommandStore(new CommandRepository(jdbc), mapper);
         commands.init();
         service = new BoardAdminService(boards, commands);
@@ -68,7 +74,7 @@ class BoardAdminServiceTest {
     }
 
     @Test
-    @DisplayName("内置板块能改标题与权限，但删不掉")
+    @DisplayName("内置板块能改权限，但删不掉；title 不能脱离调用名")
     void builtinCanBeEditedButNotDeleted() {
         Board announcement = boards.find("公告");
         BoardAdminService.BoardInput edit = new BoardAdminService.BoardInput(
@@ -77,14 +83,21 @@ class BoardAdminServiceTest {
 
         BoardAdminService.BoardView view = service.save(edit);
 
-        assertThat(view.title()).isEqualTo("群公告");
+        assertThat(view.title()).as("传了别的 title 也会被拉回调用名").isEqualTo("公告");
         assertThat(view.access()).isEqualTo("owner");
         assertThat(view.builtin()).isTrue();
-        assertThat(boards.find("公告").title()).isEqualTo("群公告");
+        assertThat(boards.find("公告").title()).isEqualTo("公告");
 
         assertThatThrownBy(() -> service.delete("公告"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("内置板块不能删除");
+
+        BoardAdminService.BoardInput rename = new BoardAdminService.BoardInput(
+                "公告2", "公告2", announcement.params(), Board.SCHEDULED, "owner", "GROUP",
+                List.of(), false, false, false, true, 10, "公告");
+        assertThatThrownBy(() -> service.save(rename))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("内置板块不能改名");
     }
 
     @Test
@@ -128,6 +141,25 @@ class BoardAdminServiceTest {
         assertThatThrownBy(() -> service.save(input))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("指定群");
+    }
+
+    @Test
+    @DisplayName("★ 自建板块改名：旧名消失，历史记录跟着走")
+    void renameCustomBoardMovesRecords() throws Exception {
+        service.save(input("旧板", Board.DIRECT, List.of(ParamSpec.of("内容", "text", true, "示例"))));
+        Board old = boards.find("旧板");
+        long recordId = records.create(old, 100L, 200L, "阿明", "内容",
+                Map.of(), List.of(), Instant.now());
+
+        BoardAdminService.BoardView view = service.save(new BoardAdminService.BoardInput(
+                "新板", "新板", old.params(), Board.DIRECT, "all", "GROUP", List.of(),
+                false, false, false, true, 40, "旧板"));
+
+        assertThat(view.path()).isEqualTo("新板");
+        assertThat(boards.find("旧板")).isNull();
+        assertThat(boards.find("新板")).isNotNull();
+        assertThat(records.query(boards.find("新板"), 0, 50))
+                .extracting(BoardRecord::id).contains(recordId);
     }
 
     @Test

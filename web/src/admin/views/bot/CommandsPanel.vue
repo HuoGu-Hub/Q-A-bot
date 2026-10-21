@@ -5,12 +5,13 @@
  * 为什么是面板而不是页面：管理端要把「设置」和「指令」并进同一个「Bot 配置」页，
  * 页面内用二级目录切换。页面级外壳（AdminPage、Tabs、页面标题）由父页面提供，
  * 所以这里不接收 props、不 emit 事件，也不渲染 AdminPage ——
- * 只负责本 tab 的内容。页面栏上的「刷新」「+ 新建板块」「+ 新建指令」由父页面
+ * 只负责本 tab 的内容。页面栏上的「刷新」「+ 新建命令」由父页面
  * BotConfigView 渲染，动作经 defineExpose 抛出（按钮调的是面板内部状态，视图拿不到）。
  *
- * 接口：/commands 管普通指令，/boards 管板块；两者共用一套编辑器与参数表组件。
+ * 板块和指令是同一件事的两种形态：对外只有一张命令表，类型列区分
+ * 「板块 / 话术 / 问答 / 动作」；底层仍分两张表 —— 板块多一层投递与记录。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
@@ -26,6 +27,7 @@ import Tag from '@shared/ui/Tag.vue'
 import ParamTable from './ParamTable.vue'
 import BoardEditor from './BoardEditor.vue'
 import BoardRecordsModal from './BoardRecordsModal.vue'
+import NewCommandModal from './NewCommandModal.vue'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
 } from './commandOptions'
@@ -48,12 +50,60 @@ const boardSaving = ref(false)
 const boardError = ref('')
 /** 正在看记录的板块；null = 弹窗关闭 */
 const recordsBoard = ref<AdminBoard | null>(null)
+/** 新建命令的类型选择弹窗 */
+const newOpen = ref(false)
+/** 使用情况统计范围（天） */
+const statsDays = ref(30)
 /** 实时预览结果 */
 const preview = ref('')
 /** 预览 {args} 用的示例参数 */
 const sampleArgs = ref('')
 
-/* 指令类型与准入选项在 commandOptions.ts —— 板块编辑器也要用同一份 */
+const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '7', label: '近 7 天' },
+  { value: '30', label: '近 30 天' },
+  { value: '90', label: '近 90 天' },
+]
+
+/** 统一命令表的一行：source 决定用哪个编辑器、有没有「记录」 */
+interface CommandRow {
+  source: 'board' | 'command'
+  key: string
+  path: string
+  usage: string
+  kind: string
+  description: string
+  access: string
+  enabled: boolean
+  builtin: boolean
+  board: AdminBoard | null
+  command: BotCommand | null
+}
+
+/** 10 天统计里按命令路径查次数；日志里的 trigger 是小写 */
+const usageMap = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {}
+  for (const item of stats.value?.usage ?? []) {
+    map[item.trigger.toLowerCase()] = item.count
+  }
+  return map
+})
+
+/** 板块在前、指令在后；这就是群里 /list 的顺序 */
+const rows = computed<CommandRow[]>(() => [
+  ...boards.value.map((b): CommandRow => ({
+    source: 'board', key: 'board-' + b.id, path: b.path, usage: b.usage, kind: 'board',
+    description: b.delivery === 'scheduled' ? '收下后按时间发出' : '收下后立即出现在板里',
+    access: b.access, enabled: b.enabled, builtin: b.builtin, board: b, command: null,
+  })),
+  ...(data.value?.commands ?? []).map((c): CommandRow => ({
+    source: 'command', key: 'command-' + c.id, path: c.trigger, usage: c.usage, kind: c.kind,
+    description: c.description || '—', access: c.access, enabled: c.enabled, builtin: c.builtin,
+    board: null, command: c,
+  })),
+])
+
+/** 指令类型与准入选项在 commandOptions.ts —— 板块编辑器也要用同一份 */
 
 const isAgent = computed(() => editing.value?.kind === 'agent')
 const isAction = computed(() => editing.value?.kind === 'action')
@@ -79,6 +129,18 @@ const kindHint = computed(() => {
     : '话术：群友发「/路径 #名字-值# 文本」→ 直接回下面的文本。不调模型、不计费，所以是秒回。'
 })
 
+async function loadStats() {
+  try {
+    stats.value = await adminApi.get<CommandStats>('/commands/stats?days=' + statsDays.value)
+  } catch { /* 统计失败不挡配置 */ }
+}
+
+watch(statsDays, loadStats)
+
+function onRangeChange(value: string) {
+  statsDays.value = Number(value)
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -87,7 +149,7 @@ async function load() {
     try { boards.value = (await adminApi.get<AdminBoardList>('/boards')).boards }
     catch { boards.value = [] }
     vars.value = await adminApi.get<CommandVariables>('/commands/variables')
-    stats.value = await adminApi.get<CommandStats>('/commands/stats?days=30')
+    await loadStats()
     actions.value = await adminApi.get<CommandActions>('/commands/actions')
     const pol = await adminApi.get<CommandPolicies>('/commands/policies')
     policies.value = Object.fromEntries(pol.policies.map((x) => [x.id, x]))
@@ -97,16 +159,35 @@ async function load() {
   }
 }
 
-function newCommand() {
+function newCommand(kind = 'template') {
   boardEditing.value = undefined
   editing.value = {
     trigger: '', reply: '', description: '', scope: 'all', enabled: true, sortOrder: 0,
-    kind: 'template', mode: 'kb', params: [], help: '', action: null, access: 'all',
+    kind, mode: 'kb', params: [], help: '', action: null, access: 'all',
   }
   preview.value = ''
   sampleArgs.value = ''
   policy.value = { scope: 'GROUP', groups: '', showGroup: false, showUser: false, allowPrivate: false }
   acl.value = { whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' }
+}
+
+/** 页面栏的「+ 新建命令」：先选类型，再进对应编辑器 */
+function openNewMenu() {
+  editing.value = null
+  boardEditing.value = undefined
+  boardError.value = ''
+  newOpen.value = true
+}
+
+function pickNew(kind: string) {
+  newOpen.value = false
+  if (kind === 'board') {
+    editing.value = null
+    boardEditing.value = null
+    boardError.value = ''
+    return
+  }
+  newCommand(kind)
 }
 
 function edit(c: BotCommand) {
@@ -124,38 +205,20 @@ function edit(c: BotCommand) {
     .catch(() => { /* 读不到名单不挡编辑 */ })
 }
 
-/**
- * 列表里怎么显示这条指令。
- *
- * <p><b>只显示路径。</b>参数是使用时的输入，不是命令名的一部分 ——
- * 把 {#time-21:30#} 拼在名字后面会让人以为命令本身长那样。
- */
-function displayOf(c: BotCommand) {
-  return '/' + c.trigger.split('/').join(' /')
-}
-
 /** 用参数表的示例值拼一段示例参数，编辑时预览立刻有东西可看 */
 function sampleArgsOf(params: AdminParamSpec[]) {
   return params.map((p) => '#' + p.name + '-' + (p.example || p.name) + '#').join(' ')
 }
 
-/** 路径之外的完整用法（带参数示例）；与路径相同时不重复显示 */
-function usageOf(c: BotCommand) {
-  return c.usage && c.usage !== displayOf(c) ? c.usage : ''
-}
-
-/** 板块行：/boards 返回的全部板块（含停用） */
-const boardRows = computed<AdminBoard[]>(() => boards.value)
-
 /** 板块的规则一栏：谁能用、怎么投递、数据范围 */
 function boardRuleTags(b: AdminBoard) {
   const tags: Array<{ label: string; tone: 'neutral' | 'good' | 'warn' | 'bad' }> = [
     { label: ACCESS_LABEL[b.access] ?? b.access, tone: 'neutral' },
-    { label: b.delivery === 'scheduled' ? '到点发' : '立即展示', tone: b.delivery === 'scheduled' ? 'warn' : 'good' },
   ]
   if (b.scope && b.scope !== 'GROUP') {
     tags.push({ label: SCOPE_LABEL[b.scope] ?? b.scope, tone: 'bad' })
   }
+  if (b.allowPrivate) tags.push({ label: '私聊开', tone: 'warn' })
   return tags
 }
 
@@ -267,12 +330,6 @@ async function toggle(c: BotCommand) {
 
 // ==================== 板块编辑 ====================
 
-function newBoard() {
-  editing.value = null
-  boardEditing.value = null
-  boardError.value = ''
-}
-
 function editBoard(b: AdminBoard) {
   editing.value = null
   boardEditing.value = b
@@ -286,6 +343,50 @@ function cancelBoard() {
 
 function openRecords(b: AdminBoard) {
   recordsBoard.value = b
+}
+
+/** 统一表里这一行的类型标签 */
+function rowKindLabel(row: CommandRow) {
+  if (row.source === 'board') return '板块'
+  if (row.kind === 'agent') return '问答'
+  if (row.kind === 'action') return '动作'
+  return '话术'
+}
+
+function rowKindTone(row: CommandRow): 'flame' | 'warn' | 'neutral' {
+  if (row.source === 'board') return 'flame'
+  if (row.kind === 'agent' || row.kind === 'action') return 'warn'
+  return 'neutral'
+}
+
+/** 近 N 天被用了几次；0 显示破折号，避免整列都是 0 */
+function rowUsage(row: CommandRow) {
+  const count = usageMap.value[row.path.toLowerCase()] ?? 0
+  return count > 0 ? count + ' 次' : '—'
+}
+
+function editRow(row: CommandRow) {
+  if (row.source === 'board' && row.board) {
+    editBoard(row.board)
+  } else if (row.command) {
+    edit(row.command)
+  }
+}
+
+function toggleRow(row: CommandRow) {
+  if (row.source === 'board' && row.board) {
+    toggleBoard(row.board)
+  } else if (row.command) {
+    toggle(row.command)
+  }
+}
+
+function removeRow(row: CommandRow) {
+  if (row.source === 'board' && row.board) {
+    removeBoard(row.board)
+  } else if (row.command) {
+    remove(row.command)
+  }
 }
 
 async function saveBoard(draft: BoardDraft) {
@@ -303,7 +404,7 @@ async function saveBoard(draft: BoardDraft) {
 }
 
 async function removeBoard(b: AdminBoard) {
-  if (!window.confirm('确定删除板块 /' + b.path + ' ？板块里的记录不会被删除。')) return
+  if (!window.confirm('确定删除命令 /' + b.path + ' ？板块记录不会被删除。')) return
   try {
     await adminApi.post('/boards/delete', { path: b.path })
     await load()
@@ -453,11 +554,10 @@ async function saveGlobalAcl() {
 const basicVars = computed(() => (vars.value?.variables ?? []).filter(v => !v.advanced))
 const advVars = computed(() => (vars.value?.variables ?? []).filter(v => v.advanced))
 
-/** 页面栏上的「刷新」「+ 新建指令」—— 见文件头注释 */
+/** 页面栏上的「刷新」「+ 新建命令」—— 见文件头注释 */
 defineExpose({
   reload: load,
-  newCommand,
-  newBoard,
+  openNewMenu,
   /** 读数式暴露：视图在渲染时调用，读到 loading 变化会重渲染，按钮的禁用态才跟得上 */
   isLoading: () => loading.value,
 })
@@ -474,7 +574,7 @@ onMounted(load)
     <div v-if="editing" class="editor">
       <div class="editor-head">
         <div>
-          <div class="editor-eyebrow">编辑指令</div>
+          <div class="editor-eyebrow">编辑命令</div>
           <div class="editor-path">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '新指令' }}</div>
         </div>
         <div class="editor-actions">
@@ -489,18 +589,23 @@ onMounted(load)
           <div class="col-title">内容</div>
 
           <label class="row">
-            <span class="row-label">路径</span>
+            <span class="row-label">命令名</span>
             <div class="trigger-line">
               <span class="slash">/</span>
               <Input
                 :model-value="editing.trigger ?? ''"
+                :disabled="editing.builtin"
                 placeholder="set/output（用 / 分层）"
-                aria-label="路径"
+                aria-label="命令名"
                 @update:model-value="patch({ trigger: $event })"
               />
             </div>
           </label>
-          <p class="path-hint">群里发 <span class="path-demo">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '…' }}</span></p>
+          <p class="path-hint">
+            群里发 <span class="path-demo">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '…' }}</span>。
+            命令名就是调用名，改名会同步改掉旧调用名。
+            <template v-if="editing.builtin">内置命令不能改名。</template>
+          </p>
 
           <label class="row">
             <span class="row-label">说明</span>
@@ -717,102 +822,77 @@ onMounted(load)
       @remove="removeBoard"
     />
 
-    <!-- 板块：与 QQ 的 /list 同一份目录 -->
-    <Panel v-if="!editing && boardEditing === undefined" title="板块" :count="boardRows.length">
+    <!-- 全部命令：板块与指令在同一张表里，类型列区分 -->
+    <Panel v-if="!editing && boardEditing === undefined" title="全部命令" :count="rows.length">
       <p class="panel-note">
-        群里发 <span class="path-demo">/板块</span> 查看、<span class="path-demo">/板块 /create</span> 添加。
-        这里的清单与 QQ 里 <span class="path-demo">/list</span> 读的是同一份数据。
+        板块和指令是同一件事的两种形态。群里发 <span class="path-demo">/命令</span> 触发；
+        板块多一层投递方式，记录在「记录」里看。
       </p>
       <DataTable
-        :rows="boardRows.length"
-        empty="还没有板块"
-        empty-hint="板块由后端种子提供"
+        :rows="rows.length"
+        empty="还没有命令"
+        empty-hint="点右上角「+ 新建命令」加一条"
       >
         <thead>
           <tr>
             <th>命令</th>
+            <th>类型</th>
             <th>说明</th>
-            <th>参数</th>
             <th>规则</th>
+            <th>使用</th>
             <th>状态</th>
             <th class="ops">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="b in boardRows" :key="'board-' + b.id">
+          <tr v-for="row in rows" :key="row.key">
             <td class="trig">
-              <div>/{{ b.path }}</div>
-              <div v-if="b.params.length" class="usage">{{ b.usage }}</div>
-            </td>
-            <td class="muted">
-              {{ b.title }}
-              <Tag v-if="b.builtin" tone="flame">内置</Tag>
-            </td>
-            <td>
-              <span v-for="p in b.params" :key="p.name" class="param-chip">
-                #{{ p.name }}-{{ p.example || p.name }}#
-              </span>
-              <span v-if="!b.params.length" class="faint">无</span>
-            </td>
-            <td>
-              <Tag v-for="t in boardRuleTags(b)" :key="t.label" :tone="t.tone">{{ t.label }}</Tag>
-            </td>
-            <td>
-              <Tag :tone="b.enabled ? 'good' : 'neutral'">{{ b.enabled ? '启用' : '停用' }}</Tag>
-            </td>
-            <td class="ops">
-              <div class="ops-btns">
-                <Button size="sm" @click="editBoard(b)">编辑</Button>
-                <Button size="sm" @click="openRecords(b)">记录</Button>
-                <Button size="sm" @click="toggleBoard(b)">{{ b.enabled ? '停用' : '启用' }}</Button>
-                <Button v-if="!b.builtin" size="sm" variant="danger" @click="removeBoard(b)">删除</Button>
+              <div>/{{ row.path.split('/').join(' /') }}</div>
+              <div v-if="row.usage && row.usage !== '/' + row.path.split('/').join(' /')" class="usage">
+                {{ row.usage }}
               </div>
             </td>
-          </tr>
-        </tbody>
-      </DataTable>
-    </Panel>
-
-    <!-- 指令列表 -->
-    <Panel v-if="!editing && boardEditing === undefined" title="已有指令" :count="data?.commands?.length">
-      <DataTable
-        :rows="data?.commands?.length ?? 0"
-        empty="还没有指令"
-        empty-hint="点右上角「+ 新建指令」加一条"
-      >
-        <thead>
-          <tr>
-            <th>命令</th>
-            <th>说明</th>
-            <th>偏离默认</th>
-            <th>状态</th>
-            <th class="ops">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in data?.commands ?? []" :key="c.id">
-            <td class="trig">
-              <div>{{ displayOf(c) }}</div>
-              <div v-if="usageOf(c)" class="usage">{{ usageOf(c) }}</div>
-            </td>
-            <td class="muted">{{ c.description }}</td>
-            <td>
-              <template v-if="deviations(c).length">
-                <Tag v-for="d in deviations(c)" :key="d" :tone="deviationTone(c)">{{ d }}</Tag>
+            <td class="kind">
+              <Tag :tone="rowKindTone(row)">{{ rowKindLabel(row) }}</Tag>
+              <template v-if="row.source === 'board' && row.board">
+                <Tag :tone="row.board.delivery === 'scheduled' ? 'warn' : 'good'">
+                  {{ row.board.delivery === 'scheduled' ? '到点发' : '立即' }}
+                </Tag>
               </template>
-              <span v-else class="faint">默认</span>
+              <template v-else-if="row.command">
+                <Tag v-if="row.command.kind === 'agent'" tone="neutral">
+                  {{ row.command.mode === 'none' ? '不用知识库' : '知识库' }}
+                </Tag>
+                <Tag v-if="row.command.kind === 'action'" tone="neutral">{{ row.command.action }}</Tag>
+              </template>
             </td>
+            <td class="muted">{{ row.description }}</td>
             <td>
-              <Tag :tone="c.enabled ? 'good' : 'neutral'">{{ c.enabled ? "启用" : "停用" }}</Tag>
-              <Tag v-if="c.kind === 'agent'" tone="warn">问答·{{ c.mode === 'none' ? '不用知识库' : '知识库' }}</Tag>
-              <Tag v-if="c.kind === 'action'" tone="warn">动作·{{ c.action }}</Tag>
-              <Tag v-if="c.builtin" tone="flame">内置</Tag>
+              <template v-if="row.source === 'board' && row.board">
+                <Tag v-for="t in boardRuleTags(row.board)" :key="t.label" :tone="t.tone">{{ t.label }}</Tag>
+              </template>
+              <template v-else-if="row.command">
+                <template v-if="deviations(row.command).length">
+                  <Tag v-for="d in deviations(row.command)" :key="d" :tone="deviationTone(row.command)">{{ d }}</Tag>
+                </template>
+                <span v-else class="faint">默认</span>
+              </template>
+            </td>
+            <td class="num" :title="'近 ' + statsDays + ' 天'">{{ rowUsage(row) }}</td>
+            <td>
+              <Tag :tone="row.enabled ? 'good' : 'neutral'">{{ row.enabled ? '启用' : '停用' }}</Tag>
+              <Tag v-if="row.builtin" tone="flame">内置</Tag>
             </td>
             <td class="ops">
               <div class="ops-btns">
-                <Button size="sm" @click="edit(c)">编辑</Button>
-                <Button size="sm" @click="toggle(c)">{{ c.enabled ? "停用" : "启用" }}</Button>
-                <Button v-if="!c.builtin" size="sm" variant="danger" @click="remove(c)">删除</Button>
+                <Button size="sm" @click="editRow(row)">编辑</Button>
+                <Button
+                  v-if="row.source === 'board' && row.board"
+                  size="sm"
+                  @click="openRecords(row.board)"
+                >记录</Button>
+                <Button size="sm" @click="toggleRow(row)">{{ row.enabled ? '停用' : '启用' }}</Button>
+                <Button v-if="!row.builtin" size="sm" variant="danger" @click="removeRow(row)">删除</Button>
               </div>
             </td>
           </tr>
@@ -860,7 +940,20 @@ onMounted(load)
     </Panel>
 
     <!-- C6：统计 -->
-    <Panel v-if="!editing && boardEditing === undefined" title="指令使用情况（近 30 天）">
+    <Panel
+      v-if="!editing && boardEditing === undefined"
+      title="指令使用情况"
+    >
+      <template #actions>
+        <div class="range-pick">
+          <Select
+            :model-value="String(statsDays)"
+            :options="RANGE_OPTIONS"
+            aria-label="统计范围"
+            @update:model-value="onRangeChange"
+          />
+        </div>
+      </template>
       <div class="two">
         <div class="col">
           <div class="faint sub">最常用</div>
@@ -891,6 +984,12 @@ onMounted(load)
       :open="recordsBoard !== null"
       :board="recordsBoard"
       @close="recordsBoard = null"
+    />
+
+    <NewCommandModal
+      :open="newOpen"
+      @pick="pickNew"
+      @close="newOpen = false"
     />
   </div>
 </template>
@@ -1017,18 +1116,10 @@ onMounted(load)
 .trig { font-family: var(--font-mono); color: var(--flame); }
 /* 路径下面的完整用法：参数示例与 QQ 里 /help 的写法一致 */
 .usage { margin-top: 2px; font-size: 11.5px; color: var(--ink-4); font-family: var(--font-mono); line-height: 1.5; overflow-wrap: anywhere; }
-.param-chip {
-  display: inline-block;
-  margin: 0 4px 3px 0;
-  padding: 1px 6px;
-  border-radius: var(--r-xs);
-  background: var(--surface-inset);
-  border: 1px solid var(--edge-soft);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-3);
-}
 .panel-note { margin: 0 0 var(--sp-3); font-size: var(--fs-meta); color: var(--ink-4); }
+.kind { white-space: nowrap; }
+.kind .tag { margin-right: 4px; }
+.range-pick { width: 128px; }
 .trig--miss { color: var(--rust); }
 .reply { font-size: var(--fs-meta); }
 
