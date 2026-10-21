@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { renderInline } from '../renderInline'
 import { site, t } from '../useSiteText'
 import Icon from '@shared/ui/Icon.vue'
+import PageHeader from '@shared/ui/PageHeader.vue'
 
 /**
  * 「回答是怎么产生的」正文按换行拆成有序列表：一个文案块承载整段正文，
@@ -21,10 +22,7 @@ const howSteps = computed(() =>
 
 <template>
   <div class="page about read">
-    <header class="head">
-      <p class="eyebrow">About</p>
-      <h1 class="title">关于</h1>
-    </header>
+    <PageHeader title="关于" desc="一个《雾锁王国》问答助手，和它背后的取舍。" />
 
     <section class="sec">
       <h2 class="h"><span v-html="renderInline(t('about.what_title', '飘雪喵是什么'))" /></h2>
@@ -81,13 +79,11 @@ const howSteps = computed(() =>
 </template>
 
 <style scoped>
-.about { padding-top: var(--sp-6); padding-bottom: var(--sp-8); }
-.head { margin-bottom: var(--sp-5); }
-.title { font-size: var(--fs-3xl); margin-top: var(--sp-2); letter-spacing: var(--tracking-ink); }
+.about { padding-top: var(--sp-5); padding-bottom: var(--sp-8); }
 
 /* 一节 = 一个 h2 + 正文。节与节之间只靠留白和一条发丝线分开，
    不再给每一节套一个面板 —— 一整页面板会把"关于"读成仪表盘。 */
-.sec { padding: var(--sp-5) 0; border-top: 1px solid var(--hairline); }
+.sec { padding: var(--sp-5) 0; border-top: 1px solid var(--hairline); scroll-margin-top: calc(var(--header-h) + 12px); }
 .sec.last { padding-bottom: 0; }
 .sec:first-of-type { border-top: 0; padding-top: 0; }
 
@@ -144,6 +140,7 @@ p { font-size: var(--fs-base); line-height: 1.9; }
 .note :deep(svg) { margin-top: 4px; color: var(--ink-4); }
 
 @media (max-width: 760px) {
-  .title { font-size: var(--fs-2xl); }
+  .sec { padding: var(--sp-4) 0; }
+  .h { font-size: var(--fs-lg); }
 }
 </style>

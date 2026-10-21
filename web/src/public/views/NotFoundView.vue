@@ -31,9 +31,9 @@ import Icon from '@shared/ui/Icon.vue'
   background: var(--stone-void);
   box-shadow: var(--bevel-inset);
   color: var(--ember);
-  filter: drop-shadow(0 0 16px rgba(242, 171, 85, .22));
+  filter: drop-shadow(0 0 16px var(--ember-glow));
 }
-.t { font-size: var(--fs-2xl); margin-bottom: var(--sp-2); }
+.t { font-size: var(--fs-3xl); margin-bottom: var(--sp-2); }
 .go {
   display: inline-flex;
   align-items: center;
@@ -49,4 +49,8 @@ import Icon from '@shared/ui/Icon.vue'
   font-size: var(--fs-base);
 }
 .go:hover { background: var(--stone-500); border-color: var(--edge-hover); color: var(--ink); text-decoration: none; }
+@media (max-width: 760px) {
+  .nf { padding-top: var(--sp-7); padding-bottom: var(--sp-7); }
+  .t { font-size: var(--fs-2xl); }
+}
 </style>

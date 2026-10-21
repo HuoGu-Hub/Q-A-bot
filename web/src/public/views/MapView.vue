@@ -67,10 +67,12 @@ const mapCanvas = ref<InstanceType<typeof MapCanvas> | null>(null)
 /**
  * 悬浮控制栏是否展开。
  *
- * <p>默认展开：第一次进来必须看得见"哪里能搜、哪里能开关图层" ——
- * 一上来就收起等于把这些功能藏起来。用户收起一次之后，这一次访问内保持收起。
+ * <p>桌面默认展开：第一次进来必须看得见「哪里能搜、哪里能开关图层」。
+ * 手机默认收起：一进来就展开会把地图盖掉六成，而这一页的主角是地图本身。
  */
-const railOpen = ref(true)
+const railOpen = ref(
+  typeof window === 'undefined' || !window.matchMedia('(max-width: 760px)').matches
+)
 
 const currentMap = computed<MapSpec | null>(
   () => catalog.value?.maps.find((m) => m.map === mapName.value) ?? null,
@@ -321,20 +323,35 @@ function fmt(n: number): string {
           面板
         </button>
 
-        <aside v-show="railOpen" id="map-rail" class="rail" aria-label="地图控制">
+        <aside id="map-rail" class="rail" :class="{ 'is-collapsed': !railOpen }" aria-label="地图控制">
           <div class="rail-head">
-            <span class="rail-title">{{ currentMap?.label ?? '地图' }}</span>
+            <!--
+              手机端整条标题栏就是开关：收起后只剩这 46px 的把手，
+              点它重新展开。上一版只有「收起」没有「展开」，收起之后再也叫不回来。
+            -->
+            <button
+              type="button"
+              class="rail-handle"
+              aria-controls="map-rail"
+              :aria-expanded="railOpen"
+              @click="railOpen = !railOpen"
+            >
+              <span class="rail-title">{{ currentMap?.label ?? '地图' }}</span>
+              <Icon name="chevron-down" :size="15" class="rail-chev" :class="{ up: railOpen }" />
+            </button>
             <button
               type="button"
               class="rail-collapse"
               aria-controls="map-rail"
-              :aria-expanded="true"
+              :aria-expanded="railOpen"
               aria-label="收起面板"
               @click="railOpen = false"
             >
               <Icon name="close" :size="15" />
             </button>
           </div>
+
+        <div class="rail-body">
         <div class="block">
           <h2 class="block-title">找地方</h2>
           <form class="find" @submit.prevent="locate">
@@ -418,6 +435,7 @@ function fmt(n: number): string {
               </label>
             </li>
           </ul>
+        </div>
         </div>
         </aside>
 
@@ -508,6 +526,7 @@ function fmt(n: number): string {
 @media (max-width: 760px) {
   /* 手机上横向一寸都不能浪费；底部留给底栏的空白由外壳那层负责 */
   .map-page { padding: var(--sp-2); }
+  .stage { width: 100%; }
 }
 
 /* 空态 / 加载 / 报错都浮在地图之上，而不是把地图顶下去 */
@@ -589,6 +608,22 @@ function fmt(n: number): string {
   background: color-mix(in srgb, var(--stone-300) 86%, transparent);
   border-bottom: 1px solid var(--edge-soft);
 }
+.rail-handle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 32px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.rail-chev { color: var(--ink-3); transition: transform var(--dur) var(--ease); }
+.rail-chev.up { transform: rotate(180deg); }
 .rail-title {
   font-size: var(--fs-sm);
   font-weight: var(--fw-semi);
@@ -606,7 +641,7 @@ function fmt(n: number): string {
   cursor: pointer;
   backdrop-filter: blur(8px);
 }
-.rail-collapse { padding: 4px 6px; border-radius: var(--r-sm); }
+.rail-collapse { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm); }
 .rail-toggle {
   position: absolute;
   left: var(--sp-3);
@@ -617,17 +652,64 @@ function fmt(n: number): string {
   font-size: var(--fs-sm);
 }
 .rail-toggle:hover, .rail-collapse:hover { color: var(--ember-hot); border-color: var(--ember); }
+/* 桌面：收起时整块藏起来，左上角留一颗「面板」按钮 */
+@media (min-width: 761px) {
+  .rail.is-collapsed { display: none; }
+}
+
+/* 手机上整块变成底部弹层：
+   收起时只剩一条 46px 的把手，地图可见面积从「六成被盖住」变成「九成可见」。
+   这是这一页移动端最重要的一个改动 —— 上一版控制栏浮在左上，一进来就遮掉 62% 的图。 */
 @media (max-width: 760px) {
-  /* 手机上不给固定 288px：左右留边、纵向收一半，别把地图全盖住 */
   .rail {
-    left: var(--sp-2);
-    right: var(--sp-2);
-    top: var(--sp-2);
-    bottom: auto;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: calc(var(--tabbar-h) + var(--safe-b));
     width: auto;
-    max-height: 62%;
+    max-height: 64svh;
+    padding: 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-bottom: 0;
+    background: var(--stone-300);
+    gap: 0;
+    overflow: hidden;
   }
-  .rail-toggle { left: var(--sp-2); top: var(--sp-2); }
+  /* 收起：只留把手。不再整块消失，否则总要回左上角找那个「面板」按钮 */
+  .rail.is-collapsed { max-height: 46px; }
+  .rail.is-collapsed .rail-body { display: none; }
+  .rail-head {
+    position: relative;
+    margin: 0;
+    padding: 0 var(--sp-4);
+    min-height: 46px;
+    align-items: center;
+    background: var(--stone-300);
+    border-bottom: 1px solid var(--hairline);
+  }
+  /* 把手：40×4 的短横，告诉用户这张纸可以推上来 */
+  .rail-head::before {
+    content: '';
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 40px;
+    height: 4px;
+    margin-left: -20px;
+    border-radius: var(--r-pill);
+    background: var(--edge-hover);
+  }
+  .rail-handle { padding-top: 6px; }
+  /* 手机端收起就是「把手」，不需要额外的关闭按钮：留着它也关不掉什么 */
+  .rail-collapse { display: none; }
+  .rail-body {
+    padding: var(--sp-2) var(--sp-4) var(--sp-5);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* 浮动的「面板」按钮只服务桌面；手机上收起是把手的事 */
+  .rail-toggle { display: none; }
+
 }
 .block + .block { padding-top: var(--sp-3); border-top: 1px solid var(--edge-soft); }
 .block-title {
@@ -642,7 +724,9 @@ function fmt(n: number): string {
 .mini {
   background: none;
   border: none;
-  padding: 0;
+  /* 行内文字按钮，但命中区要够：加内边距把高度撑到 28，不改变观感 */
+  padding: 3px 4px;
+  min-height: 28px;
   color: var(--ink-3);
   font-size: var(--fs-xs);
   cursor: pointer;
@@ -700,11 +784,14 @@ function fmt(n: number): string {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  /* 整行可点，命中高度 36：原生复选框只有 13px，但它不是唯一的点击面 */
+  min-height: 36px;
   padding: 4px 6px;
   border-radius: var(--r-xs);
   cursor: pointer;
   font-size: var(--fs-sm);
 }
+.layer input { width: 18px; height: 18px; }
 .layer:hover { background: var(--surface-hover); }
 .layer input { accent-color: var(--ember); }
 .layer-icon { width: 16px; height: 16px; object-fit: contain; }
@@ -851,4 +938,28 @@ function fmt(n: number): string {
 .detail-desc { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--ink-3); }
 .detail a { color: var(--ember); display: inline-flex; align-items: center; gap: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ==================== 窄屏收尾 ====================
+   ⚠️ 这两条必须放在文件最后：.stage-tools 与 .detail-stack 的基础规则在上面，
+   同权重下后写的那条胜出，写早了会被基础规则覆盖。 */
+@media (max-width: 760px) {
+  /* 缩放按钮挪到右上，避开底部的弹层与详情卡 */
+  .stage-tools {
+    left: auto;
+    right: var(--sp-2);
+    bottom: auto;
+    top: var(--sp-2);
+    flex-direction: row;
+  }
+  /* 手机上缩放按钮放大到 40：悬在地图上的小按钮最容易点空 */
+  .tool { width: 40px; height: 40px; }
+  /* 详情卡：贴在弹层之上，通栏。只留 8px 边距，手指点得到关闭 */
+  .detail-stack {
+    left: var(--sp-2);
+    right: var(--sp-2);
+    bottom: calc(var(--tabbar-h) + var(--safe-b) + 54px);
+    width: auto;
+    max-height: 46svh;
+  }
+}
 </style>

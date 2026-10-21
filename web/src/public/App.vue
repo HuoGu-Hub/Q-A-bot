@@ -4,6 +4,8 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { renderInline } from './renderInline'
 import { t } from './useSiteText'
 import Icon from '@shared/ui/Icon.vue'
+import ThemeToggle from '@shared/ui/ThemeToggle.vue'
+import BottomNav from '@shared/ui/BottomNav.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,23 +13,18 @@ const router = useRouter()
 /**
  * 全屏页：地图要占满一屏、页面本身不滚动。
  *
- * <p>为什么由外壳来判断，而不是让地图页自己写 {@code position: fixed}：
+ * <p>为什么由外壳判断，而不是让地图页自己写 position: fixed：
  * fixed 会让它脱离文档流，外壳的高度计算立刻失去依据 ——
  * 页脚会跑到地图底下去、手机底栏会压住地图。
- * 在这里做，只需要把页脚藏掉、把主区域撑满。
  */
 const fullBleed = computed(() => route.name === 'map')
 
 /**
  * 路由正在换页 —— 顶部那条细进度条的开关。
  *
- * <p><b>为什么必须有</b>：视图是懒加载的，点一个链接之后浏览器要先下载
- * 该页的模块、再执行、再渲染，这中间**界面完全没有变化**。
- * 本机是几十毫秒，感觉不出来；但站点经内网穿透开放到公网时，
- * 一个来回都是几百毫秒起，这段窗口会变成好几秒的"点了没反应" ——
- * 用户会以为按钮坏了，于是反复点。
- *
- * <p>这里只解决"有没有反馈"，不解决"快不快"（快不快要靠图变小、靠生产构建）。
+ * <p>视图是懒加载的，点一个链接之后要先下载模块、再执行、再渲染，
+ * 这中间界面完全没有变化。本机几十毫秒感觉不出来；经内网穿透到公网时，
+ * 一个来回几百毫秒起，这段窗口会变成"点了没反应"。
  */
 const navBusy = ref(false)
 
@@ -47,18 +44,20 @@ onBeforeUnmount(() => { if (busyTimer !== undefined) window.clearTimeout(busyTim
 /**
  * 导航项。
  *
- * 每一项都配一个线性图标 —— 手机端底部那排按钮只有图标 + 小字，
+ * 每一项都配一个线性图标：手机底栏只有图标 + 两三个字，
  * 光靠文字在 375px 宽度里会挤成四个字块，认起来比图标慢得多。
  */
 const nav = [
   { to: '/', label: '首页', icon: 'home' },
   { to: '/library', label: '资料库', icon: 'book' },
   { to: '/map', label: '地图', icon: 'map-pin' },
-  { to: '/plaza', label: '问答广场', icon: 'chat' },
+  { to: '/plaza', label: '问答', icon: 'chat' },
   { to: '/about', label: '关于', icon: 'info' },
 ]
 const isActive = (to: string) =>
   to === '/' ? route.path === '/' : route.path.startsWith(to)
+
+const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) })))
 </script>
 
 <template>
@@ -84,13 +83,14 @@ const isActive = (to: string) =>
             :aria-current="isActive(n.to) ? 'page' : undefined"
           >{{ n.label }}</RouterLink>
         </nav>
+
+        <ThemeToggle class="theme-slot" />
       </div>
     </header>
 
     <!--
       换页进度条：贴在页头下沿的一条 2px 微光。
-      它是"点完立刻有动静"的唯一来源，所以刻意做成常驻 DOM、只切透明度 ——
-      临时插入元素会晚一帧，而这一帧正是要补上的那一帧。
+      常驻 DOM、只切透明度 —— 临时插入元素会晚一帧，而这一帧正是要补上的那一帧。
     -->
     <div
       class="nav-progress"
@@ -117,37 +117,19 @@ const isActive = (to: string) =>
       </div>
     </footer>
 
-    <!--
-      手机端导航。
-      ⚠️ 为什么另做一条底栏，而不是把顶栏那条 na v 换行塞进去：
-      顶栏那条 nav 换行会占掉两行高度（首屏本来就短），而且第二行左边会留一大块空白 ——
-      这是手机上最容易看出"没为移动端做过设计"的地方。
-      底栏还顺手解决了拇指够不到的问题：4 个入口全在屏幕下缘 58px 内。
-      ≥760px 时整条隐藏（桌面用顶栏）。
-    -->
-    <nav class="tabbar" aria-label="主导航（移动端）">
-      <RouterLink
-        v-for="n in nav"
-        :key="n.to"
-        :to="n.to"
-        class="tab"
-        :class="{ active: isActive(n.to) }"
-        :aria-current="isActive(n.to) ? 'page' : undefined"
-      >
-        <Icon :name="n.icon" :size="21" />
-        <span class="tab-label">{{ n.label }}</span>
-      </RouterLink>
-    </nav>
+    <!-- 手机端导航：只有这里用 BottomNav，桌面端整条不渲染 -->
+    <BottomNav class="mobile-only" :items="tabItems" />
   </div>
 </template>
 
 <style scoped>
 .shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   position: relative;
-  /* ☝️ 内容外壳压在 .texture-grain（z-index: 1）之上 */
+  /* 内容外壳压在 .texture-grain（z-index: 1）之上 */
   z-index: 2;
 }
 
@@ -168,10 +150,7 @@ const isActive = (to: string) =>
 }
 .skip:focus { transform: none; color: var(--ember-hot); }
 
-/* ==================== 换页进度条 ====================
-   贴在页头正下方（页头是 sticky，所以用 fixed + --header-h 对齐它的下沿）。
-   常驻 DOM、只切透明度：临时插入元素会晚一帧，而这一帧正是要补上的那一帧。
-   ⚠️ 不吃事件：它横在整页最上方，能点的东西不能被它挡住。 */
+/* ==================== 换页进度条 ==================== */
 .nav-progress {
   position: fixed;
   top: var(--header-h);
@@ -185,7 +164,7 @@ const isActive = (to: string) =>
 }
 .nav-progress.on { opacity: 1; }
 
-/* 一道从左往右来回的微光。用 --ember 主色，和站点里"唯一被点亮的东西"是一套语言 */
+/* 一道从左往右来回的微光。用灵火色，和站内唯一被点亮的东西是一套语言 */
 .nav-progress span {
   display: block;
   height: 100%;
@@ -210,19 +189,18 @@ const isActive = (to: string) =>
 }
 
 /* ==================== 顶栏 ====================
-   半透明 + 背景模糊：滚动时内容从它下面透过去，而不是被一条实心条切断。
-   ⚠️ 必须同时有不透明兜底（下面的 --stone-300 那层）——*/
+   半透明 + 背景模糊：滚动时内容从它下面透过去，而不是被一条实心条切断。 */
 .hdr {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  /* 前一行是兜底：不认识 color-mix 的浏览器直接用不透明底，不会"透出内容重影" */
+  /* 前一行是兜底：不认识 color-mix 的浏览器直接用不透明底 */
   background: var(--stone-200);
-  background: color-mix(in srgb, var(--stone-200) 82%, transparent);
+  background: color-mix(in srgb, var(--stone-200) 88%, transparent);
   backdrop-filter: saturate(1.3) blur(14px);
   -webkit-backdrop-filter: saturate(1.3) blur(14px);
 }
-/* 下缘那道刻线：中间实、两端虚。比通栏 1px 实线轻，也比它更像"石头的边"。 */
+/* 下缘那道刻线：中间实、两端虚，比通栏实线轻，也更像石头的边 */
 .hdr::after {
   content: '';
   position: absolute;
@@ -241,7 +219,7 @@ const isActive = (to: string) =>
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  /* 这是站标，不是正文里的链接 —— 不参加"正文链接必须有下划线"那条规则 */
+  /* 这是站标，不是正文链接 —— 不参加"正文链接必须有下划线"那条规则 */
   text-decoration: none;
   color: var(--ink);
   font-family: var(--font-title);
@@ -249,6 +227,8 @@ const isActive = (to: string) =>
   font-weight: var(--fw-semi);
   letter-spacing: .06em;
   white-space: nowrap;
+  /* 手机上让站标也有 44 的命中高度 */
+  min-height: 44px;
 }
 .brand:hover { color: var(--ink); text-decoration: none; }
 .mark {
@@ -270,15 +250,14 @@ const isActive = (to: string) =>
 .nav-link {
   position: relative;
   text-decoration: none;
-  padding: 7px 12px;
+  padding: 8px 12px;
   font-size: var(--fs-base);
   color: var(--ink-2);
   border-radius: var(--r-sm);
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .nav-link:hover { color: var(--ink); background: var(--surface-hover); text-decoration: none; }
-/* 激活态：不再是"描一圈铜边的药丸"（那看起来像个默认标签页控件），
-   而是底部一道灵火线 —— 位置感靠下划线，颜色留给内容。 */
+/* 激活态：底部一道灵火线。位置感靠下划线，颜色留给内容 */
 .nav-link.active { color: var(--ember-hot); }
 .nav-link.active::after {
   content: '';
@@ -288,8 +267,9 @@ const isActive = (to: string) =>
   border-radius: 1px;
   background: linear-gradient(90deg, transparent, var(--ember), transparent);
 }
+.theme-slot { margin-left: var(--sp-3); }
 
-.main { flex: 1; }
+.main { flex: 1; min-width: 0; }
 
 /* ==================== 全屏页（地图） ====================
    一屏到底：外壳高度锁死、主区域撑满、页脚藏掉。
@@ -306,68 +286,26 @@ const isActive = (to: string) =>
   overflow: hidden;
 }
 .shell.is-full .ftr { display: none; }
-@media (max-width: 760px) {
-  /* 手机底栏是 fixed 的，地图要让出它的高度，否则底部一截永远被压着 */
-  .shell.is-full .main { padding-bottom: var(--tabbar-h); }
-}
 
 /* ==================== 页脚 ==================== */
 .ftr { padding-top: var(--sp-7); padding-bottom: var(--sp-6); }
 .ftr p { font-size: var(--fs-xs); color: var(--ink-3); margin: 0 0 4px; }
 .ftr .rule { margin-top: 0; margin-bottom: var(--sp-4); }
 
-/* ==================== 手机端底栏 ==================== */
-.tabbar { display: none; }
+/* ==================== 窄屏 ==================== */
+.mobile-only { display: none; }
 
 @media (max-width: 760px) {
-  .hdr-inner { height: 52px; }
   .sub { display: none; }
   .nav { display: none; }
+  /* 站名 + 主题开关各占一头 */
+  .theme-slot { margin-left: auto; }
+  .hdr-inner { gap: var(--sp-2); }
 
-  .tabbar {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    z-index: var(--z-sticky);
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    background: var(--stone-300);
-    background: color-mix(in srgb, var(--stone-300) 92%, transparent);
-    backdrop-filter: saturate(1.3) blur(16px);
-    -webkit-backdrop-filter: saturate(1.3) blur(16px);
-    border-top: 1px solid var(--hairline);
-    /* 全面屏的 Home 指示条占位，不然最后一排按钮会被它压住 */
-    padding-bottom: var(--safe-b);
-  }
-  .tab {
-    position: relative;
-    text-decoration: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    /* 44px 是拇指能稳定点中的最小高度，别往下压 */
-    min-height: var(--tabbar-h);
-    color: var(--ink-3);
-    font-size: var(--fs-micro);
-    letter-spacing: .04em;
-    transition: color var(--dur-fast) var(--ease);
-  }
-  .tab:hover { text-decoration: none; }
-  .tab.active { color: var(--ember-hot); }
-  .tab.active::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 26px;
-    height: 2px;
-    margin-left: -13px;
-    border-radius: 0 0 2px 2px;
-    background: var(--ember);
-    box-shadow: 0 0 10px var(--ember-glow);
-  }
-  .tab-label { line-height: 1; }
+  .mobile-only { display: flex; }
+
+  /* 手机上地图让出底栏高度，否则底部一截永远被压着 */
+  .shell.is-full .main { padding-bottom: calc(var(--tabbar-h) + var(--safe-b)); }
 
   /* 给底栏让出空间，否则页脚最后一行永远压在导航下面 */
   .ftr { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + var(--sp-5)); }

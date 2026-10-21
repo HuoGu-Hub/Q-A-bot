@@ -10,6 +10,8 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Empty from '@shared/ui/Empty.vue'
 import Icon from '@shared/ui/Icon.vue'
+import ListRow from '@shared/ui/ListRow.vue'
+import PageHeader from '@shared/ui/PageHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -189,15 +191,15 @@ const VOTE_BTNS = [
 
     <!-- ==================== 关键词页 ==================== -->
     <template v-if="keyword">
-      <header class="head">
+      <header class="kw-head">
         <button class="back" type="button" @click="router.push({ name: 'plaza' })">
           <Icon name="arrow-left" :size="16" /> 返回
         </button>
         <h1 class="kw">{{ page?.keyword ?? keyword }}</h1>
-        <div class="kw-meta">
-          <span v-if="page?.termEn" class="faint num en">{{ page.termEn }}</span>
-          <span v-if="page?.askedCount" class="faint asked">被问过 {{ page.askedCount }} 次</span>
-        </div>
+        <p class="kw-meta">
+          <span v-if="page?.termEn" class="faint num">{{ page.termEn }}</span>
+          <span v-if="page?.askedCount" class="faint">被问过 {{ page.askedCount }} 次</span>
+        </p>
       </header>
 
       <p v-if="loading" class="muted">读取中…</p>
@@ -286,26 +288,22 @@ const VOTE_BTNS = [
 
     <!-- ==================== 广场首页：热词列表 ==================== -->
     <template v-else>
-      <header class="head">
-        <p class="eyebrow">Community Answers</p>
-        <h1 class="kw">问答广场</h1>
-        <p class="lead">
+      <PageHeader title="问答广场">
+        <template #desc>
           <span v-html="renderInline(t('plaza.intro', '这里是群友们问过、并且被点赞认可的答案。点关键词查看 —— 如果都不满意，可以投票让更好的答案浮现出来。'))" />
-        </p>
-      </header>
+        </template>
+      </PageHeader>
 
-      <div v-if="hot?.keywords?.length" class="hot">
-        <button
+      <div v-if="hot?.keywords?.length" class="rowlist">
+        <ListRow
           v-for="k in hot.keywords"
           :key="k.keyword"
-          class="hot-item"
-          type="button"
+          :title="k.keyword"
+          :sub="k.termEn || ''"
+          :meta="num(k.votedCount || k.count)"
+          chevron
           @click="openKeyword(k.keyword)"
-        >
-          <span class="hot-kw">{{ k.keyword }}</span>
-          <span v-if="k.termEn" class="hot-en num">{{ k.termEn }}</span>
-          <span class="hot-count num">{{ num(k.votedCount || k.count) }}</span>
-        </button>
+        />
       </div>
       <Empty
         v-else
@@ -329,8 +327,10 @@ const VOTE_BTNS = [
   margin-bottom: var(--sp-4);
 }
 
-/* ==================== 页头 ==================== */
-.head { margin-bottom: var(--sp-5); }
+/* ==================== 页头 ====================
+   关键词页的标题与资料库、关于共用同一套规格：26px + 左侧余烬刻痕 + 下方一句元信息。
+   上一版这里是 38px，比页内所有内容大两档，像一张海报。 */
+.kw-head { margin-bottom: var(--sp-5); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--hairline); }
 .back {
   display: inline-flex;
   align-items: center;
@@ -340,19 +340,30 @@ const VOTE_BTNS = [
   color: var(--ink-3);
   font-size: var(--fs-sm);
   cursor: pointer;
-  padding: 0 0 var(--sp-3);
+  padding: 6px 0;
+  min-height: 40px;
+  margin-bottom: var(--sp-1);
   text-decoration: none;
 }
 .back:hover { color: var(--ember); }
 .kw {
-  font-size: var(--fs-3xl);
+  position: relative;
+  font-size: var(--fs-2xl);
   letter-spacing: var(--tracking-ink);
   margin: 0;
+  padding-left: 14px;
 }
-.kw-meta { display: flex; align-items: baseline; gap: var(--sp-4); flex-wrap: wrap; margin-top: var(--sp-2); }
-.en { font-size: var(--fs-sm); }
-.asked { font-size: var(--fs-xs); }
-.lead { font-size: var(--fs-base); color: var(--ink-3); line-height: 1.85; margin: var(--sp-3) 0 0; max-width: 44em; }
+.kw::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: .18em;
+  bottom: .18em;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--ember);
+}
+.kw-meta { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; margin: var(--sp-2) 0 0; font-size: var(--fs-xs); }
 
 /* ==================== 答案 ====================
    一条答案 = 一块石板。左侧那道 2px 竖线是"碑文"的界格；
@@ -364,6 +375,7 @@ const VOTE_BTNS = [
   border-radius: var(--r-md);
   padding: var(--sp-4) var(--sp-5);
   box-shadow: var(--bevel-raised);
+  min-width: 0;
 }
 .ans::before {
   content: '';
@@ -381,6 +393,7 @@ const VOTE_BTNS = [
   line-height: 1.85;
   color: var(--ink);
   white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 /* 投票：图标 + 等宽数字，都是"操作"而不是"表情"。
@@ -449,42 +462,10 @@ const VOTE_BTNS = [
 .new-ans { margin-top: var(--sp-5); box-shadow: var(--bevel-raised), 0 0 0 1px var(--ember-veil); }
 .new-ans::before { background: var(--ember); }
 
-/* ==================== 热词 ====================
-   与资料库页的「大家常问」同一套清单语言：两列、发丝分隔、等宽计数。 */
-.hot { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 var(--sp-5); }
-.hot-item {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  width: 100%;
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  padding: 11px var(--sp-2);
-  cursor: pointer;
-  text-align: left;
-  border-radius: var(--r-sm);
-  transition: background var(--dur-fast) var(--ease);
-}
-.hot-item:hover { background: var(--surface-hover); }
-.hot-kw { flex: 1; min-width: 0; font-size: var(--fs-base); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-item:hover .hot-kw { color: var(--ember-hot); }
-.hot-en {
-  flex: none;
-  max-width: 40%;
-  font-size: var(--fs-micro);
-  /* 同资料库页：英文词条名用三级文字色（--ink-4 只有 3.63:1，24 条全部不过） */
-  color: var(--ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hot-count { flex: none; font-size: var(--fs-xs); color: var(--ink-3); min-width: 22px; text-align: right; }
+/* 热词清单交给 ListRow（与资料库「大家常问」同一套行），这里只剩空态内边距 */
 .empty-wrap { padding: var(--sp-6) 0; }
 
 @media (max-width: 760px) {
-  .kw { font-size: var(--fs-2xl); }
   .ans { padding: var(--sp-4); }
-  .hot { grid-template-columns: 1fr; }
 }
 </style>

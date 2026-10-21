@@ -71,7 +71,6 @@ function lines(p: string): string[] {
 
     <template v-else-if="entry">
       <header class="head">
-        <p class="eyebrow">Wiki Entry</p>
         <h1 class="title">{{ entry.title }}</h1>
         <div v-if="entry.cats?.length" class="cats">
           <span v-for="c in entry.cats" :key="c" class="cat">{{ c }}</span>
@@ -156,7 +155,8 @@ function lines(p: string): string[] {
 .nf-go:hover { background: var(--stone-500); border-color: var(--edge-hover); text-decoration: none; }
 
 .head { margin-bottom: var(--sp-5); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--hairline); }
-.title { font-size: var(--fs-2xl); letter-spacing: .04em; margin-top: var(--sp-2); }
+/* 阅读页的标题和页面标题同号，但不要左侧刻痕 —— 词条名本身已经够长 */
+.title { font-size: var(--fs-2xl); letter-spacing: .02em; margin: 0; line-height: 1.35; }
 .cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-3); }
 .cat {
   font-size: var(--fs-xs);
@@ -166,7 +166,7 @@ function lines(p: string): string[] {
   background: var(--stone-400);
 }
 
-.body { line-height: 1.9; }
+.body { line-height: 1.9; overflow-wrap: break-word; }
 /* 行宽控制在 38 个汉字左右 —— 中文长行读到行尾会丢行 */
 .para { margin: 0 0 var(--sp-4); font-size: var(--fs-lg); color: var(--ink); }
 .h2 {
@@ -199,6 +199,8 @@ function lines(p: string): string[] {
 .src a { display: inline-flex; align-items: center; gap: 4px; }
 
 @media (max-width: 760px) {
-  .para { font-size: var(--fs-base); }
+  .entry { padding-top: var(--sp-4); }
+  .para { font-size: var(--fs-base); line-height: 1.85; }
+  .h2 { font-size: var(--fs-lg); }
 }
 </style>

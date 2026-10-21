@@ -9,6 +9,11 @@ import { t } from '../useSiteText'
 import Button from '@shared/ui/Button.vue'
 import Empty from '@shared/ui/Empty.vue'
 import Icon from '@shared/ui/Icon.vue'
+import ListRow from '@shared/ui/ListRow.vue'
+import PageHeader from '@shared/ui/PageHeader.vue'
+import SearchBar from '@shared/ui/SearchBar.vue'
+import Notice from '@shared/ui/Notice.vue'
+import Chip from '@shared/ui/Chip.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,26 +43,36 @@ const isBrowsing = computed(() => !!curGroup.value || !!curTag.value)
 const groupOf = (key: string) => groups.value.find(g => g.key === key)
 
 /**
+ * 分类索引：189 个 wiki 原始分类不可能一次摊开。
+ *
+ * 折叠时只给条目最多的 12 个，展开后是一个**自带筛选**的紧凑清单。
+ * 上一版把 189 个全渲染成带图标的卡片，手机上要滚十几屏才看得到「大家常问」。
+ */
+const CAT_TOP = 12
+const catsOpen = ref(false)
+const catFilter = ref('')
+
+const sortedGroups = computed(() =>
+  [...groups.value].sort((a, b) => b.entryCount - a.entryCount))
+
+const topGroups = computed(() => sortedGroups.value.slice(0, CAT_TOP))
+
+const filteredGroups = computed(() => {
+  const kw = catFilter.value.trim().toLowerCase()
+  if (!kw) return sortedGroups.value
+  return sortedGroups.value.filter(g =>
+    g.label.toLowerCase().includes(kw) || g.key.toLowerCase().includes(kw))
+})
+
+/**
  * 大类图标。
  *
- * ⚠️ 后端 Group.icon 里存的是 emoji（⚔️ 🧱 🧪 …），**这里刻意不用它**：
- * emoji 在每个平台上长得都不一样、还自带高饱和配色 —— 一排彩色 emoji 会把
- * 全站"只有一个暖色重点"的克制感直接抹掉。改用与 key 一一对应的线性图标，
- * 颜色跟着主题走，手机和桌面上长得一模一样。
- * key 是后端定义的稳定英文键（见 KbGroups.ALL），所以这个映射不会漂。
+ * ⚠️ 后端 Group.icon 里存的是 emoji，这里刻意不用它：emoji 在每个平台上长得都不一样、
+ * 还自带高饱和配色，会把「全站只有一个暖色重点」的克制感直接抹掉。
+ * 现在的分类是 wiki 原始分类，没有稳定的语义键，所以统一用书本图标，
+ * 把辨识度交给标题本身 —— 统一比"每个都图个热闹"更像一个站。
  */
-const GROUP_ICONS: Record<string, string> = {
-  combat: 'shield',
-  build: 'blocks',
-  material: 'flask',
-  creature: 'paw',
-  world: 'map-pin',
-  quest: 'scroll',
-  system: 'gear',
-  guide: 'spark',
-  other: 'book',
-}
-const iconOf = (key: string) => GROUP_ICONS[key] ?? 'book'
+function iconOf(_key: string) { return 'book' }
 
 async function loadGroups() {
   try {
@@ -110,16 +125,13 @@ function clearAll() {
  * 打开一个大类。
  *
  * ⚠️ 原来这里对空的「大佬攻略」有个特判：直接跳去一个叫 manage 的路由。
- * 而路由表里**根本没有 manage** —— router.push({name:'manage'}) 会直接抛
- * "No match for route"，那个按钮点了什么都不会发生（控制台一条红字而已）。
- * 空分组照常打开，由空态去承担"还没内容、等你来写"的表达。
+ * 而路由表里根本没有 manage —— 点了什么都不会发生（控制台一条红字而已）。
+ * 空分组照常打开，由空态去承担「还没内容、等你来写」的表达。
  */
 function openGroup(g: KbGroup) {
   router.push({ name: 'library', query: { group: g.key } })
 }
 
-/** 攻略组还没内容时的友好显示 */
-const isEmptyGuide = (g: KbGroup) => g.key === 'guide' && g.entryCount === 0
 function openTag(raw: string) {
   router.push({ name: 'library', query: { group: curGroup.value, tag: raw } })
 }
@@ -159,38 +171,23 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 
 <template>
   <div class="page library">
-    <header class="lib-head">
-      <p class="eyebrow">Wiki Index</p>
-      <h1 class="lib-title">资料库</h1>
-      <p class="lib-sub">
-        <span v-html="renderInline(t('library.subtitle', '《雾锁王国》Wiki 的中文索引 —— 直接说人话就行，比如「木头怎么弄」「等级上限」。'))" />
-      </p>
+    <PageHeader
+      title="资料库"
+      :desc="t('library.subtitle', '《雾锁王国》Wiki 的中文索引 —— 直接说人话就行，比如「木头怎么弄」「等级上限」。')"
+    />
 
-      <form class="search" role="search" @submit.prevent="submit">
-        <span class="s-ico" aria-hidden="true"><Icon name="search" :size="18" /></span>
-        <label class="sr-only" for="lib-q">搜索资料库</label>
-        <input
-          id="lib-q"
-          v-model="q"
-          class="s-inp"
-          type="search"
-          name="q"
-          placeholder="搜点什么… 比如「废料杯」「爆炸箭」「游牧高地」"
-          autocomplete="off"
-          enterkeyhint="search"
-        >
-        <!-- 清空：只在有内容时出现。手机上没有键盘 Esc，纯靠手势清空搜索框很难受 -->
-        <button v-if="q" type="button" class="s-clear" aria-label="清空" @click="clearAll">
-          <Icon name="close" :size="15" />
-        </button>
-        <Button class="s-go" variant="primary" type="submit">
-          <Icon name="search" :size="17" class="s-go-ico" />
-          <span class="s-go-txt">搜索</span>
-        </Button>
-      </form>
-    </header>
+    <!-- 手机上搜索条吸顶：翻到结果第 20 条时还能改词，不用滚回顶部 -->
+    <div class="search-wrap">
+      <SearchBar
+        v-model="q"
+        label="搜索资料库"
+        placeholder="搜点什么… 比如「废料杯」「爆炸箭」「游牧高地」"
+        @submit="submit"
+        @clear="clearAll"
+      />
+    </div>
 
-    <p v-if="error" class="err" role="alert">{{ error }}</p>
+    <Notice v-if="error" tone="error" class="err">{{ error }}</Notice>
 
     <!-- ========== 搜索结果 ========== -->
     <template v-if="hasQuery">
@@ -201,8 +198,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       </div>
       <p v-if="loading" class="muted center">查找中…</p>
       <template v-else-if="result">
-        <!-- h2 而不是 div：这一条是"结果区块"的标题，下面每条结果才是 h3；
-             用 div 会让标题层级从 h1 直接跳到 h3，读屏用户按标题跳转时看不出结构。 -->
+        <!-- h2 而不是 div：这一条是结果区块的标题，下面每条结果才是 h3 -->
         <h2 class="result-head">
           <span>找到 <b class="num">{{ result.count }}</b> 条与「{{ result.query }}」相关</span>
           <span v-if="result.mode === 'semantic'" class="mode-badge"
@@ -214,22 +210,19 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
                :text="t('library.empty_title', '没找到相关资料')"
                :hint="t('library.empty_hint', '换个更具体的说法（比如把「怎么搞木头」说成「木头」），或者到群里直接问机器人')" />
         <!--
-          ⚠️ 整行可点，但**必须是真的链接**。
-          上一版是「<article tabindex=0 @click @keydown.enter>」—— 那是 div 假装链接：
-          读屏念不出目的地、右键「在新标签打开」没有、中键点不动、也无法被浏览器预取。
-          现在标题是真的 <RouterLink>，再用 ::after 把整块行铺成它的点击区
-          （链接本身仍是唯一的可聚焦元素，不会出现两个焦点）。
+          ⚠️ 整行可点，但必须是真的链接。
+          上一版是 div + tabindex + @click —— 读屏念不出目的地、右键开不了新标签。
+          现在整行就是一个 RouterLink，没有第二个可聚焦元素。
         -->
-        <div v-else class="rows">
-          <article v-for="e in result.entries" :key="e.title" class="row">
-            <div class="row-main">
-              <h3 class="row-title">
-                <RouterLink :to="{ name: 'entry', params: { title: e.title } }">{{ e.title }}</RouterLink>
-              </h3>
-              <p class="row-ex">{{ (e.text ?? "").slice(0, 130) }}…</p>
-            </div>
-            <Icon name="chevron-right" :size="16" class="row-go" />
-          </article>
+        <div v-else class="rowlist">
+          <ListRow
+            v-for="e in result.entries"
+            :key="e.title"
+            :to="{ name: 'entry', params: { title: e.title } }"
+            :title="e.title"
+            :sub="(e.text ?? '').slice(0, 120)"
+            chevron
+          />
         </div>
       </template>
     </template>
@@ -245,16 +238,15 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       </div>
 
       <!-- 该大类的标签云 -->
-      <section v-if="curGroup && groupOf(curGroup) && !curTag" class="block">
+      <section v-if="curGroup && groupOf(curGroup) && !curTag && groupOf(curGroup)!.tags.length" class="block">
         <div class="block-head">
           <h2 class="block-title">细分标签</h2>
-          <span class="faint hint">点标签缩小范围</span>
+          <span class="hint">点标签缩小范围</span>
         </div>
         <div class="tags">
-          <button v-for="tg in groupOf(curGroup)!.tags" :key="tg.raw"
-                  class="tag-chip" type="button" @click="openTag(tg.raw)">
-            {{ tg.label }}<span class="tag-n num">{{ tg.count }}</span>
-          </button>
+          <Chip v-for="tg in groupOf(curGroup)!.tags" :key="tg.raw" :count="tg.count" @click="openTag(tg.raw)">
+            {{ tg.label }}
+          </Chip>
         </div>
       </section>
 
@@ -264,19 +256,15 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
           <span>共 <b class="num">{{ browse.total }}</b> 个条目<template v-if="totalPages > 1"> · 第 {{ browse.page + 1 }} / {{ totalPages }} 页</template></span>
         </h2>
         <Empty v-if="!browse.entries.length" text="这个分类下还没有条目" />
-        <div v-else class="rows">
-          <article v-for="e in browse.entries" :key="e.title" class="row">
-            <div class="row-main">
-              <h3 class="row-title">
-                <RouterLink :to="{ name: 'entry', params: { title: e.title } }">{{ e.title }}</RouterLink>
-              </h3>
-              <p class="row-ex">{{ (e.text ?? "").slice(0, 130) }}…</p>
-              <div v-if="e.tags.length" class="row-tags">
-                <span v-for="tg in e.tags" :key="tg" class="cat">{{ tg }}</span>
-              </div>
-            </div>
-            <Icon name="chevron-right" :size="16" class="row-go" />
-          </article>
+        <div v-else class="rowlist">
+          <ListRow
+            v-for="e in browse.entries"
+            :key="e.title"
+            :to="{ name: 'entry', params: { title: e.title } }"
+            :title="e.title"
+            :sub="(e.text ?? '').slice(0, 120)"
+            chevron
+          />
         </div>
         <div v-if="totalPages > 1" class="pager">
           <Button size="sm" :disabled="browse.page <= 0" @click="goPage(browse.page - 1)">上一页</Button>
@@ -291,54 +279,77 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       <section class="block">
         <div class="block-head">
           <h2 class="block-title">按分类找</h2>
-          <span class="faint hint">{{ groups.length }} 个大类</span>
+          <span class="hint">{{ groups.length }} 个分类</span>
         </div>
-        <div v-if="groups.length" class="grid">
-          <button
-            v-for="g in groups" :key="g.key"
-            class="gcard" :class="{ inviting: isEmptyGuide(g) }"
-            type="button" @click="openGroup(g)"
-          >
-            <span class="gcard-icon" aria-hidden="true"><Icon :name="iconOf(g.key)" :size="20" /></span>
-            <span class="gcard-body">
-              <span class="gcard-label">{{ g.label }}</span>
-              <span class="gcard-desc">
-                {{ isEmptyGuide(g) ? "还没有内容，来写第一篇？" : g.desc }}
-              </span>
-            </span>
-            <span class="gcard-count num">
-              {{ isEmptyGuide(g) ? "征集" : num(g.entryCount) }}
-            </span>
+
+        <div v-if="groups.length" class="rowlist cats">
+          <ListRow
+            v-for="g in (catsOpen ? filteredGroups : topGroups)"
+            :key="g.key"
+            :title="g.label"
+            :meta="num(g.entryCount)"
+            :icon="iconOf(g.key)"
+            @click="openGroup(g)"
+          />
+        </div>
+        <p v-else class="hint center empty-hint">分类载入中…（如果一直没有，说明后端还没重启）</p>
+
+        <div v-if="groups.length > CAT_TOP" class="cats-more">
+          <button type="button" class="more-btn" :aria-expanded="catsOpen" @click="catsOpen = !catsOpen">
+            <Icon :name="catsOpen ? 'chevron-down' : 'chevron-right'" :size="15" />
+            {{ catsOpen ? '收起分类' : '查看全部 ' + groups.length + ' 个分类' }}
           </button>
+          <!-- 展开后自带筛选：189 行里靠手滑找分类是不现实的 -->
+          <input
+            v-if="catsOpen"
+            v-model="catFilter"
+            class="cat-filter"
+            type="search"
+            placeholder="在分类里找…"
+            aria-label="筛选分类"
+          >
+          <p v-if="catsOpen && !filteredGroups.length" class="hint">没有匹配的分类。</p>
+          <div v-if="catsOpen" class="cat-scroll">
+            <div class="rowlist">
+              <ListRow
+                v-for="g in filteredGroups"
+                :key="g.key"
+                :title="g.label"
+                :meta="num(g.entryCount)"
+                @click="openGroup(g)"
+              />
+            </div>
+          </div>
         </div>
-        <p v-else class="faint center empty-hint">分类载入中…（如果一直没有，说明后端还没重启）</p>
       </section>
 
       <section class="block">
         <div class="block-head">
           <h2 class="block-title">大家常问</h2>
-          <span class="faint hint">{{ hotMixed ? "群友问得最多的" : "被点赞认可的" }}</span>
+          <span class="hint">{{ hotMixed ? '群友问得最多的' : '被点赞认可的' }}</span>
         </div>
-        <div v-if="hot.length" class="hot">
-          <button v-for="k in hot" :key="k.keyword" class="hot-item" type="button" @click="openKeyword(k.keyword)">
-            <span class="hot-kw">{{ k.keyword }}</span>
-            <span v-if="k.termEn" class="hot-en num">{{ k.termEn }}</span>
-            <span class="hot-count num">{{ num(k.votedCount || k.count) }}</span>
-          </button>
+        <div v-if="hot.length" class="rowlist">
+          <ListRow
+            v-for="k in hot"
+            :key="k.keyword"
+            :title="k.keyword"
+            :sub="k.termEn || ''"
+            :meta="num(k.votedCount || k.count)"
+            @click="openKeyword(k.keyword)"
+          />
         </div>
-        <p v-else class="faint center empty-hint">还没有人查过什么。去群里 @ 机器人问一句吧～</p>
+        <p v-else class="hint center empty-hint">还没有人查过什么。去群里 @ 机器人问一句吧～</p>
       </section>
 
       <!--
-        ⚠️ 这里原来是一个指向 /manage 的按钮，而公开站**没有**这个路由：
-        点了要么静默报错（router.push({name}) 找不到名字）、要么落到 404 页
-        （写了 path 的话）。一个"点了没用"的按钮比没有按钮更伤 ——
+        ⚠️ 这里原来是一个指向 /manage 的按钮，而公开站没有这个路由：
+        点了要么静默报错、要么落到 404。一个"点了没用"的按钮比没有按钮更伤，
         所以改成一句话说明该怎么提交，不装作站内有这个入口。
       -->
       <section class="block contribute">
         <div class="contribute-text">
           <h2 class="block-title">发现内容有误或缺失？</h2>
-          <p class="faint">
+          <p class="hint">
             资料来自 enshrouded.wiki.gg。要补充或修订，请在群里 @ 机器人，写下词条名和要改的内容 ——
             经管理员审核、重建索引后会在站上生效。
           </p>
@@ -349,84 +360,39 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 </template>
 
 <style scoped>
-.library { max-width: 1040px; padding-top: var(--sp-6); padding-bottom: var(--sp-8); }
+.library { max-width: 1040px; padding-top: var(--sp-5); padding-bottom: var(--sp-8); }
 
-/* ==================== 页头 ==================== */
-.lib-head { margin-bottom: var(--sp-6); }
-.lib-title {
-  font-size: var(--fs-3xl);
-  letter-spacing: var(--tracking-ink);
-  margin: var(--sp-2) 0 var(--sp-3);
+/* ==================== 搜索条 ====================
+   手机上吸顶：翻到结果第 20 条时还能改词。桌面端不吸顶，避免压住页头。 */
+.search-wrap { margin-bottom: var(--sp-5); }
+@media (max-width: 760px) {
+  .search-wrap {
+    position: sticky;
+    top: var(--header-h);
+    z-index: 20;
+    /* 负外边距必须等于 .page 的左右内边距，否则 360px 下会多出 4px 横向滚动 */
+    margin: 0 calc(var(--sp-4) * -1) var(--sp-4);
+    padding: var(--sp-2) var(--sp-4);
+    background: var(--stone-200);
+    background: color-mix(in srgb, var(--stone-200) 94%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
 }
-.lib-sub { font-size: var(--fs-base); color: var(--ink-3); max-width: 40em; margin-bottom: var(--sp-5); }
-
-/* 搜索框：整条做成一个"刻槽"，图标在槽里，按钮贴在槽右端。
-   上一版是 input + 按钮两个独立圆角方块并排、圆角还不一样（6px vs 3px）。 */
-.search {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  max-width: 660px;
-  padding: 6px 6px 6px var(--sp-4);
-  background: var(--stone-void);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-md);
-  box-shadow: var(--bevel-inset);
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
-}
-.search:focus-within {
-  border-color: var(--ember);
-  box-shadow: var(--bevel-inset), 0 0 0 2px var(--stone-200), 0 0 0 4px var(--ember);
-}
-.s-ico { flex: none; color: var(--ink-3); display: grid; place-items: center; }
-.s-inp {
-  flex: 1;
-  min-width: 0;
-  /* 手机端必须 ≥16px，否则 iOS 聚焦时会放大整页（见 base.css 的说明） */
-  font-size: var(--fs-base);
-  background: none;
-  border: 0;
-  outline: none;
-  padding: 9px 0;
-  color: var(--ink);
-}
-/* 占位符也是要读的文字，不能按"装饰"处理 —— --ink-4 在 stone-void 上只有 3.8:1 */
-.s-inp::placeholder { color: var(--ink-3); }
-.s-inp::-webkit-search-cancel-button { display: none; }
-.s-clear {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--stone-400);
-  color: var(--ink-3);
-  cursor: pointer;
-}
-.s-clear:hover { background: var(--stone-500); color: var(--ink); }
-.s-go { flex: none; min-height: 38px; }
-.s-go-ico { display: none; }
 
 .center { text-align: center; }
-.err {
-  color: var(--blight-lift);
-  font-size: var(--fs-base);
-  background: var(--blight-veil);
-  border: 1px solid color-mix(in srgb, var(--blight) 40%, transparent);
-  border-radius: var(--r-sm);
-  padding: var(--sp-3) var(--sp-4);
-}
-/* 语义是 h2（结果区块的标题），**样式上仍是一条元信息**。
-   ⚠️ 必须显式压回无衬线 + 常规字重：base.css 给 h1–h4 统一设了衬线体和 semibold，
-   不写这两行，"找到 12 条与「近战」相关"会突然变成一行宋体粗字。 */
+.err { margin-bottom: var(--sp-4); }
+
+/* ==================== 结果计数 ====================
+   语义是 h2，**样式上仍是一条元信息**。
+   ⚠️ 必须显式压回无衬线 + 常规字重：base.css 给 h1–h4 统一设了衬线体和 semibold。 */
 .result-head {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   flex-wrap: wrap;
-  margin: 0 0 var(--sp-4);
+  margin: 0 0 var(--sp-3);
   font-family: var(--font-body);
   font-size: var(--fs-sm);
   font-weight: var(--fw-normal);
@@ -434,7 +400,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   color: var(--ink-3);
 }
 .result-head b { color: var(--ink); }
-/* 检索模式标识：让用户知道这次是"懂人话的搜索"还是"只认名词的搜索" */
+/* 检索模式标识：让用户知道这次是「懂人话的搜索」还是「只认名词的搜索」 */
 .mode-badge {
   font-size: var(--fs-xs);
   color: var(--ember);
@@ -449,7 +415,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
+  margin-bottom: var(--sp-3);
   flex-wrap: wrap;
 }
 .back {
@@ -461,7 +427,8 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   color: var(--ink-3);
   font-size: var(--fs-sm);
   cursor: pointer;
-  padding: 4px 0;
+  padding: 6px 0;
+  min-height: 40px;
   text-decoration: none;
 }
 .back:hover { color: var(--ember); }
@@ -474,113 +441,65 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   padding: 2px 10px;
 }
 
-/* ==================== 大类卡片 ====================
-   一块块石板，网格里靠 gap 分开 —— 每一块都要描边的话，8 块并排就是 8 圈线。
-   图标放在"刻进去"的方槽里：这是全站统一的"物件槽"语言。 */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
-  gap: var(--sp-3);
-}
-.gcard {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  text-align: left;
-  background: var(--stone-300);
-  border: 0;
-  border-radius: var(--r-md);
-  padding: var(--sp-3) var(--sp-4);
-  cursor: pointer;
-  box-shadow: var(--bevel-raised);
-  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
-}
-.gcard:hover { background: var(--stone-400); }
-.gcard:active { background: var(--stone-300); box-shadow: var(--bevel-inset); }
-.gcard-icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  background: var(--stone-void);
-  box-shadow: var(--bevel-inset);
-  color: var(--ink-3);
-  transition: color var(--dur-fast) var(--ease);
-}
-.gcard:hover .gcard-icon { color: var(--ember); }
-.gcard-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.gcard-label { font-size: var(--fs-base); color: var(--ink); font-weight: var(--fw-medium); }
-.gcard-desc {
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 计数用等宽 + 次要色：上一版给的是铜色 #8a6a3f，在深底上只有 3.4:1 —— 看不清 */
-.gcard-count { flex: none; font-size: var(--fs-sm); color: var(--ink-3); }
-/* 空的攻略组：用更淡的底 + 灵火描边，暗示「等你来填」（虚线框显得廉价） */
-.gcard.inviting { background: var(--stone-200); box-shadow: var(--bevel-raised), inset 0 0 0 1px var(--ember-veil); }
-.gcard.inviting .gcard-icon { color: var(--ember); }
-.gcard.inviting .gcard-count { color: var(--ember); font-size: var(--fs-xs); }
-
-/* ==================== 标签云 ==================== */
-.tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.tag-chip {
+/* ==================== 分类索引 ====================
+   一行一个分类，发丝线分隔。189 个分类如果都做成卡片，手机上就是一面英文墙；
+   紧凑行 + 折叠 + 自带筛选，才是「找得到」而不是「全给你」。 */
+.cats { columns: 1; }
+.cats-more { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+.more-btn {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
   background: var(--stone-400);
-  border: 1px solid transparent;
-  border-radius: var(--r-pill);
-  padding: 6px 14px;
-  font-size: var(--fs-sm);
   color: var(--ink-2);
+  font-size: var(--fs-sm);
   cursor: pointer;
   box-shadow: var(--bevel-shelf);
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease);
 }
-.tag-chip:hover { background: var(--stone-500); color: var(--ink); border-color: var(--edge); }
-.tag-n { font-size: var(--fs-micro); color: var(--ink-3); }
-
-/* ==================== 结果行 ====================
-   一列行 + 发丝分隔，而不是一摞卡片。
-   卡片适合"每条都值得被单独看"的内容；搜索结果是一张清单，行更好扫。 */
-.rows { display: flex; flex-direction: column; }
-.row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-3);
-  border-bottom: 1px solid var(--hairline);
+.more-btn:hover { background: var(--stone-500); border-color: var(--edge-hover); color: var(--ink); }
+.cat-filter {
+  width: 100%;
+  max-width: 360px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
   border-radius: var(--r-sm);
-  transition: background var(--dur-fast) var(--ease);
+  background: var(--stone-void);
+  color: var(--ink);
+  font-size: var(--fs-base);
+  box-shadow: var(--bevel-inset);
 }
-.row:first-child { border-top: 1px solid var(--hairline); }
-.row:hover { background: var(--surface-hover); }
-.row:hover .row-title a { color: var(--ember-hot); }
-.row:hover .row-go { color: var(--ember); transform: translateX(2px); }
-/* 键盘走到标题链接上时，整行也要亮起来 —— 否则焦点只在两个字上，看不清落在哪一行 */
-.row:focus-within { background: var(--surface-hover); box-shadow: inset 2px 0 0 var(--ember); }
-.row-main { flex: 1; min-width: 0; }
-.row-title { font-size: var(--fs-base); font-weight: var(--fw-medium); margin: 0 0 4px; letter-spacing: 0; }
-.row-title a { color: var(--ember); text-decoration: none; }
-/* 链接的点击区铺满整行，但可聚焦元素仍然只有这一个 */
-.row-title a::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
-.row-ex { font-size: var(--fs-sm); color: var(--ink-3); line-height: 1.7; margin: 0; }
-.row-tags { margin-top: var(--sp-2); display: flex; gap: 6px; flex-wrap: wrap; }
-.row-go { flex: none; color: var(--ink-4); transition: color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
-.cat {
-  font-size: var(--fs-micro);
-  color: var(--ink-3);
-  background: var(--stone-400);
-  border-radius: var(--r-pill);
-  padding: 1px 8px;
+.cat-filter:focus-visible { outline: none; border-color: var(--ember); box-shadow: var(--bevel-inset), var(--focus-ring); }
+/* 展开后的清单自己滚：不把整页撑长，也不会把下面的区块推到几屏之外 */
+.cat-scroll {
+  max-height: 56vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--stone-300);
 }
+.empty-hint { padding: var(--sp-4) 0; }
+
+/* 两列：宽屏上把 12 行压成 6 行的高度。
+   ⚠️ 不能用 CSS columns —— .rowlist 是 flex 容器，columns 对 flex 无效，会静默退成单列。 */
+@media (min-width: 900px) {
+  .cats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--sp-5);
+  }
+  /* 分列之后「上一行的下边框」会跑到右列第一项头上，所以改成每项自带底边 */
+  .cats > * + * { border-top: 0; }
+  .cats > * { border-bottom: 1px solid var(--hairline); }
+}
+
+.tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 
 .pager {
   display: flex;
@@ -592,58 +511,23 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 }
 
 /* ==================== 区块 ==================== */
-.block { margin-bottom: var(--sp-7); }
+.block { margin-bottom: var(--sp-6); }
 .block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
   padding-bottom: var(--sp-2);
   border-bottom: 1px solid var(--hairline);
 }
 .block-title {
   font-size: var(--fs-lg);
-  letter-spacing: .04em;
+  letter-spacing: .03em;
+  margin: 0;
 }
-.hint { font-size: var(--fs-xs); }
 
-/* 常问词：两列清单，行与行之间一条发丝线。
-   上一版是 4 列的小卡片，每张卡里"中文 / 英文 / 次数"贴着三个角，
-   列宽一变就对不齐 —— 清单反而是最不容易散架的形式。 */
-.hot { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 var(--sp-5); }
-.hot-item {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  width: 100%;
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  padding: 11px var(--sp-2);
-  cursor: pointer;
-  text-align: left;
-  border-radius: var(--r-sm);
-  transition: background var(--dur-fast) var(--ease);
-}
-.hot-item:hover { background: var(--surface-hover); }
-.hot-kw { flex: 1; min-width: 0; font-size: var(--fs-base); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-item:hover .hot-kw { color: var(--ember-hot); }
-.hot-en {
-  flex: none;
-  max-width: 40%;
-  font-size: var(--fs-micro);
-  /* ⚠️ 这是**英文词条名**，是要读的内容，不是装饰 —— 用三级文字色（6.4:1）。
-     axe 实测：原来的 --ink-4 在页面底上只有 3.63:1，16 个词条全部不合格。 */
-  color: var(--ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hot-count { flex: none; font-size: var(--fs-xs); color: var(--ink-3); min-width: 22px; text-align: right; }
-.empty-hint { padding: var(--sp-5) 0; }
-
-/* 贡献入口：一块横向的"落款"区，不和上面的清单抢注意力 */
+/* 贡献入口：一块横向的落款区，不和上面的清单抢注意力 */
 .contribute {
   display: flex;
   align-items: center;
@@ -651,37 +535,22 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   gap: var(--sp-5);
   flex-wrap: wrap;
   margin-bottom: 0;
-  padding: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
   background: var(--stone-300);
   border-radius: var(--r-md);
   box-shadow: var(--bevel-raised);
 }
 .contribute-text { min-width: 0; }
 .contribute-text .block-title { border: 0; padding: 0; margin-bottom: var(--sp-2); }
-.contribute-text p { font-size: var(--fs-sm); max-width: 46em; }
+.contribute-text p { max-width: 52em; margin: 0; }
 
+@media (max-width: 380px) {
+  /* .page 在 380 以下收到 12px，这里跟着收，否则吸顶条会比版心宽 8px */
+  .search-wrap { margin-left: calc(var(--sp-3) * -1); margin-right: calc(var(--sp-3) * -1); padding-left: var(--sp-3); padding-right: var(--sp-3); }
+}
 @media (max-width: 760px) {
-  .lib-title { font-size: var(--fs-2xl); }
-  /* 搜索：按钮收成纯图标方块，把宽度全让给输入框。
-     上一版在 390px 下 placeholder 直接被截成"搜点什么… 比如「废料杯」「爆炸箭」」，很寒酸。 */
-  .search { padding-right: 5px; }
-  .s-go { min-width: 44px; padding: 0; }
-  /* ⚠️ 用 sr-only 而不是 display:none。
-  display:none 会把"搜索"两个字从无障碍树里一起删掉，按钮就只剩一个没有名字的图标
-  —— axe 直接判 critical（Buttons must have discernible text）。
-  视觉上它同样不可见，但读屏仍然会念"搜索"。 */
-  .s-go-txt {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  .s-go-ico { display: block; }
-  .grid { grid-template-columns: 1fr; }
-  .hot { grid-template-columns: 1fr; }
-  .contribute { flex-direction: column; align-items: stretch; }
+  .library { padding-top: var(--sp-4); }
+  .contribute { flex-direction: column; align-items: stretch; padding: var(--sp-4); }
+  .cat-filter { max-width: none; }
 }
 </style>

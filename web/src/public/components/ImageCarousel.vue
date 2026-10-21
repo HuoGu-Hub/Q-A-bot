@@ -548,6 +548,7 @@ onBeforeUnmount(() => {
         type="button"
         class="dot"
         :class="{ on: i === idx }"
+        data-hit="24x28"
         :aria-label="'第 ' + (i + 1) + ' 张'"
         :aria-current="i === idx ? 'true' : undefined"
         @click="jump(i)"
@@ -938,7 +939,7 @@ onBeforeUnmount(() => {
 }
 /* ⚠️ 视觉尺寸 8px，可点区域撑到 28px —— WCAG 2.5.8 要求指针目标至少 24×24。
    不能直接改 width/height：那会把这一排页码变成一排大圆球，画面会被抢走。 */
-.dot::after { content: ''; position: absolute; inset: -10px -6px; }
+.dot::after { content: ''; position: absolute; inset: -10px -8px; }
 .dot:hover { border-color: var(--flame); background: var(--flame-veil); }
 .dot.on {
   width: 34px;
