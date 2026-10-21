@@ -11,6 +11,7 @@ import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
 import Notice from '@shared/ui/Notice.vue'
+import Icon from '@shared/ui/Icon.vue'
 import ParamTable from './ParamTable.vue'
 import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
 
@@ -217,10 +218,10 @@ function submit() {
         </label>
 
         <div class="block">
-          <button class="block-head" type="button" @click="openParams = !openParams">
-            <span class="caret">{{ openParams ? '−' : '+' }}</span>
-            参数
-            <span class="faint">{{ form.params.length }}</span>
+          <button class="block-head" type="button" :aria-expanded="openParams" @click="openParams = !openParams">
+            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openParams }" />
+            <span>参数</span>
+            <span class="block-count">{{ form.params.length }}</span>
           </button>
           <div v-if="openParams" class="block-body">
             <ParamTable
@@ -256,7 +257,7 @@ function submit() {
             />
           </label>
           <label class="row row--block">
-            <span class="row-label">空列表</span>
+            <span class="row-label">无记录时</span>
             <Input
               v-model="form.listEmpty"
               :placeholder="'还没有内容，发 /' + (form.path || '命令') + ' /create 添加'"
@@ -398,11 +399,15 @@ function submit() {
 .block { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
 .block-head {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  background: none; border: 0; padding: 6px 0;
+  padding: 9px 10px; margin-top: 4px;
+  background: var(--stone-400); border: 1px solid var(--edge); border-radius: var(--r-sm);
   color: var(--ink-2); font-size: var(--fs-meta); cursor: pointer; text-align: left;
 }
-.block-head:hover { color: var(--ink); }
-.caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
+.block-head:hover { background: var(--stone-500); border-color: var(--edge-hover); color: var(--ink); }
+.block-chev { color: var(--ember); transition: transform var(--dur-fast) var(--ease); }
+.block-chev.open { transform: rotate(90deg); }
+.block-count { margin-left: auto; color: var(--ink-4); font-family: var(--font-mono); }
+.block-head:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
 
 .format-block {

@@ -21,6 +21,7 @@ import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
+import Icon from '@shared/ui/Icon.vue'
 import ParamTable from './ParamTable.vue'
 import BoardEditor from './BoardEditor.vue'
 import BoardRecordsModal from './BoardRecordsModal.vue'
@@ -809,10 +810,10 @@ onMounted(load)
 
           <!-- 低频项折叠：改回复的人不该被参数表和名单挡路 -->
           <div class="block">
-            <button class="block-head" type="button" @click="toggleBlock('params')">
-              <span class="caret">{{ openBlocks.params ? '−' : '+' }}</span>
-              参数
-              <span class="faint">{{ paramRows.length }}</span>
+            <button class="block-head" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
+              <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
+              <span>参数</span>
+              <span class="block-count">{{ paramRows.length }}</span>
             </button>
             <div v-if="openBlocks.params" class="block-body">
               <ParamTable
@@ -828,10 +829,10 @@ onMounted(load)
           </div>
 
           <div v-if="needsList" class="block">
-            <button class="block-head" type="button" @click="toggleBlock('acl')">
-              <span class="caret">{{ openBlocks.acl ? '−' : '+' }}</span>
-              名单
-              <span class="faint">{{ aclCount }}</span>
+            <button class="block-head" type="button" :aria-expanded="openBlocks.acl" @click="toggleBlock('acl')">
+              <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.acl }" />
+              <span>名单</span>
+              <span class="block-count">{{ aclCount }}</span>
             </button>
             <div v-if="openBlocks.acl" class="block-body">
               <div class="acl-grid">
@@ -856,10 +857,10 @@ onMounted(load)
           </div>
 
           <div class="block">
-            <button class="block-head" type="button" @click="toggleBlock('help')">
-              <span class="caret">{{ openBlocks.help ? '−' : '+' }}</span>
-              帮助
-              <span class="faint">{{ editing.help ? '手写' : '自动' }}</span>
+            <button class="block-head" type="button" :aria-expanded="openBlocks.help" @click="toggleBlock('help')">
+              <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.help }" />
+              <span>帮助</span>
+              <span class="block-count">{{ editing.help ? '手写' : '自动' }}</span>
             </button>
             <div v-if="openBlocks.help" class="block-body">
               <Input
@@ -1477,11 +1478,15 @@ onMounted(load)
 .block { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
 .block-head {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 6px 0; background: none; border: 0;
-  color: var(--ink-3); font-size: var(--fs-meta); text-align: left; cursor: pointer;
+  padding: 9px 10px; margin-top: 4px;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  color: var(--ink-2); font-size: var(--fs-meta); text-align: left; cursor: pointer;
 }
-.block-head:hover { color: var(--ink); }
-.caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
+.block-head:hover { background: var(--stone-500); border-color: var(--edge-hover); color: var(--ink); }
+.block-chev { color: var(--ember); transition: transform var(--dur-fast) var(--ease); }
+.block-chev.open { transform: rotate(90deg); }
+.block-count { margin-left: auto; color: var(--ink-4); font-family: var(--font-mono); }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
 
 .acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
@@ -1494,5 +1499,8 @@ onMounted(load)
 }
 @media (max-width: 900px) {
   .acl-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .block-chev { transition: none; }
 }
 </style>
