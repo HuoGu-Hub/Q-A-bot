@@ -58,7 +58,11 @@ public class CommandStore {
                 return;
             }
             repo.initSchema();
-            seedBuiltins();
+            // 种子只播一次：清空命令库后重启不能再把旧内置命令塞回来
+            if (!repo.hasMeta("command-seed-retired")) {
+                seedBuiltins();
+                repo.setMeta("command-seed-retired", Instant.now().toString());
+            }
             retireLegacyBuiltins();
             available = true;
             log.info("[CMD] 指令库就绪：{} 条指令", count());

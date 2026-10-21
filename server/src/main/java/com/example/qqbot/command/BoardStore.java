@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,7 +54,11 @@ public class BoardStore {
                 return;
             }
             repo.initSchema();
-            seedBuiltins();
+            // 种子只播一次：清空板块后重启不能再把三个内置板块塞回来
+            if (!repo.hasMeta("board-seed-retired")) {
+                seedBuiltins();
+                repo.setMeta("board-seed-retired", Instant.now().toString());
+            }
             available = true;
             log.info("[BOARD] 板块就绪：{} 个", listAll().size());
         } catch (Exception e) {

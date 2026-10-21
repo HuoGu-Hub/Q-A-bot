@@ -94,6 +94,12 @@ public class CommandRepository {
                 + " matched    INTEGER"
                 + " )");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_cmdlog_ts ON bot_command_log(ts)");
+
+        // 种子只播一次：清空命令表后重启不能把旧的内置命令又塞回来
+        jdbc.execute("CREATE TABLE IF NOT EXISTS bot_meta ("
+                + " k TEXT PRIMARY KEY,"
+                + " v TEXT NOT NULL"
+                + " )");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_cmdlog_trigger ON bot_command_log(trigger)");
 
         // 升级**已经存在**的表：CREATE TABLE IF NOT EXISTS 对老表什么都不做
@@ -156,6 +162,15 @@ public class CommandRepository {
 
     public long count() {
         return jdbc.count("SELECT COUNT(*) FROM bot_command");
+    }
+
+    public boolean hasMeta(String key) {
+        return jdbc.count("SELECT COUNT(*) FROM bot_meta WHERE k = ?", key) > 0;
+    }
+
+    public void setMeta(String key, String value) {
+        jdbc.update("INSERT INTO bot_meta(k, v) VALUES(?, ?)"
+                + " ON CONFLICT(k) DO UPDATE SET v = excluded.v", key, value);
     }
 
     /**

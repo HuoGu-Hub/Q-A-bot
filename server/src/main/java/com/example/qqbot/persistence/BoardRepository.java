@@ -49,6 +49,10 @@ public class BoardRepository {
     }
 
     public void initSchema() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS bot_meta ("
+                + " k TEXT PRIMARY KEY,"
+                + " v TEXT NOT NULL"
+                + " )");
         jdbc.execute("CREATE TABLE IF NOT EXISTS bot_board ("
                 + " id          INTEGER PRIMARY KEY AUTOINCREMENT,"
                 + " path        TEXT NOT NULL UNIQUE,"
@@ -81,6 +85,15 @@ public class BoardRepository {
                 row.scope(), row.groupsJson(),
                 row.showGroup() ? 1 : 0, row.showUser() ? 1 : 0, row.allowPrivate() ? 1 : 0,
                 row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0);
+    }
+
+    public boolean hasMeta(String key) {
+        return jdbc.count("SELECT COUNT(*) FROM bot_meta WHERE k = ?", key) > 0;
+    }
+
+    public void setMeta(String key, String value) {
+        jdbc.update("INSERT INTO bot_meta(k, v) VALUES(?, ?)"
+                + " ON CONFLICT(k) DO UPDATE SET v = excluded.v", key, value);
     }
 
     public Row findByPath(String path) {
