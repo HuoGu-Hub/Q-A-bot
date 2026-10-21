@@ -294,7 +294,7 @@ const VOTE_BTNS = [
         </template>
       </PageHeader>
 
-      <div v-if="hot?.keywords?.length" class="rowlist">
+      <div v-if="hot?.keywords?.length" class="rowlist kw-list">
         <ListRow
           v-for="k in hot.keywords"
           :key="k.keyword"
@@ -316,7 +316,9 @@ const VOTE_BTNS = [
 </template>
 
 <style scoped>
-.plaza { padding-top: var(--sp-6); padding-bottom: var(--sp-8); max-width: 880px; }
+.plaza { padding-top: var(--sp-5); padding-bottom: var(--sp-8); max-width: 1040px; }
+/* 答案正文仍然收在 760：关键词索引可以用满宽度，但读长答案的版心不能跟着变宽 */
+.answers, .fallback, .empty-wrap { max-width: var(--read-max); }
 .err {
   color: var(--blight-lift);
   font-size: var(--fs-base);
@@ -462,7 +464,18 @@ const VOTE_BTNS = [
 .new-ans { margin-top: var(--sp-5); box-shadow: var(--bevel-raised), 0 0 0 1px var(--ember-veil); }
 .new-ans::before { background: var(--ember); }
 
-/* 热词清单交给 ListRow（与资料库「大家常问」同一套行），这里只剩空态内边距 */
+/* 热词清单：宽屏两列，把 24 条压成 12 行。
+   ⚠️ 分列后「上一行的下边框」会跑到右列第一项头上，所以关掉相邻边框、改成每项自带底边。 */
+@media (min-width: 900px) {
+  .kw-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--sp-5);
+  }
+  .kw-list > * + * { border-top: 0; }
+  .kw-list > * { border-bottom: 1px solid var(--hairline); }
+}
+
 .empty-wrap { padding: var(--sp-6) 0; }
 
 @media (max-width: 760px) {

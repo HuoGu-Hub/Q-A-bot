@@ -63,8 +63,8 @@ defineEmits<{ click: [] }>()
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  min-height: 56px;
-  padding: var(--sp-3) var(--sp-3);
+  min-height: 52px;
+  padding: 10px var(--sp-3);
   background: none;
   border: 0;
   border-radius: var(--r-sm);

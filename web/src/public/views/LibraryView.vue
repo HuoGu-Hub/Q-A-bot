@@ -328,7 +328,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
           <h2 class="block-title">大家常问</h2>
           <span class="hint">{{ hotMixed ? '群友问得最多的' : '被点赞认可的' }}</span>
         </div>
-        <div v-if="hot.length" class="rowlist">
+        <div v-if="hot.length" class="rowlist hot-list">
           <ListRow
             v-for="k in hot"
             :key="k.keyword"
@@ -500,6 +500,17 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 }
 
 .tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* 「大家常问」：宽屏两列，16 条压成 8 行 —— 和广场页的热词清单同一个处理 */
+@media (min-width: 900px) {
+  .hot-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--sp-5);
+  }
+  .hot-list > * + * { border-top: 0; }
+  .hot-list > * { border-bottom: 1px solid var(--hairline); }
+}
 
 .pager {
   display: flex;

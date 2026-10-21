@@ -69,7 +69,9 @@ withDefaults(defineProps<{
   margin-top: 2px;
   color: var(--ink);
   font-weight: var(--fw-medium);
-  white-space: nowrap;
+  /* 组合值（中位数 / P95）在 8 列排布下必须允许折行 ——
+     上一版就是靠折行才放得下「640 ms / 2.0 s」。手机两列时反而够宽，那里再锁 nowrap。 */
+  white-space: normal;
 }
 .tone-moss .v { color: var(--vital); }
 .tone-rust .v { color: var(--blight-lift); }
@@ -78,6 +80,6 @@ withDefaults(defineProps<{
 @media (max-width: 760px) {
   /* 两列排布时卡片内宽只有约 145px，「640 ms / 2.0 s」这种组合值在 19px 下会被切掉。
      降到 16px 并略收字距，数字仍然清楚。 */
-  .v { font-size: var(--fs-lg); letter-spacing: -.01em; }
+  .v { font-size: var(--fs-lg); letter-spacing: -.01em; white-space: nowrap; }
 }
 </style>
