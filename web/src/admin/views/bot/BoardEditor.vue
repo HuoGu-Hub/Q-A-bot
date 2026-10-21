@@ -264,7 +264,7 @@ function submit() {
               aria-label="列表头"
             />
           </label>
-          <label class="row row--block">
+          <label class="row row--top">
             <span class="row-label">每行</span>
             <Input
               v-model="form.listItem"
@@ -274,7 +274,7 @@ function submit() {
               aria-label="每条格式"
             />
           </label>
-          <label class="row row--block">
+          <label class="row">
             <span class="row-label">无记录时</span>
             <Input
               v-model="form.listEmpty"
@@ -291,7 +291,7 @@ function submit() {
                 aria-label="显示条数"
                 @update:model-value="form.listLimit = Math.max(0, Math.min(200, Number($event) || 0))"
               />
-              <span class="faint">0 = 全部</span>
+              <span class="faint limit-hint">0 = 全部</span>
             </div>
           </label>
           <div class="format-vars">
@@ -441,11 +441,24 @@ function submit() {
 }
 .head-add:hover { background: var(--stone-500); border-color: var(--edge); }
 .head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
-.block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
+.block-body {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin-top: 8px; padding: 12px 14px;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 0 var(--hairline-lit);
+}
 
 .output-body { gap: var(--sp-3); }
-.limit-line { display: flex; align-items: center; gap: var(--sp-3); }
-.limit-line :deep(.inp) { max-width: 120px; }
+.row--top { align-items: flex-start; }
+.row--top .row-label { padding-top: 8px; }
+.limit-line { position: relative; flex: 1; min-width: 0; }
+.limit-line :deep(.inp) { width: 100%; max-width: none; padding-right: 64px; }
+.limit-hint {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 .format-vars {
   display: flex;
   flex-wrap: wrap;

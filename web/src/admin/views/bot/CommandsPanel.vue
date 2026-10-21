@@ -1512,7 +1512,13 @@ onMounted(load)
 }
 .head-add:hover { background: var(--stone-500); border-color: var(--edge); }
 .head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
-.block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
+.block-body {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin-top: 8px; padding: 12px 14px;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 0 var(--hairline-lit);
+}
 
 .acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .range-pick { width: 128px; }
