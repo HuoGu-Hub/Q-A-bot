@@ -601,9 +601,22 @@ function onDoubleClick(e: MouseEvent) {
 /* ==================== 生命周期 ==================== */
 
 let ro: ResizeObserver | null = null
+/**
+ * 主题变化监听。
+ *
+ * <p>画布上的点位、文字、选中框全部是 canvas 画的，不经过 CSS 继承 ——
+ * 只改 data-theme 不会让它们变色，必须重新读一次令牌再重绘。
+ * 这是切主题时最容易漏的一处：页面都换了，只有地图还停在旧配色。
+ */
+let themeObserver: MutationObserver | null = null
 
 onMounted(() => {
   readPalette()
+  themeObserver = new MutationObserver(() => {
+    readPalette()
+    schedule()
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
   ro = new ResizeObserver(() => {
     const el = host.value
     if (!el) return
@@ -621,6 +634,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   ro?.disconnect()
+  themeObserver?.disconnect()
   if (raf) cancelAnimationFrame(raf)
 })
 

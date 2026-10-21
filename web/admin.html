@@ -4,8 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <meta name="theme-color" content="#0b0e13">
+  <meta name="theme-color" content="#101312">
   <meta name="robots" content="noindex,nofollow">
+  <!--
+    首帧主题。必须放在任何样式之前：
+    CSS 由 JS 模块引入，等它加载完再切主题，用户会先看到一帧夜间再翻成日间。
+    存储键与 shared/theme/useTheme.ts 保持一致。
+  -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('qqbot.theme')
+        if (t !== 'day' && t !== 'night') {
+          t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : 'night'
+        }
+        document.documentElement.dataset.theme = t
+        document.documentElement.style.colorScheme = t === 'day' ? 'light' : 'dark'
+      } catch (e) { /* 隐私模式下读不到存储，交给 CSS 默认的夜间 */ }
+    })()
+  </script>
   <title>飘雪喵 · 管理后台</title>
 </head>
 <body>

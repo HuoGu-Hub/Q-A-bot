@@ -1,20 +1,21 @@
 /**
- * 质感层 —— 「石头与灯」
+ * 质感层 —— 「石头与火」
  *
  * 全部是 CSS / 内联 SVG：没有图片请求、可无限缩放、改颜色不用重新导出素材。
  *
- * 这一版把「游戏感」的实现从**画装饰**换成**做材质**：
- *   v1 靠四角铜饰、径向光晕、噪点贴图去"暗示"游戏 UI，结果装饰是加上了，
- *   但底子仍然是一堆同样粗细的描边方块 —— 装饰和结构是两层皮。
- *   v2 只做三件事，且全站共用：
- *     · 石头阶梯：靠背景明度差表达层级（tokens 的 --stone-*）
- *     · 刻与凸：靠内阴影表达"凹进去"和"凸出来"（--bevel-inset / --bevel-raised）
- *     · 一盏灯：每个页面只有一处被照亮（.lit），其余全部安静
- */
+ * 只做三件事，且全站共用：
+ *   · 石头阶梯：靠背景明度差表达层级（tokens 的 --stone-*）
+ *   · 刻与凸：靠内阴影表达「凹进去」和「凸出来」（--bevel-*）
+ *   · 一盏灯：每个页面只有一处被照亮，其余全部安静
+ *
+ * 两套主题的差别不在「加不加装饰」，而在材质：
+ *   夜间是湿冷的石面，噪点低、四周压暗重；
+ *   日间是干燥的羊皮纸，噪点略高、压暗很轻，光从左上偏暖。 */
+@import './tokens.css';
 
 /* ==================== 雾 ====================
    页面底噪：一层固定的雾。z-index 压在内容之下（内容外壳是 z-index: 2）。
-   为什么不用 background-attachment: fixed —— 它在移动端 Safari/Chrome 上会掉帧。 */
+   不用 background-attachment: fixed —— 它在移动端 Safari/Chrome 上会掉帧。 */
 .mist-veil::before {
   content: '';
   position: fixed;
@@ -23,22 +24,22 @@
   z-index: 0;
   background:
     /* 顶上那盏灯：暖光从正上方压下来，越往下越淡 */
-    radial-gradient(130% 300px at 50% -60px, rgba(242, 171, 85, .075), transparent 72%),
+    radial-gradient(130% 300px at 50% -60px, var(--veil-warm), transparent 72%),
     /* 右上角的冷雾：避免整页只有一种色温 */
-    radial-gradient(85% 55% at 100% 0%, rgba(139, 154, 171, .06), transparent 62%),
+    radial-gradient(85% 55% at 100% 0%, var(--veil-cool), transparent 62%),
     /* 四周压暗：把视线的中心让出来 */
-    radial-gradient(140% 100% at 50% 42%, transparent 42%, rgba(0, 0, 0, .38) 100%);
+    radial-gradient(140% 100% at 50% 42%, transparent 42%, var(--veil-vignette) 100%);
 }
 
 /* ==================== 石材噪点 ====================
-   2% 的不透明度叠加。有它才有"粗糙表面"，没有就是纯色 UI。 */
+   2% 到 3.5% 的不透明度叠加。有它才有「粗糙表面」，没有就是纯色 UI。 */
 .texture-noise { position: relative; }
 .texture-noise::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: .03;
+  opacity: var(--grain-opacity);
   border-radius: inherit;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
@@ -49,17 +50,15 @@
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: .022;
+  opacity: var(--grain-opacity);
   z-index: 1;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 
 /* ==================== 石板（面板）====================
-   结构 = 背景明度阶梯（表达层级）+ 上下两道内阴影（表达"这块是凸出来的"）。
-
-   ⚠️ 这里不再挂 --shadow-lift。v1 给每个面板都加了一圈 34px 的大投影，
-   而暗色底上的投影本来就几乎看不见 —— 花了 GPU 的时间，什么也没换来。
-   投影只留给**真正浮在页面之上**的东西：弹窗、抽屉、吸顶栏、提示。 */
+   结构 = 背景明度阶梯 + 上下两道内阴影。
+   ⚠️ 不再挂大投影：暗底上的投影本来就几乎看不见，花了 GPU 什么也没换来。
+   投影只留给真正浮在页面之上的东西：弹窗、抽屉、吸顶栏、提示。 */
 .panel {
   position: relative;
   background: var(--stone-300);
@@ -84,18 +83,16 @@
 }
 
 /* 内衬刻痕（.panel--corners）——
-   v1 是四角 11px 的铜色直角，远看像印刷裁切标记（crop marks），四角对称反而更没设计感。
-   v2 只留**左上**与**右下**两个内衬角，且是白色的发丝线：
-   非对称 = 是选择，不是套模板。 */
+   只留**左上**与**右下**两个内衬角，且是发丝线：非对称 = 是选择，不是套模板。 */
 .panel--corners::after {
   inset: 7px;
   border-radius: calc(var(--r-md) - 5px);
   background-repeat: no-repeat;
   background-image:
-    linear-gradient(var(--edge-soft), var(--edge-soft)),
-    linear-gradient(var(--edge-soft), var(--edge-soft)),
-    linear-gradient(var(--edge-soft), var(--edge-soft)),
-    linear-gradient(var(--edge-soft), var(--edge-soft));
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color));
   background-size: 16px 1px, 1px 16px, 16px 1px, 1px 16px;
   background-position:
     left top, left top,
@@ -103,16 +100,15 @@
 }
 
 /* ==================== 灯 ====================
-   一页只有一处被照亮。v1 是"每个面板右上角一圈橙光"，等于没重点。
-   现在是左上角一盏灯罩下来的偏心暖光（人写字的姿势：光在左上、影子在右下）。 */
+   一页只有一处被照亮。左上角一盏灯罩下来的偏心暖光：人写字的姿势，光在左上、影在右下。 */
 .lit { position: relative; overflow: hidden; }
 .lit::after {
   background:
-    radial-gradient(120% 150% at 0% 0%, rgba(242, 171, 85, .105), transparent 58%),
-    radial-gradient(70% 90% at 100% 100%, rgba(0, 0, 0, .30), transparent 70%);
+    radial-gradient(120% 150% at 0% 0%, var(--veil-warm), transparent 58%),
+    radial-gradient(70% 90% at 100% 100%, var(--shade), transparent 70%);
 }
 
-/* v1 的名字，留着给尚未重做的页面用（值收得更淡了） */
+/* v1 的名字，留给尚未重做的页面 */
 .glow-flame { position: relative; overflow: hidden; }
 .glow-flame::after {
   background: radial-gradient(140px 70px at 88% 0%, var(--ember-veil), transparent 70%);
@@ -137,15 +133,15 @@
 }
 
 /* ==================== 首屏那块石碑 ====================
-   全宽、无圆角、下缘一道刻线收口。它承接页面顶部那盏灯，是整页唯一的"实体"。 */
+   全宽、无圆角、下缘一道刻线收口。它承接页面顶部那盏灯，是整页唯一的「实体」。 */
 .slab {
   position: relative;
   background:
-    radial-gradient(115% 160% at 12% -30%, rgba(242, 171, 85, .10), transparent 58%),
+    radial-gradient(115% 160% at 12% -30%, var(--veil-warm), transparent 58%),
     linear-gradient(180deg, var(--stone-300), var(--stone-200));
   box-shadow: var(--bevel-shelf);
 }
-/* 下缘刻线：中间实、两端虚，把石碑"压"在页面上 */
+/* 下缘刻线：中间实、两端虚，把石碑「压」在页面上 */
 .slab::after {
   content: '';
   position: absolute;
@@ -157,6 +153,22 @@
 /* 雾层（v1 名字，首屏顶部用） */
 .veil-shroud {
   background:
-    radial-gradient(80% 120px at 50% 0%, rgba(139, 154, 171, .10), transparent 70%),
+    radial-gradient(80% 120px at 50% 0%, var(--veil-cool), transparent 70%),
     radial-gradient(60% 90px at 80% 10%, var(--ember-veil), transparent 70%);
+}
+
+/* ==================== 主题切换的灯 ====================
+   切换时给整个页面 200ms 的底色过渡，让「天亮了」有个过程，而不是闪一下。
+   ⚠️ 只在用户手动切换后由 JS 加上 .theme-anim，首帧不动画，避免冷启动闪。 */
+.theme-anim,
+.theme-anim body,
+.theme-anim .panel,
+.theme-anim .slab {
+  transition: background-color var(--dur-slow) var(--ease),
+              color var(--dur-slow) var(--ease),
+              border-color var(--dur-slow) var(--ease);
+}
+
+@media (max-width: 760px) {
+  .panel { padding: var(--sp-4); }
 }
