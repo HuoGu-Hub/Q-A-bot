@@ -17,13 +17,10 @@ import type {
   CommandList, BotCommand, CommandVariables, CommandStats, CommandActions, AdminParamSpec,
   CommandPolicy, CommandPolicies, CommandAcl, AdminBoard, AdminBoardList, BoardDraft,
 } from '@shared/api/types'
-import Panel from '@shared/ui/Panel.vue'
-import DataTable from '@shared/ui/DataTable.vue'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Button from '@shared/ui/Button.vue'
-import Tag from '@shared/ui/Tag.vue'
 import ParamTable from './ParamTable.vue'
 import BoardEditor from './BoardEditor.vue'
 import BoardRecordsModal from './BoardRecordsModal.vue'
@@ -52,12 +49,17 @@ const boardError = ref('')
 const recordsBoard = ref<AdminBoard | null>(null)
 /** 新建命令的类型选择弹窗 */
 const newOpen = ref(false)
+/** 命令表筛选 */
+const search = ref('')
+const kindFilter = ref('all')
 /** 使用情况统计范围（天） */
 const statsDays = ref(30)
 /** 实时预览结果 */
 const preview = ref('')
 /** 预览 {args} 用的示例参数 */
 const sampleArgs = ref('')
+/** 变量默认只露前几个，避免一屏全是胶囊 */
+const showAllVars = ref(false)
 
 const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '7', label: '近 7 天' },
@@ -93,12 +95,12 @@ const usageMap = computed<Record<string, number>>(() => {
 const SYSTEM_ROWS: CommandRow[] = [
   {
     source: 'system', key: 'system-list', path: 'list', usage: '', kind: 'system',
-    description: '列出全部可用命令', access: 'all', enabled: true, builtin: true,
+    description: '全部命令', access: 'all', enabled: true, builtin: true,
     board: null, command: null,
   },
   {
     source: 'system', key: 'system-help', path: 'help', usage: '', kind: 'system',
-    description: '通用命令格式与注意事项', access: 'all', enabled: true, builtin: true,
+    description: '格式与说明', access: 'all', enabled: true, builtin: true,
     board: null, command: null,
   },
 ]
@@ -108,7 +110,7 @@ const rows = computed<CommandRow[]>(() => [
   ...SYSTEM_ROWS,
   ...boards.value.map((b): CommandRow => ({
     source: 'board', key: 'board-' + b.id, path: b.path, usage: b.usage, kind: 'board',
-    description: b.delivery === 'scheduled' ? '收下后按时间发出' : '收下后立即出现在板里',
+    description: '—',
     access: b.access, enabled: b.enabled, builtin: b.builtin, board: b, command: null,
   })),
   ...(data.value?.commands ?? []).map((c): CommandRow => ({
@@ -120,6 +122,36 @@ const rows = computed<CommandRow[]>(() => [
 
 /** 指令类型与准入选项在 commandOptions.ts —— 板块编辑器也要用同一份 */
 
+const FILTERS = [
+  { value: 'all', label: '全部' },
+  { value: 'board', label: '板块' },
+  { value: 'template', label: '话术' },
+  { value: 'agent', label: '问答' },
+  { value: 'action', label: '动作' },
+  { value: 'system', label: '系统' },
+]
+
+const boardCount = computed(() => boards.value.length)
+
+const visibleRows = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return rows.value.filter((row) => {
+    if (kindFilter.value !== 'all' && row.kind !== kindFilter.value) return false
+    if (!q) return true
+    return row.path.toLowerCase().includes(q)
+      || row.description.toLowerCase().includes(q)
+  })
+})
+
+const maxUsed = computed(() => Math.max(1, ...(stats.value?.topUsed ?? []).map((x) => x.count)))
+const maxMiss = computed(() => Math.max(1, ...(stats.value?.unmatched ?? []).map((x) => x.count)))
+
+const globalAclCount = computed(() => {
+  const f = globalForm.value
+  return [f.whiteUsers, f.whiteGroups, f.blackUsers, f.blackGroups]
+    .filter((s) => s.trim()).length
+})
+
 const isAgent = computed(() => editing.value?.kind === 'agent')
 const isAction = computed(() => editing.value?.kind === 'action')
 /** 动作下拉：值是动作 id，直接存进库里那一列 */
@@ -127,22 +159,8 @@ const actionOptions = computed(() =>
   (actions.value?.actions ?? []).map((a) => ({ value: a.id, label: a.label || a.id }))
 )
 
-/** 选中动作的那一句说明 —— 只有真选了才出现，不占常态版面 */
-const actionHint = computed(() => {
-  const id = editing.value?.action
-  return (actions.value?.actions ?? []).find((a) => a.id === id)?.description ?? ''
-})
 /** 编辑中的参数表。新建时是空数组，模板里靠它渲染行 */
 const paramRows = computed<AdminParamSpec[]>(() => editing.value?.params ?? [])
-
-const kindHint = computed(() => {
-  if (isAction.value) {
-    return '动作：群友发「/路径 #名字-值# 文本」→ 交给绑定的执行器写库或查库。不调模型、不计费。'
-  }
-  return isAgent.value
-    ? '智能问答：群友发「/路径 问题文本」→ 交给大模型回答。会走 Guard 与成本预算（会花钱），自由文本就是问题。'
-    : '话术：群友发「/路径 #名字-值# 文本」→ 直接回下面的文本。不调模型、不计费，所以是秒回。'
-})
 
 async function loadStats() {
   try {
@@ -182,6 +200,7 @@ function newCommand(kind = 'template') {
   }
   preview.value = ''
   sampleArgs.value = ''
+  showAllVars.value = false
   policy.value = { scope: 'GROUP', groups: '', showGroup: false, showUser: false, allowPrivate: false }
   acl.value = { whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' }
 }
@@ -209,6 +228,7 @@ function edit(c: BotCommand) {
   boardEditing.value = undefined
   editing.value = { ...c }
   sampleArgs.value = sampleArgsOf(c.params ?? [])
+  showAllVars.value = false
   updatePreview()
   const p = policyOf(c.id)
   policy.value = {
@@ -225,16 +245,42 @@ function sampleArgsOf(params: AdminParamSpec[]) {
   return params.map((p) => '#' + p.name + '-' + (p.example || p.name) + '#').join(' ')
 }
 
-/** 板块的规则一栏：谁能用、怎么投递、数据范围 */
-function boardRuleTags(b: AdminBoard) {
-  const tags: Array<{ label: string; tone: 'neutral' | 'good' | 'warn' | 'bad' }> = [
-    { label: ACCESS_LABEL[b.access] ?? b.access, tone: 'neutral' },
-  ]
-  if (b.scope && b.scope !== 'GROUP') {
-    tags.push({ label: SCOPE_LABEL[b.scope] ?? b.scope, tone: 'bad' })
+/** 表格规则列：一句读完，不再堆标签 */
+function rowRuleText(row: CommandRow): string {
+  if (row.source === 'system') return '所有人'
+  if (row.source === 'board' && row.board) {
+    const parts = [ACCESS_LABEL[row.board.access] ?? row.board.access]
+    if (row.board.scope !== 'GROUP') parts.push(SCOPE_LABEL[row.board.scope] ?? row.board.scope)
+    if (row.board.allowPrivate) parts.push('私聊')
+    return parts.join(' · ')
   }
-  if (b.allowPrivate) tags.push({ label: '私聊开', tone: 'warn' })
-  return tags
+  if (row.command) {
+    const d = deviations(row.command)
+    return d.length ? d.join(' · ') : '默认'
+  }
+  return '—'
+}
+
+/** 类型下面的一行小字：投递方式或问答来源 */
+function rowTypeSub(row: CommandRow): string {
+  if (row.source === 'board' && row.board) {
+    return row.board.delivery === 'scheduled' ? '定时' : '即时'
+  }
+  if (row.command) {
+    if (row.command.kind === 'agent') {
+      return row.command.mode === 'none' ? '纯模型' : '知识库'
+    }
+    if (row.command.kind === 'action') return row.command.action || '未绑定'
+  }
+  return ''
+}
+
+function rowKindClass(row: CommandRow): string {
+  if (row.source === 'system') return 'k-system'
+  if (row.source === 'board') return 'k-board'
+  if (row.kind === 'agent') return 'k-agent'
+  if (row.kind === 'action') return 'k-action'
+  return 'k-template'
 }
 
 /* ==================== 参数表编辑 ==================== */
@@ -287,9 +333,6 @@ function onArgsInput(v: string) {
 }
 
 /** 回复内容每次改动都重算预览（原来挂在 textarea 的 @input 上） */
-/** 类型改成"动作"但没有绑定时，提示他选一个 —— 空下拉是最容易卡住的地方 */
-const needsAction = computed(() => isAction.value && !editing.value?.action)
-
 function onReplyInput(v: string) {
   patch({ reply: v })
   updatePreview()
@@ -369,17 +412,10 @@ function rowKindLabel(row: CommandRow) {
   return '话术'
 }
 
-function rowKindTone(row: CommandRow): 'flame' | 'warn' | 'neutral' {
-  if (row.source === 'system') return 'flame'
-  if (row.source === 'board') return 'flame'
-  if (row.kind === 'agent' || row.kind === 'action') return 'warn'
-  return 'neutral'
-}
-
 /** 近 N 天被用了几次；0 显示破折号，避免整列都是 0 */
 function rowUsage(row: CommandRow) {
   const count = usageMap.value[row.path.toLowerCase()] ?? 0
-  return count > 0 ? count + ' 次' : '—'
+  return count > 0 ? String(count) : '—'
 }
 
 function editRow(row: CommandRow) {
@@ -571,8 +607,16 @@ async function saveGlobalAcl() {
   }
 }
 
-const basicVars = computed(() => (vars.value?.variables ?? []).filter(v => !v.advanced))
-const advVars = computed(() => (vars.value?.variables ?? []).filter(v => v.advanced))
+const VAR_PRIORITY = ['args', 'text', 'user', 'group', 'time', 'date']
+const allVars = computed(() => {
+  const list = [...(vars.value?.variables ?? [])]
+  return list.sort((a, b) => {
+    const ia = VAR_PRIORITY.indexOf(a.name)
+    const ib = VAR_PRIORITY.indexOf(b.name)
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
+  })
+})
+const visibleVars = computed(() => showAllVars.value ? allVars.value : allVars.value.slice(0, 6))
 
 /** 页面栏上的「刷新」「+ 新建命令」—— 见文件头注释 */
 defineExpose({
@@ -589,13 +633,15 @@ onMounted(load)
   <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <!-- 编辑区：原来就是插在列表上方的一块，位置与交互保留，只换成共享 Panel -->
     <!-- 编辑态：整块替换列表。表格上面压一个巨长表单，改一个字段要滚过一整屏 -->
     <div v-if="editing" class="editor">
       <div class="editor-head">
-        <div>
-          <div class="editor-eyebrow">编辑命令</div>
-          <div class="editor-path">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '新指令' }}</div>
+        <div class="editor-ident">
+          <div class="editor-kicker">
+            <span class="type-badge">{{ isAction ? '动作' : isAgent ? '问答' : '话术' }}</span>
+            <span class="editor-mode">{{ editing.id ? '编辑' : '新建' }}</span>
+          </div>
+          <div class="editor-path" :class="{ 'is-empty': !(editing.trigger ?? '').trim() }">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '命令名' }}</div>
         </div>
         <div class="editor-actions">
           <Button size="sm" @click="editing = null">取消</Button>
@@ -606,7 +652,7 @@ onMounted(load)
       <div class="editor-grid">
         <!-- 左：这条命令说什么 -->
         <section class="editor-col">
-          <div class="col-title">内容</div>
+          <div class="col-title">命令</div>
 
           <label class="row">
             <span class="row-label">命令名</span>
@@ -615,23 +661,17 @@ onMounted(load)
               <Input
                 :model-value="editing.trigger ?? ''"
                 :disabled="editing.builtin"
-                placeholder="set/output（用 / 分层）"
+                placeholder="set/output"
                 aria-label="命令名"
                 @update:model-value="patch({ trigger: $event })"
               />
             </div>
           </label>
-          <p class="path-hint">
-            群里发 <span class="path-demo">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '…' }}</span>。
-            命令名就是调用名，改名会同步改掉旧调用名。
-            <template v-if="editing.builtin">内置命令不能改名。</template>
-          </p>
 
           <label class="row">
             <span class="row-label">说明</span>
             <Input
               :model-value="editing.description ?? ''"
-              placeholder="一句话说清它干什么"
               aria-label="说明"
               @update:model-value="patch({ description: $event })"
             />
@@ -645,42 +685,51 @@ onMounted(load)
               :rows="7"
               mono
               :placeholder="isAgent
-                ? '参数不合格时回这句'
+                ? '参数错误提示'
                 : isAction
-                  ? '留空则按参数表自动生成'
-                  : '支持 {变量} 与 {args}'"
+                  ? '留空自动'
+                  : '回复内容'"
               aria-label="回复"
               @update:model-value="onReplyInput"
             />
             <div class="vars">
-              <span v-for="v in basicVars" :key="v.name" class="vitem">
-                <button class="vchip" type="button" :title="'例：' + v.example" @click="insertVar(v.name)">{ {{ v.name }} }</button>
-                <span class="vlabel">{{ v.label }}</span>
-              </span>
-              <span v-for="v in advVars" :key="v.name" class="vitem">
-                <button class="vchip vchip--adv" type="button" :title="'例：' + v.example" @click="insertVar(v.name)">{ {{ v.name }} }</button>
-                <span class="vlabel">{{ v.label }}</span>
-              </span>
+              <span class="vars-label">变量</span>
+              <button
+                v-for="v in visibleVars" :key="v.name" class="vchip" type="button"
+                :class="{ 'vchip--adv': v.advanced }"
+                :title="v.label + '，例：' + v.example" @click="insertVar(v.name)"
+              >{ {{ v.name }} }</button>
+              <button
+                v-if="allVars.length > 6"
+                type="button"
+                class="vars-toggle"
+                @click="showAllVars = !showAllVars"
+              >{{ showAllVars ? '收起' : '更多' }}</button>
             </div>
             <div class="preview-tools">
               <Input
                 :model-value="sampleArgs"
-                placeholder="示例参数：张三 18，或 #时间-21:30# 文本"
+                placeholder="示例参数"
                 aria-label="示例参数"
                 @update:model-value="onArgsInput"
               />
-              <span class="faint note">只用于预览，不保存</span>
             </div>
-            <p v-if="preview" class="preview-line">{{ preview }}</p>
+            <div v-if="preview" class="message-preview">
+              <div class="preview-head">
+                <span>群消息</span>
+                <span class="preview-command">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '…' }}</span>
+              </div>
+              <div class="preview-bubble">{{ preview || '—' }}</div>
+            </div>
           </div>
         </section>
 
         <!-- 右：这条命令的规则 -->
         <section class="editor-col">
-          <div class="col-title">规则</div>
+          <div class="col-title">设置</div>
 
           <label class="row">
-            <span class="row-label">类型</span>
+            <span class="row-label">形态</span>
             <Select
               :model-value="editing.kind ?? 'template'"
               :options="KIND_OPTIONS"
@@ -690,7 +739,7 @@ onMounted(load)
           </label>
 
           <label v-if="isAction" class="row">
-            <span class="row-label">绑定动作</span>
+            <span class="row-label">动作</span>
             <Select
               :model-value="editing.action ?? ''"
               :options="actionOptions"
@@ -698,11 +747,9 @@ onMounted(load)
               @update:model-value="onActionPicked"
             />
           </label>
-          <p v-if="actionHint" class="path-hint">{{ actionHint }}</p>
-          <p v-if="needsAction" class="path-hint">选一个动作，路径与参数会自动填好</p>
 
           <label v-if="isAgent" class="row">
-            <span class="row-label">回答来源</span>
+            <span class="row-label">来源</span>
             <Select
               :model-value="editing.mode ?? 'kb'"
               :options="MODE_OPTIONS"
@@ -712,7 +759,7 @@ onMounted(load)
           </label>
 
           <label class="row">
-            <span class="row-label">谁能用</span>
+            <span class="row-label">权限</span>
             <Select
               :model-value="editing.access ?? 'all'"
               :options="ACCESS_OPTIONS"
@@ -722,7 +769,7 @@ onMounted(load)
           </label>
 
           <label class="row">
-            <span class="row-label">数据范围</span>
+            <span class="row-label">范围</span>
             <Select
               :model-value="policy.scope"
               :options="DATA_SCOPES"
@@ -732,12 +779,12 @@ onMounted(load)
           </label>
 
           <div v-if="policy.scope === 'SOME'" class="row row--block">
-            <span class="row-label">共享群</span>
+            <span class="row-label">群号</span>
             <Input
               :model-value="policy.groups"
               multiline
               :rows="2"
-              placeholder="一行一个群号"
+              placeholder="群号"
               aria-label="共享群号"
               @update:model-value="policy.groups = $event"
             />
@@ -746,16 +793,16 @@ onMounted(load)
           <div class="checks">
             <label class="check">
               <input type="checkbox" :checked="policy.allowPrivate" @change="onCheck('allowPrivate', $event)" />
-              <span>允许私聊</span>
+              <span>私聊</span>
             </label>
             <template v-if="policy.scope !== 'GROUP'">
               <label class="check">
                 <input type="checkbox" :checked="policy.showGroup" @change="onCheck('showGroup', $event)" />
-                <span>标出来源群</span>
+                <span>显示群</span>
               </label>
               <label class="check">
                 <input type="checkbox" :checked="policy.showUser" @change="onCheck('showUser', $event)" />
-                <span>标出来源 QQ</span>
+                <span>显示 QQ</span>
               </label>
             </template>
           </div>
@@ -764,17 +811,17 @@ onMounted(load)
           <div class="block">
             <button class="block-head" type="button" @click="toggleBlock('params')">
               <span class="caret">{{ openBlocks.params ? '−' : '+' }}</span>
-              参数表
-              <span class="faint">{{ paramRows.length ? paramRows.length + ' 个' : '没有' }}</span>
+              参数
+              <span class="faint">{{ paramRows.length }}</span>
             </button>
             <div v-if="openBlocks.params" class="block-body">
               <ParamTable
                 :params="paramRows"
-                empty-hint="群友发过来的整段都当文本，模板里用 {args} 取。"
+                empty-hint="无参数"
                 @update:params="setParams"
               >
                 <template #actions>
-                  <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入该动作的参数表</Button>
+                  <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入动作参数</Button>
                 </template>
               </ParamTable>
             </div>
@@ -789,19 +836,19 @@ onMounted(load)
             <div v-if="openBlocks.acl" class="block-body">
               <div class="acl-grid">
                 <div>
-                  <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
+                  <div class="acl-k good">白名单 · QQ</div>
                   <Input :model-value="acl.whiteUsers" multiline :rows="2" placeholder="一行一个" aria-label="白名单 QQ 号" @update:model-value="acl.whiteUsers = $event" />
                 </div>
                 <div>
-                  <div class="acl-k"><Tag tone="good">白名单 · 群号</Tag></div>
-                  <Input :model-value="acl.whiteGroups" multiline :rows="2" placeholder="整个群" aria-label="白名单群号" @update:model-value="acl.whiteGroups = $event" />
+                  <div class="acl-k good">白名单 · 群</div>
+                  <Input :model-value="acl.whiteGroups" multiline :rows="2" placeholder="整群" aria-label="白名单群号" @update:model-value="acl.whiteGroups = $event" />
                 </div>
                 <div>
-                  <div class="acl-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
+                  <div class="acl-k bad">黑名单 · QQ</div>
                   <Input :model-value="acl.blackUsers" multiline :rows="2" placeholder="一行一个" aria-label="黑名单 QQ 号" @update:model-value="acl.blackUsers = $event" />
                 </div>
                 <div>
-                  <div class="acl-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
+                  <div class="acl-k bad">黑名单 · 群</div>
                   <Input :model-value="acl.blackGroups" multiline :rows="2" placeholder="整个群" aria-label="黑名单群号" @update:model-value="acl.blackGroups = $event" />
                 </div>
               </div>
@@ -811,8 +858,8 @@ onMounted(load)
           <div class="block">
             <button class="block-head" type="button" @click="toggleBlock('help')">
               <span class="caret">{{ openBlocks.help ? '−' : '+' }}</span>
-              单命令帮助
-              <span class="faint">{{ editing.help ? '手写' : '自动生成' }}</span>
+              帮助
+              <span class="faint">{{ editing.help ? '手写' : '自动' }}</span>
             </button>
             <div v-if="openBlocks.help" class="block-body">
               <Input
@@ -820,7 +867,7 @@ onMounted(load)
                 multiline
                 :rows="4"
                 mono
-                placeholder="留空则按参数表自动生成；群里发「/路径 /help」看它"
+                placeholder="留空自动"
                 aria-label="单命令帮助"
                 @update:model-value="patch({ help: $event })"
               />
@@ -842,136 +889,102 @@ onMounted(load)
       @remove="removeBoard"
     />
 
-    <!-- 全部命令：板块与指令在同一张表里，类型列区分 -->
-    <Panel v-if="!editing && boardEditing === undefined" title="全部命令" :count="rows.length">
-      <p class="panel-note">
-        板块和指令是同一件事的两种形态。群里发 <span class="path-demo">/命令</span> 触发；
-        板块多一层投递方式，记录在「记录」里看。
-        <span class="path-demo">list</span>、<span class="path-demo">help</span>
-        是常驻系统命令；<span class="path-demo">create</span>、<span class="path-demo">delete</span>
-        是板块动作，用 <span class="path-demo">/板块 /create</span>、<span class="path-demo">/板块 /delete</span> 触发。
-      </p>
-      <DataTable
-        :rows="rows.length"
-        empty="还没有命令"
-        empty-hint="点右上角「+ 新建命令」加一条"
-      >
-        <thead>
-          <tr>
-            <th>命令</th>
-            <th>类型</th>
-            <th>说明</th>
-            <th>规则</th>
-            <th>使用</th>
-            <th>状态</th>
-            <th class="ops">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.key">
-            <td class="trig">
-              <div>/{{ row.path.split('/').join(' /') }}</div>
-              <div v-if="row.usage && row.usage !== '/' + row.path.split('/').join(' /')" class="usage">
-                {{ row.usage }}
-              </div>
-            </td>
-            <td class="kind">
-              <Tag :tone="rowKindTone(row)">{{ rowKindLabel(row) }}</Tag>
-              <template v-if="row.source === 'board' && row.board">
-                <Tag :tone="row.board.delivery === 'scheduled' ? 'warn' : 'good'">
-                  {{ row.board.delivery === 'scheduled' ? '到点发' : '立即' }}
-                </Tag>
-              </template>
-              <template v-else-if="row.command">
-                <Tag v-if="row.command.kind === 'agent'" tone="neutral">
-                  {{ row.command.mode === 'none' ? '不用知识库' : '知识库' }}
-                </Tag>
-                <Tag v-if="row.command.kind === 'action'" tone="neutral">{{ row.command.action }}</Tag>
-              </template>
-            </td>
-            <td class="muted">{{ row.description }}</td>
-            <td>
-              <template v-if="row.source === 'system'">
-                <span class="faint">所有人</span>
-              </template>
-              <template v-else-if="row.source === 'board' && row.board">
-                <Tag v-for="t in boardRuleTags(row.board)" :key="t.label" :tone="t.tone">{{ t.label }}</Tag>
-              </template>
-              <template v-else-if="row.command">
-                <template v-if="deviations(row.command).length">
-                  <Tag v-for="d in deviations(row.command)" :key="d" :tone="deviationTone(row.command)">{{ d }}</Tag>
+    <section v-if="!editing && boardEditing === undefined" class="command-index">
+      <header class="index-head">
+        <div class="index-title">
+                    <h2>命令</h2>
+        </div>
+        <div class="index-meta">
+          <span><b>{{ rows.length }}</b> 条</span>
+          <span><b>{{ boardCount }}</b> 板块</span>
+          <span v-if="search || kindFilter !== 'all'"><b>{{ visibleRows.length }}</b> 匹配</span>
+        </div>
+        <div class="index-tools">
+          <Input v-model="search" placeholder="搜索命令" aria-label="搜索命令" />
+          <div class="filters" role="group" aria-label="按类型筛选">
+            <button
+              v-for="f in FILTERS"
+              :key="f.value"
+              type="button"
+              class="filter"
+              :class="{ active: kindFilter === f.value }"
+              @click="kindFilter = f.value"
+            >{{ f.label }}</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="ledger-wrap" role="group" aria-label="命令表" tabindex="0">
+        <table v-if="visibleRows.length" class="ledger">
+          <thead>
+            <tr>
+              <th>调用</th>
+              <th>形态</th>
+              <th>说明</th>
+              <th>限制</th>
+              <th class="num">使用</th>
+              <th>状态</th>
+              <th class="ops">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in visibleRows" :key="row.key" :class="{ 'is-off': !row.enabled }">
+              <td class="cell-call">
+                <span class="cmd-path"><span class="slash">/</span>{{ row.path.split('/').join(' /') }}</span>
+              </td>
+              <td class="cell-kind">
+                <span class="kind-dot" :class="rowKindClass(row)"></span>
+                <span class="kind-label">{{ rowKindLabel(row) }}</span>
+                <span v-if="rowTypeSub(row)" class="kind-sub">{{ rowTypeSub(row) }}</span>
+              </td>
+              <td class="cell-desc">{{ row.description }}</td>
+              <td class="cell-rule">{{ rowRuleText(row) }}</td>
+              <td class="cell-use num" :title="'近 ' + statsDays + ' 天'">{{ rowUsage(row) }}</td>
+              <td class="cell-state">
+                <span class="state-dot" :class="{ on: row.enabled }"></span>
+                <span>{{ row.enabled ? '启用' : '停用' }}</span>
+                <span v-if="row.builtin" class="builtin">内置</span>
+              </td>
+              <td class="cell-ops">
+                <span v-if="row.source === 'system'" class="row-muted">只读</span>
+                <template v-else>
+                  <button type="button" class="row-action" @click="editRow(row)">编辑</button>
+                  <button
+                    v-if="row.source === 'board' && row.board"
+                    type="button"
+                    class="row-action"
+                    @click="openRecords(row.board)"
+                  >记录</button>
+                  <button type="button" class="row-action" @click="toggleRow(row)">{{ row.enabled ? '停用' : '启用' }}</button>
+                  <button
+                    v-if="!row.builtin"
+                    type="button"
+                    class="row-action danger"
+                    @click="removeRow(row)"
+                  >删除</button>
                 </template>
-                <span v-else class="faint">默认</span>
-              </template>
-            </td>
-            <td class="num" :title="'近 ' + statsDays + ' 天'">{{ rowUsage(row) }}</td>
-            <td>
-              <Tag :tone="row.enabled ? 'good' : 'neutral'">{{ row.enabled ? '启用' : '停用' }}</Tag>
-              <Tag v-if="row.builtin" tone="flame">内置</Tag>
-            </td>
-            <td class="ops">
-              <span v-if="row.source === 'system'" class="faint">—</span>
-              <div v-else class="ops-btns">
-                <Button size="sm" @click="editRow(row)">编辑</Button>
-                <Button
-                  v-if="row.source === 'board' && row.board"
-                  size="sm"
-                  @click="openRecords(row.board)"
-                >记录</Button>
-                <Button size="sm" @click="toggleRow(row)">{{ row.enabled ? '停用' : '启用' }}</Button>
-                <Button v-if="!row.builtin" size="sm" variant="danger" @click="removeRow(row)">删除</Button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </DataTable>
-    </Panel>
-
-    <!-- 全局名单：对每条命令都生效，压过单命令的判定 -->
-    <Panel v-if="!editing && boardEditing === undefined" title="全局名单">
-      <div class="acl-grid">
-        <div>
-          <div class="acl-k"><Tag tone="good">白名单 · QQ 号</Tag></div>
-          <Input
-            :model-value="globalForm.whiteUsers" multiline :rows="3" placeholder="一行一个"
-            aria-label="全局白名单 QQ 号" @update:model-value="globalForm.whiteUsers = $event"
-          />
-        </div>
-        <div>
-          <div class="acl-k"><Tag tone="good">白名单 · 群号</Tag></div>
-          <Input
-            :model-value="globalForm.whiteGroups" multiline :rows="3" placeholder="整个群"
-            aria-label="全局白名单群号" @update:model-value="globalForm.whiteGroups = $event"
-          />
-        </div>
-        <div>
-          <div class="acl-k"><Tag tone="bad">黑名单 · QQ 号</Tag></div>
-          <Input
-            :model-value="globalForm.blackUsers" multiline :rows="3" placeholder="一行一个"
-            aria-label="全局黑名单 QQ 号" @update:model-value="globalForm.blackUsers = $event"
-          />
-        </div>
-        <div>
-          <div class="acl-k"><Tag tone="bad">黑名单 · 群号</Tag></div>
-          <Input
-            :model-value="globalForm.blackGroups" multiline :rows="3" placeholder="整个群"
-            aria-label="全局黑名单群号" @update:model-value="globalForm.blackGroups = $event"
-          />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="ledger-empty">
+          <p>{{ rows.length ? '没有匹配的命令' : '还没有命令' }}</p>
+          <button
+            v-if="rows.length"
+            type="button"
+            class="text-action"
+            @click="search = ''; kindFilter = 'all'"
+          >清除筛选</button>
+          <button v-else type="button" class="text-action" @click="openNewMenu">新建命令</button>
         </div>
       </div>
-      <div class="global-actions">
-        <span class="faint note">名单里的 QQ 号优先于群号；单命令的名单优先于这一份。</span>
-        <span class="faint note">{{ globalSaved }}</span>
-        <Button size="sm" variant="primary" :disabled="globalSaving" @click="saveGlobalAcl">保存全局名单</Button>
-      </div>
-    </Panel>
+    </section>
 
-    <!-- C6：统计 -->
-    <Panel
-      v-if="!editing && boardEditing === undefined"
-      title="指令使用情况"
-    >
-      <template #actions>
+    <section v-if="!editing && boardEditing === undefined" class="usage-section">
+      <header class="section-head">
+        <div>
+                    <h3>使用</h3>
+        </div>
         <div class="range-pick">
           <Select
             :model-value="String(statsDays)"
@@ -980,32 +993,73 @@ onMounted(load)
             @update:model-value="onRangeChange"
           />
         </div>
-      </template>
-      <div class="two">
-        <div class="col">
-          <div class="faint sub">最常用</div>
-          <DataTable :rows="stats?.topUsed?.length ?? 0" empty="还没有使用记录" empty-hint="群友用过之后这里才有数据">
-            <tbody>
-              <tr v-for="t in stats?.topUsed ?? []" :key="t.trigger">
-                <td class="trig">/{{ t.trigger }}</td>
-                <td class="num">{{ t.count }}</td>
-              </tr>
-            </tbody>
-          </DataTable>
+      </header>
+      <div class="usage-grid">
+        <div class="usage-col">
+          <div class="usage-label">最常用</div>
+          <div v-if="stats?.topUsed?.length" class="bars">
+            <div v-for="t in stats.topUsed" :key="t.trigger" class="bar-row">
+              <span class="bar-path">/{{ t.trigger }}</span>
+              <span class="bar-track"><i :style="{ width: (t.count / maxUsed * 100) + '%' }"></i></span>
+              <span class="bar-count num">{{ t.count }}</span>
+            </div>
+          </div>
+          <p v-else class="empty-line">暂无记录</p>
         </div>
-        <div class="col">
-          <div class="faint sub">群友发过但没配的命令（该加什么）</div>
-          <DataTable :rows="stats?.unmatched?.length ?? 0" empty="没有未配置的命令" empty-hint="说明群友发的都能对上指令">
-            <tbody>
-              <tr v-for="u in stats?.unmatched ?? []" :key="u.trigger">
-                <td class="trig trig--miss">/{{ u.trigger }}</td>
-                <td class="num">{{ u.count }}</td>
-              </tr>
-            </tbody>
-          </DataTable>
+        <div class="usage-col">
+          <div class="usage-label">未配置</div>
+          <div v-if="stats?.unmatched?.length" class="bars">
+            <div v-for="u in stats.unmatched" :key="u.trigger" class="bar-row">
+              <span class="bar-path miss">/{{ u.trigger }}</span>
+              <span class="bar-track miss"><i :style="{ width: (u.count / maxMiss * 100) + '%' }"></i></span>
+              <span class="bar-count num">{{ u.count }}</span>
+            </div>
+          </div>
+          <p v-else class="empty-line">暂无记录</p>
         </div>
       </div>
-    </Panel>
+    </section>
+
+    <details v-if="!editing && boardEditing === undefined" class="acl-fold">
+      <summary>
+        <span class="fold-title">全局名单</span>
+        <span class="fold-meta">{{ globalAclCount ? globalAclCount + ' 组' : '未设置' }}</span>
+      </summary>
+      <div class="acl-grid">
+        <div>
+          <div class="acl-k good">白名单 · QQ</div>
+          <Input
+            :model-value="globalForm.whiteUsers" multiline :rows="2" placeholder="一行一个"
+            aria-label="全局白名单 QQ 号" @update:model-value="globalForm.whiteUsers = $event"
+          />
+        </div>
+        <div>
+          <div class="acl-k good">白名单 · 群</div>
+          <Input
+            :model-value="globalForm.whiteGroups" multiline :rows="2" placeholder="整群"
+            aria-label="全局白名单群号" @update:model-value="globalForm.whiteGroups = $event"
+          />
+        </div>
+        <div>
+          <div class="acl-k bad">黑名单 · QQ</div>
+          <Input
+            :model-value="globalForm.blackUsers" multiline :rows="2" placeholder="一行一个"
+            aria-label="全局黑名单 QQ 号" @update:model-value="globalForm.blackUsers = $event"
+          />
+        </div>
+        <div>
+          <div class="acl-k bad">黑名单 · 群</div>
+          <Input
+            :model-value="globalForm.blackGroups" multiline :rows="2" placeholder="整群"
+            aria-label="全局黑名单群号" @update:model-value="globalForm.blackGroups = $event"
+          />
+        </div>
+      </div>
+      <div class="acl-actions">
+        <span v-if="globalSaved" class="saved">{{ globalSaved }}</span>
+        <Button size="sm" variant="primary" :disabled="globalSaving" @click="saveGlobalAcl">保存</Button>
+      </div>
+    </details>
 
     <BoardRecordsModal
       :open="recordsBoard !== null"
@@ -1026,7 +1080,266 @@ onMounted(load)
 .panel-wrap {
   display: flex;
   flex-direction: column;
+  gap: var(--sp-6);
+}
+
+/* ==================== 命令索引 ====================
+   一页只留一个主角：命令账本。区块之间用横线和留白分，不再套卡片。 */
+.command-index { display: flex; flex-direction: column; gap: var(--sp-3); }
+.index-head {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: end;
+  gap: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--hairline-lit);
+}
+.eyebrow {
+  font-size: 10.5px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.index-title h2 {
+  margin: 2px 0 0;
+  font-family: var(--font-title);
+  font-size: 28px;
+  font-weight: var(--fw-semi);
+  letter-spacing: .02em;
+  line-height: var(--lh-tight);
+}
+.index-meta {
+  display: flex;
   gap: var(--sp-4);
+  padding-bottom: 4px;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.index-meta b {
+  margin-right: 2px;
+  font-family: var(--font-mono);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+}
+.index-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.index-tools :deep(.inp) { width: 210px; }
+.filters { display: flex; align-items: center; gap: 1px; }
+.filter {
+  padding: 5px 7px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.filter:hover { color: var(--ink); }
+.filter.active { color: var(--ember); border-bottom-color: var(--ember); }
+.filter:focus-visible { outline: 2px solid var(--flame); outline-offset: 1px; }
+
+.ledger-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
+.ledger { width: 100%; border-collapse: collapse; }
+.ledger th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--stone-200);
+  color: var(--ink-4);
+  font-size: 10.5px;
+  font-weight: var(--fw-medium);
+  letter-spacing: .14em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ledger th.ops { text-align: right; }
+.ledger td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: middle;
+}
+.ledger tbody tr {
+  transition: background var(--dur-fast) var(--ease);
+}
+.ledger tbody tr:hover { background: var(--surface-hover); }
+.ledger tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--ember); }
+.ledger tbody tr.is-off { opacity: .55; }
+.cell-call { min-width: 176px; }
+.cmd-path {
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.slash { color: var(--ember); }
+.cell-kind { white-space: nowrap; }
+.kind-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: var(--mist);
+}
+.k-board { background: var(--ember); }
+.k-agent { background: var(--vital); }
+.k-action { background: var(--warn); }
+.k-system { background: var(--ink-4); }
+.k-template { background: var(--mist); }
+.kind-label { color: var(--ink-2); font-size: var(--fs-sm); }
+.kind-sub { margin-left: 6px; color: var(--ink-4); font-size: var(--fs-xs); }
+.cell-desc { width: 24%; color: var(--ink-3); font-size: var(--fs-sm); }
+.cell-rule { color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; }
+.cell-use { width: 58px; color: var(--ink-2); }
+.cell-state { color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; }
+.state-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  vertical-align: 1px;
+}
+.state-dot.on { background: var(--vital); box-shadow: 0 0 0 3px var(--vital-veil); }
+.builtin { margin-left: 8px; color: var(--ink-4); font-size: 10.5px; letter-spacing: .08em; }
+.cell-ops { text-align: right; white-space: nowrap; }
+.row-action {
+  padding: 3px 4px;
+  background: none;
+  border: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.row-action:hover { color: var(--ember); }
+.row-action.danger:hover { color: var(--blight-lift); }
+.row-action:focus-visible { outline: 2px solid var(--flame); outline-offset: 1px; }
+.row-muted { color: var(--ink-4); font-size: var(--fs-xs); }
+.ledger-empty { padding: 48px 0; text-align: center; color: var(--ink-3); }
+.ledger-empty p { margin: 0 0 8px; }
+.text-action {
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--ember);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.text-action:hover { color: var(--ember-hot); }
+.text-action:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
+
+.usage-section { border-top: 1px solid var(--hairline); padding-top: var(--sp-5); }
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.section-head h3 {
+  margin: 2px 0 0;
+  font-family: var(--font-title);
+  font-size: 20px;
+  font-weight: var(--fw-semi);
+  letter-spacing: .02em;
+}
+.usage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); }
+.usage-label {
+  margin-bottom: 10px;
+  color: var(--ink-4);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.bars { display: flex; flex-direction: column; gap: 8px; }
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) 2fr 34px;
+  gap: 10px;
+  align-items: center;
+}
+.bar-path {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-path.miss { color: var(--blight-lift); }
+.bar-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--stone-void);
+}
+.bar-track i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--ember-deep), var(--ember));
+}
+.bar-track.miss i { background: linear-gradient(90deg, var(--blight-deep), var(--blight)); }
+.bar-count { color: var(--ink-3); font-size: var(--fs-xs); text-align: right; }
+.empty-line { margin: 0; color: var(--ink-4); font-size: var(--fs-xs); }
+
+.acl-fold { border-top: 1px solid var(--hairline); padding-top: var(--sp-3); }
+.acl-fold summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  color: var(--ink-2);
+  cursor: pointer;
+  list-style: none;
+}
+.acl-fold summary::-webkit-details-marker { display: none; }
+.acl-fold summary::before {
+  width: 12px;
+  color: var(--ember);
+  content: '+';
+  font-family: var(--font-mono);
+}
+.acl-fold[open] summary::before { content: '−'; }
+.fold-title { font-size: var(--fs-md); }
+.fold-meta { color: var(--ink-4); font-size: var(--fs-xs); }
+.acl-fold .acl-grid { margin-top: var(--sp-3); }
+.acl-k { margin-bottom: 5px; font-size: var(--fs-xs); letter-spacing: .04em; }
+.acl-k.good { color: var(--vital); }
+.acl-k.bad { color: var(--blight-lift); }
+.acl-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.saved { color: var(--vital); font-size: var(--fs-xs); }
+
+@media (max-width: 1100px) {
+  .index-head { grid-template-columns: 1fr auto; }
+  .index-tools { grid-column: 1 / -1; justify-content: flex-start; }
+}
+@media (max-width: 900px) {
+  .ledger th:nth-child(3), .ledger td:nth-child(3),
+  .ledger th:nth-child(4), .ledger td:nth-child(4) { display: none; }
+  .usage-grid { grid-template-columns: 1fr; gap: var(--sp-5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ledger tbody tr { transition: none; }
 }
 
 /* 工具栏已上移到页面栏（BotConfigView 的 AdminPage#actions），
@@ -1035,7 +1348,18 @@ onMounted(load)
 .trigger-line { display: flex; align-items: center; gap: var(--sp-2); }
 .slash { flex: none; color: var(--copper); font-family: var(--font-mono); }
 
-.vars { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); }
+.vars { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
+.vars-label { margin-right: 2px; color: var(--ink-4); font-size: 10.5px; letter-spacing: .14em; }
+.vars--adv { padding-top: 2px; }
+.vars-toggle {
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+.vars-toggle:hover { color: var(--ember); }
 /* 变量胶囊是可点元素，共享 Button 覆盖不到这块：
    悬浮必须【背景 + 边缘】同时变 —— 只改文字颜色在深底上看不出能不能点。
    底色沿用 Button 的规矩：基础压到 stone，悬浮抬到 raised。 */
@@ -1061,19 +1385,33 @@ onMounted(load)
 .vchip:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
 .vchip--adv { border-color: var(--copper-dim); color: var(--amber); }
 
-.preview {
-  margin: 0;
-  background: var(--surface-inset);
-  border: 1px solid var(--edge-soft);
-  border-radius: var(--r-sm);
-  padding: var(--sp-3);
+.message-preview { margin-top: var(--sp-2); }
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: 6px;
+  color: var(--ink-4);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.preview-command { color: var(--mist); font-family: var(--font-mono); letter-spacing: 0; text-transform: none; }
+.preview-bubble {
+  min-height: 52px;
+  padding: 10px 12px;
+  background: var(--stone-200);
+  border-left: 2px solid var(--ember);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  color: var(--ink-2);
   font-family: var(--font-mono);
-  font-size: var(--fs-meta);
+  font-size: var(--fs-sm);
   line-height: 1.7;
-  color: var(--moss);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.preview-tools { margin-top: var(--sp-2); }
 
 .form-actions {
   display: flex;
@@ -1085,20 +1423,46 @@ onMounted(load)
 }
 .form-buttons { display: flex; gap: var(--sp-2); margin-left: auto; }
 .note { font-size: var(--fs-meta); margin: 0; }
-/* 类型说明紧跟在下拉后面：它决定"这条指令会不会花钱"，不适合塞进 placeholder */
-.kind-note { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); max-width: 620px; line-height: 1.7; }
-
 /* ---------- 编辑态 ----------
    两栏：左边是"这条命令说什么"，右边是"它按什么规则运行"。
    行内标签在左、控件在右，比一列 Field 更省纵向空间，也更容易扫读。 */
-.editor { background: var(--stone-300); border-radius: 10px; padding: 20px 22px; }
+.editor {
+  background: var(--stone-300);
+  border-top: 2px solid var(--ember);
+  border-radius: var(--r-md);
+  padding: 22px 24px;
+}
 .editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-5); }
-.editor-eyebrow { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
-.editor-path { font-family: var(--font-mono); font-size: 17px; color: var(--flame); margin-top: 2px; }
-.editor-actions { display: flex; gap: var(--sp-2); }
-.editor-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--sp-6); align-items: start; }
+.editor-ident { min-width: 0; }
+.editor-kicker { display: flex; align-items: center; gap: var(--sp-2); }
+.type-badge {
+  padding: 2px 7px;
+  border: 1px solid var(--hairline-lit);
+  border-radius: var(--r-xs);
+  color: var(--ember);
+  font-size: 10.5px;
+  letter-spacing: .12em;
+}
+.editor-path.is-empty { color: var(--ink-4); }
+.editor-path {
+  margin-top: 4px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.editor-actions { display: flex; gap: var(--sp-2); flex: none; }
+.editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
 .editor-col { display: flex; flex-direction: column; gap: var(--sp-3); }
-.col-title { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--hairline); }
+.col-title {
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-4);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
 
 .row { display: flex; align-items: center; gap: var(--sp-3); }
 .row-label { flex: 0 0 76px; font-size: var(--fs-meta); color: var(--ink-3); }
@@ -1111,58 +1475,24 @@ onMounted(load)
 .check input { accent-color: var(--flame); }
 
 .block { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
-.block-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 6px 0; color: var(--ink-2); font-size: var(--fs-meta); cursor: pointer; text-align: left; }
+.block-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 0; background: none; border: 0;
+  color: var(--ink-3); font-size: var(--fs-meta); text-align: left; cursor: pointer;
+}
 .block-head:hover { color: var(--ink); }
 .caret { width: 12px; color: var(--flame); font-family: var(--font-mono); }
 .block-body { padding: var(--sp-2) 0 var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-2); }
-.preview-tools { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
-.preview-tools .note { white-space: nowrap; }
-.preview-line { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); color: var(--moss); font-family: var(--font-mono); white-space: pre-wrap; }
-.path-hint { margin: var(--sp-1) 0 0 88px; font-size: var(--fs-meta); color: var(--ink-4); }
-.path-demo { font-family: var(--font-mono); color: var(--flame); }
-.vitem { display: inline-flex; align-items: center; gap: 4px; }
-.vlabel { font-size: 11px; color: var(--ink-4); }
+
+.acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.range-pick { width: 128px; }
 
 @media (max-width: 1000px) {
   .editor-grid { grid-template-columns: 1fr; }
   .row { flex-direction: column; align-items: stretch; gap: 4px; }
   .row-label { flex: none; }
 }
-
-/* 私聊与来源显示用勾选：它们是"开/关"而不是"选一个" */
-.switch { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: var(--ink-2); }
-.switch input[type='checkbox'] { accent-color: var(--flame); }
-.field-extra { margin: calc(var(--sp-3) * -1) 0 var(--sp-4); max-width: 520px; }
-
-.acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
-.acl-k { margin-bottom: var(--sp-1); }
-.global-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); margin-top: var(--sp-3); }
-@media (max-width: 900px) { .acl-grid { grid-template-columns: 1fr; } }
-
-/* 触发词列：等宽 + 灵火色，一眼能和说明文字分开 */
-.trig { font-family: var(--font-mono); color: var(--flame); }
-/* 路径下面的完整用法：参数示例与 QQ 里 /help 的写法一致 */
-.usage { margin-top: 2px; font-size: 11.5px; color: var(--ink-4); font-family: var(--font-mono); line-height: 1.5; overflow-wrap: anywhere; }
-.panel-note { margin: 0 0 var(--sp-3); font-size: var(--fs-meta); color: var(--ink-4); }
-.kind { white-space: nowrap; }
-.kind .tag { margin-right: 4px; }
-.range-pick { width: 128px; }
-.trig--miss { color: var(--rust); }
-.reply { font-size: var(--fs-meta); }
-
-/* 操作列右对齐。DataTable 的表头样式带组件自己的 scope，特异性比裸 .ops 高，
-   所以这里用面板祖先 + :deep 提升特异性，而不是加 !important。 */
-.panel-wrap :deep(th.ops),
-.panel-wrap :deep(td.ops) { text-align: right; white-space: nowrap; }
-.ops-btns { display: flex; gap: var(--sp-1); justify-content: flex-end; }
-
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
-.sub { font-size: var(--fs-meta); margin-bottom: var(--sp-2); }
-/* 这两张表是「排行清单」不是数据表：行距收紧一点，
-   否则两列排行会把面板撑得很长（默认单元格内边距是给多列宽表用的）。 */
-.col :deep(td) { padding: var(--sp-2) var(--sp-3); }
-
 @media (max-width: 900px) {
-  .two { grid-template-columns: 1fr; }
+  .acl-grid { grid-template-columns: 1fr; }
 }
 </style>

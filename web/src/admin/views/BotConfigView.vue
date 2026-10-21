@@ -38,7 +38,7 @@ const router = useRouter()
 
 const TABS = [
   { key: 'settings', label: '设置' },
-  { key: 'commands', label: '指令' },
+  { key: 'commands', label: '命令' },
   // 只读：系统变量由代码决定，做成可编辑的配置只会多出「配了但代码里没有」
   { key: 'variables', label: '变量' },
 ]
@@ -88,7 +88,7 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
       </template>
       <template v-else-if="tab === 'commands'">
         <Button size="sm" :disabled="commands?.isLoading()" @click="commands?.reload()">刷新</Button>
-        <Button size="sm" variant="primary" @click="commands?.openNewMenu()">+ 新建命令</Button>
+        <Button size="sm" variant="primary" @click="commands?.openNewMenu()">新建命令</Button>
       </template>
       <template v-else>
         <Button size="sm" :disabled="variables?.isLoading()" @click="variables?.reload()">刷新</Button>

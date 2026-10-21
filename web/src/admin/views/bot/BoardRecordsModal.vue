@@ -146,7 +146,7 @@ async function restore(record: AdminBoardRecord) {
               <div v-if="r.deletedAt" class="mini faint">撤销于 {{ shortTime(r.deletedAt) }}</div>
             </td>
             <td>
-              <div class="body-text" :title="r.text">{{ r.text || '（无正文）' }}</div>
+              <div class="body-text" :title="r.text">{{ r.text || '—' }}</div>
               <div v-if="r.params && Object.keys(r.params).length" class="mini faint params">
                 {{ paramsText(r.params) }}
               </div>

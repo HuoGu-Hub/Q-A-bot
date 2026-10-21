@@ -12,7 +12,7 @@ import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
 import Notice from '@shared/ui/Notice.vue'
 import ParamTable from './ParamTable.vue'
-import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS, SCOPE_LABEL } from './commandOptions'
+import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
 
 const props = defineProps<{
   /** null = 新建 */
@@ -51,7 +51,6 @@ const form = reactive<FormState>({
 const groupsText = ref('')
 const openParams = ref(true)
 
-const isEditing = computed(() => props.board !== null)
 /** 内置命令的路径由代码约定，不能改名；自建命令可以改名并迁移记录 */
 const pathLocked = computed(() => props.board?.builtin === true)
 
@@ -106,8 +105,8 @@ interface PreviewRecord {
 }
 
 const previewRecords: PreviewRecord[] = [
-  { id: 1, when: '立即展示', text: '今晚8点缺打野', nickname: '阿明', group: '123456', params: { 时间: '今晚8点', 人数: '5' } },
-  { id: 2, when: '立即展示', text: '明天8点满员', nickname: '小红', group: '123456', params: { 时间: '明天8点', 人数: '10' } },
+  { id: 1, when: '立即展示', text: '缺打野', nickname: '阿明', group: '123456', params: { 时间: '今晚8点', 人数: '5' } },
+  { id: 2, when: '立即展示', text: '满员了', nickname: '小红', group: '123456', params: { 时间: '明天8点', 人数: '10' } },
 ]
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
@@ -140,13 +139,6 @@ const previewText = computed(() => {
     ? renderTemplate(form.listItem, previewVars(record, String(previewRecords.length)))
     : `#${record.id}  ${record.when}  ${record.text}`)
   return [header, ...items].join('\n')
-})
-
-const previewEmpty = computed(() => {
-  const path = form.path || '命令'
-  return form.listEmpty.trim()
-    ? renderTemplate(form.listEmpty, { count: '0', path })
-    : `「${path}」还没有内容。要添加就用 /${path} /create`
 })
 
 function onScopeChange(value: string) {
@@ -193,9 +185,12 @@ function submit() {
 <template>
   <section class="editor">
     <div class="editor-head">
-      <div>
-        <div class="editor-eyebrow">编辑命令 · 板块</div>
-        <div class="editor-path">/{{ form.path || '新板块' }}</div>
+      <div class="editor-ident">
+        <div class="editor-kicker">
+          <span class="type-badge">板块</span>
+          <span class="editor-mode">{{ board?.builtin ? '内置' : board ? '编辑' : '新建' }}</span>
+        </div>
+        <div class="editor-path" :class="{ 'is-empty': !form.path.trim() }">/{{ form.path || '命令名' }}</div>
       </div>
       <div class="editor-actions">
         <Button size="sm" @click="emit('cancel')">取消</Button>
@@ -216,39 +211,32 @@ function submit() {
           <Input
             v-model="form.path"
             :disabled="pathLocked"
-            placeholder="公告（群里的调用名，不带斜杠）"
+            placeholder="公告"
             aria-label="命令名"
           />
         </label>
-        <p class="path-hint">
-          群友发 <span class="path-demo">/{{ form.path || '…' }}</span> 查看，
-          发 <span class="path-demo">/{{ form.path || '…' }} /create</span> 添加。
-          命令名就是调用名。
-          <template v-if="pathLocked">内置命令不能改名。</template>
-          <template v-else-if="isEditing">改名会把已有记录一起迁到新名字下。</template>
-        </p>
 
         <div class="block">
           <button class="block-head" type="button" @click="openParams = !openParams">
             <span class="caret">{{ openParams ? '−' : '+' }}</span>
-            参数表
-            <span class="faint">{{ form.params.length ? form.params.length + ' 个' : '没有' }}</span>
+            参数
+            <span class="faint">{{ form.params.length }}</span>
           </button>
           <div v-if="openParams" class="block-body">
             <ParamTable
               :params="form.params"
-              empty-hint="没有参数时，整段文本就是这一条的内容。"
+              empty-hint="无参数"
               @update:params="form.params = $event"
             />
             <div v-if="scheduled" class="schedule-hint">
-              <span>到点发送需要 <span class="path-demo">#重复#</span> 与 <span class="path-demo">#时间#</span> 两个参数。</span>
-              <Button v-if="!hasRepeat || !hasTime" size="sm" @click="ensureScheduleParams">补上定时参数</Button>
+              <span>需要 <span class="path-demo">#重复#</span>、<span class="path-demo">#时间#</span></span>
+              <Button v-if="!hasRepeat || !hasTime" size="sm" @click="ensureScheduleParams">补全</Button>
             </div>
           </div>
         </div>
 
         <div class="format-block">
-          <div class="col-title">列表格式</div>
+          <div class="col-title">输出</div>
           <label class="row">
             <span class="row-label">列表头</span>
             <Input
@@ -258,12 +246,12 @@ function submit() {
             />
           </label>
           <label class="row row--block">
-            <span class="row-label">每条</span>
+            <span class="row-label">每行</span>
             <Input
               v-model="form.listItem"
               multiline
               :rows="2"
-              placeholder="#{id} {params.时间} {text}（{nickname}）"
+              placeholder="#{id} {params.时间} {text} / {nickname}"
               aria-label="每条格式"
             />
           </label>
@@ -284,19 +272,18 @@ function submit() {
                 aria-label="显示条数"
                 @update:model-value="form.listLimit = Math.max(0, Math.min(200, Number($event) || 0))"
               />
-              <span class="faint">0 = 全部，最多 200</span>
+              <span class="faint">0 = 全部</span>
             </div>
           </label>
-          <p class="format-hint">
-            列表头可用 <code>{count}</code> <code>{path}</code>；每条可用
-            <code>{id}</code> <code>{when}</code> <code>{text}</code>
-            <code>{nickname}</code> <code>{group}</code>
-            <code>{params.参数名}</code>。不认识的变量会原样保留。
-          </p>
+          <div class="format-vars">
+            <span>变量</span>
+            <code>{count}</code><code>{path}</code><code>{id}</code>
+            <code>{when}</code><code>{text}</code><code>{nickname}</code>
+            <code>{group}</code><code>{params.参数名}</code>
+          </div>
           <div class="preview-box">
             <div class="col-title">预览</div>
             <pre class="format-preview">{{ previewText }}</pre>
-            <div class="faint preview-empty">空列表：{{ previewEmpty }}</div>
           </div>
         </div>
       </section>
@@ -305,22 +292,22 @@ function submit() {
         <div class="col-title">规则</div>
 
         <label class="row">
-          <span class="row-label">投递方式</span>
+          <span class="row-label">投递</span>
           <Select v-model="form.delivery" :options="DELIVERY_OPTIONS" aria-label="投递方式" />
         </label>
 
         <label class="row">
-          <span class="row-label">谁能用</span>
+          <span class="row-label">权限</span>
           <Select v-model="form.access" :options="ACCESS_OPTIONS" aria-label="谁能用" />
         </label>
 
         <label class="row">
-          <span class="row-label">数据范围</span>
+          <span class="row-label">范围</span>
           <Select :model-value="form.scope" :options="DATA_SCOPES" aria-label="数据范围" @update:model-value="onScopeChange" />
         </label>
 
         <div v-if="form.scope === 'SOME'" class="row row--block">
-          <span class="row-label">共享群</span>
+          <span class="row-label">群号</span>
           <Input
             v-model="groupsText"
             multiline
@@ -333,16 +320,16 @@ function submit() {
         <div class="checks">
           <label class="check">
             <input v-model="form.allowPrivate" type="checkbox" />
-            <span>允许私聊</span>
+            <span>私聊</span>
           </label>
           <template v-if="form.scope !== 'GROUP'">
             <label class="check">
               <input v-model="form.showGroup" type="checkbox" />
-              <span>标出来源群</span>
+              <span>显示群</span>
             </label>
             <label class="check">
               <input v-model="form.showUser" type="checkbox" />
-              <span>标出来源 QQ</span>
+              <span>显示 QQ</span>
             </label>
           </template>
         </div>
@@ -352,14 +339,10 @@ function submit() {
             <input v-model="form.enabled" type="checkbox" />
             <span>启用</span>
           </label>
-          <span v-if="form.scope !== 'GROUP'" class="faint note">
-            数据范围：{{ SCOPE_LABEL[form.scope] ?? form.scope }}
-          </span>
         </div>
 
         <div v-if="board && !board.builtin" class="delete-line">
           <Button size="sm" variant="danger" @click="emit('remove', board)">删除命令</Button>
-          <span class="faint note">板块记录不会被删除。</span>
         </div>
       </section>
     </div>
@@ -367,12 +350,35 @@ function submit() {
 </template>
 
 <style scoped>
-.editor { background: var(--stone-300); border-radius: 10px; padding: 20px 22px; }
+.editor {
+  background: var(--stone-300);
+  border-top: 2px solid var(--ember);
+  border-radius: var(--r-md);
+  padding: 22px 24px;
+}
 .editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-5); }
-.editor-eyebrow { font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); }
-.editor-path { font-family: var(--font-mono); font-size: 17px; color: var(--flame); margin-top: 2px; }
-.editor-actions { display: flex; gap: var(--sp-2); }
-.editor-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--sp-6); align-items: start; }
+.editor-ident { min-width: 0; }
+.editor-kicker { display: flex; align-items: center; gap: var(--sp-2); }
+.type-badge {
+  padding: 2px 7px;
+  border: 1px solid var(--hairline-lit);
+  border-radius: var(--r-xs);
+  color: var(--ember);
+  font-size: 10.5px;
+  letter-spacing: .12em;
+}
+.editor-mode { color: var(--ink-4); font-size: 10.5px; letter-spacing: .16em; }
+.editor-path.is-empty { color: var(--ink-4); }
+.editor-path {
+  margin-top: 4px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.editor-actions { display: flex; gap: var(--sp-2); flex: none; }
+.editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
 .editor-col { display: flex; flex-direction: column; gap: var(--sp-3); }
 .col-title {
   font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4);
@@ -405,11 +411,22 @@ function submit() {
 }
 .limit-line { display: flex; align-items: center; gap: var(--sp-3); }
 .limit-line :deep(.inp) { max-width: 120px; }
-.format-hint { margin: 0; font-size: var(--fs-meta); color: var(--ink-4); line-height: 1.7; }
-.format-hint code {
-  font-family: var(--font-mono); color: var(--flame);
-  background: var(--surface-inset); border: 1px solid var(--edge-soft);
-  border-radius: 4px; padding: 0 4px;
+.format-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-4);
+  font-size: 10.5px;
+  letter-spacing: .12em;
+}
+.format-vars code {
+  padding: 0 4px;
+  border: 1px solid var(--edge-soft);
+  border-radius: 4px;
+  color: var(--flame);
+  font-family: var(--font-mono);
+  letter-spacing: 0;
 }
 .preview-box { display: flex; flex-direction: column; gap: 6px; }
 .format-preview {
@@ -419,10 +436,7 @@ function submit() {
   font-family: var(--font-mono); font-size: var(--fs-meta);
   line-height: 1.7; white-space: pre-wrap;
 }
-.preview-empty { font-size: var(--fs-meta); }
 
-.path-hint { margin: var(--sp-1) 0 0 88px; font-size: var(--fs-meta); color: var(--ink-4); line-height: 1.7; }
-.path-demo { font-family: var(--font-mono); color: var(--flame); }
 .schedule-hint {
   display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
   margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3);
@@ -430,13 +444,11 @@ function submit() {
   font-size: var(--fs-meta); color: var(--ink-3);
 }
 .delete-line { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-2); }
-.note { font-size: var(--fs-meta); margin: 0; }
 .faint { color: var(--ink-4); }
 
 @media (max-width: 1000px) {
   .editor-grid { grid-template-columns: 1fr; }
   .row { flex-direction: column; align-items: stretch; gap: 4px; }
   .row-label { flex: none; }
-  .path-hint { margin-left: 0; }
 }
 </style>

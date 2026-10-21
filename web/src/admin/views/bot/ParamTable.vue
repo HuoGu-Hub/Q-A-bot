@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
   params: AdminParamSpec[]
   addLabel?: string
   emptyHint?: string
-}>(), { addLabel: '+ 加参数', emptyHint: '' })
+}>(), { addLabel: '+ 参数', emptyHint: '' })
 
 const emit = defineEmits<{ 'update:params': [AdminParamSpec[]] }>()
 
@@ -64,6 +64,10 @@ function onOptionsChange(i: number, v: string) {
   <div class="param-table">
     <p v-if="!params.length && emptyHint" class="faint note">{{ emptyHint }}</p>
     <div class="params">
+      <div v-if="params.length" class="param-head" aria-hidden="true">
+        <span>参数名</span><span>类型</span><span>必填</span>
+        <span>示例</span><span>说明</span><span>多值</span><span></span>
+      </div>
       <div v-for="(p, i) in params" :key="i" class="param-row">
         <Input
           :model-value="p.name"
@@ -97,7 +101,7 @@ function onOptionsChange(i: number, v: string) {
           <input type="checkbox" :checked="p.multiple" @change="onMultipleChange(i, $event)" />
           可多值
         </label>
-        <Button size="sm" variant="danger" @click="removeParam(i)">删</Button>
+        <Button size="sm" variant="danger" @click="removeParam(i)">移除</Button>
         <Input
           v-if="p.type === 'enum'"
           class="enum-opts"
@@ -117,6 +121,15 @@ function onOptionsChange(i: number, v: string) {
 
 <style scoped>
 .params { display: flex; flex-direction: column; gap: var(--sp-2); }
+.param-head {
+  display: grid;
+  grid-template-columns: 128px 104px 58px 112px minmax(180px, 1fr) 74px auto;
+  gap: var(--sp-2);
+  padding: 0 2px;
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: .1em;
+}
 .param-row {
   display: grid;
   /* 说明是唯一需要吃剩余宽度的列；示例、类型、必填都够用就好 */
@@ -133,6 +146,7 @@ function onOptionsChange(i: number, v: string) {
 .param-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
 .note { font-size: var(--fs-meta); margin: 0 0 var(--sp-2); }
 @media (max-width: 1100px) {
+  .param-head { display: none; }
   .param-row { grid-template-columns: 1fr 1fr; }
   .param-row .enum-opts { grid-column: 1 / -1; }
 }
