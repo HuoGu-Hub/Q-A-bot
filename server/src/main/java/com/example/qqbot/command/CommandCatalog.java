@@ -44,7 +44,7 @@ public class CommandCatalog {
      * @param access    归一化后的准入档位 code
      * @param scope     板块的数据范围 GROUP / SOME / ALL；指令暂不在这里展开
      * @param delivery  板块的投递方式 direct / scheduled；指令为 null
-     * @param actions   板块支持的四个动作；指令为空
+     * @param actions   板块支持的动作；指令为空
      */
     public record Entry(
             String source,
@@ -129,11 +129,12 @@ public class CommandCatalog {
         List<Entry> entries = entries(false);
         List<Entry> boardList = entries.stream().filter(e -> "board".equals(e.source())).toList();
         List<Entry> commandList = entries.stream().filter(e -> "command".equals(e.source())).toList();
-        if (boardList.isEmpty() && commandList.isEmpty()) {
-            return "还没有任何命令。";
-        }
 
+        // /list 与 /help 自己也是命令，而且永远可用；清单里必须有它们
         StringBuilder sb = new StringBuilder("全部命令：\n");
+        sb.append("系统：\n");
+        sb.append("/list  列出全部可用命令\n");
+        sb.append("/help  通用命令格式与注意事项\n");
         if (!boardList.isEmpty()) {
             sb.append("板块：\n");
             for (Entry board : boardList) {
@@ -162,7 +163,9 @@ public class CommandCatalog {
                 sb.append('\n');
             }
         }
-        return sb.append("用 /板块 /help 看板块用法。").toString();
+        sb.append("板块动作：/板块 /create 添加、/板块 /delete 编号 撤销、");
+        sb.append("/板块 /list 看参数、/板块 /help 看用法\n");
+        return sb.append("单条命令加 /list 看参数、加 /help 看用法。").toString();
     }
 
     /**
@@ -172,25 +175,25 @@ public class CommandCatalog {
      * 群友问"怎么用"和"有什么"才不会拿到同一段话。
      */
     public String helpText() {
-        List<Entry> commandList = entries(false).stream()
-                .filter(e -> "command".equals(e.source())).toList();
-        StringBuilder sb = new StringBuilder();
-        sb.append("用法：\n");
-        sb.append("  /板块            看这个板块有什么\n");
-        sb.append("  /板块 /create    添加一条\n");
-        sb.append("  /板块 /delete    撤销一条\n");
-        sb.append("  /板块 /help      看这个板块收什么参数\n");
-        if (!commandList.isEmpty()) {
-            sb.append("普通命令直接发：");
-            for (int i = 0; i < commandList.size(); i++) {
-                if (i > 0) {
-                    sb.append('、');
-                }
-                sb.append('/').append(commandList.get(i).path());
-            }
-            sb.append('\n');
-        }
-        return sb.append("发 /list 看全部命令。").toString();
+        return """
+                命令格式：/命令 [/#动作] [#参数-值#] [文本]
+                全局：
+                  /list            列出全部可用命令
+                  /help            这份说明
+                单条命令：
+                  /命令 /list      看这条命令支持哪些参数
+                  /命令 /help      看这条命令怎么用
+                板块：
+                  /板块            看已经收下的内容
+                  /板块 /create    添加一条
+                  /板块 /delete    按编号撤销一条
+                  /板块 /list      看这个板块的参数
+                  /板块 /help      看这个板块怎么用
+                注意：
+                  create / delete 只配板块使用，没有全局 /create、/delete
+                  参数写成 #名字-值#，顺序随意，写在文本前后都行
+                  多个值用顿号隔开；# 用半角，前后不要多打空格
+                """;
     }
 
     /** 板块的完整创建写法，参数用示例值 —— 与指令的 display() 保持同一种形状 */

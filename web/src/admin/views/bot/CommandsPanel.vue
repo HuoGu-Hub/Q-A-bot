@@ -67,7 +67,7 @@ const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
 
 /** 统一命令表的一行：source 决定用哪个编辑器、有没有「记录」 */
 interface CommandRow {
-  source: 'board' | 'command'
+  source: 'board' | 'command' | 'system'
   key: string
   path: string
   usage: string
@@ -89,8 +89,23 @@ const usageMap = computed<Record<string, number>>(() => {
   return map
 })
 
-/** 板块在前、指令在后；这就是群里 /list 的顺序 */
+/** 全局系统命令：由路由层直接处理，不在 bot_command 里，也不能编辑 */
+const SYSTEM_ROWS: CommandRow[] = [
+  {
+    source: 'system', key: 'system-list', path: 'list', usage: '', kind: 'system',
+    description: '列出全部可用命令', access: 'all', enabled: true, builtin: true,
+    board: null, command: null,
+  },
+  {
+    source: 'system', key: 'system-help', path: 'help', usage: '', kind: 'system',
+    description: '通用命令格式与注意事项', access: 'all', enabled: true, builtin: true,
+    board: null, command: null,
+  },
+]
+
+/** 系统命令在前，板块次之，普通指令最后；与群里 /list 的顺序一致 */
 const rows = computed<CommandRow[]>(() => [
+  ...SYSTEM_ROWS,
   ...boards.value.map((b): CommandRow => ({
     source: 'board', key: 'board-' + b.id, path: b.path, usage: b.usage, kind: 'board',
     description: b.delivery === 'scheduled' ? '收下后按时间发出' : '收下后立即出现在板里',
@@ -347,6 +362,7 @@ function openRecords(b: AdminBoard) {
 
 /** 统一表里这一行的类型标签 */
 function rowKindLabel(row: CommandRow) {
+  if (row.source === 'system') return '系统'
   if (row.source === 'board') return '板块'
   if (row.kind === 'agent') return '问答'
   if (row.kind === 'action') return '动作'
@@ -354,6 +370,7 @@ function rowKindLabel(row: CommandRow) {
 }
 
 function rowKindTone(row: CommandRow): 'flame' | 'warn' | 'neutral' {
+  if (row.source === 'system') return 'flame'
   if (row.source === 'board') return 'flame'
   if (row.kind === 'agent' || row.kind === 'action') return 'warn'
   return 'neutral'
@@ -366,6 +383,7 @@ function rowUsage(row: CommandRow) {
 }
 
 function editRow(row: CommandRow) {
+  if (row.source === 'system') return
   if (row.source === 'board' && row.board) {
     editBoard(row.board)
   } else if (row.command) {
@@ -374,6 +392,7 @@ function editRow(row: CommandRow) {
 }
 
 function toggleRow(row: CommandRow) {
+  if (row.source === 'system') return
   if (row.source === 'board' && row.board) {
     toggleBoard(row.board)
   } else if (row.command) {
@@ -382,6 +401,7 @@ function toggleRow(row: CommandRow) {
 }
 
 function removeRow(row: CommandRow) {
+  if (row.source === 'system') return
   if (row.source === 'board' && row.board) {
     removeBoard(row.board)
   } else if (row.command) {
@@ -827,6 +847,9 @@ onMounted(load)
       <p class="panel-note">
         板块和指令是同一件事的两种形态。群里发 <span class="path-demo">/命令</span> 触发；
         板块多一层投递方式，记录在「记录」里看。
+        <span class="path-demo">list</span>、<span class="path-demo">help</span>
+        是常驻系统命令；<span class="path-demo">create</span>、<span class="path-demo">delete</span>
+        是板块动作，用 <span class="path-demo">/板块 /create</span>、<span class="path-demo">/板块 /delete</span> 触发。
       </p>
       <DataTable
         :rows="rows.length"
@@ -868,7 +891,10 @@ onMounted(load)
             </td>
             <td class="muted">{{ row.description }}</td>
             <td>
-              <template v-if="row.source === 'board' && row.board">
+              <template v-if="row.source === 'system'">
+                <span class="faint">所有人</span>
+              </template>
+              <template v-else-if="row.source === 'board' && row.board">
                 <Tag v-for="t in boardRuleTags(row.board)" :key="t.label" :tone="t.tone">{{ t.label }}</Tag>
               </template>
               <template v-else-if="row.command">
@@ -884,7 +910,8 @@ onMounted(load)
               <Tag v-if="row.builtin" tone="flame">内置</Tag>
             </td>
             <td class="ops">
-              <div class="ops-btns">
+              <span v-if="row.source === 'system'" class="faint">—</span>
+              <div v-else class="ops-btns">
                 <Button size="sm" @click="editRow(row)">编辑</Button>
                 <Button
                   v-if="row.source === 'board' && row.board"

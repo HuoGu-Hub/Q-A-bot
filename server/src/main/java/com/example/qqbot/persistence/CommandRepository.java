@@ -257,14 +257,14 @@ public class CommandRepository {
     /**
      * 使用排行：命中次数。
      *
-     * <p>历史日志里还留着已退休的 {@code help} / {@code list} / 旧定时命令；
-     * 它们已经不在命令表里，继续显示会让"使用情况"和上面那张命令表对不上，
-     * 所以在查询层直接排除。
+     * <p>历史日志里还留着已退休的旧定时命令；它们已经不在命令表里，
+     * 继续显示会让"使用情况"和上面那张命令表对不上，所以在查询层直接排除。
+     * {@code list} / {@code help} 是仍然可用的系统命令，要保留。
      */
     public List<UsageStat> topUsed(int days, int limit) {
         return statQuery("SELECT trigger, COUNT(*) c FROM bot_command_log"
                 + " WHERE matched=1"
-                + " AND LOWER(trigger) NOT IN ('help','list','set/output','list/output','del/output')"
+                + " AND LOWER(trigger) NOT IN ('set/output','list/output','del/output')"
                 + daysClause(days) + " GROUP BY trigger ORDER BY c DESC LIMIT ?", limit);
     }
 

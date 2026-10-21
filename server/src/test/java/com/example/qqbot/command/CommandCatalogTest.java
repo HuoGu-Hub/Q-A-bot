@@ -64,9 +64,10 @@ class CommandCatalogTest {
     void listTextCoversBoth() {
         String text = catalog.listText();
 
+        assertThat(text).contains("系统：", "/list", "/help");
         assertThat(text).contains("板块：", "/公告", "/任务", "/开黑");
         assertThat(text).contains("普通命令：", "/ping", "/stats");
-        assertThat(text).contains("用 /板块 /help");
+        assertThat(text).contains("板块动作：", "/板块 /create", "/板块 /list");
     }
 
     @Test
@@ -74,9 +75,9 @@ class CommandCatalogTest {
     void helpTextCoversBoth() {
         String text = catalog.helpText();
 
-        assertThat(text).contains("/板块 /create", "/板块 /delete", "/板块 /help");
-        assertThat(text).contains("普通命令直接发", "/ping", "/stats");
-        assertThat(text).contains("发 /list");
+        assertThat(text).contains("/板块 /create", "/板块 /delete", "/板块 /list", "/板块 /help");
+        assertThat(text).contains("单条命令", "/命令 /list", "/命令 /help");
+        assertThat(text).contains("没有全局 /create、/delete");
     }
 
     @Test
@@ -93,6 +94,18 @@ class CommandCatalogTest {
                 Board.DIRECT, "all", DataPolicy.DEFAULT, true, 40, false);
 
         assertThat(CommandCatalog.boardUsage(board)).isEqualTo("/举报 /create 内容");
+    }
+
+    @Test
+    @DisplayName("全局 list/help 有系统条目，并说明板块动作")
+    void globalTextExplainsSystemAndBoardActions() {
+        assertThat(catalog.listText())
+                .contains("系统：", "/list", "/help", "板块动作：")
+                .contains("/板块 /create", "/板块 /delete", "/板块 /list");
+        assertThat(catalog.helpText())
+                .contains("单条命令", "/命令 /list", "/命令 /help")
+                .contains("/板块 /create", "/板块 /delete")
+                .contains("没有全局 /create、/delete");
     }
 
     @Test

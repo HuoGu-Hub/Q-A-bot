@@ -83,7 +83,7 @@ class BoardStoreTest {
     @Test
     @DisplayName("四个动作都在")
     void fourActions() {
-        assertThat(Board.ACTIONS).containsExactly("create", "query", "delete", "help");
+        assertThat(Board.ACTIONS).containsExactly("create", "query", "delete", "list", "help");
     }
 
     @Test

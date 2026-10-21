@@ -86,6 +86,11 @@ public class BoardRunner {
             logUsage(event, "list");
             return Optional.of(new Reply(catalog.listText()));
         }
+        // create / delete 是板块动作，不占全局命令名；给一句明确指路，避免发出去没反应
+        if ("create".equalsIgnoreCase(boardPath) || "delete".equalsIgnoreCase(boardPath)) {
+            return Optional.of(new Reply(
+                    "create / delete 要配板块用：/板块 /create ...、/板块 /delete 编号"));
+        }
 
         Board board = boards.find(boardPath);
         if (board == null || !board.enabled()) {
@@ -115,13 +120,16 @@ public class BoardRunner {
                 List.of(), aclStore.global())) {
             return Optional.of(new Reply(access.describe(inGroup)));
         }
-        if (!records.isAvailable()) {
+        // 看参数、看用法不碰记录表，记录库暂时不可用也该能回答
+        if (!records.isAvailable() && !Board.ACT_HELP.equals(action)
+                && !Board.ACT_LIST.equals(action)) {
             return Optional.of(new Reply("这个板块暂时用不了"));
         }
 
         return Optional.of(new Reply(switch (action) {
             case Board.ACT_CREATE -> create(board, event, userId, groupId, rest);
             case Board.ACT_DELETE -> delete(board, rest);
+            case Board.ACT_LIST -> list(board);
             case Board.ACT_HELP -> help(board);
             default -> query(board, groupId);
         }));
@@ -201,6 +209,13 @@ public class BoardRunner {
         return "已撤销 #" + id + "（数据还在，可以恢复）";
     }
 
+    // ==================== 参数 ====================
+
+    private String list(Board board) {
+        return "/" + board.path() + " " + CommandHelp.paramList(
+                board.params(), "这个板块没有参数。");
+    }
+
     // ==================== 帮助 ====================
 
     private String help(Board board) {
@@ -215,6 +230,7 @@ public class BoardRunner {
         sb.append("内容\n");
         sb.append("  查：/").append(board.path()).append("\n");
         sb.append("  删：/").append(board.path()).append(" /delete 编号");
+        sb.append("  参数：/").append(board.path()).append(" /list");
         if (!board.params().isEmpty()) {
             sb.append('\n').append("  参数：");
             for (ParamSpec spec : board.params()) {

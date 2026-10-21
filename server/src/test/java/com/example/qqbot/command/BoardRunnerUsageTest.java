@@ -62,6 +62,27 @@ class BoardRunnerUsageTest {
         verify(commandStore).logUsage("list", 100L, 200L, true);
     }
 
+    @Test
+    @DisplayName("★ /板块 /list 列出参数，不依赖记录库")
+    void boardListShowsParams() {
+        BoardStore boards = mock(BoardStore.class);
+        BoardRecordStore records = mock(BoardRecordStore.class);
+        Board board = new Board(1, "开黑", "开黑",
+                List.of(ParamSpec.of("内容", "text", true, "示例")),
+                Board.DIRECT, "all", DataPolicy.DEFAULT, true, 30, false);
+        when(boards.find("开黑")).thenReturn(board);
+        when(records.isAvailable()).thenReturn(false);
+
+        BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
+                mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
+                mock(CommandStore.class));
+
+        var reply = runner.tryRun(event(), "/开黑 /list");
+
+        assertThat(reply).isPresent();
+        assertThat(reply.get().text()).contains("支持 1 个参数", "#内容#", "例 示例");
+    }
+
     private static OneBotEvent event() {
         OneBotEvent event = mock(OneBotEvent.class);
         when(event.getUserId()).thenReturn(200L);

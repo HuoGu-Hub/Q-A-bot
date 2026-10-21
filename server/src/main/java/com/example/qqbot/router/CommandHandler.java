@@ -184,6 +184,13 @@ public class CommandHandler {
             return Outcome.HANDLED;
         }
 
+        // ---------- 单命令参数表：/路径 /list ----------
+        // /list 是修饰符，不是参数；放在解析之前，否则会被当成自由文本。
+        if ("/list".equalsIgnoreCase(tail.trim())) {
+            reply(event, cmd, tail, commandHelp.list(cmd), t0);
+            return Outcome.HANDLED;
+        }
+
         // ---------- 参数解析：先展开变量，再按类型校验 ----------
         // text 传 null 而不是 ""：这一趟只是给参数值展开变量，
         // 自由文本还没算出来，{text} 必须原样保留而不是变成空串

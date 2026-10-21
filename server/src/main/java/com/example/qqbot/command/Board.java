@@ -42,17 +42,18 @@ public record Board(
     /** 到点发：收下之后等时间到了再发出去 */
     public static final String SCHEDULED = "scheduled";
 
-    /** 四个动作，全部由框架实现 */
+    /** 动作全部由框架实现：增、查、删、看参数、看用法 */
     public static final String ACT_CREATE = "create";
     public static final String ACT_QUERY = "query";
     public static final String ACT_DELETE = "delete";
+    public static final String ACT_LIST = "list";
     public static final String ACT_HELP = "help";
 
     /** 不带动作时的默认动作 —— 群友发 {@code /公告} 就是在问"有什么" */
     public static final String DEFAULT_ACTION = ACT_QUERY;
 
     public static final List<String> ACTIONS =
-            List.of(ACT_CREATE, ACT_QUERY, ACT_DELETE, ACT_HELP);
+            List.of(ACT_CREATE, ACT_QUERY, ACT_DELETE, ACT_LIST, ACT_HELP);
 
     public Board {
         path = path == null ? "" : path.trim();

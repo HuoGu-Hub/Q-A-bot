@@ -161,6 +161,18 @@ class CommandMatcherTest {
         assertThat(m.restOrEmpty()).isEmpty();
     }
 
+    @Test
+    @DisplayName("/路径 /list → 保留在尾巴里，交给执行层当参数表请求")
+    void listModifierStaysInTail() throws Exception {
+        store.upsert(command("set/output", BotCommand.KIND_ACTION));
+
+        CommandMatcher.Match m = matcher.match("/set /output /list", true, 1L);
+
+        assertThat(m.hit()).isTrue();
+        assertThat(m.helpRequested()).isFalse();
+        assertThat(m.restOrEmpty()).isEqualTo("/list");
+    }
+
     /* ==================== ★ 不该触发的（更重要）==================== */
 
     @Test

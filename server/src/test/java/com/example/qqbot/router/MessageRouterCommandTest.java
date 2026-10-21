@@ -253,6 +253,12 @@ class MessageRouterCommandTest {
                 .thenReturn(new CommandMatcher.Match(cmd, true, cmd.trigger(), "", true));
     }
 
+    /** 命中并请求这一条命令的参数表 */
+    private void matchList(BotCommand cmd) {
+        when(commandMatcher.match(anyString(), anyBoolean(), anyLong()))
+                .thenReturn(new CommandMatcher.Match(cmd, true, cmd.trigger(), "/list", false));
+    }
+
     private String sentText() {
         ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
         verify(apiClient).sendGroupMsg(eq(GROUP), captor.capture());
@@ -415,6 +421,20 @@ class MessageRouterCommandTest {
         router.handle(groupEvent("/ping /help"));
 
         assertThat(sentText()).contains("/ping").contains("看看我在不在");
+        verify(guardPipeline, never()).check(any());
+    }
+
+    @Test
+    @DisplayName("★ /路径 /list：回参数表，不执行命令")
+    void listRequestRepliesParamTable() {
+        BotCommand report = new BotCommand(1, "举报", "收到", "举报", "all", List.of(), "member",
+                true, 1, true, BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB,
+                List.of(ParamSpec.of("对象", "text", true, "某人")), null, null);
+        matchList(report);
+
+        router.handle(groupEvent("/举报 /list"));
+
+        assertThat(sentText()).contains("支持 1 个参数").contains("#对象#").contains("必填");
         verify(guardPipeline, never()).check(any());
     }
 
