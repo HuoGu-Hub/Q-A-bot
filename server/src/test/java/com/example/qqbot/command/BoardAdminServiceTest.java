@@ -185,6 +185,17 @@ class BoardAdminServiceTest {
         assertThat(boards.find("举报").access()).isEqualTo("all");
     }
 
+    @Test
+    @DisplayName("create/delete 是板块动作，不能当板块名")
+    void reservedActionNamesRejected() {
+        assertThatThrownBy(() -> service.save(input("create", Board.DIRECT, List.of())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("保留名");
+        assertThatThrownBy(() -> service.save(input("delete", Board.DIRECT, List.of())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("保留名");
+    }
+
     private static BoardAdminService.BoardInput input(String path, String delivery,
                                                       List<ParamSpec> params) {
         return new BoardAdminService.BoardInput(path, path, params, delivery, "all", "GROUP",
