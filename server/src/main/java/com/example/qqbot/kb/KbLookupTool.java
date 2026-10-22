@@ -1,6 +1,7 @@
 package com.example.qqbot.kb;
 
 import com.example.qqbot.media.ImageMarkers;
+import com.example.qqbot.text.PromptText;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.invocation.InvocationContext;
@@ -65,7 +66,7 @@ public class KbLookupTool {
         }
         KbRetriever.Retrieval r = retriever.retrieve(query);
         if (r.hits().isEmpty()) {
-            return "知识库里没有查到与「" + query + "」相关的内容（关键词候选 " + r.keywordCandidates()
+            return "知识库里没有查到与「" + PromptText.escapeDelimiters(query) + "」相关的内容（关键词候选 " + r.keywordCandidates()
                     + " 条）。如果这是中文词，可以换成游戏内的英文名再查一次。";
         }
         StringBuilder sb = new StringBuilder();
@@ -80,11 +81,12 @@ public class KbLookupTool {
                 titleHits++;
             }
             // 正文里的配图标记提到块尾单独一行，模型照抄时不容易漏（与资料注入同一处理）
-            sb.append("【").append(h.entry().title()).append("】")
+            sb.append("【").append(PromptText.escapeDelimiters(h.entry().title())).append("】")
                     .append(" 相关度 ").append(String.format("%.3f", h.score()))
-                    .append(" 来源 ").append(h.source())
+                    .append(" 来源 ").append(PromptText.escapeDelimiters(h.source()))
                     .append(titleHit ? " 标题命中" : "")
-                    .append("\n").append(ImageMarkers.hoistSingleMarker(h.entry().text())).append("\n\n");
+                    .append("\n").append(PromptText.escapeDelimiters(
+                            ImageMarkers.hoistSingleMarker(h.entry().text()))).append("\n\n");
         }
         sb.append("—— 共 ").append(n).append(" 条，最高相关度 ").append(String.format("%.3f", best))
                 .append("，标题命中 ").append(titleHits).append(" 条。");
@@ -133,9 +135,12 @@ public class KbLookupTool {
             }
         }
         if (titles.isEmpty()) {
-            return "知识库里没有任何条目的名字含「" + word + "」。换个英文词再试，或直接用中文问。";
+            return "知识库里没有任何条目的名字含「" + PromptText.escapeDelimiters(word)
+                    + "」。换个英文词再试，或直接用中文问。";
         }
-        return "名字含「" + word + "」的条目：\n- " + String.join("\n- ", titles);
+        String list = titles.stream().map(PromptText::escapeDelimiters)
+                .collect(java.util.stream.Collectors.joining("\n- "));
+        return "名字含「" + PromptText.escapeDelimiters(word) + "」的条目：\n- " + list;
     }
 
     /** 查询里的词有没有出现在标题里 —— 比分数可靠得多的"命中"信号 */
@@ -179,12 +184,13 @@ public class KbLookupTool {
         }
         PlaceAnswer.Answer answer = PlaceAnswer.answer(place.strip(), places,
                 options.getAnswerLimit(), options.getUnitsPerMeter());
-        String text = answer.text(options.getUnitsPerMeter());
+        String text = PromptText.escapeDelimiters(answer.text(options.getUnitsPerMeter()));
         if (!options.getShot().isEnabled() || !answer.found()) {
             return text;
         }
         // 附上"取图凭据"：模型不认识坐标，也不该去猜身份 —— 它只需要把这行原样抄进回答。
         // 只给最匹配的那一处：地图图比较大，一次回两张会刷屏。
-        return text + "\n配图：[[img:map:" + answer.hits().get(0).place().imageKey() + "]]";
+        return text + "\n配图：[[img:map:" + PromptText.escapeDelimiters(
+                answer.hits().get(0).place().imageKey()) + "]]";
     }
 }

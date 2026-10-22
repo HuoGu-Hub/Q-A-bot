@@ -4,6 +4,7 @@ import com.example.qqbot.llm.LlmException;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.onebot.outbound.OutboundSender;
+import com.example.qqbot.text.PromptText;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -147,9 +148,11 @@ public class FallbackService {
         sb.append("场景：公开站问答广场（有人在网页上点「问问新答案」）\n");
         if (!knowledge.isBlank()) {
             sb.append("\n以下是从《雾锁王国》官方 Wiki 检索到的资料，供你参考：\n");
-            sb.append("<<<KNOWLEDGE\n").append(knowledge).append("\nKNOWLEDGE>>>\n");
+            sb.append("<<<KNOWLEDGE\n").append(PromptText.escapeDelimiters(knowledge))
+                    .append("\nKNOWLEDGE>>>\n");
         }
-        sb.append("\n<<<USER_CONTENT\n").append(question).append("\nUSER_CONTENT>>>");
+        sb.append("\n<<<USER_CONTENT\n").append(PromptText.escapeDelimiters(question))
+                .append("\nUSER_CONTENT>>>");
         return llm.chat(sb.toString());
     }
 

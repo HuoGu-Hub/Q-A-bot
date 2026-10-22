@@ -13,6 +13,7 @@ import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.prompt.PromptStore;
+import com.example.qqbot.text.PromptText;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.example.qqbot.llm.VisionImage;
 import org.slf4j.Logger;
@@ -259,13 +260,15 @@ public class ChatService {
             String card = sender.path("card").asText("");
             String name = !card.isEmpty() ? card : nickname;
             if (!name.isEmpty()) {
-                sb.append("发言者：").append(name).append("\n");
+                // 昵称/群名片是用户可改的，换行会伪造出新的段落
+                sb.append("发言者：").append(PromptText.oneLine(name, 40)).append("\n");
             }
         }
 
         if (quoteText != null && !quoteText.isEmpty()) {
             sb.append("\n他引用了下面这条消息：\n");
-            sb.append("<<<QUOTED_CONTENT\n").append(quoteText).append("\nQUOTED_CONTENT>>>\n");
+            sb.append("<<<QUOTED_CONTENT\n").append(PromptText.escapeDelimiters(quoteText))
+                    .append("\nQUOTED_CONTENT>>>\n");
         }
 
         // 知识库资料。和用户输入一样是**外部不可信内容**，所以用固定标记包起来，
@@ -273,10 +276,12 @@ public class ChatService {
         if (knowledge != null && !knowledge.isEmpty()) {
             // 分段标题由 kb/TwoSectionInjector 拼好（「我们维护的内容」/「导入的资料」），
             // 这里不再加一句笼统的"供你参考" —— 那句话会把两段的区别抹平
-            sb.append("\n<<<KNOWLEDGE\n").append(knowledge).append("\nKNOWLEDGE>>>\n");
+            sb.append("\n<<<KNOWLEDGE\n").append(PromptText.escapeDelimiters(knowledge))
+                    .append("\nKNOWLEDGE>>>\n");
         }
 
-        sb.append("\n<<<USER_CONTENT\n").append(text == null ? "" : text).append("\nUSER_CONTENT>>>");
+        sb.append("\n<<<USER_CONTENT\n").append(PromptText.escapeDelimiters(text))
+                .append("\nUSER_CONTENT>>>");
         return sb.toString();
     }
 }

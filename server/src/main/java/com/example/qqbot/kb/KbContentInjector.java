@@ -1,5 +1,6 @@
 package com.example.qqbot.kb;
 
+import com.example.qqbot.text.PromptText;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.rag.content.Content;
@@ -47,6 +48,8 @@ public class KbContentInjector implements ContentInjector {
             return userMessage;
         }
         String original = userMessage instanceof UserMessage um ? um.singleText() : "";
-        return UserMessage.from(original + OPEN + knowledge + CLOSE);
+        // 资料正文来自 kb_block，可能是 wiki 或后台手写；里面的 <<< / >>> 必须改掉，
+        // 否则一块资料就能提前闭合 KNOWLEDGE 标记，把自己伪装成“信封之外”的内容。
+        return UserMessage.from(original + OPEN + PromptText.escapeDelimiters(knowledge) + CLOSE);
     }
 }
