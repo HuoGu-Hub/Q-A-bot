@@ -45,7 +45,7 @@ class ChatServiceToolMarkupTest {
         when(llmRouter.isAvailable()).thenReturn(true);
         assistant = mock(KbToolAssistant.class);
         promptStore = mock(PromptStore.class);
-        when(promptStore.appendixFor(anyLong())).thenReturn("");
+        when(promptStore.appendixFor(anyLong(), anyLong())).thenReturn("");
         chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new ContentGate(),
                 new MediaProperties(), mock(KbRetriever.class), new KbProperties(), assistant, promptStore);
     }
@@ -66,7 +66,8 @@ class ChatServiceToolMarkupTest {
     @Test
     @DisplayName("★ 当前用户的补充提示会传给模型助手")
     void passesPromptAppendix() {
-        when(promptStore.appendixFor(2302359993L)).thenReturn("【用户补充提示】\n- 请叫我老板");
+        when(promptStore.appendixFor(209127588L, 2302359993L))
+                .thenReturn("【补充提示】\n- 请叫我老板");
         when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
                 anyString(), anyString())).thenReturn("好");
 

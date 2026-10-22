@@ -135,7 +135,7 @@ public class CommandCatalog {
         sb.append("系统：\n");
         sb.append("/list  列出全部可用命令\n");
         sb.append("/help  通用命令格式与注意事项\n");
-        sb.append("/prompt /create 文本  添加个人补充提示\n");
+        sb.append("/prompt /create 文本  添加本群补充提示\n");
         if (!boardList.isEmpty()) {
             sb.append("板块：\n");
             for (Entry board : boardList) {
@@ -181,11 +181,12 @@ public class CommandCatalog {
                 全局：
                   /list            列出全部可用命令
                   /help            这份说明
-                个人提示：
-                  /prompt /create 文本   添加；只影响你自己
-                  /prompt /list          查看
-                  /prompt /delete 编号   删除
-                  /prompt /clear         清空
+                补充提示：
+                  /prompt /create 文本                   默认加到本群；群主或管理员
+                  /prompt /create #user_id-QQ号# 文本    只给某个人
+                  /prompt /list
+                  /prompt /delete 编号
+                  /prompt /clear
                 单条命令：
                   /命令 /list      看这条命令支持哪些参数
                   /命令 /help      看这条命令怎么用

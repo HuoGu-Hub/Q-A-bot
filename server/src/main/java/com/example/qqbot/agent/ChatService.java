@@ -115,7 +115,9 @@ public class ChatService {
 
         // 当前用户设置的补充提示：只影响他自己，追加到系统提示词末尾
         long promptUserId = event.getUserId() == null ? 0L : event.getUserId();
-        String extraPrompt = promptStore == null ? "" : promptStore.appendixFor(promptUserId);
+        long promptGroupId = event.getGroupId() == null ? 0L : event.getGroupId();
+        String extraPrompt = promptStore == null
+                ? "" : promptStore.appendixFor(promptGroupId, promptUserId);
         if (extraPrompt == null) {
             extraPrompt = "";
         }

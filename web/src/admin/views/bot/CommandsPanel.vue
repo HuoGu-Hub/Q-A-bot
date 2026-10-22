@@ -106,7 +106,7 @@ const SYSTEM_ROWS: CommandRow[] = [
   },
   {
     source: 'system', key: 'system-prompt', path: 'prompt', usage: '', kind: 'system',
-    description: '个人补充提示', access: 'all', enabled: true, builtin: true,
+    description: '群/个人补充提示', access: 'all', enabled: true, builtin: true,
     board: null, command: null,
   },
 ]
