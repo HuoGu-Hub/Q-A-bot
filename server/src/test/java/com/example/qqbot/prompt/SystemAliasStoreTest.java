@@ -12,7 +12,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,29 +39,36 @@ class SystemAliasStoreTest {
     }
 
     @Test
-    @DisplayName("中文别名能解析回系统命令，并保留后面的参数")
-    void resolvesChineseAlias() {
-        store.replace(Map.of(
-                SystemAliasStore.LIST, List.of("列表"),
-                SystemAliasStore.HELP, List.of("帮助"),
-                SystemAliasStore.PROMPT, List.of("提示"),
-                "prompt/create", List.of("新增提示"),
-                "预约开黑/create", List.of("新增预约")));
+    @DisplayName("命令名和动作词分开解析，动作只配一次")
+    void resolvesCommandAndActionAliases() {
+        store.replace(List.of(
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_COMMAND,
+                        SystemAliasStore.LIST, "列表"),
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_COMMAND,
+                        SystemAliasStore.HELP, "帮助"),
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_COMMAND,
+                        SystemAliasStore.PROMPT, "提示"),
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_ACTION, "create", "新建"),
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_ACTION, "delete", "删除")));
 
         assertThat(store.resolve("/列表")).isEqualTo("/list");
         assertThat(store.resolve("@飘雪喵 /帮助")).isEqualTo("/help");
-        assertThat(store.resolve("/提示 /create 你好")).isEqualTo("/prompt /create 你好");
-        assertThat(store.resolve("/新增提示 你好")).isEqualTo("/prompt /create 你好");
-        assertThat(store.resolve("/新增预约 今晚8点")).isEqualTo("/预约开黑 /create 今晚8点");
+        assertThat(store.resolve("/提示 /新建 你好")).isEqualTo("/prompt /create 你好");
+        assertThat(store.resolve("/预约开黑 /新建 今晚8点")).isEqualTo("/预约开黑 /create 今晚8点");
+        assertThat(store.resolve("/预约开黑 /删除 12")).isEqualTo("/预约开黑 /delete 12");
+        assertThat(store.resolve("/提示 /列表")).isEqualTo("/prompt /list");
+        assertThat(store.resolve("/预约开黑 /帮助")).isEqualTo("/预约开黑 /help");
         assertThat(store.resolve("/普通命令")).isEqualTo("/普通命令");
     }
 
     @Test
-    @DisplayName("同一别名不能指向两个系统命令")
+    @DisplayName("同一别名不能指向两个命令或动作")
     void duplicateAliasRejected() {
-        assertThatThrownBy(() -> store.replace(Map.of(
-                SystemAliasStore.LIST, List.of("命令"),
-                SystemAliasStore.HELP, List.of("命令"))))
+        assertThatThrownBy(() -> store.replace(List.of(
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_COMMAND,
+                        SystemAliasStore.LIST, "命令"),
+                new SystemAliasStore.Alias(SystemAliasStore.KIND_COMMAND,
+                        SystemAliasStore.HELP, "命令"))))
                 .isInstanceOf(SystemAliasStore.AliasException.class);
     }
 }

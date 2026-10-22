@@ -16,7 +16,7 @@ import Notice from '@shared/ui/Notice.vue'
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
-interface EditItem { target: string; label: string; text: string }
+interface EditItem { kind: 'command' | 'action'; target: string; label: string; text: string }
 interface EditGroup { label: string; items: EditItem[] }
 
 const groups = ref<EditGroup[]>([])
@@ -35,6 +35,7 @@ async function load() {
     groups.value = data.groups.map((g: SystemAliasGroup) => ({
       label: g.label,
       items: g.items.map((item) => ({
+        kind: item.kind,
         target: item.target,
         label: item.label,
         text: item.aliases.join(' '),
@@ -59,6 +60,7 @@ async function save() {
   try {
     await adminApi.post('/system-aliases', {
       entries: groups.value.flatMap((g) => g.items.map((item) => ({
+        kind: item.kind,
         target: item.target,
         aliases: splitAliases(item.text),
       }))),
@@ -73,8 +75,8 @@ async function save() {
   }
 }
 
-function commandText(target: string) {
-  return '/' + target.replaceAll('/', ' /')
+function commandText(item: EditItem) {
+  return item.kind === 'action' ? '/' + item.target : '/' + item.target.replaceAll('/', ' /')
 }
 </script>
 
@@ -82,19 +84,19 @@ function commandText(target: string) {
   <Modal :open="open" title="命令别名" width="680px" @close="emit('close')">
     <div class="alias-page">
       <Notice v-if="error" tone="error">{{ error }}</Notice>
-      <p class="alias-hint">写中文调用名，多个用空格或逗号分开。别名解析后走原命令的权限、开关与参数。</p>
+      <p class="alias-hint">命令名和动作词分开声明。动作词只配一次，所有模块共用，例如“新建”对 /prompt /create 和 /预约 /create 都生效。</p>
 
       <div v-if="loading" class="alias-empty">正在读取…</div>
       <div v-else class="alias-groups">
         <section v-for="group in groups" :key="group.label" class="alias-group">
           <h3>{{ group.label }}</h3>
           <label v-for="item in group.items" :key="item.target" class="alias-row">
-            <span class="alias-cmd">{{ commandText(item.target) }}</span>
+            <span class="alias-cmd">{{ commandText(item) }}</span>
             <span class="alias-label">{{ item.label }}</span>
             <Input
               v-model="item.text"
-              :placeholder="item.target.split('/').length > 1 ? '如 新增' : '如 列表'"
-              :aria-label="item.target + ' 的别名'"
+              :placeholder="item.kind === 'action' ? '如 新建' : '如 列表'"
+              :aria-label="item.kind + ' ' + item.target + ' 的别名'"
             />
           </label>
         </section>

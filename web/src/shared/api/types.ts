@@ -362,6 +362,7 @@ export interface AdminPrompt {
 
 /** 命令别名：target 是规范命令路径，如 prompt/create、预约开黑/create */
 export interface SystemAliasEntry {
+  kind: 'command' | 'action'
   target: string
   label: string
   aliases: string[]
