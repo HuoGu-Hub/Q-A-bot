@@ -507,11 +507,21 @@ function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
 /** 低频区块折叠：改回复的人不该被参数表和名单挡路 */
 const openBlocks = ref({ params: false, acl: false, help: false })
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
+const paramBlock = ref<HTMLElement | null>(null)
 
 /** “+ 参数”在参数标题行：展开后让参数表插入一行 */
-function addParamRow() {
+async function addParamRow() {
   openBlocks.value.params = true
-  nextTick(() => paramTableRef.value?.addParam())
+  await nextTick()
+  paramTableRef.value?.addParam()
+  // 等新行真正进 DOM 再滚，否则只能滚到参数块表头
+  await nextTick()
+  const row = paramBlock.value?.querySelector('.param-row:last-child')
+  if (row instanceof HTMLElement) {
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  } else {
+    paramBlock.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
 }
 
 /** 只有"白名单/黑名单"两档才需要录名单，其余档位下这一块根本不该出现 */
@@ -789,30 +799,6 @@ onMounted(load)
             </template>
           </div>
 
-          <!-- 低频项折叠：改回复的人不该被参数表和名单挡路 -->
-          <div class="block">
-            <div class="block-head block-head--with-action">
-              <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
-                <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
-                <span>参数</span>
-                <span class="block-count">{{ paramRows.length }}</span>
-              </button>
-              <button class="head-add" type="button" @click="addParamRow">+ 参数</button>
-            </div>
-            <div v-if="openBlocks.params" class="block-body">
-              <ParamTable
-                ref="paramTableRef"
-                :params="paramRows"
-                empty-hint="无参数"
-                @update:params="setParams"
-              >
-                <template #actions>
-                  <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入动作参数</Button>
-                </template>
-              </ParamTable>
-            </div>
-          </div>
-
           <div v-if="needsList" class="block">
             <button class="block-head" type="button" :aria-expanded="openBlocks.acl" @click="toggleBlock('acl')">
               <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.acl }" />
@@ -860,6 +846,30 @@ onMounted(load)
             </div>
           </div>
         </section>
+      </div>
+
+      <!-- 参数表单独占满整行：放在右侧设置栏会被列宽挤掉后半段 -->
+      <div ref="paramBlock" class="block block--wide">
+        <div class="block-head block-head--with-action">
+          <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
+            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
+            <span>参数</span>
+            <span class="block-count">{{ paramRows.length }}</span>
+          </button>
+          <button class="head-add" type="button" @click="addParamRow">+ 参数</button>
+        </div>
+        <div v-if="openBlocks.params" class="block-body">
+          <ParamTable
+            ref="paramTableRef"
+            :params="paramRows"
+            empty-hint="无参数"
+            @update:params="setParams"
+          >
+            <template #actions>
+              <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入动作参数</Button>
+            </template>
+          </ParamTable>
+        </div>
       </div>
     </CommandEditorShell>
 

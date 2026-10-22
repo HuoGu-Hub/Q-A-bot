@@ -120,11 +120,14 @@ function onOptionsChange(i: number, v: string) {
 </template>
 
 <style scoped>
-.params { display: flex; flex-direction: column; gap: var(--sp-2); }
+.params { display: flex; flex-direction: column; gap: var(--sp-2); overflow-x: auto; }
+.params > * { min-width: 0; }
 .param-head {
   display: grid;
-  grid-template-columns: 128px 104px 58px 112px minmax(180px, 1fr) 74px auto;
-  gap: var(--sp-2);
+  grid-template-columns:
+    minmax(96px, 1.15fr) minmax(88px, .8fr) 52px minmax(90px, .9fr)
+    minmax(120px, 1.4fr) 64px auto;
+  gap: 6px;
   padding: 0 2px;
   color: var(--ink-3);
   font-size: 11px;
@@ -132,9 +135,12 @@ function onOptionsChange(i: number, v: string) {
 }
 .param-row {
   display: grid;
-  /* 说明是唯一需要吃剩余宽度的列；示例、类型、必填都够用就好 */
-  grid-template-columns: 128px 104px 58px 112px minmax(180px, 1fr) 74px auto;
-  gap: var(--sp-2);
+  /* 说明是唯一需要吃剩余宽度的列；示例、类型、必填都够用就好。
+     列宽用 minmax 而不是固定值：命令编辑弹窗比页面窄，固定列会把右侧字段挤没 */
+  grid-template-columns:
+    minmax(96px, 1.15fr) minmax(88px, .8fr) 52px minmax(90px, .9fr)
+    minmax(120px, 1.4fr) 64px auto;
+  gap: 6px;
   align-items: center;
 }
 .param-row .enum-opts { grid-column: 1 / -1; }
