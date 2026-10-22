@@ -2,6 +2,7 @@ package com.example.qqbot.prompt;
 
 import com.example.qqbot.command.AclEntry;
 import com.example.qqbot.command.AclStore;
+import com.example.qqbot.command.BotCommand;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -30,7 +31,12 @@ class PromptCommandTest {
     private SqliteDatabase db;
     private PromptStore store;
     private AclStore aclStore;
+    private CommandStore commandStore;
     private PromptCommand command;
+
+    private static final BotCommand PROMPT_COMMAND = new BotCommand(
+            42, "prompt", "", "补充提示", "all", List.of(), "all", true, 50, true,
+            "action", "kb", List.of(), "", "prompt.manage");
 
     @BeforeEach
     void setUp() {
@@ -41,7 +47,10 @@ class PromptCommandTest {
         store = new PromptStore(new PromptRepository(new Jdbc(db)));
         aclStore = mock(AclStore.class);
         when(aclStore.global()).thenReturn(List.of());
-        command = new PromptCommand(store, mock(CommandStore.class), aclStore);
+        when(aclStore.ofCommand(42L)).thenReturn(List.of());
+        commandStore = mock(CommandStore.class);
+        when(commandStore.findByTrigger("prompt")).thenReturn(PROMPT_COMMAND);
+        command = new PromptCommand(store, commandStore, aclStore);
     }
 
     @AfterEach
@@ -81,6 +90,28 @@ class PromptCommandTest {
 
         assertThat(run("/prompt /create #user_id-1001# 我的提示", "member")).contains("个人提示");
         assertThat(store.listFor(2002L, 1001L)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("停用后 /prompt 不写库")
+    void disabledCommandIsRejected() {
+        BotCommand disabled = new BotCommand(
+                42, "prompt", "", "补充提示", "all", List.of(), "all", false, 50, true,
+                "action", "kb", List.of(), "", "prompt.manage");
+        when(commandStore.findByTrigger("prompt")).thenReturn(disabled);
+
+        assertThat(run("/prompt /create 群提示", "member")).contains("已停用");
+        assertThat(store.listFor(2002L, 1001L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("单命令黑名单拦截 /prompt")
+    void commandBlacklistBlocks() {
+        when(aclStore.ofCommand(42L)).thenReturn(List.of(
+                new AclEntry(AclEntry.BLACK, AclEntry.UID, 1001L)));
+
+        assertThat(run("/prompt /create 群提示", "member")).contains("用不了");
+        assertThat(store.listFor(2002L, 1001L)).isEmpty();
     }
 
     @Test

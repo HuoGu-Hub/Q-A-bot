@@ -2,6 +2,7 @@ package com.example.qqbot.prompt;
 
 import com.example.qqbot.command.AccessRules;
 import com.example.qqbot.command.AclStore;
+import com.example.qqbot.command.BotCommand;
 import com.example.qqbot.command.CommandAccess;
 import com.example.qqbot.command.CommandRole;
 import com.example.qqbot.command.CommandStore;
@@ -53,9 +54,16 @@ public class PromptCommand {
 
         long userId = event.getUserId() == null ? 0L : event.getUserId();
         long groupId = event.getGroupId() == null ? 0L : event.getGroupId();
-        // 与其他命令同一份全局黑白名单；/prompt 没有单独的命令行，所以只查全局
-        if (!AccessRules.allows(CommandAccess.ALL, CommandRole.ofSender(event),
-                userId, groupId, List.of(), aclStore.global())) {
+        BotCommand cmd = commandStore.findByTrigger("prompt");
+        if (cmd == null) {
+            return Optional.of(new Reply("补充提示暂时用不了"));
+        }
+        if (!cmd.enabled()) {
+            return Optional.of(new Reply("补充提示已停用"));
+        }
+        // 与其他命令同一套判定：单命令名单优先，其次全局名单，最后看档位
+        if (!AccessRules.allows(CommandAccess.of(cmd.access()), CommandRole.ofSender(event),
+                userId, groupId, aclStore.ofCommand(cmd.id()), aclStore.global())) {
             return Optional.of(new Reply("这条命令你暂时用不了"));
         }
         commandStore.logUsage("prompt", groupId, userId, true);

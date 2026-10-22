@@ -260,6 +260,20 @@ public class CommandController {
         }
     }
 
+    /** 只改准入档位：/prompt 的编辑弹窗用，避免走通用命令表单 */
+    @PostMapping("/{id}/access")
+    public ResponseEntity<Map<String, Object>> access(@org.springframework.web.bind.annotation.PathVariable long id,
+                                                      @RequestBody Map<String, Object> body) {
+        String access = str(body.get("access"));
+        try {
+            return store.setAccess(id, access)
+                    ? ResponseEntity.ok(Map.of("ok", true))
+                    : ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条指令"));
+        } catch (Exception e) {
+            return bad(e.getMessage());
+        }
+    }
+
     /** 启用/停用 */
     @PostMapping("/toggle")
     public ResponseEntity<Map<String, Object>> toggle(@RequestBody Map<String, Object> body) {

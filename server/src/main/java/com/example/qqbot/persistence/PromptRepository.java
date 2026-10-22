@@ -74,6 +74,13 @@ public class PromptRepository {
                 MAP, groupId, userId);
     }
 
+    /** 后台管理页用：全部提示，群在前、个人在后 */
+    public List<Row> listAll() {
+        return jdbc.query("SELECT " + COLUMNS + " FROM bot_prompt"
+                + " WHERE enabled = 1"
+                + " ORDER BY CASE scope WHEN 'group' THEN 1 ELSE 2 END, group_id, user_id, id", MAP);
+    }
+
     public Row find(long id) {
         return jdbc.queryOne("SELECT " + COLUMNS + " FROM bot_prompt WHERE id = ?", MAP, id);
     }

@@ -77,6 +77,7 @@ public class CommandStore {
                 repo.setMeta("command-seed-retired", Instant.now().toString());
             }
             retireLegacyBuiltins();
+            ensurePromptCommand();
             available = true;
             log.info("[CMD] 指令库就绪：{} 条指令", count());
         } catch (Exception e) {
@@ -103,6 +104,18 @@ public class CommandStore {
                         今天已回答：{qa.today} 次""", "查看知识库统计", 4, "[]", null));
 
         repo.seedBuiltins(builtins, Instant.now().toString());
+    }
+
+    /**
+     * 系统命令 /prompt 也有一条命令行：它不参与普通指令分派，
+     * 但需要被后台编辑、停用，以及挂自己的黑白名单。
+     */
+    private void ensurePromptCommand() {
+        if (repo.findByTrigger("prompt") != null) {
+            return;
+        }
+        repo.seedPromptCommand(Instant.now().toString());
+        log.info("[CMD] 已创建系统命令 /prompt");
     }
 
     /**
@@ -353,6 +366,21 @@ public class CommandStore {
             return repo.deleteById(existing.id());
         } catch (Exception e) {
             throw new IOException("删除失败：" + e.getMessage(), e);
+        }
+    }
+
+    /** 只改准入档位，不碰 prompt 这种系统命令的其它字段 */
+    public boolean setAccess(long id, String access) throws IOException {
+        if (!available) {
+            throw new IOException("指令库不可用");
+        }
+        if (id <= 0) {
+            return false;
+        }
+        try {
+            return repo.updateAccess(id, CommandAccess.of(access).code(), Instant.now().toString()) > 0;
+        } catch (Exception e) {
+            throw new IOException(e.getMessage(), e);
         }
     }
 

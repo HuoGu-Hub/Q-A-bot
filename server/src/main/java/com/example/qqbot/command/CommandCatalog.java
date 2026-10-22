@@ -157,6 +157,10 @@ public class CommandCatalog {
         if (!commandList.isEmpty()) {
             sb.append("普通命令：\n");
             for (Entry command : commandList) {
+                // /prompt 已在系统段列出，避免重复
+                if ("prompt".equalsIgnoreCase(command.path())) {
+                    continue;
+                }
                 sb.append('/').append(command.path());
                 if (command.title() != null && !command.title().isBlank()) {
                     sb.append("  ").append(command.title());

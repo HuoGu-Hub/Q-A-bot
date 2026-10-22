@@ -68,6 +68,14 @@ public class PromptStore {
         return repo.listFor(groupId, userId).stream().map(PromptStore::map).toList();
     }
 
+    /** 后台管理页用：全部提示 */
+    public List<Prompt> listAll() {
+        if (!repo.isAvailable()) {
+            return List.of();
+        }
+        return repo.listAll().stream().map(PromptStore::map).toList();
+    }
+
     public Prompt find(long id) {
         if (!repo.isAvailable() || id <= 0) {
             return null;

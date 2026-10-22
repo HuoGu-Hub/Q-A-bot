@@ -351,6 +351,20 @@ export interface AclItem {
   value: number
 }
 
+/** /prompt 的后台视图：群提示或个人提示 */
+export interface AdminPrompt {
+  id: number
+  scope: 'group' | 'user'
+  groupId: number
+  userId: number
+  content: string
+}
+
+export interface AdminPromptList {
+  available: boolean
+  prompts: AdminPrompt[]
+}
+
 export interface CommandAcl {
   white: AclItem[]
   black: AclItem[]

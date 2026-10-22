@@ -134,6 +134,21 @@ public class CommandRepository {
                 + " VALUES (?,?,?,'all','member',1,?,1,?,?,?,?)", rows);
     }
 
+    /**
+     * 确保系统命令占位行存在。
+     *
+     * <p>它不参与普通指令的分派，PromptCommand 会在命令表之前处理 /prompt；
+     * 这一行只用来承载启用状态与单命令黑白名单。
+     */
+    public int seedPromptCommand(String now) {
+        return jdbc.update("INSERT OR IGNORE INTO bot_command"
+                + " (trigger, reply, description, scope, group_ids, min_role,"
+                + "  enabled, sort_order, builtin, kind, mode, params, help, action,"
+                + "  created_at, updated_at)"
+                + " VALUES ('prompt','','补充提示','all','[]','member',1,5,1,"
+                + "  'action','kb','[]',NULL,'prompt.manage',?,?)", now, now);
+    }
+
     /** 全部指令（含停用的），按 sort_order 排 */
     public List<Row> all() {
         return jdbc.query("SELECT " + COLUMNS + " FROM bot_command ORDER BY sort_order, id", MAP);
@@ -233,6 +248,10 @@ public class CommandRepository {
     public int deleteBuiltin(String trigger) {
         return jdbc.update("DELETE FROM bot_command WHERE builtin = 1 AND LOWER(trigger) = LOWER(?)",
                 trigger);
+    }
+
+    public int updateAccess(long id, String access, String now) {
+        return jdbc.update("UPDATE bot_command SET min_role=?, updated_at=? WHERE id=?", access, now, id);
     }
 
     public boolean setEnabled(String trigger, boolean enabled, String now) {

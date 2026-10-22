@@ -26,6 +26,7 @@ import ParamTable from './ParamTable.vue'
 import BoardEditor from './BoardEditor.vue'
 import BoardRecordsModal from './BoardRecordsModal.vue'
 import NewCommandModal from './NewCommandModal.vue'
+import PromptEditor from './PromptEditor.vue'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
 } from './commandOptions'
@@ -48,6 +49,8 @@ const boardSaving = ref(false)
 const boardError = ref('')
 /** 正在看记录的板块；null = 弹窗关闭 */
 const recordsBoard = ref<AdminBoard | null>(null)
+/** /prompt 的自定义编辑器：不是普通命令表单 */
+const promptEditing = ref<BotCommand | null>(null)
 /** 新建命令的类型选择弹窗 */
 const newOpen = ref(false)
 /** 命令表筛选 */
@@ -70,7 +73,7 @@ const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
 
 /** 统一命令表的一行：source 决定用哪个编辑器、有没有「记录」 */
 interface CommandRow {
-  source: 'board' | 'command' | 'system'
+  source: 'board' | 'command' | 'system' | 'prompt'
   key: string
   path: string
   usage: string
@@ -104,11 +107,6 @@ const SYSTEM_ROWS: CommandRow[] = [
     description: '格式与说明', access: 'all', enabled: true, builtin: true,
     board: null, command: null,
   },
-  {
-    source: 'system', key: 'system-prompt', path: 'prompt', usage: '', kind: 'system',
-    description: '群/个人补充提示', access: 'all', enabled: true, builtin: true,
-    board: null, command: null,
-  },
 ]
 
 /** 系统命令在前，板块次之，普通指令最后；与群里 /list 的顺序一致 */
@@ -119,11 +117,15 @@ const rows = computed<CommandRow[]>(() => [
     description: '—',
     access: b.access, enabled: b.enabled, builtin: b.builtin, board: b, command: null,
   })),
-  ...(data.value?.commands ?? []).map((c): CommandRow => ({
-    source: 'command', key: 'command-' + c.id, path: c.trigger, usage: c.usage, kind: c.kind,
-    description: c.description || '—', access: c.access, enabled: c.enabled, builtin: c.builtin,
-    board: null, command: c,
-  })),
+  ...(data.value?.commands ?? []).map((c): CommandRow => {
+    const isPrompt = c.trigger.toLowerCase() === 'prompt'
+    return {
+      source: isPrompt ? 'prompt' : 'command', key: 'command-' + c.id, path: c.trigger,
+      usage: c.usage, kind: isPrompt ? 'system' : c.kind,
+      description: c.description || '—', access: c.access, enabled: c.enabled, builtin: c.builtin,
+      board: null, command: c,
+    }
+  }),
 ])
 
 /** 指令类型与准入选项在 commandOptions.ts —— 板块编辑器也要用同一份 */
@@ -395,6 +397,10 @@ function rowUsage(row: CommandRow) {
 
 function editRow(row: CommandRow) {
   if (row.source === 'system') return
+  if (row.source === 'prompt' && row.command) {
+    promptEditing.value = row.command
+    return
+  }
   if (row.source === 'board' && row.board) {
     editBoard(row.board)
   } else if (row.command) {
@@ -412,7 +418,7 @@ function toggleRow(row: CommandRow) {
 }
 
 function removeRow(row: CommandRow) {
-  if (row.source === 'system') return
+  if (row.source === 'system' || row.source === 'prompt') return
   if (row.source === 'board' && row.board) {
     removeBoard(row.board)
   } else if (row.command) {
@@ -1065,6 +1071,13 @@ onMounted(load)
       :open="newOpen"
       @pick="pickNew"
       @close="newOpen = false"
+    />
+
+    <PromptEditor
+      :open="promptEditing !== null"
+      :command="promptEditing"
+      @close="promptEditing = null"
+      @changed="load"
     />
   </div>
 </template>
