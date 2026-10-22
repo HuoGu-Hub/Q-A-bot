@@ -254,9 +254,10 @@ public class LlmRouter {
             return java.util.Map.of("ok", true, "elapsedMs", ms,
                     "reply", text.length() > 200 ? text.substring(0, 200) + "…" : text);
         } catch (Exception e) {
+            // 厂商报错给的是 JSON（如 api_key_expired），翻成人话再交给界面
             return java.util.Map.of("ok", false,
                     "elapsedMs", System.currentTimeMillis() - t0,
-                    "error", String.valueOf(e.getMessage()));
+                    "error", ProviderError.readable(String.valueOf(e.getMessage())));
         }
     }
 
@@ -576,8 +577,11 @@ public class LlmRouter {
                 }
                 return response;
             } catch (Exception e) {
-                log.warn("[LLM] {} 调用失败，尝试下一个：{}", name, e.getMessage());
-                errors.add(name + " -> " + e.getMessage());
+                // 日志与聚合异常都用人话 —— 否则这里会躺一段原始 JSON，
+                // 而它最终会进到 "调用大模型失败：…" 那条日志里
+                String why = ProviderError.readable(e.getMessage());
+                log.warn("[LLM] {} 调用失败，尝试下一个：{}", name, why);
+                errors.add(name + " -> " + why);
             }
         }
         throw new LlmException("所有大模型都调用失败了：" + String.join("; ", errors));

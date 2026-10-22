@@ -188,9 +188,19 @@ public class ModelController {
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
             if (resp.statusCode() != 200) {
+                // ★ 别把所有非 200 都说成"该厂商不提供列表接口"（2026-10-22 实测的误导：
+                //   实际是 OpenCode Go 的 key 过期，401；人却以为要手打模型 ID）。
+                String detail = ProviderError.readable(resp.body());
+                String suffix = detail.isEmpty() ? "" : "：" + detail;
+                if (ProviderError.isAuthError(resp.statusCode())) {
+                    return Map.of("ok", false, "models", List.of(), "authError", true,
+                            "error", "API Key 无效或已过期（HTTP " + resp.statusCode() + "）" + suffix);
+                }
+                // 404/405 才是"这家没有这个接口"的合理猜测
+                String hint = resp.statusCode() == 404 || resp.statusCode() == 405
+                        ? "（该厂商可能不提供模型列表接口，请手动输入）" : "";
                 return Map.of("ok", false, "models", List.of(),
-                        "error", "HTTP " + resp.statusCode()
-                                + "（该厂商可能不提供模型列表接口，请手动输入）");
+                        "error", "HTTP " + resp.statusCode() + suffix + hint);
             }
 
             List<String> ids = new ArrayList<>();
@@ -205,7 +215,7 @@ public class ModelController {
             return Map.of("ok", true, "models", ids, "count", ids.size());
         } catch (Exception e) {
             return Map.of("ok", false, "models", List.of(),
-                    "error", "拉取失败：" + e.getMessage());
+                    "error", "拉取失败：" + ProviderError.readable(e.getMessage()));
         }
     }
 

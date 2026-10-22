@@ -47,6 +47,8 @@ class LlmRouterToolForwardingTest {
     private String port;
     private final List<String> bodies = new CopyOnWriteArrayList<>();
     private String cannedReply;
+    /** 假厂商的状态码 —— 401 那条路要能造出来 */
+    private int cannedStatus = 200;
 
     @BeforeEach
     void startServer() throws IOException {
@@ -55,7 +57,7 @@ class LlmRouterToolForwardingTest {
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] out = cannedReply.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, out.length);
+            exchange.sendResponseHeaders(cannedStatus, out.length);
             exchange.getResponseBody().write(out);
             exchange.close();
         });
@@ -191,6 +193,21 @@ class LlmRouterToolForwardingTest {
         assertThat(bodies.get(0).replace(" ", ""))
                 .as("用满之后这轮必须禁止再调工具")
                 .contains("\"tool_choice\":\"none\"");
+    }
+
+    @Test
+    @DisplayName("★ 连通性测试失败时给一句人话：401 说密钥过期，不甩原始 JSON")
+    void probeSurfacesReadableAuthError() {
+        cannedStatus = 401;
+        cannedReply = "{\"error\":{\"type\":\"authentication_error\",\"code\":\"api_key_expired\","
+                + "\"message\":\"This API key has expired.\"}}";
+
+        java.util.Map<String, Object> result = router(List.of("chat", "tools")).probe("fake", "fake-model", null);
+
+        assertThat(result.get("ok")).isEqualTo(false);
+        assertThat(String.valueOf(result.get("error")))
+                .contains("This API key has expired.")
+                .doesNotContain("{\"error\"");
     }
 
     @Test
