@@ -18,6 +18,8 @@ import com.example.qqbot.kb.ToolBudget;
 import com.example.qqbot.kb.TwoSectionInjector;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.data.message.ImageContent;
@@ -83,6 +85,11 @@ class KbToolAssistantTest {
                                 .build())).build();
             }
             return ChatResponse.builder().aiMessage(AiMessage.from("最终答案")).build();
+        }
+
+        /** 模型收到的最后一条请求里的全部消息 */
+        List<ChatMessage> lastMessages() {
+            return seen.get(seen.size() - 1).messages();
         }
 
         /** 模型收到的最后一条用户消息 —— 断言"到底送了什么"必须看整条，不能只看正文 */
@@ -241,6 +248,29 @@ class KbToolAssistantTest {
             // 拒绝可能被框架包一层再抛；要钉的是"工具没被执行"
         }
         verify(retriever, never()).retrieve(anyString());
+    }
+
+    @Test
+    @DisplayName("★ 工具抛异常时不把异常原文回灌给模型")
+    void toolExecutionErrorIsSanitized() {
+        KbRetriever retriever = mock(KbRetriever.class);
+        when(retriever.retrieve(anyString()))
+                .thenThrow(new RuntimeException("/secret/path/application.yml"));
+        FakeChatModel model = new FakeChatModel("lookup");
+        KbToolAssistant a = new KbToolAssistant(router(), model,
+                kbWith(augmentorReturning(List.of())),
+                new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()));
+
+        String reply = a.chat("力量", "力量", new KbRetrievalDiagnostics(), true, "群:1/用户:2");
+
+        assertThat(reply).isEqualTo("最终答案");
+        assertThat(model.lastMessages())
+                .filteredOn(m -> m instanceof ToolExecutionResultMessage)
+                .extracting(m -> ((ToolExecutionResultMessage) m).text())
+                .as("异常里的路径不能进模型上下文")
+                .noneMatch(s -> s.contains("/secret/path"))
+                .as("模型要被告知工具失败，才能收尾")
+                .anyMatch(s -> s.contains("执行失败"));
     }
 
     @Test

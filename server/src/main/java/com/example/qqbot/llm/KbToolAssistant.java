@@ -5,7 +5,9 @@ import com.example.qqbot.kb.KbLookupTool;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.ToolBudget;
+import com.example.qqbot.text.PromptText;
 import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.service.UserMessage;
@@ -14,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.BeforeToolExecution;
+import dev.langchain4j.service.tool.ToolErrorHandlerResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -117,6 +120,21 @@ public class KbToolAssistant {
                 // 检索与资料注入走我们的官方管线：ContentRetriever → ContentAggregator → ContentInjector
                 .retrievalAugmentor(kbRetriever.augmentor())
                 .tools(tool)
+                // 模型编了一个不存在的工具名：回一句固定话术，别把“工具不存在”变成异常
+                .hallucinatedToolNameStrategy(request -> ToolExecutionResultMessage.from(request,
+                        "没有这个工具。可用的只有 lookup、locate、search_titles；请直接用已有资料作答。"))
+                // 参数 JSON 坏了：同样只回固定话术，不把解析器的原始报错交给模型
+                .toolArgumentsErrorHandler((error, context) -> ToolErrorHandlerResult.text(
+                        "工具参数格式不对。请检查参数后重试，或者直接用已有资料作答。"))
+                // 工具执行失败：只告诉模型“失败了”，不把异常里的路径、SQL、堆栈带进上下文
+                .toolExecutionErrorHandler((error, context) -> {
+                    String name = context == null || context.toolExecutionRequest() == null
+                            ? "未知工具" : context.toolExecutionRequest().name();
+                    log.warn("[TOOL] 工具执行失败：{}（{}）", name,
+                            error == null ? "未知错误" : error.getClass().getSimpleName());
+                    return ToolErrorHandlerResult.text(
+                            "工具 " + name + " 执行失败了。请直接用已有资料作答，不要再重复调用它。");
+                })
                 // 防死循环：模型可以反复要求调工具，必须有上限（可配，见 app.llm.tool.max-round-trips）
                 .maxToolCallingRoundTrips(Math.max(1, this.toolPolicy.getMaxRoundTrips()))
                 // ★ 授权钩子。模型能调工具之后，"说一句话"就是触发面 ——
@@ -284,7 +302,8 @@ public class KbToolAssistant {
 
     private static String extraPromptSuffix() {
         String extra = EXTRA_SYSTEM_PROMPT.get();
-        return extra == null || extra.isBlank() ? "" : "\n\n" + extra;
+        // 群/个人补充提示是用户可写的，里面的 <<< / >>> 不能当成新的分段标记
+        return extra == null || extra.isBlank() ? "" : "\n\n" + PromptText.escapeDelimiters(extra);
     }
 
     private static String pushExtraPrompt(String extraPrompt) {
