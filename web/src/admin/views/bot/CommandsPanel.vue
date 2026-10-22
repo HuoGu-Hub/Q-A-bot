@@ -262,28 +262,6 @@ function rowRuleText(row: CommandRow): string {
   return '—'
 }
 
-/** 类型下面的一行小字：投递方式或问答来源 */
-function rowTypeSub(row: CommandRow): string {
-  if (row.source === 'board' && row.board) {
-    return row.board.delivery === 'scheduled' ? '定时' : '即时'
-  }
-  if (row.command) {
-    if (row.command.kind === 'agent') {
-      return row.command.mode === 'none' ? '纯模型' : '知识库'
-    }
-    if (row.command.kind === 'action') return row.command.action || '未绑定'
-  }
-  return ''
-}
-
-function rowKindClass(row: CommandRow): string {
-  if (row.source === 'system') return 'k-system'
-  if (row.source === 'board') return 'k-board'
-  if (row.kind === 'agent') return 'k-agent'
-  if (row.kind === 'action') return 'k-action'
-  return 'k-template'
-}
-
 /* ==================== 参数表编辑 ==================== */
 
 function setParams(list: AdminParamSpec[]) {
@@ -402,15 +380,6 @@ function cancelBoard() {
 
 function openRecords(b: AdminBoard) {
   recordsBoard.value = b
-}
-
-/** 统一表里这一行的类型标签 */
-function rowKindLabel(row: CommandRow) {
-  if (row.source === 'system') return '系统'
-  if (row.source === 'board') return '板块'
-  if (row.kind === 'agent') return '问答'
-  if (row.kind === 'action') return '动作'
-  return '话术'
 }
 
 /** 近 N 天被用了几次；0 显示破折号，避免整列都是 0 */
@@ -928,11 +897,24 @@ onMounted(load)
 
       <div class="ledger-wrap" role="group" aria-label="命令表" tabindex="0">
         <table v-if="visibleRows.length" class="ledger">
+          <!--
+            列宽用 colgroup 定死，配合 CSS 的 table-layout: fixed。
+            上一版是自动布局：调用列被撑到 346px，说明反而只有 324px ——
+            真正要读的那一列最窄。现在调用 208、限制 132、使用 60、状态 104、操作 216，
+            剩下的全部给说明，它一定是最宽的那一列。
+          -->
+          <colgroup>
+            <col class="c-call">
+            <col class="c-desc">
+            <col class="c-rule">
+            <col class="c-use">
+            <col class="c-state">
+            <col class="c-ops">
+          </colgroup>
           <thead>
             <tr>
               <th>调用</th>
-              <th>形态</th>
-              <th>说明</th>
+              <th class="th-desc">说明</th>
               <th>限制</th>
               <th class="num">使用</th>
               <th>状态</th>
@@ -943,11 +925,6 @@ onMounted(load)
             <tr v-for="row in visibleRows" :key="row.key" :class="{ 'is-off': !row.enabled }">
               <td class="cell-call">
                 <span class="cmd-path"><span class="slash">/</span>{{ row.path.split('/').join(' /') }}</span>
-              </td>
-              <td class="cell-kind">
-                <span class="kind-dot" :class="rowKindClass(row)"></span>
-                <span class="kind-label">{{ rowKindLabel(row) }}</span>
-                <span v-if="rowTypeSub(row)" class="kind-sub">{{ rowTypeSub(row) }}</span>
               </td>
               <td class="cell-desc">{{ row.description }}</td>
               <td class="cell-rule">{{ rowRuleText(row) }}</td>
@@ -1159,7 +1136,15 @@ onMounted(load)
 .filter:focus-visible { outline: 2px solid var(--flame); outline-offset: 1px; }
 
 .ledger-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
-.ledger { width: 100%; border-collapse: collapse; }
+/* table-layout: fixed 让 colgroup 的列宽真正生效；自动布局会把长内容那列撑开 */
+.ledger { width: 100%; border-collapse: collapse; table-layout: fixed; }
+
+/* 列宽只有这六个数。说明列不写宽度 = 吃掉剩余空间，因此永远是最宽的一列 */
+.c-call { width: 208px; }
+.c-rule { width: 132px; }
+.c-use { width: 60px; }
+.c-state { width: 104px; }
+.c-ops { width: 216px; }
 .ledger th {
   position: sticky;
   top: 0;
@@ -1187,33 +1172,31 @@ onMounted(load)
 .ledger tbody tr:hover { background: var(--surface-hover); }
 .ledger tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--ember); }
 .ledger tbody tr.is-off { opacity: .55; }
-.cell-call { min-width: 176px; }
+.cell-call { overflow: hidden; }
 .cmd-path {
+  display: block;
   font-family: var(--font-mono);
   font-size: var(--fs-base);
   color: var(--ink);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .slash { color: var(--ember); }
-.cell-kind { white-space: nowrap; }
-.kind-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 7px;
-  border-radius: 50%;
-  vertical-align: 1px;
-  background: var(--mist);
+.cell-desc {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  /* 说明列吃掉剩余宽度，长句在单元格内换行，不要撑出表格 */
+  overflow-wrap: anywhere;
+  line-height: 1.6;
 }
-.k-board { background: var(--ember); }
-.k-agent { background: var(--vital); }
-.k-action { background: var(--warn); }
-.k-system { background: var(--ink-4); }
-.k-template { background: var(--mist); }
-.kind-label { color: var(--ink-2); font-size: var(--fs-sm); }
-.kind-sub { margin-left: 6px; color: var(--ink-4); font-size: var(--fs-xs); }
-.cell-desc { width: 24%; color: var(--ink-3); font-size: var(--fs-sm); }
-.cell-rule { color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; }
+.cell-rule {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cell-use { width: 58px; color: var(--ink-2); }
 .cell-state { color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; }
 .state-dot {
@@ -1228,17 +1211,43 @@ onMounted(load)
 .state-dot.on { background: var(--vital); box-shadow: 0 0 0 3px var(--vital-veil); }
 .builtin { margin-left: 8px; color: var(--ink-4); font-size: 10.5px; letter-spacing: .08em; }
 .cell-ops { text-align: right; white-space: nowrap; }
+/*
+ * 行内动作：上一版是「3px 内边距的灰字」，看着像表里的普通文字，
+ * 用户根本不知道那三个词能点。现在给它们按钮的形：细边、浅底、26px 高。
+ * 不给主色填充 —— 一行里有三四个按钮，全都点亮就等于没有重点。
+ */
 .row-action {
-  padding: 3px 4px;
-  background: none;
-  border: 0;
-  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-xs);
+  background: var(--stone-400);
+  color: var(--ink-2);
   font-size: var(--fs-xs);
+  line-height: 1;
   cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
 }
-.row-action:hover { color: var(--ember); }
-.row-action.danger:hover { color: var(--blight-lift); }
-.row-action:focus-visible { outline: 2px solid var(--flame); outline-offset: 1px; }
+.row-action + .row-action { margin-left: 6px; }
+.row-action:hover {
+  border-color: var(--ember);
+  color: var(--ember-hot);
+  background: var(--ember-veil);
+}
+/* 删除是唯一会掉数据的动作：悬停变红，和另外几个区分开 */
+.row-action.danger:hover {
+  border-color: var(--blight);
+  color: var(--blight-lift);
+  background: var(--blight-veil);
+}
+.row-action:active { background: var(--stone-300); }
+.row-action:focus-visible { outline: 2px solid var(--ember); outline-offset: 1px; }
 .row-muted { color: var(--ink-4); font-size: var(--fs-xs); }
 .ledger-empty { padding: 48px 0; text-align: center; color: var(--ink-3); }
 .ledger-empty p { margin: 0 0 8px; }
@@ -1346,10 +1355,28 @@ onMounted(load)
   .index-tools { grid-column: 1 / -1; justify-content: flex-start; }
 }
 @media (max-width: 900px) {
+  /* 窄屏收起「限制」和「使用」，留住调用、说明、状态与操作 ——
+     说明是这一页最该读的列，不能再像上一版那样被优先隐藏。
+
+     ⚠️ 这里必须把固定布局改回自动布局：fixed + colgroup 下隐藏两列，
+     列轨道还按原来的序号吃宽度，实测会错位成「状态 132px、操作 60px、说明 0」。
+     换成 auto 之后，隐藏的列真正消失，说明列重新吃到剩余宽度。 */
+  .ledger { table-layout: auto; }
+  .c-call, .c-rule, .c-use, .c-state, .c-ops { width: auto; }
+  /* 调用列给个下限：纯 auto 会被压到 64px，只剩一个「/li…」 */
+  .cell-call { min-width: 96px; }
   .ledger th:nth-child(3), .ledger td:nth-child(3),
   .ledger th:nth-child(4), .ledger td:nth-child(4) { display: none; }
   .usage-grid { grid-template-columns: 1fr; gap: var(--sp-5); }
 }
+/* 手机上 6 列必然放不下。再收起「状态」—— 停用的行整行已经变淡，
+   状态信息并没有丢；剩下调用 / 说明 / 操作三列，说明才能真正读到。 */
+@media (max-width: 640px) {
+  .ledger th:nth-child(5), .ledger td:nth-child(5) { display: none; }
+  .row-action { min-width: 36px; padding: 0 6px; }
+  .row-action + .row-action { margin-left: 4px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ledger tbody tr { transition: none; }
 }
