@@ -8,9 +8,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { CommandVariables, CommandVariable } from '@shared/api/types'
-import Input from '@shared/ui/Input.vue'
 import Notice from '@shared/ui/Notice.vue'
-import Tag from '@shared/ui/Tag.vue'
 
 const loading = ref(false)
 const error = ref('')
@@ -77,9 +75,22 @@ async function copyVar(name: string) {
   }
 }
 
+/**
+ * 页面栏要用的读数与动作。
+ *
+ * <p>搜索框与「看当前值 / 看示例值」已上移到 Bot 配置页的吸顶栏 ——
+ * 变量页自己的标题行因此整个去掉。状态仍留在面板里，页面栏通过这几个函数读写，
+ * 这样切到别的 tab 再切回来，关键词与显示模式都还在。
+ */
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
+  keyword: () => keyword.value,
+  setKeyword: (v: string) => { keyword.value = v },
+  showCurrent: () => showCurrent.value,
+  toggleMode: () => { showCurrent.value = !showCurrent.value },
+  /** 高级变量指 {user.id} 与 {group.id}，服务端没开时这两个不可用 */
+  advancedOff: () => !!data.value && !data.value.allowUserIds,
 })
 
 onMounted(load)
@@ -89,32 +100,10 @@ onMounted(load)
   <div class="var-page">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <header class="var-head">
-      <div class="var-title">
-        <h2>变量</h2>
-        <span class="var-count">{{ rows.length }} 个</span>
-      </div>
-      <div class="var-tools">
-        <Input
-          :model-value="keyword"
-          placeholder="搜索变量"
-          aria-label="搜索变量"
-          @update:model-value="keyword = $event"
-        />
-        <button type="button" class="mode" @click="showCurrent = !showCurrent">
-          {{ showCurrent ? '看示例值' : '看当前值' }}
-        </button>
-      </div>
-    </header>
-
     <div class="rule-strip">
       <div><code>#名字#</code><span>解析时展开</span></div>
       <div><code>文本</code><span>发送时展开</span></div>
       <div><code>一次</code><span>结果不再展开</span></div>
-    </div>
-
-    <div v-if="data && !data.allowUserIds" class="advanced">
-      <Tag tone="warn">高级变量未启用</Tag>
     </div>
 
     <div v-if="groups.length" class="var-groups">
@@ -150,38 +139,7 @@ onMounted(load)
 <style scoped>
 .var-page { display: flex; flex-direction: column; gap: var(--sp-5); }
 
-.var-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--sp-4);
-  padding-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--hairline-lit);
-}
-.var-title { display: flex; align-items: baseline; gap: var(--sp-3); }
-.var-title h2 {
-  margin: 0;
-  font-family: var(--font-title);
-  font-size: 28px;
-  font-weight: var(--fw-semi);
-  letter-spacing: .02em;
-}
-.var-count { color: var(--ink-4); font-family: var(--font-mono); font-size: var(--fs-xs); }
-.var-tools { display: flex; align-items: center; gap: var(--sp-2); }
-.var-tools :deep(.inp) { width: 220px; }
-.mode {
-  min-height: 34px;
-  padding: 0 12px;
-  background: none;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-sm);
-  color: var(--ink-2);
-  font-size: var(--fs-xs);
-  cursor: pointer;
-}
-.mode:hover { border-color: var(--edge-hover); color: var(--ink); }
-.mode:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
-
+/* 标题行与「高级变量未启用」都已经上移到页面栏（BotConfigView 的 AdminPage#actions） */
 .rule-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -198,7 +156,6 @@ onMounted(load)
 }
 .rule-strip div + div { padding-left: var(--sp-4); border-left: 1px solid var(--hairline); }
 .rule-strip code { color: var(--ember); font-family: var(--font-mono); }
-.advanced { display: flex; justify-content: flex-end; }
 
 .var-groups { display: flex; flex-direction: column; gap: var(--sp-5); }
 .var-group { display: flex; flex-direction: column; }
@@ -270,9 +227,6 @@ onMounted(load)
 }
 
 @media (max-width: 900px) {
-  .var-head { flex-direction: column; align-items: stretch; }
-  .var-tools { justify-content: space-between; }
-  .var-tools :deep(.inp) { width: auto; flex: 1; }
   .rule-strip { grid-template-columns: 1fr; }
   .rule-strip div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--hairline); }
   .var-row { grid-template-columns: 1fr auto; gap: 4px 12px; }

@@ -28,6 +28,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Tabs from '@shared/ui/Tabs.vue'
 import Button from '@shared/ui/Button.vue'
+import Input from '@shared/ui/Input.vue'
 import Tag from '@shared/ui/Tag.vue'
 import SettingsPanel from './bot/SettingsPanel.vue'
 import CommandsPanel from './bot/CommandsPanel.vue'
@@ -91,6 +92,26 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
         <Button size="sm" variant="primary" @click="commands?.openNewMenu()">新建命令</Button>
       </template>
       <template v-else>
+        <!--
+          变量页原先有一整行标题栏：大标题 + 数量 + 搜索框 + 显示模式。
+          它只在页面顶部有意义，往下滚就看不见了。现在搜索与模式都收进这条吸顶栏，
+          滚到任何位置都能改；「高级变量未启用」也不再单独占一行，就挨在刷新旁边。
+        -->
+        <Tag
+          v-if="variables?.advancedOff()"
+          tone="warn"
+          title="高级变量指 {user.id} 与 {group.id}：需要在服务端打开 app.commands.allow-user-ids 才会开放"
+        >{user.id}/{group.id} 未启用</Tag>
+        <Button size="sm" @click="variables?.toggleMode()">
+          {{ variables?.showCurrent() ? '看示例值' : '看当前值' }}
+        </Button>
+        <Input
+          class="var-search"
+          :model-value="variables?.keyword() ?? ''"
+          placeholder="搜索变量"
+          aria-label="搜索变量"
+          @update:model-value="(v: string) => variables?.setKeyword(v)"
+        />
         <Button size="sm" :disabled="variables?.isLoading()" @click="variables?.reload()">刷新</Button>
       </template>
     </template>
@@ -106,3 +127,12 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
     </KeepAlive>
   </AdminPage>
 </template>
+
+<style scoped>
+/* 变量搜索框：桌面上给个固定宽度；窄屏收窄，别把刷新挤出屏幕 */
+.var-search { width: 220px; }
+
+@media (max-width: 760px) {
+  .var-search { width: 148px; }
+}
+</style>
