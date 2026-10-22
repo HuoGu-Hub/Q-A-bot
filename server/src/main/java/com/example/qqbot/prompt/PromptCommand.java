@@ -1,5 +1,8 @@
 package com.example.qqbot.prompt;
 
+import com.example.qqbot.command.AccessRules;
+import com.example.qqbot.command.AclStore;
+import com.example.qqbot.command.CommandAccess;
 import com.example.qqbot.command.CommandRole;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -30,10 +33,12 @@ public class PromptCommand {
 
     private final PromptStore prompts;
     private final CommandStore commandStore;
+    private final AclStore aclStore;
 
-    public PromptCommand(PromptStore prompts, CommandStore commandStore) {
+    public PromptCommand(PromptStore prompts, CommandStore commandStore, AclStore aclStore) {
         this.prompts = prompts;
         this.commandStore = commandStore;
+        this.aclStore = aclStore;
     }
 
     public record Reply(String text) {
@@ -48,6 +53,11 @@ public class PromptCommand {
 
         long userId = event.getUserId() == null ? 0L : event.getUserId();
         long groupId = event.getGroupId() == null ? 0L : event.getGroupId();
+        // 与其他命令同一份全局黑白名单；/prompt 没有单独的命令行，所以只查全局
+        if (!AccessRules.allows(CommandAccess.ALL, CommandRole.ofSender(event),
+                userId, groupId, List.of(), aclStore.global())) {
+            return Optional.of(new Reply("这条命令你暂时用不了"));
+        }
         commandStore.logUsage("prompt", groupId, userId, true);
         if (!prompts.isAvailable()) {
             return Optional.of(new Reply("补充提示暂时用不了"));
@@ -86,22 +96,14 @@ public class PromptCommand {
             text = (text.substring(0, matcher.start()) + " " + text.substring(matcher.end())).trim();
         }
 
-        CommandRole role = CommandRole.ofSender(event);
         PromptStore.Scope scope;
         long ownerUser = 0L;
         long ownerGroup = 0L;
 
         if (targetUserId != null) {
-            if (targetUserId != userId && !role.atLeast(CommandRole.ADMIN)) {
-                return "只有群主或管理员能给别人设置提示";
-            }
             scope = PromptStore.Scope.USER;
             ownerUser = targetUserId;
         } else if (event.isGroupMessage() && groupId > 0) {
-            if (!role.atLeast(CommandRole.ADMIN)) {
-                return "本群提示需要群主或管理员设置。\n"
-                        + "只给自己设置：/prompt /create #user_id-" + userId + "# 文本";
-            }
             scope = PromptStore.Scope.GROUP;
             ownerGroup = groupId;
         } else {
@@ -149,34 +151,23 @@ public class PromptCommand {
         if (prompt == null) {
             return "没有 #" + id + " 这一条";
         }
-        CommandRole role = CommandRole.ofSender(event);
-        boolean admin = role.atLeast(CommandRole.ADMIN);
         if (prompt.scope() == PromptStore.Scope.GROUP) {
             if (prompt.groupId() != groupId) {
                 return "这条提示不属于当前群";
             }
-            if (!admin) {
-                return "本群提示只有群主或管理员能删";
-            }
-        } else if (prompt.userId() != userId && !admin) {
+        } else if (prompt.userId() != userId) {
             return "只能删自己的提示";
         }
         return prompts.delete(id) ? "已删除 #" + id : "没有 #" + id + " 这一条";
     }
 
     private String clear(OneBotEvent event, long userId, long groupId) {
-        CommandRole role = CommandRole.ofSender(event);
         int n = 0;
-        if (event.isGroupMessage() && groupId > 0 && role.atLeast(CommandRole.ADMIN)) {
+        if (event.isGroupMessage() && groupId > 0) {
             n += prompts.clearGroup(groupId);
         }
         n += prompts.clearUser(userId);
-        if (n == 0) {
-            return event.isGroupMessage()
-                    ? "没有可清空的提示。本群提示只有群主或管理员能清"
-                    : "没有可清空的提示";
-        }
-        return "已清空 " + n + " 条补充提示";
+        return n == 0 ? "没有可清空的提示" : "已清空 " + n + " 条补充提示";
     }
 
     private static long firstNumber(String arg) {
@@ -203,7 +194,7 @@ public class PromptCommand {
     private static String usage() {
         return """
                 默认按本群保存：
-                  /prompt /create 文本                  群主或管理员
+                  /prompt /create 文本
                   /prompt /create #user_id-QQ号# 文本   只给某个人
                   /prompt /list
                   /prompt /delete 编号

@@ -1,5 +1,7 @@
 package com.example.qqbot.prompt;
 
+import com.example.qqbot.command.AclEntry;
+import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -18,6 +20,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class PromptCommandTest {
 
@@ -26,6 +29,7 @@ class PromptCommandTest {
 
     private SqliteDatabase db;
     private PromptStore store;
+    private AclStore aclStore;
     private PromptCommand command;
 
     @BeforeEach
@@ -35,7 +39,9 @@ class PromptCommandTest {
         db = new SqliteDatabase(persist);
         db.init();
         store = new PromptStore(new PromptRepository(new Jdbc(db)));
-        command = new PromptCommand(store, mock(CommandStore.class));
+        aclStore = mock(AclStore.class);
+        when(aclStore.global()).thenReturn(List.of());
+        command = new PromptCommand(store, mock(CommandStore.class), aclStore);
     }
 
     @AfterEach
@@ -59,7 +65,7 @@ class PromptCommandTest {
     @Test
     @DisplayName("★ 传 #user_id-...# 才按 QQ 号保存")
     void userScopeOnlyWithUserId() {
-        String created = run("/prompt /create #user_id-1002# 只对 1002 生效", "admin");
+        String created = run("/prompt /create #user_id-1002# 只对 1002 生效", "member");
         assertThat(created).contains("个人提示", "只对 1002 生效");
 
         assertThat(store.listFor(2002L, 1001L)).isEmpty();
@@ -68,13 +74,23 @@ class PromptCommandTest {
     }
 
     @Test
-    @DisplayName("普通成员不能设置本群提示，但可以设置自己的")
-    void memberCannotSetGroupPrompt() {
-        assertThat(run("/prompt /create 群提示", "member")).contains("群主或管理员");
-        assertThat(store.listFor(2002L, 1001L)).isEmpty();
+    @DisplayName("普通成员也能设置本群提示")
+    void memberCanSetGroupPrompt() {
+        assertThat(run("/prompt /create 群提示", "member")).contains("本群提示");
+        assertThat(store.listFor(2002L, 1001L)).hasSize(1);
 
         assertThat(run("/prompt /create #user_id-1001# 我的提示", "member")).contains("个人提示");
-        assertThat(store.listFor(2002L, 1001L)).hasSize(1);
+        assertThat(store.listFor(2002L, 1001L)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("全局黑名单仍然拦截 /prompt")
+    void globalBlacklistBlocks() {
+        when(aclStore.global()).thenReturn(List.of(
+                new AclEntry(AclEntry.BLACK, AclEntry.UID, 1001L)));
+
+        assertThat(run("/prompt /create 群提示", "member")).contains("用不了");
+        assertThat(store.listFor(2002L, 1001L)).isEmpty();
     }
 
     @Test
@@ -91,8 +107,8 @@ class PromptCommandTest {
         long id = store.listFor(2002L, 1001L).get(0).id();
         assertThat(created).contains("#" + id);
 
-        assertThat(run("/prompt /delete " + id, "admin")).contains("已删除");
-        assertThat(run("/prompt /delete " + id, "admin")).contains("没有");
+        assertThat(run("/prompt /delete " + id, "member")).contains("已删除");
+        assertThat(run("/prompt /delete " + id, "member")).contains("没有");
     }
 
     @Test

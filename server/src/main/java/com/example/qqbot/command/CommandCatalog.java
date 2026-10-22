@@ -182,7 +182,7 @@ public class CommandCatalog {
                   /list            列出全部可用命令
                   /help            这份说明
                 补充提示：
-                  /prompt /create 文本                   默认加到本群；群主或管理员
+                  /prompt /create 文本                   默认加到本群
                   /prompt /create #user_id-QQ号# 文本    只给某个人
                   /prompt /list
                   /prompt /delete 编号
@@ -197,7 +197,7 @@ public class CommandCatalog {
                   /板块 /list      看这个板块的参数
                   /板块 /help      看这个板块怎么用
                 注意：
-                  独立的 /create、/delete 不生效：板块用 /板块 /create，个人提示用 /prompt /create
+                  独立的 /create、/delete 不生效：板块用 /板块 /create，补充提示用 /prompt /create
                   参数写成 #名字-值#，顺序随意，写在文本前后都行
                   多个值用顿号隔开；# 用半角，前后不要多打空格
                 """;
