@@ -360,15 +360,20 @@ export interface AdminPrompt {
   content: string
 }
 
-/** 系统命令的中文别名：target = list / help / prompt */
+/** 命令别名：target 是规范命令路径，如 prompt/create、预约开黑/create */
 export interface SystemAliasEntry {
-  target: 'list' | 'help' | 'prompt'
+  target: string
   label: string
   aliases: string[]
 }
 
+export interface SystemAliasGroup {
+  label: string
+  items: SystemAliasEntry[]
+}
+
 export interface SystemAliasList {
-  commands: SystemAliasEntry[]
+  groups: SystemAliasGroup[]
 }
 
 export interface AdminPromptList {

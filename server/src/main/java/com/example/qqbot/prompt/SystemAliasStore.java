@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+
 
 /**
  * 系统命令别名 —— 把 {@code /列表} 映射回 {@code /list}。
@@ -23,8 +23,6 @@ public class SystemAliasStore {
     public static final String LIST = "list";
     public static final String HELP = "help";
     public static final String PROMPT = "prompt";
-
-    private static final Set<String> TARGETS = Set.of(LIST, HELP, PROMPT);
 
     private final SystemAliasRepository repo;
 
@@ -59,8 +57,12 @@ public class SystemAliasStore {
         }
         Map<String, String> seen = new LinkedHashMap<>();
         List<SystemAliasRepository.Row> rows = new ArrayList<>();
-        for (String target : TARGETS) {
-            for (String raw : byTarget.getOrDefault(target, List.of())) {
+        for (var entry : byTarget.entrySet()) {
+            String target = entry.getKey();
+            if (target == null || target.isBlank()) {
+                continue;
+            }
+            for (String raw : entry.getValue() == null ? List.<String>of() : entry.getValue()) {
                 String alias = normalize(raw);
                 if (alias.isEmpty()) {
                     continue;
@@ -69,12 +71,9 @@ public class SystemAliasStore {
                     throw new AliasException("别名「" + alias + "」只能含汉字、字母、数字、下划线、点、短横线");
                 }
                 String lower = alias.toLowerCase(Locale.ROOT);
-                if (TARGETS.contains(lower)) {
-                    throw new AliasException("别名「" + alias + "」和系统命令重名");
-                }
                 String old = seen.putIfAbsent(lower, target);
                 if (old != null && !old.equals(target)) {
-                    throw new AliasException("别名「" + alias + "」同时指向了两个系统命令");
+                    throw new AliasException("别名「" + alias + "」同时指向了两个命令");
                 }
                 if (old != null) {
                     continue;
@@ -105,7 +104,8 @@ public class SystemAliasStore {
         String alias = parts[0].toLowerCase(Locale.ROOT);
         for (Alias item : list()) {
             if (item.alias().equals(alias)) {
-                return "/" + item.target() + (parts.length > 1 ? " " + parts[1] : "");
+                String path = item.target().replace("/", " /");
+                return "/" + path + (parts.length > 1 ? " " + parts[1] : "");
             }
         }
         return body;

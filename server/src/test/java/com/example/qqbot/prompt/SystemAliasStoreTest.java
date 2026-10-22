@@ -45,11 +45,15 @@ class SystemAliasStoreTest {
         store.replace(Map.of(
                 SystemAliasStore.LIST, List.of("列表"),
                 SystemAliasStore.HELP, List.of("帮助"),
-                SystemAliasStore.PROMPT, List.of("提示")));
+                SystemAliasStore.PROMPT, List.of("提示"),
+                "prompt/create", List.of("新增提示"),
+                "预约开黑/create", List.of("新增预约")));
 
         assertThat(store.resolve("/列表")).isEqualTo("/list");
         assertThat(store.resolve("@飘雪喵 /帮助")).isEqualTo("/help");
         assertThat(store.resolve("/提示 /create 你好")).isEqualTo("/prompt /create 你好");
+        assertThat(store.resolve("/新增提示 你好")).isEqualTo("/prompt /create 你好");
+        assertThat(store.resolve("/新增预约 今晚8点")).isEqualTo("/预约开黑 /create 今晚8点");
         assertThat(store.resolve("/普通命令")).isEqualTo("/普通命令");
     }
 

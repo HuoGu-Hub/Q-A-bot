@@ -897,7 +897,7 @@ onMounted(load)
           <span v-if="search || kindFilter !== 'all'"><b>{{ visibleRows.length }}</b> 匹配</span>
         </div>
         <div class="index-tools">
-          <button type="button" class="alias-trigger" @click="aliasOpen = true">系统别名</button>
+          <button type="button" class="alias-trigger" @click="aliasOpen = true">命令别名</button>
           <Input v-model="search" placeholder="搜索命令" aria-label="搜索命令" />
           <div class="filters" role="group" aria-label="按类型筛选">
             <button

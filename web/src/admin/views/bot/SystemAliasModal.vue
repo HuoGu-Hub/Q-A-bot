@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 系统命令的中文别名。
+ * 命令别名。
  *
- * 只给 list / help / prompt 这类由代码处理的系统命令声明调用名；
- * 别名不能和现有命令、板块重名，解析发生在命令分派之前。
+ * 给任意规范命令声明中文调用名：系统命令、板块、板块动作、普通命令。
+ * 别名在分派前展开，因此 /新增预约 和 /预约开黑 /create 走同一条路径。
  */
 import { ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
-import type { SystemAliasEntry, SystemAliasList } from '@shared/api/types'
+import type { SystemAliasGroup, SystemAliasList } from '@shared/api/types'
 import Modal from '@shared/ui/Modal.vue'
 import Input from '@shared/ui/Input.vue'
 import Button from '@shared/ui/Button.vue'
@@ -16,7 +16,10 @@ import Notice from '@shared/ui/Notice.vue'
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
-const rows = ref<Array<SystemAliasEntry & { text: string }>>([])
+interface EditItem { target: string; label: string; text: string }
+interface EditGroup { label: string; items: EditItem[] }
+
+const groups = ref<EditGroup[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
@@ -29,7 +32,14 @@ async function load() {
   saved.value = ''
   try {
     const data = await adminApi.get<SystemAliasList>('/system-aliases')
-    rows.value = data.commands.map((c) => ({ ...c, text: c.aliases.join(' ') }))
+    groups.value = data.groups.map((g: SystemAliasGroup) => ({
+      label: g.label,
+      items: g.items.map((item) => ({
+        target: item.target,
+        label: item.label,
+        text: item.aliases.join(' '),
+      })),
+    }))
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -48,7 +58,10 @@ async function save() {
   error.value = ''
   try {
     await adminApi.post('/system-aliases', {
-      commands: rows.value.map((r) => ({ target: r.target, aliases: splitAliases(r.text) })),
+      entries: groups.value.flatMap((g) => g.items.map((item) => ({
+        target: item.target,
+        aliases: splitAliases(item.text),
+      }))),
     })
     saved.value = '已保存'
     emit('changed')
@@ -59,25 +72,32 @@ async function save() {
     saving.value = false
   }
 }
+
+function commandText(target: string) {
+  return '/' + target.replaceAll('/', ' /')
+}
 </script>
 
 <template>
-  <Modal :open="open" title="系统命令别名" width="560px" @close="emit('close')">
+  <Modal :open="open" title="命令别名" width="680px" @close="emit('close')">
     <div class="alias-page">
       <Notice v-if="error" tone="error">{{ error }}</Notice>
-      <p class="alias-hint">写中文调用名，多个用空格或逗号分开。解析后会走原命令的权限与开关。</p>
+      <p class="alias-hint">写中文调用名，多个用空格或逗号分开。别名解析后走原命令的权限、开关与参数。</p>
 
       <div v-if="loading" class="alias-empty">正在读取…</div>
-      <div v-else class="alias-list">
-        <label v-for="row in rows" :key="row.target" class="alias-row">
-          <span class="alias-cmd">/{{ row.target }}</span>
-          <span class="alias-label">{{ row.label }}</span>
-          <Input
-            v-model="row.text"
-            :placeholder="row.target === 'list' ? '列表' : row.target === 'help' ? '帮助' : '提示'"
-            :aria-label="row.target + ' 的别名'"
-          />
-        </label>
+      <div v-else class="alias-groups">
+        <section v-for="group in groups" :key="group.label" class="alias-group">
+          <h3>{{ group.label }}</h3>
+          <label v-for="item in group.items" :key="item.target" class="alias-row">
+            <span class="alias-cmd">{{ commandText(item.target) }}</span>
+            <span class="alias-label">{{ item.label }}</span>
+            <Input
+              v-model="item.text"
+              :placeholder="item.target.split('/').length > 1 ? '如 新增' : '如 列表'"
+              :aria-label="item.target + ' 的别名'"
+            />
+          </label>
+        </section>
       </div>
 
       <div class="alias-actions">
@@ -89,21 +109,32 @@ async function save() {
 </template>
 
 <style scoped>
-.alias-page { display: flex; flex-direction: column; gap: var(--sp-4); }
+.alias-page { display: flex; flex-direction: column; gap: var(--sp-3); max-height: 70vh; }
 .alias-hint { margin: 0; color: var(--ink-3); font-size: var(--fs-meta); line-height: 1.6; }
-.alias-list { display: flex; flex-direction: column; border-top: 1px solid var(--hairline); }
-.alias-row {
-  display: grid; grid-template-columns: 72px 100px 1fr;
-  align-items: center; gap: var(--sp-3);
-  padding: 10px 0; border-bottom: 1px solid var(--hairline);
+.alias-groups { overflow: auto; padding-right: 4px; }
+.alias-group { display: flex; flex-direction: column; }
+.alias-group h3 {
+  position: sticky; top: 0; z-index: 1;
+  margin: 0; padding: 8px 0 6px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-4);
+  font-size: 10.5px;
+  font-weight: var(--fw-medium);
+  letter-spacing: .14em;
 }
-.alias-cmd { color: var(--ember); font-family: var(--font-mono); font-size: var(--fs-sm); }
+.alias-row {
+  display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(80px, .7fr) minmax(150px, 1.6fr);
+  align-items: center; gap: var(--sp-3);
+  padding: 7px 0; border-bottom: 1px solid var(--hairline);
+}
+.alias-cmd { overflow: hidden; color: var(--ember); font-family: var(--font-mono); font-size: var(--fs-xs); text-overflow: ellipsis; white-space: nowrap; }
 .alias-label { color: var(--ink-3); font-size: var(--fs-xs); }
 .alias-empty { padding: var(--sp-5) 0; color: var(--ink-4); }
 .alias-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); }
 .saved { color: var(--vital); font-size: var(--fs-xs); }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .alias-row { grid-template-columns: 1fr; gap: 4px; }
 }
 </style>
