@@ -21,6 +21,7 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -96,6 +97,15 @@ class KbToolAssistantTest {
         /** 模型收到的最后一条用户消息的正文。只对"单条文本"的消息有意义，多内容会抛异常 */
         String lastUserText() {
             return lastUserMessage().singleText();
+        }
+
+        /** 模型收到的最后一条系统消息 */
+        String lastSystemText() {
+            return seen.get(seen.size() - 1).messages().stream()
+                    .filter(m -> m instanceof SystemMessage)
+                    .map(m -> ((SystemMessage) m).text())
+                    .reduce((a, b) -> b)
+                    .orElseThrow(() -> new AssertionError("模型没收到系统消息"));
         }
     }
 
@@ -175,6 +185,20 @@ class KbToolAssistantTest {
     }
 
     // ---------- 授权 ----------
+
+    @Test
+    @DisplayName("★ 本轮补充提示追加到系统消息，且不会漏到下一轮")
+    void extraPromptIsScopedToOneCall() {
+        FakeChatModel model = new FakeChatModel(null);
+        KbToolAssistant a = assistant(model, kbWith(augmentorReturning(List.of())));
+
+        a.chat("问题", "问题", new KbRetrievalDiagnostics(), true, "群:1/用户:2",
+                "【用户补充提示】\n- 请叫我老板");
+        assertThat(model.lastSystemText()).contains("请叫我老板");
+
+        a.chat("第二问", "第二问", new KbRetrievalDiagnostics(), true, "群:1/用户:2");
+        assertThat(model.lastSystemText()).doesNotContain("请叫我老板");
+    }
 
     @Test
     @DisplayName("★ 默认拒绝：白名单外的工具一律不放行")

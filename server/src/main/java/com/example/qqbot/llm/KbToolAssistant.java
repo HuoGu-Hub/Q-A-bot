@@ -54,6 +54,15 @@ public class KbToolAssistant {
      */
     static final Set<String> ALLOWED_TOOLS = Set.of("lookup", "locate", "search_titles");
 
+    /**
+     * 本轮请求追加到系统提示词末尾的内容。
+     *
+     * <p>AiServices 的 {@code systemMessageProvider} 只拿得到 memoryId，拿不到调用方参数；
+     * 用它来挂"当前用户的补充提示"只能在调用线程上放一份临时值。所有入口都在 finally 里恢复，
+     * 不会把 A 的补充提示带到 B 的请求里。
+     */
+    private static final ThreadLocal<String> EXTRA_SYSTEM_PROMPT = new ThreadLocal<>();
+
     /** 调用方身份 —— 授权钩子靠它判断"这是替谁在调工具" */
     public static final String KEY_CALLER = "tool.caller";
 
@@ -104,7 +113,7 @@ public class KbToolAssistant {
         this.assistant = AiServices.builder(Assistant.class)
                 .chatModel(chatModel)
                 // 安全底座交给我们自己那份，不用官方默认的空提示词
-                .systemMessageProvider(memoryId -> router.systemPromptWithStyle())
+                .systemMessageProvider(memoryId -> router.systemPromptWithStyle() + extraPromptSuffix())
                 // 检索与资料注入走我们的官方管线：ContentRetriever → ContentAggregator → ContentInjector
                 .retrievalAugmentor(kbRetriever.augmentor())
                 .tools(tool)
@@ -216,10 +225,25 @@ public class KbToolAssistant {
      */
     public String chat(String message, String kbQuery, KbRetrievalDiagnostics sink, boolean kbEnabled,
                        String caller) {
-        ToolBudget budget = newBudget();
-        String out = assistant.chat(message, params(budget, kbQuery, sink, kbEnabled, caller));
-        logBudget(budget);
-        return out;
+        return chat(message, kbQuery, sink, kbEnabled, caller, "");
+    }
+
+    /**
+     * 带本轮用户补充提示的入口。
+     *
+     * @param extraPrompt 追加到系统提示词末尾的文本；空串表示不追加
+     */
+    public String chat(String message, String kbQuery, KbRetrievalDiagnostics sink, boolean kbEnabled,
+                       String caller, String extraPrompt) {
+        String previous = pushExtraPrompt(extraPrompt);
+        try {
+            ToolBudget budget = newBudget();
+            String out = assistant.chat(message, params(budget, kbQuery, sink, kbEnabled, caller));
+            logBudget(budget);
+            return out;
+        } finally {
+            popExtraPrompt(previous);
+        }
     }
 
     /**
@@ -231,6 +255,13 @@ public class KbToolAssistant {
      */
     public String chatWithImages(String message, List<VisionImage> images, String kbQuery,
                                  KbRetrievalDiagnostics sink, boolean kbEnabled, String caller) {
+        return chatWithImages(message, images, kbQuery, sink, kbEnabled, caller, "");
+    }
+
+    /** 带本轮用户补充提示的视觉入口 */
+    public String chatWithImages(String message, List<VisionImage> images, String kbQuery,
+                                 KbRetrievalDiagnostics sink, boolean kbEnabled, String caller,
+                                 String extraPrompt) {
         // ⚠️ 这里**不能**自己拼一条多内容 UserMessage 再传 —— 它会被框架当模板 toString 掉。
         //    见 Assistant 的第二个重载：文本走 message，图片走 List<ImageContent> 参数。
         List<ImageContent> contents = new ArrayList<>();
@@ -239,11 +270,35 @@ public class KbToolAssistant {
                 contents.add(ImageContent.from(img.base64(), img.mimeType()));
             }
         }
-        ToolBudget budget = newBudget();
-        String out = assistant.chat(message == null ? "" : message, contents,
-                params(budget, kbQuery, sink, kbEnabled, caller));
-        logBudget(budget);
-        return out;
+        String previous = pushExtraPrompt(extraPrompt);
+        try {
+            ToolBudget budget = newBudget();
+            String out = assistant.chat(message == null ? "" : message, contents,
+                    params(budget, kbQuery, sink, kbEnabled, caller));
+            logBudget(budget);
+            return out;
+        } finally {
+            popExtraPrompt(previous);
+        }
+    }
+
+    private static String extraPromptSuffix() {
+        String extra = EXTRA_SYSTEM_PROMPT.get();
+        return extra == null || extra.isBlank() ? "" : "\n\n" + extra;
+    }
+
+    private static String pushExtraPrompt(String extraPrompt) {
+        String previous = EXTRA_SYSTEM_PROMPT.get();
+        EXTRA_SYSTEM_PROMPT.set(extraPrompt == null ? "" : extraPrompt);
+        return previous;
+    }
+
+    private static void popExtraPrompt(String previous) {
+        if (previous == null) {
+            EXTRA_SYSTEM_PROMPT.remove();
+        } else {
+            EXTRA_SYSTEM_PROMPT.set(previous);
+        }
     }
 
     private static InvocationParameters params(ToolBudget budget, String kbQuery, KbRetrievalDiagnostics sink,

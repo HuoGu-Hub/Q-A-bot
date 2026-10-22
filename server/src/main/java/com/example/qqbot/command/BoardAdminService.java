@@ -97,9 +97,10 @@ public class BoardAdminService {
             throw new IllegalArgumentException("板块名「" + path + "」含不支持的字符");
         }
         if ("help".equalsIgnoreCase(path) || "list".equalsIgnoreCase(path)
-                || "create".equalsIgnoreCase(path) || "delete".equalsIgnoreCase(path)) {
+                || "create".equalsIgnoreCase(path) || "delete".equalsIgnoreCase(path)
+                || "prompt".equalsIgnoreCase(path)) {
             throw new IllegalArgumentException(
-                    "help / list / create / delete 是系统或板块动作的保留名，不能作为板块名");
+                    "help / list / create / delete / prompt 是系统或板块动作的保留名，不能作为板块名");
         }
 
         String originalPath = trim(input.originalPath());

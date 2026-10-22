@@ -24,6 +24,7 @@ import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.RenderContext;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.prompt.PromptCommand;
 import com.example.qqbot.onebot.outbound.OutboundSender;
 import com.example.qqbot.qa.QaCollector;
 import com.example.qqbot.trace.KbTrace;
@@ -71,6 +72,7 @@ public class CommandHandler {
     private final AclStore aclStore;
     private final CommandPolicyStore commandPolicyStore;
     private final BoardRunner boardRunner;
+    private final PromptCommand promptCommand;
 
     public CommandHandler(CommandPolicy commandProperties,
                           CommandMatcher commandMatcher,
@@ -84,7 +86,8 @@ public class CommandHandler {
                           QaCollector qaCollector,
                           AclStore aclStore,
                           CommandPolicyStore commandPolicyStore,
-                          BoardRunner boardRunner) {
+                          BoardRunner boardRunner,
+                          PromptCommand promptCommand) {
         this.commandProperties = commandProperties;
         this.commandMatcher = commandMatcher;
         this.commandParser = commandParser;
@@ -98,6 +101,7 @@ public class CommandHandler {
         this.aclStore = aclStore;
         this.commandPolicyStore = commandPolicyStore;
         this.boardRunner = boardRunner;
+        this.promptCommand = promptCommand;
     }
 
     /**
@@ -132,6 +136,17 @@ public class CommandHandler {
         boolean inGroup = event.isGroupMessage();
         long groupId = event.getGroupId() == null ? 0 : event.getGroupId();
         long userId = event.getUserId() == null ? 0 : event.getUserId();
+
+        // ---------- 个人提示：/prompt /create 文本 ----------
+        // 放在板块与命令表之前：prompt 是系统保留名，避免被同名配置遮住
+        java.util.Optional<PromptCommand.Reply> prompt = promptCommand.tryRun(event, text);
+        if (prompt.isPresent()) {
+            String answer = prompt.get().text();
+            if (answer != null && !answer.isBlank()) {
+                outboundSender.send(event, answer);
+            }
+            return Outcome.HANDLED;
+        }
 
         // ---------- 板块命令优先：/板块 /动作 ----------
         // 板块本身就是命令，不走命令表 —— 否则每个板块要生成五行配置，改一次就要同步一次

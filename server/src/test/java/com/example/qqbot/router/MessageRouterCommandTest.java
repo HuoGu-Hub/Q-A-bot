@@ -14,6 +14,7 @@ import com.example.qqbot.command.CommandMatcher;
 import com.example.qqbot.command.CommandParser;
 import com.example.qqbot.command.CommandRateLimiter;
 import com.example.qqbot.command.BoardRunner;
+import com.example.qqbot.prompt.PromptCommand;
 import com.example.qqbot.command.CommandPolicyStore;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.command.DataPolicy;
@@ -146,10 +147,12 @@ class MessageRouterCommandTest {
         // 板块分派在这组用例里不参与（它们验的是命令表那一路）
         BoardRunner boardRunner = mock(BoardRunner.class);
         when(boardRunner.tryRun(any(), any())).thenReturn(java.util.Optional.empty());
+        PromptCommand promptCommand = mock(PromptCommand.class);
+        when(promptCommand.tryRun(any(), any())).thenReturn(java.util.Optional.empty());
         return new CommandHandler(new CommandProperties(), commandMatcher, new CommandParser(),
                 new CommandHelp(variableRenderer), new ActionRegistry(List.of(ECHO, FAILING)),
                 commandRateLimiter, commandStore, variableRenderer, outboundSender, qaCollector,
-                aclStore, policyStore, boardRunner);
+                aclStore, policyStore, boardRunner, promptCommand);
     }
 
     private static BotCommand actionCommand(String action, String minRole) {

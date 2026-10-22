@@ -156,8 +156,9 @@ public class CommandController {
         // help 是保留字：/路径 /help 要留给单命令帮助
         String first = t.split("/")[0];
         if ("help".equalsIgnoreCase(first) || "list".equalsIgnoreCase(first)
-                || "create".equalsIgnoreCase(first) || "delete".equalsIgnoreCase(first)) {
-            return bad("help / list / create / delete 由系统或板块动作接管，不能作为指令路径的第一段");
+                || "create".equalsIgnoreCase(first) || "delete".equalsIgnoreCase(first)
+                || "prompt".equalsIgnoreCase(first)) {
+            return bad("help / list / create / delete / prompt 由系统或板块动作接管，不能作为指令路径的第一段");
         }
         if (t.toLowerCase(java.util.Locale.ROOT).endsWith("/help")) {
             return bad("help 是保留字，不能作为子命令名");

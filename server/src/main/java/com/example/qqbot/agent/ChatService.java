@@ -12,6 +12,7 @@ import com.example.qqbot.llm.ToolCallMarkup;
 import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.prompt.PromptStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.example.qqbot.llm.VisionImage;
 import org.slf4j.Logger;
@@ -39,6 +40,7 @@ public class ChatService {
     private final MediaPolicy mediaProperties;
     private final KbRetriever kbRetriever;
     private final KbPolicy kbProperties;
+    private final PromptStore promptStore;
 
     /**
      * 带工具的助手 —— <b>文本与图片两条路径共同的模型入口</b>。
@@ -50,7 +52,7 @@ public class ChatService {
 
     public ChatService(LlmRouter llmRouter, ImageFetcher imageFetcher, ContentGate contentGate,
                        MediaPolicy mediaProperties, KbRetriever kbRetriever, KbPolicy kbProperties,
-                       KbToolAssistant toolAssistant) {
+                       KbToolAssistant toolAssistant, PromptStore promptStore) {
         this.llmRouter = llmRouter;
         this.imageFetcher = imageFetcher;
         this.contentGate = contentGate;
@@ -58,6 +60,7 @@ public class ChatService {
         this.kbRetriever = kbRetriever;
         this.kbProperties = kbProperties;
         this.toolAssistant = toolAssistant;
+        this.promptStore = promptStore;
     }
 
     /**
@@ -110,6 +113,13 @@ public class ChatService {
             return done(contentGate.getNoTextReply(), t0, KbTrace.disabled());
         }
 
+        // 当前用户设置的补充提示：只影响他自己，追加到系统提示词末尾
+        long promptUserId = event.getUserId() == null ? 0L : event.getUserId();
+        String extraPrompt = promptStore == null ? "" : promptStore.appendixFor(promptUserId);
+        if (extraPrompt == null) {
+            extraPrompt = "";
+        }
+
         // ---------- 有图片：走视觉模型 ----------
         //
         // 注：视觉路径与文本路径同一套 —— 检索与资料注入由 augmentor 完成，
@@ -130,7 +140,7 @@ public class ChatService {
             KbRetrievalDiagnostics visionSink = new KbRetrievalDiagnostics();
             try {
                 String reply = toolAssistant.chatWithImages(envelope, images, visionQuery, visionSink,
-                        useMode != ReplyMode.NONE, visionCaller);
+                        useMode != ReplyMode.NONE, visionCaller, extraPrompt);
                 return done(sanitize(reply), t0, kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs()));
             } catch (Exception e) {
                 log.error("视觉模型调用失败：{}", e.getMessage());
@@ -151,7 +161,7 @@ public class ChatService {
         try {
             String userMessage = buildUserMessage(event, text, quoteText, null, useMode);
             String reply = toolAssistant.chat(userMessage, query, sink, useMode != ReplyMode.NONE,
-                    callerOf(event));
+                    callerOf(event), extraPrompt);
             return done(sanitize(reply), t0, kbRetriever.traceOf(sink, query, sink.elapsedMs()));
         } catch (Exception e) {
             log.error("调用大模型失败：{}", e.getMessage());

@@ -6,6 +6,7 @@ import com.example.qqbot.guard.ContentGate;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.llm.KbToolAssistant;
+import com.example.qqbot.prompt.PromptStore;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -18,8 +19,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -32,6 +36,7 @@ class ChatServiceToolMarkupTest {
 
     private LlmRouter llmRouter;
     private KbToolAssistant assistant;
+    private PromptStore promptStore;
     private ChatService chatService;
 
     @BeforeEach
@@ -39,8 +44,10 @@ class ChatServiceToolMarkupTest {
         llmRouter = mock(LlmRouter.class);
         when(llmRouter.isAvailable()).thenReturn(true);
         assistant = mock(KbToolAssistant.class);
+        promptStore = mock(PromptStore.class);
+        when(promptStore.appendixFor(anyLong())).thenReturn("");
         chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new ContentGate(),
-                new MediaProperties(), mock(KbRetriever.class), new KbProperties(), assistant);
+                new MediaProperties(), mock(KbRetriever.class), new KbProperties(), assistant, promptStore);
     }
 
     private OneBotEvent groupEvent() {
@@ -52,8 +59,21 @@ class ChatServiceToolMarkupTest {
     }
 
     private void modelReplies(String text) {
-        when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(), anyString()))
+        when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(), anyString(), anyString()))
                 .thenReturn(text);
+    }
+
+    @Test
+    @DisplayName("★ 当前用户的补充提示会传给模型助手")
+    void passesPromptAppendix() {
+        when(promptStore.appendixFor(2302359993L)).thenReturn("【用户补充提示】\n- 请叫我老板");
+        when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
+                anyString(), anyString())).thenReturn("好");
+
+        chatService.reply(groupEvent(), "你好", null, List.of());
+
+        verify(assistant).chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
+                anyString(), contains("请叫我老板"));
     }
 
     @Test

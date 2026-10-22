@@ -104,6 +104,11 @@ const SYSTEM_ROWS: CommandRow[] = [
     description: '格式与说明', access: 'all', enabled: true, builtin: true,
     board: null, command: null,
   },
+  {
+    source: 'system', key: 'system-prompt', path: 'prompt', usage: '', kind: 'system',
+    description: '个人补充提示', access: 'all', enabled: true, builtin: true,
+    board: null, command: null,
+  },
 ]
 
 /** 系统命令在前，板块次之，普通指令最后；与群里 /list 的顺序一致 */

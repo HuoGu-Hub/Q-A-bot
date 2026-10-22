@@ -135,6 +135,7 @@ public class CommandCatalog {
         sb.append("系统：\n");
         sb.append("/list  列出全部可用命令\n");
         sb.append("/help  通用命令格式与注意事项\n");
+        sb.append("/prompt /create 文本  添加个人补充提示\n");
         if (!boardList.isEmpty()) {
             sb.append("板块：\n");
             for (Entry board : boardList) {
@@ -180,6 +181,11 @@ public class CommandCatalog {
                 全局：
                   /list            列出全部可用命令
                   /help            这份说明
+                个人提示：
+                  /prompt /create 文本   添加；只影响你自己
+                  /prompt /list          查看
+                  /prompt /delete 编号   删除
+                  /prompt /clear         清空
                 单条命令：
                   /命令 /list      看这条命令支持哪些参数
                   /命令 /help      看这条命令怎么用
@@ -190,7 +196,7 @@ public class CommandCatalog {
                   /板块 /list      看这个板块的参数
                   /板块 /help      看这个板块怎么用
                 注意：
-                  create / delete 只配板块使用，没有全局 /create、/delete
+                  独立的 /create、/delete 不生效：板块用 /板块 /create，个人提示用 /prompt /create
                   参数写成 #名字-值#，顺序随意，写在文本前后都行
                   多个值用顿号隔开；# 用半角，前后不要多打空格
                 """;
