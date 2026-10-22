@@ -318,12 +318,6 @@ async function updatePreview() {
   } catch { /* 预览失败不阻塞 */ }
 }
 
-/** 示例参数改动 → 重算预览（{args} 才看得到效果） */
-function onArgsInput(v: string) {
-  sampleArgs.value = v
-  updatePreview()
-}
-
 /** 回复内容每次改动都重算预览（原来挂在 textarea 的 @input 上） */
 function onReplyInput(v: string) {
   patch({ reply: v })
@@ -655,16 +649,13 @@ onMounted(load)
 
           <label class="row">
             <span class="row-label">命令名</span>
-            <div class="trigger-line">
-              <span class="slash">/</span>
-              <Input
-                :model-value="editing.trigger ?? ''"
-                :disabled="editing.builtin"
-                placeholder="set/output"
-                aria-label="命令名"
-                @update:model-value="patch({ trigger: $event })"
-              />
-            </div>
+            <Input
+              :model-value="editing.trigger ?? ''"
+              :disabled="editing.builtin"
+              placeholder="set/output"
+              aria-label="命令名"
+              @update:model-value="patch({ trigger: $event })"
+            />
           </label>
 
           <label class="row">
@@ -704,14 +695,6 @@ onMounted(load)
                 class="vars-toggle"
                 @click="showAllVars = !showAllVars"
               >{{ showAllVars ? '收起' : '更多' }}</button>
-            </div>
-            <div class="preview-tools">
-              <Input
-                :model-value="sampleArgs"
-                placeholder="示例参数"
-                aria-label="示例参数"
-                @update:model-value="onArgsInput"
-              />
             </div>
             <div v-if="preview" class="message-preview">
               <div class="preview-head">
