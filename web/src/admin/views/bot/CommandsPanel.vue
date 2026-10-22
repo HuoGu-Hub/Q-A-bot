@@ -27,6 +27,7 @@ import BoardEditor from './BoardEditor.vue'
 import BoardRecordsModal from './BoardRecordsModal.vue'
 import NewCommandModal from './NewCommandModal.vue'
 import PromptEditor from './PromptEditor.vue'
+import CommandEditorShell from './CommandEditorShell.vue'
 import SystemAliasModal from './SystemAliasModal.vue'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
@@ -627,8 +628,15 @@ onMounted(load)
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
     <!-- 编辑态：整块替换列表。表格上面压一个巨长表单，改一个字段要滚过一整屏 -->
-    <div v-if="editing" class="editor">
-      <div class="editor-head">
+    <CommandEditorShell
+      v-if="editing"
+      :open="true"
+      :title="editing.id ? '编辑命令' : '新建命令'"
+      width="1120px"
+      @close="editing = null"
+      @save="save"
+    >
+      <template #head>
         <div class="editor-ident">
           <div class="editor-kicker">
             <span class="type-badge">{{ isAction ? '动作' : isAgent ? '问答' : '话术' }}</span>
@@ -636,11 +644,9 @@ onMounted(load)
           </div>
           <div class="editor-path" :class="{ 'is-empty': !(editing.trigger ?? '').trim() }">/{{ (editing.trigger ?? '').split('/').filter(Boolean).join(' /') || '命令名' }}</div>
         </div>
-        <div class="editor-actions">
-          <Button size="sm" @click="editing = null">取消</Button>
-          <Button size="sm" variant="primary" @click="save">保存</Button>
-        </div>
-      </div>
+      </template>
+
+      <Notice v-if="error" tone="error">{{ error }}</Notice>
 
       <div class="editor-grid">
         <!-- 左：这条命令说什么 -->
@@ -872,7 +878,7 @@ onMounted(load)
           </div>
         </section>
       </div>
-    </div>
+    </CommandEditorShell>
 
 
     <!-- 板块编辑器：与指令编辑器互斥，都是"整块替换列表" -->
@@ -1415,93 +1421,9 @@ onMounted(load)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ledger tbody tr { transition: none; }
+  .block-chev { transition: none; }
 }
 
-/* 工具栏已上移到页面栏（BotConfigView 的 AdminPage#actions），
-   这里只剩内容本身的排布。 */
-
-.trigger-line { display: flex; align-items: center; gap: var(--sp-2); }
-.slash { flex: none; color: var(--copper); font-family: var(--font-mono); }
-
-.vars { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
-.vars-label { margin-right: 2px; color: var(--ink-4); font-size: 10.5px; letter-spacing: .14em; }
-.vars--adv { padding-top: 2px; }
-.vars-toggle {
-  padding: 2px 0;
-  background: none;
-  border: 0;
-  color: var(--ink-3);
-  font-size: 11px;
-  cursor: pointer;
-}
-.vars-toggle:hover { color: var(--ember); }
-/* 变量胶囊是可点元素，共享 Button 覆盖不到这块：
-   悬浮必须【背景 + 边缘】同时变 —— 只改文字颜色在深底上看不出能不能点。
-   底色沿用 Button 的规矩：基础压到 stone，悬浮抬到 raised。 */
-.vchip {
-  background: var(--surface-raised);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-sm);
-  color: var(--mist);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease);
-}
-.vchip:hover {
-  background: var(--bg-raised);
-  border-color: var(--edge-hover);
-  color: var(--flame-bright);
-}
-.vchip:active { background: var(--surface-active); }
-.vchip:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
-.vchip--adv { border-color: var(--copper-dim); color: var(--amber); }
-
-.message-preview { margin-top: var(--sp-2); }
-.preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  margin-bottom: 6px;
-  color: var(--ink-4);
-  font-size: 10.5px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-.preview-command { color: var(--mist); font-family: var(--font-mono); letter-spacing: 0; text-transform: none; }
-.preview-bubble {
-  min-height: 52px;
-  padding: 10px 12px;
-  background: var(--stone-200);
-  border-left: 2px solid var(--ember);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  color: var(--ink-2);
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.preview-tools { margin-top: var(--sp-2); }
-
-.form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-  margin-top: var(--sp-4);
-}
-.form-buttons { display: flex; gap: var(--sp-2); margin-left: auto; }
-.note { font-size: var(--fs-meta); margin: 0; }
-/* ---------- 编辑态 ----------
-   两栏：左边是"这条命令说什么"，右边是"它按什么规则运行"。
-   行内标签在左、控件在右，比一列 Field 更省纵向空间，也更容易扫读。 */
 .editor {
   background: var(--stone-300);
   border-top: 2px solid var(--ember);
@@ -1530,7 +1452,7 @@ onMounted(load)
 }
 .editor-actions { display: flex; gap: var(--sp-2); flex: none; }
 .editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
-.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
 .col-title {
   padding-bottom: var(--sp-2);
   border-bottom: 1px solid var(--hairline);
@@ -1598,4 +1520,5 @@ onMounted(load)
 @media (prefers-reduced-motion: reduce) {
   .block-chev { transition: none; }
 }
+
 </style>

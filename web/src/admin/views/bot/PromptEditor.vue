@@ -8,7 +8,7 @@
 import { computed, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { AdminPrompt, AdminPromptList, BotCommand, CommandAcl } from '@shared/api/types'
-import Modal from '@shared/ui/Modal.vue'
+import CommandEditorShell from './CommandEditorShell.vue'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
@@ -131,10 +131,12 @@ function scopeText(prompt: AdminPrompt) {
 </script>
 
 <template>
-  <Modal :open="open" title="补充提示" width="760px" @close="emit('close')">
-    <div class="prompt-page">
-      <Notice v-if="error" tone="error">{{ error }}</Notice>
+  <CommandEditorShell :open="open" title="补充提示" width="760px" @close="emit('close')">
+    <template #actions>
+      <Button size="sm" @click="emit('close')">关闭</Button>
+    </template>
 
+    <template #head>
       <div class="prompt-head">
         <div>
           <span class="prompt-command">/prompt</span>
@@ -144,6 +146,10 @@ function scopeText(prompt: AdminPrompt) {
           <Input v-model="keyword" placeholder="搜索提示" aria-label="搜索提示" />
         </div>
       </div>
+    </template>
+
+    <div class="prompt-page">
+      <Notice v-if="error" tone="error">{{ error }}</Notice>
 
       <section class="prompt-section">
         <header class="section-head">
@@ -201,7 +207,7 @@ function scopeText(prompt: AdminPrompt) {
         </div>
       </section>
     </div>
-  </Modal>
+  </CommandEditorShell>
 </template>
 
 <style scoped>

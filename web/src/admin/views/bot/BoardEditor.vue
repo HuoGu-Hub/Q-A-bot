@@ -11,6 +11,7 @@ import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
 import Notice from '@shared/ui/Notice.vue'
+import CommandEditorShell from './CommandEditorShell.vue'
 import Icon from '@shared/ui/Icon.vue'
 import ParamTable from './ParamTable.vue'
 import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
@@ -193,8 +194,15 @@ function submit() {
 </script>
 
 <template>
-  <section class="editor">
-    <div class="editor-head">
+  <CommandEditorShell
+    :open="true"
+    :title="board ? '编辑板块' : '新建板块'"
+    width="1400px"
+    :saving="saving"
+    @close="emit('cancel')"
+    @save="submit"
+  >
+    <template #head>
       <div class="editor-ident">
         <div class="editor-kicker">
           <span class="type-badge">板块</span>
@@ -202,13 +210,7 @@ function submit() {
         </div>
         <div class="editor-path" :class="{ 'is-empty': !form.path.trim() }">/{{ form.path || '命令名' }}</div>
       </div>
-      <div class="editor-actions">
-        <Button size="sm" @click="emit('cancel')">取消</Button>
-        <Button size="sm" variant="primary" :disabled="saving" @click="submit">
-          {{ saving ? '保存中…' : '保存' }}
-        </Button>
-      </div>
-    </div>
+    </template>
 
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
@@ -366,7 +368,7 @@ function submit() {
         </div>
       </section>
     </div>
-  </section>
+  </CommandEditorShell>
 </template>
 
 <style scoped>
@@ -399,7 +401,7 @@ function submit() {
 }
 .editor-actions { display: flex; gap: var(--sp-2); flex: none; }
 .editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
-.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
 .col-title {
   font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4);
   padding-bottom: var(--sp-2); border-bottom: 1px solid var(--hairline);
@@ -443,6 +445,7 @@ function submit() {
 .head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
 .block-body {
   display: flex; flex-direction: column; gap: var(--sp-2);
+  min-width: 0; overflow-x: auto;
   margin-top: 8px; padding: 12px 14px;
   background: var(--stone-400); border: 1px solid var(--edge);
   border-radius: var(--r-sm);
