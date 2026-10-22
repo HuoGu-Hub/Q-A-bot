@@ -32,10 +32,12 @@ public class BoardRunner {
     private final AclStore aclStore;
     private final CommandCatalog catalog;
     private final CommandStore commandStore;
+    private final SystemReplyStore replies;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public BoardRunner(BoardStore boards, BoardRecordStore records, CommandParser parser,
                        VariableRenderer renderer, AclStore aclStore, CommandCatalog catalog,
-                       CommandStore commandStore) {
+                       CommandStore commandStore, SystemReplyStore replies) {
         this.boards = boards;
         this.records = records;
         this.parser = parser;
@@ -43,6 +45,14 @@ public class BoardRunner {
         this.aclStore = aclStore;
         this.catalog = catalog;
         this.commandStore = commandStore;
+        this.replies = replies;
+    }
+
+    /** 兼容旧测试：不接全局回复存储 */
+    public BoardRunner(BoardStore boards, BoardRecordStore records, CommandParser parser,
+                       VariableRenderer renderer, AclStore aclStore, CommandCatalog catalog,
+                       CommandStore commandStore) {
+        this(boards, records, parser, renderer, aclStore, catalog, commandStore, null);
     }
 
     /** 一句话结果：要么回一段文本，要么表示"这不是板块命令" */
@@ -77,11 +87,11 @@ public class BoardRunner {
         // 后台看到的目录与群里收到的是同一份数据，避免各写一套后漂移。
         if ("help".equalsIgnoreCase(boardPath)) {
             logUsage(event, "help");
-            return Optional.of(new Reply(catalog.helpText()));
+            return Optional.of(new Reply(globalReply(SystemReplyStore.HELP, catalog.helpText())));
         }
         if ("list".equalsIgnoreCase(boardPath)) {
             logUsage(event, "list");
-            return Optional.of(new Reply(catalog.listText()));
+            return Optional.of(new Reply(globalReply(SystemReplyStore.LIST, catalog.listText())));
         }
         // create / delete 是板块动作，不占全局命令名；给一句明确指路，避免发出去没反应
         if ("create".equalsIgnoreCase(boardPath) || "delete".equalsIgnoreCase(boardPath)) {
@@ -130,6 +140,12 @@ public class BoardRunner {
             case Board.ACT_HELP -> help(board);
             default -> query(board, groupId);
         }));
+    }
+
+    /** 全局回复只在用户明确编辑过时覆盖自动目录 */
+    private String globalReply(String key, String fallback) {
+        String custom = replies == null ? "" : replies.get(key);
+        return custom == null || custom.isBlank() ? fallback : custom;
     }
 
     /** 记一次命令使用（含被权限拦下的），与 CommandHandler 的记账口径一致 */
@@ -216,39 +232,15 @@ public class BoardRunner {
     // ==================== 参数 ====================
 
     private String list(Board board) {
-        return "/" + board.path() + " " + CommandHelp.paramList(
-                board.params(), "这个板块没有参数。");
+        return board.listReply() == null || board.listReply().isBlank()
+                ? BoardText.defaultList(board) : board.listReply();
     }
 
     // ==================== 帮助 ====================
 
     private String help(Board board) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("/").append(board.path()).append(" —— ").append(board.displayTitle())
-                .append(board.isScheduled() ? "（到点发送）" : "（立即展示）").append('\n');
-        sb.append("  增：/").append(board.path()).append(" /create ");
-        for (ParamSpec spec : board.params()) {
-            sb.append('#').append(spec.name()).append('-')
-                    .append(spec.example() == null ? spec.name() : spec.example()).append("# ");
-        }
-        sb.append("内容\n");
-        sb.append("  查：/").append(board.path()).append("\n");
-        sb.append("  删：/").append(board.path()).append(" /delete 编号");
-        sb.append("  参数：/").append(board.path()).append(" /list");
-        if (!board.params().isEmpty()) {
-            sb.append('\n').append("  参数：");
-            for (ParamSpec spec : board.params()) {
-                sb.append(spec.name());
-                if (spec.required()) {
-                    sb.append("(必填)");
-                }
-                if (spec.description() != null && !spec.description().isBlank()) {
-                    sb.append(' ').append(spec.description());
-                }
-                sb.append("；");
-            }
-        }
-        return sb.toString();
+        return board.helpReply() == null || board.helpReply().isBlank()
+                ? BoardText.defaultHelp(board) : board.helpReply();
     }
 
     // ==================== 小工具 ====================

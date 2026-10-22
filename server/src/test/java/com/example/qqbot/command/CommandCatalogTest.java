@@ -56,7 +56,7 @@ class CommandCatalogTest {
     @DisplayName("目录：三个板块在前，两条内置指令在后")
     void entriesCoverBoardsAndCommands() {
         assertThat(catalog.entries(true)).extracting(CommandCatalog.Entry::path)
-                .containsExactly("公告", "任务", "开黑", "ping", "stats");
+                .containsExactly("公告", "任务", "开黑", "ping", "stats", "prompt");
     }
 
     @Test
@@ -77,7 +77,7 @@ class CommandCatalogTest {
 
         assertThat(text).contains("/板块 /create", "/板块 /delete", "/板块 /list", "/板块 /help");
         assertThat(text).contains("单条命令", "/命令 /list", "/命令 /help");
-        assertThat(text).contains("没有全局 /create、/delete");
+        assertThat(text).contains("独立的 /create、/delete");
     }
 
     @Test
@@ -105,7 +105,7 @@ class CommandCatalogTest {
         assertThat(catalog.helpText())
                 .contains("单条命令", "/命令 /list", "/命令 /help")
                 .contains("/板块 /create", "/板块 /delete")
-                .contains("没有全局 /create、/delete");
+                .contains("独立的 /create、/delete");
     }
 
     @Test

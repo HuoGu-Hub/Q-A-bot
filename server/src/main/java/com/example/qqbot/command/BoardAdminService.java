@@ -42,7 +42,9 @@ public class BoardAdminService {
                             String delivery, String access, String scope, List<Long> groups,
                             boolean showGroup, boolean showUser, boolean allowPrivate,
                             boolean enabled, int sortOrder, boolean builtin, String usage,
-                            String listHeader, String listItem, String listEmpty, int listLimit) {
+                            String listHeader, String listItem, String listEmpty, int listLimit,
+                            String listReply, String helpReply,
+                            String defaultList, String defaultHelp) {
     }
 
     /**
@@ -56,17 +58,12 @@ public class BoardAdminService {
                              Boolean showGroup, Boolean showUser, Boolean allowPrivate,
                              Boolean enabled, Integer sortOrder, String originalPath,
                              String listHeader, String listItem, String listEmpty,
-                             Integer listLimit) {
+                             Integer listLimit, String listReply, String helpReply) {
 
-        /** 兼容旧调用：没有列表格式时沿用默认 */
-        public BoardInput(String path, String title, List<ParamSpec> params,
-                          String delivery, String access, String scope, List<Long> groups,
-                          Boolean showGroup, Boolean showUser, Boolean allowPrivate,
-                          Boolean enabled, Integer sortOrder, String originalPath) {
-            this(path, title, params, delivery, access, scope, groups,
-                    showGroup, showUser, allowPrivate, enabled, sortOrder, originalPath,
-                    null, null, null, null);
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public BoardInput {
         }
+
     }
 
     public List<BoardView> list() {
@@ -176,11 +173,17 @@ public class BoardAdminService {
         int listLimit = input.listLimit() == null
                 ? (existing == null ? 20 : existing.listLimit())
                 : Math.max(0, Math.min(200, input.listLimit()));
+        String listReply = input.listReply() == null
+                ? (existing == null ? "" : existing.listReply())
+                : clip(input.listReply(), 2000);
+        String helpReply = input.helpReply() == null
+                ? (existing == null ? "" : existing.helpReply())
+                : clip(input.helpReply(), 2000);
 
         Board board = new Board(
                 existing == null ? 0 : existing.id(), path, title, params, delivery, access, policy,
                 input.enabled() == null || input.enabled(), sortOrder, builtin,
-                listHeader, listItem, listEmpty, listLimit);
+                listHeader, listItem, listEmpty, listLimit, listReply, helpReply);
         if (renaming && !boards.rename(originalPath, path)) {
             throw new IllegalArgumentException("改名失败：旧板块不存在或不允许改名");
         }
@@ -193,7 +196,7 @@ public class BoardAdminService {
         boards.save(new Board(board.id(), board.path(), board.title(), board.params(),
                 board.delivery(), board.access(), board.policy(), enabled, board.sortOrder(),
                 board.builtin(), board.listHeader(), board.listItem(), board.listEmpty(),
-                board.listLimit()));
+                board.listLimit(), board.listReply(), board.helpReply()));
     }
 
     public void delete(String path) {
@@ -328,6 +331,8 @@ public class BoardAdminService {
                 board.policy().showGroup(), board.policy().showUser(),
                 board.policy().allowPrivate(), board.enabled(), board.sortOrder(),
                 board.builtin(), CommandCatalog.boardUsage(board),
-                board.listHeader(), board.listItem(), board.listEmpty(), board.listLimit());
+                board.listHeader(), board.listItem(), board.listEmpty(), board.listLimit(),
+                board.listReply(), board.helpReply(),
+                BoardText.defaultList(board), BoardText.defaultHelp(board));
     }
 }

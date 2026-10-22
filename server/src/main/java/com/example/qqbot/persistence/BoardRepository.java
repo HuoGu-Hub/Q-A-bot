@@ -24,7 +24,19 @@ public class BoardRepository {
                       String access, String scope, String groupsJson,
                       boolean showGroup, boolean showUser, boolean allowPrivate,
                       boolean enabled, int sortOrder, boolean builtin,
-                      String listHeader, String listItem, String listEmpty, int listLimit) {
+                      String listHeader, String listItem, String listEmpty, int listLimit,
+                      String listReply, String helpReply) {
+
+        /** 兼容旧构造：有列表格式但没有 list/help 回复 */
+        public Row(long id, String path, String title, String paramsJson, String delivery,
+                   String access, String scope, String groupsJson,
+                   boolean showGroup, boolean showUser, boolean allowPrivate,
+                   boolean enabled, int sortOrder, boolean builtin,
+                   String listHeader, String listItem, String listEmpty, int listLimit) {
+            this(id, path, title, paramsJson, delivery, access, scope, groupsJson,
+                    showGroup, showUser, allowPrivate, enabled, sortOrder, builtin,
+                    listHeader, listItem, listEmpty, listLimit, "", "");
+        }
 
         /** 兼容旧构造：没有列表格式时由 Board 的默认排版兜底 */
         public Row(long id, String path, String title, String paramsJson, String delivery,
@@ -33,7 +45,7 @@ public class BoardRepository {
                    boolean enabled, int sortOrder, boolean builtin) {
             this(id, path, title, paramsJson, delivery, access, scope, groupsJson,
                     showGroup, showUser, allowPrivate, enabled, sortOrder, builtin,
-                    "", "", "", 20);
+                    "", "", "", 20, "", "");
         }
     }
 
@@ -41,7 +53,7 @@ public class BoardRepository {
             "id, path, title, params, delivery, access, data_scope, data_groups,"
                     + " show_origin_group, show_origin_user, allow_private,"
                     + " enabled, sort_order, builtin,"
-                    + " list_header, list_item, list_empty, list_limit";
+                    + " list_header, list_item, list_empty, list_limit, list_reply, help_reply";
 
     private static final Jdbc.RowMapper<Row> MAP = r -> new Row(
             r.longOf("id"), r.str("path"), r.str("title"), r.str("params"), r.str("delivery"),
@@ -49,7 +61,7 @@ public class BoardRepository {
             r.intOf("show_origin_group") == 1, r.intOf("show_origin_user") == 1,
             r.intOf("allow_private") == 1, r.intOf("enabled") == 1, r.intOf("sort_order"),
             r.intOf("builtin") == 1, r.str("list_header"), r.str("list_item"),
-            r.str("list_empty"), r.intOf("list_limit"));
+            r.str("list_empty"), r.intOf("list_limit"), r.str("list_reply"), r.str("help_reply"));
 
     private final Jdbc jdbc;
 
@@ -84,13 +96,17 @@ public class BoardRepository {
                 + " list_header TEXT NOT NULL DEFAULT '',"
                 + " list_item   TEXT NOT NULL DEFAULT '',"
                 + " list_empty  TEXT NOT NULL DEFAULT '',"
-                + " list_limit  INTEGER NOT NULL DEFAULT 20"
+                + " list_limit  INTEGER NOT NULL DEFAULT 20,"
+                + " list_reply  TEXT NOT NULL DEFAULT '',"
+                + " help_reply  TEXT NOT NULL DEFAULT ''"
                 + " )");
         // 老库升级：CREATE TABLE IF NOT EXISTS 不会补列
         addColumnIfMissing("list_header", "TEXT NOT NULL DEFAULT ''");
         addColumnIfMissing("list_item", "TEXT NOT NULL DEFAULT ''");
         addColumnIfMissing("list_empty", "TEXT NOT NULL DEFAULT ''");
         addColumnIfMissing("list_limit", "INTEGER NOT NULL DEFAULT 20");
+        addColumnIfMissing("list_reply", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing("help_reply", "TEXT NOT NULL DEFAULT ''");
     }
 
     private void addColumnIfMissing(String column, String ddl) {
@@ -112,13 +128,14 @@ public class BoardRepository {
                         + " (path, title, params, delivery, access, data_scope, data_groups,"
                         + "  show_origin_group, show_origin_user, allow_private,"
                         + "  enabled, sort_order, builtin,"
-                        + "  list_header, list_item, list_empty, list_limit)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        + "  list_header, list_item, list_empty, list_limit, list_reply, help_reply)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 row.path(), row.title(), row.paramsJson(), row.delivery(), row.access(),
                 row.scope(), row.groupsJson(),
                 row.showGroup() ? 1 : 0, row.showUser() ? 1 : 0, row.allowPrivate() ? 1 : 0,
                 row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0,
-                row.listHeader(), row.listItem(), row.listEmpty(), row.listLimit());
+                row.listHeader(), row.listItem(), row.listEmpty(), row.listLimit(),
+                row.listReply(), row.helpReply());
     }
 
     public boolean hasMeta(String key) {
@@ -148,8 +165,8 @@ public class BoardRepository {
                         + " (path, title, params, delivery, access, data_scope, data_groups,"
                         + "  show_origin_group, show_origin_user, allow_private,"
                         + "  enabled, sort_order, builtin,"
-                        + "  list_header, list_item, list_empty, list_limit)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                        + "  list_header, list_item, list_empty, list_limit, list_reply, help_reply)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                         + " ON CONFLICT(path) DO UPDATE SET"
                         + "  title=excluded.title, params=excluded.params, delivery=excluded.delivery,"
                         + "  access=excluded.access, data_scope=excluded.data_scope,"
@@ -159,12 +176,14 @@ public class BoardRepository {
                         + "  allow_private=excluded.allow_private, enabled=excluded.enabled,"
                         + "  sort_order=excluded.sort_order,"
                         + "  list_header=excluded.list_header, list_item=excluded.list_item,"
-                        + "  list_empty=excluded.list_empty, list_limit=excluded.list_limit",
+                        + "  list_empty=excluded.list_empty, list_limit=excluded.list_limit,"
+                        + "  list_reply=excluded.list_reply, help_reply=excluded.help_reply",
                 row.path(), row.title(), row.paramsJson(), row.delivery(), row.access(),
                 row.scope(), row.groupsJson(),
                 row.showGroup() ? 1 : 0, row.showUser() ? 1 : 0, row.allowPrivate() ? 1 : 0,
                 row.enabled() ? 1 : 0, row.sortOrder(), row.builtin() ? 1 : 0,
-                row.listHeader(), row.listItem(), row.listEmpty(), row.listLimit());
+                row.listHeader(), row.listItem(), row.listEmpty(), row.listLimit(),
+                row.listReply(), row.helpReply());
     }
 
     public int delete(String path) {

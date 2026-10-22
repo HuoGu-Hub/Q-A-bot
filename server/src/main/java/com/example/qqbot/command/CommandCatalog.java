@@ -186,9 +186,10 @@ public class CommandCatalog {
                   /list            列出全部可用命令
                   /help            这份说明
                 补充提示：
+                  /prompt                                查看当前生效的提示
                   /prompt /create 文本                   默认加到本群
                   /prompt /create #user_id-QQ号# 文本    只给某个人
-                  /prompt /list
+                  /prompt /list                          查看全部可用命令
                   /prompt /delete 编号
                   /prompt /clear
                 单条命令：

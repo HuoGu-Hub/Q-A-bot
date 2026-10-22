@@ -43,16 +43,20 @@ interface FormState {
   listItem: string
   listEmpty: string
   listLimit: number
+  listReply: string
+  helpReply: string
 }
 
 const form = reactive<FormState>({
   path: '', params: [], delivery: 'direct', access: 'all', scope: 'GROUP',
   showGroup: false, showUser: false, allowPrivate: false, enabled: true,
-  listHeader: '', listItem: '', listEmpty: '', listLimit: 20,
+  listHeader: '', listItem: '', listEmpty: '', listLimit: 20, listReply: '', helpReply: '',
 })
 const groupsText = ref('')
 const openParams = ref(true)
 const openOutput = ref(true)
+const openList = ref(false)
+const openHelp = ref(false)
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
 
 /** 参数块的“+ 参数”在标题行：先展开，再让参数表插入一行 */
@@ -82,6 +86,8 @@ function reset() {
   form.listHeader = b?.listHeader ?? ''
   form.listItem = b?.listItem ?? ''
   form.listEmpty = b?.listEmpty ?? ''
+  form.listReply = b?.listReply ?? ''
+  form.helpReply = b?.helpReply ?? ''
   form.listLimit = b?.listLimit ?? 20
   groupsText.value = (b?.groups ?? []).join('\n')
   openParams.value = true
@@ -187,7 +193,11 @@ function submit() {
     listItem: form.listItem.trim(),
     listEmpty: form.listEmpty.trim(),
     listLimit: form.listLimit,
+    listReply: form.listReply.trim(),
+    helpReply: form.helpReply.trim(),
     originalPath: props.board?.path ?? null,
+    defaultList: props.board?.defaultList ?? '',
+    defaultHelp: props.board?.defaultHelp ?? '',
   }
   emit('save', draft)
 }
@@ -368,6 +378,50 @@ function submit() {
         </div>
       </section>
     </div>
+
+    <div class="block block--wide">
+      <button class="block-head" type="button" :aria-expanded="openList" @click="openList = !openList">
+        <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openList }" />
+        <span>list 回复</span>
+        <span class="block-count">{{ form.listReply.trim() ? '手写' : '自动' }}</span>
+      </button>
+      <div v-if="openList" class="block-body">
+        <Input
+          v-model="form.listReply"
+          multiline
+          :rows="4"
+          mono
+          placeholder="留空自动，/列表动作 返回这段"
+          aria-label="板块 list 回复"
+        />
+        <div class="reply-preview">
+          <div class="reply-label">实际回复</div>
+          <pre>{{ form.listReply.trim() || board?.defaultList || '保存后显示默认回复' }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="block block--wide">
+      <button class="block-head" type="button" :aria-expanded="openHelp" @click="openHelp = !openHelp">
+        <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openHelp }" />
+        <span>help 回复</span>
+        <span class="block-count">{{ form.helpReply.trim() ? '手写' : '自动' }}</span>
+      </button>
+      <div v-if="openHelp" class="block-body">
+        <Input
+          v-model="form.helpReply"
+          multiline
+          :rows="4"
+          mono
+          placeholder="留空自动，/帮助动作 返回这段"
+          aria-label="板块 help 回复"
+        />
+        <div class="reply-preview">
+          <div class="reply-label">实际回复</div>
+          <pre>{{ form.helpReply.trim() || board?.defaultHelp || '保存后显示默认回复' }}</pre>
+        </div>
+      </div>
+    </div>
   </CommandEditorShell>
 </template>
 
@@ -501,5 +555,14 @@ function submit() {
   .editor-grid { grid-template-columns: 1fr; }
   .row { flex-direction: column; align-items: stretch; gap: 4px; }
   .row-label { flex: none; }
+}
+.reply-preview { display: flex; flex-direction: column; gap: 6px; }
+.reply-label { color: var(--ink-4); font-size: 10.5px; letter-spacing: .12em; }
+.reply-preview pre {
+  max-height: 220px; margin: 0; padding: var(--sp-3); overflow: auto;
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.7;
 }
 </style>

@@ -29,6 +29,7 @@ import NewCommandModal from './NewCommandModal.vue'
 import PromptEditor from './PromptEditor.vue'
 import CommandEditorShell from './CommandEditorShell.vue'
 import SystemAliasModal from './SystemAliasModal.vue'
+import SystemReplyEditor from './SystemReplyEditor.vue'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
 } from './commandOptions'
@@ -53,6 +54,8 @@ const boardError = ref('')
 const recordsBoard = ref<AdminBoard | null>(null)
 /** /prompt 的自定义编辑器：不是普通命令表单 */
 const promptEditing = ref<BotCommand | null>(null)
+/** 全局 /list 或 /help 的回复编辑 */
+const systemReplyKind = ref<'list' | 'help' | null>(null)
 const aliasOpen = ref(false)
 /** 新建命令的类型选择弹窗 */
 const newOpen = ref(false)
@@ -98,7 +101,7 @@ const usageMap = computed<Record<string, number>>(() => {
   return map
 })
 
-/** 全局系统命令：由路由层直接处理，不在 bot_command 里，也不能编辑 */
+/** 全局系统命令：由路由层直接处理，不在 bot_command 里；回复内容可单独编辑 */
 const SYSTEM_ROWS: CommandRow[] = [
   {
     source: 'system', key: 'system-list', path: 'list', usage: '', kind: 'system',
@@ -396,7 +399,10 @@ function rowUsage(row: CommandRow) {
 }
 
 function editRow(row: CommandRow) {
-  if (row.source === 'system') return
+  if (row.source === 'system') {
+    systemReplyKind.value = row.path === 'help' ? 'help' : 'list'
+    return
+  }
   if (row.source === 'prompt' && row.command) {
     promptEditing.value = row.command
     return
@@ -505,7 +511,7 @@ function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
 }
 
 /** 低频区块折叠：改回复的人不该被参数表和名单挡路 */
-const openBlocks = ref({ params: false, acl: false, help: false })
+const openBlocks = ref({ params: false, acl: false, list: false, help: false })
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
 const paramBlock = ref<HTMLElement | null>(null)
 
@@ -529,7 +535,7 @@ const needsList = computed(() =>
   ['whitelist', 'blacklist'].includes(editing.value?.access ?? 'all')
 )
 
-function toggleBlock(key: 'params' | 'acl' | 'help') {
+function toggleBlock(key: 'params' | 'acl' | 'list' | 'help') {
   openBlocks.value[key] = !openBlocks.value[key]
 }
 
@@ -827,30 +833,11 @@ onMounted(load)
             </div>
           </div>
 
-          <div class="block">
-            <button class="block-head" type="button" :aria-expanded="openBlocks.help" @click="toggleBlock('help')">
-              <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.help }" />
-              <span>帮助</span>
-              <span class="block-count">{{ editing.help ? '手写' : '自动' }}</span>
-            </button>
-            <div v-if="openBlocks.help" class="block-body">
-              <Input
-                :model-value="editing.help ?? ''"
-                multiline
-                :rows="4"
-                mono
-                placeholder="留空自动"
-                aria-label="单命令帮助"
-                @update:model-value="patch({ help: $event })"
-              />
-            </div>
-          </div>
         </section>
       </div>
 
       <!-- 参数表单独占满整行：放在右侧设置栏会被列宽挤掉后半段 -->
-      <div ref="paramBlock" class="block block--wide">
-        <div class="block-head block-head--with-action">
+      <div ref="paramBlock" class="block block--wide">        <div class="block-head block-head--with-action">
           <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
             <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
             <span>参数</span>
@@ -871,8 +858,62 @@ onMounted(load)
           </ParamTable>
         </div>
       </div>
+
+      <div class="block block--wide">
+        <button class="block-head" type="button" :aria-expanded="openBlocks.list" @click="toggleBlock('list')">
+          <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.list }" />
+          <span>list 回复</span>
+          <span class="block-count">{{ editing.listReply ? '手写' : '自动' }}</span>
+        </button>
+        <div v-if="openBlocks.list" class="block-body">
+          <Input
+            :model-value="editing.listReply ?? ''"
+            multiline
+            :rows="4"
+            mono
+            placeholder="留空自动，/list 修饰符返回这段"
+            aria-label="单命令 list 回复"
+            @update:model-value="patch({ listReply: $event })"
+          />
+          <div class="reply-preview">
+            <div class="reply-label">实际回复</div>
+            <pre>{{ (editing.listReply ?? '').trim() || editing.defaultList || '保存后显示默认回复' }}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="block block--wide">
+        <button class="block-head" type="button" :aria-expanded="openBlocks.help" @click="toggleBlock('help')">
+          <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.help }" />
+          <span>help 回复</span>
+          <span class="block-count">{{ editing.help ? '手写' : '自动' }}</span>
+        </button>
+        <div v-if="openBlocks.help" class="block-body">
+          <Input
+            :model-value="editing.help ?? ''"
+            multiline
+            :rows="4"
+            mono
+            placeholder="留空自动，/help 修饰符返回这段"
+            aria-label="单命令帮助"
+            @update:model-value="patch({ help: $event })"
+          />
+          <div class="reply-preview">
+            <div class="reply-label">实际回复</div>
+            <pre>{{ (editing.help ?? '').trim() || editing.defaultHelp || '保存后显示默认回复' }}</pre>
+          </div>
+        </div>
+      </div>
     </CommandEditorShell>
 
+
+    <SystemReplyEditor
+      v-if="systemReplyKind"
+      :open="true"
+      :kind="systemReplyKind"
+      @close="systemReplyKind = null"
+      @changed="systemReplyKind = null"
+    />
 
     <!-- 板块编辑器：与指令编辑器互斥，都是"整块替换列表" -->
     <BoardEditor
@@ -951,7 +992,9 @@ onMounted(load)
                 <span v-if="row.builtin" class="builtin">内置</span>
               </td>
               <td class="cell-ops">
-                <span v-if="row.source === 'system'" class="row-muted">只读</span>
+                <template v-if="row.source === 'system'">
+                  <button type="button" class="row-action" @click="editRow(row)">编辑</button>
+                </template>
                 <template v-else>
                   <button type="button" class="row-action" @click="editRow(row)">编辑</button>
                   <button
@@ -1514,4 +1557,13 @@ onMounted(load)
   .block-chev { transition: none; }
 }
 
+.reply-preview { display: flex; flex-direction: column; gap: 6px; }
+.reply-label { color: var(--ink-4); font-size: 10.5px; letter-spacing: .12em; }
+.reply-preview pre {
+  max-height: 220px; margin: 0; padding: var(--sp-3); overflow: auto;
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.7;
+}
 </style>

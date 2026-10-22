@@ -285,6 +285,12 @@ export interface BotCommand {
   params: AdminParamSpec[]
   /** 手写的单命令帮助；为空则由参数表自动生成 */
   help?: string | null
+  /** 手写的 /list 回复；为空则由参数表自动生成 */
+  listReply?: string | null
+  /** 后端算好的默认 /list 回复，供编辑页实时预览 */
+  defaultList: string
+  /** 后端算好的默认帮助，供编辑页实时预览 */
+  defaultHelp: string
   /** action 类绑定的执行器 id，其余类型为空 */
   action?: string | null
   /** 后端算好的完整用法，带参数示例（与群里 {cmd.list} 的写法一致） */
@@ -373,6 +379,16 @@ export interface SystemAliasGroup {
   items: SystemAliasEntry[]
 }
 
+export interface SystemReplyItem {
+  content: string
+  defaultContent: string
+}
+
+export interface SystemReplyList {
+  list: SystemReplyItem
+  help: SystemReplyItem
+}
+
 export interface SystemAliasList {
   groups: SystemAliasGroup[]
 }
@@ -450,6 +466,14 @@ export interface AdminBoard {
   listEmpty: string
   /** 最多显示几条；0 = 全部，上限 200 */
   listLimit: number
+  /** 手写的 /list 回复；为空则由参数表自动生成 */
+  listReply: string
+  /** 手写的 /help 回复；为空则自动生成 */
+  helpReply: string
+  /** 后端算好的默认 /list 回复 */
+  defaultList: string
+  /** 后端算好的默认 /help 回复 */
+  defaultHelp: string
 }
 
 export interface AdminBoardList {

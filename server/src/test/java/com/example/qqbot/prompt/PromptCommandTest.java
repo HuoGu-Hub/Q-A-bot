@@ -69,6 +69,7 @@ class PromptCommandTest {
                 && p.content().equals("本群回答短一点"));
         assertThat(store.listFor(2002L, 1002L)).hasSize(1);
         assertThat(store.listFor(2003L, 1001L)).isEmpty();
+        assertThat(run("/prompt", "member")).contains("本群提示", "本群回答短一点");
     }
 
     @Test
@@ -145,7 +146,8 @@ class PromptCommandTest {
     @Test
     @DisplayName("空动作或未知动作回用法，不写库")
     void usage() {
-        assertThat(run("/prompt", "admin")).contains("/prompt /create");
+        assertThat(run("/prompt", "admin")).contains("当前没有生效的补充提示");
+        assertThat(run("/prompt /help", "admin")).contains("/prompt /create");
         assertThat(run("/prompt /wat", "admin")).contains("/prompt /create");
         assertThat(store.listFor(2002L, 1001L)).isEmpty();
     }

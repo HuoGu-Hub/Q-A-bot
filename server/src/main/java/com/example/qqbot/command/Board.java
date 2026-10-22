@@ -37,7 +37,9 @@ public record Board(
         String listHeader,
         String listItem,
         String listEmpty,
-        int listLimit) {
+        int listLimit,
+        String listReply,
+        String helpReply) {
 
     /** 立即展示：收下就出现在结果里 */
     public static final String DIRECT = "direct";
@@ -71,13 +73,23 @@ public record Board(
         listEmpty = listEmpty == null ? "" : listEmpty;
         // 0 = 全部；上限只防一次拉太多，不改变"全部"的语义
         listLimit = listLimit <= 0 ? 0 : Math.min(listLimit, 200);
+        listReply = listReply == null ? "" : listReply;
+        helpReply = helpReply == null ? "" : helpReply;
+    }
+
+    /** 兼容旧构造：没有 list/help 回复 */
+    public Board(long id, String path, String title, List<ParamSpec> params, String delivery,
+                 String access, DataPolicy policy, boolean enabled, int sortOrder, boolean builtin,
+                 String listHeader, String listItem, String listEmpty, int listLimit) {
+        this(id, path, title, params, delivery, access, policy, enabled, sortOrder, builtin,
+                listHeader, listItem, listEmpty, listLimit, "", "");
     }
 
     /** 兼容旧构造：没有列表格式配置时沿用框架默认排版 */
     public Board(long id, String path, String title, List<ParamSpec> params, String delivery,
                  String access, DataPolicy policy, boolean enabled, int sortOrder, boolean builtin) {
         this(id, path, title, params, delivery, access, policy, enabled, sortOrder, builtin,
-                "", "", "", 20);
+                "", "", "", 20, "", "");
     }
 
     /** 群友看到的名字 = 调用名 */

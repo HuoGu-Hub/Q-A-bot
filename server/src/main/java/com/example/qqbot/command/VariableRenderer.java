@@ -389,11 +389,11 @@ public class VariableRenderer {
         List<BotCommand> cmds = preview
                 ? List.of(
                         new BotCommand(1, "help", "", "查看所有指令", "all", List.of(), "member", true, 1, true,
-                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null),
+                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null, null),
                         new BotCommand(2, "list", "", "列出所有指令", "all", List.of(), "member", true, 2, true,
-                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null),
+                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null, null),
                         new BotCommand(3, "ping", "", "看看我在不在", "all", List.of(), "member", true, 3, true,
-                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null))
+                                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null, null))
                 : store.listEnabled();
 
         if (cmds.isEmpty()) {

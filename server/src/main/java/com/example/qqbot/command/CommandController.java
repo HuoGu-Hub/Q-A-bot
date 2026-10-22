@@ -35,12 +35,14 @@ public class CommandController {
     private final CommandPolicyStore policyStore;
     private final CommandCatalog catalog;
     private final BoardStore boards;
+    private final CommandHelp commandHelp;
     /** 只用来把后台传来的参数表 JSON 转成 ParamSpec，不承担别的语义 */
     private final ObjectMapper mapper;
 
     public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props,
                              ActionRegistry actionRegistry, CommandPolicyStore policyStore,
-                             CommandCatalog catalog, BoardStore boards, ObjectMapper mapper) {
+                             CommandCatalog catalog, BoardStore boards, CommandHelp commandHelp,
+                             ObjectMapper mapper) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;
@@ -48,6 +50,7 @@ public class CommandController {
         this.policyStore = policyStore;
         this.catalog = catalog;
         this.boards = boards;
+        this.commandHelp = commandHelp;
         this.mapper = mapper;
     }
 
@@ -56,7 +59,7 @@ public class CommandController {
     public Map<String, Object> list() {
         List<CommandView> views = new ArrayList<>();
         for (BotCommand command : store.listAll()) {
-            views.add(CommandView.of(command));
+            views.add(CommandView.of(command, commandHelp));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("available", store.isAvailable());
@@ -207,6 +210,7 @@ public class CommandController {
                 mode,
                 params,
                 str(body.get("help")),
+                str(body.get("listReply")),
                 action);
 
         Long id = longOrNull(body.get("id"));
@@ -336,16 +340,22 @@ public class CommandController {
                               String scope, List<Long> groupIds, String access,
                               boolean enabled, int sortOrder, boolean builtin,
                               String kind, String mode, List<ParamSpec> params,
-                              String help, String action, String usage) {
+                              String help, String listReply, String action, String usage,
+                              String defaultList, String defaultHelp) {
 
         static CommandView of(BotCommand command) {
+            return of(command, new CommandHelp(null));
+        }
+
+        static CommandView of(BotCommand command, CommandHelp commandHelp) {
             return new CommandView(
                     command.id(), command.trigger(), command.reply(), command.description(),
                     command.scope(), command.groupIds(),
                     CommandAccess.of(command.access()).code(), command.enabled(),
                     command.sortOrder(), command.builtin(), command.kindName(),
-                    command.modeName(), command.params(), command.help(),
-                    command.action(), command.display());
+                    command.modeName(), command.params(), command.help(), command.listReply(),
+                    command.action(), command.display(),
+                    commandHelp.defaultList(command), commandHelp.defaultHelp(command));
         }
     }
 

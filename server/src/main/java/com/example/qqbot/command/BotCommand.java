@@ -34,6 +34,7 @@ import java.util.List;
  * @param mode        agent 类的回答模式：kb = 走知识库，none = 不用知识库
  * @param params      参数表
  * @param help        手写的单命令帮助；为空则由参数表自动生成
+ * @param listReply   手写的单命令 /list 回复；为空时由参数表自动生成
  * @param action      action 类绑定的执行器 id；其余类型为空
  */
 public record BotCommand(
@@ -51,6 +52,7 @@ public record BotCommand(
         String mode,
         List<ParamSpec> params,
         String help,
+        String listReply,
         String action) {
 
     public static final String KIND_TEMPLATE = "template";
@@ -61,6 +63,15 @@ public record BotCommand(
     public static final String MODE_KB = "kb";
     /** 不用知识库，纯模型回答 */
     public static final String MODE_NONE = "none";
+
+    /** 兼容旧调用：没有单命令 /list 回复 */
+    public BotCommand(long id, String trigger, String reply, String description, String scope,
+                      List<Long> groupIds, String access, boolean enabled, int sortOrder,
+                      boolean builtin, String kind, String mode, List<ParamSpec> params,
+                      String help, String action) {
+        this(id, trigger, reply, description, scope, groupIds, access, enabled, sortOrder,
+                builtin, kind, mode, params, help, null, action);
+    }
 
     public BotCommand {
         groupIds = groupIds == null ? List.of() : List.copyOf(groupIds);

@@ -224,7 +224,7 @@ public class CommandStore {
     private BotCommand toCommand(CommandRepository.Row r) {
         return new BotCommand(r.id(), r.trigger(), r.reply(), r.description(), r.scope(),
                 parseGroupIds(r.groupIdsJson()), r.access(), r.enabled(), r.sortOrder(),
-                r.builtin(), r.kind(), r.mode(), parseParams(r.paramsJson()), r.help(), r.action());
+                r.builtin(), r.kind(), r.mode(), parseParams(r.paramsJson()), r.help(), r.listReply(), r.action());
     }
 
     /** {@code group_ids} 列里是 JSON 数组；坏数据当空处理（旧实现就是这么容错的） */
@@ -296,7 +296,7 @@ public class CommandStore {
             return repo.upsert(new CommandRepository.Row(0, cmd.trigger(), cmd.reply(),
                     cmd.description(), cmd.scope(), groupsJson, cmd.access(), cmd.enabled(),
                     cmd.sortOrder(), false, cmd.kindName(), cmd.modeName(),
-                    paramsJson, cmd.help(), cmd.action()), now);
+                    paramsJson, cmd.help(), cmd.listReply(), cmd.action()), now);
         } catch (Exception e) {
             throw new IOException("写入指令失败：" + e.getMessage(), e);
         }
@@ -332,7 +332,7 @@ public class CommandStore {
             int updated = repo.updateById(id, new CommandRepository.Row(0, cmd.trigger(), cmd.reply(),
                     cmd.description(), cmd.scope(), groupsJson, cmd.access(), cmd.enabled(),
                     cmd.sortOrder(), false, cmd.kindName(), cmd.modeName(),
-                    paramsJson, cmd.help(), cmd.action()), now);
+                    paramsJson, cmd.help(), cmd.listReply(), cmd.action()), now);
             if (updated == 0) {
                 throw new IOException("指令不存在：id=" + id);
             }

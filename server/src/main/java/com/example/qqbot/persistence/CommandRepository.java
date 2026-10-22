@@ -36,7 +36,7 @@ public class CommandRepository {
     public record Row(long id, String trigger, String reply, String description, String scope,
                       String groupIdsJson, String access, boolean enabled, int sortOrder,
                       boolean builtin, String kind, String mode,
-                      String paramsJson, String help, String action) {
+                      String paramsJson, String help, String listReply, String action) {
     }
 
     /** 一条内置指令的种子；{@code paramsJson} 与 {@code action} 给动作类命令用 */
@@ -50,13 +50,13 @@ public class CommandRepository {
 
     private static final String COLUMNS =
             "id, trigger, reply, description, scope, group_ids, min_role,"
-                    + " enabled, sort_order, builtin, kind, mode, params, help, action";
+                    + " enabled, sort_order, builtin, kind, mode, params, help, list_reply, action";
 
     private static final Jdbc.RowMapper<Row> MAP = r -> new Row(
             r.longOf("id"), r.str("trigger"), r.str("reply"), r.str("description"), r.str("scope"),
             r.str("group_ids"), r.str("min_role"), r.intOf("enabled") == 1, r.intOf("sort_order"),
             r.intOf("builtin") == 1, r.str("kind"), r.str("mode"),
-            r.str("params"), r.str("help"), r.str("action"));
+            r.str("params"), r.str("help"), r.str("list_reply"), r.str("action"));
 
     private final Jdbc jdbc;
 
@@ -108,6 +108,7 @@ public class CommandRepository {
         // 参数表、手写帮助、绑定的执行器 —— 老库升级后这三列才有内容
         addColumnIfMissing("params", "TEXT NOT NULL DEFAULT '[]'");
         addColumnIfMissing("help", "TEXT");
+        addColumnIfMissing("list_reply", "TEXT");
         addColumnIfMissing("action", "TEXT");
     }
 
@@ -201,22 +202,22 @@ public class CommandRepository {
             if (existing != null) {
                 jdbc.update("UPDATE bot_command SET reply=?, description=?, scope=?, group_ids=?,"
                                 + " min_role=?, enabled=?, sort_order=?, kind=?, mode=?,"
-                                + " params=?, help=?, action=?, updated_at=?"
+                                + " params=?, help=?, list_reply=?, action=?, updated_at=?"
                                 + " WHERE id=?",
                         row.reply(), row.description(), row.scope(), row.groupIdsJson(),
                         row.access(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
-                        row.paramsJson(), row.help(), row.action(), now, existing.id());
+                        row.paramsJson(), row.help(), row.listReply(), row.action(), now, existing.id());
                 return existing.id();
             }
             // builtin 固定 0：内置指令由 seedBuiltins 写入，走不到这条路径
             return jdbc.insert("INSERT INTO bot_command"
                             + " (trigger, reply, description, scope, group_ids, min_role,"
-                            + "  enabled, sort_order, builtin, kind, mode, params, help, action,"
+                            + "  enabled, sort_order, builtin, kind, mode, params, help, list_reply, action,"
                             + "  created_at, updated_at)"
-                            + " VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)",
+                            + " VALUES (?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?)",
                     row.trigger(), row.reply(), row.description(), row.scope(), row.groupIdsJson(),
                     row.access(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
-                    row.paramsJson(), row.help(), row.action(), now, now);
+                    row.paramsJson(), row.help(), row.listReply(), row.action(), now, now);
         });
     }
 
@@ -229,11 +230,11 @@ public class CommandRepository {
     public int updateById(long id, Row row, String now) {
         return jdbc.update("UPDATE bot_command SET trigger=?, reply=?, description=?, scope=?,"
                         + " group_ids=?, min_role=?, enabled=?, sort_order=?, kind=?, mode=?,"
-                        + " params=?, help=?, action=?, updated_at=?"
+                        + " params=?, help=?, list_reply=?, action=?, updated_at=?"
                         + " WHERE id=?",
                 row.trigger(), row.reply(), row.description(), row.scope(), row.groupIdsJson(),
                 row.access(), row.enabled(), row.sortOrder(), row.kind(), row.mode(),
-                row.paramsJson(), row.help(), row.action(), now, id);
+                row.paramsJson(), row.help(), row.listReply(), row.action(), now, id);
     }
 
     public boolean deleteById(long id) {

@@ -79,7 +79,7 @@ class BoardAdminServiceTest {
         Board announcement = boards.find("公告");
         BoardAdminService.BoardInput edit = new BoardAdminService.BoardInput(
                 "公告", "群公告", announcement.params(), Board.SCHEDULED, "owner", "GROUP",
-                List.of(), false, false, false, true, 10, "公告");
+                List.of(), false, false, false, true, 10, "公告", null, null, null, null, null, null);
 
         BoardAdminService.BoardView view = service.save(edit);
 
@@ -94,7 +94,7 @@ class BoardAdminServiceTest {
 
         BoardAdminService.BoardInput rename = new BoardAdminService.BoardInput(
                 "公告2", "公告2", announcement.params(), Board.SCHEDULED, "owner", "GROUP",
-                List.of(), false, false, false, true, 10, "公告");
+                List.of(), false, false, false, true, 10, "公告", null, null, null, null, null, null);
         assertThatThrownBy(() -> service.save(rename))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("内置板块不能改名");
@@ -136,7 +136,7 @@ class BoardAdminServiceTest {
     void someScopeNeedsGroups() {
         BoardAdminService.BoardInput input = new BoardAdminService.BoardInput(
                 "跨群板", "跨群板", List.of(ParamSpec.of("内容", "text", true, "示例")),
-                Board.DIRECT, "all", "SOME", List.of(), false, false, false, true, 0, null);
+                Board.DIRECT, "all", "SOME", List.of(), false, false, false, true, 0, null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> service.save(input))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -153,7 +153,7 @@ class BoardAdminServiceTest {
 
         BoardAdminService.BoardView view = service.save(new BoardAdminService.BoardInput(
                 "新板", "新板", old.params(), Board.DIRECT, "all", "GROUP", List.of(),
-                false, false, false, true, 40, "旧板"));
+                false, false, false, true, 40, "旧板", null, null, null, null, null, null));
 
         assertThat(view.path()).isEqualTo("新板");
         assertThat(boards.find("旧板")).isNull();
@@ -179,7 +179,7 @@ class BoardAdminServiceTest {
     void memberAccessNormalized() {
         BoardAdminService.BoardView view = service.save(new BoardAdminService.BoardInput(
                 "举报", "举报", List.of(ParamSpec.of("对象", "text", true, "某人")),
-                Board.DIRECT, "member", "GROUP", List.of(), false, false, false, true, 0, null));
+                Board.DIRECT, "member", "GROUP", List.of(), false, false, false, true, 0, null, null, null, null, null, null, null));
 
         assertThat(view.access()).isEqualTo("all");
         assertThat(boards.find("举报").access()).isEqualTo("all");
@@ -192,7 +192,7 @@ class BoardAdminServiceTest {
                 "预约开黑", "预约开黑", List.of(), Board.DIRECT, "all", "GROUP", List.of(),
                 false, false, false, true, 0, null,
                 "预约开黑 · 共 {count} 条", "#{id} {params.时间} {text}（{nickname}）",
-                "还没有预约", 0));
+                "还没有预约", 0, null, null));
 
         assertThat(view.listHeader()).isEqualTo("预约开黑 · 共 {count} 条");
         assertThat(view.listItem()).contains("{params.时间}");
@@ -221,6 +221,6 @@ class BoardAdminServiceTest {
     private static BoardAdminService.BoardInput input(String path, String delivery,
                                                       List<ParamSpec> params) {
         return new BoardAdminService.BoardInput(path, path, params, delivery, "all", "GROUP",
-                List.of(), false, false, false, true, 40, null);
+                List.of(), false, false, false, true, 40, null, null, null, null, null, null, null);
     }
 }

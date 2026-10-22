@@ -20,8 +20,16 @@ public class CommandHelp {
         this.renderer = renderer;
     }
 
-    /** 单命令参数表：{@code /路径 /list} 回的那一段 */
+    /** 单命令参数表：{@code /路径 /list} 回的那一段；手写优先 */
     public String list(BotCommand cmd) {
+        if (cmd.listReply() != null && !cmd.listReply().isBlank()) {
+            return cmd.listReply();
+        }
+        return defaultList(cmd);
+    }
+
+    /** 后台预览用：忽略手写内容，永远给出自动生成版本 */
+    public String defaultList(BotCommand cmd) {
         String head = "/" + cmd.trigger().replace("/", " /") + " ";
         return head + paramList(cmd.params(), "没有参数。");
     }
@@ -72,7 +80,11 @@ public class CommandHelp {
         if (cmd.help() != null && !cmd.help().isBlank()) {
             return renderer.render(cmd.help(), ctx);
         }
+        return defaultHelp(cmd);
+    }
 
+    /** 后台预览用：忽略手写内容，永远给出自动生成版本 */
+    public String defaultHelp(BotCommand cmd) {
         StringBuilder sb = new StringBuilder();
         sb.append('/').append(cmd.trigger().replace("/", " /"));
         if (cmd.description() != null && !cmd.description().isBlank()) {

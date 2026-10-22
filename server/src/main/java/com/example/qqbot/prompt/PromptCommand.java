@@ -5,6 +5,7 @@ import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.BotCommand;
 import com.example.qqbot.command.CommandAccess;
 import com.example.qqbot.command.CommandRole;
+import com.example.qqbot.command.CommandCatalog;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import org.slf4j.Logger;
@@ -35,11 +36,27 @@ public class PromptCommand {
     private final PromptStore prompts;
     private final CommandStore commandStore;
     private final AclStore aclStore;
+    private final CommandCatalog catalog;
+    private final com.example.qqbot.command.SystemReplyStore replies;
 
+    /** 兼容旧测试：没有目录时 /prompt /list 回退成用法 */
     public PromptCommand(PromptStore prompts, CommandStore commandStore, AclStore aclStore) {
+        this(prompts, commandStore, aclStore, null, null);
+    }
+
+    public PromptCommand(PromptStore prompts, CommandStore commandStore, AclStore aclStore,
+                         CommandCatalog catalog) {
+        this(prompts, commandStore, aclStore, catalog, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PromptCommand(PromptStore prompts, CommandStore commandStore, AclStore aclStore,
+                         CommandCatalog catalog, com.example.qqbot.command.SystemReplyStore replies) {
         this.prompts = prompts;
         this.commandStore = commandStore;
         this.aclStore = aclStore;
+        this.catalog = catalog;
+        this.replies = replies;
     }
 
     public record Reply(String text) {
@@ -72,7 +89,11 @@ public class PromptCommand {
         }
 
         String rest = text.substring("/prompt".length()).trim();
-        if (rest.isEmpty() || "/help".equalsIgnoreCase(rest)) {
+        // 不带动作 = 查看当前生效的提示；/help 才看用法
+        if (rest.isEmpty()) {
+            return Optional.of(new Reply(list(groupId, userId)));
+        }
+        if ("/help".equalsIgnoreCase(rest)) {
             return Optional.of(new Reply(usage()));
         }
 
@@ -82,7 +103,7 @@ public class PromptCommand {
         try {
             return Optional.of(new Reply(switch (action) {
                 case "/create" -> create(event, userId, groupId, arg);
-                case "/list" -> list(groupId, userId);
+                case "/list" -> globalList();
                 case "/delete" -> delete(event, userId, groupId, arg);
                 case "/clear" -> clear(event, userId, groupId);
                 default -> usage();
@@ -125,10 +146,19 @@ public class PromptCommand {
                 + "\n下次 @ 我时生效。";
     }
 
+    /** /prompt /list：全局命令目录；后台改过就用后台文案 */
+    private String globalList() {
+        String custom = replies == null ? "" : replies.get(com.example.qqbot.command.SystemReplyStore.LIST);
+        if (custom != null && !custom.isBlank()) {
+            return custom;
+        }
+        return catalog == null ? usage() : catalog.listText();
+    }
+
     private String list(long groupId, long userId) {
         List<PromptStore.Prompt> items = prompts.listFor(groupId, userId);
         if (items.isEmpty()) {
-            return "还没有补充提示。\n" + usage();
+            return "当前没有生效的补充提示。";
         }
         StringBuilder sb = new StringBuilder();
         List<PromptStore.Prompt> group = items.stream()
@@ -201,12 +231,12 @@ public class PromptCommand {
 
     private static String usage() {
         return """
-                默认按本群保存：
-                  /prompt /create 文本
-                  /prompt /create #user_id-QQ号# 文本   只给某个人
-                  /prompt /list
-                  /prompt /delete 编号
-                  /prompt /clear
+                /prompt              查看当前生效的提示
+                /prompt /create 文本  默认加到本群
+                /prompt /create #user_id-QQ号# 文本   只给某个人
+                /prompt /list        查看全部可用命令
+                /prompt /delete 编号
+                /prompt /clear
                 下次 @ 我时生效。
                 """.stripTrailing();
     }
