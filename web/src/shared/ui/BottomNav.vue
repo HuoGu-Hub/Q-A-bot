@@ -9,6 +9,11 @@
  *
  * 现在用 flex，每项 flex:1 1 0 + min-width:0：**项数变了也不会换行**，
  * 加第 6 项时只会变窄，不会掉行。
+ *
+ * ⚠️ 显隐由组件自己管，不要靠调用方加一个 .mobile-only 类来隐藏。
+ * 踩过的坑：App.vue 写了 .mobile-only { display: none }，而这里的 .bn 自带 display: flex ——
+ * 两条规则权重相同，谁后注入谁赢，结果 1920px 的桌面端也挂着一条底栏。
+ * 组件知道自己是「手机底栏」，这件事就该它自己决定。
  */
 import { RouterLink } from 'vue-router'
 import Icon from './Icon.vue'
@@ -53,6 +58,11 @@ withDefaults(defineProps<{
   border-top: 1px solid var(--hairline);
   /* 全面屏的 Home 指示条占位，否则最后一排按钮会被它压住 */
   padding-bottom: var(--safe-b);
+}
+
+/* 桌面端整条不渲染。760px 与全站断点一致（见 base.css 的窄屏基线） */
+@media (min-width: 761px) {
+  .bn { display: none; }
 }
 
 .tab {

@@ -117,8 +117,8 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
       </div>
     </footer>
 
-    <!-- 手机端导航：只有这里用 BottomNav，桌面端整条不渲染 -->
-    <BottomNav class="mobile-only" :items="tabItems" />
+    <!-- 手机端导航。桌面端的隐藏由 BottomNav 自己负责，不要在这里再挂一个类 -->
+    <BottomNav :items="tabItems" />
   </div>
 </template>
 
@@ -293,16 +293,12 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
 .ftr .rule { margin-top: 0; margin-bottom: var(--sp-4); }
 
 /* ==================== 窄屏 ==================== */
-.mobile-only { display: none; }
-
 @media (max-width: 760px) {
   .sub { display: none; }
   .nav { display: none; }
   /* 站名 + 主题开关各占一头 */
   .theme-slot { margin-left: auto; }
   .hdr-inner { gap: var(--sp-2); }
-
-  .mobile-only { display: flex; }
 
   /* 手机上地图让出底栏高度，否则底部一截永远被压着 */
   .shell.is-full .main { padding-bottom: calc(var(--tabbar-h) + var(--safe-b)); }

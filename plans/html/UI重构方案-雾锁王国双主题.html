@@ -710,6 +710,7 @@ cd web; pnpm typecheck; pnpm build</code></pre>
     <li><b>没有建立 ActionBar。</b><code>AdminPage</code> 的动作行在手机上由「横滚」改成「换行 + 小号按钮」——横滚加右对齐会把第一颗按钮裁到屏幕外，实测出现过「全部展开」只剩「部展开」。收小之后四颗按钮正好一行，五个以上的页面折两行，比被裁掉一颗好。</li>
     <li><b>资料库与知识库加了客户端筛选。</b>189 个分类、198 份文档一次性铺在手机上是十几屏。筛选是对已加载数据的本地过滤，接口与操作都没变；文档列表另外按每批 30 份渲染，避免一万像素的长页。</li>
     <li><b>DataTable 的卡片模式设了 30 行上限。</b>超过 30 行会退回表格 + 横向滚动：100 条记录每行一张卡会变成一万多像素，比横滑更难用。短表才卡片化。</li>
+    <li><b>底栏的显隐收进组件。</b>最初由 App.vue 挂 <code>.mobile-only</code> 来隐藏，而 BottomNav 自己的 <code>.bn</code> 也有 <code>display: flex</code> —— 同权重下被后注入的组件样式盖掉，1920px 的桌面端也挂着一条底栏。现在 <code>BottomNav</code> 在 <code>min-width: 761px</code> 时自己 <code>display: none</code>，调用方不需要也不应该再管这件事。</li>
     <li><b>日间主题的正文对比度按纸张重算。</b>没有直接反色：纸底是 <code>#E9E1CF</code> 而非白，墨色是 <code>#2A2318</code> 而非黑，灵火变成赭石 <code>#9C5717</code>，三个方向都过了 4.5:1。</li>
   </ul>
 
