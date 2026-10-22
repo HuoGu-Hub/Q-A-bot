@@ -360,6 +360,17 @@ export interface AdminPrompt {
   content: string
 }
 
+/** 系统命令的中文别名：target = list / help / prompt */
+export interface SystemAliasEntry {
+  target: 'list' | 'help' | 'prompt'
+  label: string
+  aliases: string[]
+}
+
+export interface SystemAliasList {
+  commands: SystemAliasEntry[]
+}
+
 export interface AdminPromptList {
   available: boolean
   prompts: AdminPrompt[]

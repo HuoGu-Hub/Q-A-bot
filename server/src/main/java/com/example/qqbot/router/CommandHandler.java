@@ -25,6 +25,7 @@ import com.example.qqbot.command.RenderContext;
 import com.example.qqbot.command.VariableRenderer;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.prompt.PromptCommand;
+import com.example.qqbot.prompt.SystemAliasStore;
 import com.example.qqbot.onebot.outbound.OutboundSender;
 import com.example.qqbot.qa.QaCollector;
 import com.example.qqbot.trace.KbTrace;
@@ -73,6 +74,7 @@ public class CommandHandler {
     private final CommandPolicyStore commandPolicyStore;
     private final BoardRunner boardRunner;
     private final PromptCommand promptCommand;
+    private final SystemAliasStore systemAliases;
 
     public CommandHandler(CommandPolicy commandProperties,
                           CommandMatcher commandMatcher,
@@ -87,7 +89,8 @@ public class CommandHandler {
                           AclStore aclStore,
                           CommandPolicyStore commandPolicyStore,
                           BoardRunner boardRunner,
-                          PromptCommand promptCommand) {
+                          PromptCommand promptCommand,
+                          SystemAliasStore systemAliases) {
         this.commandProperties = commandProperties;
         this.commandMatcher = commandMatcher;
         this.commandParser = commandParser;
@@ -102,6 +105,7 @@ public class CommandHandler {
         this.commandPolicyStore = commandPolicyStore;
         this.boardRunner = boardRunner;
         this.promptCommand = promptCommand;
+        this.systemAliases = systemAliases;
     }
 
     /**
@@ -133,13 +137,15 @@ public class CommandHandler {
         if (!commandProperties.isEnabled()) {
             return Outcome.NOT_COMMAND;
         }
+        // 系统命令别名：/列表 → /list、/提示 → /prompt
+        String commandText = systemAliases == null ? text : systemAliases.resolve(text);
         boolean inGroup = event.isGroupMessage();
         long groupId = event.getGroupId() == null ? 0 : event.getGroupId();
         long userId = event.getUserId() == null ? 0 : event.getUserId();
 
         // ---------- 个人提示：/prompt /create 文本 ----------
         // 放在板块与命令表之前：prompt 是系统保留名，避免被同名配置遮住
-        java.util.Optional<PromptCommand.Reply> prompt = promptCommand.tryRun(event, text);
+        java.util.Optional<PromptCommand.Reply> prompt = promptCommand.tryRun(event, commandText);
         if (prompt.isPresent()) {
             String answer = prompt.get().text();
             if (answer != null && !answer.isBlank()) {
@@ -150,7 +156,7 @@ public class CommandHandler {
 
         // ---------- 板块命令优先：/板块 /动作 ----------
         // 板块本身就是命令，不走命令表 —— 否则每个板块要生成五行配置，改一次就要同步一次
-        java.util.Optional<BoardRunner.Reply> board = boardRunner.tryRun(event, text);
+        java.util.Optional<BoardRunner.Reply> board = boardRunner.tryRun(event, commandText);
         if (board.isPresent()) {
             String answer = board.get().text();
             if (answer != null && !answer.isBlank()) {
@@ -159,7 +165,7 @@ public class CommandHandler {
             return Outcome.HANDLED;
         }
 
-        CommandMatcher.Match match = commandMatcher.match(text, inGroup, groupId);
+        CommandMatcher.Match match = commandMatcher.match(commandText, inGroup, groupId);
 
         if (!match.hit()) {
             // 看起来像指令但没匹配上 —— 记一笔，用来发现"该加哪些命令"

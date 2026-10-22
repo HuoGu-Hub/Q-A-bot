@@ -27,6 +27,7 @@ import BoardEditor from './BoardEditor.vue'
 import BoardRecordsModal from './BoardRecordsModal.vue'
 import NewCommandModal from './NewCommandModal.vue'
 import PromptEditor from './PromptEditor.vue'
+import SystemAliasModal from './SystemAliasModal.vue'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
 } from './commandOptions'
@@ -51,6 +52,7 @@ const boardError = ref('')
 const recordsBoard = ref<AdminBoard | null>(null)
 /** /prompt 的自定义编辑器：不是普通命令表单 */
 const promptEditing = ref<BotCommand | null>(null)
+const aliasOpen = ref(false)
 /** 新建命令的类型选择弹窗 */
 const newOpen = ref(false)
 /** 命令表筛选 */
@@ -138,6 +140,9 @@ const FILTERS = [
   { value: 'action', label: '动作' },
   { value: 'system', label: '系统' },
 ]
+
+const hasActions = computed(() => (actions.value?.actions?.length ?? 0) > 0)
+const filters = computed(() => FILTERS.filter((f) => f.value !== 'action' || hasActions.value))
 
 const boardCount = computed(() => boards.value.length)
 
@@ -892,10 +897,11 @@ onMounted(load)
           <span v-if="search || kindFilter !== 'all'"><b>{{ visibleRows.length }}</b> 匹配</span>
         </div>
         <div class="index-tools">
+          <button type="button" class="alias-trigger" @click="aliasOpen = true">系统别名</button>
           <Input v-model="search" placeholder="搜索命令" aria-label="搜索命令" />
           <div class="filters" role="group" aria-label="按类型筛选">
             <button
-              v-for="f in FILTERS"
+              v-for="f in filters"
               :key="f.value"
               type="button"
               class="filter"
@@ -1069,6 +1075,7 @@ onMounted(load)
 
     <NewCommandModal
       :open="newOpen"
+      :show-action="hasActions"
       @pick="pickNew"
       @close="newOpen = false"
     />
@@ -1079,6 +1086,8 @@ onMounted(load)
       @close="promptEditing = null"
       @changed="load"
     />
+
+    <SystemAliasModal :open="aliasOpen" @close="aliasOpen = false" />
   </div>
 </template>
 
@@ -1137,6 +1146,16 @@ onMounted(load)
   flex-wrap: wrap;
 }
 .index-tools :deep(.inp) { width: 210px; }
+.alias-trigger {
+  padding: 6px 9px;
+  background: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.alias-trigger:hover { border-color: var(--edge-hover); color: var(--ink); }
 .filters { display: flex; align-items: center; gap: 1px; }
 .filter {
   padding: 5px 7px;

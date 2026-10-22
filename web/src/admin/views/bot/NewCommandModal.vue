@@ -8,7 +8,7 @@
 import Modal from '@shared/ui/Modal.vue'
 import Icon from '@shared/ui/Icon.vue'
 
-defineProps<{ open: boolean }>()
+withDefaults(defineProps<{ open: boolean; showAction?: boolean }>(), { showAction: true })
 const emit = defineEmits<{
   pick: [string]
   close: []
@@ -33,7 +33,7 @@ const emit = defineEmits<{
         <span class="type-hint">知识库回答</span>
         <Icon name="chevron-right" :size="15" class="type-arrow" />
       </button>
-      <button type="button" class="type" @click="emit('pick', 'action')">
+      <button v-if="showAction" type="button" class="type" @click="emit('pick', 'action')">
         <span class="type-name">动作</span>
         <span class="type-hint">调用已注册执行器</span>
         <Icon name="chevron-right" :size="15" class="type-arrow" />
