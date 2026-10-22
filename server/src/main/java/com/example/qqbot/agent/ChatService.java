@@ -259,9 +259,10 @@ public class ChatService {
             String nickname = sender.path("nickname").asText("");
             String card = sender.path("card").asText("");
             String name = !card.isEmpty() ? card : nickname;
-            if (!name.isEmpty()) {
-                // 昵称/群名片是用户可改的，换行会伪造出新的段落
-                sb.append("发言者：").append(PromptText.oneLine(name, 40)).append("\n");
+            // 昵称/群名片是用户可改的，换行会伪造出新的段落
+            String safeName = PromptText.oneLine(name, 40);
+            if (!safeName.isEmpty()) {
+                sb.append("发言者：").append(safeName).append("\n");
             }
         }
 
