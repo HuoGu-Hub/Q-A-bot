@@ -87,11 +87,11 @@ public class BoardRunner {
         // 后台看到的目录与群里收到的是同一份数据，避免各写一套后漂移。
         if ("help".equalsIgnoreCase(boardPath)) {
             logUsage(event, "help");
-            return Optional.of(new Reply(globalReply(SystemReplyStore.HELP, catalog.helpText())));
+            return Optional.of(new Reply(globalReply(SystemReplyStore.HELP, catalog.helpText(), event)));
         }
         if ("list".equalsIgnoreCase(boardPath)) {
             logUsage(event, "list");
-            return Optional.of(new Reply(globalReply(SystemReplyStore.LIST, catalog.listText())));
+            return Optional.of(new Reply(globalReply(SystemReplyStore.LIST, catalog.listText(), event)));
         }
         // create / delete 是板块动作，不占全局命令名；给一句明确指路，避免发出去没反应
         if ("create".equalsIgnoreCase(boardPath) || "delete".equalsIgnoreCase(boardPath)) {
@@ -137,15 +137,18 @@ public class BoardRunner {
             case Board.ACT_CREATE -> create(board, event, userId, groupId, rest);
             case Board.ACT_DELETE -> delete(board, rest);
             case Board.ACT_LIST -> list(board);
-            case Board.ACT_HELP -> help(board);
+            case Board.ACT_HELP -> help(board, event);
             default -> query(board, groupId);
         }));
     }
 
     /** 全局回复只在用户明确编辑过时覆盖自动目录 */
-    private String globalReply(String key, String fallback) {
+    private String globalReply(String key, String fallback, OneBotEvent event) {
         String custom = replies == null ? "" : replies.get(key);
-        return custom == null || custom.isBlank() ? fallback : custom;
+        if (custom == null || custom.isBlank()) {
+            return fallback;
+        }
+        return renderer.render(custom, renderer.contextOf(event, Map.of(), "", ""));
     }
 
     /** 记一次命令使用（含被权限拦下的），与 CommandHandler 的记账口径一致 */
@@ -238,9 +241,9 @@ public class BoardRunner {
 
     // ==================== 帮助 ====================
 
-    private String help(Board board) {
+    private String help(Board board, OneBotEvent event) {
         return board.helpReply() == null || board.helpReply().isBlank()
-                ? globalReply(SystemReplyStore.HELP, catalog.helpText()) : board.helpReply();
+                ? globalReply(SystemReplyStore.HELP, catalog.helpText(), event) : board.helpReply();
     }
 
     // ==================== 小工具 ====================

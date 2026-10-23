@@ -7,32 +7,45 @@
  */
 import { computed, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
-import type { SystemReplyList } from '@shared/api/types'
+import type { SystemReplyList, CommandVariables } from '@shared/api/types'
 import CommandEditorShell from './CommandEditorShell.vue'
 import Input from '@shared/ui/Input.vue'
 import Notice from '@shared/ui/Notice.vue'
+import VariablePanel from './VariablePanel.vue'
+import { useVariableInsert } from './useVariableInsert'
 
 const props = defineProps<{ open: boolean; kind: 'list' | 'help' }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
 const content = ref('')
 const defaultContent = ref('')
+const variables = ref<CommandVariables | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 
 const title = computed(() => props.kind === 'list' ? '编辑 /list 回复' : '编辑 /help 回复')
-const preview = computed(() => content.value.trim() || defaultContent.value)
+const preview = computed(() => {
+  const raw = content.value.trim() || defaultContent.value
+  const samples = variables.value?.preview ?? {}
+  return raw.replace(/\{([^}]+)\}/g, (token, name: string) => samples[name] ?? token)
+})
+const allVars = computed(() => (variables.value?.variables ?? []).filter((v) => v.inText))
+const { insert: insertVariable } = useVariableInsert({ content: (value) => { content.value = value } }, 'content')
 
 async function load() {
   if (!props.open) return
   loading.value = true
   error.value = ''
   try {
-    const data = await adminApi.get<SystemReplyList>('/system-replies')
+    const [data, vars] = await Promise.all([
+      adminApi.get<SystemReplyList>('/system-replies'),
+      adminApi.get<CommandVariables>('/commands/variables'),
+    ])
     const item = data[props.kind]
     content.value = item.content
     defaultContent.value = item.defaultContent
+    variables.value = vars
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -76,13 +89,15 @@ async function save() {
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <div v-if="loading" class="reply-empty">正在读取…</div>
     <template v-else>
+      <VariablePanel :vars="allVars" @insert="insertVariable" />
       <Input
         v-model="content"
         multiline
         :rows="10"
         mono
         :placeholder="kind === 'list' ? '自定义 /list 回复' : '自定义 /help 回复'"
-        :aria-label="kind + ' 回复'"
+        aria-label="回复内容"
+        data-var-field="content"
       />
       <div class="reply-preview">
         <div class="preview-label">实际回复</div>
