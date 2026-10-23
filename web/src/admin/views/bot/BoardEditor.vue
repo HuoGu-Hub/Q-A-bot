@@ -6,7 +6,7 @@
  * 历史记录会在同一事务里迁到新名字下；内置命令的路径是代码约定，不能改。
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import type { AdminBoard, AdminParamSpec, BoardDraft } from '@shared/api/types'
+import type { AdminBoard, AdminParamSpec, BoardDraft, CommandVariables } from '@shared/api/types'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
@@ -23,6 +23,8 @@ const props = defineProps<{
   board: AdminBoard | null
   saving: boolean
   error: string
+  /** 全局通用变量，与板块专用变量合并后一起展示 */
+  variables?: CommandVariables | null
 }>()
 
 const emit = defineEmits<{
@@ -60,16 +62,23 @@ const openOutput = ref(true)
 const openList = ref(false)
 const openHelp = ref(false)
 
-const boardVars = [
-  { name: 'count', label: '总条数', example: '3' },
-  { name: 'path', label: '命令名', example: '预约开黑' },
-  { name: 'id', label: '记录编号', example: '12' },
-  { name: 'when', label: '时间', example: '立即展示' },
-  { name: 'text', label: '内容', example: '缺打野' },
-  { name: 'nickname', label: '昵称', example: '阿明' },
-  { name: 'group', label: '群号', example: '269127588' },
-  { name: 'params.参数名', label: '参数值', example: '今晚8点' },
-]
+const boardVars = computed(() => {
+  const own = [
+    { name: 'count', label: '总条数', example: '3' },
+    { name: 'path', label: '命令名', example: '预约开黑' },
+    { name: 'id', label: '记录编号', example: '12' },
+    { name: 'when', label: '时间', example: '立即展示' },
+    { name: 'text', label: '内容', example: '缺打野' },
+    { name: 'nickname', label: '昵称', example: '阿明' },
+    { name: 'group', label: '群号', example: '269127588' },
+    { name: 'params.参数名', label: '参数值', example: '今晚8点' },
+  ]
+  const seen = new Set(own.map((v) => v.name))
+  const common = (props.variables?.variables ?? [])
+    .filter((v) => v.inText && !seen.has(v.name))
+    .map((v) => ({ name: v.name, label: v.label, example: v.example, advanced: v.advanced }))
+  return [...own, ...common]
+})
 const { insert: insertVariable } = useVariableInsert({
   listHeader: (value) => { form.listHeader = value },
   listItem: (value) => { form.listItem = value },

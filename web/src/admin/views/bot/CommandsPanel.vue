@@ -909,6 +909,7 @@ onMounted(load)
       :board="boardEditing"
       :saving="boardSaving"
       :error="boardError"
+      :variables="vars"
       @save="saveBoard"
       @cancel="cancelBoard"
       @remove="removeBoard"
