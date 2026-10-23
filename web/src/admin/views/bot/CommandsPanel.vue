@@ -704,6 +704,76 @@ onMounted(load)
               <div class="preview-bubble">{{ preview || '—' }}</div>
             </div>
           </div>
+      <!-- 参数、list、help 都留在左栏，右侧设置与变量固定 -->
+      <div ref="paramBlock" class="block">        <div class="block-head block-head--with-action">
+          <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
+            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
+            <span>参数</span>
+            <span class="block-count">{{ paramRows.length }}</span>
+          </button>
+          <button class="head-add" type="button" @click="addParamRow">+ 参数</button>
+        </div>
+        <div v-if="openBlocks.params" class="block-body">
+          <ParamTable
+            ref="paramTableRef"
+            :params="paramRows"
+            empty-hint="无参数"
+            @update:params="setParams"
+          >
+            <template #actions>
+              <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入动作参数</Button>
+            </template>
+          </ParamTable>
+        </div>
+      </div>
+
+      <div class="block">
+        <button class="block-head" type="button" :aria-expanded="openBlocks.list" @click="toggleBlock('list')">
+          <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.list }" />
+          <span>list 回复</span>
+          <span class="block-count">{{ editing.listReply ? '手写' : '自动' }}</span>
+        </button>
+        <div v-if="openBlocks.list" class="block-body">
+          <Input
+            :model-value="editing.listReply ?? ''"
+            multiline
+            :rows="4"
+            mono
+            placeholder="留空自动，默认列出本命令动作"
+            aria-label="单命令 list 回复"
+            data-var-field="listReply"
+            @update:model-value="patch({ listReply: $event })"
+          />
+          <div class="reply-preview">
+            <div class="reply-label">实际回复</div>
+            <pre>{{ (editing.listReply ?? '').trim() || editing.defaultList || '保存后显示默认回复' }}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <button class="block-head" type="button" :aria-expanded="openBlocks.help" @click="toggleBlock('help')">
+          <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.help }" />
+          <span>help 回复</span>
+          <span class="block-count">{{ editing.help ? '手写' : '全局 help' }}</span>
+        </button>
+        <div v-if="openBlocks.help" class="block-body">
+          <Input
+            :model-value="editing.help ?? ''"
+            multiline
+            :rows="4"
+            mono
+            placeholder="留空使用全局 help"
+            aria-label="单命令帮助"
+            data-var-field="help"
+            @update:model-value="patch({ help: $event })"
+          />
+          <div class="reply-preview">
+            <div class="reply-label">实际回复</div>
+            <pre>{{ (editing.help ?? '').trim() || editing.defaultHelp || '保存后显示默认回复' }}</pre>
+          </div>
+        </div>
+      </div>
         </section>
 
         <!-- 右：规则与变量，滚动时保持固定 -->
@@ -822,76 +892,6 @@ onMounted(load)
         </section>
       </div>
 
-      <!-- 参数表单独占满整行：放在右侧设置栏会被列宽挤掉后半段 -->
-      <div ref="paramBlock" class="block block--wide">        <div class="block-head block-head--with-action">
-          <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
-            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
-            <span>参数</span>
-            <span class="block-count">{{ paramRows.length }}</span>
-          </button>
-          <button class="head-add" type="button" @click="addParamRow">+ 参数</button>
-        </div>
-        <div v-if="openBlocks.params" class="block-body">
-          <ParamTable
-            ref="paramTableRef"
-            :params="paramRows"
-            empty-hint="无参数"
-            @update:params="setParams"
-          >
-            <template #actions>
-              <Button v-if="isAction && editing.action" size="sm" @click="loadActionParams">载入动作参数</Button>
-            </template>
-          </ParamTable>
-        </div>
-      </div>
-
-      <div class="block block--wide">
-        <button class="block-head" type="button" :aria-expanded="openBlocks.list" @click="toggleBlock('list')">
-          <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.list }" />
-          <span>list 回复</span>
-          <span class="block-count">{{ editing.listReply ? '手写' : '自动' }}</span>
-        </button>
-        <div v-if="openBlocks.list" class="block-body">
-          <Input
-            :model-value="editing.listReply ?? ''"
-            multiline
-            :rows="4"
-            mono
-            placeholder="留空自动，默认列出本命令动作"
-            aria-label="单命令 list 回复"
-            data-var-field="listReply"
-            @update:model-value="patch({ listReply: $event })"
-          />
-          <div class="reply-preview">
-            <div class="reply-label">实际回复</div>
-            <pre>{{ (editing.listReply ?? '').trim() || editing.defaultList || '保存后显示默认回复' }}</pre>
-          </div>
-        </div>
-      </div>
-
-      <div class="block block--wide">
-        <button class="block-head" type="button" :aria-expanded="openBlocks.help" @click="toggleBlock('help')">
-          <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.help }" />
-          <span>help 回复</span>
-          <span class="block-count">{{ editing.help ? '手写' : '全局 help' }}</span>
-        </button>
-        <div v-if="openBlocks.help" class="block-body">
-          <Input
-            :model-value="editing.help ?? ''"
-            multiline
-            :rows="4"
-            mono
-            placeholder="留空使用全局 help"
-            aria-label="单命令帮助"
-            data-var-field="help"
-            @update:model-value="patch({ help: $event })"
-          />
-          <div class="reply-preview">
-            <div class="reply-label">实际回复</div>
-            <pre>{{ (editing.help ?? '').trim() || editing.defaultHelp || '保存后显示默认回复' }}</pre>
-          </div>
-        </div>
-      </div>
     </CommandEditorShell>
 
 
