@@ -444,6 +444,8 @@ export interface AdminBoard {
   id: number
   path: string
   title: string
+  /** 一句话说明，供命令表展示 */
+  description: string
   params: AdminParamSpec[]
   /** direct / scheduled */
   delivery: string

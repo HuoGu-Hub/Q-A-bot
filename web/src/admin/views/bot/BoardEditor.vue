@@ -35,6 +35,7 @@ const emit = defineEmits<{
 
 interface FormState {
   path: string
+  description: string
   params: AdminParamSpec[]
   delivery: string
   access: string
@@ -52,7 +53,7 @@ interface FormState {
 }
 
 const form = reactive<FormState>({
-  path: '', params: [], delivery: 'direct', access: 'all', scope: 'GROUP',
+  path: '', description: '', params: [], delivery: 'direct', access: 'all', scope: 'GROUP',
   showGroup: false, showUser: false, allowPrivate: false, enabled: true,
   listHeader: '', listItem: '', listEmpty: '', listLimit: 20, listReply: '', helpReply: '',
 })
@@ -104,6 +105,7 @@ const scheduled = computed(() => form.delivery === 'scheduled')
 function reset() {
   const b = props.board
   form.path = b?.path ?? ''
+  form.description = b?.description ?? ''
   form.params = (b?.params ?? []).map((p) => ({ ...p }))
   form.delivery = b?.delivery ?? 'direct'
   form.access = b?.access ?? 'all'
@@ -204,6 +206,7 @@ function submit() {
   const draft: BoardDraft = {
     id: props.board?.id ?? 0,
     path: form.path.trim(),
+    description: form.description.trim(),
     // 命令名就是调用名，title 只作为历史字段跟着 path 走
     title: form.path.trim(),
     params: form.params.map((p) => ({ ...p })),
@@ -264,6 +267,15 @@ function submit() {
             :disabled="pathLocked"
             placeholder="公告"
             aria-label="命令名"
+          />
+        </label>
+
+        <label class="row">
+          <span class="row-label">说明</span>
+          <Input
+            v-model="form.description"
+            placeholder="一句话说明这个板块"
+            aria-label="板块说明"
           />
         </label>
 

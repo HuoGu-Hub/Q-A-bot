@@ -54,7 +54,7 @@ public class BoardAdminService {
                             boolean enabled, int sortOrder, boolean builtin, String usage,
                             String listHeader, String listItem, String listEmpty, int listLimit,
                             String listReply, String helpReply,
-                            String defaultList, String defaultHelp) {
+                            String defaultList, String defaultHelp, String description) {
     }
 
     /**
@@ -68,7 +68,19 @@ public class BoardAdminService {
                              Boolean showGroup, Boolean showUser, Boolean allowPrivate,
                              Boolean enabled, Integer sortOrder, String originalPath,
                              String listHeader, String listItem, String listEmpty,
-                             Integer listLimit, String listReply, String helpReply) {
+                             Integer listLimit, String listReply, String helpReply, String description) {
+
+        /** 兼容旧调用：没有说明 */
+        public BoardInput(String path, String title, List<ParamSpec> params,
+                          String delivery, String access, String scope, List<Long> groups,
+                          Boolean showGroup, Boolean showUser, Boolean allowPrivate,
+                          Boolean enabled, Integer sortOrder, String originalPath,
+                          String listHeader, String listItem, String listEmpty,
+                          Integer listLimit, String listReply, String helpReply) {
+            this(path, title, params, delivery, access, scope, groups, showGroup, showUser,
+                    allowPrivate, enabled, sortOrder, originalPath, listHeader, listItem,
+                    listEmpty, listLimit, listReply, helpReply, null);
+        }
 
         @com.fasterxml.jackson.annotation.JsonCreator
         public BoardInput {
@@ -189,11 +201,14 @@ public class BoardAdminService {
         String helpReply = input.helpReply() == null
                 ? (existing == null ? "" : existing.helpReply())
                 : clip(input.helpReply(), 2000);
+        String description = input.description() == null
+                ? (existing == null ? "" : existing.description())
+                : clip(input.description(), 200);
 
         Board board = new Board(
                 existing == null ? 0 : existing.id(), path, title, params, delivery, access, policy,
                 input.enabled() == null || input.enabled(), sortOrder, builtin,
-                listHeader, listItem, listEmpty, listLimit, listReply, helpReply);
+                listHeader, listItem, listEmpty, listLimit, listReply, helpReply, description);
         if (renaming && !boards.rename(originalPath, path)) {
             throw new IllegalArgumentException("改名失败：旧板块不存在或不允许改名");
         }
@@ -206,7 +221,7 @@ public class BoardAdminService {
         boards.save(new Board(board.id(), board.path(), board.title(), board.params(),
                 board.delivery(), board.access(), board.policy(), enabled, board.sortOrder(),
                 board.builtin(), board.listHeader(), board.listItem(), board.listEmpty(),
-                board.listLimit(), board.listReply(), board.helpReply()));
+                board.listLimit(), board.listReply(), board.helpReply(), board.description()));
     }
 
     private String globalHelp() {
@@ -352,6 +367,6 @@ public class BoardAdminService {
                 board.listHeader(), board.listItem(), board.listEmpty(), board.listLimit(),
                 board.listReply(), board.helpReply(),
                 catalog == null ? "" : catalog.boardModuleList(board),
-                globalHelp());
+                globalHelp(), board.description());
     }
 }

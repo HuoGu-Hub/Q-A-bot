@@ -120,7 +120,7 @@ const rows = computed<CommandRow[]>(() => [
   ...SYSTEM_ROWS,
   ...boards.value.map((b): CommandRow => ({
     source: 'board', key: 'board-' + b.id, path: b.path, usage: b.usage, kind: 'board',
-    description: '—',
+    description: b.description || '—',
     access: b.access, enabled: b.enabled, builtin: b.builtin, board: b, command: null,
   })),
   ...(data.value?.commands ?? []).map((c): CommandRow => {
