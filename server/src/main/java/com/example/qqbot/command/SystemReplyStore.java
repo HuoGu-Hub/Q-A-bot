@@ -4,9 +4,6 @@ import com.example.qqbot.persistence.Jdbc;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 /**
  * 全局 list / help 的自定义回复。
  *
@@ -39,18 +36,6 @@ public class SystemReplyStore {
         String content = jdbc.queryOne("SELECT content FROM bot_system_reply WHERE key = ?",
                 r -> r.str("content"), key);
         return content == null ? "" : content;
-    }
-
-    public Map<String, String> all() {
-        Map<String, String> out = new LinkedHashMap<>();
-        if (!jdbc.isAvailable()) {
-            return out;
-        }
-        for (var row : jdbc.query("SELECT key, content FROM bot_system_reply",
-                r -> Map.entry(r.str("key"), r.str("content")))) {
-            out.put(row.getKey(), row.getValue());
-        }
-        return out;
     }
 
     public void save(String key, String content) {

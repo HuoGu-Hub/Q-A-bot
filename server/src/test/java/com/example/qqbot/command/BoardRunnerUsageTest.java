@@ -63,8 +63,8 @@ class BoardRunnerUsageTest {
     }
 
     @Test
-    @DisplayName("★ /板块 /list 列出参数，不依赖记录库")
-    void boardListShowsParams() {
+    @DisplayName("★ /板块 /list 列出这条板块自己的命令")
+    void boardListShowsModuleCommands() {
         BoardStore boards = mock(BoardStore.class);
         BoardRecordStore records = mock(BoardRecordStore.class);
         Board board = new Board(1, "开黑", "开黑",
@@ -73,14 +73,16 @@ class BoardRunnerUsageTest {
         when(boards.find("开黑")).thenReturn(board);
         when(records.isAvailable()).thenReturn(false);
 
+        CommandCatalog catalog = mock(CommandCatalog.class);
+        when(catalog.boardModuleList(board)).thenReturn("/开黑\n/开黑 /create\n/开黑 /delete id\n/开黑 /help\n/开黑 /list");
         BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
-                mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
+                mock(VariableRenderer.class), mock(AclStore.class), catalog,
                 mock(CommandStore.class));
 
         var reply = runner.tryRun(event(), "/开黑 /list");
 
         assertThat(reply).isPresent();
-        assertThat(reply.get().text()).contains("支持 1 个参数", "#内容#", "例 示例");
+        assertThat(reply.get().text()).contains("/开黑 /create", "/开黑 /delete id", "/开黑 /help", "/开黑 /list");
     }
 
     @Test

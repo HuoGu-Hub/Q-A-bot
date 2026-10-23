@@ -205,7 +205,7 @@ public class CommandHandler {
             return Outcome.HANDLED;
         }
 
-        // ---------- 单命令参数表：/路径 /list ----------
+        // ---------- 单命令动作清单：/路径 /list ----------
         // /list 是修饰符，不是参数；放在解析之前，否则会被当成自由文本。
         if ("/list".equalsIgnoreCase(tail.trim())) {
             reply(event, cmd, tail, commandHelp.list(cmd), t0);

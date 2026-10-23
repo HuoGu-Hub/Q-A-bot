@@ -56,6 +56,29 @@ public class SystemAliasStore {
                 .toList();
     }
 
+    /** 列表展示用：有别名就用别名，没有就用规范路径 */
+    public String commandName(String target) {
+        return aliasFor(KIND_COMMAND, target);
+    }
+
+    /** 列表展示用：动作词有别名就用别名 */
+    public String actionName(String target) {
+        return aliasFor(KIND_ACTION, target);
+    }
+
+    public String commandDisplay(String target) {
+        return "/" + commandName(target).replace("/", " /");
+    }
+
+    private String aliasFor(String kind, String target) {
+        for (Alias item : list()) {
+            if (kind.equals(item.kind()) && target.equalsIgnoreCase(item.target())) {
+                return item.alias();
+            }
+        }
+        return target;
+    }
+
     public void replace(List<Alias> aliases) {
         if (!repo.isAvailable()) {
             throw new AliasException("别名暂时存不了");

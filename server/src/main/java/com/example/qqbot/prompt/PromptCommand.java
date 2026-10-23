@@ -89,12 +89,12 @@ public class PromptCommand {
         }
 
         String rest = text.substring("/prompt".length()).trim();
-        // 不带动作 = 查看当前生效的提示；/help 才看用法
+        // 不带动作 = 查看这个板块当前的数据；/help、/list 各自是命令
         if (rest.isEmpty()) {
             return Optional.of(new Reply(list(groupId, userId)));
         }
         if ("/help".equalsIgnoreCase(rest)) {
-            return Optional.of(new Reply(usage()));
+            return Optional.of(new Reply(help(cmd)));
         }
 
         String[] parts = rest.split("\\s+", 2);
@@ -103,7 +103,7 @@ public class PromptCommand {
         try {
             return Optional.of(new Reply(switch (action) {
                 case "/create" -> create(event, userId, groupId, arg);
-                case "/list" -> globalList();
+                case "/list" -> listCommand(cmd);
                 case "/delete" -> delete(event, userId, groupId, arg);
                 case "/clear" -> clear(event, userId, groupId);
                 default -> usage();
@@ -146,38 +146,37 @@ public class PromptCommand {
                 + "\n下次 @ 我时生效。";
     }
 
-    /** /prompt /list：全局命令目录；后台改过就用后台文案 */
-    private String globalList() {
-        String custom = replies == null ? "" : replies.get(com.example.qqbot.command.SystemReplyStore.LIST);
+    /** /prompt /list：这个板块自己的命令清单 */
+    private String listCommand(BotCommand cmd) {
+        if (cmd.listReply() != null && !cmd.listReply().isBlank()) {
+            return cmd.listReply();
+        }
+        return catalog == null ? usage() : catalog.promptModuleList();
+    }
+
+    private String help(BotCommand cmd) {
+        if (cmd.help() != null && !cmd.help().isBlank()) {
+            return cmd.help();
+        }
+        String custom = replies == null ? "" : replies.get(com.example.qqbot.command.SystemReplyStore.HELP);
         if (custom != null && !custom.isBlank()) {
             return custom;
         }
-        return catalog == null ? usage() : catalog.listText();
+        return catalog == null ? usage() : catalog.helpText();
     }
 
+    /** 直接 /prompt：当前生效的提示词，按序号展示 */
     private String list(long groupId, long userId) {
         List<PromptStore.Prompt> items = prompts.listFor(groupId, userId);
         if (items.isEmpty()) {
-            return "当前没有生效的补充提示。";
+            return "当前没有生效的提示词。";
         }
-        StringBuilder sb = new StringBuilder();
-        List<PromptStore.Prompt> group = items.stream()
-                .filter(p -> p.scope() == PromptStore.Scope.GROUP).toList();
-        List<PromptStore.Prompt> user = items.stream()
-                .filter(p -> p.scope() == PromptStore.Scope.USER).toList();
-        if (!group.isEmpty()) {
-            sb.append("本群提示：\n");
-            for (PromptStore.Prompt item : group) {
-                sb.append('#').append(item.id()).append(' ').append(shorten(item.content())).append('\n');
-            }
+        StringBuilder sb = new StringBuilder("当前生效的提示词为：");
+        int index = 1;
+        for (PromptStore.Prompt item : items) {
+            sb.append('\n').append(index++).append(". ").append(shorten(item.content()));
         }
-        if (!user.isEmpty()) {
-            sb.append("我的提示：\n");
-            for (PromptStore.Prompt item : user) {
-                sb.append('#').append(item.id()).append(' ').append(shorten(item.content())).append('\n');
-            }
-        }
-        return sb.append("删除：/prompt /delete 编号").toString();
+        return sb.toString();
     }
 
     private String delete(OneBotEvent event, long userId, long groupId, String arg) {
@@ -234,7 +233,7 @@ public class PromptCommand {
                 /prompt              查看当前生效的提示
                 /prompt /create 文本  默认加到本群
                 /prompt /create #user_id-QQ号# 文本   只给某个人
-                /prompt /list        查看全部可用命令
+                /prompt /list        查看补充提示的动作
                 /prompt /delete 编号
                 /prompt /clear
                 下次 @ 我时生效。

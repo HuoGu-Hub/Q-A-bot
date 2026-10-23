@@ -11,7 +11,7 @@ import static org.mockito.Mockito.mock;
 class CommandHelpListTest {
 
     @Test
-    @DisplayName("★ 单命令 /list 列出参数契约")
+    @DisplayName("★ 单命令 /list 列出本命令动作")
     void listsParams() {
         CommandHelp help = new CommandHelp(mock(VariableRenderer.class));
         BotCommand cmd = new BotCommand(1, "举报", "收到", "举报", "all", List.of(), "all",
@@ -22,17 +22,17 @@ class CommandHelpListTest {
 
         String text = help.list(cmd);
 
-        assertThat(text).contains("支持 2 个参数", "#对象#", "必填", "#理由#", "可选", "例 某人");
+        assertThat(text).contains("/举报", "/举报 /help", "/举报 /list");
     }
 
     @Test
-    @DisplayName("没有参数时明确说没有")
+    @DisplayName("没有动作时也列出基础命令与 help/list")
     void noParams() {
         CommandHelp help = new CommandHelp(mock(VariableRenderer.class));
         BotCommand cmd = new BotCommand(1, "ping", "pong", "测试", "all", List.of(), "all",
                 true, 0, true, BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB,
                 List.of(), null, null);
 
-        assertThat(help.list(cmd)).isEqualTo("/ping 没有参数。");
+        assertThat(help.list(cmd)).isEqualTo("/ping\n/ping /help\n/ping /list");
     }
 }

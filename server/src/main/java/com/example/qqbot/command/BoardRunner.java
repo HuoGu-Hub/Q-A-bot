@@ -127,7 +127,7 @@ public class BoardRunner {
                 List.of(), aclStore.global())) {
             return Optional.of(new Reply(access.describe(inGroup)));
         }
-        // 看参数、看用法不碰记录表，记录库暂时不可用也该能回答
+        // 看命令、看用法不碰记录表，记录库暂时不可用也该能回答
         if (!records.isAvailable() && !Board.ACT_HELP.equals(action)
                 && !Board.ACT_LIST.equals(action)) {
             return Optional.of(new Reply("这个板块暂时用不了"));
@@ -233,14 +233,14 @@ public class BoardRunner {
 
     private String list(Board board) {
         return board.listReply() == null || board.listReply().isBlank()
-                ? BoardText.defaultList(board) : board.listReply();
+                ? catalog.boardModuleList(board) : board.listReply();
     }
 
     // ==================== 帮助 ====================
 
     private String help(Board board) {
         return board.helpReply() == null || board.helpReply().isBlank()
-                ? BoardText.defaultHelp(board) : board.helpReply();
+                ? globalReply(SystemReplyStore.HELP, catalog.helpText()) : board.helpReply();
     }
 
     // ==================== 小工具 ====================

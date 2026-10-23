@@ -391,7 +391,7 @@ function submit() {
           multiline
           :rows="4"
           mono
-          placeholder="留空自动，/列表动作 返回这段"
+          placeholder="留空自动，默认列出本板块动作"
           aria-label="板块 list 回复"
         />
         <div class="reply-preview">
@@ -405,7 +405,7 @@ function submit() {
       <button class="block-head" type="button" :aria-expanded="openHelp" @click="openHelp = !openHelp">
         <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openHelp }" />
         <span>help 回复</span>
-        <span class="block-count">{{ form.helpReply.trim() ? '手写' : '自动' }}</span>
+        <span class="block-count">{{ form.helpReply.trim() ? '手写' : '全局 help' }}</span>
       </button>
       <div v-if="openHelp" class="block-body">
         <Input
@@ -413,7 +413,7 @@ function submit() {
           multiline
           :rows="4"
           mono
-          placeholder="留空自动，/帮助动作 返回这段"
+          placeholder="留空使用全局 help"
           aria-label="板块 help 回复"
         />
         <div class="reply-preview">

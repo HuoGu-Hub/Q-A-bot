@@ -30,6 +30,10 @@ const error = ref('')
 const keyword = ref('')
 const aclSaving = ref(false)
 const aclSaved = ref('')
+const listReply = ref('')
+const helpReply = ref('')
+const textsSaving = ref(false)
+const textsSaved = ref('')
 const acl = ref({ whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' })
 const accessMode = ref('all')
 const ACCESS_OPTIONS = [
@@ -79,6 +83,9 @@ async function load() {
   loading.value = true
   error.value = ''
   aclSaved.value = ''
+  textsSaved.value = ''
+  listReply.value = props.command.listReply ?? ''
+  helpReply.value = props.command.help ?? ''
   try {
     const [list, aclData] = await Promise.all([
       adminApi.get<AdminPromptList>('/prompts'),
@@ -111,6 +118,25 @@ async function saveAcl() {
     error.value = describeError(e)
   } finally {
     aclSaving.value = false
+  }
+}
+
+async function saveTexts() {
+  if (!props.command) return
+  textsSaving.value = true
+  error.value = ''
+  try {
+    await adminApi.post('/commands/' + props.command.id + '/texts', {
+      help: helpReply.value,
+      listReply: listReply.value,
+    })
+    textsSaved.value = '回复已保存'
+    emit('changed')
+    window.setTimeout(() => { textsSaved.value = '' }, 1600)
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    textsSaving.value = false
   }
 }
 
@@ -206,6 +232,49 @@ function scopeText(prompt: AdminPrompt) {
           <Button size="sm" variant="primary" :disabled="aclSaving" @click="saveAcl">保存名单</Button>
         </div>
       </section>
+
+      <section class="prompt-section">
+        <header class="section-head">
+          <h3>list 回复</h3>
+          <span>{{ listReply.trim() ? '手写' : '自动' }}</span>
+        </header>
+        <Input
+          v-model="listReply"
+          multiline
+          :rows="4"
+          mono
+          placeholder="留空自动，/提示词 /list 返回这段"
+          aria-label="prompt list 回复"
+        />
+        <div class="reply-preview">
+          <div class="reply-label">实际回复</div>
+          <pre>{{ listReply.trim() || command?.defaultList || '保存后显示默认回复' }}</pre>
+        </div>
+      </section>
+
+      <section class="prompt-section">
+        <header class="section-head">
+          <h3>help 回复</h3>
+          <span>{{ helpReply.trim() ? '手写' : '全局 help' }}</span>
+        </header>
+        <Input
+          v-model="helpReply"
+          multiline
+          :rows="4"
+          mono
+          placeholder="留空使用全局 help"
+          aria-label="prompt help 回复"
+        />
+        <div class="reply-preview">
+          <div class="reply-label">实际回复</div>
+          <pre>{{ helpReply.trim() || command?.defaultHelp || '保存后显示全局 help' }}</pre>
+        </div>
+      </section>
+
+      <div class="acl-actions">
+        <span v-if="textsSaved" class="saved">{{ textsSaved }}</span>
+        <Button size="sm" variant="primary" :disabled="textsSaving" @click="saveTexts">保存回复</Button>
+      </div>
     </div>
   </CommandEditorShell>
 </template>
@@ -251,6 +320,15 @@ function scopeText(prompt: AdminPrompt) {
 .acl-k.bad { color: var(--blight-lift); }
 .acl-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); }
 .saved { color: var(--vital); font-size: var(--fs-xs); }
+.reply-preview { display: flex; flex-direction: column; gap: 6px; }
+.reply-label { color: var(--ink-4); font-size: 10.5px; letter-spacing: .12em; }
+.reply-preview pre {
+  max-height: 220px; margin: 0; padding: var(--sp-3); overflow: auto;
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm); color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.7;
+}
 
 @media (max-width: 700px) {
   .prompt-head { flex-direction: column; align-items: stretch; }

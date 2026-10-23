@@ -359,6 +359,26 @@ public class CommandController {
         }
     }
 
+    /** 只改单命令的 list/help 回复，prompt 这类独立编辑器也能复用 */
+    @PostMapping("/{id}/texts")
+    public ResponseEntity<Map<String, Object>> texts(@org.springframework.web.bind.annotation.PathVariable long id,
+                                                     @RequestBody Map<String, Object> body) {
+        BotCommand cmd = store.findById(id);
+        if (cmd == null) {
+            return bad("指令不存在");
+        }
+        try {
+            BotCommand updated = new BotCommand(cmd.id(), cmd.trigger(), cmd.reply(),
+                    cmd.description(), cmd.scope(), cmd.groupIds(), cmd.access(), cmd.enabled(),
+                    cmd.sortOrder(), cmd.builtin(), cmd.kindName(), cmd.modeName(), cmd.params(),
+                    str(body.get("help")), str(body.get("listReply")), cmd.action());
+            store.saveExisting(id, updated);
+            return ResponseEntity.ok(Map.of("ok", true));
+        } catch (Exception e) {
+            return bad("保存失败：" + e.getMessage());
+        }
+    }
+
     // ==================== C6：使用统计 ====================
 
     @GetMapping("/stats")

@@ -27,10 +27,20 @@ public class BoardAdminService {
 
     private final BoardStore boards;
     private final CommandStore commands;
+    private final CommandCatalog catalog;
+    private final SystemReplyStore replies;
 
     public BoardAdminService(BoardStore boards, CommandStore commands) {
+        this(boards, commands, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BoardAdminService(BoardStore boards, CommandStore commands,
+                             CommandCatalog catalog, SystemReplyStore replies) {
         this.boards = boards;
         this.commands = commands;
+        this.catalog = catalog;
+        this.replies = replies;
     }
 
     /**
@@ -199,6 +209,14 @@ public class BoardAdminService {
                 board.listLimit(), board.listReply(), board.helpReply()));
     }
 
+    private String globalHelp() {
+        String custom = replies == null ? "" : replies.get(SystemReplyStore.HELP);
+        if (custom != null && !custom.isBlank()) {
+            return custom;
+        }
+        return catalog == null ? "" : catalog.helpText();
+    }
+
     public void delete(String path) {
         Board board = require(path);
         if (board.builtin()) {
@@ -324,7 +342,7 @@ public class BoardAdminService {
         return t.isEmpty() ? null : t;
     }
 
-    private static BoardView view(Board board) {
+    private BoardView view(Board board) {
         return new BoardView(board.id(), board.path(), board.displayTitle(), board.params(),
                 board.delivery(), CommandAccess.of(board.access()).code(),
                 board.policy().scope().name(), board.policy().groups(),
@@ -333,6 +351,7 @@ public class BoardAdminService {
                 board.builtin(), CommandCatalog.boardUsage(board),
                 board.listHeader(), board.listItem(), board.listEmpty(), board.listLimit(),
                 board.listReply(), board.helpReply(),
-                BoardText.defaultList(board), BoardText.defaultHelp(board));
+                catalog == null ? "" : catalog.boardModuleList(board),
+                globalHelp());
     }
 }

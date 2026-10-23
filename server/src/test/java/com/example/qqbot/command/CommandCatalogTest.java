@@ -60,14 +60,12 @@ class CommandCatalogTest {
     }
 
     @Test
-    @DisplayName("★ /list 同时列出板块与指令")
-    void listTextCoversBoth() {
+    @DisplayName("★ /list 只列一级命令")
+    void listTextCoversTopLevel() {
         String text = catalog.listText();
 
-        assertThat(text).contains("系统：", "/list", "/help");
-        assertThat(text).contains("板块：", "/公告", "/任务", "/开黑");
-        assertThat(text).contains("普通命令：", "/ping", "/stats");
-        assertThat(text).contains("板块动作：", "/板块 /create", "/板块 /list");
+        assertThat(text).contains("/list", "/help", "/公告", "/任务", "/开黑", "/ping", "/stats", "/prompt");
+        assertThat(text).doesNotContain("系统：", "板块动作", "/公告 /create");
     }
 
     @Test
@@ -100,8 +98,8 @@ class CommandCatalogTest {
     @DisplayName("全局 list/help 有系统条目，并说明板块动作")
     void globalTextExplainsSystemAndBoardActions() {
         assertThat(catalog.listText())
-                .contains("系统：", "/list", "/help", "板块动作：")
-                .contains("/板块 /create", "/板块 /delete", "/板块 /list");
+                .contains("/list", "/help", "/公告", "/ping")
+                .doesNotContain("板块动作", "/板块 /create");
         assertThat(catalog.helpText())
                 .contains("单条命令", "/命令 /list", "/命令 /help")
                 .contains("/板块 /create", "/板块 /delete")

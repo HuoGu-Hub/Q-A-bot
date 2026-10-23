@@ -33,8 +33,8 @@ import java.util.List;
  * @param kind        指令类型 template / agent / action
  * @param mode        agent 类的回答模式：kb = 走知识库，none = 不用知识库
  * @param params      参数表
- * @param help        手写的单命令帮助；为空则由参数表自动生成
- * @param listReply   手写的单命令 /list 回复；为空时由参数表自动生成
+ * @param help        手写的单命令帮助；为空时回退到全局 help
+ * @param listReply   手写的单命令 /list 回复；为空时列出本命令的动作
  * @param action      action 类绑定的执行器 id；其余类型为空
  */
 public record BotCommand(

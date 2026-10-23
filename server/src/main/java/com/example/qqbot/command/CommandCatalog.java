@@ -2,8 +2,12 @@ package com.example.qqbot.command;
 
 import org.springframework.stereotype.Component;
 
+import com.example.qqbot.prompt.SystemAliasStore;
+
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 命令目录 —— 板块与普通指令的<b>唯一清单</b>。
@@ -27,10 +31,17 @@ public class CommandCatalog {
 
     private final BoardStore boards;
     private final CommandStore commands;
+    private final SystemAliasStore aliases;
 
     public CommandCatalog(BoardStore boards, CommandStore commands) {
+        this(boards, commands, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CommandCatalog(BoardStore boards, CommandStore commands, SystemAliasStore aliases) {
         this.boards = boards;
         this.commands = commands;
+        this.aliases = aliases;
     }
 
     /**
@@ -120,86 +131,79 @@ public class CommandCatalog {
                 List.of());
     }
 
-    /**
-     * 群里 {@code /list} 的正文。
-     *
-     * <p>只列启用的条目 —— 停用的命令不该出现在群友的清单里。
-     */
+    /** 全局 /list：只列当前可用的一级命令，不展开动作 */
     public String listText() {
-        List<Entry> entries = entries(false);
-        List<Entry> boardList = entries.stream().filter(e -> "board".equals(e.source())).toList();
-        List<Entry> commandList = entries.stream().filter(e -> "command".equals(e.source())).toList();
+        Set<String> out = new LinkedHashSet<>();
+        out.add(commandDisplay("list"));
+        out.add(commandDisplay("help"));
+        for (Board board : boards.listEnabled()) {
+            out.add(commandDisplay(board.path()));
+        }
+        for (BotCommand command : commands.listEnabled()) {
+            out.add(commandDisplay(command.trigger()));
+        }
+        return String.join("\n", out);
+    }
 
-        // /list 与 /help 自己也是命令，而且永远可用；清单里必须有它们
-        StringBuilder sb = new StringBuilder("全部命令：\n");
-        sb.append("系统：\n");
-        sb.append("/list  列出全部可用命令\n");
-        sb.append("/help  通用命令格式与注意事项\n");
-        sb.append("/prompt /create 文本  添加本群补充提示\n");
-        if (!boardList.isEmpty()) {
-            sb.append("板块：\n");
-            for (Entry board : boardList) {
-                // 命令名就是调用名，不再重复打印一遍 title
-                sb.append('/').append(board.path());
-                if (!board.params().isEmpty()) {
-                    sb.append("  （");
-                    for (int i = 0; i < board.params().size(); i++) {
-                        if (i > 0) {
-                            sb.append('、');
-                        }
-                        sb.append(board.params().get(i).name());
-                    }
-                    sb.append('）');
-                }
-                sb.append('\n');
+    /** 单个命令的 /list：当前命令下的动作清单 */
+    public String moduleList(String target, List<String> actions) {
+        StringBuilder sb = new StringBuilder(commandDisplay(target));
+        for (String action : actions) {
+            sb.append('\n').append(commandDisplay(target)).append(" /")
+                    .append(actionDisplay(action));
+            if ("delete".equalsIgnoreCase(action)) {
+                sb.append(" id");
             }
         }
-        if (!commandList.isEmpty()) {
-            sb.append("普通命令：\n");
-            for (Entry command : commandList) {
-                // /prompt 已在系统段列出，避免重复
-                if ("prompt".equalsIgnoreCase(command.path())) {
-                    continue;
-                }
-                sb.append('/').append(command.path());
-                if (command.title() != null && !command.title().isBlank()) {
-                    sb.append("  ").append(command.title());
-                }
-                sb.append('\n');
-            }
-        }
-        sb.append("板块动作：/板块 /create 添加、/板块 /delete 编号 撤销、");
-        sb.append("/板块 /list 看参数、/板块 /help 看用法\n");
-        return sb.append("单条命令加 /list 看参数、加 /help 看用法。").toString();
+        return sb.toString();
+    }
+
+    public String promptModuleList() {
+        return moduleList("prompt", List.of("create", "delete", "help", "list"));
+    }
+
+    public String commandModuleList(BotCommand command) {
+        return moduleList(command.trigger(), List.of("help", "list"));
+    }
+
+    public String boardModuleList(Board board) {
+        return moduleList(board.path(), List.of("create", "delete", "help", "list"));
+    }
+
+    private String commandDisplay(String target) {
+        return aliases == null ? "/" + target.replace("/", " /") : aliases.commandDisplay(target);
+    }
+
+    private String actionDisplay(String action) {
+        return aliases == null ? action : aliases.actionName(action);
     }
 
     /**
      * 群里 {@code /help} 的正文。
      *
-     * <p>只讲"怎么写"，不铺清单 —— 清单在 {@code /list}，两件事分开，
-     * 群友问"怎么用"和"有什么"才不会拿到同一段话。
+     * <p>只讲"怎么写"，不铺清单 —— 清单在 {@code /list}，两件事分开。
      */
     public String helpText() {
         return """
                 命令格式：/命令 [/#动作] [#参数-值#] [文本]
                 全局：
-                  /list            列出全部可用命令
+                  /list            当前可用的命令
                   /help            这份说明
                 补充提示：
                   /prompt                                查看当前生效的提示
                   /prompt /create 文本                   默认加到本群
                   /prompt /create #user_id-QQ号# 文本    只给某个人
-                  /prompt /list                          查看全部可用命令
+                  /prompt /list                          查看补充提示的动作
                   /prompt /delete 编号
                   /prompt /clear
                 单条命令：
-                  /命令 /list      看这条命令支持哪些参数
+                  /命令 /list      看这条命令有哪些动作
                   /命令 /help      看这条命令怎么用
                 板块：
-                  /板块            看已经收下的内容
+                  /板块            看这个板块当前的数据
                   /板块 /create    添加一条
                   /板块 /delete    按编号撤销一条
-                  /板块 /list      看这个板块的参数
+                  /板块 /list      看这个板块有哪些动作
                   /板块 /help      看这个板块怎么用
                 注意：
                   独立的 /create、/delete 不生效：板块用 /板块 /create，补充提示用 /prompt /create

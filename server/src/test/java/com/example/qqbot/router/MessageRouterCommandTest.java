@@ -444,8 +444,8 @@ class MessageRouterCommandTest {
     }
 
     @Test
-    @DisplayName("★ /路径 /list：回参数表，不执行命令")
-    void listRequestRepliesParamTable() {
+    @DisplayName("★ /路径 /list：回这条命令的动作清单，不执行命令")
+    void listRequestRepliesModuleCommands() {
         BotCommand report = new BotCommand(1, "举报", "收到", "举报", "all", List.of(), "member",
                 true, 1, true, BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB,
                 List.of(ParamSpec.of("对象", "text", true, "某人")), null, null);
@@ -453,7 +453,7 @@ class MessageRouterCommandTest {
 
         router.handle(groupEvent("/举报 /list"));
 
-        assertThat(sentText()).contains("支持 1 个参数").contains("#对象#").contains("必填");
+        assertThat(sentText()).contains("/举报 /help").contains("/举报 /list");
         verify(guardPipeline, never()).check(any());
     }
 

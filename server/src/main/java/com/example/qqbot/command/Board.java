@@ -48,7 +48,7 @@ public record Board(
     /** 到点发：收下之后等时间到了再发出去 */
     public static final String SCHEDULED = "scheduled";
 
-    /** 动作全部由框架实现：增、查、删、看参数、看用法 */
+    /** 动作全部由框架实现：增、查、删、看命令、看用法 */
     public static final String ACT_CREATE = "create";
     public static final String ACT_QUERY = "query";
     public static final String ACT_DELETE = "delete";

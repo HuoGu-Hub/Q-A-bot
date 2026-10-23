@@ -871,7 +871,7 @@ onMounted(load)
             multiline
             :rows="4"
             mono
-            placeholder="留空自动，/list 修饰符返回这段"
+            placeholder="留空自动，默认列出本命令动作"
             aria-label="单命令 list 回复"
             @update:model-value="patch({ listReply: $event })"
           />
@@ -886,7 +886,7 @@ onMounted(load)
         <button class="block-head" type="button" :aria-expanded="openBlocks.help" @click="toggleBlock('help')">
           <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.help }" />
           <span>help 回复</span>
-          <span class="block-count">{{ editing.help ? '手写' : '自动' }}</span>
+          <span class="block-count">{{ editing.help ? '手写' : '全局 help' }}</span>
         </button>
         <div v-if="openBlocks.help" class="block-body">
           <Input
@@ -894,7 +894,7 @@ onMounted(load)
             multiline
             :rows="4"
             mono
-            placeholder="留空自动，/help 修饰符返回这段"
+            placeholder="留空使用全局 help"
             aria-label="单命令帮助"
             @update:model-value="patch({ help: $event })"
           />

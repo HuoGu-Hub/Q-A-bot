@@ -3,6 +3,7 @@ package com.example.qqbot.prompt;
 import com.example.qqbot.command.AclEntry;
 import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.BotCommand;
+import com.example.qqbot.command.CommandCatalog;
 import com.example.qqbot.command.CommandStore;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -69,7 +70,7 @@ class PromptCommandTest {
                 && p.content().equals("本群回答短一点"));
         assertThat(store.listFor(2002L, 1002L)).hasSize(1);
         assertThat(store.listFor(2003L, 1001L)).isEmpty();
-        assertThat(run("/prompt", "member")).contains("本群提示", "本群回答短一点");
+        assertThat(run("/prompt", "member")).contains("当前生效的提示词", "本群回答短一点");
     }
 
     @Test
@@ -133,6 +134,25 @@ class PromptCommandTest {
     }
 
     @Test
+    @DisplayName("/prompt /list 走这个模块自己的动作清单")
+    void listUsesModuleCommands() {
+        CommandCatalog catalog = mock(CommandCatalog.class);
+        when(catalog.promptModuleList()).thenReturn("/提示词\n/提示词 /新建\n/提示词 /删除 id\n/提示词 /help\n/提示词 /list");
+        PromptCommand moduleCommand = new PromptCommand(store, commandStore, aclStore, catalog);
+
+        OneBotEvent event = new OneBotEvent();
+        event.setPostType("message");
+        event.setMessageType("group");
+        event.setUserId(1001L);
+        event.setGroupId(2002L);
+        event.setSender(new ObjectMapper().createObjectNode().put("role", "member"));
+
+        assertThat(moduleCommand.tryRun(event, "/prompt /list").orElseThrow().text())
+                .contains("/提示词 /新建", "/提示词 /删除 id", "/提示词 /help", "/提示词 /list")
+                .doesNotContain("全部命令");
+    }
+
+    @Test
     @DisplayName("删除编号；不存在的编号给人话")
     void deleteById() {
         String created = run("/prompt /create 临时提示", "admin");
@@ -146,7 +166,7 @@ class PromptCommandTest {
     @Test
     @DisplayName("空动作或未知动作回用法，不写库")
     void usage() {
-        assertThat(run("/prompt", "admin")).contains("当前没有生效的补充提示");
+        assertThat(run("/prompt", "admin")).contains("当前没有生效的提示词");
         assertThat(run("/prompt /help", "admin")).contains("/prompt /create");
         assertThat(run("/prompt /wat", "admin")).contains("/prompt /create");
         assertThat(store.listFor(2002L, 1001L)).isEmpty();
