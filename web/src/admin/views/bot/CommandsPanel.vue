@@ -1422,6 +1422,123 @@ onMounted(load)
   .index-tools { grid-column: 1 / -1; justify-content: flex-start; }
 }
 @media (max-width: 900px) {
+  /* 窄屏收起「限制」和「使用」，留住调用、说明、状态与操作 ——
+     说明是这一页最该读的列，不能再像上一版那样被优先隐藏。
+
+     ⚠️ 这里必须把固定布局改回自动布局：fixed + colgroup 下隐藏两列，
+     列轨道还按原来的序号吃宽度，实测会错位成「状态 132px、操作 60px、说明 0」。
+     换成 auto 之后，隐藏的列真正消失，说明列重新吃到剩余宽度。 */
+  .ledger { table-layout: auto; }
+  .c-call, .c-rule, .c-use, .c-state, .c-ops { width: auto; }
+  /* 调用列给个下限：纯 auto 会被压到 64px，只剩一个「/li…」 */
+  .cell-call { min-width: 96px; }
+  .ledger th:nth-child(3), .ledger td:nth-child(3),
+  .ledger th:nth-child(4), .ledger td:nth-child(4) { display: none; }
+  .usage-grid { grid-template-columns: 1fr; gap: var(--sp-5); }
+}
+/* 手机上 6 列必然放不下。再收起「状态」—— 停用的行整行已经变淡，
+   状态信息并没有丢；剩下调用 / 说明 / 操作三列，说明才能真正读到。 */
+@media (max-width: 640px) {
+  .ledger th:nth-child(5), .ledger td:nth-child(5) { display: none; }
+  .row-action { min-width: 36px; padding: 0 6px; }
+  .row-action + .row-action { margin-left: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block-chev { transition: none; }
+}
+
+.editor {
+  background: var(--stone-300);
+  border-top: 2px solid var(--ember);
+  border-radius: var(--r-md);
+  padding: 22px 24px;
+}
+.editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-5); }
+.editor-ident { min-width: 0; }
+.editor-kicker { display: flex; align-items: center; gap: var(--sp-2); }
+.type-badge {
+  padding: 2px 7px;
+  border: 1px solid var(--hairline-lit);
+  border-radius: var(--r-xs);
+  color: var(--ember);
+  font-size: 10.5px;
+  letter-spacing: .12em;
+}
+.editor-path.is-empty { color: var(--ink-4); }
+.editor-path {
+  margin-top: 4px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.editor-actions { display: flex; gap: var(--sp-2); flex: none; }
+.editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
+.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.col-title {
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-4);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.row { display: flex; align-items: center; gap: var(--sp-3); }
+.row-label { flex: 0 0 76px; font-size: var(--fs-meta); color: var(--ink-3); }
+.row > :not(.row-label) { flex: 1; min-width: 0; }
+.row--block { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+.row--block .row-label { flex: none; }
+
+.checks { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+.check { display: flex; align-items: center; gap: 6px; font-size: var(--fs-meta); color: var(--ink-2); }
+.check input { accent-color: var(--flame); }
+
+.block { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
+.block-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 10px; margin-top: 4px;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  color: var(--ink-2); font-size: var(--fs-meta); text-align: left; cursor: pointer;
+}
+.block-head:hover { background: var(--stone-500); border-color: var(--edge-hover); color: var(--ink); }
+.block-chev { color: var(--ember); transition: transform var(--dur-fast) var(--ease); }
+.block-chev.open { transform: rotate(90deg); }
+.block-count { margin-left: auto; color: var(--ink-4); font-family: var(--font-mono); }
+.block-head--with-action { padding: 0; cursor: default; }
+.block-toggle {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  padding: 9px 10px; background: none; border: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.block-toggle:focus-visible { outline: 2px solid var(--flame); outline-offset: -2px; }
+.head-add {
+  margin-right: 8px; padding: 2px 7px;
+  background: none; border: 1px solid transparent; border-radius: var(--r-xs);
+  color: var(--ember); font-size: 11px; cursor: pointer;
+}
+.head-add:hover { background: var(--stone-500); border-color: var(--edge); }
+.head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
+.block-body {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin-top: 8px; padding: 12px 14px;
+  background: var(--stone-400); border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 0 var(--hairline-lit);
+}
+
+.acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.range-pick { width: 128px; }
+
+@media (max-width: 1000px) {
+  .editor-grid { grid-template-columns: 1fr; }
+  .row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .row-label { flex: none; }
+}
+@media (max-width: 900px) {
   .acl-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
