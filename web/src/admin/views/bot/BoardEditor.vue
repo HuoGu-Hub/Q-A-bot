@@ -14,6 +14,8 @@ import Notice from '@shared/ui/Notice.vue'
 import CommandEditorShell from './CommandEditorShell.vue'
 import Icon from '@shared/ui/Icon.vue'
 import ParamTable from './ParamTable.vue'
+import VariablePanel from './VariablePanel.vue'
+import { useVariableInsert } from './useVariableInsert'
 import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
 
 const props = defineProps<{
@@ -57,6 +59,24 @@ const openParams = ref(true)
 const openOutput = ref(true)
 const openList = ref(false)
 const openHelp = ref(false)
+
+const boardVars = [
+  { name: 'count', label: '总条数', example: '3' },
+  { name: 'path', label: '命令名', example: '预约开黑' },
+  { name: 'id', label: '记录编号', example: '12' },
+  { name: 'when', label: '时间', example: '立即展示' },
+  { name: 'text', label: '内容', example: '缺打野' },
+  { name: 'nickname', label: '昵称', example: '阿明' },
+  { name: 'group', label: '群号', example: '269127588' },
+  { name: 'params.参数名', label: '参数值', example: '今晚8点' },
+]
+const { insert: insertVariable } = useVariableInsert({
+  listHeader: (value) => { form.listHeader = value },
+  listItem: (value) => { form.listItem = value },
+  listEmpty: (value) => { form.listEmpty = value },
+  listReply: (value) => { form.listReply = value },
+  helpReply: (value) => { form.helpReply = value },
+})
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
 
 /** 参数块的“+ 参数”在标题行：先展开，再让参数表插入一行 */
@@ -274,6 +294,7 @@ function submit() {
               v-model="form.listHeader"
               placeholder="预约开黑 · 共 {count} 条"
               aria-label="列表头"
+              data-var-field="listHeader"
             />
           </label>
           <label class="row row--top">
@@ -284,6 +305,7 @@ function submit() {
               :rows="2"
               placeholder="#{id} {params.时间} {text} / {nickname}"
               aria-label="每条格式"
+              data-var-field="listItem"
             />
           </label>
           <label class="row">
@@ -292,6 +314,7 @@ function submit() {
               v-model="form.listEmpty"
               :placeholder="'还没有内容，发 /' + (form.path || '命令') + ' /create 添加'"
               aria-label="空列表文案"
+              data-var-field="listEmpty"
             />
           </label>
           <label class="row">
@@ -306,12 +329,6 @@ function submit() {
               <span class="faint limit-hint">0 = 全部</span>
             </div>
           </label>
-          <div class="format-vars">
-            <span>变量</span>
-            <code>{count}</code><code>{path}</code><code>{id}</code>
-            <code>{when}</code><code>{text}</code><code>{nickname}</code>
-            <code>{group}</code><code>{params.参数名}</code>
-          </div>
           <div class="preview-box">
             <div class="col-title">预览</div>
             <pre class="format-preview">{{ previewText }}</pre>
@@ -320,8 +337,10 @@ function submit() {
         </div>
       </section>
 
-      <section class="editor-col">
+      <section class="editor-col editor-col--side">
         <div class="col-title">规则</div>
+
+        <VariablePanel :vars="boardVars" @insert="insertVariable" />
 
         <label class="row">
           <span class="row-label">投递</span>
@@ -393,6 +412,7 @@ function submit() {
           mono
           placeholder="留空自动，默认列出本板块动作"
           aria-label="板块 list 回复"
+          data-var-field="listReply"
         />
         <div class="reply-preview">
           <div class="reply-label">实际回复</div>
@@ -415,6 +435,7 @@ function submit() {
           mono
           placeholder="留空使用全局 help"
           aria-label="板块 help 回复"
+          data-var-field="helpReply"
         />
         <div class="reply-preview">
           <div class="reply-label">实际回复</div>
@@ -456,6 +477,12 @@ function submit() {
 .editor-actions { display: flex; gap: var(--sp-2); flex: none; }
 .editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
 .editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.editor-col--side { position: sticky; top: 0; align-self: start; gap: var(--sp-2); }
+.editor-col--side .row { gap: var(--sp-2); }
+.editor-col--side .row-label { flex-basis: 64px; }
+.editor-col--side .col-title { padding-bottom: 4px; }
+.editor-col--side .checks { gap: var(--sp-3); }
+@media (max-width: 1000px) { .editor-col--side { position: static; } }
 .col-title {
   font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4);
   padding-bottom: var(--sp-2); border-bottom: 1px solid var(--hairline);
@@ -515,23 +542,6 @@ function submit() {
   position: absolute; right: 10px; top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-}
-.format-vars {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  color: var(--ink-4);
-  font-size: 10.5px;
-  letter-spacing: .12em;
-}
-.format-vars code {
-  padding: 0 4px;
-  border: 1px solid var(--edge-soft);
-  border-radius: 4px;
-  color: var(--flame);
-  font-family: var(--font-mono);
-  letter-spacing: 0;
 }
 .preview-box { display: flex; flex-direction: column; gap: 6px; }
 .format-preview {

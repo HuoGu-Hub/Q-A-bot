@@ -30,6 +30,8 @@ import PromptEditor from './PromptEditor.vue'
 import CommandEditorShell from './CommandEditorShell.vue'
 import SystemAliasModal from './SystemAliasModal.vue'
 import SystemReplyEditor from './SystemReplyEditor.vue'
+import VariablePanel from './VariablePanel.vue'
+import { useVariableInsert } from './useVariableInsert'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
 } from './commandOptions'
@@ -68,8 +70,6 @@ const statsDays = ref(30)
 const preview = ref('')
 /** 预览 {args} 用的示例参数 */
 const sampleArgs = ref('')
-/** 变量默认只露前几个，避免一屏全是胶囊 */
-const showAllVars = ref(false)
 
 const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '7', label: '近 7 天' },
@@ -217,7 +217,6 @@ function newCommand(kind = 'template') {
   }
   preview.value = ''
   sampleArgs.value = ''
-  showAllVars.value = false
   policy.value = { scope: 'GROUP', groups: '', showGroup: false, showUser: false, allowPrivate: false }
   acl.value = { whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' }
 }
@@ -245,7 +244,6 @@ function edit(c: BotCommand) {
   boardEditing.value = undefined
   editing.value = { ...c }
   sampleArgs.value = sampleArgsOf(c.params ?? [])
-  showAllVars.value = false
   updatePreview()
   const p = policyOf(c.id)
   policy.value = {
@@ -328,11 +326,11 @@ function onReplyInput(v: string) {
 }
 
 /** 点击变量 → 插入到回复末尾（光标位置在 textarea 里比较麻烦，追加更直观） */
-function insertVar(name: string) {
-  if (!editing.value) return
-  patch({ reply: (editing.value.reply ?? '') + '{' + name + '}' })
-  updatePreview()
-}
+const { insert: insertVariable } = useVariableInsert({
+  reply: (value) => { patch({ reply: value }); updatePreview() },
+  listReply: (value) => patch({ listReply: value }),
+  help: (value) => patch({ help: value }),
+})
 
 async function save() {
   if (!editing.value) return
@@ -620,7 +618,6 @@ const allVars = computed(() => {
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
   })
 })
-const visibleVars = computed(() => showAllVars.value ? allVars.value : allVars.value.slice(0, 6))
 
 /** 页面栏上的「刷新」「+ 新建命令」—— 见文件头注释 */
 defineExpose({
@@ -696,22 +693,9 @@ onMounted(load)
                   ? '留空自动'
                   : '回复内容'"
               aria-label="回复"
+              data-var-field="reply"
               @update:model-value="onReplyInput"
             />
-            <div class="vars">
-              <span class="vars-label">变量</span>
-              <button
-                v-for="v in visibleVars" :key="v.name" class="vchip" type="button"
-                :class="{ 'vchip--adv': v.advanced }"
-                :title="v.label + '，例：' + v.example" @click="insertVar(v.name)"
-              >{ {{ v.name }} }</button>
-              <button
-                v-if="allVars.length > 6"
-                type="button"
-                class="vars-toggle"
-                @click="showAllVars = !showAllVars"
-              >{{ showAllVars ? '收起' : '更多' }}</button>
-            </div>
             <div v-if="preview" class="message-preview">
               <div class="preview-head">
                 <span>群消息</span>
@@ -722,9 +706,11 @@ onMounted(load)
           </div>
         </section>
 
-        <!-- 右：这条命令的规则 -->
-        <section class="editor-col">
+        <!-- 右：规则与变量，滚动时保持固定 -->
+        <section class="editor-col editor-col--side">
           <div class="col-title">设置</div>
+
+          <VariablePanel :vars="allVars" @insert="insertVariable" />
 
           <label class="row">
             <span class="row-label">形态</span>
@@ -873,6 +859,7 @@ onMounted(load)
             mono
             placeholder="留空自动，默认列出本命令动作"
             aria-label="单命令 list 回复"
+            data-var-field="listReply"
             @update:model-value="patch({ listReply: $event })"
           />
           <div class="reply-preview">
@@ -896,6 +883,7 @@ onMounted(load)
             mono
             placeholder="留空使用全局 help"
             aria-label="单命令帮助"
+            data-var-field="help"
             @update:model-value="patch({ help: $event })"
           />
           <div class="reply-preview">
@@ -1434,123 +1422,6 @@ onMounted(load)
   .index-tools { grid-column: 1 / -1; justify-content: flex-start; }
 }
 @media (max-width: 900px) {
-  /* 窄屏收起「限制」和「使用」，留住调用、说明、状态与操作 ——
-     说明是这一页最该读的列，不能再像上一版那样被优先隐藏。
-
-     ⚠️ 这里必须把固定布局改回自动布局：fixed + colgroup 下隐藏两列，
-     列轨道还按原来的序号吃宽度，实测会错位成「状态 132px、操作 60px、说明 0」。
-     换成 auto 之后，隐藏的列真正消失，说明列重新吃到剩余宽度。 */
-  .ledger { table-layout: auto; }
-  .c-call, .c-rule, .c-use, .c-state, .c-ops { width: auto; }
-  /* 调用列给个下限：纯 auto 会被压到 64px，只剩一个「/li…」 */
-  .cell-call { min-width: 96px; }
-  .ledger th:nth-child(3), .ledger td:nth-child(3),
-  .ledger th:nth-child(4), .ledger td:nth-child(4) { display: none; }
-  .usage-grid { grid-template-columns: 1fr; gap: var(--sp-5); }
-}
-/* 手机上 6 列必然放不下。再收起「状态」—— 停用的行整行已经变淡，
-   状态信息并没有丢；剩下调用 / 说明 / 操作三列，说明才能真正读到。 */
-@media (max-width: 640px) {
-  .ledger th:nth-child(5), .ledger td:nth-child(5) { display: none; }
-  .row-action { min-width: 36px; padding: 0 6px; }
-  .row-action + .row-action { margin-left: 4px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .block-chev { transition: none; }
-}
-
-.editor {
-  background: var(--stone-300);
-  border-top: 2px solid var(--ember);
-  border-radius: var(--r-md);
-  padding: 22px 24px;
-}
-.editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-5); }
-.editor-ident { min-width: 0; }
-.editor-kicker { display: flex; align-items: center; gap: var(--sp-2); }
-.type-badge {
-  padding: 2px 7px;
-  border: 1px solid var(--hairline-lit);
-  border-radius: var(--r-xs);
-  color: var(--ember);
-  font-size: 10.5px;
-  letter-spacing: .12em;
-}
-.editor-path.is-empty { color: var(--ink-4); }
-.editor-path {
-  margin-top: 4px;
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 24px;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-.editor-actions { display: flex; gap: var(--sp-2); flex: none; }
-.editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
-.editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
-.col-title {
-  padding-bottom: var(--sp-2);
-  border-bottom: 1px solid var(--hairline);
-  color: var(--ink-4);
-  font-size: 10.5px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-
-.row { display: flex; align-items: center; gap: var(--sp-3); }
-.row-label { flex: 0 0 76px; font-size: var(--fs-meta); color: var(--ink-3); }
-.row > :not(.row-label) { flex: 1; min-width: 0; }
-.row--block { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
-.row--block .row-label { flex: none; }
-
-.checks { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
-.check { display: flex; align-items: center; gap: 6px; font-size: var(--fs-meta); color: var(--ink-2); }
-.check input { accent-color: var(--flame); }
-
-.block { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
-.block-head {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 9px 10px; margin-top: 4px;
-  background: var(--stone-400); border: 1px solid var(--edge);
-  border-radius: var(--r-sm);
-  color: var(--ink-2); font-size: var(--fs-meta); text-align: left; cursor: pointer;
-}
-.block-head:hover { background: var(--stone-500); border-color: var(--edge-hover); color: var(--ink); }
-.block-chev { color: var(--ember); transition: transform var(--dur-fast) var(--ease); }
-.block-chev.open { transform: rotate(90deg); }
-.block-count { margin-left: auto; color: var(--ink-4); font-family: var(--font-mono); }
-.block-head--with-action { padding: 0; cursor: default; }
-.block-toggle {
-  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
-  padding: 9px 10px; background: none; border: 0;
-  color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-.block-toggle:focus-visible { outline: 2px solid var(--flame); outline-offset: -2px; }
-.head-add {
-  margin-right: 8px; padding: 2px 7px;
-  background: none; border: 1px solid transparent; border-radius: var(--r-xs);
-  color: var(--ember); font-size: 11px; cursor: pointer;
-}
-.head-add:hover { background: var(--stone-500); border-color: var(--edge); }
-.head-add:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
-.block-body {
-  display: flex; flex-direction: column; gap: var(--sp-2);
-  margin-top: 8px; padding: 12px 14px;
-  background: var(--stone-400); border: 1px solid var(--edge);
-  border-radius: var(--r-sm);
-  box-shadow: inset 0 1px 0 var(--hairline-lit);
-}
-
-.acl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
-.range-pick { width: 128px; }
-
-@media (max-width: 1000px) {
-  .editor-grid { grid-template-columns: 1fr; }
-  .row { flex-direction: column; align-items: stretch; gap: 4px; }
-  .row-label { flex: none; }
-}
-@media (max-width: 900px) {
   .acl-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1566,4 +1437,11 @@ onMounted(load)
   border-radius: var(--r-sm); color: var(--ink-2);
   font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.7;
 }
+
+.editor-col--side { position: sticky; top: 0; align-self: start; gap: var(--sp-2); }
+.editor-col--side .row { gap: var(--sp-2); }
+.editor-col--side .row-label { flex-basis: 64px; }
+.editor-col--side .col-title { padding-bottom: 4px; }
+.editor-col--side .checks { gap: var(--sp-3); }
+@media (max-width: 1000px) { .editor-col--side { position: static; } }
 </style>
