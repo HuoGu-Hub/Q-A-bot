@@ -218,6 +218,11 @@ const palette = shallowRef({
   warn: '#cfa334',
   ink: '#eae5da',
   inkDim: '#8b95a3',
+  labelBg: 'rgba(8,10,14,.82)',
+  labelInk: '#eae5da',
+  labelEdge: 'rgba(255,255,255,.12)',
+  labelAccent: '#ffd08a',
+  ring: 'rgba(234,229,218,.55)',
 })
 
 /** 颜色从主题令牌读一次，而不是写死 —— 页面换主题时地图跟着换 */
@@ -233,6 +238,12 @@ function readPalette() {
     warn: get('--warn', '#cfa334'),
     ink: get('--ink', '#eae5da'),
     inkDim: get('--ink-3', '#8b95a3'),
+    // 名牌与方位徽标：日间是纸底深字，夜间是深底浅字，两边都必须能读
+    labelBg: get('--map-label-bg', 'rgba(8,10,14,.82)'),
+    labelInk: get('--map-label-ink', '#eae5da'),
+    labelEdge: get('--map-label-edge', 'rgba(255,255,255,.12)'),
+    labelAccent: get('--map-label-accent', '#ffd08a'),
+    ring: get('--map-ring', 'rgba(234,229,218,.55)'),
   }
 }
 
@@ -355,7 +366,7 @@ function draw() {
       ctx.beginPath()
       ctx.arc(sx, sy, box / 2, 0, Math.PI * 2)
       ctx.lineWidth = 1.5
-      ctx.strokeStyle = 'rgba(234,229,218,.5)'
+      ctx.strokeStyle = palette.value.ring
       ctx.stroke()
       continue
     }
@@ -382,9 +393,18 @@ function draw() {
       ctx.textAlign = 'center'
       const label = m.name
       const tw = ctx.measureText(label).width
-      ctx.fillStyle = 'rgba(8,10,14,.82)'
-      ctx.fillRect(sx - tw / 2 - 6, sy - 30, tw + 12, 18)
-      ctx.fillStyle = palette.value.ink
+      const bx = sx - tw / 2 - 6
+      const by = sy - 30
+      const bw = tw + 12
+      const bh = 18
+      // 名牌底与描边都跟主题走：日间纸底、夜间深底
+      ctx.fillStyle = palette.value.labelBg
+      ctx.fillRect(bx, by, bw, bh)
+      ctx.lineWidth = 1
+      ctx.strokeStyle = palette.value.labelEdge
+      // +0.5 让 1px 描边落在像素中心，否则边缘会糊成两像素灰
+      ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1)
+      ctx.fillStyle = palette.value.labelInk
       ctx.fillText(label, sx, sy - 17)
     }
   }
@@ -444,9 +464,14 @@ function drawHighlight(ctx: CanvasRenderingContext2D, v: View, w: number, h: num
   ctx.font = '600 12px system-ui, sans-serif'
   ctx.textAlign = 'center'
   const tw = ctx.measureText(text).width
-  ctx.fillStyle = 'rgba(8,10,14,.85)'
-  ctx.fillRect(mx - tw / 2 - 7, my - 11, tw + 14, 20)
-  ctx.fillStyle = palette.value.emberHot
+  const bx = mx - tw / 2 - 7
+  const by = my - 11
+  ctx.fillStyle = palette.value.labelBg
+  ctx.fillRect(bx, by, tw + 14, 20)
+  ctx.lineWidth = 1
+  ctx.strokeStyle = palette.value.labelEdge
+  ctx.strokeRect(bx + 0.5, by + 0.5, tw + 13, 19)
+  ctx.fillStyle = palette.value.labelAccent
   ctx.fillText(text, mx, my + 3)
   ctx.restore()
 }

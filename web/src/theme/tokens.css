@@ -116,6 +116,16 @@
   --backdrop-mask:  rgba(3, 4, 6, .66);        /* 弹窗遮罩 */
   --map-tint:       rgba(242, 169, 78, 0);     /* 地图暖色叠加，夜间不加 */
 
+  /* ---------- 地图画布 ----------
+     这些值由 MapCanvas 用 getComputedStyle 读走，画在 canvas 上。
+     ⚠️ 不能像 DOM 那样靠颜色继承：画布上的字是 fillText 画的，
+     只改 data-theme 不会让已经画上去的像素变色，必须重读令牌再重绘。 */
+  --map-label-bg:   rgba(8, 10, 14, .82);      /* 选中点位的名牌底 */
+  --map-label-ink:  #ede6d6;                   /* 名牌文字 */
+  --map-label-edge: rgba(255, 255, 255, .12);  /* 名牌描边 */
+  --map-label-accent: #ffd08a;                 /* 方位徽标的字 */
+  --map-ring:       rgba(234, 229, 218, .55);  /* 图标未加载时的占位圈 */
+
   /* 这一行让浏览器把滚动条、表单控件、自动填充都按暗色渲染 */
   color-scheme: dark;
 }
@@ -189,6 +199,14 @@
   --shade:         rgba(90, 70, 40, .05);
   --backdrop-mask: rgba(60, 48, 30, .42);
   --map-tint:      rgba(201, 140, 58, .10);
+
+  /* 地图画布：日间必须是纸底深字 —— 上一版名牌底色写死成近黑，
+     文字却跟着主题变成深墨，选中点位后头顶那块牌子就是一团黑。 */
+  --map-label-bg:   rgba(255, 251, 242, .94);
+  --map-label-ink:  #2a2318;
+  --map-label-edge: rgba(58, 45, 28, .22);
+  --map-label-accent: #9c5717;
+  --map-ring:       rgba(42, 35, 24, .40);
 
   color-scheme: light;
 }
