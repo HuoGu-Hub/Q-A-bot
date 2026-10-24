@@ -58,7 +58,6 @@ async function submit() {
         <ThemeToggle />
       </div>
       <h1 class="t">管理员登录</h1>
-      <p class="hint sub">后台能看到群里的提问记录，因此需要密码</p>
       <form ref="formEl" @submit.prevent="submit">
         <Input
           v-model="password"
@@ -104,8 +103,8 @@ async function submit() {
   margin-bottom: var(--sp-4);
 }
 .mark { color: var(--ember); filter: drop-shadow(0 0 8px var(--ember-glow)); }
-.t { font-size: var(--fs-2xl); letter-spacing: var(--tracking-ink); }
-.sub { margin: var(--sp-2) 0 var(--sp-5); }
+/* 副标题删掉之后，标题自己把与表单之间的间距带上 */
+.t { font-size: var(--fs-2xl); letter-spacing: var(--tracking-ink); margin: 0 0 var(--sp-4); }
 form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .err-slot { margin-top: var(--sp-3); }
 
