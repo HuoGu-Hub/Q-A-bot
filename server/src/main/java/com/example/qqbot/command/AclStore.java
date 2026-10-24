@@ -53,6 +53,17 @@ public class AclStore {
         return available && commandId > 0 ? repo.list(commandId) : List.of();
     }
 
+    /**
+     * 板块自己的名单。
+     *
+     * <p>板块与指令是两张表，id 各自从 1 开始，直接共用 {@code command_id}
+     * 会把「1 号指令」和「1 号板块」的名单混在一起。这里用<b>负数</b>给板块
+     * 单独开一段键空间：指令是正数、板块是 -id、0 留给全局，三者不会撞。
+     */
+    public List<AclEntry> ofBoard(long boardId) {
+        return available && boardId > 0 ? repo.list(-boardId) : List.of();
+    }
+
     /** 全局名单：对所有命令生效 */
     public List<AclEntry> global() {
         return available ? repo.list(AclEntry.GLOBAL) : List.of();
@@ -61,6 +72,13 @@ public class AclStore {
     public void replaceCommand(long commandId, List<AclEntry> entries) {
         if (available && commandId > 0) {
             repo.replace(commandId, entries);
+        }
+    }
+
+    /** 整份替换某个板块的名单 */
+    public void replaceBoard(long boardId, List<AclEntry> entries) {
+        if (available && boardId > 0) {
+            repo.replace(-boardId, entries);
         }
     }
 
@@ -74,6 +92,13 @@ public class AclStore {
     public void deleteCommand(long commandId) {
         if (available && commandId > 0) {
             repo.delete(commandId);
+        }
+    }
+
+    /** 板块被删掉时连带清理它那段负数键 */
+    public void deleteBoard(long boardId) {
+        if (available && boardId > 0) {
+            repo.delete(-boardId);
         }
     }
 }

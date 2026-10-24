@@ -54,7 +54,24 @@ public class AccessController {
         return ResponseEntity.ok(view(aclStore.ofCommand(id)));
     }
 
-    /** 全局名单：对所有命令生效 */
+    /** 某个板块自己的名单 */
+    @GetMapping("/boards/{id}/acl")
+    public Map<String, Object> boardAcl(@PathVariable long id) {
+        return view(aclStore.ofBoard(id));
+    }
+
+    /** 整份替换某个板块的名单 */
+    @PostMapping("/boards/{id}/acl")
+    public ResponseEntity<Map<String, Object>> saveBoardAcl(@PathVariable long id,
+                                                            @RequestBody Map<String, Object> body) {
+        if (id <= 0) {
+            return bad("板块编号不对");
+        }
+        aclStore.replaceBoard(id, parse(body));
+        return ResponseEntity.ok(view(aclStore.ofBoard(id)));
+    }
+
+    /** 全局名单：对所有命令与板块生效 */
     @GetMapping("/acl/global")
     public Map<String, Object> globalAcl() {
         return view(aclStore.global());

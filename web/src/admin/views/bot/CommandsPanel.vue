@@ -32,6 +32,7 @@ import SystemAliasModal from './SystemAliasModal.vue'
 import SystemReplyEditor from './SystemReplyEditor.vue'
 import VariablePanel from './VariablePanel.vue'
 import { useVariableInsert } from './useVariableInsert'
+import type { AclBody } from './aclForm'
 import {
   KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, SCOPE_LABEL,
 } from './commandOptions'
@@ -430,11 +431,16 @@ function removeRow(row: CommandRow) {
   }
 }
 
-async function saveBoard(draft: BoardDraft) {
+async function saveBoard(draft: BoardDraft, acl: AclBody) {
   boardSaving.value = true
   boardError.value = ''
   try {
-    await adminApi.post('/boards', draft)
+    const res = await adminApi.post<{ ok: boolean; board: AdminBoard }>('/boards', draft)
+    // 新建时草稿还没有 id，用后端回的那一条拿 id，再把名单落下去
+    const savedId = res?.board?.id
+    if (savedId) {
+      await adminApi.post('/boards/' + savedId + '/acl', acl)
+    }
     boardEditing.value = undefined
     await load()
   } catch (e) {

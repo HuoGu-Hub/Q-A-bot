@@ -170,6 +170,29 @@ class AccessControllerTest {
     }
 
     @Test
+    @DisplayName("★ 板块名单与指令名单分开存：同 id 不串")
+    void boardAclIsSeparateFromCommandAcl() {
+        controller.saveCommandAcl(7L, Map.of(
+                "white", List.of(Map.of("type", "uid", "value", 1001))));
+        controller.saveBoardAcl(7L, Map.of(
+                "black", List.of(Map.of("type", "gid", "value", 2001))));
+
+        assertThat(aclStore.ofCommand(7L)).extracting(AclEntry::value).containsExactly(1001L);
+        assertThat(aclStore.ofBoard(7L)).extracting(AclEntry::value).containsExactly(2001L);
+    }
+
+    @Test
+    @DisplayName("板块删除时名单一起清掉")
+    void deleteBoardClearsAcl() {
+        controller.saveBoardAcl(7L, Map.of(
+                "white", List.of(Map.of("type", "uid", "value", 1001))));
+
+        aclStore.deleteBoard(7L);
+
+        assertThat(aclStore.ofBoard(7L)).isEmpty();
+    }
+
+    @Test
     @DisplayName("全局名单与某条命令的名单互不干扰")
     void globalAndCommandListsAreSeparate() {
         controller.saveCommandAcl(CMD, Map.of("white", List.of(Map.of("type", "uid", "value", 1))));

@@ -124,7 +124,7 @@ public class BoardRunner {
         }
         CommandAccess access = CommandAccess.of(board.access());
         if (!AccessRules.allows(access, CommandRole.ofSender(event), userId, groupId,
-                List.of(), aclStore.global())) {
+                aclStore.ofBoard(board.id()), aclStore.global())) {
             // 板块的拒绝也要留痕：不回日志时，只能靠群友说"没反应"来发现问题
             log.info("[BOARD] 准入拒绝：用户 {} 在群 {} 触发 /{}（档位 {}）",
                     userId, groupId, board.path(), access.code());

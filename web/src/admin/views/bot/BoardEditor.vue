@@ -6,7 +6,8 @@
  * 历史记录会在同一事务里迁到新名字下；内置命令的路径是代码约定，不能改。
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import type { AdminBoard, AdminParamSpec, BoardDraft, CommandVariables } from '@shared/api/types'
+import type { AdminBoard, AdminParamSpec, BoardDraft, CommandAcl, CommandVariables } from '@shared/api/types'
+import { adminApi } from '@shared/api/client'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
@@ -15,8 +16,11 @@ import CommandEditorShell from './CommandEditorShell.vue'
 import Icon from '@shared/ui/Icon.vue'
 import ParamTable from './ParamTable.vue'
 import VariablePanel from './VariablePanel.vue'
+import AclEditor from './AclEditor.vue'
 import { useVariableInsert } from './useVariableInsert'
 import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
+import { aclBody, aclCount, emptyAclForm, fillAcl } from './aclForm'
+import type { AclBody, AclForm } from './aclForm'
 
 const props = defineProps<{
   /** null = 新建 */
@@ -28,7 +32,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  save: [BoardDraft]
+  /** 第二项是名单：保存板块成功后由父组件按板块 id 落到 /boards/{id}/acl */
+  save: [BoardDraft, AclBody]
   cancel: []
   remove: [AdminBoard]
 }>()
@@ -129,6 +134,13 @@ const hasRepeat = computed(() => repeatParam.value !== null)
 const hasTime = computed(() => timeParam.value !== null)
 const scheduled = computed(() => form.delivery === 'scheduled')
 
+/** 名单只在看名单的档位下才有意义；和指令编辑器同一份规则 */
+const needsAcl = computed(() =>
+  ['whitelist', 'blacklist', 'admin_whitelist'].includes(form.access))
+const acl = ref<AclForm>(emptyAclForm())
+const openAcl = ref(false)
+const aclSummary = computed(() => aclCount(acl.value))
+
 function reset() {
   const b = props.board
   form.path = b?.path ?? ''
@@ -149,6 +161,13 @@ function reset() {
   form.listLimit = b?.listLimit ?? 20
   groupsText.value = (b?.groups ?? []).join('\n')
   upgradeRepeatType()
+  // 名单按板块 id 存；新建时还没有 id，等保存成功后再由父组件写入
+  acl.value = emptyAclForm()
+  if (b?.id) {
+    adminApi.get<CommandAcl>('/boards/' + b.id + '/acl')
+      .then((saved) => fillAcl(acl.value, saved))
+      .catch(() => { /* 读不到名单不挡编辑 */ })
+  }
   openParams.value = true
   openOutput.value = true
 }
@@ -291,7 +310,7 @@ function submit() {
     defaultList: props.board?.defaultList ?? '',
     defaultHelp: props.board?.defaultHelp ?? '',
   }
-  emit('save', draft)
+  emit('save', draft, aclBody(acl.value))
 }
 </script>
 
@@ -513,6 +532,17 @@ function submit() {
         <p v-if="form.scope !== 'GROUP'" class="faint origin-hint">
           跨群记录才标来源；本群记录不标
         </p>
+
+        <div v-if="needsAcl" class="block">
+          <button class="block-head" type="button" :aria-expanded="openAcl" @click="openAcl = !openAcl">
+            <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openAcl }" />
+            <span>名单</span>
+            <span class="block-count">{{ aclSummary }}</span>
+          </button>
+          <div v-if="openAcl" class="block-body">
+            <AclEditor v-model="acl" />
+          </div>
+        </div>
 
         <div class="checks">
           <label class="check">

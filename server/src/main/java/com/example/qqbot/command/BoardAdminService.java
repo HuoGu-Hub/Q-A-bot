@@ -29,18 +29,25 @@ public class BoardAdminService {
     private final CommandStore commands;
     private final CommandCatalog catalog;
     private final SystemReplyStore replies;
+    private final AclStore aclStore;
 
     public BoardAdminService(BoardStore boards, CommandStore commands) {
-        this(boards, commands, null, null);
+        this(boards, commands, null, null, null);
+    }
+
+    public BoardAdminService(BoardStore boards, CommandStore commands,
+                             CommandCatalog catalog, SystemReplyStore replies) {
+        this(boards, commands, catalog, replies, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public BoardAdminService(BoardStore boards, CommandStore commands,
-                             CommandCatalog catalog, SystemReplyStore replies) {
+                             CommandCatalog catalog, SystemReplyStore replies, AclStore aclStore) {
         this.boards = boards;
         this.commands = commands;
         this.catalog = catalog;
         this.replies = replies;
+        this.aclStore = aclStore;
     }
 
     /**
@@ -240,6 +247,10 @@ public class BoardAdminService {
         }
         if (!boards.delete(path)) {
             throw new IllegalArgumentException("删除失败：没有这个板块");
+        }
+        // 名单按板块 id 存，删板块时一起清掉，不留孤儿行
+        if (aclStore != null) {
+            aclStore.deleteBoard(board.id());
         }
     }
 

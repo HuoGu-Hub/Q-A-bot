@@ -123,6 +123,32 @@ class BoardRunnerUsageTest {
     }
 
     @Test
+    @DisplayName("★ 板块自己的白名单对普通成员生效")
+    void boardWhitelistGrantsMember() {
+        BoardStore boards = mock(BoardStore.class);
+        BoardRecordStore records = mock(BoardRecordStore.class);
+        AclStore acl = mock(AclStore.class);
+        Board board = new Board(1, "公告", "公告", List.of(), Board.DIRECT, "whitelist",
+                DataPolicy.DEFAULT, true, 0, false);
+        when(boards.find("公告")).thenReturn(board);
+        when(records.isAvailable()).thenReturn(true);
+        when(records.queryVisible(board, 100L, 20)).thenReturn(List.of());
+        when(acl.ofBoard(1L)).thenReturn(List.of(
+                new AclEntry(AclEntry.WHITE, AclEntry.UID, 200L)));
+
+        BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
+                mock(VariableRenderer.class), acl, mock(CommandCatalog.class),
+                mock(CommandStore.class));
+
+        var reply = runner.tryRun(event(), "/公告");
+
+        assertThat(reply).isPresent();
+        assertThat(reply.get().text())
+                .doesNotContain("只对指定的人开放")
+                .contains("还没有内容");
+    }
+
+    @Test
     @DisplayName("★ 普通群友触发管理员板块：回一句拦截原因")
     void nonAdminGetsDenyReason() {
         BoardStore boards = mock(BoardStore.class);
