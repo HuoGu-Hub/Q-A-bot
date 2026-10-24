@@ -43,6 +43,12 @@ class RepeatRuleTest {
         assertThat(parse("每周日").dayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
         assertThat(parse("每周天").dayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
         assertThat(parse("每星期一").dayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
+        // 1-7 全覆盖，中文「七」与「日」「天」同义
+        assertThat(parse("每周1").dayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
+        assertThat(parse("每周2").dayOfWeek()).isEqualTo(DayOfWeek.TUESDAY);
+        assertThat(parse("每周6").dayOfWeek()).isEqualTo(DayOfWeek.SATURDAY);
+        assertThat(parse("每周7").dayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
+        assertThat(parse("每周七").dayOfWeek()).isEqualTo(DayOfWeek.SUNDAY);
     }
 
     @Test
@@ -52,6 +58,29 @@ class RepeatRuleTest {
         assertThat(parse("每三天").everyDays()).isEqualTo(3);
         assertThat(parse("每两天").everyDays()).isEqualTo(2);
         assertThat(parse("每十天").everyDays()).isEqualTo(10);
+        assertThat(parse("每十五天").everyDays()).isEqualTo(15);
+        assertThat(parse("每二十天").everyDays()).isEqualTo(20);
+        assertThat(parse("每三十天").everyDays()).isEqualTo(30);
+        assertThat(parse("每23天").everyDays()).isEqualTo(23);
+    }
+
+    @Test
+    @DisplayName("★ 每 N 周不支持，要给出能照做的提示")
+    void everyNWeeksIsRejected() {
+        assertThatThrownBy(() -> parse("每两周"))
+                .isInstanceOf(CommandParseException.class)
+                .hasMessageContaining("每 N 周");
+    }
+
+    @Test
+    @DisplayName("★ 落库形态 once/daily/weekly:3 转回人话，脏数据原样返回")
+    void describeStored() {
+        assertThat(RepeatRule.describeStored("once")).isEqualTo("只发一次");
+        assertThat(RepeatRule.describeStored("daily")).isEqualTo("每天");
+        assertThat(RepeatRule.describeStored("weekly:3")).isEqualTo("每周三");
+        assertThat(RepeatRule.describeStored("every:5")).isEqualTo("每 5 天");
+        assertThat(RepeatRule.describeStored("隔三差五")).isEqualTo("隔三差五");
+        assertThat(RepeatRule.describeStored("")).isEmpty();
     }
 
     @Test
@@ -72,6 +101,7 @@ class RepeatRuleTest {
         assertThatThrownBy(() -> parse("每0天")).isInstanceOf(CommandParseException.class);
         assertThatThrownBy(() -> parse("每99天")).isInstanceOf(CommandParseException.class);
         assertThatThrownBy(() -> parse("每1天")).isInstanceOf(CommandParseException.class);
+        assertThatThrownBy(() -> parse("每31天")).isInstanceOf(CommandParseException.class);
     }
 
     @Test

@@ -162,6 +162,7 @@ public class BoardAdminService {
         List<ParamSpec> params = validateParams(input.params());
         String delivery = Board.SCHEDULED.equalsIgnoreCase(trim(input.delivery()))
                 ? Board.SCHEDULED : Board.DIRECT;
+        params = normalizeScheduled(delivery, params);
         validateDelivery(delivery, params);
 
         String access = CommandAccess.of(input.access()).code();
@@ -285,6 +286,30 @@ public class BoardAdminService {
     }
 
     /**
+     * 把定时板块的「重复」统一成重复周期类型。
+     *
+     * <p>重复周期类型上线前建的板块把它存成了文本。两种类型都能解析同一批写法，
+     * 所以升级时只换类型、不动值：管理员再保存一次，库里就是新类型，
+     * 列表里的 {@code {params.重复}} 也会按周期显示中文。
+     */
+    private static List<ParamSpec> normalizeScheduled(String delivery, List<ParamSpec> params) {
+        if (!Board.SCHEDULED.equals(delivery)) {
+            return params;
+        }
+        List<ParamSpec> out = new ArrayList<>(params.size());
+        for (ParamSpec spec : params) {
+            if (PARAM_REPEAT.equals(spec.name()) && spec.type() == ParamType.TEXT) {
+                out.add(new ParamSpec(spec.name(), ParamType.REPEAT, spec.required(),
+                        spec.defaultValue(), spec.maxChars(), spec.description(), spec.example(),
+                        spec.options(), spec.multiple()));
+            } else {
+                out.add(spec);
+            }
+        }
+        return out;
+    }
+
+    /**
      * 定时板块的两个约定参数。
      *
      * <p>{@link BoardRecordStore} 按名字取 {@code 重复} 与 {@code 时间}；
@@ -299,8 +324,8 @@ public class BoardAdminService {
         if (repeat == null) {
             throw new IllegalArgumentException("到点发送的板块必须有 #" + PARAM_REPEAT + "# 参数");
         }
-        // 老数据里「重复」是文本，继续兼容；新建的定时板块用「重复周期」类型
-        if (repeat.type() != ParamType.TEXT && repeat.type() != ParamType.REPEAT) {
+        // 老配置的文本类型已在 normalizeScheduled 里升级，这里只认新类型
+        if (repeat.type() != ParamType.REPEAT) {
             throw new IllegalArgumentException("#" + PARAM_REPEAT + "# 必须是重复周期参数");
         }
         if (time == null) {

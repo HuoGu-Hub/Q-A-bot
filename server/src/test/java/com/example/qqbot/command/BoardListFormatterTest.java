@@ -99,6 +99,30 @@ class BoardListFormatterTest {
         return board(header, item, empty, limit, DataPolicy.DEFAULT);
     }
 
+    @Test
+    @DisplayName("★ {params.重复} 显示中文，不把 daily 这种落库形态发到群里")
+    void repeatParamShowsHumanText() {
+        Board board = board("", "#{id} {params.重复} {params.时间}", "", 20);
+        List<BoardRecord> records = List.of(record(3, 100L, 200L, "阿明", "",
+                Map.of("重复", "daily", "时间", "21:30")));
+
+        assertThat(BoardListFormatter.render(board, records, 100L))
+                .contains("#3 每天 21:30");
+    }
+
+    @Test
+    @DisplayName("★ 没有正文时用参数拼行，重复也要显示中文")
+    void bodyFallbackUsesHumanRepeat() {
+        Board board = board("", "#{id} {text}", "", 20);
+        List<BoardRecord> records = List.of(record(4, 100L, 200L, "阿明", "",
+                Map.of("重复", "weekly:3", "时间", "21:30")));
+
+        assertThat(BoardListFormatter.render(board, records, 100L))
+                .contains("#4")
+                .contains("每周三")
+                .contains("21:30");
+    }
+
     private static Board board(String header, String item, String empty, int limit,
                                DataPolicy policy) {
         return new Board(1, "预约开黑", "预约开黑", List.of(), Board.DIRECT, "all",

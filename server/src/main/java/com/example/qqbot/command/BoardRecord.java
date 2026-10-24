@@ -79,11 +79,42 @@ public record BoardRecord(
         return s.rule().describe() + " " + s.describeTimes();
     }
 
+    /**
+     * 参数值的人话。
+     *
+     * <p>「重复」落库是 once / daily / weekly:3 这种机器形态，列表里要显示成
+     * 只发一次 / 每天 / 每周三；其余参数原样。
+     */
+    public String paramText(String name) {
+        String value = params.get(name);
+        if (value == null) {
+            return "";
+        }
+        return BoardRecordStore.PARAM_REPEAT.equals(name)
+                ? RepeatRule.describeStored(value) : value;
+    }
+
     /** 列表里的一行：{@code #12 每天 07:00、14:00 今晚八点开黑} */
     public String displayLine() {
-        String body = text == null || text.isBlank() ? String.join(" ", params.values()) : text;
+        String body = text == null || text.isBlank() ? paramLine() : text;
         String oneLine = body.replaceAll("\\s+", " ").trim();
         String shortBody = oneLine.length() <= 40 ? oneLine : oneLine.substring(0, 40) + "…";
         return "#" + id + "  " + whenText() + "  " + shortBody;
+    }
+
+    /** 没有正文时用参数拼一行：参数值按人话显示，重复周期的存储形态不外泄 */
+    private String paramLine() {
+        StringBuilder sb = new StringBuilder();
+        for (String name : params.keySet()) {
+            String value = paramText(name);
+            if (value.isEmpty()) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append(' ');
+            }
+            sb.append(value);
+        }
+        return sb.toString();
     }
 }

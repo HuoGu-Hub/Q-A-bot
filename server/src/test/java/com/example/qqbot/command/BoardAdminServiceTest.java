@@ -132,6 +132,22 @@ class BoardAdminServiceTest {
     }
 
     @Test
+    @DisplayName("★ 老的文本「重复」保存时升级成重复周期")
+    void legacyTextRepeatUpgradedOnSave() {
+        service.save(input("打卡", Board.SCHEDULED, List.of(
+                ParamSpec.of("重复", "text", true, "每天"),
+                ParamSpec.of("时间", "moment", true, "21:30"))));
+
+        Board saved = boards.find("打卡");
+        ParamSpec repeat = saved.params().stream()
+                .filter((p) -> "重复".equals(p.name()))
+                .findFirst().orElseThrow();
+
+        assertThat(repeat.type()).isEqualTo(ParamType.REPEAT);
+        assertThat(saved.delivery()).isEqualTo(Board.SCHEDULED);
+    }
+
+    @Test
     @DisplayName("指定群模式至少要有一个群号")
     void someScopeNeedsGroups() {
         BoardAdminService.BoardInput input = new BoardAdminService.BoardInput(

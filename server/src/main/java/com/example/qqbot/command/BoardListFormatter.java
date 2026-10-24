@@ -128,11 +128,9 @@ final class BoardListFormatter {
         vars.put("user.id", board.policy().marksUser() ? String.valueOf(record.userId()) : null);
         vars.put("count", String.valueOf(count));
         vars.put("path", board.path());
-        if (record.params() != null) {
-            for (Map.Entry<String, String> entry : record.params().entrySet()) {
-                vars.put("params." + entry.getKey(),
-                        entry.getValue() == null ? "" : entry.getValue());
-            }
+        // 「重复」按周期显示（库里是 daily / weekly:3），其余参数原样
+        for (String name : record.params().keySet()) {
+            vars.put("params." + name, record.paramText(name));
         }
         return vars;
     }
@@ -141,10 +139,21 @@ final class BoardListFormatter {
         if (record.text() != null && !record.text().isBlank()) {
             return record.text();
         }
-        if (record.params() == null || record.params().isEmpty()) {
+        if (record.params().isEmpty()) {
             return "";
         }
-        return String.join(" ", record.params().values());
+        StringBuilder sb = new StringBuilder();
+        for (String name : record.params().keySet()) {
+            String value = record.paramText(name);
+            if (value.isEmpty()) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append(' ');
+            }
+            sb.append(value);
+        }
+        return sb.toString();
     }
 
     private static String fill(String template, Map<String, String> vars) {

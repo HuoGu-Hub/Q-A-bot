@@ -43,8 +43,13 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
     /**
      * 解析群友写的重复方式。
      *
-     * <p>认这些写法：一次 / 每天 / 每日 / 每周三 / 每周天 / 每3天 / 每三天。
-     * 认不出来就报错并指出他写的是什么 —— 静默当成"一次"最危险，
+     * <p>认这些写法：一次 / 每天 / 每日 / 每周三 / 每周3 / 每周7 / 每周天 /
+     * 每3天 / 每三天 / 每十五天 / 每30天。
+     *
+     * <p>星期几接受 1 到 7、一 到 六、日 / 天 / 七 / 7；「每 N 天」的 N 接受
+     * 阿拉伯数字与中文数字，范围 2 到 30 —— 1 天就是每天，直接写「每天」。
+     *
+     * <p>认不出来就报错并指出他写的是什么 —— 静默当成"一次"最危险，
      * 那样一条本该每天发的公告会只发一次，而且没人知道为什么。
      */
     public static RepeatRule parse(String raw) throws CommandParseException {
@@ -93,16 +98,24 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
 
     private static RepeatRule everyDays(String s) throws CommandParseException {
         String rest = s.replaceFirst("^每", "").replaceFirst("天$", "").trim();
+        if (rest.contains("周") || rest.contains("星期") || rest.contains("礼拜")) {
+            throw new CommandParseException("重复",
+                    "暂不支持「每 N 周」，可以写「每周几」或者「每 N 天」");
+        }
         int n = number(rest);
+        if (n == 1) {
+            throw new CommandParseException("重复", "每 1 天就是每天，写「每天」就行");
+        }
         if (n < 2 || n > 30) {
-            throw new CommandParseException("重复", "每几天发一次，天数要在 2 到 30 之间，例：每3天");
+            throw new CommandParseException("重复",
+                    "每几天发一次，天数要在 2 到 30 之间，例：每3天、每十五天");
         }
         return new RepeatRule(Kind.EVERY_N_DAYS, n, null);
     }
 
-    /** 周几：一 到 六 与 日/天 */
+    /** 周几：一 到 六 与 日/天/七/7，都指周日 */
     private static int weekIndex(char c) {
-        if (c == '日' || c == '天' || c == '7') {
+        if (c == '日' || c == '天' || c == '七' || c == '7') {
             return 6;
         }
         if (c >= '1' && c <= '6') {
@@ -116,8 +129,16 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
         return -1;
     }
 
-    /** 阿拉伯数字或一到十的中文数字 */
+    /**
+     * 阿拉伯数字或中文数字（两、十一、二十、二十三、三十）。
+     *
+     * <p>「每十五天」以前会走进「十 到 十九」那条特判，二十以上则直接失败；
+     * 这里统一按「十位 + 个位」拆，2 到 30 全都能写。
+     */
     private static int number(String s) {
+        if (s == null || s.isEmpty()) {
+            return -1;
+        }
         try {
             return Integer.parseInt(s);
         } catch (NumberFormatException ignored) {
@@ -126,17 +147,23 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
         if (s.equals("两")) {
             return 2;
         }
+        int tenAt = s.indexOf('十');
+        if (tenAt < 0) {
+            return digit(s);
+        }
+        int tens = tenAt == 0 ? 1 : digit(s.substring(0, tenAt));
+        int ones = tenAt == s.length() - 1 ? 0 : digit(s.substring(tenAt + 1));
+        if (tens < 1 || tens > 3 || ones < 0) {
+            return -1;
+        }
+        return tens * 10 + ones;
+    }
+
+    /** 零到九的中文数字；不认识返回 -1 */
+    private static int digit(String s) {
         for (int i = 0; i < CN_DIGITS.length; i++) {
             if (CN_DIGITS[i].equals(s)) {
                 return i;
-            }
-        }
-        // 十一 到 十九
-        if (s.startsWith("十") && s.length() == 2) {
-            for (int i = 0; i < CN_DIGITS.length; i++) {
-                if (CN_DIGITS[i].equals(s.substring(1))) {
-                    return 10 + i;
-                }
             }
         }
         return -1;
@@ -167,6 +194,24 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek) {
             // 落到下面统一报错
         }
         throw new CommandParseException("重复", "没看懂「" + raw + "」");
+    }
+
+    /**
+     * 落库形态转人话，列表里显示 {@code {params.重复}} 用。
+     *
+     * <p>库里存的是 once / daily / weekly:3 / every:5，群友看到的应该是
+     * 只发一次 / 每天 / 每周三 / 每 5 天。认不出来就原样返回 —— 显示层不能因为
+     * 一条脏数据把整个列表打断。
+     */
+    public static String describeStored(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return raw == null ? "" : raw;
+        }
+        try {
+            return parse(raw).describe();
+        } catch (CommandParseException e) {
+            return raw;
+        }
     }
 
     /** 回执里那句人话 */
