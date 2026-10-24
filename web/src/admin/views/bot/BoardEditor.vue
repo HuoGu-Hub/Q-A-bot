@@ -136,17 +136,35 @@ function reset() {
   form.helpReply = b?.helpReply ?? ''
   form.listLimit = b?.listLimit ?? 20
   groupsText.value = (b?.groups ?? []).join('\n')
+  upgradeRepeatType()
   openParams.value = true
   openOutput.value = true
 }
 
 watch(() => props.board, reset, { immediate: true })
+// 同一次编辑里把投递改成「到点发送」时，老的文本「重复」也要跟着换类型
+watch(() => form.delivery, (value) => {
+  if (value === 'scheduled') upgradeRepeatType()
+})
 
-/** 到点发送的两个约定参数：缺哪个补哪个，已有的不动 */
+/**
+ * 「重复」是调度约定参数，不是普通文本。
+ *
+ * <p>重复周期类型上线前建的定时板块把它存成了 text，读进来时统一换成
+ * repeat：值不变、解析规则不变，但落库形态会规范成 once / daily / weekly:3。
+ */
+function upgradeRepeatType() {
+  if (form.delivery !== 'scheduled') return
+  const repeat = form.params.find((p) => p.name === '重复')
+  if (repeat && repeat.type === 'text') repeat.type = 'repeat'
+}
+
+/** 到点发送的两个约定参数：缺哪个补哪个，已有的不动类型除外 —— 老的文本「重复」就地升级 */
 function ensureScheduleParams() {
+  upgradeRepeatType()
   if (!hasRepeat.value) {
     form.params.push({
-      name: '重复', type: 'text', required: true, example: '每天',
+      name: '重复', type: 'repeat', required: true, example: '每天',
       description: '一次 / 每天 / 每周三 / 每3天', multiple: false,
     })
   }
