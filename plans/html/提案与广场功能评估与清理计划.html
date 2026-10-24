@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>提案与广场：考古、去向判断与清理计划</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --bg-code: #f4f6f8;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --fg-faint: #8b949e;
+  --border: #d8dee4;
+  --border-soft: #e6eaef;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --ok: #15803d;
+  --ok-bg: #f0fdf4;
+  --bad: #b91c1c;
+  --bad-bg: #fef2f2;
+  --radius: 10px;
+  --content: 880px;
+  --sidebar: 250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-code: #161b22;
+    --fg: #e6edf3;
+    --fg-soft: #9198a1;
+    --fg-faint: #6e7681;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --accent: #6ea8fe;
+    --accent-soft: #16233a;
+    --warn: #f0b429;
+    --warn-bg: #2a2109;
+    --ok: #4ade80;
+    --ok-bg: #0f2a1a;
+    --bad: #f87171;
+    --bad-bg: #2a1111;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC",
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout { display: flex; align-items: flex-start; gap: 40px; max-width: 1240px; margin: 0 auto; padding: 40px 28px 96px; }
+.toc {
+  position: sticky; top: 28px; flex: 0 0 var(--sidebar); width: var(--sidebar);
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  font-size: 13.5px; line-height: 1.6;
+  border-right: 1px solid var(--border-soft); padding-right: 18px;
+}
+.toc-title { font-weight: 700; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-soft); text-decoration: none; border-bottom: 0; border-left: 2px solid transparent; }
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc details { display: none; }
+main { flex: 1 1 auto; min-width: 0; max-width: var(--content); }
+main > :first-child { margin-top: 0; }
+h1, h2, h3, h4 { line-height: 1.4; font-weight: 700; scroll-margin-top: 20px; }
+h1 { font-size: 2em; margin: 0 0 .7em; letter-spacing: -.015em; padding-bottom: .4em; border-bottom: 2px solid var(--border); }
+h2 { font-size: 1.42em; margin: 2.4em 0 .8em; padding-left: .55em; border-left: 4px solid var(--accent); }
+h3 { font-size: 1.15em; margin: 1.9em 0 .6em; color: var(--fg); }
+h4 { font-size: 1em; margin: 1.5em 0 .5em; color: var(--fg-soft); }
+p { margin: 0 0 1.05em; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.6em 0; }
+ul, ol { margin: 0 0 1.05em; padding-left: 1.5em; }
+li { margin: .32em 0; }
+li > ul, li > ol { margin: .32em 0 .2em; }
+blockquote {
+  margin: 1.4em 0; padding: .85em 1.15em;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--fg);
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote p { margin: .35em 0; }
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+  font-size: .875em;
+  background: var(--bg-code);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: .14em .38em;
+  word-break: break-word;
+}
+pre {
+  margin: 1.3em 0; padding: 1.05em 1.2em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  line-height: 1.65;
+}
+pre code { background: none; border: 0; padding: 0; font-size: .855em; }
+.table-wrap { margin: 1.4em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.table-wrap table { margin: 0; border: 0; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .945em; }
+thead th { background: var(--bg-soft); text-align: left; font-weight: 700; padding: .62em .85em; border-bottom: 2px solid var(--border); white-space: nowrap; }
+tbody td { padding: .62em .85em; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom: 0; }
+.footer { margin-top: 4em; padding-top: 1.2em; border-top: 1px solid var(--border-soft); font-size: .85em; color: var(--fg-faint); }
+
+/* KPI 与判定 */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin: 1.4em 0; }
+.kpi { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: var(--bg-soft); }
+.kpi b { display: block; font-size: 1.55em; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.kpi span { display: block; margin-top: 2px; font-size: .8em; color: var(--fg-soft); }
+.kpi.is-warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); }
+.kpi.is-bad { background: var(--bad-bg); border-color: color-mix(in srgb, var(--bad) 35%, var(--border)); }
+.kpi.is-ok { background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); }
+.tag { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: .76em; line-height: 1.7; border: 1px solid var(--border); background: var(--bg-soft); color: var(--fg-soft); white-space: nowrap; }
+.tag.ok { color: var(--ok); background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); }
+.tag.warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); }
+.tag.bad { color: var(--bad); background: var(--bad-bg); border-color: color-mix(in srgb, var(--bad) 35%, var(--border)); }
+.verdict { margin: 1.5em 0; padding: 1em 1.2em; border: 1px solid var(--border); border-left: 5px solid var(--ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--ok-bg); }
+.verdict h3 { margin: 0 0 .35em; font-size: 1.05em; }
+.verdict p:last-child { margin-bottom: 0; }
+.note { font-size: .9em; color: var(--fg-soft); }
+.files { min-width: 840px; }
+.files td:nth-child(1), .files td:nth-child(2) { white-space: nowrap; }
+
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; gap: 0; padding: 22px 18px 72px; }
+  .toc { position: static; flex: none; width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 14px; margin-bottom: 26px; }
+  .toc > ol, .toc > .toc-title { display: block; }
+  .toc details { display: none; }
+  .toc summary { cursor: pointer; font-weight: 700; color: var(--accent); padding: 6px 0; }
+  .toc details ol { margin-top: 10px; }
+  body { font-size: 16px; line-height: 1.8; }
+  h1 { font-size: 1.65em; }
+  h2 { font-size: 1.28em; }
+}
+@media print {
+  .toc { display: none; }
+  .layout { display: block; max-width: none; padding: 0; }
+  main { max-width: none; }
+  body { font-size: 11.5pt; line-height: 1.6; background: #fff; color: #000; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+  a { color: #000; border: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol>
+    <li><a href="#names">一、先分清三个名字</a></li>
+    <li><a href="#evidence">二、结论与证据</a></li>
+    <li><a href="#archaeology">三、考古：它们本来是一条链</a></li>
+    <li><a href="#survey">四、代码测绘</a></li>
+    <li><a href="#idle">五、为什么这两块会空转</a></li>
+    <li><a href="#decision">六、判定：还需不需要</a></li>
+    <li><a href="#plan-a">七、方案 A：清理</a></li>
+    <li><a href="#plan-b">八、方案 B：重构</a></li>
+    <li><a href="#next">九、建议的下一步</a></li>
+    <li><a href="#appendix">附录：证据索引</a></li>
+  </ol>
+</nav>
+<main>
+
+<h1 id="title">提案与广场：考古、去向判断与清理计划</h1>
+<blockquote>
+<p>2026-10-24 ｜ 结论先放这里：<strong>两项功能都不建议按现形态保留</strong>。广场整体下线；提案删掉分析管线，保留人工标注用于统计。</p>
+</blockquote>
+
+<hr>
+
+<h2 id="names">一、先分清三个名字</h2>
+<p>代码里其实有三样东西，名字很像，命运不同。你记忆里的“提案”大概率是第一个。若你记得的是“让群友交资料”，那是第三个，代码早就不在了。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>名字</th><th>代码与表</th><th>现在还在吗</th><th>它到底是什么</th></tr></thead>
+<tbody>
+<tr>
+<td><strong>提案</strong></td>
+<td><code>kb/proposal/</code>、<code>kb_proposal</code></td>
+<td><span class="tag warn">在，但从未产生过数据</span></td>
+<td>管理员把某些回答标成“有帮助”，攒够 10 条后让模型跟知识库比对，产出“新增词条”或“覆盖词条”的建议，人工确认后才落库。</td>
+</tr>
+<tr>
+<td><strong>广场</strong></td>
+<td><code>plaza/</code>、<code>answer_vote</code>、<code>help_request</code></td>
+<td><span class="tag warn">在，但公开页是空的</span></td>
+<td>公开站按关键词展示群里的历史问答，访客点赞/踩/标过时；都不满意时可以“问问新答案”或“求助大佬”。</td>
+</tr>
+<tr>
+<td><strong>投稿 / 邀请码</strong></td>
+<td><code>kb_contribution</code>、<code>kb_token</code></td>
+<td><span class="tag">代码已删，表还在</span></td>
+<td>早期让群友凭邀请码向知识库投递资料。已经下线，<code>知识库导入与使用手册</code> 写明“整块功能下线”。</td>
+</tr>
+</tbody>
+</table></div>
+<p>第三个功能只剩两张 0 行的空表。如果这就是你印象里的“提案”，清理成本只有几分钟；本文重点分析前两个仍在运行的功能。</p>
+<p>还有一条旁证：<code>plans/html/雾锁王国地图查看器与地点问答实施计划.html:260</code> 的“已知未决”里写过，“是否要「点位纠错」的群友提案通道：现有 <code>kb_proposal</code> 是问答提案，地图点位是否复用需单独定”。这说明当时确实想过把提案扩成通用投稿口，但没有落地。地图现在有自己的管理端标注和待复核点位，不需要靠这条老链路。</p>
+
+<h2 id="evidence">二、结论与证据</h2>
+<p>先看当前运行库。数据库从 2026-09-25 持续写入到今天，不是旧备份。下面的读数是 2026-10-24 14:00 的快照；群聊还在继续写入，绝对数字会变，比例结论不变。</p>
+<div class="kpis">
+  <div class="kpi"><b>44,105</b><span>累计问答</span></div>
+  <div class="kpi is-bad"><b>0</b><span>广场投票</span></div>
+  <div class="kpi is-bad"><b>0</b><span>改进提案</span></div>
+  <div class="kpi is-bad"><b>0</b><span>“有帮助”标记</span></div>
+  <div class="kpi is-warn"><b>1</b><span>求助记录，来自探针</span></div>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th>证据</th><th>读数</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>问答总量</td><td><code>qa_stat</code> 44,105 行，2026-09-25 至 2026-10-24</td><td>群聊功能一直在真实使用</td></tr>
+<tr><td>人工标注</td><td><code>verdict</code> 全部为 <code>unknown</code>，0 行被标过</td><td>后台 <code>/admin/api/annotate</code> 调用记录也是 0 次</td></tr>
+<tr><td>提案</td><td><code>kb_proposal</code> 0 行</td><td>表没有删除接口，0 行等于从未产出过</td></tr>
+<tr><td>投票</td><td><code>answer_vote</code> 0 行</td><td>29 天里没有任何一次点赞、点踩或标过时</td></tr>
+<tr><td>求助</td><td><code>help_request</code> 1 行，状态 <code>pending</code></td><td>问题文本带短码前缀，群号和用户号都是 0，是 10-10 的探针残留</td></tr>
+<tr><td>广场生成答案</td><td><code>qa_stat.source='plaza'</code> 1 行</td><td>同一批探针产生，正常群聊来源 44,104 行</td></tr>
+<tr><td>后台使用</td><td>广场管理页入口只在 09-26 打开过 2 次；下架、投票明细接口 0 次；<code>proposals/analyze</code>、<code>proposals/review</code> 各 0 次</td><td>页面被打开过，但关键动作一次都没执行</td></tr>
+</tbody>
+</table></div>
+<p>这不是“还没上线”，而是<strong>上线了，但从未进入工作流</strong>。广场的公开页现在会列出从群聊聚合出来的热词，点进去却没有任何答案，因为答案必须至少有一个赞才会展示，而赞是 0。提案面板会显示“再有 10 条「有帮助」标记就能分析”，而这个数字 29 天没有动过。</p>
+
+<h2 id="archaeology">三、考古：它们本来是一条链</h2>
+<p>README 的功能表里有一句话，把两个功能绑在一起：</p>
+<blockquote><p><strong>问答广场 ｜ 群内发起求助，投票认可的回答沉淀为改进提案</strong></p></blockquote>
+<p>这句话不是现状，是当时的设想。把它拆成六步，再对照代码，断点非常清楚。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>设想中的环节</th><th>代码里的实现</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>群友提问，问答入库</td><td><code>qa_stat</code> / <code>qa_raw</code> / <code>qa_keyword</code></td><td><span class="tag ok">成立</span></td></tr>
+<tr><td>2</td><td>公开站按关键词聚合</td><td><code>AnswerAggregator.hotKeywords</code> / <code>page</code></td><td><span class="tag ok">成立</span></td></tr>
+<tr><td>3</td><td>访客投票表达认可</td><td><code>PlazaController.vote</code> 写 <code>answer_vote</code></td><td><span class="tag warn">成立，但 0 票</span></td></tr>
+<tr><td>4</td><td>被认可的答案公开</td><td><code>only-voted=true</code> 只放行 <code>up &gt; 0</code> 的答案</td><td><span class="tag warn">成立，但没有票就没有内容</span></td></tr>
+<tr><td>5</td><td>不满意就生成新答案或求助</td><td><code>ask-new</code> 调模型；<code>help-request</code> 生成短码</td><td><span class="tag bad">半成品</span></td></tr>
+<tr><td>6</td><td>认可的回答沉淀为提案，人工确认后进知识库</td><td><code>KbProposalService</code> 读 <code>qa_stat.verdict='good'</code></td><td><span class="tag bad">未接线</span></td></tr>
+</tbody>
+</table></div>
+
+<h3>断点 1：投票从来没有变成“认可”</h3>
+<p>提案的入口是 <code>verdict='good'</code>，这个字段只能由后台“问答记录”里的人工标注写入。广场投票写的是另一张表 <code>answer_vote</code>。两者之间没有任何代码相连：没有触发器、没有定时任务、没有“赞数达到 N 就置为 good”的分支。</p>
+<pre><code>// KbProposalRepository.java:87
+SELECT COUNT(*) FROM qa_stat s WHERE s.verdict = 'good' ...
+// 全库 verdict 分布：unknown 44,105
+
+// PlazaStore.java:118
+public boolean vote(long statId, long voterQq, String vote)
+// 只写 answer_vote，不碰 qa_stat.verdict</code></pre>
+<p>所以“投票认可的回答沉淀为提案”只完成了前半句。票数只影响广场里的排序和是否展示，进不了提案队列。</p>
+
+<h3>断点 2：求助链路只写不收</h3>
+<p>网页点“求助大佬”会生成一个短码，并把“短码|问题”写进 <code>help_request</code>，状态 <code>pending</code>。但前端拿到响应后只用 <code>text</code> 字段，<code>code</code> 字段没有展示、没有复制入口。群里真正触发发送的是另一条路径：用户手动输入“求助：xxx”，由 <code>MessageRouter.tryHelpRequest</code> 匹配前缀后直接发群。</p>
+<p>结果是：<code>findPendingHelp</code>、<code>confirmHelp</code>、<code>FallbackService.askHelp</code> 都没有调用方。那条 10-10 的 <code>pending</code> 记录永远不会被消费。求助发出后，群友的回答也没有回写链路，不会自动变成广场里的新答案。</p>
+
+<h3>断点 3：提案的目标在文档里也说岔了</h3>
+<p><code>KbProposalService</code> 的类注释写的是“让标记变便宜，标记之后真的有用”，处理对象是“被人工认可的回答”。但 <code>知识库运营手册</code> 让运营者每月去“知识库 → 提案”看“哪些问题没答上”。这两件事不是一回事：前者是“答对了，值得沉淀”，后者是“没答上，需要补内容”。</p>
+<p>这个偏差说明：连功能自己的使用说明都没有形成稳定心智。它不是被用坏的，是从来没有被真正理解过。</p>
+
+<h2 id="survey">四、代码测绘</h2>
+<h3>4.1 体量</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>范围</th><th>文件</th><th>行数</th></tr></thead>
+<tbody>
+<tr><td>广场后端</td><td><code>plaza/</code> 6 个类</td><td>1,463</td></tr>
+<tr><td>广场配置</td><td><code>config/PlazaProperties.java</code></td><td>161</td></tr>
+<tr><td>广场持久化</td><td><code>PlazaRepository</code>、<code>PlazaQueryRepository</code></td><td>349</td></tr>
+<tr><td>提案后端</td><td><code>kb/proposal/</code> 2 个类</td><td>517</td></tr>
+<tr><td>提案持久化</td><td><code>KbProposalRepository</code></td><td>140</td></tr>
+<tr><td>前端</td><td><code>PlazaView</code>、<code>PlazaAdminView</code>、<code>ProposalPanel</code></td><td>1,286</td></tr>
+<tr><td>共享类型</td><td><code>shared/api/types.ts</code> 的 Plaza 段</td><td>约 80</td></tr>
+<tr><td><strong>合计</strong></td><td><strong>15 个源文件</strong></td><td><strong>3,916</strong></td></tr>
+</tbody>
+</table></div>
+
+<h3>4.2 接线</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>位置</th><th>当前接线</th></tr></thead>
+<tbody>
+<tr><td>公开站</td><td>导航“问答” → <code>/plaza</code>；路由、SPA 转发、5 个公开接口</td></tr>
+<tr><td>管理端</td><td>导航“广场” → <code>/plaza</code>；5 个管理接口；知识库第 4 个 tab“提案”</td></tr>
+<tr><td>数据库</td><td><code>answer_vote</code>、<code>help_request</code>、<code>kb_proposal</code>，另有 <code>kb_contribution</code>、<code>kb_token</code> 两张遗留空表</td></tr>
+<tr><td>文档</td><td>系统说明书、README、运营手册、设计文档、plaza-loop 与 kb-dataflow 两张图</td></tr>
+<tr><td>测试</td><td><strong>核心逻辑 0 个单元测试</strong>；1 段 mock 的 Playwright 验收；2 个手工探针</td></tr>
+</tbody>
+</table></div>
+<p>系统说明书写着测试覆盖了“广场”，但测试目录里搜不到 <code>AnswerAggregator</code>、<code>PlazaStore</code>、<code>KbProposalService</code> 的任何单元测试。只有 <code>MessageRouterCommandTest</code> 用 <code>mock(FallbackService.class)</code> 把它当作构造参数，<code>QaAnalyticsTest</code> 的注释提到过广场生成的 <code>group_id=0</code>。这是文档与代码的又一处漂移。</p>
+
+<h3>4.3 具体缺陷</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>位置</th><th>问题</th><th>性质</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>AnswerAggregator.java:140</code></td><td><code>needsHelp</code> 永远返回 <code>false</code>，接口字段和前端类型都在，但从来不会为真</td><td>死字段</td></tr>
+<tr><td>2</td><td><code>FallbackService.askHelp</code></td><td>没有调用方；实际入口是 <code>confirmAndSendHelp</code></td><td>死代码</td></tr>
+<tr><td>3</td><td><code>PlazaStore.findPendingHelp</code>、<code>confirmHelp</code></td><td>没有调用方；短码链路只写不读</td><td>死代码</td></tr>
+<tr><td>4</td><td><code>PlazaController.helpRequest</code></td><td>返回的 <code>code</code> 前端没有使用，仍然写一条 <code>pending</code> 记录</td><td>无效写入</td></tr>
+<tr><td>5</td><td><code>PlazaStore.isBadlyDownvoted</code></td><td>没有调用方；判定逻辑在前端和聚合器里各写了一遍</td><td>重复逻辑</td></tr>
+<tr><td>6</td><td><code>PlazaAdminView.vue:43-46</code></td><td>同一个“确定下架”确认弹窗写了两遍，第二次缩进还是错的</td><td>手滑残留</td></tr>
+<tr><td>7</td><td><code>KbProposalService.review</code></td><td>新增提案实际直接写块，成功提示却说“去「资料」页审核并建索引”</td><td>提示与实现不一致</td></tr>
+<tr><td>8</td><td><code>ProposalPanel.vue</code></td><td>注释说新增提案“进投递队列”，同一文件的确认文案又说“直接写进知识库”</td><td>注释漂移</td></tr>
+<tr><td>9</td><td><code>kb_proposal</code></td><td>没有删除接口，前端用“拒绝”冒充“删除”</td><td>接口缺口</td></tr>
+<tr><td>10</td><td><code>AnswerAggregatorTest</code></td><td>不存在；排序、去重、过滤、隐私门槛都没有测试</td><td>测试缺口</td></tr>
+</tbody>
+</table></div>
+<p>这些问题不是“代码写得很烂”。相反，两个模块的分层、Repository 拆分、注释质量都高于项目平均线。问题在于：<strong>它们服务的业务流程已经不存在了</strong>，所以再整齐也是空转。</p>
+
+<h2 id="idle">五、为什么这两块会空转</h2>
+<h3>5.1 广场：认可门槛和流量互相卡死</h3>
+<ul>
+<li><strong>冷启动死锁</strong>：<code>only-voted=true</code> 要求至少 1 个赞才展示答案；公开站没有形成能带来投票的访问量；没有赞就没有内容；没有内容就更没有人来投票。29 天 0 票，这个循环一次都没有转起来。</li>
+<li><strong>公开页是“半开的门”</strong>：热词来自群聊关键词，所以列表看起来有内容；点进去每条答案都被 <code>up &lt;= 0</code> 过滤掉，访客看到的是空列表和“还没有被认可的答案”。</li>
+<li><strong>“被点赞 = 同意公开”不成立</strong>：投票只凭前端随机 <code>clientId</code>，清缓存就能重投；任何人只要知道 <code>statId</code> 就能给任意一条回答投票。匿名赞不能代替提问者或群主的同意，隐私论证站不住。</li>
+<li><strong>两级降级是成本与打扰的来源</strong>：问新答案会调模型，求助会往群里发消息；这两条路都没有闭环，却各自带一套限额和状态机。</li>
+</ul>
+
+<h3>5.2 提案：把“改一条”变成了“标十条、跑模型、逐条审”</h3>
+<ul>
+<li><strong>入口动作没人做</strong>：29 天 44,105 条问答，<code>annotate</code> 0 次。不是按钮藏得深，是这个动作没有进入日常习惯。</li>
+<li><strong>阈值放大了摩擦</strong>：默认 10 条才能点一次分析。0 条标注意味着 <code>canAnalyze</code> 永远是 false，面板长期停在“再有 10 条就能分析”。</li>
+<li><strong>路径比直接改块更长</strong>：标记 → 攒 10 条 → 手动分析 → 读模型 diff → 采纳或拒绝。同样是把一条好答案写进知识库，直接在“文档”里改块只要一次编辑。</li>
+<li><strong>产出质量仍要人兜底</strong>：模型会给 <code>new</code> / <code>overwrite</code> / <code>none</code>，还会幻觉。项目定位是“资料不足就说没查到”，批量生成提案与这个定位天然紧张。</li>
+<li><strong>真正的运营路径是导入文档</strong>：<code>知识库运营手册</code> 的主线是“准备符合格式的文档 → 导入 → 校验”，不是“从群聊回答里挖提案”。提案是一条支线，支线没有入口流量。</li>
+</ul>
+
+<h2 id="decision">六、判定：还需不需要</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>能力</th><th>有人用吗</th><th>服务主线吗</th><th>维护成本</th><th>更简单的替代</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>广场浏览与投票</td><td>0 票</td><td>弱，和“策展资料库”的定位冲突</td><td>中，1,973 行后端 + 1,286 行前端 + 隐私口径</td><td>公开资料库已能浏览</td><td><span class="tag bad">下线</span></td></tr>
+<tr><td>问问新答案</td><td>1 次探针</td><td>否</td><td>中，模型成本、限额、曾整段失败</td><td>群里直接问机器人</td><td><span class="tag bad">删除</span></td></tr>
+<tr><td>求助大佬</td><td>1 条探针</td><td>否</td><td>中，短码链路半成品、打扰群友</td><td>群里直接问</td><td><span class="tag bad">删除</span></td></tr>
+<tr><td>提案分析</td><td>0</td><td>弱，运营不走这条路</td><td>高，模型调用 + 人工审阅 + 无测试</td><td>直接编辑知识库块</td><td><span class="tag bad">删除</span></td></tr>
+<tr><td>人工标注 verdict</td><td>0 次，但成本极低</td><td>统计口径需要</td><td>低，一行 UPDATE</td><td>无</td><td><span class="tag ok">保留</span></td></tr>
+</tbody>
+</table></div>
+
+<div class="verdict">
+<h3>判断</h3>
+<p><strong>广场：不建议保留。</strong> 它不是“差一点就能用”，而是产品面本身与项目定位冲突：一边是严格策展、资料不足就承认不知道；另一边是把群聊里未经编辑的问答公开，还让匿名访客决定什么该公开。即使修好技术问题，它仍然需要持续运营和流量，而目前没有证据表明这两样存在。</p>
+<p><strong>提案：不建议保留当前形态。</strong> 目标本身合理，把好回答沉淀进知识库是值得做的事；但“批量模型分析 + 阈值 + 逐条审阅”这条路太重，重到 29 天没人走。保留人工标注，需要沉淀时直接改块，成本更低、质量更可控。</p>
+</div>
+
+<p>只有同时满足下面两条，才值得考虑保留或重构：</p>
+<ol>
+<li><strong>公开问答是你想主推的产品面</strong>，而不是顺手做的一个页面；</li>
+<li><strong>你或有人愿意每周至少花 10 分钟</strong>标注、审核、处理求助。</li>
+</ol>
+<p>如果这两条有一条不成立，直接走清理。若两条都成立，看第八节的方案 B，但不要原样复活现在的代码。</p>
+
+<h2 id="plan-a">七、方案 A：清理</h2>
+<p>推荐分阶段，不要一次把入口、代码、表全删掉。先让入口消失，观察一周，确认没有人反弹，再删代码和表。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>阶段</th><th>动作</th><th>产出</th><th>工时</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>备份数据库，冻结改动，记录当前读数</td><td>一份带时间戳的 <code>qqbot.sqlite</code> 备份</td><td>0.5 小时</td></tr>
+<tr><td>1</td><td>下线入口：公开站导航、管理端导航、知识库“提案”tab；<code>/plaza</code> 重定向到 <code>/library</code>；<code>app.plaza.enabled=false</code></td><td>访客和后台都看不到入口，接口仍在</td><td>2 小时 + 观察 3 到 7 天</td></tr>
+<tr><td>2</td><td>删除后端与前端代码，修所有引用与测试</td><td>少 15 个源文件、3,916 行</td><td>1 天</td></tr>
+<tr><td>3</td><td>清理数据库表与探针残留</td><td>少 5 张表，少 2 行探针数据</td><td>0.5 小时</td></tr>
+<tr><td>4</td><td>更新 README、系统说明书、运营手册、架构图</td><td>文档与代码一致</td><td>0.5 天</td></tr>
+<tr><td>5</td><td>跑测试、构建、Playwright、手工验收</td><td>一份验收记录</td><td>0.5 天</td></tr>
+</tbody>
+</table></div>
+<p class="note">总计约 2 到 3 个工作日，其中阶段 1 之后的观察期不计入工时。</p>
+
+<h3>7.1 阶段 1：先让入口消失</h3>
+<ul>
+<li>公开站：删掉 <code>web/src/public/App.vue</code> 的“问答”导航；<code>/plaza</code> 路由改成重定向到 <code>/library</code>，老书签不至于 404。</li>
+<li>管理端：删掉 <code>web/src/admin/App.vue</code> 的“广场”导航；<code>/plaza</code> 路由重定向到 <code>/stats</code>；<code>KbView.vue</code> 去掉“提案”tab。</li>
+<li>配置：<code>app.plaza.enabled</code> 改成 <code>false</code>。公开接口会返回“问答广场未启用”，群里的“求助：”分支也会被 <code>confirmAndSendHelp</code> 的开关挡住。</li>
+<li>观察：一周内看群里有没有人问“广场怎么没了”、看后台有没有相关报错。没有就进入阶段 2。</li>
+</ul>
+
+<h3>7.2 阶段 2：删除清单</h3>
+<div class="table-wrap"><table class="files">
+<thead><tr><th>区域</th><th>文件</th><th>行数</th><th>处理</th></tr></thead>
+<tbody>
+<tr><td rowspan="6">广场后端</td><td><code>plaza/PlazaStore.java</code></td><td>361</td><td>删</td></tr>
+<tr><td><code>plaza/PlazaController.java</code></td><td>304</td><td>删</td></tr>
+<tr><td><code>plaza/PlazaAdminController.java</code></td><td>135</td><td>删</td></tr>
+<tr><td><code>plaza/AnswerAggregator.java</code></td><td>249</td><td>删</td></tr>
+<tr><td><code>plaza/FallbackService.java</code></td><td>357</td><td>删</td></tr>
+<tr><td><code>plaza/PlazaPolicy.java</code></td><td>57</td><td>删</td></tr>
+<tr><td rowspan="3">广场支撑</td><td><code>config/PlazaProperties.java</code></td><td>161</td><td>删，并从 <code>QqbotServerApplication</code> 的配置注册里移除</td></tr>
+<tr><td><code>persistence/PlazaRepository.java</code></td><td>253</td><td>删</td></tr>
+<tr><td><code>persistence/PlazaQueryRepository.java</code></td><td>96</td><td>删</td></tr>
+<tr><td rowspan="3">提案后端</td><td><code>kb/proposal/KbProposalService.java</code></td><td>424</td><td>删</td></tr>
+<tr><td><code>kb/proposal/KbProposalController.java</code></td><td>93</td><td>删</td></tr>
+<tr><td><code>persistence/KbProposalRepository.java</code></td><td>140</td><td>删</td></tr>
+<tr><td rowspan="3">前端</td><td><code>public/views/PlazaView.vue</code></td><td>484</td><td>删</td></tr>
+<tr><td><code>admin/views/PlazaAdminView.vue</code></td><td>228</td><td>删</td></tr>
+<tr><td><code>admin/views/kb/ProposalPanel.vue</code></td><td>574</td><td>删</td></tr>
+<tr><td rowspan="5">接线点</td><td><code>router/MessageRouter.java</code></td><td>约 45</td><td>删 <code>FallbackService</code> 依赖、<code>tryHelpRequest</code> 及调用</td></tr>
+<tr><td><code>QqbotServerApplication.java</code></td><td>2</td><td>删 <code>PlazaProperties</code> 的 import 与注册</td></tr>
+<tr><td><code>publicapi/SpaForwardController.java</code></td><td>2</td><td>删 <code>/plaza</code> 与 <code>/admin/plaza</code> 的转发项</td></tr>
+<tr><td><code>site/SiteTextService.java</code></td><td>1 个 Block</td><td>删 <code>plaza.intro</code> 默认文案</td></tr>
+<tr><td><code>application.yml</code></td><td>约 28 行</td><td>删 <code>app.plaza</code> 整段与 <code>app.kb.proposal</code> 整段</td></tr>
+<tr><td rowspan="5">前端接线</td><td><code>public/router.ts</code>、<code>public/App.vue</code></td><td>2 处</td><td>删路由与导航</td></tr>
+<tr><td><code>admin/router.ts</code>、<code>admin/App.vue</code></td><td>2 处</td><td>删路由与导航</td></tr>
+<tr><td><code>admin/views/KbView.vue</code></td><td>约 20 行</td><td>删 tab、import、<code>propRef</code>、提案动作与模板</td></tr>
+<tr><td><code>shared/api/types.ts</code></td><td>约 80 行</td><td>删 Plaza 段类型</td></tr>
+<tr><td><code>RecordsPanel.vue</code></td><td>1 段提示</td><td>删“可在知识库 → 提案分析”的进度文案，保留标注按钮</td></tr>
+<tr><td rowspan="4">测试</td><td><code>MessageRouterCommandTest.java</code></td><td>3 处构造</td><td>删 <code>mock(FallbackService.class)</code> 参数与 import</td></tr>
+<tr><td><code>tests/verify-redesign-t11.js</code></td><td>提案段</td><td>删 mock 与断言，更新 tab 数量</td></tr>
+<tr><td><code>tests/verify-frontend.js</code> 等</td><td>4 个清单</td><td>删广场页面/导航项</td></tr>
+<tr><td><code>tests/manual/probe-plaza*.mjs</code></td><td>2 个文件</td><td>删；<code>cleanup-probe-test-data.sql</code> 去掉 <code>answer_vote</code> 语句</td></tr>
+</tbody>
+</table></div>
+
+<h3>7.3 阶段 3：清理数据库</h3>
+<p>先备份，再把两行探针数据导出留档，最后删表。当前库里没有真实投票、提案或求助，删除不会损失用户数据。</p>
+<pre><code>-- 0) 先备份
+--    cp server/data/qa/qqbot.sqlite server/data/qa/qqbot-before-plaza-cleanup.sqlite
+
+-- 1) 导出探针残留，留档
+--    1 行 qa_stat.source='plaza'，1 行 help_request
+
+BEGIN;
+
+-- 2) 删广场生成的那条问答及其附属行
+DELETE FROM qa_keyword WHERE stat_id IN (SELECT id FROM qa_stat WHERE source = 'plaza');
+DELETE FROM qa_raw     WHERE id       IN (SELECT id FROM qa_stat WHERE source = 'plaza');
+DELETE FROM qa_stat    WHERE source = 'plaza';
+
+-- 3) 删功能表。answer_vote / help_request 当前为空，kb_proposal 为空
+DROP TABLE IF EXISTS answer_vote;
+DROP TABLE IF EXISTS help_request;
+DROP TABLE IF EXISTS kb_proposal;
+
+-- 4) 顺带删两张遗留空表
+DROP TABLE IF EXISTS kb_contribution;
+DROP TABLE IF EXISTS kb_token;
+
+COMMIT;
+
+-- 5) 核对
+SELECT COUNT(*) FROM qa_stat;          -- 应减少 1
+SELECT COUNT(*) FROM qa_raw;           -- 应减少 1
+SELECT COUNT(*) FROM qa_keyword;       -- 应减少 1</code></pre>
+<p class="note">如果暂时不想删表，只执行第 2 步也可以。代码删掉后表不会再被写入，但会长期占着 schema，建议一并清掉。</p>
+
+<h3>7.4 阶段 5：验收</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>项</th><th>怎么验</th><th>通过标准</th></tr></thead>
+<tbody>
+<tr><td>编译与测试</td><td><code>mvn test</code> 或项目 preflight</td><td>全绿，无 <code>FallbackService</code> / <code>Plaza</code> 相关失败</td></tr>
+<tr><td>残留引用</td><td><code>grep -ri "plaza\|proposal" server/src web/src</code></td><td>无业务引用，只剩历史注释或无关词</td></tr>
+<tr><td>公开站</td><td>打开首页、资料库、关于；访问 <code>/plaza</code></td><td>导航 3 项；<code>/plaza</code> 跳到资料库</td></tr>
+<tr><td>管理端</td><td>登录后看导航与知识库 tab；访问 <code>/admin/plaza</code></td><td>导航 6 项；知识库 4 个 tab；<code>/admin/plaza</code> 跳走</td></tr>
+<tr><td>启动日志</td><td>重启服务</td><td>没有 <code>[PLAZA]</code> / <code>[PROPOSAL]</code> 初始化日志，也没有配置绑定报错</td></tr>
+<tr><td>数据库</td><td>查 <code>sqlite_master</code></td><td>5 张表已消失；<code>qa_stat</code> 少 1 行</td></tr>
+</tbody>
+</table></div>
+
+<h3>7.5 风险</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>风险</th><th>应对</th></tr></thead>
+<tbody>
+<tr><td>老链接 404</td><td>阶段 1 就加重定向，别等到删代码</td></tr>
+<tr><td>删表不可逆</td><td>先备份；当前三张表都是空表，实际风险很低</td></tr>
+<tr><td>测试构造参数改漏</td><td><code>MessageRouterCommandTest</code> 有 3 处构造调用，一起改</td></tr>
+<tr><td>文档漏改</td><td>用上面的 grep 扫 <code>docs/</code> 与 <code>plans/</code>，至少改 README、系统说明书、运营手册</td></tr>
+<tr><td>以后又想做社区</td><td>不要复活旧代码，按方案 B 重做，旧实现的问题会一起回来</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="plan-b">八、方案 B：重构</h2>
+<p>只有当你确认“公开问答要作为产品面”时才走这条。原则是砍掉不闭环的两级降级，把认可权收回人工，把提案缩成单条动作。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>步骤</th><th>做什么</th><th>为什么</th><th>工时</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>只保留浏览 + 投票，删掉 <code>ask-new</code>、<code>help-request</code>、<code>FallbackService</code>、<code>help_request</code> 表</td><td>这两级成本最高、链路最碎、打扰群友</td><td>1 天</td></tr>
+<tr><td>2</td><td>把“公开”改成管理员显式标记，不再用匿名赞代替同意；投票只做排序和提示</td><td>修复隐私论证，避免任何人给任意回答“上架”</td><td>1 天</td></tr>
+<tr><td>3</td><td>在问答记录或广场管理页加“沉淀为词条”按钮，复用 <code>KbBlockAdminService.add/updateText</code>；不做阈值、不做批量、不调模型</td><td>保留“好答案进知识库”的真实价值，路径最短</td><td>1 天</td></tr>
+<tr><td>4</td><td>删掉 <code>kb_proposal</code>、<code>KbProposalService</code>、<code>ProposalPanel</code>；提案不再是独立队列</td><td>避免两套“写知识库”的入口</td><td>0.5 天</td></tr>
+<tr><td>5</td><td>补测试：排序/去重/过滤、投票幂等、单条沉淀的写入顺序</td><td>现在这块是 0 测试</td><td>1 天</td></tr>
+</tbody>
+</table></div>
+<p>总计 3 到 5 天，之后仍然需要持续审核。它会把“空房间”变成一个“有人打扫的房间”，但前提是有人来。</p>
+
+<h2 id="next">九、建议的下一步</h2>
+<p>先回答三个问题，答案会直接决定走 A 还是 B：</p>
+<ol>
+<li>过去 30 天，有没有访客从公开站提问、反馈，或提到过“问答”页面？</li>
+<li>有没有哪一条群问答，是你愿意署上站点名字公开的？</li>
+<li>你愿意每周花至少 10 分钟标注、审核，或处理求助吗？</li>
+</ol>
+<p>如果答案是“没有 / 没有 / 不愿意”，执行方案 A。我的建议是先做阶段 0 和阶段 1：备份数据库、隐藏两个入口、把 <code>/plaza</code> 重定向到资料库，观察一周。你确认没有反弹后，再删代码和表。</p>
+<p>清理完成后，项目会少 15 个源文件、3,916 行代码、5 个公开接口、5 个管理接口、5 张表。公开站导航从 4 项变成 3 项，管理端从 7 项变成 6 项，知识库从 5 个 tab 变成 4 个。</p>
+
+<h2 id="appendix">附录：证据索引</h2>
+<h3>A. 数据库读数</h3>
+<pre><code>qa_stat            44,105 行    2026-09-25 至 2026-10-24
+verdict=unknown    44,105 行    人工标注 0 行
+source='plaza'          1 行    探针
+answer_vote             0 行
+help_request            1 行    status=pending，探针
+kb_proposal             0 行
+kb_contribution         0 行    遗留表
+kb_token                0 行    遗留表
+admin_visit:
+  /admin/api/annotate                 0 次
+  /admin/api/kb/proposals/analyze     0 次
+  /admin/api/kb/proposals/review      0 次
+  /admin/plaza                        2 次，均在 2026-09-26</code></pre>
+
+<h3>B. 代码索引</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>结论</th><th>证据</th></tr></thead>
+<tbody>
+<tr><td>README 把两个功能写成一条链</td><td><code>README.md:71</code></td></tr>
+<tr><td>提案只读人工标注</td><td><code>KbProposalRepository.java:87-88</code>、<code>KbProposalService.java:23-33</code></td></tr>
+<tr><td>投票只写自己的表</td><td><code>PlazaStore.java:118-129</code>、<code>PlazaRepository.java:119</code></td></tr>
+<tr><td>没票就不展示</td><td><code>AnswerAggregator.java:98-101</code></td></tr>
+<tr><td>求助短码只写不收</td><td><code>PlazaStore.java:225-237</code>、<code>PlazaController.java:256-263</code>、<code>MessageRouter.java:216-250</code></td></tr>
+<tr><td>短码前端未使用</td><td><code>PlazaView.vue:130-137</code>，只读 <code>r.text</code></td></tr>
+<tr><td>死代码</td><td><code>FallbackService.askHelp:194</code>、<code>PlazaStore.findPendingHelp:240</code>、<code>confirmHelp:264</code>、<code>isBadlyDownvoted:106</code></td></tr>
+<tr><td>死字段</td><td><code>AnswerAggregator.java:140</code> 固定返回 <code>false</code></td></tr>
+<tr><td>后台重复确认</td><td><code>PlazaAdminView.vue:43-46</code></td></tr>
+<tr><td>提案提示与实现不一致</td><td><code>KbProposalService.java:404-408</code> 与实际 <code>blockAdmin.add</code></td></tr>
+<tr><td>文档漂移</td><td><code>系统说明书.md:840-841</code> 声称广场有测试；<code>知识库运营手册.md:184</code> 把提案当成“没答上”的入口</td></tr>
+<tr><td>“问问新答案”曾经整段失败</td><td><code>数据大屏数据准确性核查.md:103-117</code>：INSERT 写了不存在的列，被 try/catch 吞掉</td></tr>
+</tbody>
+</table></div>
+
+<h3>C. 复核方式</h3>
+<pre><code># 1) 看数据
+sqlite3 server/data/qa/qqbot.sqlite \
+  "select verdict, count(*) from qa_stat group by 1;
+   select count(*) from answer_vote;
+   select count(*) from kb_proposal;"
+
+# 2) 看调用记录
+sqlite3 server/data/qa/qqbot.sqlite \
+  "select path, count(*) from admin_visit
+    where path like '%plaza%' or path like '%proposal%' group by 1;"
+
+# 3) 看残留引用
+grep -rnE "plaza|proposal" server/src web/src \
+  --include=*.java --include=*.vue --include=*.ts</code></pre>
+
+<div class="footer">
+<p>报告基于 2026-10-24 的工作区、当前运行库与 361 次提交历史。代码引用以当时文件为准；执行清理前请再跑一次附录 C 的复核。</p>
+</div>
+
+</main>
+</div>
+</body>
+</html>
