@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>显示群 / 显示 QQ 为什么不生效 · 诊断与修复</title>
+<style>
+  :root{--bg:#0b0e13;--slab:#141922;--slab2:#1a212c;--line:#2a3340;--ink:#e8ecf2;--ink2:#a8b3c1;--ink3:#7d8796;--ember:#d8873f;--ember-hot:#f2ab55;--vital:#5ec98a;--blight:#e0605f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 "Noto Serif SC",Georgia,"Songti SC",serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 24px 96px}
+  h1{font-size:28px;line-height:1.35;margin:0 0 6px}
+  .sub{color:var(--ink3);font-size:13px;margin:0 0 40px}
+  h2{font-size:19px;margin:44px 0 14px;padding-left:12px;border-left:3px solid var(--ember)}
+  h3{font-size:15px;margin:26px 0 8px;color:var(--ink2);font-weight:600}
+  p{margin:10px 0}
+  .lead{background:var(--slab);border:1px solid var(--line);border-left:3px solid var(--ember);padding:16px 18px;border-radius:0 6px 6px 0;margin:0 0 8px}
+  .lead strong{color:var(--ember-hot)}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--ink3);font-weight:600;font-size:12.5px;letter-spacing:.04em}
+  ul{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+  code{background:var(--slab2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font:13px/1.5 ui-monospace,Consolas,monospace;color:var(--ember-hot)}
+  pre{background:var(--slab);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow:auto;font:13px/1.6 ui-monospace,Consolas,monospace;color:var(--ink2)}
+  .fix{border-left:3px solid var(--vital);padding-left:14px;margin:18px 0}
+  .fix h3{color:var(--vital);margin-top:0}
+  .warn{border-left:3px solid var(--blight);padding-left:14px;margin:18px 0}
+  .warn h3{color:var(--blight);margin-top:0}
+  .note{color:var(--ink3);font-size:13px}
+  .tag{display:inline-block;padding:0 6px;border:1px solid var(--line);border-radius:4px;font-size:12px;color:var(--ink2)}
+  .tag.ok{color:var(--vital);border-color:rgba(94,201,138,.4)}
+  .tag.no{color:var(--blight);border-color:rgba(224,96,95,.4)}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>「显示群」「显示 QQ」勾了没反应，以及 user / nickname / QQ 号三个疑问</h1>
+<p class="sub">诊断与修复报告 · 2026-10-24 · 命令系统 · 板块与指令</p>
+
+<p class="lead">三个问题其实是同一条链断在两个地方：后台把 <code>showGroup</code> / <code>showUser</code> 正常存进了库，但<strong>服务端渲染从来没读过这两个字段</strong>；变量面板又把「列表变量」和「全局变量」混在一起展示，于是 <code>{user}</code> 看着和 <code>{nickname}</code> 重复，QQ 号变量则被配置开关挡住，面板里根本不出现。</p>
+
+<h2>一、现象、根因、状态</h2>
+<table>
+<thead><tr><th>现象</th><th>根因</th><th>状态</th></tr></thead>
+<tbody>
+<tr>
+  <td>勾了「显示群」「显示 QQ」，群里看到的内容没有变化</td>
+  <td><code>DataPolicy.marksGroup()</code> / <code>marksUser()</code> 只有测试在调用；板块列表由 <code>BoardListFormatter</code> 排版，它拿不到「查询发生在哪个群」，也没有拼来源的代码。指令侧更彻底：指令不读任何跨群数据，这两个开关对它从来就是空转。</td>
+  <td><span class="tag ok">板块已修</span><br><span class="tag no">指令已隐藏</span></td>
+</tr>
+<tr>
+  <td><code>{user}</code> 与 <code>{nickname}</code> 像是重复参数</td>
+  <td>两者来源不同：<code>{user}</code> 是<strong>发这条命令的人</strong>的昵称，<code>{nickname}</code> 是<strong>记录发起人</strong>的昵称。但板块列表只认 <code>nickname</code>，<code>{user}</code> 插进每条格式里会原样输出成文本，看起来既重复又没用。</td>
+  <td><span class="tag ok">已按编辑区拆分</span></td>
+</tr>
+<tr>
+  <td>没有 QQ 号参数可选</td>
+  <td>指令里它叫 <code>{user.id}</code>，默认被 <code>app.commands.allow-user-ids=false</code> 关掉；板块的变量表里原本根本没有 QQ 号。另外板块手写的 list / help 回复此前完全没有经过变量渲染，插什么都是死文本。</td>
+  <td><span class="tag ok">已补</span></td>
+</tr>
+</tbody>
+</table>
+
+<h2>二、本次改了什么</h2>
+
+<div class="fix">
+<h3>1. 板块列表真的会标出来源了</h3>
+<p><code>BoardListFormatter</code> 新增 <code>render(board, records, viewerGroupId)</code>：只给<strong>别群</strong>的记录追加来源，本群记录不标，避免每行都挂一句「来自本群」。</p>
+<pre>#2 满员了 · 来自 300 · QQ 201</pre>
+<p>两个开关分别控制「来自 群号」与「QQ 号」。<code>BoardRunner.query()</code> 现在把查询所在的群号传进去，私聊传 0 时按「全部都是别群」处理。</p>
+</div>
+
+<div class="fix">
+<h3>2. 板块的 list / help 回复接入变量渲染</h3>
+<p>编辑页在这两个输入框上也摆了变量按钮，但之前 <code>BoardRunner</code> 直接把原文发出去。现在只有<strong>手写内容</strong>走 <code>VariableRenderer</code>，自动生成的命令目录保持纯文本，不会被当成模板二次解析。</p>
+</div>
+
+<div class="fix">
+<h3>3. 变量面板按当前编辑区切换</h3>
+<p>列表头 / 每条格式 / 空列表：只显示列表变量，新增 <code>{user.id}</code>「发起人 QQ 号」，<strong>勾了「显示 QQ」才出现</strong>。list 回复 / help 回复：只显示全局变量，<code>{user}</code> 在这里就是发命令的人。</p>
+<p>列表变量现在是：<code>{id}</code> <code>{when}</code> <code>{nickname}</code> <code>{text}</code> <code>{group}</code> <code>{count}</code> <code>{path}</code> <code>{params.参数名}</code>，外加按开关出现的 <code>{user.id}</code>。预览框也同步显示来源后缀，勾选后立刻能看出效果。</p>
+</div>
+
+<div class="fix">
+<h3>4. 指令编辑器去掉空转的范围设置</h3>
+<p>指令不读跨群记录，所以「范围 / 群号 / 显示群 / 显示 QQ」对指令没有任何效果，已从指令编辑器移除，只保留「私聊」；板块编辑器保留这些设置并真正生效。</p>
+</div>
+
+<h2>三、现在怎么用</h2>
+<h3>板块要跨群展示来源</h3>
+<ul>
+<li>范围选「所有群」或「指定群」并填群号；</li>
+<li>勾「显示群」，别群记录的行尾出现 <code> · 来自 群号</code>；</li>
+<li>勾「显示 QQ」，行尾再加 <code> · QQ 号</code>，同时变量面板开放 <code>{user.id}</code>，可以自己安排它在行里的位置。</li>
+</ul>
+
+<h3>指令回复里要打 QQ 号</h3>
+<p>到「设置 → 指令系统 → 允许 <code>{user.id}</code>」打开。变量页右上角会从「{user.id}/{group.id} 未启用」变成可用；关闭时模板里的 <code>{user.id}</code> 会渲染成「（未启用）」，不会静默消失。</p>
+
+<h2>四、验证</h2>
+<ul>
+<li>新增 3 个单测：只标本群外记录、只勾显示群不带 QQ、<code>{user.id}</code> 受开关控制；<code>mvn test</code>（BoardListFormatter / BoardRunner / BoardStore / AccessController / BoardAdminService）通过。</li>
+<li><code>vue-tsc --noEmit</code> 与 <code>vite build</code> 通过，构建产物已同步到 <code>server/web-dist</code>。</li>
+<li>前端 dev server 会热更新；<strong>后端 8080 需要重启一次</strong>，Java 改动才会生效。</li>
+</ul>
+
+<h2>五、边界与遗留</h2>
+<div class="warn">
+<h3>指令的数据范围字段仍在库里</h3>
+<p>老数据可能存过 <code>ALL</code> 之类，但指令没有「读取别的群的记录」这条路径，所以它依旧不产生效果。等以后接了动作类执行器（查记录、撤销记录）再按设计文档启用；在那之前不把它摆出来，比摆出来不生效好。</p>
+</div>
+<p class="note">本群记录不标来源是刻意选择：列表大部分时候都在本群内，逐行标「来自本群」只会把真正需要的信息淹没。</p>
+
+</div></body>
+</html>
