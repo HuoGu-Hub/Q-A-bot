@@ -33,7 +33,7 @@ public class BoardStore {
      * <p>名字是约定：{@link BoardRecordStore#PARAM_REPEAT} 与 {@link BoardRecordStore#PARAM_TIME}
      * 就是靠这两个名字认出来的，改名字时要一起改。
      */
-    private static final ParamSpec REPEAT = ParamSpec.of("重复", "text", true, "每天");
+    private static final ParamSpec REPEAT = ParamSpec.of("重复", "repeat", true, "每天");
     private static final ParamSpec TIME = ParamSpec.multi(
             "时间", ParamType.MOMENT, true, null, 0, "几点发，可以写多个，用顿号隔开", "21:30");
 

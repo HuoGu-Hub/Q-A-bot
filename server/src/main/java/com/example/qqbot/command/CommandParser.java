@@ -341,6 +341,15 @@ public class CommandParser {
                         "#" + spec.name() + "# 的 " + value + " 不是有效日期" + example(spec));
             }
         }
+        if (type == ParamType.REPEAT) {
+            try {
+                return RepeatRule.parse(value).toStorage();
+            } catch (CommandParseException e) {
+                throw new CommandParseException(spec.name(),
+                        "#" + spec.name() + "# 的 " + value + " 不是有效重复周期"
+                                + "，可以写：一次 / 每天 / 每周三 / 每3天");
+            }
+        }
         // ENUM
         if (spec.options().isEmpty()) {
             return value;

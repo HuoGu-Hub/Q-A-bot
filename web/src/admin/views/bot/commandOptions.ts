@@ -29,6 +29,7 @@ export const PARAM_TYPES: Array<{ value: string; label: string }> = [
   { value: 'moment', label: '时间点' },
   { value: 'date', label: '日期' },
   { value: 'enum', label: '枚举' },
+  { value: 'repeat', label: '重复周期' },
 ]
 
 export const MODE_OPTIONS: Array<{ value: string; label: string }> = [

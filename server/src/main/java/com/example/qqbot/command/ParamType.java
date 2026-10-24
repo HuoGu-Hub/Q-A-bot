@@ -25,7 +25,9 @@ public enum ParamType {
     /** 日期：2026-10-18 / 10-18 / 明天 */
     DATE,
     /** 枚举，取值必须在 {@code options} 里 */
-    ENUM;
+    ENUM,
+    /** 重复周期：一次 / 每天 / 每周三 / 每3天 */
+    REPEAT;
 
     /**
      * 从字符串宽容地转成类型。
@@ -44,6 +46,7 @@ public enum ParamType {
             case "moment", "time", "datetime", "时间" -> MOMENT;
             case "date", "day", "日期" -> DATE;
             case "enum", "options", "枚举" -> ENUM;
+            case "repeat", "cycle", "重复", "周期", "重复周期" -> REPEAT;
             default -> TEXT;
         };
     }

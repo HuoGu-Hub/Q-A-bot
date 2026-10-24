@@ -299,8 +299,9 @@ public class BoardAdminService {
         if (repeat == null) {
             throw new IllegalArgumentException("到点发送的板块必须有 #" + PARAM_REPEAT + "# 参数");
         }
-        if (repeat.type() != ParamType.TEXT) {
-            throw new IllegalArgumentException("#" + PARAM_REPEAT + "# 必须是文本参数");
+        // 老数据里「重复」是文本，继续兼容；新建的定时板块用「重复周期」类型
+        if (repeat.type() != ParamType.TEXT && repeat.type() != ParamType.REPEAT) {
+            throw new IllegalArgumentException("#" + PARAM_REPEAT + "# 必须是重复周期参数");
         }
         if (time == null) {
             throw new IllegalArgumentException("到点发送的板块必须有 #" + PARAM_TIME + "# 参数");
