@@ -126,6 +126,20 @@ class BoardListFormatterTest {
     }
 
     @Test
+    @DisplayName("★ 参数改名后，老记录里的「重复」键仍然显示中文")
+    void legacyRepeatKeyAfterRename() {
+        Board board = new Board(1, "打卡提醒", "打卡提醒", List.of(
+                ParamSpec.of("周期", "repeat", true, "每天"),
+                ParamSpec.of("时间", "moment", true, "21:30")),
+                Board.DIRECT, "all", DataPolicy.DEFAULT, true, 0, false,
+                "", "#{id} {params.重复}", "", 20);
+        List<BoardRecord> records = List.of(record(6, 100L, 200L, "阿明", "",
+                Map.of("重复", "daily")));
+
+        assertThat(BoardListFormatter.render(board, records, 100L)).contains("#6 每天");
+    }
+
+    @Test
     @DisplayName("★ 没有正文时用参数拼行，重复也要显示中文")
     void bodyFallbackUsesHumanRepeat() {
         Board board = board("", "#{id} {text}", "", 20);

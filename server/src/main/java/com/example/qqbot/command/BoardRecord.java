@@ -98,7 +98,11 @@ public record BoardRecord(
         if (value == null) {
             return "";
         }
-        return repeatParam.equals(name) ? RepeatRule.describeStored(value) : value;
+        // 参数改名后，老记录里仍是旧键名「重复」；两种名字都按周期显示，
+        // 否则改名那一刻的历史记录会把 daily / weekly:3 直接甩到群里
+        boolean repeatValue = repeatParam.equals(name)
+                || BoardRecordStore.PARAM_REPEAT.equals(name);
+        return repeatValue ? RepeatRule.describeStored(value) : value;
     }
 
     /** 列表里的一行：{@code #12 每天 07:00、14:00 今晚八点开黑} */
