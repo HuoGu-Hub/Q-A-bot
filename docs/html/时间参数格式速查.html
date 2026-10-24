@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>时间参数格式速查</title>
+<style>
+  :root{--bg:#0b0e13;--slab:#141922;--slab2:#1a212c;--line:#2a3340;--ink:#e8ecf2;--ink2:#a8b3c1;--ink3:#7d8796;--ember:#d8873f;--ember-hot:#f2ab55;--vital:#5ec98a;--blight:#e0605f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 "Noto Serif SC",Georgia,"Songti SC",serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:56px 24px 96px}
+  h1{font-size:28px;line-height:1.35;margin:0 0 6px}
+  .sub{color:var(--ink3);font-size:13px;margin:0 0 36px}
+  h2{font-size:19px;margin:42px 0 14px;padding-left:12px;border-left:3px solid var(--ember)}
+  h3{font-size:15px;margin:24px 0 8px;color:var(--ink2);font-weight:600}
+  p{margin:10px 0}
+  .lead{background:var(--slab);border:1px solid var(--line);border-left:3px solid var(--ember);padding:16px 18px;border-radius:0 6px 6px 0;margin:0 0 8px}
+  .lead strong{color:var(--ember-hot)}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--ink3);font-weight:600;font-size:12.5px;letter-spacing:.04em}
+  td code{white-space:nowrap}
+  ul{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+  code{background:var(--slab2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font:13px/1.5 ui-monospace,Consolas,monospace;color:var(--ember-hot)}
+  .ok{color:var(--vital)}
+  .no{color:var(--blight)}
+  .note{color:var(--ink3);font-size:13px}
+  .callout{background:var(--slab);border:1px solid var(--line);border-left:3px solid var(--vital);padding:14px 16px;border-radius:0 6px 6px 0;margin:16px 0}
+  .callout b{color:var(--vital)}
+  .warn{border-left-color:var(--blight)}
+  .warn b{color:var(--blight)}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>时间参数能写什么</h1>
+<p class="sub">命令系统 · 参数类型「时间点」 · 解析器 MomentParser · 2026-10-24</p>
+
+<p class="lead">时间参数只有一套口径：<strong>东八区墙上时间</strong>。时刻必须带冒号写成 <code>21:30</code>；只写日期不写时刻会直接报错，不会默认成零点。下面例子都假定「现在」是 <code>2026-10-24 09:32</code>，星期六。</p>
+
+<h2>一、认得的写法</h2>
+<table>
+<thead><tr><th>输入</th><th>解析结果</th><th>规则</th></tr></thead>
+<tbody>
+<tr><td><code>21:30</code></td><td>2026-10-24 21:30</td><td>只写时刻：今天还没到就是今天</td></tr>
+<tr><td><code>9:30</code></td><td>2026-10-25 09:30</td><td>今天已过，顺延到明天</td></tr>
+<tr><td><code>今天21:30</code> / <code>今日21:30</code></td><td>2026-10-24 21:30</td><td rowspan="2">写死当天，<b>已过也不顺延</b></td></tr>
+<tr><td><code>今晚21:30</code></td><td>2026-10-24 21:30</td></tr>
+<tr><td><code>明天9:00</code> / <code>明早7:00</code> / <code>明晚21:00</code></td><td>10-25 对应时刻</td><td>第二天</td></tr>
+<tr><td><code>后天20:00</code> / <code>后日20:00</code></td><td>10-26 20:00</td><td>第三天</td></tr>
+<tr><td><code>周三21:30</code> / <code>星期三21:30</code> / <code>礼拜三21:30</code></td><td>10-28 21:30</td><td>下一次周几；今天就是周几且已过点，算下周</td></tr>
+<tr><td><code>下周三21:30</code></td><td>11-04 21:30</td><td>再往后一周</td></tr>
+<tr><td><code>周日10:00</code> / <code>周天10:00</code> / <code>周7 10:00</code></td><td>10-25 10:00</td><td>周日，1–7 与中文都认</td></tr>
+<tr><td><code>12-01 21:30</code> / <code>12/01 21:30</code> / <code>12月01日 21:30</code></td><td>2026-12-01 21:30</td><td>不带年份；该日期今年已过则按明年</td></tr>
+<tr><td><code>2026-12-01 21:30</code> / <code>2026/12/01 21:30</code></td><td>2026-12-01 21:30</td><td>写全年份，原样使用</td></tr>
+<tr><td><code>30分钟</code> / <code>3小时后</code></td><td>+30 分钟 / +3 小时</td><td>相对时长，<b>精确到分</b>，不是墙上整点</td></tr>
+<tr><td><code>2天之后</code> / <code>3天</code></td><td>+2 天 / +3 天</td><td>「后 / 之后 / 以后」可省</td></tr>
+<tr><td><code>２１：３０</code></td><td>2026-10-24 21:30</td><td>全角数字、全角冒号、全角斜杠都会先归一</td></tr>
+</tbody></table>
+
+<h2>二、两条容易踩的规则</h2>
+
+<div class="callout">
+<b>「今天 / 今晚」不会顺延。</b>
+只写时刻时的「顺延到明天」是在回答「下一次到这个点是何时」；而「今晚9:30」在 22:00 说出口，指的就是已经过去的时间。解析器会如实返回今天 21:30。<b>一次性</b>任务落库时会被拒绝，回「那个时间已经过去了，换个时间」；<b>每天 / 每周</b>这类周期任务只取钟点，按规则从下一次到点算起。
+</div>
+
+<div class="callout warn">
+<b>不带年份的日期会跨年。</b>
+10 月 24 日写 <code>10-18 21:30</code>，得到的是 <b>2027</b>-10-18。想留在今年就写全年份 <code>2026-10-18 21:30</code>。
+</div>
+
+<h2>三、不认的写法</h2>
+<table>
+<thead><tr><th>输入</th><th>结果</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>21点30</code>、<code>21时30</code></td><td class="no">报错</td><td>时刻只认冒号；报错会提示「只认冒号，不认「点」」</td></tr>
+<tr><td><code>9点半</code>、<code>晚上9点</code>、<code>明天晚上9点半</code></td><td class="no">报错</td><td>不认「点 / 半 / 早上 / 下午 / 晚上」这类口语</td></tr>
+<tr><td><code>明天</code>、<code>2026-12-01</code></td><td class="no">报错</td><td>只有日期没有时刻</td></tr>
+<tr><td><code>24:00</code>、<code>21:60</code></td><td class="no">报错</td><td>小时 0–23，分钟 0–59</td></tr>
+<tr><td><code>2-30 21:30</code></td><td class="no">报错</td><td>不存在的日期</td></tr>
+<tr><td><code>9:30:00</code></td><td class="no">报错</td><td>不支持秒</td></tr>
+<tr><td><code>现在</code>、<code>一会儿</code></td><td class="no">报错</td><td>相对时间只认「N 分钟 / 小时 / 天」</td></tr>
+</tbody></table>
+
+<h2>四、多值与落库</h2>
+<p>「时间」参数是可多值的：用顿号、全角逗号或半角逗号分隔，每段单独解析。</p>
+<pre><code>#时间-07:00、14:00、21:30#</code></pre>
+<ul>
+<li><b>一次</b>：完整时刻（日期 + 钟点）原样落库，过期就没得发。</li>
+<li><b>每天 / 每周几 / 每 N 天</b>：<b>只保留钟点</b>，日期部分不参与计算；<code>每3天</code> 的起算点是记录创建时间。</li>
+<li>落库形态：一次性存 ISO 时刻；周期存 <code>HH:mm</code>，多个值按顺序排。</li>
+<li>回执与列表里显示的是解析后的人话，例如「每天 21:30」。</li>
+</ul>
+
+<h2>五、如果你问的是 <code>{time}</code> 变量</h2>
+<p>那个不是解析输入，而是输出当前时刻，格式固定：</p>
+<table>
+<thead><tr><th>变量</th><th>输出示例</th><th>格式</th></tr></thead>
+<tbody>
+<tr><td><code>{time}</code></td><td>14:32</td><td>HH:mm</td></tr>
+<tr><td><code>{date}</code></td><td>2026-10-24</td><td>yyyy-MM-dd</td></tr>
+<tr><td><code>{datetime}</code></td><td>2026-10-24 14:32:07</td><td>yyyy-MM-dd HH:mm:ss</td></tr>
+<tr><td><code>{weekday}</code></td><td>星期六</td><td>星期X</td></tr>
+<tr><td><code>{uptime}</code></td><td>3 小时 12 分</td><td>运行时长，非时刻</td></tr>
+</tbody></table>
+
+<h2>六、改动与验证</h2>
+<p>本次修了一处语义错误：<code>今天 / 今晚</code> 原来被当成「只写时刻」，时刻一过就悄悄变成明天。现在它们锚定当天，由板块在落库时拒绝过期时刻。新增 <code>MomentParserTest</code>，把上面这些写法全部钉住；<code>mvn test</code> 通过。</p>
+<p class="note">想支持「21点30」「9点半」「晚上9点」这类口语，需要再加一层时刻语法与 12/24 小时换算；目前故意不猜。</p>
+
+</div></body>
+</html>
