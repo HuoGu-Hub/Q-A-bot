@@ -132,6 +132,47 @@ class BoardAdminServiceTest {
     }
 
     @Test
+    @DisplayName("★ 重复周期按类型认：参数改名也能保存")
+    void renamedScheduleParamsAccepted() {
+        service.save(input("打卡", Board.SCHEDULED, List.of(
+                ParamSpec.of("周期", "repeat", true, "每天"),
+                ParamSpec.multi("提醒时间", ParamType.MOMENT, true, null, 0, null, "21:30"))));
+
+        Board saved = boards.find("打卡");
+        assertThat(saved.repeatParam().name()).isEqualTo("周期");
+        assertThat(saved.timeParam().name()).isEqualTo("提醒时间");
+    }
+
+    @Test
+    @DisplayName("多个重复周期参数语义不明，保存时拦住")
+    void multipleRepeatParamsRejected() {
+        assertThatThrownBy(() -> service.save(input("打卡", Board.SCHEDULED, List.of(
+                ParamSpec.of("重复", "repeat", true, "每天"),
+                ParamSpec.of("周期", "repeat", true, "每周一"),
+                ParamSpec.of("时间", "moment", true, "21:30")))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("只能有一个");
+    }
+
+    @Test
+    @DisplayName("多个时间点参数时必须有一个叫「时间」")
+    void multipleMomentParamsNeedReservedName() {
+        assertThatThrownBy(() -> service.save(input("打卡", Board.SCHEDULED, List.of(
+                ParamSpec.of("重复", "repeat", true, "每天"),
+                ParamSpec.of("开始", "moment", true, "21:30"),
+                ParamSpec.of("结束", "moment", true, "22:00")))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("命名为「时间」");
+
+        service.save(input("打卡", Board.SCHEDULED, List.of(
+                ParamSpec.of("重复", "repeat", true, "每天"),
+                ParamSpec.of("时间", "moment", true, "21:30"),
+                ParamSpec.of("结束", "moment", true, "22:00"))));
+
+        assertThat(boards.find("打卡").timeParam().name()).isEqualTo("时间");
+    }
+
+    @Test
     @DisplayName("★ 老的文本「重复」保存时升级成重复周期")
     void legacyTextRepeatUpgradedOnSave() {
         service.save(input("打卡", Board.SCHEDULED, List.of(

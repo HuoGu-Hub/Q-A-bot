@@ -111,6 +111,21 @@ class BoardListFormatterTest {
     }
 
     @Test
+    @DisplayName("★ 重复参数改名后，{params.周期} 也显示中文")
+    void renamedRepeatParamShowsHumanText() {
+        Board board = new Board(1, "打卡提醒", "打卡提醒", List.of(
+                ParamSpec.of("周期", "repeat", true, "每天"),
+                ParamSpec.of("时间", "moment", true, "21:30")),
+                Board.DIRECT, "all", DataPolicy.DEFAULT, true, 0, false,
+                "", "#{id} {params.周期} {params.时间}", "", 20);
+        List<BoardRecord> records = List.of(record(5, 100L, 200L, "阿明", "",
+                Map.of("周期", "weekly:3", "时间", "21:30")));
+
+        assertThat(BoardListFormatter.render(board, records, 100L))
+                .contains("#5 每周三 21:30");
+    }
+
+    @Test
     @DisplayName("★ 没有正文时用参数拼行，重复也要显示中文")
     void bodyFallbackUsesHumanRepeat() {
         Board board = board("", "#{id} {text}", "", 20);

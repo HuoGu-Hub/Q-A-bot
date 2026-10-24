@@ -30,8 +30,8 @@ public class BoardStore {
     /**
      * 定时板块的两个基础参数。
      *
-     * <p>名字是约定：{@link BoardRecordStore#PARAM_REPEAT} 与 {@link BoardRecordStore#PARAM_TIME}
-     * 就是靠这两个名字认出来的，改名字时要一起改。
+     * <p>这里只是内置板块用默认名；调度认的是类型与 {@link Board#repeatParam()} /
+     * {@link Board#timeParam()} 的规则，自建板块把参数改名不影响。
      */
     private static final ParamSpec REPEAT = ParamSpec.of("重复", "repeat", true, "每天");
     private static final ParamSpec TIME = ParamSpec.multi(

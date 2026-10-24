@@ -51,11 +51,12 @@ final class BoardListFormatter {
         }
         StringBuilder sb = new StringBuilder(trimTo(header, MAX_MESSAGE_CHARS));
 
+        String repeatParam = repeatParamName(board);
         int shown = 0;
         for (BoardRecord record : records) {
             String line = board.listItem().isBlank()
-                    ? record.displayLine()
-                    : fill(board.listItem(), vars(record, board, records.size()));
+                    ? record.displayLine(repeatParam)
+                    : fill(board.listItem(), vars(record, board, records.size(), repeatParam));
             line = line == null ? "" : line.stripTrailing();
             line = markOrigin(line, board, record, viewerGroupId);
             if (line.isEmpty()) {
@@ -116,11 +117,18 @@ final class BoardListFormatter {
         return sb.toString();
     }
 
-    private static Map<String, String> vars(BoardRecord record, Board board, int count) {
+    /** 重复周期参数可能已经改名，按类型认出来；认不出才回落到默认名 */
+    private static String repeatParamName(Board board) {
+        ParamSpec repeat = Board.repeatParam(board.params());
+        return repeat == null ? BoardRecordStore.PARAM_REPEAT : repeat.name();
+    }
+
+    private static Map<String, String> vars(BoardRecord record, Board board, int count,
+                                            String repeatParam) {
         Map<String, String> vars = new HashMap<>();
         vars.put("id", String.valueOf(record.id()));
         vars.put("when", record.whenText());
-        vars.put("text", body(record));
+        vars.put("text", body(record, repeatParam));
         vars.put("nickname", record.nickname() == null ? "" : record.nickname());
         vars.put("group", String.valueOf(record.groupId()));
         // QQ 号没有独立开关：勾了「显示 QQ」才认这个变量，否则原样保留，
@@ -128,14 +136,14 @@ final class BoardListFormatter {
         vars.put("user.id", board.policy().marksUser() ? String.valueOf(record.userId()) : null);
         vars.put("count", String.valueOf(count));
         vars.put("path", board.path());
-        // 「重复」按周期显示（库里是 daily / weekly:3），其余参数原样
+        // 重复周期按人话显示（库里是 daily / weekly:3），其余参数原样
         for (String name : record.params().keySet()) {
-            vars.put("params." + name, record.paramText(name));
+            vars.put("params." + name, record.paramText(name, repeatParam));
         }
         return vars;
     }
 
-    private static String body(BoardRecord record) {
+    private static String body(BoardRecord record, String repeatParam) {
         if (record.text() != null && !record.text().isBlank()) {
             return record.text();
         }
@@ -144,7 +152,7 @@ final class BoardListFormatter {
         }
         StringBuilder sb = new StringBuilder();
         for (String name : record.params().keySet()) {
-            String value = record.paramText(name);
+            String value = record.paramText(name, repeatParam);
             if (value.isEmpty()) {
                 continue;
             }

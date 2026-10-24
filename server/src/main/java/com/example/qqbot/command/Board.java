@@ -99,6 +99,68 @@ public record Board(
         return path;
     }
 
+    /**
+     * 调度用的重复周期参数。
+     *
+     * <p>按<b>类型</b>认，不认名字：唯一一个 REPEAT 参数就是它，叫「周期」「频率」
+     * 都行。多个 REPEAT 时返回 null，由校验层给出具体原因；一个都没有时回落到
+     * 老配置的保留名「重复」，保证重复周期类型上线前的板块还能跑。
+     */
+    public ParamSpec repeatParam() {
+        return repeatParam(params);
+    }
+
+    public static ParamSpec repeatParam(List<ParamSpec> params) {
+        ParamSpec found = null;
+        for (ParamSpec spec : params) {
+            if (spec.type() != ParamType.REPEAT) {
+                continue;
+            }
+            if (found != null) {
+                return null;   // 多个重复周期参数，语义不明确
+            }
+            found = spec;
+        }
+        return found != null ? found : named(params, BoardRecordStore.PARAM_REPEAT);
+    }
+
+    /**
+     * 调度用的时间点参数。
+     *
+     * <p>优先认保留名「时间」；没有时，唯一的 MOMENT 参数就是它。
+     * 多个 MOMENT 又没一个叫「时间」时返回 null —— 猜错会发错时间，不如拒绝。
+     */
+    public ParamSpec timeParam() {
+        return timeParam(params);
+    }
+
+    public static ParamSpec timeParam(List<ParamSpec> params) {
+        ParamSpec named = named(params, BoardRecordStore.PARAM_TIME);
+        if (named != null) {
+            return named;
+        }
+        ParamSpec found = null;
+        for (ParamSpec spec : params) {
+            if (spec.type() != ParamType.MOMENT) {
+                continue;
+            }
+            if (found != null) {
+                return null;
+            }
+            found = spec;
+        }
+        return found;
+    }
+
+    private static ParamSpec named(List<ParamSpec> params, String name) {
+        for (ParamSpec spec : params) {
+            if (name.equals(spec.name())) {
+                return spec;
+            }
+        }
+        return null;
+    }
+
     public boolean isScheduled() {
         return SCHEDULED.equals(delivery);
     }

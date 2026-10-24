@@ -86,27 +86,38 @@ public record BoardRecord(
      * 只发一次 / 每天 / 每周三；其余参数原样。
      */
     public String paramText(String name) {
+        return paramText(name, BoardRecordStore.PARAM_REPEAT);
+    }
+
+    /**
+     * @param repeatParam 这条板块的重复周期参数名。按类型认出来之后可能已经改名，
+     *                    不一定是「重复」，所以由调用方传进来
+     */
+    public String paramText(String name, String repeatParam) {
         String value = params.get(name);
         if (value == null) {
             return "";
         }
-        return BoardRecordStore.PARAM_REPEAT.equals(name)
-                ? RepeatRule.describeStored(value) : value;
+        return repeatParam.equals(name) ? RepeatRule.describeStored(value) : value;
     }
 
     /** 列表里的一行：{@code #12 每天 07:00、14:00 今晚八点开黑} */
     public String displayLine() {
-        String body = text == null || text.isBlank() ? paramLine() : text;
+        return displayLine(BoardRecordStore.PARAM_REPEAT);
+    }
+
+    public String displayLine(String repeatParam) {
+        String body = text == null || text.isBlank() ? paramLine(repeatParam) : text;
         String oneLine = body.replaceAll("\\s+", " ").trim();
         String shortBody = oneLine.length() <= 40 ? oneLine : oneLine.substring(0, 40) + "…";
         return "#" + id + "  " + whenText() + "  " + shortBody;
     }
 
     /** 没有正文时用参数拼一行：参数值按人话显示，重复周期的存储形态不外泄 */
-    private String paramLine() {
+    private String paramLine(String repeatParam) {
         StringBuilder sb = new StringBuilder();
         for (String name : params.keySet()) {
-            String value = paramText(name);
+            String value = paramText(name, repeatParam);
             if (value.isEmpty()) {
                 continue;
             }

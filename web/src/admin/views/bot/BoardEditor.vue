@@ -113,8 +113,20 @@ function addParam() {
 /** 内置命令的路径由代码约定，不能改名；自建命令可以改名并迁移记录 */
 const pathLocked = computed(() => props.board?.builtin === true)
 
-const hasRepeat = computed(() => form.params.some((p) => p.name === '重复'))
-const hasTime = computed(() => form.params.some((p) => p.name === '时间'))
+/**
+ * 调度用的重复周期参数：按类型认，名字随意；老配置按「重复」这个名字认。
+ * 时间点优先认「时间」，没有时用唯一的 moment —— 与服务端 Board 的判定一致。
+ */
+const repeatParam = computed(() => form.params.find((p) => p.type === 'repeat')
+  ?? form.params.find((p) => p.name === '重复') ?? null)
+const timeParam = computed(() => {
+  const named = form.params.find((p) => p.name === '时间')
+  if (named) return named
+  const moments = form.params.filter((p) => p.type === 'moment')
+  return moments.length === 1 ? moments[0] : null
+})
+const hasRepeat = computed(() => repeatParam.value !== null)
+const hasTime = computed(() => timeParam.value !== null)
 const scheduled = computed(() => form.delivery === 'scheduled')
 
 function reset() {
@@ -155,8 +167,8 @@ watch(() => form.delivery, (value) => {
  */
 function upgradeRepeatType() {
   if (form.delivery !== 'scheduled') return
-  const repeat = form.params.find((p) => p.name === '重复')
-  if (repeat && repeat.type === 'text') repeat.type = 'repeat'
+  const legacy = form.params.find((p) => p.name === '重复' && p.type === 'text')
+  if (legacy) legacy.type = 'repeat'
 }
 
 /** 到点发送的两个约定参数：缺哪个补哪个，已有的不动类型除外 —— 老的文本「重复」就地升级 */
@@ -344,7 +356,7 @@ function submit() {
               @update:params="form.params = $event"
             />
             <div v-if="scheduled" class="schedule-hint">
-              <span>需要 <span class="path-demo">#重复#</span>、<span class="path-demo">#时间#</span></span>
+              <span>需要「重复周期」与「时间点」各一个，名字可以改</span>
               <Button v-if="!hasRepeat || !hasTime" size="sm" @click="ensureScheduleParams">补全</Button>
             </div>
           </div>

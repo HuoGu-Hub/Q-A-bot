@@ -177,10 +177,13 @@ public class BoardRunner {
                 return "还要写一句话：/" + board.path() + " /create 内容";
             }
         }
+        // 调度用的时间点参数：名字「时间」优先，没有时就是唯一的 MOMENT 参数
+        ParamSpec time = Board.timeParam(board.params());
+        String timeName = time == null ? BoardRecordStore.PARAM_TIME : time.name();
         try {
             long id = records.create(board, groupId, userId,
                     renderer.contextOf(event, Map.of(), "", "").nickname(), text,
-                    args.rawValues(), args.moments(BoardRecordStore.PARAM_TIME),
+                    args.rawValues(), args.moments(timeName),
                     Instant.now());
             BoardRecord saved = records.find(id);
             return "已记下 #" + id + "：" + saved.whenText() + " " + board.displayTitle()

@@ -1,15 +1,22 @@
 package com.example.qqbot.command;
 
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.time.AppTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import java.time.Instant;
+import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -113,6 +120,45 @@ class BoardRunnerUsageTest {
         assertThat(reply.get().text())
                 .contains("预约开黑 · 共 1 条")
                 .contains("#1 今晚8点 缺打野（阿明）");
+    }
+
+    @Test
+    @DisplayName("★ 重复与时间参数改名后，/create 仍按那个参数取时刻")
+    @SuppressWarnings("unchecked")
+    void renamedScheduleParamsCreate() throws Exception {
+        BoardStore boards = mock(BoardStore.class);
+        BoardRecordStore records = mock(BoardRecordStore.class);
+        Board board = new Board(1, "打卡", "打卡",
+                List.of(ParamSpec.of("周期", "repeat", true, "每天"),
+                        ParamSpec.multi("提醒时间", ParamType.MOMENT, true, null, 0, null, "21:30")),
+                Board.SCHEDULED, "all", DataPolicy.DEFAULT, true, 0, false);
+        when(boards.find("打卡")).thenReturn(board);
+        when(records.isAvailable()).thenReturn(true);
+        when(records.create(any(), anyLong(), anyLong(), anyString(), anyString(), anyMap(),
+                anyList(), any())).thenReturn(7L);
+        when(records.find(7L)).thenReturn(new BoardRecord(7L, "打卡", 100L, 200L, "阿明", "打卡啦",
+                java.util.Map.of(), Board.SCHEDULED, Instant.now(), "daily", List.of(), null,
+                "pending", 0, null, Instant.now(), null, null));
+
+        VariableRenderer renderer = mock(VariableRenderer.class);
+        when(renderer.render(anyString(), any(RenderContext.class)))
+                .thenAnswer((call) -> call.getArgument(0));
+        when(renderer.contextOf(any(OneBotEvent.class), anyMap(), anyString(), anyString()))
+                .thenReturn(new RenderContext(200L, 100L, true, "阿明", "",
+                        java.util.Map.of(), "", false, Instant.now()));
+
+        BoardRunner runner = new BoardRunner(boards, records, new CommandParser(), renderer,
+                mock(AclStore.class), mock(CommandCatalog.class), mock(CommandStore.class));
+
+        var reply = runner.tryRun(event(), "/打卡 /create #周期-每天# #提醒时间-21:30# 打卡啦");
+
+        assertThat(reply).isPresent();
+        ArgumentCaptor<List<Instant>> moments = ArgumentCaptor.forClass(List.class);
+        verify(records).create(any(), anyLong(), anyLong(), anyString(), anyString(), anyMap(),
+                moments.capture(), any());
+        assertThat(moments.getValue()).hasSize(1);
+        assertThat(LocalTime.ofInstant(moments.getValue().get(0), AppTime.ZONE))
+                .isEqualTo(LocalTime.of(21, 30));
     }
 
     private static OneBotEvent event() {

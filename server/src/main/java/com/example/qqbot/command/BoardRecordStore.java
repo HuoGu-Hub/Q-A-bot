@@ -27,18 +27,18 @@ import java.util.Map;
  * 加一个板块 = 填一张表，不写代码。
  *
  * <h2>定时板块的约定</h2>
- * 板块的参数表里如果有名为 {@code 时间} 的 MOMENT 参数，就按"到点发"处理：
- * 它的每个值都是一个发送时刻；名为 {@code 重复} 的参数交给 {@link RepeatRule} 解析。
- * 这条约定写在 {@link Board} 的说明里，后台改参数名时要一起改。
+ * 参数表里唯一一个 REPEAT 类型的参数就是重复周期，名字随意；时间点优先认
+ * 名为 {@code 时间} 的 MOMENT 参数，没有时用唯一的 MOMENT 参数。
+ * 判定集中在 {@link Board#repeatParam()} 与 {@link Board#timeParam()}。
  */
 @Component
 public class BoardRecordStore {
 
     private static final Logger log = LoggerFactory.getLogger(BoardRecordStore.class);
 
-    /** 定时板块里"什么时候发"的参数名 */
+    /** "什么时候发"的默认参数名；改过名的板块按类型/唯一 moment 认，见 Board#timeParam() */
     public static final String PARAM_TIME = "时间";
-    /** 定时板块里"多久一次"的参数名 */
+    /** "多久一次"的默认名，也是老配置（文本类型）的回落名，见 Board#repeatParam() */
     public static final String PARAM_REPEAT = "重复";
 
     private static final String STATUS_PENDING = "pending";
@@ -96,7 +96,10 @@ public class BoardRecordStore {
                     iso(now), null, null));
         }
         // 到点发：时刻 -> 时刻组的两种存法，与 RepeatSchedule 的约定一致
-        RepeatRule rule = RepeatRule.parse(params.get(PARAM_REPEAT));
+        // 重复周期按类型认（名字随意）；老配置回落到「重复」这个名字
+        ParamSpec repeat = Board.repeatParam(board.params());
+        String repeatName = repeat == null ? PARAM_REPEAT : repeat.name();
+        RepeatRule rule = RepeatRule.parse(params.get(repeatName));
         List<String> times = new ArrayList<>();
         for (Instant moment : moments) {
             times.add(rule.kind() == RepeatRule.Kind.ONCE

@@ -101,6 +101,24 @@ class BoardRecordStoreTest {
     }
 
     @Test
+    @DisplayName("★ 重复与时间参数改名后仍能识别")
+    void renamedScheduleParamsStillWork() throws Exception {
+        Board board = new Board(1, "打卡提醒", "打卡提醒", List.of(
+                ParamSpec.of("周期", "repeat", true, "每天"),
+                ParamSpec.multi("提醒时间", ParamType.MOMENT, true, null, 0, null, "21:30")),
+                Board.SCHEDULED, "all", DataPolicy.DEFAULT, true, 0, false);
+        Instant now = Instant.now();
+
+        long id = records.create(board, 100L, 200L, "管理员", "打卡",
+                Map.of("周期", "daily", "提醒时间", "21:30"),
+                List.of(futureAt(21, 30)), now);
+
+        BoardRecord record = records.find(id);
+        assertThat(record.isScheduled()).isTrue();
+        assertThat(record.whenText()).startsWith("每天");
+    }
+
+    @Test
     @DisplayName("一天三个时刻：一条记录，三个都存着")
     void severalTimesInOneRecord() throws Exception {
         Board announcement = boards.find("公告");

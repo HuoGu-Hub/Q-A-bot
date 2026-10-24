@@ -22,8 +22,8 @@ import java.util.Locale;
 @Service
 public class BoardAdminService {
 
+    /** 老配置里「重复」是文本；定时板块保存时按这个名字升级成重复周期类型 */
     private static final String PARAM_REPEAT = BoardRecordStore.PARAM_REPEAT;
-    private static final String PARAM_TIME = BoardRecordStore.PARAM_TIME;
 
     private final BoardStore boards;
     private final CommandStore commands;
@@ -310,42 +310,49 @@ public class BoardAdminService {
     }
 
     /**
-     * 定时板块的两个约定参数。
+     * 定时板块的两个调度参数。
      *
-     * <p>{@link BoardRecordStore} 按名字取 {@code 重复} 与 {@code 时间}；
-     * 名字或类型不对，保存时能过，群里一发就报错 —— 所以在保存时就拦住。
+     * <p>重复周期按<b>类型</b>认，名字随意（「周期」「频率」都行）；
+     * 时间点优先认名字「时间」，没有时用唯一的 MOMENT 参数。名字或类型不对，
+     * 保存时能过、群里一发就报错 —— 所以在保存时就拦住。
      */
     private static void validateDelivery(String delivery, List<ParamSpec> params) {
         if (!Board.SCHEDULED.equals(delivery)) {
             return;
         }
-        ParamSpec repeat = find(params, PARAM_REPEAT);
-        ParamSpec time = find(params, PARAM_TIME);
+        ParamSpec repeat = Board.repeatParam(params);
+        ParamSpec time = Board.timeParam(params);
         if (repeat == null) {
-            throw new IllegalArgumentException("到点发送的板块必须有 #" + PARAM_REPEAT + "# 参数");
+            if (countType(params, ParamType.REPEAT) > 1) {
+                throw new IllegalArgumentException(
+                        "到点发送的板块只能有一个「重复周期」参数，名字随意");
+            }
+            throw new IllegalArgumentException(
+                    "到点发送的板块必须有一个「重复周期」参数，名字随意，例：重复 / 周期");
         }
         // 老配置的文本类型已在 normalizeScheduled 里升级，这里只认新类型
         if (repeat.type() != ParamType.REPEAT) {
-            throw new IllegalArgumentException("#" + PARAM_REPEAT + "# 必须是重复周期参数");
+            throw new IllegalArgumentException("#" + repeat.name() + "# 必须是重复周期参数");
         }
         if (time == null) {
-            throw new IllegalArgumentException("到点发送的板块必须有 #" + PARAM_TIME + "# 参数");
+            if (countType(params, ParamType.MOMENT) > 1) {
+                throw new IllegalArgumentException(
+                        "有多个时间点参数时，请把用来定时的那一个命名为「时间」");
+            }
+            throw new IllegalArgumentException(
+                    "到点发送的板块必须有一个「时间点」参数，例：时间 / 发送时间");
         }
         if (time.type() != ParamType.MOMENT) {
-            throw new IllegalArgumentException("#" + PARAM_TIME + "# 必须是时间点参数");
+            throw new IllegalArgumentException("#" + time.name() + "# 必须是时间点参数");
         }
         if (!repeat.required() || !time.required()) {
-            throw new IllegalArgumentException("#" + PARAM_REPEAT + "# 与 #" + PARAM_TIME + "# 必须设为必填");
+            throw new IllegalArgumentException("#" + repeat.name() + "# 与 #" + time.name()
+                    + "# 必须设为必填");
         }
     }
 
-    private static ParamSpec find(List<ParamSpec> params, String name) {
-        for (ParamSpec spec : params) {
-            if (name.equals(spec.name())) {
-                return spec;
-            }
-        }
-        return null;
+    private static long countType(List<ParamSpec> params, ParamType type) {
+        return params.stream().filter((spec) -> spec.type() == type).count();
     }
 
     private static DataPolicy.DataScope parseScope(String raw) {
