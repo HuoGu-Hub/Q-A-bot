@@ -125,6 +125,9 @@ public class BoardRunner {
         CommandAccess access = CommandAccess.of(board.access());
         if (!AccessRules.allows(access, CommandRole.ofSender(event), userId, groupId,
                 List.of(), aclStore.global())) {
+            // 板块的拒绝也要留痕：不回日志时，只能靠群友说"没反应"来发现问题
+            log.info("[BOARD] 准入拒绝：用户 {} 在群 {} 触发 /{}（档位 {}）",
+                    userId, groupId, board.path(), access.code());
             return Optional.of(new Reply(access.describe(inGroup)));
         }
         // 看命令、看用法不碰记录表，记录库暂时不可用也该能回答

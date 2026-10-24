@@ -8,8 +8,13 @@ import java.util.List;
  * 一次安全判定的上下文。
  *
  * <p>只管数据，不管逻辑 —— 这样每个 stage 都是无状态的，方便测试。
+ *
+ * @param mentioned 这条消息算不算 @ 了机器人。判定集中在 {@code MessageRouter} 一处：
+ *                  除了 QQ 的 at 消息段，手打/复制的「@昵称」也算，否则同一条消息
+ *                  会在指令侧放行、在 Guard 侧被拦
  */
-public record GuardContext(OneBotEvent event, String text, List<String> imageUrls, boolean hasQuote) {
+public record GuardContext(OneBotEvent event, String text, List<String> imageUrls,
+                           boolean hasQuote, boolean mentioned) {
 
     public GuardContext {
         imageUrls = imageUrls == null ? List.of() : List.copyOf(imageUrls);

@@ -93,6 +93,45 @@ public class MessageRouter {
     }
 
     /**
+     * 摘掉手打 / 复制出来的「@机器人」前缀。
+     *
+     * <p>只认「@昵称」「＠昵称」「@QQ号」，而且名字后面必须是空白或斜杠 ——
+     * 否则「@飘雪喵酱」会被误当成在叫机器人。认出来时返回摘掉前缀的文本，
+     * 没认出来原样返回，调用方据此判断这是不是一次「文本 @」。
+     */
+    private String stripTextMention(String text) {
+        if (!StringUtils.hasText(text)) {
+            return text;
+        }
+        List<String> names = new ArrayList<>(2);
+        String selfName = identity.getSelfName();
+        if (StringUtils.hasText(selfName)) {
+            names.add(selfName.trim());
+        }
+        long selfId = identity.getSelfId();
+        if (selfId > 0) {
+            names.add(String.valueOf(selfId));
+        }
+        for (String name : names) {
+            for (String at : new String[] {"@", "＠"}) {
+                String prefix = at + name;
+                if (!text.startsWith(prefix)) {
+                    continue;
+                }
+                int end = prefix.length();
+                boolean boundary = text.length() == end
+                        || Character.isWhitespace(text.charAt(end))
+                        || text.charAt(end) == '/';
+                if (!boundary) {
+                    continue;
+                }
+                return text.substring(end).trim();
+            }
+        }
+        return text;
+    }
+
+    /**
      * 被引用消息的内容。
      *
      * <p>注意：**引用消息里的图片同样要取出来**。
@@ -242,7 +281,11 @@ public class MessageRouter {
         }
 
         long t0 = System.currentTimeMillis();
-        String text = codec.extractPlainText(event);
+        String rawText = codec.extractPlainText(event);
+        // QQ 的 @ 是消息段；用户手打或复制出来的「@昵称」只是普通文字。
+        // 这种消息意图明确，按 @ 处理并把前缀摘掉，否则会被准入层静默丢弃。
+        String text = event.isGroupMessage() ? stripTextMention(rawText) : rawText;
+        boolean textMention = event.isGroupMessage() && !text.equals(rawText);
         List<ImageRef> ownImages = codec.extractImageRefs(event);
         boolean hasQuote = codec.extractReplyId(event).isPresent();
         RoutedRequest req = RoutedRequest.of(event, text, ownImages, hasQuote, t0);
@@ -262,6 +305,7 @@ public class MessageRouter {
         //    ⚠️ @ 判定复用准入那一份设置，指令不再自带 require-mention：
         //    同一个语义留两个开关，会出现「问答回了、指令没回」这种自相矛盾的状态。
         boolean mentioned = !event.isGroupMessage()
+                || textMention
                 || codec.isMentioned(event, identity.getSelfId());
         CommandHandler.Outcome cmd = guardAccess.mentionSatisfied(event.isGroupMessage(), mentioned)
                 ? commandHandler.tryCommand(event, text, t0)
@@ -281,7 +325,7 @@ public class MessageRouter {
         }
 
         // ③ Guard 五层 + 成本预算。顺序有硬约束，见 guardAndBudget 的注释。
-        if (guardAndBudget(req)) {
+        if (guardAndBudget(req, mentioned)) {
             return;
         }
 
@@ -300,11 +344,11 @@ public class MessageRouter {
      *
      * @return {@code true} = 本次到此为止（被拦、回了固定话术、或超预算），不要再调模型
      */
-    private boolean guardAndBudget(RoutedRequest req) {
+    private boolean guardAndBudget(RoutedRequest req, boolean mentioned) {
         OneBotEvent event = req.event();
 
         GuardContext ctx = new GuardContext(event, req.text(),
-                req.ownImages().stream().map(ImageRef::url).toList(), req.hasQuote());
+                req.ownImages().stream().map(ImageRef::url).toList(), req.hasQuote(), mentioned);
         GuardResult result = guardPipeline.check(ctx);
         if (result instanceof GuardResult.Drop) {
             // 被 Guard 拦下的也记一笔 —— "多少消息被限流/拦下"本身就是运营数据

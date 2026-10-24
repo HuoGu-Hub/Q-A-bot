@@ -31,6 +31,7 @@ import com.example.qqbot.guard.Outbound;
 import com.example.qqbot.guard.RateLimit;
 import com.example.qqbot.guard.BlockNotifier;
 import com.example.qqbot.guard.BudgetGuard;
+import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardPipeline;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.guard.OutboundFilter;
@@ -269,6 +270,38 @@ class MessageRouterCommandTest {
         ArgumentCaptor<JsonNode> captor = ArgumentCaptor.forClass(JsonNode.class);
         verify(apiClient).sendGroupMsg(eq(GROUP), captor.capture());
         return captor.getValue().path("text").asText();
+    }
+
+    @Test
+    @DisplayName("★ 文本里的「@昵称」也算 @：摘掉前缀后照常命中指令")
+    void textualMentionIsAccepted() {
+        when(codec.isMentioned(any(), anyLong())).thenReturn(false);
+        when(identity.getSelfName()).thenReturn("飘雪喵");
+        BotCommand ping = new BotCommand(9, "ping", "在的喵～", "看看我在不在",
+                "all", List.of(), "member", true, 9, false,
+                BotCommand.KIND_TEMPLATE, BotCommand.MODE_KB, List.of(), null, null);
+        matchCommand(ping, "");
+        when(variableRenderer.render(eq("在的喵～"), any())).thenReturn("在的喵～");
+
+        router.handle(groupEvent("@飘雪喵 /ping"));
+
+        verify(commandMatcher).match(eq("/ping"), anyBoolean(), anyLong());
+        assertThat(sentText()).isEqualTo("在的喵～");
+    }
+
+    @Test
+    @DisplayName("★ 文本 @ 也带进 Guard：两处判定不能一个放行一个拦截")
+    void textualMentionReachesGuard() {
+        when(codec.isMentioned(any(), anyLong())).thenReturn(false);
+        when(identity.getSelfName()).thenReturn("飘雪喵");
+        when(commandMatcher.match(anyString(), anyBoolean(), anyLong())).thenReturn(CommandMatcher.Match.none());
+
+        router.handle(groupEvent("@飘雪喵 今天天气怎么样"));
+
+        ArgumentCaptor<GuardContext> captor = ArgumentCaptor.forClass(GuardContext.class);
+        verify(guardPipeline).check(captor.capture());
+        assertThat(captor.getValue().mentioned()).isTrue();
+        assertThat(captor.getValue().text()).isEqualTo("今天天气怎么样");
     }
 
     // ==================== template：秒回，不碰 Guard / 预算 / 模型 ====================

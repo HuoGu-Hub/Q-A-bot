@@ -123,6 +123,26 @@ class BoardRunnerUsageTest {
     }
 
     @Test
+    @DisplayName("★ 普通群友触发管理员板块：回一句拦截原因")
+    void nonAdminGetsDenyReason() {
+        BoardStore boards = mock(BoardStore.class);
+        BoardRecordStore records = mock(BoardRecordStore.class);
+        Board board = new Board(1, "公告", "公告",
+                List.of(ParamSpec.of("内容", "text", true, "示例")),
+                Board.DIRECT, "admin", DataPolicy.DEFAULT, true, 0, false);
+        when(boards.find("公告")).thenReturn(board);
+
+        BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
+                mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
+                mock(CommandStore.class));
+
+        var reply = runner.tryRun(event(), "/公告");
+
+        assertThat(reply).isPresent();
+        assertThat(reply.get().text()).isEqualTo("这条命令只有群主或管理员能用");
+    }
+
+    @Test
     @DisplayName("★ 重复与时间参数改名后，/create 仍按那个参数取时刻")
     @SuppressWarnings("unchecked")
     void renamedScheduleParamsCreate() throws Exception {
