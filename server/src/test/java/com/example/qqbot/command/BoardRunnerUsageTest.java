@@ -149,8 +149,8 @@ class BoardRunnerUsageTest {
     }
 
     @Test
-    @DisplayName("★ 普通群友触发管理员板块：回一句拦截原因")
-    void nonAdminGetsDenyReason() {
+    @DisplayName("★ 管理员档的板块：普通群友新增被拒，回一句原因")
+    void nonAdminCannotCreate() {
         BoardStore boards = mock(BoardStore.class);
         BoardRecordStore records = mock(BoardRecordStore.class);
         Board board = new Board(1, "公告", "公告",
@@ -162,10 +162,34 @@ class BoardRunnerUsageTest {
                 mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
                 mock(CommandStore.class));
 
-        var reply = runner.tryRun(event(), "/公告");
+        var reply = runner.tryRun(event(), "/公告 /create #内容-示例# 测试");
 
         assertThat(reply).isPresent();
         assertThat(reply.get().text()).isEqualTo("这条命令只有群主或管理员能用");
+    }
+
+    @Test
+    @DisplayName("★ 管理员档的板块：普通群友照样能查询")
+    void nonAdminCanQuery() {
+        BoardStore boards = mock(BoardStore.class);
+        BoardRecordStore records = mock(BoardRecordStore.class);
+        Board board = new Board(1, "公告", "公告",
+                List.of(ParamSpec.of("内容", "text", true, "示例")),
+                Board.DIRECT, "admin", DataPolicy.DEFAULT, true, 0, false);
+        when(boards.find("公告")).thenReturn(board);
+        when(records.isAvailable()).thenReturn(true);
+        when(records.queryVisible(board, 100L, 20)).thenReturn(List.of());
+
+        BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
+                mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
+                mock(CommandStore.class));
+
+        var reply = runner.tryRun(event(), "/公告");
+
+        assertThat(reply).isPresent();
+        assertThat(reply.get().text())
+                .doesNotContain("只有群主或管理员")
+                .contains("还没有内容");
     }
 
     @Test

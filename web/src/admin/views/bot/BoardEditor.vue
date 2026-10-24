@@ -494,8 +494,9 @@ function submit() {
 
         <label class="row">
           <span class="row-label">权限</span>
-          <Select v-model="form.access" :options="ACCESS_OPTIONS" aria-label="谁能用" />
+          <Select v-model="form.access" :options="ACCESS_OPTIONS" aria-label="谁能新增或删除" />
         </label>
+        <p class="faint access-hint">只限制新增 / 删除；查询对所有人生效</p>
 
         <label class="row">
           <span class="row-label">范围</span>
@@ -591,6 +592,7 @@ function submit() {
 .editor-actions { display: flex; gap: var(--sp-2); flex: none; }
 .editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
 .origin-hint { margin: -4px 0 0; font-size: 11px; line-height: 1.4; }
+.access-hint { margin: -4px 0 0; font-size: 11px; line-height: 1.4; }
 .editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
 .editor-col--side { position: sticky; top: 0; align-self: start; gap: var(--sp-2); }
 .editor-col--side .row { gap: var(--sp-2); }

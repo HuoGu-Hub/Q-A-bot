@@ -122,13 +122,18 @@ public class BoardRunner {
         if (!inGroup && !board.policy().allowPrivate()) {
             return Optional.of(new Reply("这条命令要在群里用"));
         }
-        CommandAccess access = CommandAccess.of(board.access());
-        if (!AccessRules.allows(access, CommandRole.ofSender(event), userId, groupId,
-                aclStore.ofBoard(board.id()), aclStore.global())) {
-            // 板块的拒绝也要留痕：不回日志时，只能靠群友说"没反应"来发现问题
-            log.info("[BOARD] 准入拒绝：用户 {} 在群 {} 触发 /{}（档位 {}）",
-                    userId, groupId, board.path(), access.code());
-            return Optional.of(new Reply(access.describe(inGroup)));
+        // 权限只管「数据变更」：新增与删除。查询、看用法、看命令列表对所有人生效 ——
+        // 一条设为仅管理员的公告，群友本来就该能看当前有什么，只是不能替群发。
+        boolean mutating = Board.ACT_CREATE.equals(action) || Board.ACT_DELETE.equals(action);
+        if (mutating) {
+            CommandAccess access = CommandAccess.of(board.access());
+            if (!AccessRules.allows(access, CommandRole.ofSender(event), userId, groupId,
+                    aclStore.ofBoard(board.id()), aclStore.global())) {
+                // 板块的拒绝也要留痕：不回日志时，只能靠群友说"没反应"来发现问题
+                log.info("[BOARD] 准入拒绝：用户 {} 在群 {} 触发 /{} /{}（档位 {}）",
+                        userId, groupId, board.path(), action, access.code());
+                return Optional.of(new Reply(access.describe(inGroup)));
+            }
         }
         // 看命令、看用法不碰记录表，记录库暂时不可用也该能回答
         if (!records.isAvailable() && !Board.ACT_HELP.equals(action)
