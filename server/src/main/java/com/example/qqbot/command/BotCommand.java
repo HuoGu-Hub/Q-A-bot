@@ -26,7 +26,7 @@ import java.util.List;
  * @param description 用途说明 —— {cmd.list} 会用它渲染列表
  * @param scope       作用范围 all / group / private
  * @param groupIds    scope=group 时限定的群
- * @param access      准入档位 all / admin / owner / whitelist / blacklist
+ * @param access      准入档位 all / admin / admin_whitelist / owner / whitelist / blacklist
  * @param enabled     是否启用
  * @param sortOrder   排序
  * @param builtin     内置命令不可删除

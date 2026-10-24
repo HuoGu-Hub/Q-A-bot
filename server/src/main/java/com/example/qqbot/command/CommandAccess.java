@@ -7,6 +7,7 @@ package com.example.qqbot.command;
  * <ul>
  *   <li>{@link #ALL} 全体成员</li>
  *   <li>{@link #ADMIN} 群主与管理员</li>
+ *   <li>{@link #ADMIN_WHITELIST} 群主、管理员，外加白名单里的人</li>
  *   <li>{@link #OWNER} 只有群主</li>
  *   <li>{@link #WHITELIST} <b>只有</b>这条命令名单里的人能用</li>
  *   <li>{@link #BLACKLIST} 名单里的人不能用，其余照旧</li>
@@ -18,6 +19,8 @@ public enum CommandAccess {
 
     ALL("all"),
     ADMIN("admin"),
+    /** 管理员与白名单：管理员照常，另外白名单里的人也能用（不在名单里的普通成员不行） */
+    ADMIN_WHITELIST("admin_whitelist"),
     OWNER("owner"),
     WHITELIST("whitelist"),
     BLACKLIST("blacklist");
@@ -37,6 +40,7 @@ public enum CommandAccess {
         return switch (this) {
             case OWNER -> inGroup ? "这条命令只有群主能用" : "这条命令要在群里用";
             case ADMIN -> inGroup ? "这条命令只有群主或管理员能用" : "这条命令要在群里用";
+            case ADMIN_WHITELIST -> inGroup ? "这条命令只有管理员或白名单里的人能用" : "这条命令要在群里用";
             case WHITELIST -> "这条命令只对指定的人开放";
             case BLACKLIST -> "这条命令你暂时用不了";
             case ALL -> "";

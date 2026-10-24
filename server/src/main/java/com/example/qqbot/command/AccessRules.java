@@ -55,6 +55,9 @@ public final class AccessRules {
         return switch (access) {
             case ALL -> true;
             case ADMIN -> role.atLeast(CommandRole.ADMIN);
+            // 白名单条目在 decide 阶段已经放行；走到这里说明名单没命中，
+            // 所以「管理员与白名单」剩下的判断就是角色够不够
+            case ADMIN_WHITELIST -> role.atLeast(CommandRole.ADMIN);
             case OWNER -> role.atLeast(CommandRole.OWNER);
             // 白名单档却没在名单里 → 不进；黑名单档且不在名单里 → 放行
             case WHITELIST -> false;

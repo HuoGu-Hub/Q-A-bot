@@ -530,7 +530,7 @@ async function addParamRow() {
 
 /** 只有"白名单/黑名单"两档才需要录名单，其余档位下这一块根本不该出现 */
 const needsList = computed(() =>
-  ['whitelist', 'blacklist'].includes(editing.value?.access ?? 'all')
+  ['whitelist', 'blacklist', 'admin_whitelist'].includes(editing.value?.access ?? 'all')
 )
 
 function toggleBlock(key: 'params' | 'acl' | 'list' | 'help') {

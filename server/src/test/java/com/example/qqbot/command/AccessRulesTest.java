@@ -143,6 +143,32 @@ class AccessRulesTest {
     }
 
     @Test
+    @DisplayName("★ 管理员与白名单：管理员照用，白名单里的普通成员也能用")
+    void adminWhitelistTier() {
+        assertThat(allows(CommandAccess.ADMIN_WHITELIST, CommandRole.MEMBER, List.of(), List.of()))
+                .as("普通成员不在名单里")
+                .isFalse();
+        assertThat(allows(CommandAccess.ADMIN_WHITELIST, CommandRole.ADMIN, List.of(), List.of()))
+                .as("管理员不靠名单")
+                .isTrue();
+        assertThat(allows(CommandAccess.ADMIN_WHITELIST, CommandRole.OWNER, List.of(), List.of()))
+                .as("群主比管理员高")
+                .isTrue();
+        assertThat(allows(CommandAccess.ADMIN_WHITELIST, CommandRole.MEMBER,
+                List.of(white(USER)), List.of()))
+                .as("命令白名单放行")
+                .isTrue();
+        assertThat(allows(CommandAccess.ADMIN_WHITELIST, CommandRole.MEMBER,
+                List.of(), List.of(white(USER))))
+                .as("全局白名单也放行")
+                .isTrue();
+        assertThat(allows(CommandAccess.ADMIN_WHITELIST, CommandRole.ADMIN,
+                List.of(black(USER)), List.of()))
+                .as("黑名单优先于管理员身份")
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("群主：只有群主能用")
     void ownerNeedsOwnerRole() {
         assertThat(allows(CommandAccess.OWNER, CommandRole.ADMIN, List.of(), List.of())).isFalse();
@@ -188,7 +214,7 @@ class AccessRulesTest {
     }
 
     @Test
-    @DisplayName("五个档位都能解析出来")
+    @DisplayName("每个档位都能解析出来")
     void allTiersRoundTrip() {
         for (CommandAccess access : CommandAccess.values()) {
             assertThat(CommandAccess.of(access.code())).isEqualTo(access);

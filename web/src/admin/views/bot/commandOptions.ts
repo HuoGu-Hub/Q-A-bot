@@ -14,13 +14,15 @@ export const KIND_OPTIONS: Array<{ value: string; label: string }> = [
 export const ACCESS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'all', label: '全体' },
   { value: 'admin', label: '管理员' },
+  { value: 'admin_whitelist', label: '管理员与白名单' },
   { value: 'owner', label: '群主' },
   { value: 'whitelist', label: '白名单' },
   { value: 'blacklist', label: '黑名单' },
 ]
 
 export const ACCESS_LABEL: Record<string, string> = {
-  all: '全体', admin: '管理员', owner: '群主', whitelist: '白名单', blacklist: '黑名单',
+  all: '全体', admin: '管理员', admin_whitelist: '管理员与白名单',
+  owner: '群主', whitelist: '白名单', blacklist: '黑名单',
 }
 
 export const PARAM_TYPES: Array<{ value: string; label: string }> = [
