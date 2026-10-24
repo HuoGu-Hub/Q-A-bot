@@ -16,9 +16,8 @@ import java.util.regex.Pattern;
  * @param kind        重复方式
  * @param everyDays   {@link Kind#EVERY_N_DAYS} 时的天数，其余情况为 0
  * @param dayOfWeek   {@link Kind#WEEKLY} 时的星期，其余情况为 null
- * @param repeatCount {@link Kind#TIMES} 时的次数（天数），其余情况为 0。
- *                    「3 次」指 3 天，每天按时间表里的所有时刻各发一次 ——
- *                    与「一次」是同一个口径：一次指一天
+ * @param repeatCount {@link Kind#TIMES} 时是总条数，{@link Kind#DAYS} 时是连续天数，
+ *                    其余情况为 0。「3 次」按消息条数算，「3 天」按天算
  */
 public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repeatCount) {
 
@@ -40,14 +39,18 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
         WEEKLY,
         /** 每 N 天 */
         EVERY_N_DAYS,
-        /** 共 N 次：从第一次的时刻起按天发，发满 N 天就结束 */
-        TIMES
+        /** 共 N 条：按时间表的时刻顺序发，发满 N 条就结束 */
+        TIMES,
+        /** 连续 N 天：每天按时间表的所有时刻发，发满 N 天就结束 */
+        DAYS
     }
 
     private static final String[] CN_DIGITS = {"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"};
     private static final String[] WEEK_NAMES = {"一", "二", "三", "四", "五", "六", "日"};
-    /** 「3次」「三次」「十五次」 */
+    /** 「3次」「三次」「十五次」—— 总条数 */
     private static final Pattern TIMES = Pattern.compile("^(\\d{1,3}|[零一二两三四五六七八九十]+)次$");
+    /** 「3天」「三天」「十五天」—— 连续天数，与「每3天」区分开 */
+    private static final Pattern DAYS = Pattern.compile("^(\\d{1,3}|[零一二两三四五六七八九十]+)天$");
 
     public static RepeatRule once() {
         return new RepeatRule(Kind.ONCE, 0, null);
@@ -57,7 +60,7 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
         return new RepeatRule(Kind.DAILY, 0, null);
     }
 
-    /** 共 N 次，N 至少 2（1 次就是 {@link #once()}） */
+    /** 共 N 条消息，N 至少 2（1 次就是 {@link #once()}） */
     public static RepeatRule times(int count) throws CommandParseException {
         if (count < 2 || count > 99) {
             throw new CommandParseException("重复", "「N 次」的 N 要在 2 到 99 之间");
@@ -65,14 +68,27 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
         return new RepeatRule(Kind.TIMES, 0, null, count);
     }
 
+    /** 连续 N 天，每天按时间表的所有时刻发；N 至少 2（1 天就是 {@link #once()}） */
+    public static RepeatRule days(int count) throws CommandParseException {
+        if (count < 2 || count > 99) {
+            throw new CommandParseException("重复", "「N 天」的 N 要在 2 到 99 之间");
+        }
+        return new RepeatRule(Kind.DAYS, 0, null, count);
+    }
+
     /**
      * 解析群友写的重复方式。
      *
-     * <p>认这些写法：一次 / 3次 / 每天 / 每日 / 每周三 / 每周3 / 每周7 / 每周天 /
-     * 每3天 / 每三天 / 每十五天 / 每30天。
+     * <p>认这些写法：一次 / 3次 / 3天 / 每天 / 每日 / 每周三 / 每周3 / 每周7 /
+     * 每周天 / 每3天 / 每三天 / 每十五天 / 每30天。
      *
-     * <p>「N 次」是有限周期：从第一次的时刻起每天发一次，发满 N 天结束；
-     * 与「一次」同口径 —— 一次指一天，那天时间表里有几个时刻就各发一次。
+     * <p>两个有限周期的口径不同：
+     * <ul>
+     *   <li><b>N 次</b> —— 按<b>消息条数</b>算。一天三个时刻、写 4 次，
+     *       就是今天三条 + 明天第一条，然后停；</li>
+     *   <li><b>N 天</b> —— 按<b>天数</b>算。一天三个时刻、写 3 天，
+     *       就是连续三天每天都发满三个时刻。</li>
+     * </ul>
      *
      * <p>星期几接受 1 到 7、一 到 六、日 / 天 / 七 / 7；「每 N 天」的 N 接受
      * 阿拉伯数字与中文数字，范围 2 到 30 —— 1 天就是每天，直接写「每天」。
@@ -83,7 +99,7 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
     public static RepeatRule parse(String raw) throws CommandParseException {
         if (raw == null || raw.isBlank()) {
             throw new CommandParseException("重复",
-                    "缺少 #重复#，可以写：一次 / 3次 / 每天 / 每周三 / 每3天");
+                    "缺少 #重复#，可以写：一次 / 3次 / 3天 / 每天 / 每周三 / 每3天");
         }
         String s = raw.trim().toLowerCase(Locale.ROOT);
         // 先认落库形态，再认群友手写的说法
@@ -95,6 +111,9 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
         }
         if (s.startsWith("times:")) {
             return times(numberOf(s.substring(6), 2, 99, raw));
+        }
+        if (s.startsWith("days:")) {
+            return days(numberOf(s.substring(5), 2, 99, raw));
         }
         if (s.equals("一次") || s.equals("只一次") || s.equals("once")) {
             return once();
@@ -108,6 +127,13 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
                 return once();
             }
             return times(count);
+        }
+        if (DAYS.matcher(s).matches()) {
+            int count = number(s.substring(0, s.length() - 1));
+            if (count == 1) {
+                return once();
+            }
+            return days(count);
         }
         if (s.startsWith("每周") || s.startsWith("周") || s.startsWith("week")
                 || s.startsWith("每星期") || s.startsWith("每礼拜")) {
@@ -221,6 +247,7 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
             case WEEKLY -> "weekly:" + dayOfWeek.getValue();
             case EVERY_N_DAYS -> "every:" + everyDays;
             case TIMES -> "times:" + repeatCount;
+            case DAYS -> "days:" + repeatCount;
         };
     }
 
@@ -261,7 +288,8 @@ public record RepeatRule(Kind kind, int everyDays, DayOfWeek dayOfWeek, int repe
             case DAILY -> "每天";
             case WEEKLY -> "每周" + WEEK_NAMES[dayOfWeek.getValue() - 1];
             case EVERY_N_DAYS -> "每 " + everyDays + " 天";
-            case TIMES -> "共 " + repeatCount + " 次";
+            case TIMES -> "共 " + repeatCount + " 条";
+            case DAYS -> "连续 " + repeatCount + " 天";
         };
     }
 }

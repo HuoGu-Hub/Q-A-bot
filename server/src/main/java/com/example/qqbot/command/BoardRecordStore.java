@@ -107,9 +107,11 @@ public class BoardRecordStore {
                     : LocalDateTime.ofInstant(moment, AppTime.ZONE).toLocalTime()
                             .truncatedTo(ChronoUnit.MINUTES).toString());
         }
-        // 「N 次」从第一次的时刻起算：anchor 取最早那个时刻的那一天，
-        // 这样带日期写「10月25日21:30、3次」会发 25/26/27 三天，而不是从创建日算
-        Instant anchor = rule.kind() == RepeatRule.Kind.TIMES
+        // 有限周期从第一次的时刻起算：anchor 取最早那个时刻，
+        // 这样带日期写「10月25日21:30、3次」会从 25 号开始，而不是从创建日算
+        boolean finiteByTime = rule.kind() == RepeatRule.Kind.TIMES
+                || rule.kind() == RepeatRule.Kind.DAYS;
+        Instant anchor = finiteByTime
                 ? moments.stream().min(Instant::compareTo).orElse(now)
                 : now;
         RepeatSchedule schedule = new RepeatSchedule(rule, times, anchor);

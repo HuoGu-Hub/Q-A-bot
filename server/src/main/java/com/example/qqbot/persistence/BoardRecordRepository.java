@@ -113,9 +113,10 @@ public class BoardRecordRepository {
     }
 
     /**
-     * 群友看的列表：不含已删，也不含已经执行完的有限周期（status='sent'）。
+     * 群友看的列表：不含已删，也不含已经结束的调度 ——
+     * {@code sent}（发完）、{@code expired}（错过宽限期）、{@code failed}（重试耗尽）。
      *
-     * <p>「一次」「N 次」发完就没有下一次了，留在列表里只会让人以为还会发；
+     * <p>这三种都不会再发了，留在列表里只会让人以为还在排队；
      * 后台记录页走 {@link #listByBoard}，仍然看得到历史。
      */
     public List<Row> listVisibleByBoard(String board, long groupId, int limit) {
@@ -127,7 +128,7 @@ public class BoardRecordRepository {
         String sql = "SELECT " + COLUMNS + " FROM bot_record WHERE board = ?"
                 + (groupId > 0 ? " AND group_id = ?" : "")
                 + (withDeleted ? "" : " AND deleted_at IS NULL")
-                + (hideFinished ? " AND status <> 'sent'" : "")
+                + (hideFinished ? " AND status NOT IN ('sent','expired','failed')" : "")
                 + " ORDER BY id DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(board);
@@ -163,7 +164,7 @@ public class BoardRecordRepository {
         String sql = "SELECT " + COLUMNS + " FROM bot_record WHERE board = ?"
                 + " AND group_id IN (" + in + ")"
                 + (withDeleted ? "" : " AND deleted_at IS NULL")
-                + (hideFinished ? " AND status <> 'sent'" : "")
+                + (hideFinished ? " AND status NOT IN ('sent','expired','failed')" : "")
                 + " ORDER BY id DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(board);

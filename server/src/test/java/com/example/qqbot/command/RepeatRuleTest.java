@@ -81,9 +81,21 @@ class RepeatRuleTest {
         assertThat(parse("两次").repeatCount()).isEqualTo(2);
         assertThat(parse("十次").repeatCount()).isEqualTo(10);
         assertThat(parse("3次").toStorage()).isEqualTo("times:3");
-        assertThat(parse("3次").describe()).isEqualTo("共 3 次");
+        assertThat(parse("3次").describe()).isEqualTo("共 3 条");
         assertThat(parse("1次").kind()).isEqualTo(RepeatRule.Kind.ONCE);
-        assertThat(RepeatRule.describeStored("times:5")).isEqualTo("共 5 次");
+        assertThat(RepeatRule.describeStored("times:5")).isEqualTo("共 5 条");
+    }
+
+    @Test
+    @DisplayName("★ 连续天数：3天 / 三天 → days:3，和「每3天」不是一回事")
+    void finiteDays() throws Exception {
+        assertThat(parse("3天").kind()).isEqualTo(RepeatRule.Kind.DAYS);
+        assertThat(parse("3天").repeatCount()).isEqualTo(3);
+        assertThat(parse("三天").toStorage()).isEqualTo("days:3");
+        assertThat(parse("3天").describe()).isEqualTo("连续 3 天");
+        assertThat(parse("1天").kind()).isEqualTo(RepeatRule.Kind.ONCE);
+        assertThat(parse("每3天").kind()).isEqualTo(RepeatRule.Kind.EVERY_N_DAYS);
+        assertThat(RepeatRule.describeStored("days:4")).isEqualTo("连续 4 天");
     }
 
     @Test
@@ -93,6 +105,12 @@ class RepeatRuleTest {
                 .isInstanceOf(CommandParseException.class)
                 .hasMessageContaining("2 到 99");
         assertThatThrownBy(() -> parse("100次"))
+                .isInstanceOf(CommandParseException.class)
+                .hasMessageContaining("2 到 99");
+        assertThatThrownBy(() -> parse("0天"))
+                .isInstanceOf(CommandParseException.class)
+                .hasMessageContaining("2 到 99");
+        assertThatThrownBy(() -> parse("100天"))
                 .isInstanceOf(CommandParseException.class)
                 .hasMessageContaining("2 到 99");
     }

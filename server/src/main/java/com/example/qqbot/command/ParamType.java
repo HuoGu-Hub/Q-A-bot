@@ -26,7 +26,7 @@ public enum ParamType {
     DATE,
     /** 枚举，取值必须在 {@code options} 里 */
     ENUM,
-    /** 重复周期：一次 / 3次 / 每天 / 每周1-7 / 每2-30天；落库为 once / times:3 / daily / weekly:3 / every:5 */
+    /** 重复周期：一次 / 3次 / 3天 / 每天 / 每周1-7 / 每2-30天；落库为 once / times:3 / days:3 / daily / weekly:3 / every:5 */
     REPEAT;
 
     /**

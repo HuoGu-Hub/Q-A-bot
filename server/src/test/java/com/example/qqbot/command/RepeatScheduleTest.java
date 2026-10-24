@@ -145,10 +145,23 @@ class RepeatScheduleTest {
     }
 
     @Test
-    @DisplayName("★ 一天两个时刻：2 次 = 两天各发两个时刻")
-    void timesCoversAllSlotsPerDay() throws Exception {
+    @DisplayName("★ 4 次 = 4 条：一天三个时刻，发完第二天的第一条就停")
+    void timesCountsMessagesNotDays() throws Exception {
         RepeatSchedule s = new RepeatSchedule(
-                RepeatRule.parse("2次"), List.of("07:00", "21:30"), at(21, 30));
+                RepeatRule.parse("4次"), List.of("07:00", "12:00", "21:30"), at(7, 0));
+
+        assertThat(s.nextAfter(at(6, 0))).isEqualTo(at(7, 0));
+        assertThat(s.nextAfter(at(7, 0))).isEqualTo(at(12, 0));
+        assertThat(s.nextAfter(at(12, 0))).isEqualTo(at(21, 30));
+        assertThat(s.nextAfter(at(21, 30))).isEqualTo(at(TODAY.plusDays(1), 7, 0));
+        assertThat(s.nextAfter(at(TODAY.plusDays(1), 7, 0))).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 连续 2 天：每天两个时刻，共发四条")
+    void daysCountsWholeDays() throws Exception {
+        RepeatSchedule s = new RepeatSchedule(
+                RepeatRule.parse("2天"), List.of("07:00", "21:30"), at(7, 0));
 
         assertThat(s.nextAfter(at(6, 0))).isEqualTo(at(7, 0));
         assertThat(s.nextAfter(at(7, 0))).isEqualTo(at(21, 30));

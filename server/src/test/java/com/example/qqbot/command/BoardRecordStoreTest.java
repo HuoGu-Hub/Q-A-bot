@@ -115,28 +115,40 @@ class BoardRecordStoreTest {
         BoardRecord record = records.find(id);
         assertThat(record.repeatRule()).isEqualTo("times:3");
         assertThat(record.times()).containsExactly("21:30");
-        assertThat(record.whenText()).startsWith("共 3 次");
+        assertThat(record.whenText()).startsWith("共 3 条");
         assertThat(record.anchorAt()).isEqualTo(first);
+
+        long daysId = records.create(board, 100L, 200L, "阿明", "打卡2",
+                Map.of("周期", "3天", "时间", "21:30"), List.of(first), Instant.now());
+        BoardRecord days = records.find(daysId);
+        assertThat(days.repeatRule()).isEqualTo("days:3");
+        assertThat(days.whenText()).startsWith("连续 3 天");
     }
 
     @Test
-    @DisplayName("★ 执行完的有限周期不再出现在群友列表，后台仍看得到")
-    void sentFiniteRecordHiddenFromVisibleList() throws Exception {
+    @DisplayName("★ 发完 / 过期 / 连续失败都不再出现在群友列表，后台仍看得到")
+    void finishedRecordsHiddenFromVisibleList() throws Exception {
         Board announcement = boards.find("公告");
         Instant at = futureAt(21, 30);
-        long id = records.create(announcement, 100L, 200L, "管理员", "公告测试",
+        long sent = records.create(announcement, 100L, 200L, "管理员", "发完了",
+                Map.of("重复", "一次", "时间", "21:30"), List.of(at), Instant.now());
+        long expired = records.create(announcement, 100L, 200L, "管理员", "错过了",
+                Map.of("重复", "一次", "时间", "21:30"), List.of(at), Instant.now());
+        long failed = records.create(announcement, 100L, 200L, "管理员", "发不出去",
                 Map.of("重复", "一次", "时间", "21:30"), List.of(at), Instant.now());
 
         assertThat(records.queryVisible(announcement, 100L, 10))
-                .extracting(BoardRecord::id).contains(id);
+                .extracting(BoardRecord::id).contains(sent, expired, failed);
 
-        records.markSent(records.find(id), Instant.now());
+        records.markSent(records.find(sent), Instant.now());
+        records.markExpired(records.find(expired));
+        records.markFailed(records.find(failed), "发送失败");
 
         assertThat(records.queryVisible(announcement, 100L, 10))
-                .extracting(BoardRecord::id).doesNotContain(id);
+                .extracting(BoardRecord::id).doesNotContain(sent, expired, failed);
         // 后台历史不受影响
         assertThat(records.query(announcement, 100L, 10))
-                .extracting(BoardRecord::id).contains(id);
+                .extracting(BoardRecord::id).contains(sent, expired, failed);
     }
 
     @Test
