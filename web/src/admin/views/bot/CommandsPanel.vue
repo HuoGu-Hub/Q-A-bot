@@ -33,7 +33,7 @@ import SystemReplyEditor from './SystemReplyEditor.vue'
 import VariablePanel from './VariablePanel.vue'
 import { useVariableInsert } from './useVariableInsert'
 import {
-  KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, DATA_SCOPES, SCOPE_LABEL,
+  KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, SCOPE_LABEL,
 } from './commandOptions'
 
 const loading = ref(false)
@@ -822,44 +822,14 @@ onMounted(load)
             />
           </label>
 
-          <label class="row">
-            <span class="row-label">范围</span>
-            <Select
-              :model-value="policy.scope"
-              :options="DATA_SCOPES"
-              aria-label="数据范围"
-              @update:model-value="policy.scope = $event"
-            />
-          </label>
-
-          <div v-if="policy.scope === 'SOME'" class="row row--block">
-            <span class="row-label">群号</span>
-            <Input
-              :model-value="policy.groups"
-              multiline
-              :rows="2"
-              placeholder="群号"
-              aria-label="共享群号"
-              @update:model-value="policy.groups = $event"
-            />
-          </div>
-
           <div class="checks">
             <label class="check">
               <input type="checkbox" :checked="policy.allowPrivate" @change="onCheck('allowPrivate', $event)" />
               <span>私聊</span>
             </label>
-            <template v-if="policy.scope !== 'GROUP'">
-              <label class="check">
-                <input type="checkbox" :checked="policy.showGroup" @change="onCheck('showGroup', $event)" />
-                <span>显示群</span>
-              </label>
-              <label class="check">
-                <input type="checkbox" :checked="policy.showUser" @change="onCheck('showUser', $event)" />
-                <span>显示 QQ</span>
-              </label>
-            </template>
           </div>
+          <!-- 指令不读跨群数据，数据范围与来源显示对它没有意义，只放在板块编辑器 -->
+          <p class="faint scope-hint">数据范围与来源显示只对板块生效</p>
 
           <div v-if="needsList" class="block">
             <button class="block-head" type="button" :aria-expanded="openBlocks.acl" @click="toggleBlock('acl')">
@@ -1561,5 +1531,6 @@ onMounted(load)
 .editor-col--side .row-label { flex-basis: 64px; }
 .editor-col--side .col-title { padding-bottom: 4px; }
 .editor-col--side .checks { gap: var(--sp-3); }
+.scope-hint { margin: -2px 0 0; font-size: 11px; line-height: 1.4; }
 @media (max-width: 1000px) { .editor-col--side { position: static; } }
 </style>

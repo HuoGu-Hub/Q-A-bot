@@ -63,30 +63,45 @@ const openOutput = ref(true)
 const openList = ref(false)
 const openHelp = ref(false)
 
-const boardVars = computed(() => {
-  const own = [
-    { name: 'count', label: '总条数', example: '3' },
-    { name: 'path', label: '命令名', example: '预约开黑' },
-    { name: 'id', label: '记录编号', example: '12' },
-    { name: 'when', label: '时间', example: '立即展示' },
-    { name: 'text', label: '内容', example: '缺打野' },
-    { name: 'nickname', label: '昵称', example: '阿明' },
-    { name: 'group', label: '群号', example: '269127588' },
-    { name: 'params.参数名', label: '参数值', example: '今晚8点' },
-  ]
-  const seen = new Set(own.map((v) => v.name))
-  const common = (props.variables?.variables ?? [])
-    .filter((v) => v.inText && !seen.has(v.name))
-    .map((v) => ({ name: v.name, label: v.label, example: v.example, advanced: v.advanced }))
-  return [...own, ...common]
-})
-const { insert: insertVariable } = useVariableInsert({
+const { insert: insertVariable, activeField } = useVariableInsert({
   listHeader: (value) => { form.listHeader = value },
   listItem: (value) => { form.listItem = value },
   listEmpty: (value) => { form.listEmpty = value },
   listReply: (value) => { form.listReply = value },
   helpReply: (value) => { form.helpReply = value },
 })
+
+/**
+ * 列表字段走 BoardListFormatter 的变量，list/help 回复走全局变量渲染 ——
+ * 两套变量不通用，所以变量面板按当前编辑区切换，不给点不出来的按钮。
+ */
+const TEXT_FIELDS = ['listReply', 'helpReply']
+
+const rowVars = computed(() => {
+  const vars = [
+    { name: 'count', label: '总条数', example: '3' },
+    { name: 'path', label: '命令名', example: '预约开黑' },
+    { name: 'id', label: '记录编号', example: '12' },
+    { name: 'when', label: '时间', example: '立即展示' },
+    { name: 'nickname', label: '发起人昵称', example: '阿明' },
+    { name: 'text', label: '内容', example: '缺打野' },
+    { name: 'group', label: '记录所属群号', example: '269127588' },
+    { name: 'params.参数名', label: '参数值', example: '今晚8点' },
+  ]
+  // QQ 号跟「显示 QQ」开关走：没勾就不会渲染，面板里就不该出现
+  if (form.scope !== 'GROUP' && form.showUser) {
+    vars.push({ name: 'user.id', label: '发起人 QQ 号', example: '100000005' })
+  }
+  return vars
+})
+
+const textVars = computed(() => (props.variables?.variables ?? [])
+  .filter((v) => v.inText)
+  .map((v) => ({ name: v.name, label: v.label, example: v.example, advanced: v.advanced })))
+
+const boardVars = computed(() =>
+  TEXT_FIELDS.includes(activeField.value) ? textVars.value : rowVars.value)
+
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
 
 /** 参数块的“+ 参数”在标题行：先展开，再让参数表插入一行 */
@@ -148,13 +163,14 @@ interface PreviewRecord {
   when: string
   text: string
   nickname: string
+  qq: string
   group: string
   params: Record<string, string>
 }
 
 const previewRecords: PreviewRecord[] = [
-  { id: 1, when: '立即展示', text: '缺打野', nickname: '阿明', group: '123456', params: { 时间: '今晚8点', 人数: '5' } },
-  { id: 2, when: '立即展示', text: '满员了', nickname: '小红', group: '123456', params: { 时间: '明天8点', 人数: '10' } },
+  { id: 1, when: '立即展示', text: '缺打野', nickname: '阿明', qq: '100000005', group: '123456', params: { 时间: '今晚8点', 人数: '5' } },
+  { id: 2, when: '立即展示', text: '满员了', nickname: '小红', qq: '100000006', group: '123456', params: { 时间: '明天8点', 人数: '10' } },
 ]
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
@@ -174,8 +190,19 @@ function previewVars(record: PreviewRecord, count: string): Record<string, strin
     count,
     path: form.path || '命令',
   }
+  // QQ 号只在「显示 QQ」打开时可取，和 BoardListFormatter 的判定一致
+  if (form.scope !== 'GROUP' && form.showUser) vars['user.id'] = record.qq
   for (const [key, value] of Object.entries(record.params)) vars['params.' + key] = value
   return vars
+}
+
+/** 跨群记录才标来源，本群记录不标 —— 与服务端 BoardListFormatter.markOrigin 一致 */
+function previewOrigin(record: PreviewRecord): string {
+  if (form.scope === 'GROUP') return ''
+  let out = ''
+  if (form.showGroup) out += ' · 来自 ' + record.group
+  if (form.showUser) out += ' · QQ ' + record.qq
+  return out
 }
 
 const previewText = computed(() => {
@@ -183,9 +210,12 @@ const previewText = computed(() => {
   const header = form.listHeader.trim()
     ? renderTemplate(form.listHeader, { count: String(previewRecords.length), path })
     : `「${path}」共 ${previewRecords.length} 条：`
-  const items = previewRecords.map((record) => form.listItem.trim()
-    ? renderTemplate(form.listItem, previewVars(record, String(previewRecords.length)))
-    : `#${record.id}  ${record.when}  ${record.text}`)
+  const items = previewRecords.map((record) => {
+    const line = form.listItem.trim()
+      ? renderTemplate(form.listItem, previewVars(record, String(previewRecords.length)))
+      : `#${record.id}  ${record.when}  ${record.text}`
+    return line + previewOrigin(record)
+  })
   return [header, ...items].join('\n')
 })
 
@@ -440,16 +470,19 @@ function submit() {
             <span>私聊</span>
           </label>
           <template v-if="form.scope !== 'GROUP'">
-            <label class="check">
+            <label class="check" title="别群的记录后面标「来自 群号」，本群的不标">
               <input v-model="form.showGroup" type="checkbox" />
               <span>显示群</span>
             </label>
-            <label class="check">
+            <label class="check" title="别群的记录后面标「QQ 号」，并开放 {user.id} 变量">
               <input v-model="form.showUser" type="checkbox" />
               <span>显示 QQ</span>
             </label>
           </template>
         </div>
+        <p v-if="form.scope !== 'GROUP'" class="faint origin-hint">
+          跨群记录才标来源；本群记录不标
+        </p>
 
         <div class="checks">
           <label class="check">
@@ -497,6 +530,7 @@ function submit() {
 }
 .editor-actions { display: flex; gap: var(--sp-2); flex: none; }
 .editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
+.origin-hint { margin: -4px 0 0; font-size: 11px; line-height: 1.4; }
 .editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
 .editor-col--side { position: sticky; top: 0; align-self: start; gap: var(--sp-2); }
 .editor-col--side .row { gap: var(--sp-2); }

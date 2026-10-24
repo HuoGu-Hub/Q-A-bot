@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, onMounted } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
  * 记录最后一个获得焦点的编辑框，并把变量插入到它的光标位置。
@@ -8,12 +8,15 @@ import { nextTick, onBeforeUnmount, onMounted } from 'vue'
  */
 export function useVariableInsert(setters: Record<string, (value: string) => void>, fallbackField = 'reply') {
   let active: HTMLInputElement | HTMLTextAreaElement | null = null
+  /** 当前编辑区的 data-var-field —— 编辑区可用的变量不一样，父组件据此切换变量面板 */
+  const activeField = ref('')
 
   function onFocus(event: FocusEvent) {
     const target = event.target
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
       if (target.dataset.varField) {
         active = target
+        activeField.value = target.dataset.varField
       }
     }
   }
@@ -43,5 +46,5 @@ export function useVariableInsert(setters: Record<string, (value: string) => voi
     el.setSelectionRange(pos, pos)
   }
 
-  return { insert }
+  return { insert, activeField }
 }

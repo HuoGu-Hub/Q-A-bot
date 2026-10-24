@@ -27,6 +27,16 @@ final class BoardListFormatter {
     }
 
     static String render(Board board, List<BoardRecord> records) {
+        return render(board, records, 0L);
+    }
+
+    /**
+     * 渲染列表，并标注跨群来源。
+     *
+     * @param viewerGroupId 发起查询的群；私聊或未知传 0。<b>本群记录不标注</b> ——
+     *                      「来自本群」对看的人没有信息量，只有别群来的才需要
+     */
+    static String render(Board board, List<BoardRecord> records, long viewerGroupId) {
         if (records == null || records.isEmpty()) {
             return renderEmpty(board);
         }
@@ -47,6 +57,7 @@ final class BoardListFormatter {
                     ? record.displayLine()
                     : fill(board.listItem(), vars(record, board, records.size()));
             line = line == null ? "" : line.stripTrailing();
+            line = markOrigin(line, board, record, viewerGroupId);
             if (line.isEmpty()) {
                 continue;
             }
@@ -80,6 +91,31 @@ final class BoardListFormatter {
         return fill(board.listEmpty(), Map.of("count", "0", "path", board.path())).stripTrailing();
     }
 
+    /**
+     * 跨群结果的来源标注。
+     *
+     * <p>两个开关都按板块配，落在 {@link DataPolicy#marksGroup()} /
+     * {@link DataPolicy#marksUser()} 上；本群记录一律不标，免得列表里每条都挂着
+     * 「来自本群」。
+     */
+    private static String markOrigin(String line, Board board, BoardRecord record, long viewerGroupId) {
+        if (line.isEmpty() || record.groupId() <= 0) {
+            return line;
+        }
+        boolean foreign = viewerGroupId <= 0 || record.groupId() != viewerGroupId;
+        if (!foreign) {
+            return line;
+        }
+        StringBuilder sb = new StringBuilder(line);
+        if (board.policy().marksGroup()) {
+            sb.append(" · 来自 ").append(record.groupId());
+        }
+        if (board.policy().marksUser()) {
+            sb.append(" · QQ ").append(record.userId());
+        }
+        return sb.toString();
+    }
+
     private static Map<String, String> vars(BoardRecord record, Board board, int count) {
         Map<String, String> vars = new HashMap<>();
         vars.put("id", String.valueOf(record.id()));
@@ -87,6 +123,9 @@ final class BoardListFormatter {
         vars.put("text", body(record));
         vars.put("nickname", record.nickname() == null ? "" : record.nickname());
         vars.put("group", String.valueOf(record.groupId()));
+        // QQ 号没有独立开关：勾了「显示 QQ」才认这个变量，否则原样保留，
+        // 与 VariableRenderer 对未启用变量的处理一致（不静默变空）
+        vars.put("user.id", board.policy().marksUser() ? String.valueOf(record.userId()) : null);
         vars.put("count", String.valueOf(count));
         vars.put("path", board.path());
         if (record.params() != null) {

@@ -55,13 +55,63 @@ class BoardListFormatterTest {
         assertThat(BoardListFormatter.render(board, records)).contains("{unknown} 7");
     }
 
+    @Test
+    @DisplayName("★ 跨群列表给别群的记录标来源群号与 QQ 号，本群记录不标")
+    void marksForeignRecordsOnly() {
+        Board board = board("", "#{id} {text}", "", 20,
+                new DataPolicy(DataPolicy.DataScope.ALL, List.of(), true, true, false));
+        List<BoardRecord> records = List.of(
+                record(1, 100L, 200L, "阿明", "缺打野", Map.of()),
+                record(2, 300L, 201L, "小红", "满员了", Map.of()));
+
+        String text = BoardListFormatter.render(board, records, 100L);
+
+        assertThat(text).contains("#1 缺打野")
+                .doesNotContain("#1 缺打野 ·");
+        assertThat(text).contains("#2 满员了 · 来自 300 · QQ 201");
+    }
+
+    @Test
+    @DisplayName("★ 只勾「显示群」时不带 QQ 号")
+    void marksGroupOnly() {
+        Board board = board("", "#{id}", "", 20,
+                new DataPolicy(DataPolicy.DataScope.ALL, List.of(), true, false, false));
+        List<BoardRecord> records = List.of(record(2, 300L, 201L, "小红", "满员了", Map.of()));
+
+        assertThat(BoardListFormatter.render(board, records, 100L))
+                .contains("#2 · 来自 300")
+                .doesNotContain("QQ");
+    }
+
+    @Test
+    @DisplayName("★ 显示 QQ 打开后 {user.id} 才认，否则原样保留")
+    void userIdVariableNeedsShowUser() {
+        List<BoardRecord> records = List.of(record(1, 100L, 200L, "阿明", "缺打野", Map.of()));
+        Board shown = board("", "#{id} {user.id}", "", 20,
+                new DataPolicy(DataPolicy.DataScope.ALL, List.of(), false, true, false));
+        Board hidden = board("", "#{id} {user.id}", "", 20, DataPolicy.DEFAULT);
+
+        assertThat(BoardListFormatter.render(shown, records, 100L)).contains("#1 200");
+        assertThat(BoardListFormatter.render(hidden, records, 100L)).contains("{user.id}");
+    }
+
     private static Board board(String header, String item, String empty, int limit) {
+        return board(header, item, empty, limit, DataPolicy.DEFAULT);
+    }
+
+    private static Board board(String header, String item, String empty, int limit,
+                               DataPolicy policy) {
         return new Board(1, "预约开黑", "预约开黑", List.of(), Board.DIRECT, "all",
-                DataPolicy.DEFAULT, true, 0, false, header, item, empty, limit);
+                policy, true, 0, false, header, item, empty, limit);
     }
 
     private static BoardRecord record(long id, String nickname, String text, Map<String, String> params) {
-        return new BoardRecord(id, "预约开黑", 100L, 200L, nickname, text, params,
+        return record(id, 100L, 200L, nickname, text, params);
+    }
+
+    private static BoardRecord record(long id, long groupId, long userId, String nickname,
+                                      String text, Map<String, String> params) {
+        return new BoardRecord(id, "预约开黑", groupId, userId, nickname, text, params,
                 Board.DIRECT, null, "once", List.of(), null, "pending", 0, null,
                 Instant.now(), null, null);
     }

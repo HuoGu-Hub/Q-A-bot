@@ -136,8 +136,9 @@ public class BoardRunner {
         return Optional.of(new Reply(switch (action) {
             case Board.ACT_CREATE -> create(board, event, userId, groupId, rest);
             case Board.ACT_DELETE -> delete(board, rest);
-            case Board.ACT_LIST -> list(board);
+            case Board.ACT_LIST -> list(board, event);
             case Board.ACT_HELP -> help(board, event);
+            // 传本群号：跨群查询时，列表要给别群的记录标出来源
             default -> query(board, groupId);
         }));
     }
@@ -212,7 +213,7 @@ public class BoardRunner {
             }
             list = records.query(board, groupId, limit);
         }
-        return BoardListFormatter.render(board, list);
+        return BoardListFormatter.render(board, list, groupId);
     }
 
     // ==================== 删 ====================
@@ -234,16 +235,26 @@ public class BoardRunner {
 
     // ==================== 参数 ====================
 
-    private String list(Board board) {
-        return board.listReply() == null || board.listReply().isBlank()
-                ? catalog.boardModuleList(board) : board.listReply();
+    /**
+     * 手写的 list 回复要走变量渲染 —— 编辑页把变量按钮摆在那里，插进去就得有用。
+     * 自动生成的目录不渲染：那是代码拼的纯文本，不该被当成模板再解析一次。
+     */
+    private String list(Board board, OneBotEvent event) {
+        String custom = board.listReply();
+        if (custom == null || custom.isBlank()) {
+            return catalog.boardModuleList(board);
+        }
+        return renderer.render(custom, renderer.contextOf(event, Map.of(), "", ""));
     }
 
     // ==================== 帮助 ====================
 
     private String help(Board board, OneBotEvent event) {
-        return board.helpReply() == null || board.helpReply().isBlank()
-                ? globalReply(SystemReplyStore.HELP, catalog.helpText(), event) : board.helpReply();
+        String custom = board.helpReply();
+        if (custom == null || custom.isBlank()) {
+            return globalReply(SystemReplyStore.HELP, catalog.helpText(), event);
+        }
+        return renderer.render(custom, renderer.contextOf(event, Map.of(), "", ""));
     }
 
     // ==================== 小工具 ====================
