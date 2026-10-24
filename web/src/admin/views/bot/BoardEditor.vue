@@ -177,7 +177,7 @@ function ensureScheduleParams() {
   if (!hasRepeat.value) {
     form.params.push({
       name: '重复', type: 'repeat', required: true, example: '每天',
-      description: '一次 / 每天 / 每周1-7 / 每2-30天', multiple: false,
+      description: '一次 / 3次 / 每天 / 每周1-7 / 每2-30天', multiple: false,
     })
   }
   if (!hasTime.value) {

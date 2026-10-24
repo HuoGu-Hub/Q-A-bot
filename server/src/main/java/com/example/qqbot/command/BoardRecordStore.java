@@ -107,14 +107,19 @@ public class BoardRecordStore {
                     : LocalDateTime.ofInstant(moment, AppTime.ZONE).toLocalTime()
                             .truncatedTo(ChronoUnit.MINUTES).toString());
         }
-        RepeatSchedule schedule = new RepeatSchedule(rule, times, now);
+        // 「N 次」从第一次的时刻起算：anchor 取最早那个时刻的那一天，
+        // 这样带日期写「10月25日21:30、3次」会发 25/26/27 三天，而不是从创建日算
+        Instant anchor = rule.kind() == RepeatRule.Kind.TIMES
+                ? moments.stream().min(Instant::compareTo).orElse(now)
+                : now;
+        RepeatSchedule schedule = new RepeatSchedule(rule, times, anchor);
         Instant fireAt = schedule.nextAfter(now);
         if (fireAt == null) {
             throw new CommandParseException("时间", "那个时间已经过去了，换个时间");
         }
         return repo.insert(new BoardRecordRepository.Row(0, board.path(), groupId, userId,
                 safe(nickname), safe(text), toJson(params), BoardRecordRepository.SCHEDULED,
-                iso(fireAt), rule.toStorage(), toJsonList(times), iso(now), STATUS_PENDING, 0,
+                iso(fireAt), rule.toStorage(), toJsonList(times), iso(anchor), STATUS_PENDING, 0,
                 null, iso(now), null, null));
     }
 
@@ -124,10 +129,27 @@ public class BoardRecordStore {
         return available ? toRecords(repo.listByBoard(board.path(), groupId, false, limit)) : List.of();
     }
 
+    /**
+     * 群友看的列表：隐藏已经执行完的有限周期（一次 / N 次）。
+     *
+     * <p>这些记录 status 已经是 sent，不会再发；留在列表里会让人以为还在排队。
+     * 后台记录页仍走 {@link #query} / {@link #queryWithDeleted}，历史不丢。
+     */
+    public List<BoardRecord> queryVisible(Board board, long groupId, int limit) {
+        return available ? toRecords(repo.listVisibleByBoard(board.path(), groupId, limit)) : List.of();
+    }
+
     /** 指定群列表；板块数据范围 SOME 用 */
     public List<BoardRecord> query(Board board, List<Long> groupIds, int limit) {
         return available
                 ? toRecords(repo.listByBoard(board.path(), groupIds, false, limit))
+                : List.of();
+    }
+
+    /** 跨群列表同上：执行完的有限周期不显示 */
+    public List<BoardRecord> queryVisible(Board board, List<Long> groupIds, int limit) {
+        return available
+                ? toRecords(repo.listVisibleByBoard(board.path(), groupIds, limit))
                 : List.of();
     }
 

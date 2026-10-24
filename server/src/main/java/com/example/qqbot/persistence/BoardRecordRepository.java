@@ -109,9 +109,25 @@ public class BoardRecordRepository {
 
     /** 某个板块在某群的记录；默认不含已删 */
     public List<Row> listByBoard(String board, long groupId, boolean withDeleted, int limit) {
+        return listByBoard(board, groupId, withDeleted, limit, false);
+    }
+
+    /**
+     * 群友看的列表：不含已删，也不含已经执行完的有限周期（status='sent'）。
+     *
+     * <p>「一次」「N 次」发完就没有下一次了，留在列表里只会让人以为还会发；
+     * 后台记录页走 {@link #listByBoard}，仍然看得到历史。
+     */
+    public List<Row> listVisibleByBoard(String board, long groupId, int limit) {
+        return listByBoard(board, groupId, false, limit, true);
+    }
+
+    private List<Row> listByBoard(String board, long groupId, boolean withDeleted, int limit,
+                                  boolean hideFinished) {
         String sql = "SELECT " + COLUMNS + " FROM bot_record WHERE board = ?"
                 + (groupId > 0 ? " AND group_id = ?" : "")
                 + (withDeleted ? "" : " AND deleted_at IS NULL")
+                + (hideFinished ? " AND status <> 'sent'" : "")
                 + " ORDER BY id DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(board);
@@ -124,6 +140,16 @@ public class BoardRecordRepository {
 
     /** 指定多个群的记录；用于板块数据范围 = SOME。 */
     public List<Row> listByBoard(String board, List<Long> groupIds, boolean withDeleted, int limit) {
+        return listByBoard(board, groupIds, withDeleted, limit, false);
+    }
+
+    /** 群友看的跨群列表：同样不显示已经执行完的有限周期 */
+    public List<Row> listVisibleByBoard(String board, List<Long> groupIds, int limit) {
+        return listByBoard(board, groupIds, false, limit, true);
+    }
+
+    private List<Row> listByBoard(String board, List<Long> groupIds, boolean withDeleted, int limit,
+                                  boolean hideFinished) {
         if (groupIds == null || groupIds.isEmpty()) {
             return List.of();
         }
@@ -137,6 +163,7 @@ public class BoardRecordRepository {
         String sql = "SELECT " + COLUMNS + " FROM bot_record WHERE board = ?"
                 + " AND group_id IN (" + in + ")"
                 + (withDeleted ? "" : " AND deleted_at IS NULL")
+                + (hideFinished ? " AND status <> 'sent'" : "")
                 + " ORDER BY id DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(board);

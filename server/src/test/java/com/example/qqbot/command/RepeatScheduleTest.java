@@ -117,6 +117,45 @@ class RepeatScheduleTest {
                 .isEqualTo(at(TODAY.plusDays(6), 7, 0));
     }
 
+    // ==================== 共 N 次 ====================
+
+    @Test
+    @DisplayName("★ 共 3 次：连续三天，发完就没有下一次")
+    void timesFiresFixedDaysThenStops() throws Exception {
+        Instant anchor = at(21, 30);
+        RepeatSchedule s = new RepeatSchedule(
+                RepeatRule.parse("3次"), List.of("21:30"), anchor);
+
+        assertThat(s.nextAfter(at(9, 0))).isEqualTo(at(21, 30));
+        assertThat(s.nextAfter(at(21, 30))).isEqualTo(at(TODAY.plusDays(1), 21, 30));
+        assertThat(s.nextAfter(at(TODAY.plusDays(1), 21, 30)))
+                .isEqualTo(at(TODAY.plusDays(2), 21, 30));
+        assertThat(s.nextAfter(at(TODAY.plusDays(2), 21, 30))).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 第一次在明天：从明天起算 3 天，不是从今天")
+    void timesAnchorsAtFirstMoment() throws Exception {
+        Instant anchor = at(TODAY.plusDays(1), 21, 30);
+        RepeatSchedule s = new RepeatSchedule(
+                RepeatRule.parse("3次"), List.of("21:30"), anchor);
+
+        assertThat(s.nextAfter(at(23, 0))).isEqualTo(at(TODAY.plusDays(1), 21, 30));
+        assertThat(s.nextAfter(at(TODAY.plusDays(3), 22, 0))).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 一天两个时刻：2 次 = 两天各发两个时刻")
+    void timesCoversAllSlotsPerDay() throws Exception {
+        RepeatSchedule s = new RepeatSchedule(
+                RepeatRule.parse("2次"), List.of("07:00", "21:30"), at(21, 30));
+
+        assertThat(s.nextAfter(at(6, 0))).isEqualTo(at(7, 0));
+        assertThat(s.nextAfter(at(7, 0))).isEqualTo(at(21, 30));
+        assertThat(s.nextAfter(at(21, 30))).isEqualTo(at(TODAY.plusDays(1), 7, 0));
+        assertThat(s.nextAfter(at(TODAY.plusDays(1), 21, 30))).isNull();
+    }
+
     // ==================== 一次性 ====================
 
     @Test

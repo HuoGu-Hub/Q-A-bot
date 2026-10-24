@@ -48,6 +48,7 @@ public record RepeatSchedule(RepeatRule rule, List<String> times, Instant anchor
             case DAILY -> nextDaily(after);
             case WEEKLY -> nextWeekly(after);
             case EVERY_N_DAYS -> nextEveryDays(after);
+            case TIMES -> nextTimes(after);
         };
     }
 
@@ -95,6 +96,42 @@ public record RepeatSchedule(RepeatRule rule, List<String> times, Instant anchor
         for (int dayOffset = 0; dayOffset <= 7; dayOffset++) {
             LocalDate date = base.toLocalDate().plusDays(dayOffset);
             if (date.getDayOfWeek() != rule.dayOfWeek()) {
+                continue;
+            }
+            for (LocalTime slot : slots) {
+                Instant candidate = date.atTime(slot).atZone(AppTime.ZONE).toInstant();
+                if (candidate.isAfter(after)) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
+    // ==================== 共 N 次 ====================
+
+    /**
+     * 有限的「N 次」：从 anchor 那天起按天推，只在前 N 天内找时刻。
+     *
+     * <p>和每天的区别只有一个<b>上界</b>：anchor 是第一次的时刻（由创建时传入），
+     * 第 N 天发完就返回 null —— 扫描器据此把记录标成 sent，
+     * 板块列表也就不会再显示这条已经执行完的数据。
+     */
+    private Instant nextTimes(Instant after) {
+        List<LocalTime> slots = slots();
+        int count = rule.repeatCount();
+        if (slots.isEmpty() || count <= 0) {
+            return null;
+        }
+        ZonedDateTime base = after.atZone(AppTime.ZONE);
+        LocalDate anchorDate = anchor == null
+                ? base.toLocalDate()
+                : anchor.atZone(AppTime.ZONE).toLocalDate();
+        // 从 after 当天开始往后找，最多找到第 N 天
+        for (int offset = 0; offset <= count; offset++) {
+            LocalDate date = base.toLocalDate().plusDays(offset);
+            long gap = ChronoUnit.DAYS.between(anchorDate, date);
+            if (gap < 0 || gap >= count) {
                 continue;
             }
             for (LocalTime slot : slots) {

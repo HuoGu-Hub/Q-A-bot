@@ -210,14 +210,14 @@ public class BoardRunner {
         DataPolicy.DataScope scope = board.policy().scope();
         if (scope == DataPolicy.DataScope.ALL) {
             // 0 = 不按群过滤，跨群预约列表靠这个
-            list = records.query(board, 0L, limit);
+            list = records.queryVisible(board, 0L, limit);
         } else if (scope == DataPolicy.DataScope.SOME) {
-            list = records.query(board, board.policy().groups(), limit);
+            list = records.queryVisible(board, board.policy().groups(), limit);
         } else {
             if (groupId <= 0) {
                 return "这个板块要在群里看";
             }
-            list = records.query(board, groupId, limit);
+            list = records.queryVisible(board, groupId, limit);
         }
         return BoardListFormatter.render(board, list, groupId);
     }

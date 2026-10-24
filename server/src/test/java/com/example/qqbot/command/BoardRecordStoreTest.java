@@ -101,6 +101,45 @@ class BoardRecordStoreTest {
     }
 
     @Test
+    @DisplayName("★ 共 N 次：时间按钟点存，第一次的时刻作为起算日")
+    void timesRuleStoresClockSlotsAndAnchor() throws Exception {
+        Board board = new Board(1, "打卡", "打卡", List.of(
+                ParamSpec.of("周期", "repeat", true, "3次"),
+                ParamSpec.multi("时间", ParamType.MOMENT, true, null, 0, null, "21:30")),
+                Board.SCHEDULED, "all", DataPolicy.DEFAULT, true, 0, false);
+        Instant first = futureAt(21, 30);
+
+        long id = records.create(board, 100L, 200L, "阿明", "打卡",
+                Map.of("周期", "3次", "时间", "21:30"), List.of(first), Instant.now());
+
+        BoardRecord record = records.find(id);
+        assertThat(record.repeatRule()).isEqualTo("times:3");
+        assertThat(record.times()).containsExactly("21:30");
+        assertThat(record.whenText()).startsWith("共 3 次");
+        assertThat(record.anchorAt()).isEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("★ 执行完的有限周期不再出现在群友列表，后台仍看得到")
+    void sentFiniteRecordHiddenFromVisibleList() throws Exception {
+        Board announcement = boards.find("公告");
+        Instant at = futureAt(21, 30);
+        long id = records.create(announcement, 100L, 200L, "管理员", "公告测试",
+                Map.of("重复", "一次", "时间", "21:30"), List.of(at), Instant.now());
+
+        assertThat(records.queryVisible(announcement, 100L, 10))
+                .extracting(BoardRecord::id).contains(id);
+
+        records.markSent(records.find(id), Instant.now());
+
+        assertThat(records.queryVisible(announcement, 100L, 10))
+                .extracting(BoardRecord::id).doesNotContain(id);
+        // 后台历史不受影响
+        assertThat(records.query(announcement, 100L, 10))
+                .extracting(BoardRecord::id).contains(id);
+    }
+
+    @Test
     @DisplayName("★ 重复与时间参数改名后仍能识别")
     void renamedScheduleParamsStillWork() throws Exception {
         Board board = new Board(1, "打卡提醒", "打卡提醒", List.of(

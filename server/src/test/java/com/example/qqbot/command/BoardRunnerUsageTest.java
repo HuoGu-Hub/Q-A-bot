@@ -38,7 +38,7 @@ class BoardRunnerUsageTest {
                 DataPolicy.DEFAULT, true, 30, true);
         when(boards.find("开黑")).thenReturn(board);
         when(records.isAvailable()).thenReturn(true);
-        when(records.query(any(), anyLong(), anyInt())).thenReturn(List.of());
+        when(records.queryVisible(any(), anyLong(), anyInt())).thenReturn(List.of());
 
         BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
                 mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),
@@ -108,7 +108,7 @@ class BoardRunnerUsageTest {
                 List.of(), null, "pending", 0, null, java.time.Instant.now(), null, null);
         when(boards.find("预约开黑")).thenReturn(board);
         when(records.isAvailable()).thenReturn(true);
-        when(records.query(board, 0L, 200)).thenReturn(List.of(record));
+        when(records.queryVisible(board, 0L, 200)).thenReturn(List.of(record));
 
         BoardRunner runner = new BoardRunner(boards, records, mock(CommandParser.class),
                 mock(VariableRenderer.class), mock(AclStore.class), mock(CommandCatalog.class),

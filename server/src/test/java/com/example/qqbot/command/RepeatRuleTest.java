@@ -73,6 +73,31 @@ class RepeatRuleTest {
     }
 
     @Test
+    @DisplayName("★ 有限次数：3次 / 三次 → times:3；1次就是一次")
+    void finiteTimes() throws Exception {
+        assertThat(parse("3次").kind()).isEqualTo(RepeatRule.Kind.TIMES);
+        assertThat(parse("3次").repeatCount()).isEqualTo(3);
+        assertThat(parse("三次").repeatCount()).isEqualTo(3);
+        assertThat(parse("两次").repeatCount()).isEqualTo(2);
+        assertThat(parse("十次").repeatCount()).isEqualTo(10);
+        assertThat(parse("3次").toStorage()).isEqualTo("times:3");
+        assertThat(parse("3次").describe()).isEqualTo("共 3 次");
+        assertThat(parse("1次").kind()).isEqualTo(RepeatRule.Kind.ONCE);
+        assertThat(RepeatRule.describeStored("times:5")).isEqualTo("共 5 次");
+    }
+
+    @Test
+    @DisplayName("次数越界要拒")
+    void timesOutOfRange() {
+        assertThatThrownBy(() -> parse("0次"))
+                .isInstanceOf(CommandParseException.class)
+                .hasMessageContaining("2 到 99");
+        assertThatThrownBy(() -> parse("100次"))
+                .isInstanceOf(CommandParseException.class)
+                .hasMessageContaining("2 到 99");
+    }
+
+    @Test
     @DisplayName("★ 落库形态 once/daily/weekly:3 转回人话，脏数据原样返回")
     void describeStored() {
         assertThat(RepeatRule.describeStored("once")).isEqualTo("只发一次");
