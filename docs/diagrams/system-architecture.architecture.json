@@ -3,11 +3,11 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "飘雪喵 QQ 机器人 · 系统架构",
-    "quality_profile": "showcase",
     "viewBox": [
       2000,
-      860
+      760
     ],
+    "quality_profile": "showcase",
     "legend": {
       "entries": {
         "frontend": {
@@ -40,72 +40,270 @@
         "focus": [
           "qq_users",
           "napcat",
+          "intake",
           "router",
           "guard",
           "assistant",
-          "llm"
+          "retrieval",
+          "llm",
+          "outbound"
         ],
         "note": "去程与回程方向相反，回路闭合。"
       },
       {
-        "id": "official-pipeline",
-        "label": "官方检索管线",
+        "id": "commands",
+        "label": "命令与板块",
         "focus": [
-          "assistant",
-          "recall",
-          "aggregator",
-          "inject",
-          "model_api",
+          "intake",
+          "router",
+          "commands",
+          "outbound",
           "sqlite"
         ],
-        "note": "AiServices 驱动官方骨架：召回 → 聚合 → 注入。"
+        "note": "话术在 Guard 之前返回，定时靠记录表加 15 秒扫表。"
       },
       {
-        "id": "corpus",
-        "label": "语料怎么进来",
+        "id": "map",
+        "label": "地图出图",
         "focus": [
-          "ingest",
-          "sqlite",
-          "recall"
+          "assistant",
+          "map",
+          "outbound",
+          "wiki",
+          "sqlite"
         ],
-        "note": "文档导入 / wiki 抓取 / 地图同步平级，清洗（wikitext 默认保留，数据层再走渲染兜底）分块后落进同一张块表。"
+        "note": "模型只抄取图凭据，坐标与出图都在服务端完成。"
       },
       {
-        "id": "web-plane",
+        "id": "web",
         "label": "双端站点",
         "focus": [
           "browsers",
           "nginx",
           "webapp",
-          "router"
+          "sqlite"
         ],
-        "note": "公开站与后台共用 Nginx 与同一个 JVM，接口前缀各自独立。"
+        "note": "公开站只读限流，后台要 cookie 会话。"
       }
     ]
   },
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "宿主机业务进程 · systemd（单 JVM :8080 · /onebot · /api/public · /admin/api）",
+      "wraps": [
+        "webapp",
+        "intake",
+        "router",
+        "guard",
+        "assistant",
+        "retrieval",
+        "outbound",
+        "commands",
+        "map",
+        "sqlite"
+      ],
+      "pad": 18
+    }
+  ],
   "components": [
     {
-      "id": "browsers",
+      "id": "qq_users",
       "type": "external",
-      "label": "双端浏览器",
-      "sublabel": "访客 / 管理员",
+      "label": "QQ 群友",
+      "sublabel": "提问 · 斜杠命令",
       "pos": [
         40,
         80
       ],
       "size": [
-        150,
-        64
+        170,
+        66
+      ]
+    },
+    {
+      "id": "napcat",
+      "type": "cloud",
+      "label": "NapCat 协议端",
+      "sublabel": "OneBot 11 · Docker",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "Docker 容器 · 只跑协议层"
+    },
+    {
+      "id": "intake",
+      "type": "backend",
+      "label": "接入分诊",
+      "sublabel": "去重 · 立即 204 · 双池",
+      "pos": [
+        560,
+        80
+      ],
+      "size": [
+        190,
+        76
+      ],
+      "tag": "chat 6 / cmd 3"
+    },
+    {
+      "id": "router",
+      "type": "backend",
+      "label": "编排与闸门",
+      "sublabel": "排队超时 · 准入 · 分流",
+      "pos": [
+        860,
+        80
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "Guard 五层",
+      "sublabel": "准入 · 提及 · 限流 · 闸门 · 词表",
+      "pos": [
+        1160,
+        80
+      ],
+      "size": [
+        190,
+        76
+      ]
+    },
+    {
+      "id": "assistant",
+      "type": "backend",
+      "label": "对话编排",
+      "sublabel": "ChatService · AiServices 工具循环",
+      "pos": [
+        1460,
+        80
+      ],
+      "size": [
+        210,
+        76
+      ],
+      "tag": "轮次 3 · 30s"
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "大模型网关",
+      "sublabel": "OpenCode Go · DeepSeek 降级",
+      "pos": [
+        1760,
+        80
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "outbound",
+      "type": "backend",
+      "label": "出站",
+      "sublabel": "回答 · 话术 · 取图 · 过滤 · 分片",
+      "pos": [
+        300,
+        230
+      ],
+      "size": [
+        190,
+        76
+      ],
+      "tag": "所有回复的唯一出口"
+    },
+    {
+      "id": "commands",
+      "type": "backend",
+      "label": "命令与板块",
+      "sublabel": "命令表 · 变量 · 六档准入",
+      "pos": [
+        560,
+        230
+      ],
+      "size": [
+        200,
+        76
+      ],
+      "tag": "Guard 之前秒回"
+    },
+    {
+      "id": "map",
+      "type": "backend",
+      "label": "地图子系统",
+      "sublabel": "点位备注 · Java2D 截图 · 瓦片缓存",
+      "pos": [
+        860,
+        230
+      ],
+      "size": [
+        210,
+        86
+      ],
+      "tag": "出站按需取图"
+    },
+    {
+      "id": "retrieval",
+      "type": "backend",
+      "label": "检索管线",
+      "sublabel": "两路召回 · RRF · 标题闸门 · 重排",
+      "pos": [
+        1160,
+        230
+      ],
+      "size": [
+        210,
+        76
+      ],
+      "tag": "top-5"
+    },
+    {
+      "id": "siliconflow",
+      "type": "external",
+      "label": "SiliconFlow",
+      "sublabel": "bge-m3 向量 · bge-reranker 重排",
+      "pos": [
+        1460,
+        230
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "browsers",
+      "type": "external",
+      "label": "双端浏览器",
+      "sublabel": "公开站 · 管理后台",
+      "pos": [
+        40,
+        380
+      ],
+      "size": [
+        170,
+        66
       ]
     },
     {
       "id": "nginx",
       "type": "security",
       "label": "Nginx :443",
-      "sublabel": "TLS · 限流 · IP 白名单",
+      "sublabel": "TLS · 限流 · 反代",
       "pos": [
-        330,
-        76
+        300,
+        380
       ],
       "size": [
         170,
@@ -117,446 +315,286 @@
       "id": "webapp",
       "type": "frontend",
       "label": "双端 Web 前端",
-      "sublabel": "public.html / admin.html",
+      "sublabel": "SPA · /api/public 只读限流 · /admin/api 会话",
       "pos": [
-        640,
-        80
+        560,
+        380
       ],
       "size": [
         190,
-        64
-      ],
-      "tag": "Vue3 产物"
+        66
+      ]
     },
     {
-      "id": "qq_users",
+      "id": "wiki",
       "type": "external",
-      "label": "QQ 群友",
-      "sublabel": "@提问 / 图片 / 引用",
+      "label": "Enshrouded Wiki",
+      "sublabel": "地图 JSON · 瓦片与图标",
       "pos": [
-        40,
-        340
-      ],
-      "size": [
-        150,
-        64
-      ]
-    },
-    {
-      "id": "napcat",
-      "type": "cloud",
-      "label": "NapCat 协议端",
-      "sublabel": "OneBot 11 · 容器",
-      "pos": [
-        330,
-        336
-      ],
-      "size": [
-        170,
-        72
-      ],
-      "tag": "127.0.0.1:3000"
-    },
-    {
-      "id": "router",
-      "type": "backend",
-      "label": "接入与路由",
-      "sublabel": "去重 · 指令 · 预算 · 出站",
-      "pos": [
-        640,
-        328
-      ],
-      "size": [
-        190,
-        88
-      ]
-    },
-    {
-      "id": "guard",
-      "type": "security",
-      "label": "Guard 五层拦截",
-      "sublabel": "零成本 · 跑完才调模型",
-      "pos": [
-        980,
-        336
-      ],
-      "size": [
-        180,
-        72
-      ],
-      "tag": "唯一有权说不"
-    },
-    {
-      "id": "assistant",
-      "type": "backend",
-      "label": "KbToolAssistant",
-      "sublabel": "AiServices · 工具循环 · 授权钩子",
-      "pos": [
-        1310,
-        322
-      ],
-      "size": [
-        210,
-        92
-      ],
-      "tag": "唯一调模型处"
-    },
-    {
-      "id": "llm",
-      "type": "external",
-      "label": "大模型服务",
-      "sublabel": "opencode-go → deepseek",
-      "pos": [
-        1640,
-        336
+        1160,
+        380
       ],
       "size": [
         190,
         72
-      ]
-    },
-    {
-      "id": "recall",
-      "type": "backend",
-      "label": "双路召回",
-      "sublabel": "A 正文向量 · B 术语关键词",
-      "pos": [
-        640,
-        520
       ],
-      "size": [
-        170,
-        70
-      ],
-      "tag": "官方骨架"
-    },
-    {
-      "id": "aggregator",
-      "type": "backend",
-      "label": "聚合：融合 · 闸门 · 重排",
-      "sublabel": "RRF → 标题闸门 → 交叉编码器",
-      "pos": [
-        980,
-        520
-      ],
-      "size": [
-        210,
-        70
-      ],
-      "tag": "官方骨架"
-    },
-    {
-      "id": "inject",
-      "type": "backend",
-      "label": "两段出处注入",
-      "sublabel": "<<<KNOWLEDGE>>> 契约",
-      "pos": [
-        1310,
-        520
-      ],
-      "size": [
-        180,
-        70
-      ],
-      "tag": "官方骨架"
-    },
-    {
-      "id": "ingest",
-      "type": "backend",
-      "label": "语料摄入与清洗",
-      "sublabel": "文档导入 · wiki 抓取 · 地图同步",
-      "pos": [
-        640,
-        700
-      ],
-      "size": [
-        190,
-        70
-      ],
-      "tag": "离线批处理 · 默认关"
+      "tag": "6s 出站间隔"
     },
     {
       "id": "sqlite",
       "type": "database",
       "label": "SQLite 单文件",
-      "sublabel": "块+向量 · 词条 · 统计 · 指令 · 投票",
+      "sublabel": "33 张表 · WAL · 单连接单锁",
       "pos": [
-        980,
-        700
+        560,
+        530
       ],
       "size": [
-        200,
-        76
-      ],
-      "tag": "data/qa/"
-    },
-    {
-      "id": "model_api",
-      "type": "external",
-      "label": "SiliconFlow",
-      "sublabel": "bge-m3 · bge-reranker-v2-m3",
-      "pos": [
-        1640,
-        680
-      ],
-      "size": [
-        190,
-        72
+        900,
+        80
       ]
-    }
-  ],
-  "boundaries": [
-    {
-      "kind": "region",
-      "label": "Docker 容器 · 只跑协议层",
-      "wraps": [
-        "napcat"
-      ],
-      "pad": 16
-    },
-    {
-      "kind": "security-group",
-      "label": "宿主机业务进程 · systemd（单 JVM :8080 · /onebot · /api/public · /admin/api）",
-      "wraps": [
-        "webapp",
-        "router",
-        "guard",
-        "assistant",
-        "recall",
-        "aggregator",
-        "inject",
-        "ingest",
-        "sqlite"
-      ],
-      "pad": 18
     }
   ],
   "connections": [
     {
-      "id": "e_https",
+      "from": "qq_users",
+      "to": "napcat",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "群消息",
+      "labelAt": [
+        125,
+        172
+      ]
+    },
+    {
+      "from": "napcat",
+      "to": "intake",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "POST /onebot/event",
+      "labelAt": [
+        300,
+        208
+      ]
+    },
+    {
+      "from": "intake",
+      "to": "router",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "双池排队"
+    },
+    {
+      "from": "router",
+      "to": "guard",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "非命令消息"
+    },
+    {
+      "from": "guard",
+      "to": "assistant",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "放行"
+    },
+    {
+      "from": "assistant",
+      "to": "llm",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "llm",
+      "to": "assistant",
+      "fromSide": "left",
+      "toSide": "right",
+      "label": "回答文本",
+      "labelAt": [
+        1715,
+        96
+      ]
+    },
+    {
+      "from": "router",
+      "to": "commands",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "首字符 /",
+      "via": [
+        [
+          955,
+          200
+        ],
+        [
+          660,
+          200
+        ]
+      ]
+    },
+    {
+      "from": "commands",
+      "to": "outbound",
+      "fromSide": "left",
+      "toSide": "right",
+      "label": "话术秒回"
+    },
+    {
+      "from": "outbound",
+      "to": "napcat",
+      "fromSide": "left",
+      "toSide": "bottom",
+      "label": "send_group_msg",
+      "via": [
+        [
+          260,
+          268
+        ],
+        [
+          260,
+          290
+        ],
+        [
+          125,
+          290
+        ]
+      ],
+      "labelAt": [
+        190,
+        300
+      ]
+    },
+    {
+      "from": "assistant",
+      "to": "retrieval",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "label": "检索 · top-5 注入",
+      "via": [
+        [
+          1565,
+          215
+        ],
+        [
+          1265,
+          215
+        ]
+      ]
+    },
+    {
+      "from": "retrieval",
+      "to": "siliconflow",
+      "fromSide": "right",
+      "toSide": "left",
+      "label": "向量 · 重排分",
+      "labelAt": [
+        1415,
+        252
+      ]
+    },
+    {
       "from": "browsers",
       "to": "nginx",
+      "fromSide": "right",
+      "toSide": "left",
       "label": "HTTPS"
     },
     {
-      "id": "e_static",
       "from": "nginx",
       "to": "webapp",
+      "fromSide": "right",
+      "toSide": "left",
       "label": "静态资源"
     },
     {
-      "id": "e_proxy",
-      "from": "nginx",
-      "to": "router",
-      "label": "反代双端 API"
-    },
-    {
-      "id": "e_ask_in",
-      "from": "qq_users",
-      "to": "napcat",
-      "label": "提问",
-      "variant": "emphasis"
-    },
-    {
-      "id": "e_report",
-      "from": "napcat",
-      "to": "router",
-      "label": "POST /onebot/event",
-      "variant": "emphasis",
-      "labelDy": 26
-    },
-    {
-      "id": "e_action",
-      "from": "router",
-      "to": "napcat",
-      "label": "send_group_msg",
-      "variant": "dashed",
-      "fromSide": "bottom",
-      "toSide": "bottom",
-      "via": [
-        [
-          735,
-          450
-        ],
-        [
-          415,
-          450
-        ]
-      ]
-    },
-    {
-      "id": "e_reply",
-      "from": "napcat",
-      "to": "qq_users",
-      "label": "回复到群",
-      "variant": "emphasis",
+      "from": "wiki",
+      "to": "map",
       "fromSide": "top",
-      "toSide": "top",
+      "toSide": "left",
+      "label": "地图 JSON · 瓦片",
       "via": [
         [
-          415,
-          280
+          1255,
+          330
         ],
         [
-          115,
-          280
+          830,
+          330
+        ],
+        [
+          830,
+          273
         ]
+      ],
+      "labelAt": [
+        1043,
+        330
       ]
     },
     {
-      "id": "e_guard",
-      "from": "router",
-      "to": "guard",
-      "label": "先过安全判定",
-      "variant": "emphasis"
+      "from": "map",
+      "to": "sqlite",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "label": "点位 · 画布",
+      "via": [
+        [
+          965,
+          490
+        ],
+        [
+          520,
+          490
+        ],
+        [
+          520,
+          570
+        ]
+      ],
+      "labelAt": [
+        880,
+        430
+      ]
     },
     {
-      "id": "e_pass",
-      "from": "guard",
-      "to": "assistant",
-      "label": "Pass 放行",
-      "variant": "emphasis"
-    },
-    {
-      "id": "e_pipeline",
-      "from": "assistant",
-      "to": "recall",
-      "label": "驱动官方管线",
+      "from": "webapp",
+      "to": "sqlite",
       "fromSide": "bottom",
       "toSide": "top",
-      "via": [
-        [
-          1415,
-          480
-        ],
-        [
-          725,
-          480
-        ]
+      "label": "只读检索 · 配置",
+      "labelAt": [
+        700,
+        505
       ]
-    },
-    {
-      "id": "e_candidates",
-      "from": "recall",
-      "to": "aggregator",
-      "label": "两路候选"
-    },
-    {
-      "id": "e_topk",
-      "from": "aggregator",
-      "to": "inject",
-      "label": "top-5"
-    },
-    {
-      "id": "e_inject",
-      "from": "inject",
-      "to": "llm",
-      "label": "资料 + 问题",
-      "variant": "emphasis",
-      "fromSide": "right",
-      "toSide": "bottom",
-      "via": [
-        [
-          1600,
-          555
-        ],
-        [
-          1600,
-          440
-        ],
-        [
-          1735,
-          440
-        ]
-      ]
-    },
-    {
-      "id": "e_llm_back",
-      "from": "llm",
-      "to": "assistant",
-      "label": "回答文本",
-      "variant": "emphasis"
-    },
-    {
-      "id": "e_answer",
-      "from": "assistant",
-      "to": "router",
-      "label": "回答文本",
-      "variant": "emphasis",
-      "fromSide": "top",
-      "toSide": "top",
-      "via": [
-        [
-          1415,
-          210
-        ],
-        [
-          735,
-          210
-        ]
-      ]
-    },
-    {
-      "id": "e_blocks",
-      "from": "recall",
-      "to": "sqlite",
-      "label": "块 + 向量"
-    },
-    {
-      "id": "e_rerank",
-      "from": "aggregator",
-      "to": "model_api",
-      "label": "候选 ⇄ 重排分",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "via": [
-        [
-          1085,
-          645
-        ],
-        [
-          1735,
-          645
-        ]
-      ]
-    },
-    {
-      "id": "e_ingest",
-      "from": "ingest",
-      "to": "sqlite",
-      "label": "清洗分块后落库",
-      "labelDy": 40
     }
   ],
   "cards": [
     {
       "dot": "rose",
-      "title": "一问一答，回路是闭合的",
+      "title": "两条入口，一个出口",
       "items": [
-        "去程：QQ 群友 → NapCat → 接入与路由（POST /onebot/event，先回 204 再异步）",
-        "判定：去重 → 指令秒回 → Guard 五层 → 成本预算，全部跑完才轮到模型",
-        "模型侧：KbToolAssistant 驱动官方检索管线，资料注入后再调大模型",
-        "回路：回答文本 → 接入与路由 → send_group_msg → NapCat → 回复到群"
+        "群消息经 NapCat 走 POST /onebot/event，浏览器经 Nginx 走 /api/public 与 /admin/api",
+        "去重后立刻回 204，再按首字符分投问答池与命令池，队列满了回一句人多稍等",
+        "所有回复只从出站一个口子发出，摘图、过滤、分片与节奏都在那里"
       ]
     },
     {
-      "dot": "cyan",
-      "title": "这次迭代换掉了检索编排",
+      "dot": "violet",
+      "title": "命中就秒回，到点就发送",
       "items": [
-        "DefaultRetrievalAugmentor 接走「变换查询 → 路由召回 → 聚合 → 注入」四格，自研只剩算法",
-        "A 路自研 ContentRetriever：问题向量由编排层算一次，A 与 C 共用，省掉每轮多一次外部调用",
-        "聚合器里顺序固定：RRF 融合 → 标题闸门置顶 → 交叉编码器重排 → 地点提权 → 最后才截到 top-5",
-        "KbContentInjector 保住 <<<KNOWLEDGE>>> 两段出处契约，标记漏了不会报错、只会静默失效"
+        "斜杠命令在 Guard 之前就地渲染，不调模型也不进问答统计",
+        "板块把到点要发写成一条记录，15 秒扫一次抢行投递，无内存队列，重启靠记录表续上",
+        "重复周期只存规则与时刻表，下一次从规则推导，补发与改期都不会漂"
       ]
     },
     {
       "dot": "emerald",
-      "title": "工具能调之后，授权立起来了",
+      "title": "确定性判定全在模型之前",
       "items": [
-        "KbToolAssistant 用官方 AiServices 装配，工具白名单默认拒绝，只开只读的 lookup",
-        "beforeToolExecution 钩子：没有调用方身份一律拒绝，将来按人授权才有落脚点",
-        "maxToolCallingRoundTrips=3 防死循环；系统提示词仍来自唯一那份 system.md",
-        "模型 SDK 只在 llm 包、框架词汇只在 llm 与 kb；ArchUnit 14 条规则守住这些边界"
+        "Guard 五层决定这条消息要不要理，六档准入决定这个人能不能用这条命令，两层互不替代",
+        "检索是两路召回加标题闸门，RRF 融合后交叉编码重排，只取 top-5 注入",
+        "地图把哪里有某物做成确定性计算，模型只负责措辞与抄一行取图凭据"
       ]
     }
   ]
