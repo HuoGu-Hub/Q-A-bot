@@ -28,8 +28,15 @@ import java.util.regex.Pattern;
  *   3小时后 30分钟后 2天后
  * </pre>
  *
+ * <p>时刻只认 <b>冒号</b>写法（{@code 21:30}），不认「21点30」「9点半」；
+ * 全角数字、全角冒号会先归一。
+ *
  * <p><b>只给日期不给时间是要报错的</b>，不做「默认零点」这种猜测 ——
  * 零点推送一条消息比不推送更糟。
+ *
+ * <p><b>写了「今天 / 今晚」就不再顺延</b>：只写时刻时的顺延是「下一次到这个点」，
+ * 而「今晚9:30」在 22:00 说出口指的是已经过去的时间，应该由调用方拒绝
+ * （板块会回「那个时间已经过去了」），不能悄悄改成明天。
  */
 public final class MomentParser {
 
@@ -69,7 +76,8 @@ public final class MomentParser {
 
         Matcher tail = TAIL_CLOCK.matcher(s);
         if (!tail.matches()) {
-            throw new CommandParseException(null, "「" + s + "」没写时间，例：21:30 或 明天21:30");
+            throw new CommandParseException(null,
+                    "「" + s + "」没写时间，例：21:30 或 明天21:30（时刻只认冒号，不认「点」）");
         }
         Resolved day = resolveDate(tail.group(1), now);
         int hour = parseInt(tail.group(2), "小时");
@@ -109,8 +117,13 @@ public final class MomentParser {
     private static Resolved resolveDate(String expr, Instant now) throws CommandParseException {
         String s = expr == null ? "" : expr.trim();
         LocalDate today = now.atZone(AppTime.ZONE).toLocalDate();
-        if (s.isEmpty() || "今天".equals(s) || "今日".equals(s) || "今晚".equals(s)) {
+        if (s.isEmpty()) {
             return new Resolved(today, DateKind.IMPLICIT);
+        }
+        // 明确写了「今天 / 今晚」就锚定今天：时刻已过时不再顺延，
+        // 交给调用方拒绝。只有「只写时刻」才顺延到明天。
+        if ("今天".equals(s) || "今日".equals(s) || "今晚".equals(s)) {
+            return new Resolved(today, DateKind.DAY_WORD);
         }
         if ("明天".equals(s) || "明早".equals(s) || "明晚".equals(s)) {
             return new Resolved(today.plusDays(1), DateKind.DAY_WORD);
