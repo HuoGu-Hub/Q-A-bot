@@ -62,6 +62,8 @@ public class ChatCaptureService {
     private final AtomicLong recorded = new AtomicLong();
     private final AtomicLong dropped = new AtomicLong();
     private final AtomicLong imageSaved = new AtomicLong();
+    /** 只用于一次性提示"这个群没在白名单"，避免每条消息刷屏 */
+    private final java.util.Set<Long> otherGroups = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public ChatCaptureService(DistillPolicy props, ChatRepository repo, MessageCodec codec,
                               ImageFetcher images, ChatImageStore imageStore) {
@@ -110,7 +112,13 @@ public class ChatCaptureService {
         }
         try {
             long groupId = event.getGroupId() == null ? 0 : event.getGroupId();
-            if (groupId <= 0 || !props.getCaptureGroups().contains(groupId)) {
+            if (groupId <= 0) {
+                return;
+            }
+            if (!props.getCaptureGroups().contains(groupId)) {
+                if (otherGroups.add(groupId)) {
+                    log.info("[DISTILL] 群 {} 不在 capture-groups，已跳过；要采集请把它加入配置", groupId);
+                }
                 return;
             }
             long userId = event.getUserId() == null ? 0 : event.getUserId();
