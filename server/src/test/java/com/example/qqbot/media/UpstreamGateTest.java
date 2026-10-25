@@ -1,4 +1,4 @@
-package com.example.qqbot.kb.map;
+package com.example.qqbot.media;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

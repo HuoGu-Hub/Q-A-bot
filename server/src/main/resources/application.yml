@@ -383,6 +383,19 @@ app:
       # 永久保留。任何清理脚本都不允许碰这里
       dir: ./data/kb-images
 
+    # wiki 抓来的配图：自动抓取、**可重建**。
+    # 单独一个目录而不是塞进 kb-images —— 前者会被整批清空重抓，
+    # 后者是人工维护的永久资产，一次"重抓"绝不能把它们带走。
+    # 三个目录互不嵌套，配错时 MediaStorageGuard 直接拒绝启动。
+    wiki-images:
+      # 关掉后不再抓新图，已经落盘的图仍然可以发出去
+      enabled: true
+      dir: ./data/wiki-images
+      # 目录总量上限（MB）。到顶后**停止写入新图**，不淘汰旧图 ——
+      # 旧图被历史回答里的 marker 指着，删掉就会变成"只有标记没有图"。
+      # 要腾空间请显式清空目录再重跑导入。0 = 不限制（不建议）
+      max-total-size-mb: 512
+
     # 出站图片：我们主动发给群友的图（目前来自 kb-images 目录）。
     # 回复里出现 [[img:kb:文件名]] 这样的标记时，标记被摘掉、换成一张真图。
     # 标记只认"来源:名字"，来源必须是我们自己登记的，模型编的名字会被丢弃并记日志。
@@ -735,6 +748,27 @@ app:
         prefer-ratio: 1.2
         # 一页一次请求，间隔别太小
         delay-millis: 200
+      # ---------- 配图 ----------
+      # 从 action=parse 的渲染 HTML 里取 infobox 主图，下载到 data/wiki-images，
+      # 在第 1 块末尾写一个 [[img:wiki:<页面>/<文件>]]。
+      # ⚠️ 它依赖 render.enabled：图片地址来自渲染 HTML，关掉渲染就不会抓图。
+      # ⚠️ 首次全量抓取按 6 秒一张算，4,000 页要约 4~5 小时；必须能中断续跑。
+      images:
+        enabled: true
+        # 与地图共用 Special:FilePath：稳定入口，自带 ?width= 缩略
+        image-base: https://enshrouded.wiki.gg/wiki/Special:FilePath/
+        # 没有自定义 UA 的请求实测会被直接限流
+        user-agent: "qqbot-personal/0.1 (Enshrouded wiki images; contact via group)"
+        # 请求的缩略宽度。主图原图多为 256px，480 是"够看清且几乎不增体积"的一档
+        width: 480
+        # 单张上限。主图实测 29~90KB，1MB 已能挡住异常大文件
+        max-bytes: 1048576
+        timeout-seconds: 30
+        # 一个文件被**超过**这么多页引用时判为共享图标，不配图。
+        # 技能页的 infobox 主图常是 Attribute Node 图标，不做这道过滤会稳定配错图。
+        # 0 = 关闭过滤（不建议）
+        shared-icon-min-pages: 5
+
       # 派生块归属 wiki·<来源>，purge 按它清
       doc-id-prefix: wiki
       # **单块**正文上限。任务页约 2KB、机制页约 11KB —— 太长会把 prompt 撑爆、也稀释语义。

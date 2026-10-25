@@ -120,7 +120,7 @@ class WikiArticleImporterE2ETest {
         com.example.qqbot.kb.category.CategoryService categoryService =
                 new com.example.qqbot.kb.category.CategoryService(catStore, blocks);
         WikiArticleImporter importer = new WikiArticleImporter(kb, client, pageStore, blocks, embedding,
-                sourceStore, categoryService);
+                sourceStore, categoryService, (page, pick) -> java.util.Optional.empty());
 
         // ① dryRun：只列页、比版本
         WikiArticleImporter.ImportReport dry = importer.importAll(true);

@@ -46,6 +46,7 @@ class TempImageCleanerTest {
         props = new MediaProperties();
         props.getTempImages().setDir(tmp.toString());
         props.getKbImages().setDir(kb.toString());
+        props.getWikiImages().setDir(base.resolve("wiki-images").toString());
 
         FileAccess fileAccess = new FileAccess();
         fileAccess.setAllowedRoots(List.of(base.toString()));

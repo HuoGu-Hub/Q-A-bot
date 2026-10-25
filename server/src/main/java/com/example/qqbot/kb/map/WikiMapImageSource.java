@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
+import com.example.qqbot.media.UpstreamGate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -47,11 +48,13 @@ public class WikiMapImageSource implements MapImageSource {
     private final MapOptions options;
     private final HttpClient http;
 
-    public WikiMapImageSource(MapOptions options) {
+    /**
+     * @param gate 全局唯一的上游闸门 —— 地图与 wiki 配图共用，见 {@link UpstreamGate} 类注释。
+     *             以 Bean 注入而不是自己 new：两个抓图路径必须排同一条队。
+     */
+    public WikiMapImageSource(MapOptions options, UpstreamGate gate) {
         this.options = options;
-        // 传取值函数而不是当时的值：配置中心调完立刻生效，不用重启
-        this.gate = new UpstreamGate(options::getRequestGapMs, options::getRateLimitPauseMs,
-                options::getRateLimitStreak);
+        this.gate = gate;
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 // 必须跟随：Special:FilePath 是 302，真正的字节在 /images/ 下

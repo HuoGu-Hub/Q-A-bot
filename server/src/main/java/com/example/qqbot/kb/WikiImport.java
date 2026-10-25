@@ -114,11 +114,115 @@ public class WikiImport {
     }
 
 
+    /** 配图：从渲染 HTML 的 infobox 主图里取一张，写进第 1 块的 marker */
+    private final Images images = new Images();
+
+    public Images getImages() {
+        return images;
+    }
+
     /** 渲染兜底：拿 {@code action=parse} 的 HTML 补数据层与数据表 */
     private final Render render = new Render();
 
     public Render getRender() {
         return render;
+    }
+
+    /**
+     * 配图配置。
+     *
+     * <h2>为什么默认只取一张，而且只取主图</h2>
+     * 实测一页平均引用 8.4 张图，绝大多数是全站复用的 UI 图标；真正有信息量的是
+     * infobox 里那张"这一页长什么样"。一条回复最多带 2 张图，抓多了也只是躺在磁盘上。
+     *
+     * <h2>为什么缩略交给 MediaWiki</h2>
+     * 这台机器只有 2 核。在 JVM 里解码再缩一张 250px 的图，CPU 与堆都不值；
+     * {@code Special:FilePath?width=} 是服务端缩略，我们只负责把字节存下来。
+     */
+    public static class Images {
+
+        private boolean enabled = true;
+
+        /** 图片直链前缀。与地图共用同一个入口约定：Special:FilePath 是稳定入口，且原生支持 ?width= */
+        private String imageBase = "https://enshrouded.wiki.gg/wiki/Special:FilePath/";
+
+        /** 遵守对方的使用礼仪：没有自定义 UA 的请求实测会被直接限流 */
+        private String userAgent = "qqbot-personal/0.1 (Enshrouded wiki images; contact via group)";
+
+        /** 请求的缩略宽度。主图原图多为 256px，480 是"够看清且几乎不增体积"的一档 */
+        private int width = 480;
+
+        /** 单张字节上限。主图实测 29~90KB，1MB 已能挡住异常大文件 */
+        private int maxBytes = 1024 * 1024;
+
+        private int timeoutSeconds = 30;
+
+        /**
+         * 一个文件被**超过**这么多页引用时，判为共享图标，不配图。
+         *
+         * <p>实测技能页的 infobox 主图是 {@code Attribute_Node_Green_Medium.png}，
+         * 全站复用；直接取第一张图会让每个技能问题都配上一张属性点图标。
+         * 5 是"排除明显复用、又不误伤只被两页共用的套装图"的值。
+         *
+         * <p>0 = 关闭这条过滤（不建议，等于把所有图标都放进回答）。
+         */
+        private int sharedIconMinPages = 5;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getImageBase() {
+            return imageBase;
+        }
+
+        public void setImageBase(String imageBase) {
+            this.imageBase = imageBase;
+        }
+
+        public String getUserAgent() {
+            return userAgent;
+        }
+
+        public void setUserAgent(String userAgent) {
+            this.userAgent = userAgent;
+        }
+
+        public int getWidth() {
+            return width;
+        }
+
+        public void setWidth(int width) {
+            this.width = width;
+        }
+
+        public int getMaxBytes() {
+            return maxBytes;
+        }
+
+        public void setMaxBytes(int maxBytes) {
+            this.maxBytes = maxBytes;
+        }
+
+        public int getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
+        }
+
+        public int getSharedIconMinPages() {
+            return sharedIconMinPages;
+        }
+
+        public void setSharedIconMinPages(int sharedIconMinPages) {
+            this.sharedIconMinPages = sharedIconMinPages;
+        }
     }
 
     /**

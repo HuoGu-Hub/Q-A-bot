@@ -54,6 +54,14 @@ public class WikiArticleImporter {
     /** 块来源标记：来自 wiki 文章（与 doc / manual / map 并列） */
     public static final String SRC_WIKI = "wiki";
 
+    /**
+     * 统计"一个文件被多少页引用"时取多少页做样本。
+     *
+     * <p>200 页约 4 次 API 请求，足够让全站复用的图标浮出来；取全部 4,000 页是 80 次请求，
+     * 对增量跑（只改几页）毫无必要。样本**包含未变的页**，否则增量跑会把图标数漏掉。
+     */
+    private static final int IMAGE_USAGE_SAMPLE = 200;
+
     private final KbPolicy props;
     private final WikiApiClient client;
     private final KbWikiPageStore store;
@@ -63,12 +71,15 @@ public class WikiArticleImporter {
     private final KbWikiSourceStore sourceStore;
     /** 分类清单 —— wiki 的来源名与页面分类要自动登记进去，否则全落「未分类」 */
     private final com.example.qqbot.kb.category.CategoryService categoryService;
+    /** 配图抓取 —— 只问它要一个 marker key；抓不到就是没图，不影响正文 */
+    private final WikiImageFetcher images;
 
     /* 既不持有块索引、也不持有词条表：写完索引自己失效、分类自己读标签 */
     public WikiArticleImporter(KbPolicy props, WikiApiClient client, KbWikiPageStore store,
                                KbBlockStore blockStore, EmbeddingClient embedding,
                                KbWikiSourceStore sourceStore,
-                               com.example.qqbot.kb.category.CategoryService categoryService) {
+                               com.example.qqbot.kb.category.CategoryService categoryService,
+                               WikiImageFetcher images) {
         this.props = props;
         this.client = client;
         this.store = store;
@@ -76,6 +87,7 @@ public class WikiArticleImporter {
         this.embedding = embedding;
         this.sourceStore = sourceStore;
         this.categoryService = categoryService;
+        this.images = images;
     }
 
     /**
@@ -189,6 +201,14 @@ public class WikiArticleImporter {
         int renderedPages = 0;
         int failed = 0;
         int chars = 0;
+        // 配图统计：新下载 / 复用 / 因共享图标跳过 / 失败。只进日志，不改 ImportReport 的形状
+        int imagesAdded = 0;
+        int imagesReused = 0;
+        int imagesSkippedIcon = 0;
+        int imagesFailed = 0;
+        // 配图依赖渲染 HTML；render 关掉时只提醒一次，不要每页一条
+        boolean imageNoHtmlWarned = false;
+        WikiImport.Images imageCfg = cfg.getImages();
         // 进度用：已经处理过的页数（含失败页，进度条不该倒着走）
         int processed = 0;
         List<String> errors = new ArrayList<>();
@@ -284,6 +304,23 @@ public class WikiArticleImporter {
                 continue;
             }
 
+            // 共享图标的判定分母必须**包含未变的页**：增量跑只改 3 页时，用 changed 统计
+            // 会让"属性点"这类图标只被数到 3 次，正好躲过阈值。取来源前 200 页做样本即可。
+            Map<String, Integer> imageUsage = new java.util.HashMap<>();
+            if (imageCfg.isEnabled()) {
+                List<String> sample = titles.size() > IMAGE_USAGE_SAMPLE
+                        ? titles.subList(0, IMAGE_USAGE_SAMPLE) : titles;
+                try {
+                    for (List<String> files : client.fetchImages(sample).values()) {
+                        for (String f : files) {
+                            imageUsage.merge(WikiImagePicker.normalize(f), 1, Integer::sum);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[KB-WIKI] 取页面图片清单失败（本次不做共享图标过滤）：{}", e.getMessage());
+                }
+            }
+
             try {
                 content = client.fetchContent(changed);
             } catch (Exception e) {
@@ -324,9 +361,13 @@ public class WikiArticleImporter {
                     // 实测 27 篇样本里渲染更多的 11 篇、相当 14 篇、更少 2 篇，
                     // 所以它是补差而不是替换，其余页面一个字不动。
                     WikiImport.Render renderCfg = cfg.getRender();
+                    // 渲染 HTML 同时服务两件事：兜底正文、选 infobox 主图。
+                    // 只请求一次 —— 选图不额外花任何 API 调用。
+                    String parsedHtml = null;
                     if (renderCfg.isEnabled()) {
                         try {
-                            String renderedText = WikiHtmlCleaner.clean(client.fetchParsedHtml(title));
+                            parsedHtml = client.fetchParsedHtml(title);
+                            String renderedText = WikiHtmlCleaner.clean(parsedHtml);
                             if (!renderedText.isBlank()
                                     && renderedText.length() >= body.length() * renderCfg.getPreferRatio()) {
                                 body = renderedText;
@@ -349,6 +390,49 @@ public class WikiArticleImporter {
                         store.upsert(title, src.label(), rev.revid(), rev.timestamp(), 0, "", 0);
                         continue;
                     }
+                    // ★ 配图：只取 infobox 主图，只在第 1 块末尾写一个 marker。
+                    //   任何一步失败都只表现为"这次没图"，正文照常导入。
+                    String imageKey = null;
+                    if (imageCfg.isEnabled()) {
+                        if (parsedHtml == null) {
+                            if (!imageNoHtmlWarned) {
+                                log.warn("[KB-WIKI] 配图需要渲染 HTML，但 render.enabled=false，本次不抓图");
+                                imageNoHtmlWarned = true;
+                            }
+                        } else {
+                            WikiImagePicker.Pick pick = WikiImagePicker.pick(parsedHtml).orElse(null);
+                            if (pick != null) {
+                                String file = WikiImagePicker.normalize(pick.fileName());
+                                int usedBy = imageUsage.getOrDefault(file, 0);
+                                if (imageCfg.getSharedIconMinPages() > 0
+                                        && usedBy > imageCfg.getSharedIconMinPages()) {
+                                    // 技能页的 infobox 主图常是全站复用的属性点/伤害图标。
+                                    // 配上去比不配更糟：看的人会以为那就是答案。
+                                    imagesSkippedIcon++;
+                                    log.debug("[KB-WIKI] {} 的主图 {} 被 {} 页引用，判为共享图标，不配图",
+                                            title, file, usedBy);
+                                } else {
+                                    try {
+                                        WikiImageFetcher.Result got = images.fetch(title, pick).orElse(null);
+                                        if (got != null) {
+                                            imageKey = got.key();
+                                            if (got.downloaded()) {
+                                                imagesAdded++;
+                                            } else {
+                                                imagesReused++;
+                                            }
+                                        } else {
+                                            imagesFailed++;
+                                        }
+                                    } catch (Exception e) {
+                                        imagesFailed++;
+                                        log.warn("[KB-WIKI] {} 配图失败（不影响正文）：{}", title, e.getMessage());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     String name = titleOf(title);
                     // ★ 有核对来的中文名就写成「中文（English）」——中英都能命中。
                     //   查不到就保持英文，**不编**（见 NameZhIndex 类注释）。
@@ -381,6 +465,9 @@ public class WikiArticleImporter {
                         String chunkTitle = i == 0 ? display : display + "（续 " + (i + 1) + "）";
                         // 中文名**每块都带**：块是独立检索单位，缺了它中文提问够不到后面的块
                         String text = zh != null ? zh + "。" + chunks.get(i) : chunks.get(i);
+                        // marker 放第 1 块末尾、单独一行：与资料注入时的 hoistSingleMarker 对齐，
+                        // 模型改写正文时不容易把它带走。后续块不带 —— 一页只配一张图。
+                        text = withImageMarker(text, i == 0 ? imageKey : null);
                         KbBlock block = new KbBlock(com.example.qqbot.kb.EntryId.of(id), docId, chunkTitle, text, url,
                                 cats, SRC_WIKI, false, now, aliasById.getOrDefault(id, ""));
                         if (blockStore.upsert(block, embedding.embedOne(name + "\n" + text))) {
@@ -412,6 +499,10 @@ public class WikiArticleImporter {
         //    和 SLF4J 的 UTF-8 混在一个日志里 —— 所以关键数字必须也出现在这一行。
         log.info("[KB-WIKI] 导入完成：来源 {} 个 / 页面 {} 篇（去重跳过 {}）/ 变过 {} 篇 / 写入 {} 块 / 失败 {} / {} 字 / 渲染兜底 {} 页",
                 sources.size(), totalPages, duplicates, totalChanged, imported, failed, chars, renderedPages);
+        if (imageCfg.isEnabled()) {
+            log.info("[KB-WIKI] 配图：新下载 {} 张 / 复用 {} 张 / 共享图标跳过 {} 页 / 失败 {} 页",
+                    imagesAdded, imagesReused, imagesSkippedIcon, imagesFailed);
+        }
         return new ImportReport(sources.size(), totalPages, duplicates, totalChanged, imported, failed, chars,
                 renderedPages, errors, dryRun, bySource);
     }
@@ -501,6 +592,21 @@ public class WikiArticleImporter {
      */
     public static String chunkId(String baseId, int part) {
         return part <= 1 ? baseId : baseId + "-" + part;
+    }
+
+    /**
+     * 第 1 块末尾追加配图标记。
+     *
+     * <p>抽成静态方法是为了能**离线**钉住格式：marker 是提示词、解析器、出站图片三方
+     * 共用的协议，格式错了不会报错，只会表现为"资料里明明有图，机器人却从来不发"。
+     *
+     * @param imageKey {@code null} 或空白时原样返回
+     */
+    static String withImageMarker(String text, String imageKey) {
+        if (imageKey == null || imageKey.isBlank()) {
+            return text;
+        }
+        return text + "\n\n[[img:wiki:" + imageKey + "]]";
     }
 
     /** 页面名 → 块 id（确定性，重跑幂等） */

@@ -4,6 +4,7 @@ import com.example.qqbot.media.KbImages;
 import com.example.qqbot.media.MediaPolicy;
 import com.example.qqbot.media.OutboundImages;
 import com.example.qqbot.media.TempImages;
+import com.example.qqbot.media.WikiImages;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -49,6 +50,8 @@ public class MediaProperties implements MediaPolicy {
 
     private KbImages kbImages = new KbImages();
 
+    private WikiImages wikiImages = new WikiImages();
+
     private OutboundImages outboundImages = new OutboundImages();
 
     // ==================== getter / setter ====================
@@ -74,6 +77,15 @@ public class MediaProperties implements MediaPolicy {
     @Override
     public KbImages getKbImages() {
         return kbImages;
+    }
+
+    @Override
+    public WikiImages getWikiImages() {
+        return wikiImages;
+    }
+
+    public void setWikiImages(WikiImages wikiImages) {
+        this.wikiImages = wikiImages;
     }
 
     public void setKbImages(KbImages kbImages) {

@@ -96,7 +96,7 @@ class CorpusResetTool {
         com.example.qqbot.kb.category.CategoryService categories =
                 new com.example.qqbot.kb.category.CategoryService(catStore, blocks);
         WikiArticleImporter importer = new WikiArticleImporter(kb, client, pages, blocks, embedding, sources,
-                categories);
+                categories, (page, pick) -> java.util.Optional.empty());
 
         // ① 范围只留这一个来源
         sources.replace(List.of(new KbWikiSourceRepository.Source(source, kind, true, "")));

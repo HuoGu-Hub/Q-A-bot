@@ -51,6 +51,30 @@ class MediaStorageGuardTest {
     }
 
     @Test
+    @DisplayName("wiki 配图目录落在知识库里 → 拒绝启动")
+    void refusesWhenWikiInsideKb() {
+        Path kb = base.resolve("nest/kb-images");
+        MediaProperties props = propsWith(base.resolve("nest/tmp-images"), kb);
+        props.getWikiImages().setDir(kb.resolve("wiki").toString());
+
+        assertThatThrownBy(() -> new MediaStorageGuard(props, allowAllUnderBase()).init())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("不能互相嵌套");
+    }
+
+    @Test
+    @DisplayName("知识库目录落在 wiki 配图里 → 拒绝启动")
+    void refusesWhenKbInsideWiki() {
+        Path wiki = base.resolve("nest2/wiki-images");
+        MediaProperties props = propsWith(base.resolve("nest2/tmp-images"), wiki.resolve("kb-images"));
+        props.getWikiImages().setDir(wiki.toString());
+
+        assertThatThrownBy(() -> new MediaStorageGuard(props, allowAllUnderBase()).init())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("不能互相嵌套");
+    }
+
+    @Test
     @DisplayName("保留时长 / 单轮上限必须为正数")
     void refusesNonPositiveNumbers() {
         MediaProperties props = propsWith(base.resolve("t2"), base.resolve("k2"));
@@ -97,7 +121,8 @@ class MediaStorageGuardTest {
                 .withUserConfiguration(GuardContextConfig.class)
                 .withPropertyValues(
                         "app.media.temp-images.dir=" + same,
-                        "app.media.kb-images.dir=" + same)
+                        "app.media.kb-images.dir=" + same,
+                        "app.media.wiki-images.dir=" + base.resolve("ctx/wiki-images"))
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(IllegalStateException.class);
@@ -111,7 +136,8 @@ class MediaStorageGuardTest {
                 .withUserConfiguration(GuardContextConfig.class)
                 .withPropertyValues(
                         "app.media.temp-images.dir=" + base.resolve("ctx/ok-tmp"),
-                        "app.media.kb-images.dir=" + base.resolve("ctx/ok-kb"))
+                        "app.media.kb-images.dir=" + base.resolve("ctx/ok-kb"),
+                        "app.media.wiki-images.dir=" + base.resolve("ctx/ok-wiki"))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(MediaStorageGuard.class);
@@ -124,6 +150,8 @@ class MediaStorageGuardTest {
         MediaProperties props = new MediaProperties();
         props.getTempImages().setDir(tmp.toString());
         props.getKbImages().setDir(kb.toString());
+        // wiki 图与 tmp 同层，避免测试在仓库里建出 ./data/wiki-images
+        props.getWikiImages().setDir(tmp.resolveSibling("wiki-images").toString());
         return props;
     }
 

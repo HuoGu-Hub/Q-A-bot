@@ -36,6 +36,7 @@ class KbImageSourceTest {
         MediaProperties props = new MediaProperties();
         props.getTempImages().setDir(base.resolve("tmp").toString());
         props.getKbImages().setDir(base.resolve("kb").toString());
+        props.getWikiImages().setDir(base.resolve("wiki-images").toString());
 
         FileAccess fileAccess = new FileAccess();
         fileAccess.setAllowedRoots(List.of(base.toString()));

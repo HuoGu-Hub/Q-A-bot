@@ -36,6 +36,14 @@ public interface MediaPolicy {
     KbImages getKbImages();
 
     /**
+     * wiki 抓来的配图（{@code wiki-images}）—— 自动抓取、可重建。
+     *
+     * <p>单独一类而不是塞进 kb-images：它会被整批清理与重建，
+     * 而人工维护的图绝不能被那种操作带走。见 {@link WikiImages} 的类注释。
+     */
+    WikiImages getWikiImages();
+
+    /**
      * 出站图片（我们主动发给群友的图）的策略。
      *
      * <p>和 {@link #getMaxImagesPerMessage()} 是两个方向：那一个防别人用图打我们，

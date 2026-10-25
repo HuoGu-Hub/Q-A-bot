@@ -43,6 +43,7 @@ class ImageCacheTest {
         props = new MediaProperties();
         props.getTempImages().setDir(base.resolve("data/tmp-images").toString());
         props.getKbImages().setDir(base.resolve("data/kb-images").toString());
+        props.getWikiImages().setDir(base.resolve("data/wiki-images").toString());
 
         FileAccess fileAccess = new FileAccess();
         fileAccess.setAllowedRoots(List.of(base.toString()));

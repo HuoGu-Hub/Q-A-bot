@@ -328,6 +328,39 @@ public class WikiApiClient {
         return out;
     }
 
+    /**
+     * 一批页面**各自引用的图片文件**（{@code prop=images}）。
+     *
+     * <p>导入器用它算"这个文件被多少页引用" —— 超过阈值的就是全站共享图标，
+     * 配进回答只会得到一张与问题无关的图标。一次问 50 页，成本与分类查询同量级。
+     *
+     * <p>取不到不影响导入：调用方自己 try/catch，最坏是这一批页不做图标过滤。
+     */
+    public Map<String, List<String>> fetchImages(List<String> titles) {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        for (List<String> batch : batches(titles)) {
+            String url = props.getMapSync().getApiBase()
+                    + "?action=query&prop=images&imlimit=max"
+                    + "&format=json&formatversion=2&titles=" + join(batch);
+            JsonNode root = get(url);
+            for (JsonNode p : root.path("query").path("pages")) {
+                String title = p.path("title").asText("");
+                if (title.isBlank()) {
+                    continue;
+                }
+                List<String> files = new ArrayList<>();
+                for (JsonNode im : p.path("images")) {
+                    String name = im.path("title").asText("");
+                    if (!name.isBlank()) {
+                        files.add(name);
+                    }
+                }
+                out.put(title, files);
+            }
+        }
+        return out;
+    }
+
     /** wiki 上的分类名 + 成员数（{@code acprop=size}）。管理端"范围"页面用它列菜单 */
     public List<CategoryInfo> listAllCategories() {
         String url = props.getMapSync().getApiBase()

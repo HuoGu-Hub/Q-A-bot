@@ -44,6 +44,7 @@ public class MediaStorageGuard {
 
     private Path tmpDir;
     private Path kbDir;
+    private Path wikiDir;
 
     public MediaStorageGuard(MediaPolicy props, PathGuard pathGuard) {
         this.props = props;
@@ -64,9 +65,14 @@ public class MediaStorageGuard {
             throw new IllegalStateException("[MEDIA] 配置错误：app.media.outbound-images.max-size-kb 不能为负数，"
                     + "0 表示不限制");
         }
+        if (props.getWikiImages().getMaxTotalSizeMb() < 0) {
+            throw new IllegalStateException("[MEDIA] 配置错误：app.media.wiki-images.max-total-size-mb 不能为负数，"
+                    + "0 表示不限制");
+        }
 
         Path tmp = resolve("app.media.temp-images.dir", props.getTempImages().getDir());
         Path kb = resolve("app.media.kb-images.dir", props.getKbImages().getDir());
+        Path wiki = resolve("app.media.wiki-images.dir", props.getWikiImages().getDir());
 
         // ① 绝不能是同一个目录
         if (tmp.equals(kb)) {
@@ -86,6 +92,40 @@ public class MediaStorageGuard {
                       临时图片（会被递归清理）：%s
                       知识库图片：%s
                     请把知识库挪到临时目录之外。""", tmp, kb));
+        }
+
+        // ②' wiki 配图与另外两个目录也必须互不嵌套。
+        //    wiki 图会被整批清理与重建（可重建是它的设计前提），
+        //    一旦它套住了 kb-images，一次"清空重抓"就会带走人工资产。
+        if (wiki.equals(tmp) || wiki.equals(kb)) {
+            throw new IllegalStateException(String.format("""
+                    [MEDIA] 配置错误：wiki 配图目录与临时/知识库图片目录是同一个路径！
+                      wiki 配图：%s
+                     临时图片：%s
+                     知识库图片：%s
+                    wiki 配图会被整批清理重建，不能和另外两类共用目录。""",
+                    wiki, tmp, kb));
+        }
+        if (wiki.startsWith(tmp)) {
+            throw new IllegalStateException(String.format("""
+                    [MEDIA] 配置错误：wiki 配图目录位于临时图片目录内部！
+                      临时图片（会被递归清理）：%s
+                      wiki 配图：%s
+                    请把 wiki 配图挪到临时目录之外。""", tmp, wiki));
+        }
+        if (tmp.startsWith(wiki)) {
+            throw new IllegalStateException(String.format("""
+                    [MEDIA] 配置错误：临时图片目录位于 wiki 配图目录内部！
+                      wiki 配图（会被整批清理）：%s
+                      临时图片：%s
+                    请把两者分开放。""", wiki, tmp));
+        }
+        if (wiki.startsWith(kb) || kb.startsWith(wiki)) {
+            throw new IllegalStateException(String.format("""
+                    [MEDIA] 配置错误：wiki 配图目录与知识库图片目录不能互相嵌套！
+                      wiki 配图：%s
+                     知识库图片：%s
+                    前者会被整批清理重建，后者是永久资产。""", wiki, kb));
         }
 
         // ③ 临时目录反过来落在知识库里：不致命，但说明目录规划很乱，提醒一下
@@ -122,11 +162,13 @@ public class MediaStorageGuard {
         }
 
         ensureDirectory(kb, "知识库图片目录");
+        ensureDirectory(wiki, "wiki 配图目录");
 
         this.tmpDir = tmp;
         this.kbDir = kb;
+        this.wikiDir = wiki;
 
-        log.info("[MEDIA] 目录隔离已生效：临时={}  知识库={}", tmp, kb);
+        log.info("[MEDIA] 目录隔离已生效：临时={}  知识库={}  wiki 配图={}", tmp, kb, wiki);
         log.info("[MEDIA] 单条消息图片上限：{}",
                 props.getMaxImagesPerMessage() > 0 ? props.getMaxImagesPerMessage() + " 张" : "不限制");
         if (props.getOutboundImages().isEnabled()) {
@@ -160,6 +202,11 @@ public class MediaStorageGuard {
     /** 知识库图片目录（已解析为绝对路径并创建） */
     public Path kbDir() {
         return requireInitialized(kbDir, "知识库图片目录");
+    }
+
+    /** wiki 配图目录（已解析为绝对路径并创建） */
+    public Path wikiDir() {
+        return requireInitialized(wikiDir, "wiki 配图目录");
     }
 
     /** 图片缓存目录（tmp-images/inbound，已创建） */
