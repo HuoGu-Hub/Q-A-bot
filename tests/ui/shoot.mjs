@@ -43,14 +43,12 @@ const PAGES = [
   ['/', 'home'],
   ['/library', 'library'],
   ['/map', 'map'],
-  ['/plaza', 'plaza'],
   ['/about', 'about'],
   ['/admin/', 'admin-stats'],
   ['/admin/kb', 'admin-kb'],
   ['/admin/bot', 'admin-bot'],
   ['/admin/system', 'admin-system'],
   ['/admin/pages', 'admin-pages'],
-  ['/admin/plaza', 'admin-plaza'],
   ['/admin/map', 'admin-map'],
 ]
 

@@ -27,11 +27,10 @@ const BASE = arg('base', process.env.BASE || 'http://127.0.0.1:5173')
 const ADMIN_PW = process.env.ADMIN_PASSWORD || arg('admin-password', '')
 
 const PAGES = [
-  ['/', 'home'], ['/library', 'library'], ['/map', 'map'],
-  ['/plaza', 'plaza'], ['/about', 'about'],
+  ['/', 'home'], ['/library', 'library'], ['/map', 'map'], ['/about', 'about'],
   ['/admin/', 'admin-stats'], ['/admin/kb', 'admin-kb'], ['/admin/bot', 'admin-bot'],
   ['/admin/system', 'admin-system'], ['/admin/pages', 'admin-pages'],
-  ['/admin/plaza', 'admin-plaza'], ['/admin/map', 'admin-map'],
+  ['/admin/map', 'admin-map'],
 ]
 const VIEWPORTS = [
   ['desktop', 1440, 900],

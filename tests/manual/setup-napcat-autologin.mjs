@@ -2,9 +2,11 @@
 // 配置 NapCat 重启后自动登录 + 建立设备标识备份（安全网）
 import fs from 'node:fs'
 import crypto from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 
-const BASE = process.env.NAPCAT_WEBUI ?? 'http://192.168.65.254:6099'
-const cfgPath = '/app/workspace/qqbot/deploy/data/napcat/config/webui.json'
+const BASE = process.env.NAPCAT_WEBUI ?? 'http://127.0.0.1:6099'
+const cfgPath = process.env.NAPCAT_WEBUI_JSON
+  ?? fileURLToPath(new URL('../../deploy/data/napcat/config/webui.json', import.meta.url))
 // 真实 QQ 号不进仓库：必须显式传 BOT_QQ，避免有人把真号写回代码
 const BOT_QQ = process.env.BOT_QQ
 if (!BOT_QQ) {

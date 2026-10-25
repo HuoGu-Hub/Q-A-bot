@@ -3,9 +3,11 @@
 // 用法：node tests/manual/watch-napcat-login.mjs   （在重启 NapCat 前后跑都行）
 import fs from 'node:fs'
 import crypto from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 
-const BASE = process.env.NAPCAT_WEBUI ?? 'http://192.168.65.254:6099'
-const cfgPath = '/app/workspace/qqbot/deploy/data/napcat/config/webui.json'
+const BASE = process.env.NAPCAT_WEBUI ?? 'http://127.0.0.1:6099'
+const cfgPath = process.env.NAPCAT_WEBUI_JSON
+  ?? fileURLToPath(new URL('../../deploy/data/napcat/config/webui.json', import.meta.url))
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 180000)
 const token = JSON.parse(fs.readFileSync(cfgPath, 'utf8')).token
 const hash = crypto.createHash('sha256').update(token + '.napcat').digest('hex')
