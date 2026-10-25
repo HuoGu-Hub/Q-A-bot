@@ -51,6 +51,18 @@ public interface DistillPolicy {
     /** 一个任务最多多少批，防止成本失控 */
     int getMaxBatchesPerJob();
 
+    /** 一个批次最多产出多少条笔记 */
+    int getMaxNotesPerBatch();
+
+    /** 是否自动发布达到质量门槛的笔记 */
+    boolean isAutoPublish();
+
+    /** 自动发布的最低置信度 */
+    double getMinConfidence();
+
+    /** 提示词版本，写进笔记便于回溯 */
+    String getPromptVersion();
+
     /** 一次导入最多接受多少字符 */
     int getMaxImportChars();
 }

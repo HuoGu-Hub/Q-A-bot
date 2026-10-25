@@ -2,15 +2,17 @@ package com.example.qqbot.distill;
 
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
+import com.example.qqbot.persistence.DistillNoteRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -35,18 +37,21 @@ public class DistillAdminController {
     private final ChatCaptureService capture;
     private final ChatImportService imports;
     private final DistillJobService jobs;
+    private final DistillWorker worker;
+    private final DistillNoteService notes;
     private final ChatRepository chat;
-    private final DistillJobRepository jobRepo;
     private final ChatImageStore imageStore;
 
     public DistillAdminController(ChatCaptureService capture, ChatImportService imports,
-                                  DistillJobService jobs, ChatRepository chat,
-                                  DistillJobRepository jobRepo, ChatImageStore imageStore) {
+                                  DistillJobService jobs, DistillWorker worker,
+                                  DistillNoteService notes, ChatRepository chat,
+                                  ChatImageStore imageStore) {
         this.capture = capture;
         this.imports = imports;
         this.jobs = jobs;
+        this.worker = worker;
+        this.notes = notes;
         this.chat = chat;
-        this.jobRepo = jobRepo;
         this.imageStore = imageStore;
     }
 
@@ -70,6 +75,9 @@ public class DistillAdminController {
         out.put("imports", jobs.countImports());
         out.put("jobs", jobs.countJobs());
         out.put("batches", jobs.countBatches());
+        out.put("notes", notes.count(null));
+        out.put("drafts", notes.count("draft"));
+        out.put("publishedNotes", notes.count("published"));
         return out;
     }
 
@@ -188,6 +196,102 @@ public class DistillAdminController {
     public ResponseEntity<?> job(@PathVariable long id) {
         DistillJobService.JobDetail detail = jobs.detail(id);
         return detail == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(detail);
+    }
+
+    /** 开始或继续一个任务 */
+    @PostMapping("/jobs/{id}/start")
+    public ResponseEntity<?> start(@PathVariable long id) {
+        try {
+            boolean started = worker.start(id);
+            return ResponseEntity.ok(Map.of("ok", true, "started", started));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/jobs/{id}/pause")
+    public ResponseEntity<?> pause(@PathVariable long id) {
+        worker.pause(id);
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    @PostMapping("/jobs/{id}/retry")
+    public ResponseEntity<?> retry(@PathVariable long id) {
+        try {
+            boolean started = worker.retry(id);
+            return ResponseEntity.ok(Map.of("ok", true, "started", started));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** 笔记列表 */
+    @GetMapping("/notes")
+    public Map<String, Object> notes(@RequestParam(required = false) String status,
+                                     @RequestParam(defaultValue = "0") long jobId,
+                                     @RequestParam(defaultValue = "100") int limit) {
+        List<DistillNoteRepository.Note> rows = notes.list(status, jobId, limit);
+        return Map.of("rows", rows, "count", rows.size());
+    }
+
+    /** 笔记详情：正文 + 来源 + 图片 */
+    @GetMapping("/notes/{id}")
+    public ResponseEntity<?> note(@PathVariable long id) {
+        DistillNoteService.Detail detail = notes.detail(id);
+        return detail == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(detail);
+    }
+
+    /** 编辑标题 / 别名 / 分类 / 正文 / 置信度 */
+    @PutMapping("/notes/{id}")
+    public ResponseEntity<?> updateNote(@PathVariable long id, @RequestBody Map<String, Object> body) {
+        try {
+            var note = notes.update(id, str(body.get("title")), str(body.get("aliases")),
+                    str(body.get("category")), str(body.get("body")), dbl(body.get("confidence")));
+            return note == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(note);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.warn("[DISTILL] 保存笔记失败：{}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/notes/{id}/publish")
+    public ResponseEntity<?> publish(@PathVariable long id) {
+        try {
+            var note = notes.publish(id);
+            return note == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(note);
+        } catch (Exception e) {
+            log.warn("[DISTILL] 发布笔记失败：{}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/notes/{id}/unpublish")
+    public ResponseEntity<?> unpublish(@PathVariable long id) {
+        var note = notes.unpublish(id);
+        return note == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(note);
+    }
+
+    @DeleteMapping("/notes/{id}")
+    public ResponseEntity<?> deleteNote(@PathVariable long id) {
+        boolean ok = notes.delete(id);
+        return ok ? ResponseEntity.ok(Map.of("ok", true)) : ResponseEntity.notFound().build();
+    }
+
+    private static String str(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
+    private static Double dbl(Object o) {
+        if (o instanceof Number n) {
+            return n.doubleValue();
+        }
+        try {
+            return o == null ? null : Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 受鉴权的聊天图片字节 */

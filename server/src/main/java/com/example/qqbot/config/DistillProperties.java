@@ -56,6 +56,18 @@ public class DistillProperties implements DistillPolicy {
     /** 单任务最多批次 */
     private int maxBatchesPerJob = 200;
 
+    /** 单批最多产出笔记数 */
+    private int maxNotesPerBatch = 12;
+
+    /** 是否自动发布达到门槛的笔记 */
+    private boolean autoPublish = true;
+
+    /** 自动发布最低置信度 */
+    private double minConfidence = 0.75;
+
+    /** 提示词版本 */
+    private String promptVersion = "v1";
+
     /** 单次导入最大字符数 */
     private int maxImportChars = 20_000_000;
 
@@ -183,6 +195,42 @@ public class DistillProperties implements DistillPolicy {
 
     public void setMaxBatchesPerJob(int maxBatchesPerJob) {
         this.maxBatchesPerJob = maxBatchesPerJob;
+    }
+
+    @Override
+    public int getMaxNotesPerBatch() {
+        return maxNotesPerBatch;
+    }
+
+    public void setMaxNotesPerBatch(int maxNotesPerBatch) {
+        this.maxNotesPerBatch = maxNotesPerBatch;
+    }
+
+    @Override
+    public boolean isAutoPublish() {
+        return autoPublish;
+    }
+
+    public void setAutoPublish(boolean autoPublish) {
+        this.autoPublish = autoPublish;
+    }
+
+    @Override
+    public double getMinConfidence() {
+        return minConfidence;
+    }
+
+    public void setMinConfidence(double minConfidence) {
+        this.minConfidence = minConfidence;
+    }
+
+    @Override
+    public String getPromptVersion() {
+        return promptVersion;
+    }
+
+    public void setPromptVersion(String promptVersion) {
+        this.promptVersion = promptVersion;
     }
 
     @Override

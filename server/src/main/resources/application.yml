@@ -146,6 +146,14 @@ app:
     batch-overlap: 5
     # 单任务最多多少批，防止一次点爆成本
     max-batches-per-job: 200
+    # 单批最多产出几条笔记
+    max-notes-per-batch: 12
+    # 是否自动发布达到门槛的笔记；删除仍是软删除，可在回收站恢复
+    auto-publish: true
+    # 自动发布最低置信度
+    min-confidence: 0.75
+    # 提示词版本，写进笔记便于回溯
+    prompt-version: v1
     # 一次导入最多接受多少字符
     max-import-chars: 20000000
 

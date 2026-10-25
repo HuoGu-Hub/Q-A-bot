@@ -388,6 +388,37 @@ public class LlmRouter {
     }
 
     /**
+     * 用调用方给的系统提示词做一次纯文本对话。
+     *
+     * <p>这是给"不是群聊人格"的旁路用的：聊天蒸馏要的是数据整理提示词，
+     * 不能把 {@code system.md} 叠上去。返回模型名与 token，便于任务账本记录。
+     */
+    public Reply chatWithSystem(String systemPrompt, String userMessage) {
+        ChatRequest req = request(List.of(SystemMessage.from(systemPrompt),
+                new UserMessage(userMessage)));
+        ChatResponse response = callWithFallbackResponse(req, null);
+        if (response == null || response.aiMessage() == null
+                || response.aiMessage().text() == null || response.aiMessage().text().isBlank()) {
+            throw new LlmException("模型返回为空");
+        }
+        long in = 0;
+        long out = 0;
+        if (response.tokenUsage() != null) {
+            in = response.tokenUsage().inputTokenCount() == null
+                    ? 0 : response.tokenUsage().inputTokenCount();
+            out = response.tokenUsage().outputTokenCount() == null
+                    ? 0 : response.tokenUsage().outputTokenCount();
+        }
+        String provider = chain.isEmpty() ? "" : chain.get(0);
+        String model = provider.isBlank() ? "" : currentModelName(provider);
+        return new Reply(response.aiMessage().text(), model, in, out);
+    }
+
+    /** 一次旁路调用的结果 */
+    public record Reply(String text, String model, long tokensIn, long tokensOut) {
+    }
+
+    /**
      * 本轮实际用的系统消息 = system.md（启动时读一次）+ 后台配的回复风格（每轮现取）。
      *
      * <p>风格是**追加**的，永远不可能覆盖或削弱上面的安全规则 —— 风格段开头也写明了

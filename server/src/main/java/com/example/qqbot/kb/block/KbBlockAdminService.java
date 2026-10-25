@@ -157,6 +157,15 @@ public class KbBlockAdminService {
      */
     public BlockView add(String docId, String id, String title, String text,
                          String url, List<String> tags) {
+        return addWithSource(docId, id, title, text, url, tags, KbBlock.SRC_MANUAL);
+    }
+
+    /**
+     * 带来源新增一块。聊天蒸馏写块时用 {@code chat-distill}，
+     * 管理端手写仍走 {@link #add}，默认来源是 {@code manual}。
+     */
+    public BlockView addWithSource(String docId, String id, String title, String text,
+                                   String url, List<String> tags, String source) {
         String body = text == null ? "" : text.trim();
         if (body.isEmpty()) {
             throw new IllegalArgumentException("正文不能为空");
@@ -169,10 +178,11 @@ public class KbBlockAdminService {
         if (store.get(com.example.qqbot.kb.EntryId.of(bid)) != null) {
             throw new IllegalArgumentException("id 已存在：" + bid + "（想改内容请用「保存这一块」）");
         }
+        String src = source == null || source.isBlank() ? KbBlock.SRC_MANUAL : source.trim();
         KbBlock b = new KbBlock(com.example.qqbot.kb.EntryId.of(bid), doc,
                 title == null ? "" : title.trim(), body,
                 url == null ? "" : url, tags == null ? List.of() : List.copyOf(tags),
-                KbBlock.SRC_MANUAL, false, Instant.now().toString());
+                src, false, Instant.now().toString());
         store.upsert(b, embed(body, bid));
         // 标题向量一起补上（C 路要它才能"名字直击"）；没标题的块就没有这一路
         if (!b.title().isBlank()) {
@@ -180,6 +190,33 @@ public class KbBlockAdminService {
         }
         log.info("[KB-BLOCK] 新增块 {}（文档 {}，{} 字）", bid, doc, body.length());
         return BlockView.of(b);
+    }
+
+    /**
+     * 改标题、正文与标签 —— 正文和标题都会重算向量。
+     *
+     * <p>蒸馏笔记编辑后要同步到块，走这个入口；不要直接写表，
+     * 否则会出现"正文改了、检索还按旧文本"的静默错误。
+     */
+    public BlockView updateMeta(String id, String title, String text, List<String> tags) {
+        KbBlock old = store.get(com.example.qqbot.kb.EntryId.of(id));
+        if (old == null) {
+            return null;
+        }
+        String body = text == null ? "" : text.trim();
+        if (body.isEmpty()) {
+            throw new IllegalArgumentException("正文不能为空；要下架这一块请用「下架」");
+        }
+        String newTitle = title == null ? "" : title.trim();
+        List<String> newTags = tags == null ? List.of() : List.copyOf(tags);
+        KbBlock updated = new KbBlock(old.id(), old.docId(), newTitle, body, old.url(),
+                newTags, old.source(), old.retired(), Instant.now().toString(), old.aliasOrEmpty());
+        store.upsert(updated, embed(body, id));
+        if (!newTitle.isBlank() && !newTitle.equals(old.title())) {
+            store.upsertTitleVector(com.example.qqbot.kb.EntryId.of(id), newTitle, embed(newTitle, id));
+        }
+        log.info("[KB-BLOCK] 块 {} 标题/正文/标签已更新（向量已重算）", id);
+        return BlockView.of(updated);
     }
 
     /**

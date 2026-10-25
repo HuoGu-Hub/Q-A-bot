@@ -154,6 +154,74 @@ public class DistillJobRepository {
         return jdbc.query("SELECT * FROM distill_batch WHERE job_id = ? ORDER BY seq", BATCH, jobId);
     }
 
+    /** 下一个待处理批次；没有返回 null */
+    public Batch nextPending(long jobId) {
+        return jdbc.queryOne("SELECT * FROM distill_batch WHERE job_id = ? AND status = 'pending'"
+                + " ORDER BY seq LIMIT 1", BATCH, jobId);
+    }
+
+    public Batch findBatch(long id) {
+        return jdbc.queryOne("SELECT * FROM distill_batch WHERE id = ?", BATCH, id);
+    }
+
+    public void markBatchRunning(long id, String startedAt) {
+        jdbc.update("UPDATE distill_batch SET status='running', attempts=attempts+1,"
+                + " started_at=?, error='' WHERE id=?", startedAt, id);
+    }
+
+    public void markBatchDone(long id, String model, long tokensIn, long tokensOut) {
+        jdbc.update("UPDATE distill_batch SET status='done', finished_at=?, model=?,"
+                        + " tokens_in=?, tokens_out=?, error='' WHERE id=?",
+                java.time.Instant.now().toString(), model, tokensIn, tokensOut, id);
+    }
+
+    public void markBatchFailed(long id, String error) {
+        jdbc.update("UPDATE distill_batch SET status='failed', finished_at=?, error=? WHERE id=?",
+                java.time.Instant.now().toString(), truncate(error), id);
+    }
+
+    /** 自动重试：放回 pending，保留 attempts */
+    public void requeueBatch(long id, String error) {
+        jdbc.update("UPDATE distill_batch SET status='pending', error=? WHERE id=?",
+                truncate(error), id);
+    }
+
+    /** 进程重启后把卡在 running 的批次放回 pending，避免永远转圈 */
+    public int resetRunningBatches(long jobId) {
+        return jdbc.update("UPDATE distill_batch SET status='pending', error='上次中断，已重新排队'"
+                + " WHERE job_id = ? AND status = 'running'", jobId);
+    }
+
+    /** 重试：把失败的批次放回 pending */
+    public int resetFailedBatches(long jobId) {
+        return jdbc.update("UPDATE distill_batch SET status='pending', error=''"
+                + " WHERE job_id = ? AND status = 'failed'", jobId);
+    }
+
+    public void updateJobStatus(long id, String status, String error) {
+        jdbc.update("UPDATE distill_job SET status=?, error=?, started_at=CASE"
+                        + " WHEN ?='running' AND (started_at IS NULL OR started_at='') THEN ?"
+                        + " ELSE started_at END WHERE id=?",
+                status, truncate(error), status, java.time.Instant.now().toString(), id);
+    }
+
+    public void finishJob(long id, String status, String error) {
+        jdbc.update("UPDATE distill_job SET status=?, error=?, finished_at=? WHERE id=?",
+                status, truncate(error), java.time.Instant.now().toString(), id);
+    }
+
+    public long countByStatus(long jobId, String status) {
+        return jdbc.count("SELECT COUNT(*) FROM distill_batch WHERE job_id = ? AND status = ?",
+                jobId, status);
+    }
+
+    private static String truncate(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() > 500 ? s.substring(0, 500) : s;
+    }
+
     public long countJobs() {
         return jdbc.count("SELECT COUNT(*) FROM distill_job");
     }

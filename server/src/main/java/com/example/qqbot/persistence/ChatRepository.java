@@ -172,6 +172,28 @@ public class ChatRepository {
         return jdbc.query("SELECT * FROM chat_image WHERE message_id = ? ORDER BY id", IMAGE, messageId);
     }
 
+    /** 取一个批次范围内的消息。批次按候选顺序连续切分，通常 id 也是连续的。 */
+    public List<Message> messagesBetween(long fromId, long toId) {
+        return jdbc.query("SELECT " + MESSAGE_COLUMNS
+                + " FROM chat_message WHERE id BETWEEN ? AND ? ORDER BY ts, id",
+                MESSAGE, fromId, toId);
+    }
+
+    /** 一次取多条消息的图片，避免逐条查询 */
+    public List<Image> imagesOfMessages(List<Long> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return List.of();
+        }
+        StringBuilder sql = new StringBuilder("SELECT * FROM chat_image WHERE message_id IN (");
+        List<Object> args = new ArrayList<>();
+        for (int i = 0; i < messageIds.size(); i++) {
+            sql.append(i == 0 ? "?" : ",?");
+            args.add(messageIds.get(i));
+        }
+        sql.append(") ORDER BY message_id, id");
+        return jdbc.query(sql.toString(), IMAGE, args.toArray());
+    }
+
     public Image findImage(long id) {
         return jdbc.queryOne("SELECT * FROM chat_image WHERE id = ?", IMAGE, id);
     }
