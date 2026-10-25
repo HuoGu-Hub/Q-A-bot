@@ -43,7 +43,6 @@ import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.onebot.model.OneBotEvent;
-import com.example.qqbot.plaza.FallbackService;
 import com.example.qqbot.qa.QaCollector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -226,7 +225,7 @@ class MessageRouterCommandTest {
         CommandHandler commandHandler = newHandler();
         router = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), new Access(),
-                mock(BlockNotifier.class), qaCollector, commandHandler, mock(FallbackService.class));
+                mock(BlockNotifier.class), qaCollector, commandHandler);
     }
 
     private OneBotEvent privateEvent(String text) {
@@ -436,7 +435,7 @@ class MessageRouterCommandTest {
         CommandHandler handler = newHandler();
         MessageRouter blacklisted = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), blacklist,
-                mock(BlockNotifier.class), qaCollector, handler, mock(FallbackService.class));
+                mock(BlockNotifier.class), qaCollector, handler);
 
         BotCommand ping = new BotCommand(9, "ping", "在的喵～", "看看我在不在",
                 "all", List.of(), "member", true, 9, true,
@@ -583,7 +582,7 @@ class MessageRouterCommandTest {
         openPrivate.setPrivateChatPolicy("all");
         MessageRouter openRouter = new MessageRouter(apiClient, codec, identity, chatService, guardPipeline,
                 outboundSender, budgetGuard, new AsyncProperties(), new RateLimit(), openPrivate,
-                mock(BlockNotifier.class), qaCollector, newHandler(), mock(FallbackService.class));
+                mock(BlockNotifier.class), qaCollector, newHandler());
         matchCommand(actionCommand("test.echo", "admin"), "文本");
 
         openRouter.handle(privateEvent("/test/echo 文本"));

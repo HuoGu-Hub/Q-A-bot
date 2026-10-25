@@ -42,6 +42,7 @@ ORDER BY s.id;
 BEGIN;
 
 -- 先删引用方（qa_raw.id / qa_keyword.stat_id 都外键指向 qa_stat.id）
+-- 若已执行 cleanup-plaza-proposal-tables.sql，answer_vote 已删除，请注释掉下面这条
 DELETE FROM answer_vote
  WHERE stat_id IN (SELECT id FROM qa_stat WHERE group_id BETWEEN 700000 AND 700004);
 

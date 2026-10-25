@@ -38,7 +38,7 @@ public class CategoryService {
     /** 没有分类（或标签认不出）时的兜底名。它不是一个真实分类，不落库、不可删除 */
     public static final String UNCATEGORIZED = "未分类";
 
-    /** 群友贡献内容（提案落地）的固定分类 */
+    /** 群友贡献内容的固定分类：聊天蒸馏、人工沉淀都归这里 */
     public static final String CONTRIB = "大佬攻略";
 
     /**

@@ -64,8 +64,8 @@ public class QaAnalytics {
      *   <li>{@code users}/{@code groups} —— <b>提过问的</b>独立用户/群。
      *       ⚠️ 曾漏加 {@code pass} 过滤，实测把 90 个"说过话的人"算成独立用户，
      *       真实只有 25 个 —— 群里闲聊的人不是用户。
-     *       ⚠️ 只算 {@code group_id > 0}：广场生成的答案写的是 {@code group_id = 0}
-     *       （见 {@code PlazaStore.saveGeneratedAnswer}），不排除的话
+     *       ⚠️ 只算 {@code group_id > 0}：历史上广场生成的答案写的是 {@code group_id = 0}，
+     *       功能已下线，但老库里可能还有这种行。不排除的话
      *       {@code COUNT(DISTINCT group_id)} 会凭空多出一个"0 号群"。</li>
      *   <li>{@code dropped}/{@code fixedReplies} —— 被拦截的两种，分开列。
      *       两者语义都是"被拦"，不该混进任何"回答量"。</li>

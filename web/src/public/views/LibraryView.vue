@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { renderInline } from '../renderInline'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi, describeError } from '@shared/api/client'
-import type { KbEntry, KbSearchResult, KbGroup, KbBrowseResult, PlazaKeywordItem } from '@shared/api/types'
+import type { KbEntry, KbSearchResult, KbGroup, KbBrowseResult } from '@shared/api/types'
 import { num } from '@shared/utils/format'
 import { t } from '../useSiteText'
 import Button from '@shared/ui/Button.vue'
@@ -28,10 +28,6 @@ const result = ref<KbSearchResult | null>(null)
 const browse = ref<KbBrowseResult | null>(null)
 /** 大类定义（含各自的热门标签） */
 const groups = ref<KbGroup[]>([])
-/** 大家常问（来自问答广场的投票数据） */
-const hot = ref<PlazaKeywordItem[]>([])
-/** 热词是全部来自投票，还是掺了「被问最多」的 */
-const hotMixed = ref(false)
 
 /** 当前选中的大类 / 标签 */
 const curGroup = computed(() => String(route.query.group ?? ''))
@@ -78,14 +74,6 @@ async function loadGroups() {
   try {
     groups.value = await publicApi.get<KbGroup[]>('/kb/groups')
   } catch { /* 拿不到就不显示分类 */ }
-}
-
-async function loadHot() {
-  try {
-    const r = await publicApi.get<{ keywords: PlazaKeywordItem[]; mixed?: boolean }>('/plaza/keywords?limit=16')
-    hot.value = r.keywords ?? []
-    hotMixed.value = r.mixed === true
-  } catch { /* 忽略 */ }
 }
 
 async function search(kw: string) {
@@ -141,11 +129,6 @@ function backToGroups() {
 function goPage(p: number) {
   router.push({ name: 'library', query: { ...route.query, page: String(p) } })
 }
-function openKeyword(kw: string) {
-  q.value = kw
-  router.push({ name: 'library', query: { q: kw } })
-}
-
 /** 分页信息 */
 const totalPages = computed(() =>
   browse.value ? Math.ceil(browse.value.total / browse.value.pageSize) : 0)
@@ -162,7 +145,7 @@ async function refresh() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadGroups(), loadHot()])
+  await loadGroups()
   await refresh()
 })
 
@@ -321,24 +304,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
             </div>
           </div>
         </div>
-      </section>
-
-      <section class="block">
-        <div class="block-head">
-          <h2 class="block-title">大家常问</h2>
-          <span class="hint">{{ hotMixed ? '群友问得最多的' : '被点赞认可的' }}</span>
-        </div>
-        <div v-if="hot.length" class="rowlist hot-list">
-          <ListRow
-            v-for="k in hot"
-            :key="k.keyword"
-            :title="k.keyword"
-            :sub="k.termEn || ''"
-            :meta="num(k.votedCount || k.count)"
-            @click="openKeyword(k.keyword)"
-          />
-        </div>
-        <p v-else class="hint center empty-hint">还没有人查过什么。去群里 @ 机器人问一句吧～</p>
       </section>
 
       <!--
@@ -500,17 +465,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 }
 
 .tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-
-/* 「大家常问」：宽屏两列，16 条压成 8 行 —— 和广场页的热词清单同一个处理 */
-@media (min-width: 900px) {
-  .hot-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--sp-5);
-  }
-  .hot-list > * + * { border-top: 0; }
-  .hot-list > * { border-bottom: 1px solid var(--hairline); }
-}
 
 .pager {
   display: flex;

@@ -21,9 +21,8 @@ import java.util.concurrent.Callable;
  * 全项目共用一个 SQLite 连接，而 JDBC 连接**不是线程安全的**。
  * {@link SqliteConnectionProvider} 的注释写着"调用方自己负责同步"，
  * 但实测 14 个手写 SQL 的类里：6 个用 {@code synchronized (this)}、1 个用同步方法、
- * **另外 8 个完全没有同步**（{@code KbMapStore} / {@code KbWikiPageStore} /
- * {@code AnswerAggregator} / {@code QaAnalytics} / {@code QaStore} / {@code SiteTextService} /
- * {@code KbProposalService} / {@code PlazaAdminController}）。
+ * **另外多个完全没有同步**，例如 {@code KbMapStore} / {@code KbWikiPageStore} /
+ * {@code QaAnalytics} / {@code QaStore} / {@code SiteTextService}。
  * 靠"每个人记得加锁"是行不通的 —— 这里**统一加锁**。
  *
  * <p>本类是 Spring 单例，所以 {@code monitor} 是**全局唯一**的；

@@ -27,8 +27,6 @@ const scope = ref<'questions' | 'all'>('questions')
 const rows = ref<RecordRow[]>([])
 const total = ref(0)
 
-/** 标记「有帮助」的累计进度 —— 打标记是为了喂给「知识库 → 提案」的 agent 分析 */
-const prop = ref<{ threshold: number; pendingGood: number; canAnalyze: boolean } | null>(null)
 const loading = ref(false)
 const error = ref('')
 const busyId = ref<number | null>(null)
@@ -48,9 +46,6 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // 进度失败不该影响主列表
-    adminApi.get<{ threshold: number; pendingGood: number; canAnalyze: boolean }>(
-      '/kb/proposals/stats').then(r => { prop.value = r }).catch(() => {})
     const r = await adminApi.get<{ rows: RecordRow[]; total: number; scope: string }>(
       `/records?days=${props.days}&limit=100&scope=${scope.value}`)
     rows.value = r.rows
@@ -129,9 +124,7 @@ onMounted(load)
   <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <Notice v-else-if="scope === 'questions'" tone="info">
-      共 {{ total }} 条提问<template v-if="prop"> · 标记「有帮助」的回答累计
-      <strong class="num">{{ prop.pendingGood }}</strong>/<span class="num">{{ prop.threshold }}</span> 条后，
-      可在「知识库 → 提案」让 agent 分析并给出改进建议</template>
+      共 {{ total }} 条提问 · 标记结果只用于统计
     </Notice>
 
     <Panel>

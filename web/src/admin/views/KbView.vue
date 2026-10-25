@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * 知识库 —— 「文档」「词条」「分类」「提案」「抓取」五个二级目录合并后的页面。
+ * 知识库 —— 「文档」「词条」「分类」「抓取」四个二级目录合并后的页面。
  *
  *  文档   往知识库**导入文档**（按块 id 操作，导入即自动切割成一个个词条）
  *  词条   **一个词条 = 一个分块**：列表看标题 / 别名 / 分类，点「编辑」展开改别名与正文
  *  分类   人工维护的平铺分类清单：新增 / 改名 / 删除；标签认不出就是「未分类」
- *  提案   被认可的回答攒够阈值后，由 agent 产出、等人确认的改进提案
  *  抓取   从 wiki 抓文章：选范围 → 开始抓取（空跑 / 增量 / 强制重洗）→ 看进度与结果
  *
  * 页面栏（吸顶）只剩「刷新」这类整页动作 —— 筛选、导出、导入都在各自面板里，
@@ -23,7 +22,6 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import TermPanel from './kb/TermPanel.vue'
 import CategoryPanel from './kb/CategoryPanel.vue'
-import ProposalPanel from './kb/ProposalPanel.vue'
 import DocPanel from './kb/DocPanel.vue'
 import WikiPanel from './kb/WikiPanel.vue'
 
@@ -34,7 +32,6 @@ const TABS = [
   { key: 'docs', label: '文档' },
   { key: 'terms', label: '词条' },
   { key: 'category', label: '分类' },
-  { key: 'proposals', label: '提案' },
   { key: 'wiki', label: '抓取' },
 ]
 
@@ -52,25 +49,17 @@ function setTab(k: string) {
 
 const termRef = ref<InstanceType<typeof TermPanel> | null>(null)
 const catRef = ref<InstanceType<typeof CategoryPanel> | null>(null)
-const propRef = ref<InstanceType<typeof ProposalPanel> | null>(null)
 const docRef = ref<InstanceType<typeof DocPanel> | null>(null)
 const wikiRef = ref<InstanceType<typeof WikiPanel> | null>(null)
 
 const tm = computed(() => (tab.value === 'terms' ? termRef.value : null))
 const cat = computed(() => (tab.value === 'category' ? catRef.value : null))
-const prop = computed(() => (tab.value === 'proposals' ? propRef.value : null))
 const doc = computed(() => (tab.value === 'docs' ? docRef.value : null))
 const wiki = computed(() => (tab.value === 'wiki' ? wikiRef.value : null))
 
 const tmLoading = computed(() => tm.value?.isLoading() ?? false)
 const catLoading = computed(() => cat.value?.isLoading() ?? false)
 const docLoading = computed(() => doc.value?.isLoading() ?? false)
-
-const propProgress = computed(() => prop.value?.progress() ?? null)
-const propAnalyzing = computed(() => prop.value?.analyzing() ?? false)
-const propLoading = computed(() => prop.value?.isLoading() ?? false)
-const propCanAnalyze = computed(() => prop.value?.canAnalyze() ?? false)
-const propTitle = computed(() => prop.value?.analyzeTitle() ?? '')
 
 const wikiRunning = computed(() => wiki.value?.isRunning() ?? false)
 const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', label: '空闲', tone: 'neutral' as const })
@@ -106,28 +95,6 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
         </Button>
       </template>
 
-      <template v-else-if="tab === 'proposals'">
-        <span v-if="propProgress" class="stat faint">
-          <template v-if="!propProgress.available">提案库不可用</template>
-          <template v-else>
-            <b>{{ propProgress.pendingGood }}</b> / <b>{{ propProgress.threshold }}</b>
-            条「有帮助」待分析
-            <template v-if="propProgress.canAnalyze"> · <span class="reach">可以分析</span></template>
-            <template v-else> · 还差 {{ propProgress.remaining }} 条</template>
-          </template>
-        </span>
-        <Button size="sm" :disabled="propLoading" @click="prop?.reload()">刷新</Button>
-        <Button
-          size="sm"
-          variant="primary"
-          :disabled="propAnalyzing || propLoading || !propCanAnalyze"
-          :title="propTitle"
-          @click="prop?.analyze()"
-        >
-          {{ propAnalyzing ? '分析中…' : '让 agent 分析' }}
-        </Button>
-      </template>
-
       <!--
         抓取：主操作常驻顶栏。这个页面以前最大的问题就是"找不到从哪开始" ——
         现在无论滚到分类菜单的哪一行，「开始抓取」都在同一处。
@@ -154,7 +121,6 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
       <DocPanel v-if="tab === 'docs'" ref="docRef" />
       <TermPanel v-else-if="tab === 'terms'" ref="termRef" />
       <CategoryPanel v-else-if="tab === 'category'" ref="catRef" />
-      <ProposalPanel v-else-if="tab === 'proposals'" ref="propRef" />
       <WikiPanel v-else-if="tab === 'wiki'" ref="wikiRef" />
     </KeepAlive>
   </AdminPage>
@@ -163,5 +129,4 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
 <style scoped>
 .stat { font-size: var(--fs-meta); color: var(--ink-dim); }
 .stat b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: var(--fw-semi); }
-.reach { color: var(--moss); }
 </style>

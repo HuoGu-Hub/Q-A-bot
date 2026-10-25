@@ -34,7 +34,7 @@ public class SpaForwardController {
      */
     @GetMapping({"/admin/login", "/admin/screen", "/admin/dashboard",
             "/admin/records", "/admin/glossary", "/admin/logs",
-            "/admin/commands", "/admin/settings", "/admin/models", "/admin/plaza"})
+            "/admin/commands", "/admin/settings", "/admin/models"})
     public String adminRoutes() {
         return "forward:/admin.html";
     }
@@ -61,7 +61,7 @@ public class SpaForwardController {
     }
 
     /** 公开站的前端路由 fallback */
-    @GetMapping({"/library", "/plaza", "/about", "/entry/**"})
+    @GetMapping({"/library", "/about", "/entry/**"})
     public String publicRoutes() {
         return "forward:/public.html";
     }

@@ -15,7 +15,7 @@
 import { renderInline } from '@/public/renderInline'
 
 const props = defineProps<{
-  /** page key：layout / home / about / library / plaza / notfound */
+  /** page key：layout / home / about / library / notfound */
   page: string
   /** block key → 当前生效文案（含未保存的改动） */
   texts: Record<string, string>
@@ -182,16 +182,6 @@ const TITLE_TAIL = '灵火'
         </div>
       </div>
 
-      <!-- ==================== 问答广场 ==================== -->
-      <div v-else-if="page === 'plaza'" class="m-plaza">
-        <div class="m-section-title">
-          <span class="m-rule" aria-hidden="true" />
-          <span>问答广场</span>
-          <span class="m-rule" aria-hidden="true" />
-        </div>
-        <p v-if="has('intro')" class="m-p m-html" :class="mark('intro')" v-html="html('intro')" />
-      </div>
-
       <!-- ==================== 404 ==================== -->
       <div v-else-if="page === 'notfound'" class="m-nf">
         <div class="m-nf-box">
@@ -322,18 +312,6 @@ const TITLE_TAIL = '灵火'
 .m-empty-glyph { color: var(--copper-dim); font-size: var(--fs-body); margin-bottom: var(--sp-1); }
 .m-empty-t { color: var(--ink-dim); font-size: var(--fs-meta); }
 .m-empty-h { color: var(--ink-faint); font-size: var(--fs-meta); margin-top: var(--sp-1); line-height: var(--lh-normal); }
-
-/* ---------- 广场 ---------- */
-.m-plaza { display: flex; flex-direction: column; gap: var(--sp-3); }
-.m-section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-family: var(--font-title);
-  font-size: var(--fs-section);
-  font-weight: var(--fw-medium);
-}
-.m-rule { height: 1px; flex: 1; background: var(--copper-dim); }
 
 /* ---------- 404 ---------- */
 .m-nf { display: flex; align-items: center; justify-content: center; padding: var(--sp-5) 0; }

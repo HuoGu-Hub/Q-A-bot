@@ -70,7 +70,7 @@ const USE_POLLING = process.env.WATCH_POLLING !== '0'
  *    而路由表里没有这个路径 → 落到 404 兜底页。
  *    这里把它 302 到 /，让路由正常匹配。
  *
- * 2. **SPA fallback**：刷新 /library、/plaza 这类前端路由时，
+ * 2. **SPA fallback**：刷新 /library、/map 这类前端路由时，
  *    Vite 找不到对应文件会返回 404。这里改写到对应的入口 html。
  *
  * ⚠️ 两个入口要分开判断：

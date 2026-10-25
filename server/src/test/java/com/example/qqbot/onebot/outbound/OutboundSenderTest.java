@@ -290,7 +290,7 @@ class OutboundSenderTest {
     }
 
     @Test
-    @DisplayName("★ sendToGroup 也走出站过滤 —— 广场那条路不允许绕过（实测漏洞的回归测试）")
+    @DisplayName("★ sendToGroup 也走出站过滤 —— 旁路直接发送不允许绕过（实测漏洞的回归测试）")
     void sendToGroupIsFiltered() {
         // 过滤命中 → 整条替换成兜底话术
         when(filter.filter(anyString())).thenReturn("这条不能发");

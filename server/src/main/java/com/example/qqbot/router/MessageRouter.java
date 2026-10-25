@@ -13,7 +13,6 @@ import com.example.qqbot.onebot.outbound.OutboundSender;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
-import com.example.qqbot.plaza.FallbackService;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -26,7 +25,6 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -60,7 +58,6 @@ public class MessageRouter {
     private final QaCollector qaCollector;
     /** 指令那一路 —— 它自己的配置、匹配、限流、存储、渲染都在里面 */
     private final CommandHandler commandHandler;
-    private final FallbackService fallbackService;
 
     public MessageRouter(OneBotApiClient apiClient,
                          MessageCodec codec,
@@ -74,8 +71,7 @@ public class MessageRouter {
                          Access guardAccess,
                          BlockNotifier blockNotifier,
                          QaCollector qaCollector,
-                         CommandHandler commandHandler,
-                         FallbackService fallbackService) {
+                         CommandHandler commandHandler) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.identity = identity;
@@ -89,7 +85,6 @@ public class MessageRouter {
         this.blockNotifier = blockNotifier;
         this.qaCollector = qaCollector;
         this.commandHandler = commandHandler;
-        this.fallbackService = fallbackService;
     }
 
     /**
@@ -203,53 +198,6 @@ public class MessageRouter {
     }
 
     /**
-     * 处理广场的「求助」——
-     *
-     * <p>用户在公开站点了「求助大佬」，网页给出一句「求助：xxx」，
-     * 他复制到群里 @ 机器人，我们就在**这个群**里把问题发出来。
-     *
-     * <p>为什么绕这么一圈：网页上填群号是不可信的（能填任意群 = 任意群广播漏洞）。
-     * 从群聊上下文取群号，天然保证「只发到他自己所在的群」。
-     *
-     * @return true = 已处理
-     */
-    private boolean tryHelpRequest(OneBotEvent event, String text) {
-        if (!event.isGroupMessage() || text == null) {
-            return false;
-        }
-        String t = text.trim();
-        // 允许前置 @机器人
-        t = t.replaceAll("^@\\S+\\s*", "").trim();
-        if (!t.startsWith("求助：") && !t.startsWith("求助:")) {
-            return false;
-        }
-        String question = t.substring(3).trim();
-        if (question.isEmpty()) {
-            return false;
-        }
-        long groupId = event.getGroupId() == null ? 0 : event.getGroupId();
-        long userId = event.getUserId() == null ? 0 : event.getUserId();
-        if (groupId <= 0) {
-            return false;
-        }
-
-        try {
-            Map<String, Object> result = fallbackService.confirmAndSendHelp(
-                    groupId, userId, question);
-            if (Boolean.TRUE.equals(result.get("ok"))) {
-                log.info("[PLAZA] 群 {} 的求助已发出：{}", groupId, question);
-            } else {
-                log.info("[PLAZA] 群 {} 的求助被拒：{}", groupId, result.get("error"));
-                outboundSender.send(event, String.valueOf(result.get("error")));
-            }
-            return true;
-        } catch (Exception e) {
-            log.warn("[PLAZA] 处理求助失败：{}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
      * 一条消息在本次处理里的上下文 —— 在 {@link #handle} 的各步骤之间传递。
      *
      * <p>为什么要有它：拆成步骤之后，每一步都要 event / text / 图片 / 起始时间戳，
@@ -317,13 +265,6 @@ public class MessageRouter {
         // agent 指令把「参数」当问题；其余情况用整条消息
         String question = cmd.question() != null ? cmd.question() : text;
 
-        // ②.5 广场求助确认：群里发「求助：xxx」→ 发到本群
-        //      ★ 关键：群号取自**群聊上下文**，不是网页传的 ——
-        //        这样网页访客无法向任意群发消息。
-        if (tryHelpRequest(event, text)) {
-            return;
-        }
-
         // ③ Guard 五层 + 成本预算。顺序有硬约束，见 guardAndBudget 的注释。
         if (guardAndBudget(req, mentioned)) {
             return;
@@ -384,7 +325,7 @@ public class MessageRouter {
      * 生成回复并发出。
      *
      * <p>出站敏感词过滤在 {@link OutboundSender} 内部 —— 单一出口，任何发送路径都绕不过。
-     * （放在调用方就得靠每个人记得调，广场那条直接发送的路就漏掉过。）
+     * （放在调用方就得靠每个人记得调，旁路直接发送就漏掉过。）
      * 用它的返回值而不是自己再过滤一遍：记录的就是<b>实际发出去的那段文本</b>。
      */
     private void reply(RoutedRequest req, String question, ReplyMode replyMode) {

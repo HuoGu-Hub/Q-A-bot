@@ -11,9 +11,8 @@ import java.sql.Connection;
  * 于是当年的做法是"让所有 Store 都依赖 {@code QaStore}"——问答记录存储顺手当了
  * **全项目的连接提供者**。
  *
- * <p>后果实测：{@code QaStore} 被 **12 个类** import，横跨 8 个业务包
- * （admin / command / kb.block / kb.category / kb.map / kb.proposal / kb.term / plaza / site）。
- * 其中**只有 3 个**是真的在读写问答记录；另外 **9 个**只用 {@code connection()} 与
+ * <p>后果实测：{@code QaStore} 曾被 **12 个类** import，横跨 8 个业务包，
+ * 其中**只有 3 个**是真的在读写问答记录；其余只用 {@code connection()} 与
  * {@code isAvailable()} —— 它们依赖的不是"问答记录"，是"一个连接"。
  *
  * <h2>为什么先做接口而不是直接上 Repository</h2>

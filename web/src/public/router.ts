@@ -12,7 +12,8 @@ export const router = createRouter({
     { path: '/library', name: 'library', component: () => import('./views/LibraryView.vue') },
     { path: '/entry/:title', name: 'entry', component: () => import('./views/EntryView.vue'), props: true },
     { path: '/map', name: 'map', component: () => import('./views/MapView.vue') },
-    { path: '/plaza', name: 'plaza', component: () => import('./views/PlazaView.vue') },
+    // 问答广场已下线，旧书签回资料库
+    { path: '/plaza', redirect: '/library' },
     { path: '/about', name: 'about', component: () => import('./views/AboutView.vue') },
     { path: '/:pathMatch(.*)*', name: 'notfound', component: () => import('./views/NotFoundView.vue') },
   ],

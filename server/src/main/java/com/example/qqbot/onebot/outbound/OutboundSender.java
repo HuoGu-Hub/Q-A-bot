@@ -89,7 +89,7 @@ public class OutboundSender {
 
     /**
      * 发送目标。把"发给谁、要不要 @"从 {@link OneBotEvent} 里摘出来，
-     * 这样**没有入站事件**的场景（广场的群内求助）也能走同一条出站路径。
+     * 这样**没有入站事件**的场景也能走同一条出站路径。
      *
      * @param group    群消息还是私聊
      * @param id       群号或用户号
@@ -135,7 +135,7 @@ public class OutboundSender {
     }
 
     /**
-     * 按群号直接发 —— 给**没有入站事件**的调用方（广场的群内求助）。
+     * 按群号直接发 —— 给**没有入站事件**的调用方。
      *
      * <p>这个方法存在的意义就是**不让任何人绕过出站路径**：
      * 过去那条路是直接调 {@code OneBotApiClient.sendGroupMsg}，
@@ -177,7 +177,7 @@ public class OutboundSender {
      * <ol>
      *   <li><b>先摘工具调用标记</b>：模型把"要调工具"写成正文时留下的协议噪音，
      *       不是给群友看的东西（见 {@link ToolCallMarkup}）。放在唯一出口，
-     *       这样广场、指令、兜底话术**任何一条路**都漏不出去；</li>
+     *       这样指令、兜底话术等**任何一条路**都漏不出去；</li>
      *   <li><b>再摘图片标记</b>：出站过滤是按词替换文本的，标记一旦被改写就再也匹配不上，
      *       于是"这张图没了"且不报错；</li>
      *   <li><b>然后过滤文本</b>：过滤只看正文，图片是我们自己资产里的东西，没有可过滤的文字；</li>
@@ -223,7 +223,7 @@ public class OutboundSender {
             return null;
         }
         // 出站敏感词过滤放在**发送器内部**，而不是各个调用方 ——
-        // 放在调用方就得靠每个人记得调，实测广场那条路就漏了。
+        // 放在调用方就得靠每个人记得调，实测旁路直接发送就漏了。
         String safe = filter.filter(body);
         if (!StringUtils.hasText(safe) && attached.isEmpty()) {
             log.warn("[OUT] 出站过滤后内容为空，跳过发送");

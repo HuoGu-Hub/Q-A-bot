@@ -23,7 +23,7 @@ import java.util.Objects;
  *       检索来源 / 标注"的分母都必须是它。漏了它，群里没 @ 机器人的闲聊会把榜单灌满
  *       （实测：独立用户 90 个 → 真实 25 个；延迟 P50 39ms → 真实 697ms）。</li>
  *   <li><b>{@code group_id > 0}</b>（{@link #overviewCounts} / {@link #dailyQuestions}）——
- *       广场生成的答案写的是 {@code group_id = 0}（见 {@code PlazaStore.saveGeneratedAnswer}），
+ *       历史上广场生成的答案写的是 {@code group_id = 0}，功能已下线，但老库里可能还有这种行。
  *       不排除的话 {@code COUNT(DISTINCT group_id)} 会凭空多出一个"0 号群"，
  *       而且「群消息总数」会大于各 action 之和。</li>
  *   <li><b>延迟分位数只统计 {@code pass} 行</b> —— {@code drop} 行的 {@code retrieve_ms}
@@ -142,7 +142,7 @@ public class QaAnalyticsRepository {
     /**
      * 总览的一组计数。
      *
-     * <p>{@code where} 里的 {@code group_id > 0} 见类注释（排除广场生成的行）。
+     * <p>{@code where} 里的 {@code group_id > 0} 见类注释（排除历史广场生成的行）。
      */
     public OverviewCounts overviewCounts(String cutoff) {
         String where = (cutoff == null ? " WHERE" : " WHERE ts >= ? AND") + " group_id > 0";

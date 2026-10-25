@@ -36,7 +36,8 @@ export const router = createRouter({
     { path: '/bot', name: 'bot', component: () => import('./views/BotConfigView.vue') },
     { path: '/settings', redirect: { path: '/bot', query: { tab: 'settings' } } },
     { path: '/commands', redirect: { path: '/bot', query: { tab: 'commands' } } },
-    { path: '/plaza', name: 'plaza', component: () => import('./views/PlazaAdminView.vue') },
+    // 问答广场已下线，旧书签回统计页
+    { path: '/plaza', redirect: { path: '/stats', query: { tab: 'overview' } } },
     // 地图：公开站地图的"管理员那一半"，点位与备注都在这里写
     { path: '/map', name: 'map', component: () => import('./views/MapAdminView.vue') },
     // 公开站的固定文案（首页标语、关于页正文、页脚、404 等）

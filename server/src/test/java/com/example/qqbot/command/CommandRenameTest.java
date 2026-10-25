@@ -56,7 +56,7 @@ class CommandRenameTest {
         assertThat(store.findByTrigger("旧名")).as("旧调用名不能再命中").isNull();
         assertThat(store.findByTrigger("新名")).isNotNull();
         assertThat(store.findByTrigger("新名").id()).isEqualTo(id);
-        assertThat(store.listAll()).hasSize(3); // ping、stats + 这一条
+        assertThat(store.listAll()).hasSize(4); // ping、stats、prompt + 这一条
         assertThat(store.topUsed(30, 10)).extracting(m -> m.get("trigger"))
                 .as("历史使用记录跟着改名走").contains("新名").doesNotContain("旧名");
     }

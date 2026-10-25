@@ -21,7 +21,7 @@ public class PersistenceException extends RuntimeException {
      * 把真正的原因拼进 message。
      *
      * <p>为什么需要：持久层的 message 说的是「做了什么」
-     * （{@code 更新失败：UPDATE kb_proposal ...}），真正有用的原因
+     * （{@code 更新失败：UPDATE kb_block ...}），真正有用的原因
      * （{@code [SQLITE_BUSY] database is locked}）在 cause 里。
      * 业务侧有几处把 {@code e.getMessage()} **直接回给前端**，
      * 不拼的话那些提示会退化成一句 SQL 文本，谁也看不出出了什么事。

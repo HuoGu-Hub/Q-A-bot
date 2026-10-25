@@ -463,7 +463,7 @@ public class LlmRouter {
      * 请求级入口：**整条 {@link ChatRequest} 原样转发，不注入系统提示词**。
      *
      * <p>AiServices 自己管系统消息，所以它需要一个"别替我加"的入口；
-     * 而 {@link #chat(String)} 仍然自己拼系统消息，现在只服务广场与提案两条旁路。
+     * 而 {@link #chat(String)} 仍然自己拼系统消息，现在只服务少数旁路与测试。
      * {@link #chatWithImages} 自视觉路径改走 AiServices 后已无生产调用方。
      *
      * <p><b>必须整条转发，不能只转发 {@code messages()}</b>：工具定义住在

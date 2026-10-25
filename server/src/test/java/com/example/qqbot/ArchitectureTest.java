@@ -73,12 +73,12 @@ class ArchitectureTest {
     }
 
     @Test
-    @DisplayName("知识库不得反向依赖后台 / 配置中心 / 广场")
-    void knowledgeDoesNotDependOnAdminSettingsPlaza() {
+    @DisplayName("知识库不得反向依赖后台 / 配置中心")
+    void knowledgeDoesNotDependOnAdminOrSettings() {
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..kb..")
                 .should().dependOnClassesThat()
-                .resideInAnyPackage("..admin..", "..settings..", "..plaza..");
+                .resideInAnyPackage("..admin..", "..settings..");
         rule.check(CLASSES);
     }
 
@@ -177,8 +177,8 @@ class ArchitectureTest {
     @Test
     @DisplayName("★ S1 第一步：kb 不得依赖 qa（原先有 4 个 Store 直接依赖 qa.QaStore）")
     void knowledgeDoesNotDependOnQa() {
-        // 2026-10-02 转正：kb 侧原先 KbBlockStore / CategoryStore / KbProposalService / KbTermStore
-        // 直接依赖 qa.QaStore —— 而它们要的只是"一个 SQLite 连接"，不是"问答记录"。
+        // 2026-10-02 转正：kb 侧原先多个 Store 直接依赖 qa.QaStore ——
+        // 而它们要的只是"一个 SQLite 连接"，不是"问答记录"。
         // 换成 persistence.SqliteConnectionProvider 之后这条就成立了。
         // ⚠️ 反向（qa -> kb）仍在：QaCollector 要用 kb.Glossary / KbRetriever / KbTrace。
         //    那是另一个方向的问题（记录检索指标），需要把 KbTrace 挪成中性 DTO 才能解，见文档。
@@ -213,7 +213,7 @@ class ArchitectureTest {
     //
     // 收窄之后保护的是**当初那条教训本身**，而不是"任何框架类型"：
     //   · dev.langchain4j.model.. 仍然只有 llm 能用（见 onlyLlmDependsOnModelSdk）
-    //   · 其余业务包（agent/qa/command/media/site/publicapi/admin/logs/guard/plaza/
+    //   · 其余业务包（agent/qa/command/media/site/publicapi/admin/logs/guard/
     //     onebot/router）一律不得出现任何 dev.langchain4j 类型 —— **这一条就挡住了
     //     当初那次事故**（ChatService 在 agent 包里 import ImageContent）
     // 换句话说：框架词汇被限制在**两个**包里，模型 SDK 被限制在**一个**包里。
@@ -231,7 +231,7 @@ class ArchitectureTest {
 
     @Test
     @DisplayName("★ 铁律②：只有 onebot.outbound 与 router 能碰到 OneBotApiClient")
-    // 2026-10-02 转正：plaza/FallbackService 原先把消息**直接**发给协议客户端，
+    // 2026-10-02 转正：已经下线的 plaza/FallbackService 曾把消息**直接**发给协议客户端，
     // 绕过了出站敏感词过滤与节流 —— 真实的治理缺口。
     // 修法不是"在 FallbackService 里补一次过滤"，而是**让发送器成为唯一出口**：
     //   - 出站过滤从 MessageRouter 挪进 OutboundSender（放在调用方就得靠每个人记得调）
@@ -249,7 +249,7 @@ class ArchitectureTest {
     @DisplayName("★ 业务包不得直接依赖 config（配置只应在装配层注入）—— 2026-10-02 转正")
     void businessPackagesDoNotDependOnConfig() {
         // 2026-10-02 转正：原先 496 处违反 / 48 个类，分 7 轮还完（见交付说明债务⑥）：
-        //   logs · plaza · onebot.client · settings · guard · guard.stage · onebot.outbound
+        //   logs · onebot.client · settings · guard · guard.stage · onebot.outbound
         //   kb · kb.wiki · kb.category · kb.term · llm · media · site · router
         //
         // 两条判据（写在交付说明里，别混用）：
@@ -266,7 +266,7 @@ class ArchitectureTest {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
                         "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..", "..llm..",
-                        "..plaza..", "..onebot..", "..settings..", "..router..", "..persistence..")
+                        "..onebot..", "..settings..", "..router..", "..persistence..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
         rule.check(CLASSES);
     }

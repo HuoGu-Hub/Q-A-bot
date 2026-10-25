@@ -114,31 +114,6 @@ app:
     group-desc: 一个《雾锁王国》玩家交流群 —— 分享建造、探索心得，机器人也在群里。
     join-hint: QQ 群搜索群号即可加入。
 
-  # ============================ 问答广场 ============================
-  # 公开站：按关键词展示「被点赞认可」的历史回答 + 三级降级求助。
-  # 这些都是【热生效】的 —— 改完立即起作用。
-  plaza:
-    enabled: true
-    # ★ 只展示「被点赞过」的问答 —— 隐私保护的核心。
-    #   有人点赞 = 主动认可公开，相当于社区审核。
-    #   关掉的话所有问答都会公开（风险自负）。
-    only-voted: true
-    # 触发「全被踩」的最小踩数（避免一个人点踩就触发降级）
-    downvote-threshold: 2
-    # 每个关键词最多展示几条回答
-    max-answers-per-keyword: 3
-    # 相似度高于这个值就合并（同一个问题问多次，回答往往雷同）
-    dedup-threshold: 0.9
-    # 「问问新答案」限额（会调用大模型，必须防刷）
-    ask-limit-per-keyword-per-day: 3
-    ask-limit-global-per-day: 100
-    # 「求助大佬」限额（会发到群里，必须更严）
-    help-limit-per-question-per-day: 1
-    help-limit-per-user-per-day: 3
-    help-limit-per-group-per-hour: 1
-    # 投票者哈希的盐。留空用默认值（开发环境够用）
-    vote-salt: ${PLAZA_VOTE_SALT:}
-
   # 板块示例种子：新库默认不建公告/任务/开黑，由管理员按需创建
   boards:
     seed-defaults: false
@@ -485,11 +460,6 @@ app:
   kb:
     # 运行时检索总开关。关掉后退化成「没有知识库」的普通回答
     enabled: true
-    # 知识库改进提案：管理员在「问答记录」里打「有帮助」，累计到阈值后
-    # 才允许手动触发一次 agent 分析（会和知识库现有文本比对，产出"新增/覆盖"提案）。
-    # 提案一律**人工确认后**才写进知识库，不自动落库 —— 模型幻觉不该静默污染知识库。
-    proposal:
-      threshold: 10
     # 全部产物都在这里（相对路径以程序工作目录为基准，构建日志会打印绝对路径）
     dir: ./data/kb
     # 取前几条资料拼进 prompt

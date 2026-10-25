@@ -24,7 +24,7 @@ import java.util.List;
  *       先写 raw 会直接违反约束。</li>
  *   <li>{@link #initSchema} 的**幂等补列**：{@code CREATE TABLE IF NOT EXISTS} 对已存在的表
  *       什么都不做，而这张库要长期保留统计数据、不能删库重建。少了补列，
- *       老库上广场「生成新答案」会一直报 {@code no such column: source}。</li>
+ *       老库上写问答行会一直报 {@code no such column: source}。</li>
  *   <li>{@link #markFollowUp} 的 {@code verdict IS NULL OR verdict = 'unknown'} ——
  *       只给"还没被人工标过"的行打追问标记，**不能覆盖人工结论**。</li>
  * </ul>
@@ -143,9 +143,9 @@ public class QaStoreRepository {
         addColumnIfMissing("qa_stat", "best_cosine", "REAL");
         // 2026-09-26：卡阈值【之前】的最高余弦。老库靠这一行自动补列，不用删库重建
         addColumnIfMissing("qa_stat", "best_cosine_raw", "REAL");
-        // 2026-09-28：行来源（'chat' 群聊 / 'plaza' 广场生成）。PlazaStore 与
-        // PlazaAdminController 早就在读写它，但建表语句里一直没有这一列 ——
-        // 也就是说**全新库**上广场「生成新答案」必然报 no such column。这里补上。
+        // 2026-09-28：行来源（'chat' 群聊 / 'plaza' 历史广场生成）。广场功能已下线，
+        // 但老库里可能还有 source='plaza' 的行，列保留用于历史统计；
+        // 全新库没有这一列时补上，避免写问答行报 no such column。
         addColumnIfMissing("qa_stat", "source", "TEXT DEFAULT 'chat'");
 
         jdbc.execute("PRAGMA user_version = 1");

@@ -23,17 +23,16 @@ const hasBar = computed(() => route.name !== 'login')
 const drawerOpen = ref(false)
 
 /**
- * 7 个目的地。桌面端平铺，手机端收进抽屉 —— 上一版 7 个 tab 横排，
+ * 6 个目的地。桌面端平铺，手机端收进抽屉 —— 上一版 7 个 tab 横排，
  * 390px 下「页面信息」和「退出」被挤到屏幕外，等于导航只剩 5 项。
  * desc 只在抽屉里显示：它是解释，不是标签。
  */
 const nav = [
   { to: '/stats', label: '统计', icon: 'chart', desc: '提问量、命中率与记录' },
-  { to: '/kb', label: '知识库', icon: 'book', desc: '文档、词条、分类与提案' },
+  { to: '/kb', label: '知识库', icon: 'book', desc: '文档、词条与分类' },
   { to: '/map', label: '地图', icon: 'map-pin', desc: '底图同步与点位维护' },
   { to: '/system', label: '系统', icon: 'gear', desc: '模型配置与运行日志' },
   { to: '/bot', label: 'Bot 配置', icon: 'bot', desc: '指令、回复与功能开关' },
-  { to: '/plaza', label: '广场', icon: 'chat', desc: '答案、投票与关键词' },
   { to: '/pages', label: '页面信息', icon: 'list', desc: '前台文案与轮播' },
 ]
 
@@ -179,7 +178,7 @@ async function logout() {
   padding: 1px 6px;
 }
 
-/* 7 个 tab：宽屏一行铺开。手机端整条隐藏，改用抽屉 */
+/* 6 个 tab：宽屏一行铺开。手机端整条隐藏，改用抽屉 */
 .nav {
   display: flex;
   gap: var(--sp-1);

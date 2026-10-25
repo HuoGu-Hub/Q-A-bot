@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>它不注入系统提示词</b>：系统消息由 AiServices 提供。
  * 这一点与 {@link LlmRouter#chat(String)} 不同 —— 那条入口自己拼系统消息，
- * 现在只服务广场与提案两条旁路。
+ * 现在只服务少数旁路与测试。
  *
  * <p><b>它必须整条转发 {@code ChatRequest}，不能只转发 {@code request.messages()}</b>：
  * 工具定义住在 {@code ChatRequest.toolSpecifications()} 里。只传消息的话工具

@@ -108,19 +108,19 @@ class QaAnalyticsTest {
     }
 
     @Test
-    @DisplayName("★ 广场行（group_id = 0）不算群消息，也不冒充一个群")
+    @DisplayName("★ 非群消息行（group_id = 0）不算群消息，也不冒充一个群")
     void nonGroupRowsAreExcluded() {
         store.insertBatch(List.of(
                 rec("真群里的提问", 5, 0.5, "both", 100, 1000,
                         List.of(new QaRecord.Keyword("废料杯", "Scrap Cup", true))),
-                // 广场生成的答案写的就是 group_id = 0（见 PlazaStore.saveGeneratedAnswer）。
+                // 历史上广场生成的答案写的是 group_id = 0，功能已下线，但老库里可能还有这种行。
                 // 这里刻意给它 pass，证明挡住它的是 group_id 过滤本身，而不是顺带被动作过滤掉
                 recAt("2026-09-27T10:00:00Z", 0L, 0L, "pass", 0)));
 
         QaAnalytics.Overview ov = analytics.overview(0);
 
         assertThat(ov.total()).as("总数只算群消息").isEqualTo(1);
-        assertThat(ov.questions()).as("广场行不算提问").isEqualTo(1);
+        assertThat(ov.questions()).as("非群消息行不算提问").isEqualTo(1);
         assertThat(ov.groups()).as("0 号不该被数成一个群").isEqualTo(1);
         assertThat(ov.guardActions()).as("动作分布也只剩群里的那一条").containsEntry("pass", 1L);
     }
