@@ -1,8 +1,8 @@
 # 物品图鉴 翻译与产出规范（给执行翻译的 AI）
 
 ## 目标
-把 `docs/gamedata/_source/<组名>.json` 里的每一件物品翻译成中文，产出知识库文档
-`docs/gamedata/雾锁王国-<组名>.md`（组名里已含「物品图鉴-」，所以文件名形如
+把 `corpus/gamedata/_source/<组名>.json` 里的每一件物品翻译成中文，产出知识库文档
+`corpus/gamedata/雾锁王国-<组名>.md`（组名里已含「物品图鉴-」，所以文件名形如
 `雾锁王国-物品图鉴-材料.md`）。
 
 ## 一、硬性格式（不符合会被校验器拒绝）
@@ -75,7 +75,7 @@ tags: 物品, <分类标签>
 
 ```bash
 cd /app/workspace/qqbot
-env -u LANG -u LC_ALL ./scripts/validate-kb-doc.sh docs/gamedata/雾锁王国-<组名>.md
+env -u LANG -u LC_ALL ./scripts/validate-kb-doc.sh corpus/gamedata/雾锁王国-<组名>.md
 ```
 
 **退出码必须是 0**。有致命问题（id 重复、正文为空、文档头没闭合等）必须修到 0 为止。
@@ -84,5 +84,5 @@ env -u LANG -u LC_ALL ./scripts/validate-kb-doc.sh docs/gamedata/雾锁王国-<�
 
 ## 五、参考
 
-- 黄金样例：`docs/gamedata/雾锁王国-物品图鉴-单手剑.md`（38 块，已通过校验）
-- 格式规范原文：`docs/md/知识库文档格式规范.md`
+- 黄金样例：`corpus/gamedata/雾锁王国-物品图鉴-单手剑.md`（38 块，已通过校验）
+- 格式规范原文：`docs/knowledge-base.md`
