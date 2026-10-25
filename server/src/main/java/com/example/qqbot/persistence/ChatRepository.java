@@ -172,6 +172,28 @@ public class ChatRepository {
         return jdbc.query("SELECT * FROM chat_image WHERE message_id = ? ORDER BY id", IMAGE, messageId);
     }
 
+    public long maxMessageId() {
+        return jdbc.count("SELECT COALESCE(MAX(id),0) FROM chat_message");
+    }
+
+    /** 自动蒸馏用：按 id 顺序取游标之后、指定群的新消息 */
+    public List<Message> messagesAfter(long afterId, List<Long> groupIds, int limit) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return List.of();
+        }
+        StringBuilder sql = new StringBuilder("SELECT " + MESSAGE_COLUMNS
+                + " FROM chat_message WHERE id > ? AND group_id IN (");
+        List<Object> args = new ArrayList<>();
+        args.add(afterId);
+        for (int i = 0; i < groupIds.size(); i++) {
+            sql.append(i == 0 ? "?" : ",?");
+            args.add(groupIds.get(i));
+        }
+        sql.append(") ORDER BY id LIMIT ?");
+        args.add(Math.min(Math.max(1, limit), 2000));
+        return jdbc.query(sql.toString(), MESSAGE, args.toArray());
+    }
+
     /** 取一个批次范围内的消息。批次按候选顺序连续切分，通常 id 也是连续的。 */
     public List<Message> messagesBetween(long fromId, long toId) {
         return jdbc.query("SELECT " + MESSAGE_COLUMNS

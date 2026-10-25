@@ -3,6 +3,7 @@ package com.example.qqbot.distill;
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
 import com.example.qqbot.persistence.DistillNoteRepository;
+import com.example.qqbot.persistence.DistillSettingRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -38,18 +39,20 @@ public class DistillAdminController {
     private final ChatImportService imports;
     private final DistillJobService jobs;
     private final DistillWorker worker;
+    private final DistillAutoService auto;
     private final DistillNoteService notes;
     private final ChatRepository chat;
     private final ChatImageStore imageStore;
 
     public DistillAdminController(ChatCaptureService capture, ChatImportService imports,
                                   DistillJobService jobs, DistillWorker worker,
-                                  DistillNoteService notes, ChatRepository chat,
+                                  DistillAutoService auto, DistillNoteService notes, ChatRepository chat,
                                   ChatImageStore imageStore) {
         this.capture = capture;
         this.imports = imports;
         this.jobs = jobs;
         this.worker = worker;
+        this.auto = auto;
         this.notes = notes;
         this.chat = chat;
         this.imageStore = imageStore;
@@ -225,6 +228,50 @@ public class DistillAdminController {
         }
     }
 
+    /** 自动蒸馏设置 + 采集群 */
+    @GetMapping("/settings")
+    public Map<String, Object> settings() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("settings", auto.settings());
+        out.put("groups", capture.status().groups());
+        return out;
+    }
+
+    /** 保存触发条件与分批参数 */
+    @PutMapping("/settings")
+    public ResponseEntity<?> saveSettings(@RequestBody Map<String, Object> body) {
+        try {
+            DistillSettingRepository.Settings old = auto.settings();
+            DistillSettingRepository.Settings next = new DistillSettingRepository.Settings(
+                    bool(body.get("autoEnabled")),
+                    intOf(body.get("triggerMessages"), 0),
+                    intOf(body.get("triggerImages"), 0),
+                    intOf(body.get("batchMessages"), 80),
+                    intOf(body.get("batchChars"), 10_000),
+                    intOf(body.get("overlap"), 0),
+                    intOf(body.get("maxGapMinutes"), 30),
+                    bool(body.get("autoPublish")),
+                    dblOf(body.get("minConfidence"), 0.75),
+                    old.lastMessageId(), old.updatedAt());
+            return ResponseEntity.ok(Map.of("ok", true, "settings", auto.save(next)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** 立即蒸馏一次；忽略阈值，处理游标之后的新消息 */
+    @PostMapping("/settings/run-now")
+    public ResponseEntity<?> runNow() {
+        try {
+            return ResponseEntity.ok(Map.of("ok", true, "jobId", auto.runNow()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.warn("[DISTILL] 手动蒸馏失败：{}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /** 笔记列表 */
     @GetMapping("/notes")
     public Map<String, Object> notes(@RequestParam(required = false) String status,
@@ -281,6 +328,32 @@ public class DistillAdminController {
 
     private static String str(Object o) {
         return o == null ? null : String.valueOf(o);
+    }
+
+    private static boolean bool(Object o) {
+        return o instanceof Boolean b ? b : "true".equalsIgnoreCase(String.valueOf(o));
+    }
+
+    private static int intOf(Object o, int fallback) {
+        if (o instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return o == null ? fallback : Integer.parseInt(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static double dblOf(Object o, double fallback) {
+        if (o instanceof Number n) {
+            return n.doubleValue();
+        }
+        try {
+            return o == null ? fallback : Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private static Double dbl(Object o) {

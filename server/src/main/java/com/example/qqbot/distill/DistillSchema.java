@@ -3,6 +3,7 @@ package com.example.qqbot.distill;
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
 import com.example.qqbot.persistence.DistillNoteRepository;
+import com.example.qqbot.persistence.DistillSettingRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,12 +22,14 @@ public class DistillSchema {
     private final ChatRepository chat;
     private final DistillJobRepository jobs;
     private final DistillNoteRepository notes;
+    private final DistillSettingRepository settings;
 
     public DistillSchema(ChatRepository chat, DistillJobRepository jobs,
-                         DistillNoteRepository notes) {
+                         DistillNoteRepository notes, DistillSettingRepository settings) {
         this.chat = chat;
         this.jobs = jobs;
         this.notes = notes;
+        this.settings = settings;
     }
 
     @PostConstruct
@@ -39,8 +42,10 @@ public class DistillSchema {
             chat.initSchema();
             jobs.initSchema();
             notes.initSchema();
-            log.info("[DISTILL] 聊天蒸馏表就绪：消息 {}，图片 {}，任务 {}，笔记 {}",
-                    chat.countMessages(), chat.countImages(), jobs.countJobs(), notes.count());
+            settings.initSchema();
+            log.info("[DISTILL] 聊天蒸馏表就绪：消息 {}，图片 {}，任务 {}，笔记 {}，自动蒸馏 {}",
+                    chat.countMessages(), chat.countImages(), jobs.countJobs(), notes.count(),
+                    settings.getOrCreate().autoEnabled() ? "开" : "关");
         } catch (Exception e) {
             log.warn("[DISTILL] 建表失败（不影响问答）：{}", e.getMessage());
         }

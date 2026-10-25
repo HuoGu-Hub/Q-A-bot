@@ -6,6 +6,7 @@ import com.example.qqbot.kb.category.CategoryService;
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
 import com.example.qqbot.persistence.DistillNoteRepository;
+import com.example.qqbot.persistence.DistillSettingRepository;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,6 +51,8 @@ class DistillWorkerTest {
 
         DistillProperties props = new DistillProperties();
         props.setAutoPublish(false);
+        DistillSettingRepository settings = new DistillSettingRepository(jdbc, props);
+        settings.initSchema();
         props.setMaxNotesPerBatch(5);
         DistillLlm llm = mock(DistillLlm.class);
         when(llm.summarize(anyString())).thenReturn(new DistillLlm.Result(
@@ -61,7 +64,7 @@ class DistillWorkerTest {
         CategoryService categories = mock(CategoryService.class);
         when(categories.catalogNames()).thenReturn(List.of("大佬攻略"));
         worker = new DistillWorker(jobRepo, chat, noteRepo, llm, new DistillResponseParser(new ObjectMapper()),
-                mock(DistillPublisher.class), categories, props);
+                mock(DistillPublisher.class), categories, settings, props);
     }
 
     @AfterEach

@@ -210,6 +210,12 @@ public class DistillJobRepository {
                 status, truncate(error), java.time.Instant.now().toString(), id);
     }
 
+    /** 自动蒸馏同一时刻只允许一个 live 任务在跑，避免堆积 */
+    public long countActiveAutoJobs() {
+        return jdbc.count("SELECT COUNT(*) FROM distill_job WHERE source = 'live'"
+                + " AND status IN ('ready','running')");
+    }
+
     public long countByStatus(long jobId, String status) {
         return jdbc.count("SELECT COUNT(*) FROM distill_batch WHERE job_id = ? AND status = ?",
                 jobId, status);

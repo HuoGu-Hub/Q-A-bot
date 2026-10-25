@@ -4,6 +4,7 @@ import com.example.qqbot.kb.category.CategoryService;
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
 import com.example.qqbot.persistence.DistillNoteRepository;
+import com.example.qqbot.persistence.DistillSettingRepository;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,7 @@ public class DistillWorker {
     private final DistillResponseParser parser;
     private final DistillPublisher publisher;
     private final CategoryService categories;
+    private final DistillSettingRepository settings;
     private final DistillPolicy props;
 
     private final ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
@@ -55,7 +57,8 @@ public class DistillWorker {
 
     public DistillWorker(DistillJobRepository jobs, ChatRepository chat, DistillNoteRepository notes,
                          DistillLlm llm, DistillResponseParser parser, DistillPublisher publisher,
-                         CategoryService categories, DistillPolicy props) {
+                         CategoryService categories, DistillSettingRepository settings,
+                         DistillPolicy props) {
         this.jobs = jobs;
         this.chat = chat;
         this.notes = notes;
@@ -63,6 +66,7 @@ public class DistillWorker {
         this.parser = parser;
         this.publisher = publisher;
         this.categories = categories;
+        this.settings = settings;
         this.props = props;
     }
 
@@ -184,6 +188,7 @@ public class DistillWorker {
         for (ChatRepository.Message m : messages) {
             byId.put(m.id(), m);
         }
+        var setting = settings.getOrCreate();
         for (DistillDraft d : drafts) {
             List<DistillNoteRepository.Source> sources = new ArrayList<>();
             for (Long mid : d.sourceMessageIds()) {
@@ -204,7 +209,7 @@ public class DistillWorker {
                 log.debug("[DISTILL] 笔记重复，已跳过：{}", d.title());
                 continue;
             }
-            if (props.isAutoPublish() && d.confidence() >= props.getMinConfidence()) {
+            if (setting.autoPublish() && d.confidence() >= setting.minConfidence()) {
                 DistillNoteRepository.Note note = notes.find(ins.id());
                 try {
                     publisher.publish(note);
