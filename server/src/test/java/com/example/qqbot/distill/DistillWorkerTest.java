@@ -20,8 +20,11 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DistillWorkerTest {
@@ -33,6 +36,8 @@ class DistillWorkerTest {
     private ChatRepository chat;
     private DistillJobRepository jobRepo;
     private DistillNoteRepository noteRepo;
+    private DistillSettingRepository settings;
+    private DistillPublisher publisher;
     private DistillWorker worker;
 
     @BeforeEach
@@ -51,7 +56,7 @@ class DistillWorkerTest {
 
         DistillProperties props = new DistillProperties();
         props.setAutoPublish(false);
-        DistillSettingRepository settings = new DistillSettingRepository(jdbc, props);
+        settings = new DistillSettingRepository(jdbc, props);
         settings.initSchema();
         props.setMaxNotesPerBatch(5);
         DistillLlm llm = mock(DistillLlm.class);
@@ -63,8 +68,9 @@ class DistillWorkerTest {
                 "fake-model", 100, 50));
         CategoryService categories = mock(CategoryService.class);
         when(categories.catalogNames()).thenReturn(List.of("大佬攻略"));
+        publisher = mock(DistillPublisher.class);
         worker = new DistillWorker(jobRepo, chat, noteRepo, llm, new DistillResponseParser(new ObjectMapper()),
-                mock(DistillPublisher.class), categories, settings, props);
+                publisher, categories, settings, props);
     }
 
     @AfterEach
@@ -101,5 +107,23 @@ class DistillWorkerTest {
         // mock 返回的 sourceMessageIds 是 1，若真实 id 不是 1 会被过滤，这批就没有笔记；
         // 这个测试只断言批次完成，笔记数量在 parser/repo 测试里单独覆盖。
         assertThat(noteRepo.count()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("开启自动发布后，即使低于旧置信度门槛也直接发布")
+    void autoPublishIsBinary() throws Exception {
+        settings.save(new DistillSettingRepository.Settings(true, 0, 0, 80, 10000, 0, 30,
+                true, 0.99, 0, ""));
+        String content = String.join("\n",
+                "{\"ts\":\"2026-10-20 21:00:00\",\"sender\":\"甲\",\"text\":\"灵火祭坛怎么去\"}",
+                "{\"ts\":\"2026-10-20 21:01:00\",\"sender\":\"乙\",\"text\":\"东边，带火把\"}");
+        var imported = new ChatImportService(chat, new DistillProperties(), new ObjectMapper())
+                .importFile("publish.jsonl", content, 7L);
+        long jobId = new DistillJobService(chat, jobRepo, new DistillProperties())
+                .create(new DistillJobService.JobRequest("file", List.of(), "", "",
+                        imported.importId(), "count", 10, 0, 30));
+
+        worker.start(jobId);
+        verify(publisher, timeout(3000)).publish(any(DistillNoteRepository.Note.class));
     }
 }

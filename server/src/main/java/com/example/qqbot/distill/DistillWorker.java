@@ -209,7 +209,9 @@ public class DistillWorker {
                 log.debug("[DISTILL] 笔记重复，已跳过：{}", d.title());
                 continue;
             }
-            if (setting.autoPublish() && d.confidence() >= setting.minConfidence()) {
+            // 二选一：开启就全部自动发布，关闭就全部留草稿等人工整理。
+            // 不再用置信度偷偷拦截，否则用户看到"开了自动发布"却仍有草稿。
+            if (setting.autoPublish()) {
                 DistillNoteRepository.Note note = notes.find(ins.id());
                 try {
                     publisher.publish(note);

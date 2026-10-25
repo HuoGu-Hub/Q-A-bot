@@ -134,11 +134,6 @@ const filteredNotes = computed(() => {
     (n.title + ' ' + n.category + ' ' + n.body).toLowerCase().includes(q))
 })
 
-const confidencePercent = computed({
-  get: () => Math.round(form.value.minConfidence * 100),
-  set: (v: number) => { form.value.minConfidence = Math.max(0, Math.min(100, v)) / 100 },
-})
-
 async function loadAll() {
   loading.value = true
   error.value = ''
@@ -418,14 +413,19 @@ onMounted(loadAll)
           <input v-model.number="form.maxGapMinutes" class="num" type="number" min="0" />
           <span>分钟就断开</span>
         </label>
-        <label class="check">
-          <input v-model="form.autoPublish" type="checkbox" />
-          达标的笔记自动发布
-        </label>
-        <label>最低置信度
-          <input v-model.number="confidencePercent" class="num" type="number" min="0" max="100" />
-          <span>%</span>
-        </label>
+      </div>
+
+      <div class="publish-row">
+        <span class="label">蒸馏结果</span>
+        <div class="segmented">
+          <button type="button" :class="{ on: form.autoPublish }"
+                  @click="form.autoPublish = true">自动发布</button>
+          <button type="button" :class="{ on: !form.autoPublish }"
+                  @click="form.autoPublish = false">先整理再发布</button>
+        </div>
+        <span class="hint">
+          {{ form.autoPublish ? '生成的笔记直接进入知识库' : '全部进入待处理，人工确认后发布' }}
+        </span>
       </div>
 
       <div class="settings-foot">
@@ -629,6 +629,13 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--copper-dim)
 .option-grid label { display: flex; align-items: center; gap: 5px; color: var(--ink-dim);
   font-size: var(--fs-meta); }
 .option-grid label.check { gap: 7px; color: var(--ink); }
+.publish-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid var(--edge-soft); padding-top: var(--sp-3); }
+.segmented { display: inline-flex; border: 1px solid var(--edge-soft); border-radius: var(--r-xs);
+  overflow: hidden; }
+.segmented button { border: 0; background: transparent; color: var(--ink-dim); padding: 5px 12px;
+  cursor: pointer; font: inherit; }
+.segmented button.on { background: color-mix(in oklab, var(--copper) 22%, transparent); color: var(--ink); }
 .settings-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   flex-wrap: wrap; border-top: 1px solid var(--edge-soft); padding-top: var(--sp-3); }
 .groups { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
