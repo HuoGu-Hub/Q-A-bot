@@ -108,15 +108,13 @@ chmod 600 .env
 | 变量 | 必填 | 用途 |
 |---|---|---|
 | `ONEBOT_TOKEN` | 是 | 与 NapCat 的 Access Token 一致 |
-| `ONEBOT_API_BASE` | 是 | 默认 `http://127.0.0.1:3000` |
+| `ONEBOT_API_BASE` | 否 | 默认 `http://127.0.0.1:3000` |
 | `OPENCODE_GO_API_KEY` | 是 | 默认对话 provider |
 | `OPENCODE_GO_MODEL` | 否 | 默认模型名 |
 | `DEEPSEEK_API_KEY` | 否 | 降级 provider |
 | `SILICONFLOW_API_KEY` | 是 | 向量与重排 |
 | `DASHSCOPE_API_KEY` | 否 | 备用向量，默认关闭 |
 | `ADMIN_PASSWORD` | 是 | 为空时管理后台整体返回 503 |
-| `NAPCAT_MAC` | 建议 | 固定设备指纹 |
-| `NAPCAT_QUICK_ACCOUNT` | 否 | 快速登录账号 |
 
 其余配置在 `server/src/main/resources/application.yml`，可被环境变量、`config/overrides.yml` 与命令行参数覆盖。后台「设置」页只修改白名单内的键。
 
@@ -143,16 +141,12 @@ APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 ```bash
 cd /opt/qqbot
 ./scripts/build-web.sh
-./scripts/build-server.sh package -DskipTests
-```
-
-`build-web.sh` 把前端产物同步到 `server/web-dist/`，后端直接托管。`build-server.sh` 在 `.toolchain/server-ci/` 中隔离构建，产物位于 `.toolchain/server-ci/target/`。
-
-本地开发机上 IDE 正在运行时不要直接对 `server/pom.xml` 执行 `mvn clean`，那会删掉运行中 JVM 的 classpath。服务器上没有这个约束，也可以直接：
-
-```bash
 cd server && mvn -q clean package -DskipTests
 ```
+
+`build-web.sh` 把前端产物同步到 `server/web-dist/`，后端直接托管。服务器上没有 IDE 占用 classpath，可以直接在 `server/` 中构建，产物位于 `server/target/`，与 systemd 单元中的路径一致。
+
+本地开发机应改用 `./scripts/build-server.sh`。该脚本把源码复制到 `.toolchain/server-ci/` 后构建，不会删除 IDE 正在运行的 `target/classes`。
 
 ## 6. systemd
 
@@ -208,7 +202,7 @@ sudo nginx -t && sudo systemctl reload nginx
 |---|---|---|
 | 公开站 `/admin/` | `return 404` | 公网域名下不暴露后台入口 |
 | 管理后台 | IP 白名单 | 密码不是第一道防线 |
-| 公开 API 限流 | 60 次/分钟 | 与应应用层限流形成双层 |
+| 公开 API 限流 | 60 次/分钟 | 与应用层限流形成双层 |
 | 登录接口限流 | 5 次/分钟 | 防密码爆破 |
 | `client_max_body_size` | 16m | 与 Spring 上传上限对齐，否则只看到 413 |
 

@@ -18,6 +18,8 @@ pnpm dev
 
 ## 构建
 
+在仓库根目录执行：
+
 ```bash
 ./scripts/build-web.sh
 ```

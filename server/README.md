@@ -11,7 +11,7 @@ mvn spring-boot:run
 
 服务监听 `0.0.0.0:8080`。数据库、语料、图片与日志默认落在 `server/data/`，路径相对进程工作目录。启动日志会打印解析后的绝对路径。
 
-构建请使用仓库根目录的脚本：
+在仓库根目录构建：
 
 ```bash
 ./scripts/build-server.sh package -DskipTests

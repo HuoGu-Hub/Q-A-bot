@@ -20,7 +20,7 @@
 
 This project connects to QQ through OneBot 11 and answers questions for gaming communities. A question is first matched against a private corpus; the retrieved passages are then passed to an LLM for composition. When the corpus has no relevant material, the bot says so instead of answering from model memory.
 
-The same process also hosts a command system, scheduled announcements, an interactive map, a public site and an admin console. All persistent state lives in one SQLite file. There is no Redis, no message queue and no second database; the deployment unit is a single jar.
+The same process also hosts a command system, scheduled announcements, an interactive map, a public site and an admin console. Business state lives in one SQLite file, while images and map tiles use local directories. There is no Redis, no message queue and no second database.
 
 | Entry | Audience | Form |
 |---|---|---|
@@ -105,7 +105,7 @@ See [docs/architecture.md](docs/architecture.md) for the full design.
 |---|---|
 | Backend | Java 17, Spring Boot 3.5.16, Maven 3.9+ |
 | Models | LangChain4j 1.20.0, OpenAI-compatible APIs, multi-provider fallback |
-| Storage | SQLite, sqlite-jdbc 3.53.4.0, WAL, single serialized connection, 30 tables |
+| Storage | SQLite, sqlite-jdbc 3.53.4.0, WAL, single serialized connection, about 30 tables |
 | Retrieval | bge-m3 embeddings, glossary keywords, title-vector gate, bge-reranker-v2-m3 |
 | Map rendering | Java2D viewport tile composition, markers, JPEG encoding, on-disk tile cache |
 | Spreadsheets | Apache POI 5.3.0 for term and category import/export |
@@ -133,9 +133,9 @@ See [docs/architecture.md](docs/architecture.md) for the full design.
 cp .env.example .env
 # Set ONEBOT_TOKEN, OPENCODE_GO_API_KEY, SILICONFLOW_API_KEY, ADMIN_PASSWORD
 
-cd deploy && docker compose up -d    # start NapCat and sign in
-./scripts/build-web.sh               # build frontend into server/web-dist
-cd server && mvn spring-boot:run     # start the application
+(cd deploy && docker compose up -d)   # start NapCat and sign in
+./scripts/build-web.sh                # build frontend into server/web-dist
+(cd server && mvn spring-boot:run)    # start the application
 ```
 
 The service listens on `0.0.0.0:8080`. The admin console is served at `/admin/` and the public site at `/`.
@@ -163,7 +163,7 @@ Sources, from lowest to highest priority: `application.yml`, environment variabl
 | Variable | Required | Purpose |
 |---|---|---|
 | `ONEBOT_TOKEN` | Yes | Must match the NapCat access token |
-| `ONEBOT_API_BASE` | Yes | NapCat HTTP endpoint, default `http://127.0.0.1:3000` |
+| `ONEBOT_API_BASE` | No | NapCat HTTP endpoint, default `http://127.0.0.1:3000` |
 | `OPENCODE_GO_API_KEY` | Yes | Default chat provider |
 | `DEEPSEEK_API_KEY` | No | Fallback chat provider |
 | `SILICONFLOW_API_KEY` | Yes | Embedding and rerank models |

@@ -37,13 +37,17 @@ cp .env.example .env
 ## 4. 本地运行
 
 ```bash
-cd deploy && docker compose up -d
-cd server && mvn spring-boot:run
+(cd deploy && docker compose up -d)
+(cd server && mvn spring-boot:run)
 ```
 
 或使用构建产物：
 
 ```bash
+# scripts/build-server.sh 的产物
+java -jar .toolchain/server-ci/target/qqbot-server-0.0.1-SNAPSHOT.jar
+
+# 直接在 server/ 中 mvn package 的产物
 java -jar server/target/qqbot-server-0.0.1-SNAPSHOT.jar
 ```
 

@@ -20,7 +20,7 @@
 
 本项目通过 OneBot 11 接入 QQ，面向游戏玩家群提供知识库问答。收到提问后，系统先在自有语料中检索，再把命中资料交给大模型组织回答；资料不足时明确说明未查到，不使用模型自身知识补全。
 
-同一进程还承载命令系统、定时板块、交互地图、公开站与管理后台。全部持久化状态保存在一个 SQLite 文件中，没有 Redis、消息队列或第二个数据库，部署单位是一个 jar。
+同一进程还承载命令系统、定时板块、交互地图、公开站与管理后台。业务状态保存在一个 SQLite 文件中，图片与地图瓦片走本地目录；没有 Redis、消息队列或第二个数据库。
 
 | 入口 | 使用者 | 形态 |
 |---|---|---|
@@ -105,7 +105,7 @@ flowchart LR
 |---|---|
 | 后端 | Java 17、Spring Boot 3.5.16、Maven 3.9+ |
 | 模型接入 | LangChain4j 1.20.0、OpenAI 兼容协议、多 provider 降级链 |
-| 存储 | SQLite、sqlite-jdbc 3.53.4.0、WAL、单连接串行写入、30 张表 |
+| 存储 | SQLite、sqlite-jdbc 3.53.4.0、WAL、单连接串行写入、约 30 张表 |
 | 检索 | bge-m3 向量、术语表关键词、标题向量闸门、bge-reranker-v2-m3 重排 |
 | 地图出图 | Java2D 按视口裁瓦片、绘制点位、JPEG 编码、磁盘瓦片缓存 |
 | 表格 | Apache POI 5.3.0，用于词条与分类导入导出 |
@@ -133,9 +133,9 @@ flowchart LR
 cp .env.example .env
 # 填写 ONEBOT_TOKEN、OPENCODE_GO_API_KEY、SILICONFLOW_API_KEY、ADMIN_PASSWORD
 
-cd deploy && docker compose up -d    # 启动 NapCat 并扫码登录
-./scripts/build-web.sh               # 构建前端并同步到 server/web-dist
-cd server && mvn spring-boot:run     # 启动业务层
+(cd deploy && docker compose up -d)   # 启动 NapCat 并扫码登录
+./scripts/build-web.sh                # 构建前端并同步到 server/web-dist
+(cd server && mvn spring-boot:run)    # 启动业务层
 ```
 
 服务监听 `0.0.0.0:8080`。管理后台为 `/admin/`，公开站为 `/`。首次启动后可用健康自检：
@@ -163,7 +163,7 @@ pnpm dev
 | 变量 | 必填 | 用途 |
 |---|---|---|
 | `ONEBOT_TOKEN` | 是 | 与 NapCat 的 Access Token 一致 |
-| `ONEBOT_API_BASE` | 是 | NapCat HTTP 地址，默认 `http://127.0.0.1:3000` |
+| `ONEBOT_API_BASE` | 否 | NapCat HTTP 地址，默认 `http://127.0.0.1:3000` |
 | `OPENCODE_GO_API_KEY` | 是 | 默认对话模型 |
 | `DEEPSEEK_API_KEY` | 否 | 降级对话模型 |
 | `SILICONFLOW_API_KEY` | 是 | 向量与重排模型 |

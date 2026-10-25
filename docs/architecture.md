@@ -9,8 +9,8 @@
 | 边界 | 内容 |
 |---|---|
 | 协议 | QQ 协议由 NapCat 处理，业务层只认 OneBot 11 的 JSON。`onebot/` 是唯一知道协议细节的包 |
-| 状态 | 全部持久化状态落在一个 SQLite 文件。没有 Redis、消息队列或第二个数据库 |
-| 进程 | 群消息、HTTP 接口、定时任务、地图出图共用同一个 JVM。部署单位就是一个 jar |
+| 状态 | 结构化业务数据落在一个 SQLite 文件，图片与地图瓦片走本地目录。没有 Redis、消息队列或第二个数据库 |
+| 进程 | 群消息、HTTP 接口、定时任务、地图出图共用同一个 JVM。部署单位是一个进程加数据目录 |
 
 这三条边界决定了扩展方式：增加能力优先在现有模块内完成，不引入新的运行时组件。
 
@@ -19,7 +19,7 @@
 ```mermaid
 flowchart LR
     QQ[QQ 用户] --> NC[NapCat 容器]
-    NC -->|HTTP 上报| IN[/onebot/event/]
+    NC -->|HTTP 上报| IN["/onebot/event"]
     IN --> ROUTER[路由与 Guard]
     ROUTER --> CMD[命令与板块]
     ROUTER --> CHAT[问答]
@@ -45,7 +45,7 @@ flowchart LR
 |---|---|---|
 | `/onebot/event` | NapCat 事件上报 | OneBot Token |
 | `/api/public/**` | 公开站只读数据、检索、地图 | 无，应用层限流 |
-| `/admin/api/**` | 管理后台 | 会话 Cookie，缺失时整体 503 |
+| `/admin/api/**` | 管理后台 | 会话 Cookie；未配置密码时整体返回 503 |
 
 ## 3. 消息生命周期
 
@@ -108,11 +108,11 @@ flowchart TD
 | `settings` / `config` | 配置中心与装配 | 业务包不得依赖 `config` |
 | `publicapi` / `admin` / `site` | HTTP 接口与站点内容 | 公开接口使用独立 DTO，不复用管理接口 |
 
-14 条规则覆盖四个方向：协议细节收敛、发送出口唯一、模型 SDK 收敛、SQL 收敛。另有知识库分层、配置依赖、框架类型分布等约束。新增包时需要同步更新 `ArchitectureTest` 里的包名单。
+14 条规则覆盖协议细节收敛、发送出口唯一、模型 SDK 收敛、SQL 收敛、知识库分层与配置依赖。新增包时需要同步更新 `ArchitectureTest` 里的包名单。
 
 ## 5. 数据模型
 
-一个 SQLite 文件保存全部状态，默认路径 `server/data/qa/qqbot.sqlite`。启用 WAL，单连接串行写入。
+一个 SQLite 文件保存全部结构化状态，默认路径 `server/data/qa/qqbot.sqlite`。启用 WAL，单连接串行写入。
 
 | 前缀 | 表数 | 内容 |
 |---|---|---|
