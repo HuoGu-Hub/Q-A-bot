@@ -396,7 +396,26 @@ public class LlmRouter {
     public Reply chatWithSystem(String systemPrompt, String userMessage) {
         ChatRequest req = request(List.of(SystemMessage.from(systemPrompt),
                 new UserMessage(userMessage)));
-        ChatResponse response = callWithFallbackResponse(req, null);
+        return toReply(callWithFallbackResponse(req, null));
+    }
+
+    /**
+     * 带图片的系统提示词旁路。和 {@link #chatWithSystem} 一样不注入群聊人格，
+     * 只把图片作为用户消息的内容块发给支持 vision 的 provider。
+     */
+    public Reply chatWithSystemAndImages(String systemPrompt, String userMessage,
+                                         List<VisionImage> images) {
+        List<Content> contents = new ArrayList<>();
+        contents.add(TextContent.from(userMessage));
+        for (VisionImage image : images == null ? List.<VisionImage>of() : images) {
+            contents.add(ImageContent.from(image.base64(), image.mimeType()));
+        }
+        ChatMessage message = UserMessage.from(contents);
+        ChatRequest req = request(List.of(SystemMessage.from(systemPrompt), message));
+        return toReply(callWithFallbackResponse(req, CAP_VISION));
+    }
+
+    private Reply toReply(ChatResponse response) {
         if (response == null || response.aiMessage() == null
                 || response.aiMessage().text() == null || response.aiMessage().text().isBlank()) {
             throw new LlmException("模型返回为空");

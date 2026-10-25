@@ -24,6 +24,9 @@ public interface DistillPolicy {
     /** 单条消息最多下载几张图 */
     int getMaxImagesPerMessage();
 
+    /** 一批最多把几张图送给视觉模型 */
+    int getMaxImagesPerBatch();
+
     /** 聊天图片目录 */
     String getImagesDir();
 

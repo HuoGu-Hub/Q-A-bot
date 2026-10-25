@@ -29,6 +29,9 @@ public class DistillProperties implements DistillPolicy {
     /** 单条消息最多下载几张图 */
     private int maxImagesPerMessage = 4;
 
+    /** 一批最多送几张图给视觉模型；太多会撑爆上下文 */
+    private int maxImagesPerBatch = 6;
+
     /** 聊天图片目录 */
     private String imagesDir = "./data/chat-images";
 
@@ -114,6 +117,15 @@ public class DistillProperties implements DistillPolicy {
 
     public void setMaxImagesPerMessage(int maxImagesPerMessage) {
         this.maxImagesPerMessage = maxImagesPerMessage;
+    }
+
+    @Override
+    public int getMaxImagesPerBatch() {
+        return maxImagesPerBatch;
+    }
+
+    public void setMaxImagesPerBatch(int maxImagesPerBatch) {
+        this.maxImagesPerBatch = maxImagesPerBatch;
     }
 
     @Override

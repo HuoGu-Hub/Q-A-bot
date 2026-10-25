@@ -44,6 +44,7 @@ public class DistillWorker {
     private final DistillResponseParser parser;
     private final DistillPublisher publisher;
     private final CategoryService categories;
+    private final ChatImageStore imageStore;
     private final DistillSettingRepository settings;
     private final DistillPolicy props;
 
@@ -57,8 +58,8 @@ public class DistillWorker {
 
     public DistillWorker(DistillJobRepository jobs, ChatRepository chat, DistillNoteRepository notes,
                          DistillLlm llm, DistillResponseParser parser, DistillPublisher publisher,
-                         CategoryService categories, DistillSettingRepository settings,
-                         DistillPolicy props) {
+                         CategoryService categories, ChatImageStore imageStore,
+                         DistillSettingRepository settings, DistillPolicy props) {
         this.jobs = jobs;
         this.chat = chat;
         this.notes = notes;
@@ -66,6 +67,7 @@ public class DistillWorker {
         this.parser = parser;
         this.publisher = publisher;
         this.categories = categories;
+        this.imageStore = imageStore;
         this.settings = settings;
         this.props = props;
     }
@@ -160,7 +162,27 @@ public class DistillWorker {
         for (ChatRepository.Message m : messages) {
             allowedMessages.add(m.id());
         }
-        List<ChatRepository.Image> images = chat.imagesOfMessages(new ArrayList<>(allowedMessages));
+        List<ChatRepository.Image> allImages = chat.imagesOfMessages(new ArrayList<>(allowedMessages));
+        // 视觉模型才需要读字节；没有视觉能力时保留"未识别"文本，不让整批失败
+        boolean vision = llm.hasVision();
+        int maxImages = Math.max(1, props.getMaxImagesPerBatch());
+        List<ChatRepository.Image> images = new ArrayList<>();
+        List<DistillLlm.Attachment> attachments = new ArrayList<>();
+        for (ChatRepository.Image img : allImages) {
+            if (vision) {
+                if (attachments.size() >= maxImages) {
+                    break;
+                }
+                byte[] bytes = imageStore.read(img.path());
+                if (bytes == null) {
+                    continue;
+                }
+                images.add(img);
+                attachments.add(new DistillLlm.Attachment(img.id(), img.mime(), bytes));
+            } else {
+                images.add(img);
+            }
+        }
         Map<Long, List<ChatRepository.Image>> imagesByMessage = new HashMap<>();
         Set<Long> allowedImages = new LinkedHashSet<>();
         for (ChatRepository.Image img : images) {
@@ -174,9 +196,9 @@ public class DistillWorker {
         }
         var setting = settings.getOrCreate();
         String prompt = DistillPrompts.batchPrompt(messages, aliases, imagesByMessage, cats,
-                setting.focus());
+                setting.focus(), !attachments.isEmpty());
 
-        DistillLlm.Result result = llm.summarize(prompt);
+        DistillLlm.Result result = llm.summarize(prompt, attachments);
         lastModel = result.model();
         lastTokensIn = result.tokensIn();
         lastTokensOut = result.tokensOut();

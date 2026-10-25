@@ -129,6 +129,8 @@ app:
     flush-batch-size: 20
     # 单条消息最多下载几张图
     max-images-per-message: 4
+    # 一批最多送几张图给视觉模型；太多会撑爆上下文
+    max-images-per-batch: 6
     # 聊天图片目录；和 kb-images / tmp-images 分开
     images-dir: ./data/chat-images
     # 单张图片上限，KB

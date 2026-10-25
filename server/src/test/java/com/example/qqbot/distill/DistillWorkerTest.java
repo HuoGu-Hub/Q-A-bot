@@ -21,6 +21,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
@@ -60,7 +61,7 @@ class DistillWorkerTest {
         settings.initSchema();
         props.setMaxNotesPerBatch(5);
         DistillLlm llm = mock(DistillLlm.class);
-        when(llm.summarize(anyString())).thenReturn(new DistillLlm.Result(
+        when(llm.summarize(anyString(), anyList())).thenReturn(new DistillLlm.Result(
                 "{\"notes\":[{\"title\":\"灵火祭坛位置\",\"aliases\":[\"祭坛\"],"
                         + "\"category\":\"大佬攻略\",\"body\":\"先找灵火祭坛，再把火把放上去，"
                         + "需要三个树脂和两个石头，晚上去更容易看清。\",\"confidence\":0.9,"
@@ -70,7 +71,7 @@ class DistillWorkerTest {
         when(categories.catalogNames()).thenReturn(List.of("大佬攻略"));
         publisher = mock(DistillPublisher.class);
         worker = new DistillWorker(jobRepo, chat, noteRepo, llm, new DistillResponseParser(new ObjectMapper()),
-                publisher, categories, settings, props);
+                publisher, categories, mock(ChatImageStore.class), settings, props);
     }
 
     @AfterEach

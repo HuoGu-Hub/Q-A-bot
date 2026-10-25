@@ -439,6 +439,8 @@ onMounted(loadAll)
         </span>
       </div>
 
+      <p class="hint">采集到的图片会按批作为附件交给视觉模型；模型没有视觉能力或图片读取失败时，自动退回纯文本。</p>
+
       <div class="settings-foot">
         <div class="groups">
           <span class="label">采集群</span>
