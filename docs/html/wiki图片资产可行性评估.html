@@ -38,6 +38,18 @@ ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
 <p><b>真正的瓶颈有两个：</b>上游 Cloudflare 的突发限流，和"选错图"。前者决定你要花几小时还是几晚上，后者决定这个功能是加分还是扣分 —— 给技能页配一张属性点图标，比不配图更糟。</p>
 </div>
 
+<div class="box ok">
+<p><b>已落地 · 2026-10-25。</b>P0 已按本文第三节实现，并已提交 <code>e1d4b18</code>：</p>
+<ul>
+<li><code>kb/wiki/WikiImagePicker</code> 从渲染 HTML 的 <code>.druid-main-image</code> 选主图，文件名过白名单；</li>
+<li><code>kb/wiki/WikiImageStore</code> 下载、原子落盘、共享图标过滤、目录配额；</li>
+<li><code>media/WikiImageSource</code> 解析 <code>[[img:wiki:页面/文件]]</code>，与 kb / map 两个来源并列；</li>
+<li><code>UpstreamGate</code> 从 <code>kb.map</code> 提到 <code>media</code> 并做成唯一 Bean，地图与配图排同一条队；</li>
+<li><code>WikiArticleImporter</code> 只在第 1 块末尾写 marker，任何失败都不影响正文。</li>
+</ul>
+<p>首次生效要在管理端「知识库 → 抓取」点一次<b>「强制重洗全部」</b>：老块的 <code>revid</code> 没变，不会自己补图。按 6 秒一张估算，4,000 页约 4~5 小时，建议夜里跑，并且不要同时开地图预热。</p>
+</div>
+
 <h2>一、现在为什么拿不到图</h2>
 <p>不是发不出去，是语料里从来没有图。三层各丢一次：</p>
 <table>
