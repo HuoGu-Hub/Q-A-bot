@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * 知识库 —— 「文档」「词条」「分类」「抓取」四个二级目录合并后的页面。
+ * 知识库 —— 「文档」「词条」「分类」「聊天蒸馏」「抓取」五个二级目录合并后的页面。
  *
  *  文档   往知识库**导入文档**（按块 id 操作，导入即自动切割成一个个词条）
  *  词条   **一个词条 = 一个分块**：列表看标题 / 别名 / 分类，点「编辑」展开改别名与正文
  *  分类   人工维护的平铺分类清单：新增 / 改名 / 删除；标签认不出就是「未分类」
+ *  聊天蒸馏 群聊采集 / 文件导入 / 分批 / 模型笔记 / 发布与回收站
  *  抓取   从 wiki 抓文章：选范围 → 开始抓取（空跑 / 增量 / 强制重洗）→ 看进度与结果
  *
  * 页面栏（吸顶）只剩「刷新」这类整页动作 —— 筛选、导出、导入都在各自面板里，
@@ -22,6 +23,7 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import TermPanel from './kb/TermPanel.vue'
 import CategoryPanel from './kb/CategoryPanel.vue'
+import DistillPanel from './kb/DistillPanel.vue'
 import DocPanel from './kb/DocPanel.vue'
 import WikiPanel from './kb/WikiPanel.vue'
 
@@ -32,6 +34,7 @@ const TABS = [
   { key: 'docs', label: '文档' },
   { key: 'terms', label: '词条' },
   { key: 'category', label: '分类' },
+  { key: 'distill', label: '聊天蒸馏' },
   { key: 'wiki', label: '抓取' },
 ]
 
@@ -121,6 +124,7 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
       <DocPanel v-if="tab === 'docs'" ref="docRef" />
       <TermPanel v-else-if="tab === 'terms'" ref="termRef" />
       <CategoryPanel v-else-if="tab === 'category'" ref="catRef" />
+      <DistillPanel v-else-if="tab === 'distill'" />
       <WikiPanel v-else-if="tab === 'wiki'" ref="wikiRef" />
     </KeepAlive>
   </AdminPage>

@@ -66,6 +66,13 @@ export const adminApi = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(`/admin/api${path}`, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
   del: <T>(path: string) => request<T>(`/admin/api${path}`, { method: 'DELETE' }),
+  /** 聊天文件导入走 text/plain，不能套 JSON 的 content-type */
+  postText: <T>(path: string, text: string) =>
+    request<T>(`/admin/api${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=UTF-8' },
+      body: text,
+    }),
 }
 
 /** 把后端抛的错误转成人话 */
