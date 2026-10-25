@@ -53,7 +53,7 @@ public class KbProperties implements KbPolicy {
      * C 路（标题向量）的闸门阈值 —— 余弦 ≥ 它才认为"这次提问就是在问某个名字"，把那条置顶。
      *
      * <p>为什么要有闸门、为什么是这个值：见 {@code KbRetriever} 的类注释与
-     * {@code docs/md/知识库标题向量召回方案.md}。一句话 ——
+     * {@code docs/retrieval.md} 的标题闸门一节。一句话 ——
      * 名字查询 100% 能触发、真实口语提问只有 2.5% 误触发（实测 200 + 120 条）。
      *
      * <p>设成 {@code <= 0} 就是**关掉 C 路**（等于回到没有标题向量之前的检索行为），
@@ -66,13 +66,13 @@ public class KbProperties implements KbPolicy {
 
     private Embedding embedding = new Embedding();
 
-    /** 重排（cross-encoder）配置，见 docs/md/知识库口语问答重构方案.md D4 */
+    /** 重排（cross-encoder）配置，见 docs/retrieval.md 的重排一节 */
     private Rerank rerank = new Rerank();
 
-    /** wiki 地图数据同步（Interactive Data Maps）。见 docs/md/知识库口语问答重构方案.md 第四节 */
+    /** wiki 地图数据同步（Interactive Data Maps）。见 docs/knowledge-base.md 的摄入通道一节 */
     private MapSync mapSync = new MapSync();
 
-    /** wiki 文章导入（任务 / 机制）。见 docs/md/知识库口语问答重构方案.md 第四节 */
+    /** wiki 文章导入（任务 / 机制）。见 docs/knowledge-base.md 的摄入通道一节 */
     private WikiImport wikiImport = new WikiImport();
 
     private TitleIndex titleIndex = new TitleIndex();
