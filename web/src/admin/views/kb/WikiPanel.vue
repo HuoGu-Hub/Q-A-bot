@@ -271,6 +271,7 @@ const status = ref<ImportStatus>({
 const runOpen = ref(false)
 /** 回滚是破坏性操作：点一次变成"确认"，再点才真清 —— 不弹窗，不打断键盘流 */
 const purgeArmed = ref(false)
+const forceArmed = ref(false)
 
 const running = computed(() => status.value.state === 'running')
 const report = computed(() => status.value.report)
@@ -514,6 +515,26 @@ async function doPurge() {
   await start('purge')
 }
 
+/**
+ * 强制重洗不适合埋在「开始抓取」弹窗的第三个选项里 ——
+ * 改完清洗规则的人会直接来这个面板找它，找不到就会以为没有这个功能。
+ * 单独放一个按钮，并在执行前要求二次确认：它会重算全部 wiki 块的向量。
+ */
+function armForce() {
+  if (!checkedCount.value) {
+    okMsg.value = ''
+    error.value = '先在下面勾选要重洗的来源'
+    return
+  }
+  error.value = ''
+  forceArmed.value = true
+}
+async function doForce() {
+  forceArmed.value = false
+  await flushSave()
+  await start('force')
+}
+
 function fmt(n: number | undefined | null) {
   if (n === undefined || n === null) return '—'
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -567,7 +588,7 @@ defineExpose({
         </div>
 
         <p v-if="report.dryRun" class="job-note">
-          <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」。
+          <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」；改了清洗规则用下面的「强制重洗全部」。
         </p>
 
         <table v-if="report.bySource && Object.keys(report.bySource).length" class="mini">
@@ -587,8 +608,21 @@ defineExpose({
       <template v-else>
         <p class="job-idle">
           还没跑过。点右上角<b>开始抓取</b>：先「空跑」确认会拉到多少页，再「增量导入」写进库。
+          改了清洗规则、或要让老页补抓配图，用下面的<b>强制重洗全部</b>。
         </p>
       </template>
+
+      <div class="job-actions">
+        <template v-if="!forceArmed">
+          <Button size="sm" :disabled="running" @click="armForce">强制重洗全部</Button>
+          <span class="faint">全部页重洗、重算向量，并为有主图的页面补抓配图；改了清洗规则、或要让老页补图，才用这个</span>
+        </template>
+        <template v-else>
+          <span class="warn-text">确认重洗全部？会重新清洗、重算全部 wiki 块的向量，并为有主图的页面下载配图。可能持续数小时，且按量计费。</span>
+          <Button variant="danger" size="sm" :disabled="running" @click="doForce">确认重洗</Button>
+          <Button size="sm" @click="forceArmed = false">取消</Button>
+        </template>
+      </div>
 
       <div class="purge">
         <template v-if="!purgeArmed">
@@ -730,7 +764,7 @@ defineExpose({
         />
         <ActionOption
           title="强制重洗全部"
-          hint="全部页重洗并重算向量。改了清洗规则、或怀疑老页是旧规则洗的，才用这个。"
+          hint="全部页重洗并重算向量，同时补抓配图。改了清洗规则、或要让老页补图，才用这个。"
           @select="chooseRun('force')"
         />
       </div>
@@ -769,6 +803,16 @@ defineExpose({
 
 .errs { margin: var(--sp-3) 0 0; padding-left: 18px; color: var(--ink-dim); font-size: var(--fs-meta); line-height: 1.7; }
 
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-meta);
+}
 .purge {
   display: flex;
   align-items: center;
