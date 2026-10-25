@@ -271,7 +271,8 @@ const status = ref<ImportStatus>({
 const runOpen = ref(false)
 /** 回滚是破坏性操作：点一次变成"确认"，再点才真清 —— 不弹窗，不打断键盘流 */
 const purgeArmed = ref(false)
-const forceArmed = ref(false)
+/** 强制重洗同样破坏性且计费：弹窗里选中后先停一步，确认才开跑 */
+const forceConfirm = ref(false)
 
 const running = computed(() => status.value.state === 'running')
 const report = computed(() => status.value.report)
@@ -485,12 +486,19 @@ function openRun() {
     return
   }
   error.value = ''
+  forceConfirm.value = false
   runOpen.value = true
 }
 function closeRun() {
+  forceConfirm.value = false
   runOpen.value = false
 }
 async function chooseRun(mode: string) {
+  // 强制重洗不能一键开跑：留在弹窗里先让人看清代价
+  if (mode === 'force') {
+    pickForce()
+    return
+  }
   runOpen.value = false
   // 勾选可能还没落到库里（自动保存有防抖）—— 开跑前先兜一次
   await flushSave()
@@ -516,21 +524,16 @@ async function doPurge() {
 }
 
 /**
- * 强制重洗不适合埋在「开始抓取」弹窗的第三个选项里 ——
- * 改完清洗规则的人会直接来这个面板找它，找不到就会以为没有这个功能。
- * 单独放一个按钮，并在执行前要求二次确认：它会重算全部 wiki 块的向量。
+ * 强制重洗是破坏性操作：在「开始抓取」弹窗里再确认一次。
+ * 它会重算全部 wiki 块的向量，可能持续数小时并按量计费。
  */
-function armForce() {
-  if (!checkedCount.value) {
-    okMsg.value = ''
-    error.value = '先在下面勾选要重洗的来源'
-    return
-  }
+function pickForce() {
   error.value = ''
-  forceArmed.value = true
+  forceConfirm.value = true
 }
-async function doForce() {
-  forceArmed.value = false
+async function confirmForce() {
+  forceConfirm.value = false
+  runOpen.value = false
   await flushSave()
   await start('force')
 }
@@ -588,7 +591,7 @@ defineExpose({
         </div>
 
         <p v-if="report.dryRun" class="job-note">
-          <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」；改了清洗规则用下面的「强制重洗全部」。
+          <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」；改了清洗规则用「开始抓取 → 强制重洗全部」。
         </p>
 
         <table v-if="report.bySource && Object.keys(report.bySource).length" class="mini">
@@ -608,21 +611,9 @@ defineExpose({
       <template v-else>
         <p class="job-idle">
           还没跑过。点右上角<b>开始抓取</b>：先「空跑」确认会拉到多少页，再「增量导入」写进库。
-          改了清洗规则、或要让老页补抓配图，用下面的<b>强制重洗全部</b>。
+          改了清洗规则、或要让老页补抓配图，用<b>开始抓取</b>里的「强制重洗全部」。
         </p>
       </template>
-
-      <div class="job-actions">
-        <template v-if="!forceArmed">
-          <Button size="sm" :disabled="running" @click="armForce">强制重洗全部</Button>
-          <span class="faint">全部页重洗、重算向量，并为有主图的页面补抓配图；改了清洗规则、或要让老页补图，才用这个</span>
-        </template>
-        <template v-else>
-          <span class="warn-text">确认重洗全部？会重新清洗、重算全部 wiki 块的向量，并为有主图的页面下载配图。可能持续数小时，且按量计费。</span>
-          <Button variant="danger" size="sm" :disabled="running" @click="doForce">确认重洗</Button>
-          <Button size="sm" @click="forceArmed = false">取消</Button>
-        </template>
-      </div>
 
       <div class="purge">
         <template v-if="!purgeArmed">
@@ -747,27 +738,38 @@ defineExpose({
 
     <!-- 选一种抓取方式 -->
     <Modal :open="runOpen" title="开始抓取" width="540px" @close="closeRun">
-      <p class="run-lede">
-        跑在服务端后台，关掉页面也会继续。本次要拉 <b class="num">{{ checkedCount }}</b> 个来源、约
-        <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个前缀来源页数未知）</template>。选一种方式：
-      </p>
-      <div class="run-opts">
-        <ActionOption
-          title="空跑"
-          hint="只统计会拉到多少页、清洗出多少字。不写库、不算向量、不花钱。"
-          @select="chooseRun('dry-run')"
-        />
-        <ActionOption
-          title="增量导入"
-          hint="只处理 wiki 上版本变过的页。日常更新用这个。"
-          @select="chooseRun('incremental')"
-        />
-        <ActionOption
-          title="强制重洗全部"
-          hint="全部页重洗并重算向量，同时补抓配图。改了清洗规则、或要让老页补图，才用这个。"
-          @select="chooseRun('force')"
-        />
-      </div>
+      <template v-if="!forceConfirm">
+        <p class="run-lede">
+          跑在服务端后台，关掉页面也会继续。本次要拉 <b class="num">{{ checkedCount }}</b> 个来源、约
+          <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个前缀来源页数未知）</template>。选一种方式：
+        </p>
+        <div class="run-opts">
+          <ActionOption
+            title="空跑"
+            hint="只统计会拉到多少页、清洗出多少字。不写库、不算向量、不花钱。"
+            @select="chooseRun('dry-run')"
+          />
+          <ActionOption
+            title="增量导入"
+            hint="只处理 wiki 上版本变过的页。日常更新用这个。"
+            @select="chooseRun('incremental')"
+          />
+          <ActionOption
+            title="强制重洗全部"
+            hint="全部页重洗并重算向量，同时补抓配图。改了清洗规则、或要让老页补图，才用这个。"
+            @select="pickForce"
+          />
+        </div>
+      </template>
+      <template v-else>
+        <p class="run-lede warn-text">
+          确认重洗全部？会重新清洗、重算全部 wiki 块的向量，并为有主图的页面下载配图。可能持续数小时，且按量计费。
+        </p>
+        <div class="force-confirm">
+          <Button variant="danger" size="sm" :disabled="running" @click="confirmForce">确认重洗</Button>
+          <Button size="sm" @click="forceConfirm = false">返回</Button>
+        </div>
+      </template>
     </Modal>
   </div>
 </template>
@@ -803,15 +805,11 @@ defineExpose({
 
 .errs { margin: var(--sp-3) 0 0; padding-left: 18px; color: var(--ink-dim); font-size: var(--fs-meta); line-height: 1.7; }
 
-.job-actions {
+.force-confirm {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
-  margin-top: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--hairline);
-  font-size: var(--fs-meta);
 }
 .purge {
   display: flex;
