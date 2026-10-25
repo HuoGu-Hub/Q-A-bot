@@ -119,9 +119,10 @@ app:
   # 这些都是【热生效】的；采集开关改了要重启才会启停 worker。
   distill:
     # 是否采集群消息。关掉后不落新消息，但导入和已有数据仍可用
-    capture-enabled: ${DISTILL_CAPTURE_ENABLED:false}
+    capture-enabled: ${DISTILL_CAPTURE_ENABLED:true}
     # 采集群白名单。空表示一个都不采；示例：[123456789, 987654321]
-    capture-groups: []
+    # 209127588 / 866095282 是现有问答量最大的两个群；新群直接往这里加
+    capture-groups: [209127588, 866095282]
     # 采集队列容量；满了丢消息并计数，绝不阻塞机器人回复
     queue-capacity: 500
     # 一次批量落库多少条

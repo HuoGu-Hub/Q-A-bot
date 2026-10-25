@@ -146,6 +146,7 @@ const overlap = ref(5)
 const maxGap = ref(30)
 const timeFrom = ref('')
 const timeTo = ref('')
+const liveGroups = ref('')
 const jobPreview = ref<JobPreview | null>(null)
 
 const editTitle = ref('')
@@ -210,7 +211,9 @@ async function doImport() {
 function jobRequest() {
   return {
     source: source.value,
-    groupIds: [] as number[],
+    groupIds: liveGroups.value.split(/[,，\s]+/)
+      .map(v => Number(v.trim()))
+      .filter(v => Number.isFinite(v) && v > 0),
     timeFrom: timeFrom.value,
     timeTo: timeTo.value,
     importId: importId.value,
@@ -385,7 +388,7 @@ onMounted(load)
         <button type="button" :class="{ on: tab === 'notes' }" @click="tab = 'notes'; loadNotes()">笔记</button>
       </div>
       <span v-if="stats" class="faint">
-        采集{{ stats.capture.enabled ? '已开启' : '未开启' }} · 队列 {{ stats.capture.queueSize }}
+        采集{{ stats.capture.enabled ? '已开启' : '未开启' }}<template v-if="stats.capture.groups.length"> · 群 {{ stats.capture.groups.join('、') }}</template> · 队列 {{ stats.capture.queueSize }}
       </span>
       <Button size="sm" :disabled="loading" @click="load">{{ loading ? '读取中…' : '刷新' }}</Button>
     </div>
@@ -434,6 +437,7 @@ onMounted(load)
           <label>间隙分钟<input v-model.number="maxGap" type="number" /></label>
         </div>
         <div v-if="source === 'live'" class="row">
+          <label>群号<input v-model="liveGroups" placeholder="留空=全部；多个用逗号" /></label>
           <label>开始<input v-model="timeFrom" placeholder="2026-10-20" /></label>
           <label>结束<input v-model="timeTo" placeholder="2026-10-21" /></label>
         </div>
