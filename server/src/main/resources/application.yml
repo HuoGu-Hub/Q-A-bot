@@ -114,6 +114,41 @@ app:
     group-desc: 一个《雾锁王国》玩家交流群 —— 分享建造、探索心得，机器人也在群里。
     join-hint: QQ 群搜索群号即可加入。
 
+  # ============================ 聊天蒸馏 ============================
+  # 把群聊整理成知识库笔记。采集默认关闭，先配好群白名单再打开。
+  # 这些都是【热生效】的；采集开关改了要重启才会启停 worker。
+  distill:
+    # 是否采集群消息。关掉后不落新消息，但导入和已有数据仍可用
+    capture-enabled: ${DISTILL_CAPTURE_ENABLED:false}
+    # 采集群白名单。空表示一个都不采；示例：[123456789, 987654321]
+    capture-groups: []
+    # 采集队列容量；满了丢消息并计数，绝不阻塞机器人回复
+    queue-capacity: 500
+    # 一次批量落库多少条
+    flush-batch-size: 20
+    # 单条消息最多下载几张图
+    max-images-per-message: 4
+    # 聊天图片目录；和 kb-images / tmp-images 分开
+    images-dir: ./data/chat-images
+    # 单张图片上限，KB
+    max-image-size-kb: 5120
+    # 原始消息保留天数；0 = 不清理
+    message-retention-days: 90
+    # 聊天图片保留天数；0 = 不清理
+    image-retention-days: 30
+    # 每批最多多少条消息
+    batch-max-messages: 80
+    # 每批最多多少字；chars 模式下就是 batch-size 的默认值
+    batch-max-chars: 10000
+    # 两条消息间隔超过多少分钟就断开
+    batch-max-gap-minutes: 30
+    # 相邻批次重叠多少条
+    batch-overlap: 5
+    # 单任务最多多少批，防止一次点爆成本
+    max-batches-per-job: 200
+    # 一次导入最多接受多少字符
+    max-import-chars: 20000000
+
   # 板块示例种子：新库默认不建公告/任务/开黑，由管理员按需创建
   boards:
     seed-defaults: false

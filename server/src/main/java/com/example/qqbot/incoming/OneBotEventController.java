@@ -1,5 +1,6 @@
 package com.example.qqbot.incoming;
 
+import com.example.qqbot.distill.ChatCaptureService;
 import com.example.qqbot.guard.MessageDeduplicator;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.router.EventDispatcher;
@@ -27,10 +28,13 @@ public class OneBotEventController {
 
     private final EventDispatcher dispatcher;
     private final MessageDeduplicator deduplicator;
+    private final ChatCaptureService capture;
 
-    public OneBotEventController(EventDispatcher dispatcher, MessageDeduplicator deduplicator) {
+    public OneBotEventController(EventDispatcher dispatcher, MessageDeduplicator deduplicator,
+                                 ChatCaptureService capture) {
         this.dispatcher = dispatcher;
         this.deduplicator = deduplicator;
+        this.capture = capture;
     }
 
     @PostMapping("/event")
@@ -39,6 +43,8 @@ public class OneBotEventController {
             log.debug("重复事件，已忽略：{}", event);
             return ResponseEntity.noContent().build();
         }
+        // 先入采集队列，再交给问答线程池。采集只入队，不阻塞这条 HTTP 响应。
+        capture.capture(event);
         // 把「提交前」的时间戳传进去，让 worker 能判断自己在队列里排了多久
         dispatcher.dispatch(event, System.currentTimeMillis());
         // 204：告诉 NapCat「收到了」
