@@ -45,6 +45,7 @@ interface Settings {
   maxGapMinutes: number
   autoPublish: boolean
   minConfidence: number
+  focus: string
   lastMessageId: number
   updatedAt: string
 }
@@ -125,6 +126,7 @@ const form = ref({
   maxGapMinutes: 30,
   autoPublish: true,
   minConfidence: 0.75,
+  focus: '',
 })
 
 const filteredNotes = computed(() => {
@@ -155,6 +157,7 @@ async function loadAll() {
         maxGapMinutes: cfg.settings.maxGapMinutes,
         autoPublish: cfg.settings.autoPublish,
         minConfidence: cfg.settings.minConfidence,
+        focus: cfg.settings.focus ?? '',
       }
       if (!importGroupId.value) importGroupId.value = groups.value[0] ?? 0
     }
@@ -199,6 +202,7 @@ async function saveSettings() {
         maxGapMinutes: r.settings.maxGapMinutes,
         autoPublish: r.settings.autoPublish,
         minConfidence: r.settings.minConfidence,
+        focus: r.settings.focus ?? '',
       }
     }
     ok.value = form.value.autoEnabled ? '已保存，达到条件后会自动开始' : '已保存，自动蒸馏已关闭'
@@ -399,6 +403,13 @@ onMounted(loadAll)
         <span class="label">触发一次蒸馏</span>
       </div>
       <p class="hint">任一条件先满足就触发；只处理尚未蒸馏的新消息，不会重复。填 0 表示不按这个条件。</p>
+
+      <label class="focus-row">
+        <span class="label">蒸馏关注点</span>
+        <textarea v-model="form.focus" rows="3"
+                  placeholder="例如：只整理建筑、配方、材料、坐标和 BOSS 打法；不要收录剧情闲聊。留空则按默认游戏经验规则。" />
+        <span class="hint">这段只描述“提取什么”，会作为本批次的提取范围交给模型，不改变群聊人格。</span>
+      </label>
 
       <div class="option-grid">
         <label>每批最多
@@ -629,6 +640,8 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--copper-dim)
 .option-grid label { display: flex; align-items: center; gap: 5px; color: var(--ink-dim);
   font-size: var(--fs-meta); }
 .option-grid label.check { gap: 7px; color: var(--ink); }
+.focus-row { display: flex; flex-direction: column; gap: 5px; }
+.focus-row textarea { width: 100%; resize: vertical; line-height: 1.6; }
 .publish-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border-top: 1px solid var(--edge-soft); padding-top: var(--sp-3); }
 .segmented { display: inline-flex; border: 1px solid var(--edge-soft); border-radius: var(--r-xs);

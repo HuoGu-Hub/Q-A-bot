@@ -252,6 +252,7 @@ public class DistillAdminController {
                     intOf(body.get("maxGapMinutes"), 30),
                     bool(body.get("autoPublish")),
                     dblOf(body.get("minConfidence"), 0.75),
+                    str(body.get("focus")) == null ? "" : str(body.get("focus")),
                     old.lastMessageId(), old.updatedAt());
             return ResponseEntity.ok(Map.of("ok", true, "settings", auto.save(next)));
         } catch (IllegalArgumentException e) {

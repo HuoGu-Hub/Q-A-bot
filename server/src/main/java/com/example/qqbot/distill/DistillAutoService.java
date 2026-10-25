@@ -48,11 +48,15 @@ public class DistillAutoService {
         return settingsRepo.getOrCreate();
     }
 
-    /** 保存设置；从关到开时把游标推到最新，避免一次性蒸馏关闭期间的历史 */
+    /** 保存设置；游标不动，避免丢弃已经采集但还没蒸馏的消息 */
     public DistillSettingRepository.Settings save(DistillSettingRepository.Settings raw) {
         DistillSettingRepository.Settings old = settingsRepo.getOrCreate();
         int batchMessages = clamp(raw.batchMessages(), 1, 500);
         int overlap = clamp(raw.overlap(), 0, Math.max(0, batchMessages - 1));
+        String focus = raw.focus() == null ? "" : raw.focus().strip();
+        if (focus.length() > 1000) {
+            focus = focus.substring(0, 1000);
+        }
         DistillSettingRepository.Settings clean = new DistillSettingRepository.Settings(
                 raw.autoEnabled(),
                 clamp(raw.triggerMessages(), 0, 100_000),
@@ -63,6 +67,7 @@ public class DistillAutoService {
                 clamp(raw.maxGapMinutes(), 0, 1_440),
                 raw.autoPublish(),
                 Math.max(0, Math.min(1, raw.minConfidence())),
+                focus,
                 old.lastMessageId(),
                 old.updatedAt());
         DistillSettingRepository.Settings saved = settingsRepo.save(clean);

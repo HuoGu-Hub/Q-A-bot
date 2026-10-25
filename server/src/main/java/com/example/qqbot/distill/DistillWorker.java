@@ -172,7 +172,9 @@ public class DistillWorker {
         if (!cats.contains(CategoryService.CONTRIB)) {
             cats.add(CategoryService.CONTRIB);
         }
-        String prompt = DistillPrompts.batchPrompt(messages, aliases, imagesByMessage, cats);
+        var setting = settings.getOrCreate();
+        String prompt = DistillPrompts.batchPrompt(messages, aliases, imagesByMessage, cats,
+                setting.focus());
 
         DistillLlm.Result result = llm.summarize(prompt);
         lastModel = result.model();
@@ -188,7 +190,6 @@ public class DistillWorker {
         for (ChatRepository.Message m : messages) {
             byId.put(m.id(), m);
         }
-        var setting = settings.getOrCreate();
         for (DistillDraft d : drafts) {
             List<DistillNoteRepository.Source> sources = new ArrayList<>();
             for (Long mid : d.sourceMessageIds()) {
