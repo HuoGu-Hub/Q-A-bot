@@ -21,13 +21,18 @@ class DistillPromptsTest {
     void focusIsInjected() {
         var messages = List.of(msg(1, "灵火祭坛在东边"));
         String withFocus = DistillPrompts.batchPrompt(messages, Map.of("h1", "群友A"),
-                Map.of(), List.of("大佬攻略"), "只整理建筑和配方", false);
+                Map.of(), List.of("大佬攻略"), "只整理建筑和配方", List.of(), false);
         assertThat(withFocus).contains("本次蒸馏关注点");
         assertThat(withFocus).contains("只整理建筑和配方");
 
         String without = DistillPrompts.batchPrompt(messages, Map.of("h1", "群友A"),
-                Map.of(), List.of("大佬攻略"), "", false);
+                Map.of(), List.of("大佬攻略"), "", List.of(), false);
         assertThat(without).doesNotContain("本次蒸馏关注点");
+
+        String withKnown = DistillPrompts.batchPrompt(messages, Map.of("h1", "群友A"),
+                Map.of(), List.of("大佬攻略"), "", List.of("金色宝箱位置"), false);
+        assertThat(withKnown).contains("已有笔记标题");
+        assertThat(withKnown).contains("金色宝箱位置");
     }
 
     @Test
@@ -37,12 +42,12 @@ class DistillPromptsTest {
         var image = new ChatRepository.Image(3, 1, "m", "a.png", "image/png", 10, "",
                 "2026-10-26T01:00:00Z");
         String attached = DistillPrompts.batchPrompt(messages, Map.of("h1", "群友A"),
-                Map.of(1L, List.of(image)), List.of("大佬攻略"), "", true);
+                Map.of(1L, List.of(image)), List.of("大佬攻略"), "", List.of(), true);
         assertThat(attached).contains("作为附件提供");
         assertThat(attached).doesNotContain("未识别");
 
         String notAttached = DistillPrompts.batchPrompt(messages, Map.of("h1", "群友A"),
-                Map.of(1L, List.of(image)), List.of("大佬攻略"), "", false);
+                Map.of(1L, List.of(image)), List.of("大佬攻略"), "", List.of(), false);
         assertThat(notAttached).contains("未识别");
     }
 }

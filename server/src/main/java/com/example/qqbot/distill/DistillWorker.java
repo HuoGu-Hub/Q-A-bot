@@ -207,8 +207,15 @@ public class DistillWorker {
             cats.add(CategoryService.CONTRIB);
         }
         var setting = settings.getOrCreate();
+        List<DistillNoteRepository.Note> recentNotes = notes.recent(300);
+        List<String> knownTitles = recentNotes.stream()
+                .map(DistillNoteRepository.Note::title)
+                .filter(t -> t != null && !t.isBlank())
+                .distinct()
+                .limit(80)
+                .toList();
         String prompt = DistillPrompts.batchPrompt(messages, aliases, imagesByMessage, cats,
-                setting.focus(), !attachments.isEmpty());
+                setting.focus(), knownTitles, !attachments.isEmpty());
 
         DistillLlm.Result result = llm.summarize(prompt, attachments, setting.modelProvider());
         lastModel = result.model();
@@ -236,13 +243,24 @@ public class DistillWorker {
             if (sources.isEmpty()) {
                 continue;
             }
+            DistillNoteRepository.Note duplicate = DistillDeduper.find(recentNotes, d.title(), d.body());
+            if (duplicate != null) {
+                notes.appendSources(duplicate.id(), sources, d.imageIds());
+                log.info("[DISTILL] 笔记与已有 #{} 主题重复，已合并来源：{}", duplicate.id(), d.title());
+                continue;
+            }
             DistillNoteRepository.Inserted ins = notes.insert(new DistillNoteRepository.NewNote(
                     jobId, batch.id(), d.title(), d.titleNorm(), d.aliases(), d.body(),
                     d.category(), d.confidence(), "draft", result.model(), props.getPromptVersion(),
                     d.bodyHash(), Instant.now().toString()), sources, d.imageIds());
             if (!ins.created()) {
-                log.debug("[DISTILL] 笔记重复，已跳过：{}", d.title());
+                notes.appendSources(ins.id(), sources, d.imageIds());
+                log.debug("[DISTILL] 笔记重复，已合并来源：{}", d.title());
                 continue;
+            }
+            DistillNoteRepository.Note saved = notes.find(ins.id());
+            if (saved != null) {
+                recentNotes.add(0, saved);
             }
             // 二选一：开启就全部自动发布，关闭就全部留草稿等人工整理。
             // 不再用置信度偷偷拦截，否则用户看到"开了自动发布"却仍有草稿。

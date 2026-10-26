@@ -67,9 +67,9 @@ class DistillAutoServiceTest {
     }
 
     @Test
-    @DisplayName("游标保留重叠条数，但每轮至少向前推进一条")
-    void nextCursorKeepsOverlap() {
-        assertThat(DistillAutoService.nextCursor(0, 5, 2)).isEqualTo(3);
+    @DisplayName("任务之间不重叠，批次内部才保留上下文")
+    void nextCursorDoesNotOverlapJobs() {
+        assertThat(DistillAutoService.nextCursor(0, 5, 2)).isEqualTo(5);
         assertThat(DistillAutoService.nextCursor(3, 4, 5)).isEqualTo(4);
         assertThat(DistillAutoService.nextCursor(0, 5, 0)).isEqualTo(5);
     }

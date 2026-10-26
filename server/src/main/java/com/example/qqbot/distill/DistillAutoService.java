@@ -192,11 +192,14 @@ public class DistillAutoService {
     }
 
     /**
-     * 下一轮从哪继续：保留 overlap 条上下文，但至少向前推进一条，避免小批次原地打转。
+     * 下一轮从哪继续：任务之间不重叠。
+     *
+     * <p>批次内部仍由 DistillBatchPlanner 保留 overlap 条上下文；
+     * 如果任务之间也回退 overlap，图片触发会频繁创建窗口几乎全是旧消息的任务，
+     * 同一事实会被反复总结成多条笔记。
      */
     static long nextCursor(long start, long cutoff, int overlap) {
-        long next = Math.max(start + 1, cutoff - Math.max(0, overlap));
-        return Math.min(cutoff, next);
+        return Math.max(start + 1, cutoff);
     }
 
     private static int clamp(int v, int min, int max) {

@@ -159,6 +159,29 @@ public class DistillNoteRepository {
         return jdbc.queryOne("SELECT " + COLUMNS + " FROM distill_note WHERE id = ?", NOTE, id);
     }
 
+    public List<Note> recent(int limit) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM distill_note ORDER BY id DESC LIMIT ?",
+                NOTE, Math.min(Math.max(1, limit), 1000));
+    }
+
+    /** 把重复笔记的来源、图片并到保留笔记上；不新增笔记行 */
+    public void appendSources(long noteId, List<Source> sources, List<Long> imageIds) {
+        jdbc.transaction(() -> {
+            for (Source s : sources == null ? List.<Source>of() : sources) {
+                jdbc.update("INSERT OR IGNORE INTO distill_note_source"
+                                + " (note_id, message_id, ts, sender_name, text) VALUES (?,?,?,?,?)",
+                        noteId, s.messageId(), s.ts(), s.senderName(), s.text());
+            }
+            for (Long imageId : imageIds == null ? List.<Long>of() : imageIds) {
+                if (imageId != null && imageId > 0) {
+                    jdbc.update("INSERT OR IGNORE INTO distill_note_image"
+                            + " (note_id, chat_image_id, kb_name) VALUES (?,?,'')", noteId, imageId);
+                }
+            }
+            return null;
+        });
+    }
+
     public List<Note> list(String status, long jobId, int limit) {
         StringBuilder sql = new StringBuilder("SELECT " + COLUMNS + " FROM distill_note WHERE 1=1");
         List<Object> args = new ArrayList<>();
