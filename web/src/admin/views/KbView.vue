@@ -5,7 +5,7 @@
  *  文档   往知识库**导入文档**（按块 id 操作，导入即自动切割成一个个词条）
  *  词条   **一个词条 = 一个分块**：列表看标题 / 别名 / 分类，点「编辑」展开改别名与正文
  *  分类   人工维护的平铺分类清单：新增 / 改名 / 删除；标签认不出就是「未分类」
- *  聊天蒸馏 群聊采集 / 文件导入 / 分批 / 模型笔记 / 发布与回收站
+ *  聊天蒸馏 自动触发设置 / 蒸馏模型 / 笔记整理与发布
  *  抓取   从 wiki 抓文章：选范围 → 开始抓取（空跑 / 增量 / 强制重洗）→ 看进度与结果
  *
  * 页面栏（吸顶）只剩「刷新」这类整页动作 —— 筛选、导出、导入都在各自面板里，
@@ -52,6 +52,7 @@ function setTab(k: string) {
 
 const termRef = ref<InstanceType<typeof TermPanel> | null>(null)
 const catRef = ref<InstanceType<typeof CategoryPanel> | null>(null)
+const distillRef = ref<InstanceType<typeof DistillPanel> | null>(null)
 const docRef = ref<InstanceType<typeof DocPanel> | null>(null)
 const wikiRef = ref<InstanceType<typeof WikiPanel> | null>(null)
 
@@ -62,6 +63,7 @@ const wiki = computed(() => (tab.value === 'wiki' ? wikiRef.value : null))
 
 const tmLoading = computed(() => tm.value?.isLoading() ?? false)
 const catLoading = computed(() => cat.value?.isLoading() ?? false)
+const distillLoading = computed(() => distillRef.value?.isLoading() ?? false)
 const docLoading = computed(() => doc.value?.isLoading() ?? false)
 
 const wikiRunning = computed(() => wiki.value?.isRunning() ?? false)
@@ -110,6 +112,12 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
         <Button size="sm" @click="wikiRef?.reload()">刷新</Button>
       </template>
 
+      <template v-else-if="tab === 'distill'">
+        <Button size="sm" :disabled="distillLoading" @click="distillRef?.reload()">
+          {{ distillLoading ? '读取中…' : '刷新' }}
+        </Button>
+      </template>
+
       <template v-else-if="tab === 'docs'">
         <Button size="sm" :disabled="docLoading" @click="docRef?.reload()">
           {{ docLoading ? '读取中…' : '刷新' }}
@@ -124,7 +132,7 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
       <DocPanel v-if="tab === 'docs'" ref="docRef" />
       <TermPanel v-else-if="tab === 'terms'" ref="termRef" />
       <CategoryPanel v-else-if="tab === 'category'" ref="catRef" />
-      <DistillPanel v-else-if="tab === 'distill'" />
+      <DistillPanel v-else-if="tab === 'distill'" ref="distillRef" />
       <WikiPanel v-else-if="tab === 'wiki'" ref="wikiRef" />
     </KeepAlive>
   </AdminPage>

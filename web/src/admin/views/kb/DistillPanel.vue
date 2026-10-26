@@ -2,17 +2,24 @@
 /**
  * 知识库 → 聊天蒸馏。
  *
- * 页面只有两件事：
- *   1. 配自动蒸馏的触发条件：累计多少条消息、多少张图，自动切一批。
- *   2. 管理蒸馏出来的知识：搜、改、发布、撤回、删除。
+ * 页面只做两件事：
+ *   1. 配自动蒸馏：触发条数、图片数、模型、发布方式。
+ *   2. 管理笔记：搜索、整理、发布、撤回、删除。
  *
- * 导入历史文件是补数据的旁路，收进「高级」，不占主流程。
+ * 运行记录与历史导入都是旁路，收进可折叠面板，不占主视觉。
  */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
+import Panel from '@shared/ui/Panel.vue'
+import Field from '@shared/ui/Field.vue'
+import Input from '@shared/ui/Input.vue'
+import Select from '@shared/ui/Select.vue'
+import Switch from '@shared/ui/Switch.vue'
+import DataTable from '@shared/ui/DataTable.vue'
 import Button from '@shared/ui/Button.vue'
+import Tag from '@shared/ui/Tag.vue'
+import Modal from '@shared/ui/Modal.vue'
 import Notice from '@shared/ui/Notice.vue'
-import Empty from '@shared/ui/Empty.vue'
 
 interface CaptureStatus {
   enabled: boolean
@@ -124,7 +131,7 @@ const selectedJob = ref<{ job: Job; batches: Batch[] } | null>(null)
 const search = ref('')
 const statusFilter = ref('')
 const importText = ref('')
-const importGroupId = ref(0)
+const importGroupId = ref('')
 
 const form = ref({
   autoEnabled: false,
@@ -139,12 +146,45 @@ const form = ref({
   modelProvider: '',
 })
 
+const PUBLISH_MODES = [
+  { value: 'auto', label: '自动发布到知识库' },
+  { value: 'manual', label: '先整理再发布' },
+]
+
+const STATUS_OPTIONS = [
+  { value: '', label: '全部状态' },
+  { value: 'draft', label: '待处理' },
+  { value: 'published', label: '已发布' },
+  { value: 'duplicate', label: '重复' },
+  { value: 'rejected', label: '已拒绝' },
+]
+
+const providerOptions = computed(() => [
+  { value: '', label: '跟随默认链' },
+  ...providers.value.map(p => ({
+    value: p.provider,
+    label: p.provider + ' · ' + p.model + (p.vision ? ' · 视觉' : ''),
+  })),
+])
+
+const groupOptions = computed(() => groups.value.map(g => ({
+  value: String(g),
+  label: '群 ' + g,
+})))
+
+const publishMode = computed({
+  get: () => (form.value.autoPublish ? 'auto' : 'manual'),
+  set: (v: string) => { form.value.autoPublish = v === 'auto' },
+})
+
 const filteredNotes = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return notes.value
   return notes.value.filter(n =>
     (n.title + ' ' + n.category + ' ' + n.body).toLowerCase().includes(q))
 })
+
+const noteTitle = computed(() => (selected.value ? '整理笔记 #' + selected.value.note.id : '整理笔记'))
 
 async function loadAll() {
   loading.value = true
@@ -172,7 +212,7 @@ async function loadAll() {
         focus: cfg.settings.focus ?? '',
         modelProvider: cfg.settings.modelProvider ?? '',
       }
-      if (!importGroupId.value) importGroupId.value = groups.value[0] ?? 0
+      if (!importGroupId.value) importGroupId.value = String(groups.value[0] ?? '')
     }
     await Promise.all([loadNotes(), loadJobs()])
   } catch (e) {
@@ -245,8 +285,12 @@ async function selectNote(id: number) {
   }
 }
 
-async function saveNote() {
-  if (!selected.value) return
+function closeNote() {
+  selected.value = null
+}
+
+async function saveNote(): Promise<boolean> {
+  if (!selected.value) return false
   error.value = ''
   ok.value = ''
   try {
@@ -260,13 +304,17 @@ async function saveNote() {
     })
     ok.value = '已保存'
     await Promise.all([selectNote(n.id), loadNotes()])
+    return true
   } catch (e) {
     error.value = describeError(e)
+    return false
   }
 }
 
 async function publishNote() {
   if (!selected.value) return
+  // 先把当前编辑内容存下来，否则发布的是库里的旧正文
+  if (!(await saveNote())) return
   try {
     await adminApi.post('/distill/notes/' + selected.value.note.id + '/publish')
     ok.value = '已发布到知识库'
@@ -338,7 +386,7 @@ async function retryJob(id: number) {
 async function importHistory() {
   error.value = ''
   ok.value = ''
-  const group = importGroupId.value || groups.value[0] || 0
+  const group = Number(importGroupId.value) || groups.value[0] || 0
   if (!group) {
     error.value = '没有可用的采集群'
     return
@@ -356,6 +404,18 @@ async function importHistory() {
   }
 }
 
+function toInt(v: string, fallback: number, min: number, max: number) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return fallback
+  return Math.max(min, Math.min(max, Math.round(n)))
+}
+
+function toFloat(v: string, fallback: number, min: number, max: number) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return fallback
+  return Math.max(min, Math.min(max, n))
+}
+
 function fmt(s: string) {
   if (!s) return ''
   const d = new Date(s)
@@ -364,7 +424,15 @@ function fmt(s: string) {
 
 function statusText(s: string) {
   return ({ ready: '待开始', running: '运行中', paused: '已暂停', done: '已完成', failed: '失败',
-    pending: '待处理', draft: '草稿', published: '已发布', duplicate: '重复', rejected: '已拒绝' } as Record<string, string>)[s] || s
+    pending: '待处理', draft: '待处理', published: '已发布', duplicate: '重复', rejected: '已拒绝' } as Record<string, string>)[s] || s
+}
+
+function statusTone(s: string) {
+  if (s === 'published' || s === 'done') return 'good' as const
+  if (s === 'running' || s === 'ready') return 'flame' as const
+  if (s === 'failed' || s === 'rejected') return 'bad' as const
+  if (s === 'paused' || s === 'draft' || s === 'pending') return 'warn' as const
+  return 'neutral' as const
 }
 
 function conf(v: number) {
@@ -372,395 +440,418 @@ function conf(v: number) {
 }
 
 onMounted(loadAll)
+
+defineExpose({
+  reload: loadAll,
+  isLoading: () => loading.value,
+})
 </script>
 
 <template>
-  <div class="distill-page">
+  <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <Notice v-else-if="ok" tone="ok">{{ ok }}</Notice>
 
-    <header class="page-head">
-      <div>
-        <div class="eyebrow">知识库 / 聊天蒸馏</div>
-        <h2>把群聊变成能检索的经验</h2>
-        <p>自动累计群消息，按条件切批整理。你只需要管触发条件和最终知识。</p>
-      </div>
-      <div class="head-stats">
-        <div><b>{{ stats?.messages ?? 0 }}</b><span>条消息</span></div>
-        <div><b>{{ stats?.publishedNotes ?? 0 }}</b><span>条已入库</span></div>
-        <div><b>{{ stats?.drafts ?? 0 }}</b><span>条待处理</span></div>
-      </div>
-    </header>
+    <Panel title="自动蒸馏" hint="达到条件自动切批、调用模型整理">
+      <Field label="自动蒸馏" hint="关闭后只采集，不自动调用模型">
+        <Switch v-model="form.autoEnabled" aria-label="自动蒸馏" />
+      </Field>
 
-    <section class="settings-card">
-      <div class="settings-title">
-        <div>
-          <h3>自动蒸馏</h3>
-          <p v-if="form.autoEnabled">达到任一触发条件就自动开始，不用手动建任务。</p>
-          <p v-else>当前关闭，不会自动调用模型。</p>
+      <Field label="触发条件" hint="N 同时也是每批上限；图片达到 M 张可以提前触发">
+        <div class="inline">
+          <span class="faint">每累计</span>
+          <span class="num-box">
+            <Input
+              :model-value="String(form.triggerMessages)"
+              type="number"
+              aria-label="触发消息数"
+              @update:model-value="(v: string) => form.triggerMessages = toInt(v, 1, 1, 500)"
+            />
+          </span>
+          <span class="faint">条消息，或</span>
+          <span class="num-box">
+            <Input
+              :model-value="String(form.triggerImages)"
+              type="number"
+              aria-label="触发图片数"
+              @update:model-value="(v: string) => form.triggerImages = toInt(v, 0, 0, 10000)"
+            />
+          </span>
+          <span class="faint">张图片</span>
         </div>
-        <label class="switch" title="自动蒸馏开关">
-          <input v-model="form.autoEnabled" type="checkbox" aria-label="自动蒸馏" />
-          <span />
-        </label>
-      </div>
+      </Field>
 
-      <div class="trigger-row">
-        <span class="label">每累计</span>
-        <input v-model.number="form.triggerMessages" class="num" type="number" min="1" max="500"
-               aria-label="触发消息数" />
-        <span>条消息</span>
-        <span class="or">或</span>
-        <input v-model.number="form.triggerImages" class="num" type="number" min="0"
-               aria-label="触发图片数" />
-        <span>张图片</span>
-        <span class="label">触发一次蒸馏</span>
-      </div>
-      <p class="hint">每累计 N 条消息触发一批，N 同时也是每批上限；图片达到 M 张可以提前触发。填 0 表示不按图片触发。</p>
-      <p class="hint">当前游标 #{{ settings?.lastMessageId ?? 0 }}，之后还有 {{ pendingMessages }} 条待处理；关机重启不会丢。</p>
-
-      <label class="focus-row">
-        <span class="label">蒸馏关注点</span>
-        <textarea v-model="form.focus" rows="3"
-                  placeholder="例如：只整理建筑、配方、材料、坐标和 BOSS 打法；不要收录剧情闲聊。留空则按默认游戏经验规则。" />
-        <span class="hint">这段只描述“提取什么”，会作为本批次的提取范围交给模型，不改变群聊人格。</span>
-      </label>
-
-      <label class="model-row">
-        <span class="label">蒸馏模型</span>
-        <select v-model="form.modelProvider">
-          <option value="">跟随默认链</option>
-          <option v-for="p in providers" :key="p.provider" :value="p.provider">
-            {{ p.provider }} · {{ p.model }}{{ p.vision ? ' · 视觉' : '' }}
-          </option>
-        </select>
-        <span class="hint">只影响蒸馏，不影响群聊回复；所选模型失败时会按 fallback 链降级。</span>
-      </label>
-
-      <div class="option-grid">
-        <label>相邻批次重叠
-          <input v-model.number="form.overlap" class="num" type="number" min="0" />
-          <span>条</span>
-        </label>
-        <label>间隔超过
-          <input v-model.number="form.maxGapMinutes" class="num" type="number" min="0" />
-          <span>分钟就断开</span>
-        </label>
-      </div>
-
-      <div class="publish-row">
-        <span class="label">蒸馏结果</span>
-        <div class="segmented">
-          <button type="button" :class="{ on: form.autoPublish }"
-                  @click="form.autoPublish = true">自动发布</button>
-          <button type="button" :class="{ on: !form.autoPublish }"
-                  @click="form.autoPublish = false">先整理再发布</button>
+      <Field label="相邻批次重叠" hint="保留上一批末尾 K 条作为上下文，0 表示不重叠">
+        <div class="inline">
+          <span class="num-box">
+            <Input
+              :model-value="String(form.overlap)"
+              type="number"
+              aria-label="重叠条数"
+              @update:model-value="(v: string) => form.overlap = toInt(v, 0, 0, 500)"
+            />
+          </span>
+          <span class="faint">条</span>
         </div>
-        <span class="hint">
-          {{ form.autoPublish ? '生成的笔记直接进入知识库' : '全部进入待处理，人工确认后发布' }}
+      </Field>
+
+      <Field label="对话间隔" hint="两条消息间隔超过这个分钟数就断开">
+        <div class="inline">
+          <span class="num-box">
+            <Input
+              :model-value="String(form.maxGapMinutes)"
+              type="number"
+              aria-label="对话断开分钟数"
+              @update:model-value="(v: string) => form.maxGapMinutes = toInt(v, 30, 0, 1440)"
+            />
+          </span>
+          <span class="faint">分钟</span>
+        </div>
+      </Field>
+
+      <Field label="采集群" :hint="stats?.capture.enabled ? '采集已开启；群号在 application.yml 的 capture-groups 配置' : '采集未开启；先在配置里打开 capture-enabled'">
+        <div class="chips">
+          <Tag v-for="g in groups" :key="g" tone="neutral">{{ g }}</Tag>
+          <span v-if="!groups.length" class="faint">未配置采集群</span>
+        </div>
+      </Field>
+
+      <Field label="蒸馏模型" hint="只影响蒸馏，不影响群聊回复；失败时按 fallback 链降级">
+        <Select
+          v-model="form.modelProvider"
+          :options="providerOptions"
+          aria-label="蒸馏模型"
+        />
+      </Field>
+
+      <Field label="蒸馏结果" hint="自动发布 = 直接进知识库；先整理 = 全部进待处理">
+        <Select
+          v-model="publishMode"
+          :options="PUBLISH_MODES"
+          aria-label="蒸馏结果发布方式"
+        />
+      </Field>
+
+      <Field label="蒸馏关注点" hint="只描述提取什么；留空则按默认游戏经验规则" control-width="1fr">
+        <Input
+          v-model="form.focus"
+          multiline
+          :rows="3"
+          placeholder="例如：只整理建筑、配方、材料、坐标和 BOSS 打法；不要收录剧情闲聊。"
+          aria-label="蒸馏关注点"
+        />
+      </Field>
+
+      <div class="form-foot">
+        <span class="faint">
+          游标 #{{ settings?.lastMessageId ?? 0 }} · 之后还有 {{ pendingMessages }} 条待处理 · 关机重启不会丢
         </span>
-      </div>
-
-      <p class="hint">采集到的图片会按批作为附件交给视觉模型；模型没有视觉能力或图片读取失败时，自动退回纯文本。</p>
-
-      <div class="settings-foot">
-        <div class="groups">
-          <span class="label">采集群</span>
-          <span v-for="g in groups" :key="g" class="chip">{{ g }}</span>
-          <span v-if="!groups.length" class="hint">未配置采集群</span>
-        </div>
-        <div class="foot-actions">
-          <Button size="sm" :disabled="loading" @click="saveSettings">保存设置</Button>
-          <Button size="sm" variant="primary" @click="runNow">立即蒸馏一次</Button>
+        <div class="actions">
+          <Button size="sm" variant="primary" @click="saveSettings">保存设置</Button>
+          <Button size="sm" @click="runNow">立即蒸馏一次</Button>
         </div>
       </div>
-    </section>
+    </Panel>
 
-    <section class="notes-section">
-      <div class="section-head">
-        <div>
-          <h3>知识笔记</h3>
-          <p>模型整理出的经验，确认后发布；撤回的块保留可恢复，彻底删除不可恢复。</p>
+    <Panel title="知识笔记" :count="filteredNotes.length" hint="模型整理出的经验，确认后发布">
+      <div class="toolbar">
+        <div class="search">
+          <Input
+            v-model="search"
+            placeholder="搜标题、分类或正文…"
+            aria-label="搜索笔记"
+          />
         </div>
-        <div class="filters">
-          <input v-model="search" class="search" placeholder="搜标题、分类或正文"
-                 aria-label="搜索笔记" />
-          <select v-model="statusFilter" aria-label="按状态筛选" @change="loadNotes">
-            <option value="">全部状态</option>
-            <option value="draft">待处理</option>
-            <option value="published">已发布</option>
-            <option value="duplicate">重复</option>
-            <option value="rejected">已拒绝</option>
-          </select>
-          <Button size="sm" :disabled="loading" @click="loadAll">刷新</Button>
+        <div class="filter">
+          <Select
+            :model-value="statusFilter"
+            :options="STATUS_OPTIONS"
+            aria-label="按状态筛选"
+            @update:model-value="(v: string) => { statusFilter = v; loadNotes() }"
+          />
         </div>
+        <Tag tone="warn">{{ stats?.drafts ?? 0 }} 待处理</Tag>
+        <Tag tone="good">{{ stats?.publishedNotes ?? 0 }} 已发布</Tag>
+        <span class="spacer" />
+        <span class="faint">共 {{ notes.length }} 条</span>
       </div>
 
-      <div class="notes-layout">
-        <div class="note-list">
-          <Empty v-if="!filteredNotes.length" text="还没有匹配的笔记"
-                 hint="调整筛选，或等自动蒸馏产出" />
-          <button v-for="n in filteredNotes" :key="n.id" type="button"
-                  class="note-row" :class="{ on: selected?.note.id === n.id }"
-                  @click="selectNote(n.id)">
-            <span class="note-main">
-              <span class="note-title">{{ n.title }}</span>
-              <span class="note-meta">
-                <span class="chip small">{{ n.category || '未分类' }}</span>
-                <span>{{ conf(n.confidence) }}</span>
-                <span>·</span>
-                <span>{{ fmt(n.createdAt) }}</span>
-              </span>
-            </span>
-            <span class="dot" :class="n.status" :title="statusText(n.status)" />
-          </button>
-        </div>
+      <DataTable
+        cards
+        label="蒸馏笔记表"
+        :rows="filteredNotes.length"
+        empty="还没有匹配的笔记"
+        empty-hint="调整筛选，或等自动蒸馏产出"
+      >
+        <thead>
+          <tr>
+            <th>标题</th>
+            <th class="c-cat">分类</th>
+            <th class="c-conf num">置信度</th>
+            <th class="c-status">状态</th>
+            <th class="c-time">时间</th>
+            <th class="c-ops">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="n in filteredNotes" :key="n.id">
+            <td data-label="标题">
+              <button type="button" class="title-btn" @click="selectNote(n.id)">
+                {{ n.title }}
+              </button>
+              <div class="faint meta">#{{ n.id }} · {{ n.model || '未知模型' }}</div>
+            </td>
+            <td class="c-cat" data-label="分类">
+              <Tag tone="flame">{{ n.category || '未分类' }}</Tag>
+            </td>
+            <td class="c-conf num" data-label="置信度">{{ conf(n.confidence) }}</td>
+            <td class="c-status" data-label="状态">
+              <Tag :tone="statusTone(n.status)">{{ statusText(n.status) }}</Tag>
+            </td>
+            <td class="c-time faint" data-label="时间">{{ fmt(n.createdAt) }}</td>
+            <td class="c-ops" data-label="操作">
+              <Button size="sm" @click="selectNote(n.id)">整理</Button>
+            </td>
+          </tr>
+        </tbody>
+      </DataTable>
+    </Panel>
 
-        <div class="editor">
-          <div v-if="!selected" class="editor-empty">
-            <p>从左边选一条笔记开始整理。</p>
-            <p class="hint">新笔记会先进入「待处理」，确认后再发布。</p>
-          </div>
-          <template v-else>
-            <div class="editor-head">
-              <span class="status-pill" :class="selected.note.status">{{ statusText(selected.note.status) }}</span>
-              <span class="hint">#{{ selected.note.id }} · {{ selected.note.model || '未知模型' }}
-                · {{ fmt(selected.note.createdAt) }}</span>
-            </div>
-
-            <input v-model="selected.note.title" class="title-input" placeholder="标题" />
-            <div class="editor-row">
-              <label>分类<input v-model="selected.note.category" /></label>
-              <label>别名<input v-model="selected.note.aliases" placeholder="多个用、分隔" /></label>
-              <label>置信度<input v-model.number="selected.note.confidence" class="num"
-                                 type="number" min="0" max="1" step="0.05" /></label>
-            </div>
-            <textarea v-model="selected.note.body" class="body-input" rows="14" placeholder="正文" />
-
-            <div class="editor-actions">
-              <Button size="sm" variant="primary" @click="saveNote">保存</Button>
-              <Button v-if="selected.note.status !== 'published'" size="sm" @click="publishNote">发布</Button>
-              <Button v-else size="sm" @click="unpublishNote">撤回</Button>
-              <Button size="sm" variant="danger" @click="deleteNote">彻底删除</Button>
-            </div>
-
-            <details class="source-box">
-              <summary>来源消息 {{ selected.sources.length }} 条</summary>
-              <div v-for="s in selected.sources" :key="s.messageId" class="source">
-                <div class="source-meta">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
-                <p>{{ s.text }}</p>
+    <Panel
+      title="运行记录"
+      :count="jobs.length"
+      hint="自动任务、失败批次与重试"
+      collapsible
+      :default-open="false"
+      mobile-collapsed
+    >
+      <DataTable
+        cards
+        label="蒸馏任务表"
+        :rows="jobs.length"
+        empty="还没有任务"
+        empty-hint="达到触发条件后会自动创建"
+      >
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th class="num">消息</th>
+            <th class="num">批次</th>
+            <th>状态</th>
+            <th>创建时间</th>
+            <th class="c-ops">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="j in jobs" :key="j.id">
+            <td class="num" data-label="#">{{ j.id }}</td>
+            <td class="num" data-label="消息">{{ j.messageCount }}</td>
+            <td class="num" data-label="批次">{{ j.batchCount }}</td>
+            <td data-label="状态">
+              <Tag :tone="statusTone(j.status)">{{ statusText(j.status) }}</Tag>
+              <div v-if="j.error" class="faint err">{{ j.error }}</div>
+            </td>
+            <td class="faint" data-label="创建时间">{{ fmt(j.createdAt) }}</td>
+            <td class="c-ops" data-label="操作">
+              <div class="row-actions">
+                <Button size="sm" @click="openJob(j.id)">批次</Button>
+                <Button size="sm" :disabled="j.status === 'running'" @click="startJob(j.id)">开始</Button>
+                <Button size="sm" @click="pauseJob(j.id)">暂停</Button>
+                <Button size="sm" @click="retryJob(j.id)">重试</Button>
               </div>
-            </details>
+            </td>
+          </tr>
+        </tbody>
+      </DataTable>
 
-            <div v-if="selected.imageIds.length" class="image-box">
-              <div class="label">关联图片</div>
-              <p class="hint">发布会把图片复制到知识库并追加 [[img:kb:...]]；撤回保留图片，彻底删除会清理。</p>
-              <div class="images">
-                <img v-for="id in selected.imageIds" :key="id"
-                     :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </section>
-
-    <details class="runs">
-      <summary>运行记录 <span class="hint">{{ jobs.length }} 个任务</span></summary>
-      <div class="runs-body">
-        <Empty v-if="!jobs.length" text="还没有任务" hint="达到触发条件后会自动创建" />
-        <table v-else class="tbl">
-          <thead><tr><th>#</th><th>消息</th><th>批次</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr v-for="j in jobs" :key="j.id" :class="{ on: selectedJob?.job.id === j.id }">
-              <td>{{ j.id }}</td>
-              <td>{{ j.messageCount }}</td>
-              <td>{{ j.batchCount }}</td>
-              <td><span class="status-pill" :class="j.status">{{ statusText(j.status) }}</span></td>
-              <td>{{ fmt(j.createdAt) }}</td>
-              <td class="ops">
-                <button type="button" @click="openJob(j.id)">批次</button>
-                <button type="button" :disabled="j.status === 'running'" @click="startJob(j.id)">开始</button>
-                <button type="button" @click="pauseJob(j.id)">暂停</button>
-                <button type="button" @click="retryJob(j.id)">重试</button>
-              </td>
+      <template v-if="selectedJob">
+        <h3 class="sub-title">任务 #{{ selectedJob.job.id }} 的批次</h3>
+        <DataTable
+          label="批次表"
+          :rows="selectedJob.batches.length"
+          empty="没有批次"
+          :cards="selectedJob.batches.length <= 10"
+        >
+          <thead>
+            <tr>
+              <th class="num">批次</th>
+              <th class="num">消息</th>
+              <th class="num">字数</th>
+              <th>状态</th>
+              <th>模型</th>
+              <th>错误</th>
             </tr>
-          </tbody>
-        </table>
-
-        <table v-if="selectedJob" class="tbl batches">
-          <thead><tr><th>批次</th><th>消息数</th><th>字数</th><th>状态</th><th>模型</th><th>错误</th></tr></thead>
+          </thead>
           <tbody>
             <tr v-for="b in selectedJob.batches" :key="b.id">
-              <td>{{ b.seq }}</td>
-              <td>{{ b.messageCount }}</td>
-              <td>{{ b.charCount }}</td>
-              <td>{{ statusText(b.status) }}</td>
-              <td>{{ b.model || '—' }}</td>
-              <td class="err">{{ b.error }}</td>
+              <td class="num" data-label="批次">{{ b.seq }}</td>
+              <td class="num" data-label="消息">{{ b.messageCount }}</td>
+              <td class="num" data-label="字数">{{ b.charCount }}</td>
+              <td data-label="状态">
+                <Tag :tone="statusTone(b.status)">{{ statusText(b.status) }}</Tag>
+              </td>
+              <td class="faint" data-label="模型">{{ b.model || '—' }}</td>
+              <td class="faint err" data-label="错误">{{ b.error || '—' }}</td>
             </tr>
           </tbody>
-        </table>
-      </div>
-    </details>
+        </DataTable>
+      </template>
+    </Panel>
 
-    <details class="advanced">
-      <summary>高级：导入历史聊天</summary>
-      <div class="advanced-body">
-        <p class="hint">只有补历史数据时才用；实时群消息会自动采集，不需要这里。</p>
-        <div class="editor-row">
-          <label>归属群
-            <select v-model.number="importGroupId">
-              <option v-for="g in groups" :key="g" :value="g">{{ g }}</option>
-            </select>
-          </label>
-        </div>
-        <textarea v-model="importText" rows="6"
-                  placeholder="粘贴 TXT 或 JSONL。TXT 例：2026-10-20 21:03:11 甲: 灵火祭坛在东边" />
-        <div class="editor-actions">
-          <Button size="sm" @click="importHistory">导入</Button>
-        </div>
+    <Panel
+      title="高级：导入历史聊天"
+      hint="只有补历史时才用；实时消息会自动采集"
+      collapsible
+      :default-open="false"
+      mobile-collapsed
+    >
+      <Field label="归属群">
+        <Select
+          v-model="importGroupId"
+          :options="groupOptions"
+          aria-label="历史聊天归属群"
+        />
+      </Field>
+      <Field label="聊天原文" hint="支持 TXT 或 JSONL；文件名由系统生成" control-width="1fr">
+        <Input
+          v-model="importText"
+          multiline
+          :rows="6"
+          placeholder="2026-10-20 21:03:11 甲: 灵火祭坛在东边&#10;2026-10-20 21:03:40 乙: 还要三个树脂"
+          aria-label="历史聊天原文"
+        />
+      </Field>
+      <div class="actions">
+        <Button size="sm" @click="importHistory">导入</Button>
       </div>
-    </details>
+    </Panel>
+
+    <Modal :open="!!selected" :title="noteTitle" width="760px" @close="closeNote">
+      <template v-if="selected">
+        <div class="note-head">
+          <Tag :tone="statusTone(selected.note.status)">{{ statusText(selected.note.status) }}</Tag>
+          <span class="faint">{{ selected.note.model || '未知模型' }} · {{ fmt(selected.note.createdAt) }}</span>
+        </div>
+
+        <Field label="标题" control-width="1fr">
+          <Input
+            :model-value="selected.note.title"
+            aria-label="笔记标题"
+            @update:model-value="(v: string) => { if (selected) selected.note.title = v }"
+          />
+        </Field>
+        <Field label="分类">
+          <Input
+            :model-value="selected.note.category"
+            aria-label="笔记分类"
+            @update:model-value="(v: string) => { if (selected) selected.note.category = v }"
+          />
+        </Field>
+        <Field label="别名" hint="多个用「、」分隔">
+          <Input
+            :model-value="selected.note.aliases"
+            aria-label="笔记别名"
+            @update:model-value="(v: string) => { if (selected) selected.note.aliases = v }"
+          />
+        </Field>
+        <Field label="置信度" hint="0 到 1">
+          <div class="num-box">
+            <Input
+              :model-value="String(selected.note.confidence)"
+              type="number"
+              aria-label="笔记置信度"
+              @update:model-value="(v: string) => { if (selected) selected.note.confidence = toFloat(v, 0, 0, 1) }"
+            />
+          </div>
+        </Field>
+        <Field label="正文" control-width="1fr">
+          <Input
+            :model-value="selected.note.body"
+            multiline
+            :rows="12"
+            aria-label="笔记正文"
+            @update:model-value="(v: string) => { if (selected) selected.note.body = v }"
+          />
+        </Field>
+
+        <details class="source-box">
+          <summary>来源消息 {{ selected.sources.length }} 条</summary>
+          <div v-for="s in selected.sources" :key="s.messageId" class="source">
+            <div class="faint">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
+            <p>{{ s.text }}</p>
+          </div>
+        </details>
+
+        <div v-if="selected.imageIds.length" class="image-box">
+          <div class="source-label">关联图片</div>
+          <p class="faint">发布会复制到知识库并追加 [[img:kb:...]]；撤回保留，彻底删除会清理。</p>
+          <div class="images">
+            <img v-for="id in selected.imageIds" :key="id"
+                 :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <Button size="sm" variant="danger" @click="deleteNote">彻底删除</Button>
+          <span class="spacer" />
+          <Button v-if="selected.note.status !== 'published'" size="sm" @click="publishNote">发布</Button>
+          <Button v-else size="sm" @click="unpublishNote">撤回</Button>
+          <Button size="sm" variant="primary" @click="saveNote">保存</Button>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
-.distill-page { display: flex; flex-direction: column; gap: var(--sp-4); color: var(--ink); }
-.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4);
-  border-bottom: 1px solid var(--edge-soft); padding-bottom: var(--sp-3); }
-.eyebrow { color: var(--copper); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.page-head h2 { margin: 4px 0; font-size: 1.55rem; letter-spacing: -.02em; }
-.page-head p { margin: 0; color: var(--ink-dim); font-size: var(--fs-meta); max-width: 56ch; }
-.head-stats { display: flex; gap: var(--sp-4); }
-.head-stats div { display: flex; flex-direction: column; align-items: flex-end; }
-.head-stats b { font-family: var(--font-mono); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
-.head-stats span { color: var(--ink-dim); font-size: 11px; }
+.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-.settings-card { border: 1px solid var(--edge-soft); border-radius: var(--r-sm);
-  background: var(--surface-raised); padding: var(--sp-4); display: flex; flex-direction: column;
-  gap: var(--sp-3); }
-.settings-title { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
-.settings-title h3 { margin: 0 0 3px; font-size: 1rem; }
-.settings-title p { margin: 0; color: var(--ink-dim); font-size: var(--fs-meta); }
-.switch { position: relative; width: 42px; height: 24px; flex: none; cursor: pointer; }
-.switch input { position: absolute; opacity: 0; }
-.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--surface-inset);
-  border: 1px solid var(--edge-soft); transition: background .15s; }
-.switch span::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%;
-  top: 3px; left: 3px; background: var(--ink-dim); transition: transform .15s, background .15s; }
-.switch input:checked + span { background: color-mix(in oklab, var(--copper) 35%, transparent); }
-.switch input:checked + span::after { transform: translateX(18px); background: var(--copper); }
+.inline { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.chips { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.num-box { display: block; width: 92px; }
+.faint { color: var(--ink-3); font-size: var(--fs-meta); }
 
-.trigger-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  padding: var(--sp-3); background: var(--surface-inset); border-radius: var(--r-sm); }
-.trigger-row .label { color: var(--ink-dim); }
-.trigger-row .or { color: var(--ink-faint); margin: 0 4px; }
-.num { width: 68px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-input, select, textarea { background: var(--surface-inset); border: 1px solid var(--edge-soft);
-  border-radius: var(--r-xs); color: var(--ink); padding: 5px 7px; font: inherit; }
-input:focus, select:focus, textarea:focus { outline: 1px solid var(--copper-dim); outline-offset: 0; }
-.hint { color: var(--ink-dim); font-size: 11px; margin: 0; }
-.option-grid { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
-.option-grid label { display: flex; align-items: center; gap: 5px; color: var(--ink-dim);
-  font-size: var(--fs-meta); }
-.option-grid label.check { gap: 7px; color: var(--ink); }
-.model-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.model-row select { min-width: 240px; }
-.focus-row { display: flex; flex-direction: column; gap: 5px; }
-.focus-row textarea { width: 100%; resize: vertical; line-height: 1.6; }
-.publish-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  border-top: 1px solid var(--edge-soft); padding-top: var(--sp-3); }
-.segmented { display: inline-flex; border: 1px solid var(--edge-soft); border-radius: var(--r-xs);
-  overflow: hidden; }
-.segmented button { border: 0; background: transparent; color: var(--ink-dim); padding: 5px 12px;
-  cursor: pointer; font: inherit; }
-.segmented button.on { background: color-mix(in oklab, var(--copper) 22%, transparent); color: var(--ink); }
-.settings-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
-  flex-wrap: wrap; border-top: 1px solid var(--edge-soft); padding-top: var(--sp-3); }
-.groups { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.label { color: var(--ink-dim); font-size: 11px; }
-.chip { display: inline-block; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--edge-soft); color: var(--ink-dim); font-family: var(--font-mono);
-  font-size: 11px; }
-.chip.small { padding: 1px 6px; font-family: inherit; }
-.foot-actions { display: flex; gap: var(--sp-2); }
+.form-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  flex-wrap: wrap; border-top: 1px solid var(--hairline); padding-top: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
-.notes-section { display: flex; flex-direction: column; gap: var(--sp-3); }
-.section-head { display: flex; align-items: flex-end; justify-content: space-between;
-  gap: var(--sp-3); flex-wrap: wrap; }
-.section-head h3 { margin: 0 0 3px; font-size: 1rem; }
-.section-head p { margin: 0; color: var(--ink-dim); font-size: var(--fs-meta); }
-.filters { display: flex; gap: var(--sp-2); align-items: center; }
-.search { width: 210px; }
-.notes-layout { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
-  gap: var(--sp-3); align-items: start; }
-.note-list { border: 1px solid var(--edge-soft); border-radius: var(--r-sm);
-  background: var(--surface-raised); overflow: hidden; max-height: 640px; overflow-y: auto; }
-.note-row { display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: left;
-  padding: 10px 12px; background: transparent; border: 0; border-bottom: 1px solid var(--edge-soft);
-  color: var(--ink); cursor: pointer; font: inherit; }
-.note-row:last-child { border-bottom: 0; }
-.note-row:hover { background: color-mix(in oklab, var(--surface-inset) 70%, transparent); }
-.note-row.on { background: color-mix(in oklab, var(--copper) 12%, transparent);
-  box-shadow: inset 2px 0 0 var(--copper); }
-.note-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-.note-title { font-size: var(--fs-meta); font-weight: var(--fw-medium); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-.note-meta { display: flex; align-items: center; gap: 5px; color: var(--ink-dim); font-size: 11px;
-  white-space: nowrap; overflow: hidden; }
-.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--ink-faint); }
-.dot.published { background: var(--moss); }
-.dot.draft { background: var(--brass); }
-.dot.duplicate, .dot.rejected { background: var(--blight); }
+.toolbar { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.search { flex: 1; min-width: 220px; max-width: 360px; }
+.filter { width: 160px; }
+.spacer { flex: 1; }
 
-.editor { border: 1px solid var(--edge-soft); border-radius: var(--r-sm);
-  background: var(--surface-raised); padding: var(--sp-4); min-height: 360px; }
-.editor-empty { display: flex; flex-direction: column; justify-content: center; min-height: 320px;
-  align-items: center; color: var(--ink-dim); gap: 4px; }
-.editor-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2);
-  flex-wrap: wrap; }
-.status-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--edge-soft); color: var(--ink-dim); }
-.status-pill.published { color: var(--moss); border-color: color-mix(in oklab, var(--moss) 45%, transparent); }
-.status-pill.running { color: var(--copper); border-color: var(--copper-dim); }
-.status-pill.failed, .status-pill.rejected { color: var(--blight); }
-.title-input { width: 100%; font-size: 1.15rem; font-weight: var(--fw-medium); padding: 7px 0;
-  background: transparent; border: 0; border-bottom: 1px solid var(--edge-soft); border-radius: 0; }
-.editor-row { display: flex; gap: var(--sp-3); flex-wrap: wrap; margin: var(--sp-3) 0; }
-.editor-row label { display: flex; flex-direction: column; gap: 4px; color: var(--ink-dim);
-  font-size: 11px; }
-.body-input { width: 100%; resize: vertical; line-height: 1.7; font-size: var(--fs-meta); }
-.editor-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2); }
-.source-box { margin-top: var(--sp-4); border-top: 1px solid var(--edge-soft); padding-top: var(--sp-2); }
-.source-box summary { cursor: pointer; color: var(--ink-dim); font-size: var(--fs-meta); }
-.source { border-left: 2px solid var(--copper-dim); padding-left: var(--sp-3); margin-top: var(--sp-2); }
-.source-meta { color: var(--ink-dim); font-size: 11px; }
-.source p { margin: 3px 0 0; white-space: pre-wrap; font-size: var(--fs-meta); }
+.title-btn {
+  padding: 0; border: 0; background: none; color: var(--ink); font: inherit;
+  text-align: left; cursor: pointer;
+}
+.title-btn:hover { color: var(--ember); text-decoration: underline; }
+.meta { margin-top: 2px; }
+
+.row-actions { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+.err { margin-top: 2px; line-height: 1.5; overflow-wrap: anywhere; }
+
+.sub-title { font-size: var(--fs-sm); font-weight: var(--fw-medium); margin: var(--sp-4) 0 var(--sp-2); }
+
+.note-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
+.source-box { margin-top: var(--sp-3); border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
+.source-box summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-sm); }
+.source { border-left: 2px solid var(--edge); padding-left: var(--sp-3); margin-top: var(--sp-2); }
+.source p { margin: 2px 0 0; white-space: pre-wrap; font-size: var(--fs-meta); }
+.source-label { font-size: var(--fs-sm); color: var(--ink-2); }
 .image-box { margin-top: var(--sp-3); }
 .images { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2); }
-.images img { max-width: 180px; max-height: 140px; border: 1px solid var(--edge-soft); border-radius: var(--r-xs); }
+.images img { max-width: 180px; max-height: 140px; border: 1px solid var(--edge); border-radius: var(--r-sm); }
+.modal-actions { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-4);
+  border-top: 1px solid var(--hairline); padding-top: var(--sp-3); flex-wrap: wrap; }
 
-.runs, .advanced { border: 1px solid var(--edge-soft); border-radius: var(--r-sm);
-  background: var(--surface-raised); }
-.runs summary, .advanced summary { cursor: pointer; padding: 10px 12px; font-size: var(--fs-meta); }
-.runs-body, .advanced-body { padding: 0 12px 12px; display: flex; flex-direction: column;
-  gap: var(--sp-2); }
-.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-meta); }
-.tbl th, .tbl td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--edge-soft); }
-.tbl th { color: var(--ink-dim); font-weight: var(--fw-medium); }
-.tbl tr.on { background: color-mix(in oklab, var(--copper) 9%, transparent); }
-.tbl.batches { margin-top: var(--sp-2); }
-.ops { display: flex; gap: 7px; flex-wrap: wrap; }
-.ops button { border: 0; background: transparent; color: var(--copper); cursor: pointer;
-  padding: 0; font: inherit; }
-.ops button:disabled { color: var(--ink-faint); cursor: default; }
-.err { color: var(--blight); max-width: 260px; word-break: break-word; }
-.advanced-body textarea { width: 100%; }
-@media (max-width: 900px) {
-  .notes-layout { grid-template-columns: 1fr; }
-  .note-list { max-height: 320px; }
-  .page-head { align-items: flex-start; flex-direction: column; }
-  .head-stats { align-self: stretch; justify-content: space-between; }
+@media (max-width: 760px) {
+  .form-foot { align-items: flex-start; }
+  .search { max-width: none; flex: 1 1 100%; }
+  .filter { flex: 1 1 100%; width: auto; }
+  .toolbar .spacer { display: none; }
+  .num-box { width: 100px; }
 }
 </style>
