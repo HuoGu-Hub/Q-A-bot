@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>语音回复与素材库 · 设计方案</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --panel-2:#1b2029; --line:#272e3a;
+    --fg:#e6e9ef; --fg-dim:#9aa4b2; --accent:#7ee0c0; --accent-2:#8ab4ff;
+    --warn:#ffc46b; --bad:#ff7d84; --ok:#6ee7a8;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Code","JetBrains Mono",Consolas,monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{--bg:#f7f8fa;--panel:#fff;--panel-2:#f2f4f7;--line:#e3e7ee;--fg:#1b2029;--fg-dim:#5a6472;--accent:#0f8f74;--accent-2:#2f6fe0;--warn:#b06a00;--bad:#c0272d;--ok:#0f7a4d;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.75 system-ui,-apple-system,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:960px;margin:0 auto;padding:56px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  .kicker{font:600 12px/1 var(--mono);letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+  h1{font-size:34px;line-height:1.25;margin:14px 0 12px;letter-spacing:-.01em}
+  .sub{color:var(--fg-dim);font-size:15px;margin:0}
+  h2{font-size:22px;margin:52px 0 14px;letter-spacing:-.01em}
+  h2 .num{font:600 12px/1 var(--mono);color:var(--accent);margin-right:10px;vertical-align:3px}
+  h3{font-size:16px;margin:28px 0 10px;color:var(--accent-2)}
+  p{margin:12px 0}
+  code{font-family:var(--mono);font-size:.88em;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow:auto;font:13px/1.7 var(--mono);margin:16px 0}
+  pre code{background:none;border:0;padding:0;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase}
+  tbody tr:hover{background:var(--panel)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:20px 0}
+  .tldr{border-left:3px solid var(--accent)}
+  .tldr p{margin:8px 0}
+  .tag{display:inline-block;font:600 11px/1 var(--mono);padding:4px 7px;border-radius:999px;border:1px solid var(--line);color:var(--fg-dim);margin-right:6px;vertical-align:2px}
+  .tag.ok{color:var(--ok);border-color:color-mix(in oklab,var(--ok) 40%,transparent)}
+  .tag.bad{color:var(--bad);border-color:color-mix(in oklab,var(--bad) 40%,transparent)}
+  .tag.warn{color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
+  .note{color:var(--fg-dim);font-size:14px}
+  ul,ol{padding-left:22px}
+  li{margin:7px 0}
+  .kv{font-size:14px}
+  .kv div{padding:6px 0;border-bottom:1px dashed var(--line)}
+  .kv b{color:var(--fg-dim);font-weight:600;display:inline-block;min-width:150px}
+  figure{margin:26px 0}
+  figcaption{color:var(--fg-dim);font-size:13px;margin-top:8px;text-align:center}
+  a{color:var(--accent-2);text-decoration:none;border-bottom:1px solid color-mix(in oklab,var(--accent-2) 35%,transparent)}
+  .hr{height:1px;background:var(--line);margin:44px 0}
+  .phase{border-left:2px solid var(--line);padding-left:18px;margin:18px 0}
+  .phase b{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Design / Voice Reply</div>
+  <h1>语音回复与素材库</h1>
+  <p class="sub">关键词直发、上传自家音频、大模型可调用的语音工具，以及 TTS 在其中的位置。</p>
+</header>
+
+<div class="card tldr">
+  <p><b>一句话结论：</b>语音回复走三条入口 —— 关键词命中直接发素材、大模型判断后调工具发素材、TTS 现场合成。三条都收敛到已有的 <code>VoiceSender</code>，发送只有一条出口。</p>
+  <p><b>TTS 的定位：</b>edge-tts 只当「随时能用的免费兜底」，不当主引擎。要稳定就换 Azure 或国内云；要离线就在宿主侧跑小模型。</p>
+  <p><b>工具的关键设计：</b>工具不直接发，只把「要发哪一段」放进本次请求的待发队列；回答文本先发，语音后发。</p>
+</div>
+
+<h2><span class="num">01</span>TTS 选型：还有哪些路</h2>
+
+<p>先把结论摆在前面：<b>你的服务器跑不动本地大模型</b>。部署文档里那台是 2GB 内存的 Debian，而 2026 年的中文 TTS 基本都要 4GB 以上显存。所以只有两类现实选择：云 API，或者把 TTS 放在另一台机器上跑。</p>
+
+<table>
+  <thead><tr><th>方案</th><th>在哪跑</th><th>中文质量</th><th>联网</th><th>成本</th><th>适合</th></tr></thead>
+  <tbody>
+    <tr><td>edge-tts</td><td>任意机器，20MB 依赖</td><td>自然，8 个 zh-CN 声线</td><td><span class="tag bad">每次都要</span></td><td>免费</td><td>日常、兜底</td></tr>
+    <tr><td>Azure Speech</td><td>云</td><td>与 edge-tts 同一批声线</td><td>每次都要</td><td>按量付费</td><td>要稳定的正式环境</td></tr>
+    <tr><td>阿里百炼 CosyVoice / MiniMax</td><td>国内云</td><td>好，低延迟</td><td>每次都要</td><td>按量付费</td><td>国内网络、合规</td></tr>
+    <tr><td>Qwen3-TTS</td><td>本地 GPU</td><td>中文优先，支持克隆</td><td><span class="tag ok">离线</span></td><td>自有算力</td><td>有显卡的机器</td></tr>
+    <tr><td>CosyVoice 3</td><td>本地 GPU</td><td>150ms 级流式，18+ 方言</td><td>离线</td><td>自有算力</td><td>实时对话</td></tr>
+    <tr><td>Fish Audio S2 Pro</td><td>本地 GPU</td><td>高保真多语言</td><td>离线</td><td>建议 24GB 显存</td><td>配音级内容</td></tr>
+    <tr><td>Kokoro-82M</td><td>CPU 可跑</td><td>够用，情感弱</td><td>离线</td><td>免费</td><td>轻量兜底</td></tr>
+    <tr><td>Piper</td><td>CPU</td><td>一般</td><td>离线</td><td>免费</td><td>纯离线、嵌入式</td></tr>
+    <tr><td>GPT-SoVITS</td><td>本地 GPU</td><td>音色克隆，几十秒样本</td><td>离线</td><td>自有算力</td><td>要「某个人的声音」</td></tr>
+  </tbody>
+</table>
+
+<p>本地模型这一年的进步主要在中文自然度、流式延迟和克隆，代价是显存。你的开发机是 RTX 3050 4GB，CosyVoice 0.5B、Kokoro 这类能跑；那台 2GB 的服务器只能当客户端。</p>
+
+<h3>建议的降级链</h3>
+<pre><code>主：edge-tts         免费、够自然、现成
+备：Azure / 国内云    要稳定、要合规时换
+底：Kokoro / Piper    断网、或云端限流时兜底
+终：纯文字            合成失败绝不静默，退回文字回答</code></pre>
+
+<p>四层都实现同一个接口，配置里换一个 <code>provider</code> 就能切，发送链路完全不动。</p>
+
+<h2><span class="num">02</span>整体流程</h2>
+
+<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+  <div>
+    <b>流程图：三条入口收敛到一个出口</b>
+    <p class="note" style="margin:6px 0 0">关键词直发 · 大模型调工具 · TTS 合成，最后都进 VoiceSender</p>
+  </div>
+  <a href="diagrams/voice-reply-flow.html" style="white-space:nowrap">打开可交互流程图 →</a>
+</div>
+
+<p>三条入口的优先级是固定的：</p>
+<ol>
+  <li><b>关键词直发</b>：零模型成本、零延迟，命中就发，不再问模型。</li>
+  <li><b>大模型调工具</b>：没命中关键词时正常回答，模型自己判断要不要放一段。</li>
+  <li><b>TTS 合成</b>：工具或指令里要求「说这句话」时现场生成。</li>
+</ol>
+
+<h2><span class="num">03</span>关键词触发</h2>
+
+<p>放数据库，不放 Yaml —— 你要能随时加一条「唱首歌」而不用重启。</p>
+
+<pre><code>voice_trigger(
+  id, keyword, match_type, asset_id, priority,
+  cooldown_seconds, group_scope, enabled, created_at
+)</code></pre>
+
+<div class="kv">
+  <div><b>匹配</b>全角转半角、去空白后做包含匹配；同一句命中多条时取关键词最长的那条</div>
+  <div><b>冷却</b>按「群 + 规则」计，默认 120 秒，防止有人刷「唱首歌」</div>
+  <div><b>作用域</b>空 = 所有群；填群号 = 只在指定群生效</div>
+  <div><b>命中但素材被删</b>记日志并放行给大模型，不报错</div>
+  <div><b>额度</b>复用现有的每人每分钟限流，不另开一套</div>
+</div>
+
+<p>默认给三条示例：<code>唱首歌 / 唱歌 / 来一首</code> 指向歌曲素材，<code>喵 / 叫一声</code> 指向猫叫，<code>晚安</code> 指向晚安语音。全部可以在后台改。</p>
+
+<h2><span class="num">04</span>素材库与上传</h2>
+
+<p>这是你说的「有个地方上传歌曲录音」。文件落盘，元数据进库，后台一页管理。</p>
+
+<pre><code>voice_asset(
+  id, title, aliases, tags,
+  sha256, file_name, mime, size_bytes, duration_ms,
+  enabled, created_at, play_count, last_played_at
+)</code></pre>
+
+<div class="kv">
+  <div><b>目录</b><code>server/data/voices/</code>，文件名用内容哈希，天然去重、永不覆盖</div>
+  <div><b>上传</b>multipart，单文件 ≤ 8MB，用 ffprobe 量时长，超过 5 分钟直接拒</div>
+  <div><b>转码</b>原文件保留，发送时才转 24kHz mp3 —— 歌曲留着原音质，试听才有意义</div>
+  <div><b>试听</b><code>GET /admin/api/voice/{id}/audio</code>，走会话鉴权，直接给浏览器 audio 标签</div>
+  <div><b>试发</b><code>POST /admin/api/voice/{id}/send</code>，指定群号，立刻收到一条语音</div>
+</div>
+
+<p>后台页面就三块：拖拽上传、列表（时长 / 大小 / 标签 / 启用）、每行的「试听 / 发到群 / 删除」。上传后立刻可用，不需要重启。</p>
+
+<h2><span class="num">05</span>给大模型的工具</h2>
+
+<p>工具只做两件事：把「哪段素材」查出来，把「发到哪」记下来。<b>它不直接发送</b>，原因见下面「顺序」。</p>
+
+<pre><code>@Tool("把语音素材库里的音频发到当前聊天。query 可以是曲名、标签或描述。")
+String playVoice(@P("曲名或描述") String query);</code></pre>
+
+<h3>目标从哪来</h3>
+<p>不解析 <code>caller</code> 字符串。调用助手时把三个参数放进 <code>InvocationParameters</code>：<code>tool.group_id</code>、<code>tool.user_id</code>、<code>tool.message_type</code>。工具从 <code>InvocationContext</code> 里读，取不到就拒绝发送。</p>
+
+<h3>为什么不在工具里直接发</h3>
+<p>工具在模型生成过程中执行，直接发会让语音<b>先于</b>文字出现，看起来像机器人抢话。正确做法是把意图放进本次请求的待发队列，等回答文本发完再发语音：</p>
+
+<pre><code>ChatService 造一个 MediaOutbox，塞进 InvocationParameters
+  → 工具查素材，outbox.add(voiceIntent)，返回"已安排，回答后发出"
+  → 模型正常生成文字
+  → 路由发送文字
+  → 路由按 outbox 顺序发送语音</code></pre>
+
+<p>这条设计还带来两个好处：一条回复最多一段语音，天然限流；发送失败只影响语音，不影响文字。</p>
+
+<h3>授权与预算</h3>
+<ul>
+  <li>加进 <code>KbToolAssistant.ALLOWED_TOOLS</code>，默认拒绝的规矩不变。</li>
+  <li>复用 <code>ToolBudget</code>：一次请求最多 3 次工具调用，语音工具算一次。</li>
+  <li>工具只能读库，<b>永不接受文件路径或 URL</b>，避免被提示词诱导读服务器任意文件。</li>
+  <li>目标固定为当前会话，模型无法指定别的群。</li>
+</ul>
+
+<h3>以后扩展成通用媒体工具</h3>
+<p>把工具名从 <code>play_voice</code> 扩成 <code>send_media(kind, query)</code>：<code>kind</code> 取 <code>voice / image / file</code>，每种类型一个素材库、一条发送通道。今天的 <code>MediaOutbox</code> 已经按「有序意图列表」设计，加类型只是多一种 <code>MediaIntent</code>。</p>
+
+<h2><span class="num">06</span>模块与边界</h2>
+
+<table>
+  <thead><tr><th>位置</th><th>新增内容</th></tr></thead>
+  <tbody>
+    <tr><td><code>voice/</code></td><td><code>VoiceAsset</code>、<code>VoiceLibrary</code>、<code>VoiceTrigger</code>、<code>SpeechSynthesizer</code> 接口与 <code>EdgeTtsSynthesizer</code>、<code>VoiceTool</code>、<code>MediaOutbox</code></td></tr>
+    <tr><td><code>persistence/</code></td><td><code>VoiceAssetRepository</code>、<code>VoiceTriggerRepository</code>，只在这里出现 <code>java.sql</code></td></tr>
+    <tr><td><code>admin/</code></td><td><code>VoiceAdminController</code>：列表、上传、试听、试发、删除</td></tr>
+    <tr><td><code>router/</code></td><td>在 Guard 之后、问答之前插入一次关键词判定；命中直接回复并结束</td></tr>
+    <tr><td><code>agent/</code></td><td><code>ReplyResult</code> 增加待发媒体列表，路由发完文字再发语音</td></tr>
+    <tr><td><code>llm/</code></td><td>工具注册与白名单，加 <code>play_voice</code>；<code>InvocationParameters</code> 增加目标字段</td></tr>
+  </tbody>
+</table>
+
+<p>ArchUnit 的 14 条规则继续成立：<code>voice</code> 不碰 <code>OneBotApiClient</code>、不 import <code>config</code>、不直接读写 SQL；发送仍然只有 <code>OutboundSender</code> 一个出口。</p>
+
+<h2><span class="num">07</span>分阶段落地</h2>
+
+<div class="phase">
+  <b>P1 · 素材库</b> 表、上传接口、后台页面、试听与试发。做完你就能把歌曲传进去、手动发一条。<span class="note">约 1 天</span>
+</div>
+<div class="phase">
+  <b>P2 · 关键词直发</b> 触发规则表、匹配与冷却、接入路由。做完喊「唱首歌」就会收到素材。<span class="note">约半天</span>
+</div>
+<div class="phase">
+  <b>P3 · TTS</b> <code>SpeechSynthesizer</code> 接口 + edge-tts 实现 + 磁盘缓存 + 降级到文字。<span class="note">约 1 天</span>
+</div>
+<div class="phase">
+  <b>P4 · 工具</b> <code>play_voice</code> + <code>MediaOutbox</code> + 白名单 + 回答后发送。<span class="note">约 1 天</span>
+</div>
+<div class="phase">
+  <b>P5 · 泛化</b> 图片与文件走同一套工具与队列。<span class="note">按需</span>
+</div>
+
+<h2><span class="num">08</span>风险与约束</h2>
+
+<ul>
+  <li><b>版权</b>：歌曲只在你有权使用的范围内传。工具只读库，但库里的东西是你放的。</li>
+  <li><b>刷屏</b>：关键词冷却 + 每人限流 + 一条回复最多一段语音，三道闸都要有。</li>
+  <li><b>TTS 依赖</b>：edge-tts 是逆向接口，微软随时可能改；必须能一键切 Azure，且失败退回文字。</li>
+  <li><b>服务器</b>：2GB 机器不跑本地模型；如果 TTS 放宿主，注意机器人服务和它的可达性。</li>
+  <li><b>工具滥用</b>：只允许当前会话、只读素材库、不接受路径，三条缺一不可。</li>
+</ul>
+
+<h2><span class="num">09</span>要你拍板的三件事</h2>
+
+<ol>
+  <li><b>TTS 主选</b>：edge-tts 够用就先免费跑，还是要我同时把 Azure 的 provider 留好口子？</li>
+  <li><b>触发词范围</b>：默认三条我还想加「放首歌」和「讲个笑话」，你希望关键词跟素材是多对一还是多对多？</li>
+  <li><b>工具发送时机</b>：回答后发语音，还是允许模型选择「先语音后文字」？前者体验更稳，后者更像真人插话。</li>
+</ol>
+
+<div class="hr"></div>
+<p class="note">流程图为 archify 生成的可交互页面：<a href="diagrams/voice-reply-flow.html">voice-reply-flow.html</a>。TTS 选型依据公开资料与实测：本机 edge-tts 单句 1.7 ~ 2.0 秒，输出 27 ~ 31KB mp3。</p>
+
+</div>
+</body>
+</html>
