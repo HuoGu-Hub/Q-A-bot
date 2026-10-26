@@ -19,6 +19,7 @@ import Switch from '@shared/ui/Switch.vue'
 import DataTable from '@shared/ui/DataTable.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
+import Empty from '@shared/ui/Empty.vue'
 import Notice from '@shared/ui/Notice.vue'
 
 interface CaptureStatus {
@@ -579,149 +580,135 @@ defineExpose({
       </div>
     </Panel>
 
-    <Panel title="知识笔记" :count="filteredNotes.length" hint="确认后发布">
-      <div class="toolbar">
-        <div class="search">
-          <Input
-            v-model="search"
-            placeholder="搜标题、分类或正文…"
-            aria-label="搜索笔记"
-          />
-        </div>
-        <div class="filter">
-          <Select
-            :model-value="statusFilter"
-            :options="STATUS_OPTIONS"
-            aria-label="按状态筛选"
-            @update:model-value="(v: string) => { statusFilter = v; loadNotes() }"
-          />
-        </div>
-        <Tag tone="warn">{{ stats?.drafts ?? 0 }} 待处理</Tag>
-        <Tag tone="good">{{ stats?.publishedNotes ?? 0 }} 已发布</Tag>
-        <span class="spacer" />
-        <span class="faint">共 {{ notes.length }} 条</span>
-      </div>
+    <Panel title="知识笔记" :count="filteredNotes.length">
+      <div class="notes-workbench">
+        <aside class="notes-list">
+          <div class="notes-tools">
+            <Input
+              v-model="search"
+              placeholder="搜索笔记"
+              aria-label="搜索笔记"
+            />
+            <Select
+              :model-value="statusFilter"
+              :options="STATUS_OPTIONS"
+              aria-label="按状态筛选"
+              @update:model-value="(v: string) => { statusFilter = v; loadNotes() }"
+            />
+          </div>
+          <div class="notes-summary faint">
+            {{ filteredNotes.length }} 条
+            <template v-if="stats">· {{ stats.drafts }} 待处理 · {{ stats.publishedNotes }} 已发布</template>
+          </div>
 
-      <DataTable
-        cards
-        label="蒸馏笔记表"
-        :rows="filteredNotes.length"
-        empty="还没有匹配的笔记"
-        empty-hint="调整筛选，或等自动蒸馏产出"
-      >
-        <thead>
-          <tr>
-            <th>标题</th>
-            <th class="c-cat">分类</th>
-            <th class="c-conf num">置信度</th>
-            <th class="c-status">状态</th>
-            <th class="c-time">时间</th>
-            <th class="c-ops">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="n in filteredNotes" :key="n.id">
-            <tr>
-              <td data-label="标题">
-                <button type="button" class="title-btn" @click="toggleNote(n.id)">
-                  {{ n.title }}
-                </button>
-                <div class="faint meta">#{{ n.id }} · {{ n.model || '未知模型' }}</div>
-              </td>
-              <td class="c-cat" data-label="分类">
-                <Tag tone="flame">{{ n.category || '未分类' }}</Tag>
-              </td>
-              <td class="c-conf num" data-label="置信度">{{ conf(n.confidence) }}</td>
-              <td class="c-status" data-label="状态">
+          <div class="notes-scroll">
+            <Empty
+              v-if="!filteredNotes.length"
+              text="没有匹配的笔记"
+              hint="调整筛选条件"
+            />
+            <button
+              v-for="n in filteredNotes"
+              :key="n.id"
+              type="button"
+              class="note-item"
+              :class="{ on: selected?.note.id === n.id }"
+              @click="toggleNote(n.id)"
+            >
+              <span class="note-line">
+                <span class="note-title">{{ n.title }}</span>
                 <Tag :tone="statusTone(n.status)">{{ statusText(n.status) }}</Tag>
-              </td>
-              <td class="c-time faint" data-label="时间">{{ fmt(n.createdAt) }}</td>
-              <td class="c-ops" data-label="操作">
-                <Button size="sm" @click="toggleNote(n.id)">
-                  {{ selected?.note.id === n.id ? '收起' : '整理' }}
-                </Button>
-              </td>
-            </tr>
+              </span>
+              <span class="note-meta">
+                <Tag tone="flame">{{ n.category || '未分类' }}</Tag>
+                <span>{{ conf(n.confidence) }}</span>
+                <span>·</span>
+                <span>{{ fmt(n.createdAt) }}</span>
+              </span>
+            </button>
+          </div>
+        </aside>
 
-            <tr v-if="selected?.note.id === n.id" class="detail-row">
-              <td colspan="6">
-                <div class="note-editor">
-                  <div class="note-head">
-                    <Tag :tone="statusTone(selected.note.status)">{{ statusText(selected.note.status) }}</Tag>
-                    <span class="faint">{{ selected.note.model || '未知模型' }} · {{ fmt(selected.note.createdAt) }}</span>
-                  </div>
+        <section class="notes-editor">
+          <Empty
+            v-if="!selected"
+            text="选择一条笔记"
+            hint="左侧选择，右侧整理"
+          />
+          <template v-else>
+            <div class="editor-head">
+              <span class="faint">#{{ selected.note.id }} · {{ selected.note.model || '未知模型' }} · {{ fmt(selected.note.createdAt) }}</span>
+              <Tag :tone="statusTone(selected.note.status)">{{ statusText(selected.note.status) }}</Tag>
+            </div>
 
-                  <Field label="标题" control-width="1fr">
-                    <Input
-                      :model-value="selected.note.title"
-                      aria-label="笔记标题"
-                      @update:model-value="(v: string) => { if (selected) selected.note.title = v }"
-                    />
-                  </Field>
-                  <Field label="分类">
-                    <Input
-                      :model-value="selected.note.category"
-                      aria-label="笔记分类"
-                      @update:model-value="(v: string) => { if (selected) selected.note.category = v }"
-                    />
-                  </Field>
-                  <Field label="别名">
-                    <Input
-                      :model-value="selected.note.aliases"
-                      aria-label="笔记别名"
-                      @update:model-value="(v: string) => { if (selected) selected.note.aliases = v }"
-                    />
-                  </Field>
-                  <Field label="置信度">
-                    <div class="num-box">
-                      <Input
-                        :model-value="String(selected.note.confidence)"
-                        type="number"
-                        aria-label="笔记置信度"
-                        @update:model-value="(v: string) => { if (selected) selected.note.confidence = toFloat(v, 0, 0, 1) }"
-                      />
-                    </div>
-                  </Field>
-                  <Field label="正文" control-width="1fr">
-                    <Input
-                      :model-value="selected.note.body"
-                      multiline
-                      :rows="10"
-                      aria-label="笔记正文"
-                      @update:model-value="(v: string) => { if (selected) selected.note.body = v }"
-                    />
-                  </Field>
+            <Field label="标题" control-width="1fr">
+              <Input
+                :model-value="selected.note.title"
+                aria-label="笔记标题"
+                @update:model-value="(v: string) => { if (selected) selected.note.title = v }"
+              />
+            </Field>
+            <Field label="分类">
+              <Input
+                :model-value="selected.note.category"
+                aria-label="笔记分类"
+                @update:model-value="(v: string) => { if (selected) selected.note.category = v }"
+              />
+            </Field>
+            <Field label="别名">
+              <Input
+                :model-value="selected.note.aliases"
+                aria-label="笔记别名"
+                @update:model-value="(v: string) => { if (selected) selected.note.aliases = v }"
+              />
+            </Field>
+            <Field label="置信度">
+              <div class="num-box">
+                <Input
+                  :model-value="String(selected.note.confidence)"
+                  type="number"
+                  aria-label="笔记置信度"
+                  @update:model-value="(v: string) => { if (selected) selected.note.confidence = toFloat(v, 0, 0, 1) }"
+                />
+              </div>
+            </Field>
+            <Field label="正文" control-width="1fr">
+              <Input
+                :model-value="selected.note.body"
+                multiline
+                :rows="10"
+                aria-label="笔记正文"
+                @update:model-value="(v: string) => { if (selected) selected.note.body = v }"
+              />
+            </Field>
 
-                  <details class="source-box">
-                    <summary>来源消息 {{ selected.sources.length }} 条</summary>
-                    <div v-for="s in selected.sources" :key="s.messageId" class="source">
-                      <div class="faint">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
-                      <p>{{ s.text }}</p>
-                    </div>
-                  </details>
+            <details class="source-box">
+              <summary>来源消息 {{ selected.sources.length }} 条</summary>
+              <div v-for="s in selected.sources" :key="s.messageId" class="source">
+                <div class="faint">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
+                <p>{{ s.text }}</p>
+              </div>
+            </details>
 
-                  <div v-if="selected.imageIds.length" class="image-box">
-                    <div class="source-label">关联图片</div>
-                    <p class="faint">发布后入库；撤回保留。</p>
-                    <div class="images">
-                      <img v-for="id in selected.imageIds" :key="id"
-                           :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
-                    </div>
-                  </div>
+            <div v-if="selected.imageIds.length" class="image-box">
+              <div class="source-label">关联图片</div>
+              <p class="faint">发布后入库；撤回保留。</p>
+              <div class="images">
+                <img v-for="id in selected.imageIds" :key="id"
+                     :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
+              </div>
+            </div>
 
-                  <div class="editor-actions">
-                    <Button size="sm" variant="danger" @click="deleteNote">彻底删除</Button>
-                    <span class="spacer" />
-                    <Button v-if="selected.note.status !== 'published'" size="sm" @click="publishNote">发布</Button>
-                    <Button v-else size="sm" @click="unpublishNote">撤回</Button>
-                    <Button size="sm" variant="primary" @click="saveNote">保存</Button>
-                  </div>
-                </div>
-              </td>
-            </tr>
+            <div class="editor-actions">
+              <Button size="sm" variant="danger" @click="deleteNote">彻底删除</Button>
+              <span class="spacer" />
+              <Button v-if="selected.note.status !== 'published'" size="sm" @click="publishNote">发布</Button>
+              <Button v-else size="sm" @click="unpublishNote">撤回</Button>
+              <Button size="sm" variant="primary" @click="saveNote">保存</Button>
+            </div>
           </template>
-        </tbody>
-      </DataTable>
+        </section>
+      </div>
     </Panel>
 
     <Panel
@@ -888,17 +875,26 @@ defineExpose({
 }
 .actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
-.toolbar { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
-.search { flex: 1; min-width: 220px; max-width: 360px; }
-.filter { width: 160px; }
 .spacer { flex: 1; }
 
-.title-btn {
-  padding: 0; border: 0; background: none; color: var(--ink); font: inherit;
-  text-align: left; cursor: pointer;
-}
-.title-btn:hover { color: var(--ember); text-decoration: underline; }
-.meta { margin-top: 2px; }
+.notes-workbench { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr);
+  gap: var(--sp-4); align-items: start; }
+.notes-list { min-width: 0; border-right: 1px solid var(--hairline); padding-right: var(--sp-3); }
+.notes-tools { display: flex; flex-direction: column; gap: var(--sp-2); }
+.notes-summary { margin: var(--sp-2) 0; }
+.notes-scroll { max-height: 560px; overflow-y: auto; }
+.note-item { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left;
+  background: transparent; border: 0; border-bottom: 1px solid var(--hairline);
+  padding: var(--sp-2) var(--sp-2); color: var(--ink); cursor: pointer; font: inherit; }
+.note-item:hover { background: var(--surface-hover); }
+.note-item.on { background: var(--surface-hover); box-shadow: inset 2px 0 0 var(--ember); }
+.note-line { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.note-title { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-meta { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap;
+  color: var(--ink-3); font-size: var(--fs-xs); }
+.notes-editor { min-width: 0; }
+.editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  padding-bottom: var(--sp-2); margin-bottom: var(--sp-2); border-bottom: 1px solid var(--hairline); }
 
 .row-actions { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 .err { margin-top: 2px; line-height: 1.5; overflow-wrap: anywhere; }
@@ -920,11 +916,15 @@ defineExpose({
 .editor-actions { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2);
   border-top: 1px solid var(--hairline); padding-top: var(--sp-3); flex-wrap: wrap; }
 
+@media (max-width: 900px) {
+  .notes-workbench { grid-template-columns: 1fr; }
+  .notes-list { border-right: 0; border-bottom: 1px solid var(--hairline); padding-right: 0;
+    padding-bottom: var(--sp-3); }
+  .notes-scroll { max-height: 280px; }
+}
+
 @media (max-width: 760px) {
   .form-foot { align-items: flex-start; }
-  .search { max-width: none; flex: 1 1 100%; }
-  .filter { flex: 1 1 100%; width: auto; }
-  .toolbar .spacer { display: none; }
   .num-box { width: 100px; }
 }
 </style>
