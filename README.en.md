@@ -181,7 +181,6 @@ server/       Spring Boot application and HTTP API
 web/          Frontend: public site, admin console, shared components and theme
 deploy/       NapCat container and Nginx configuration
 scripts/      Build, health check, preflight, retrieval gate, document validator
-corpus/       Sample corpus and source data
 docs/         Architecture, retrieval, knowledge base, deployment and development
 tests/        Golden set, portable UI tests, manual probes, cleanup SQL
 ```
@@ -225,12 +224,10 @@ See [docs/deployment.md](docs/deployment.md) for the full procedure, systemd uni
 |---|---|
 | Single instance | SQLite and in-memory caches assume one process. No horizontal scaling |
 | QQ protocol | Depends on NapCat and a dedicated account. Risk control and session loss remain possible |
-| Corpus | The sample corpus targets Enshrouded. Replacing it requires the document format and vector rebuild |
+| Corpus | No game corpus is bundled. Operators must prepare documents in the supported format and import them |
 | Models | Requires external OpenAI-compatible APIs plus a separate embedding and rerank service |
 | Admin | Single administrator. No multi-user or role model |
 
 ## 12. License
 
 No license file is included. Contact the author before use, redistribution or derivative work.
-
-The sample corpus under `corpus/` is derived from `enshrouded.wiki.gg`. Copyright and licensing remain with the source site; verify the terms before redistributing.

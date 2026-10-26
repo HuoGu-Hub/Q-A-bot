@@ -198,7 +198,6 @@ server/       Spring Boot 单体，唯一进入生产的 Java 代码
 web/          前端双端构建：public 公开站、admin 管理后台、shared 组件与主题
 deploy/       NapCat 容器与 Nginx 配置
 scripts/      构建、自检、回归门禁、文档校验
-corpus/       示例语料与来源数据
 docs/         项目文档
 tests/        黄金集、可移植 UI 测试、手工探针与清理 SQL
 ```
