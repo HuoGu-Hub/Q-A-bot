@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>wikily.gg 适配评估：能不能爬，值不值得</title>
+<style>
+:root{--bg:#0f1216;--panel:#161b22;--panel2:#1c232c;--line:#2b3440;--fg:#e6edf3;--dim:#9aa7b4;--acc:#e08a4a;--ok:#3fb950;--warn:#e3b341;--bad:#ff6b6b}
+@media (prefers-color-scheme:light){:root{--bg:#f7f5f2;--panel:#fff;--panel2:#f1eee9;--line:#ddd6cc;--fg:#1d2126;--dim:#5d6874;--acc:#b4560f;--ok:#2f7d32;--warn:#8a6100;--bad:#b3261e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+.wrap{max-width:1020px;margin:0 auto;padding:48px 24px 96px}
+h1{font-size:27px;margin:0 0 10px}
+h2{font-size:19px;margin:42px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+h3{font-size:16px;margin:24px 0 8px}
+p{margin:9px 0}
+code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;font-family:ui-monospace,Consolas,monospace}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font-size:13px;line-height:1.6}
+.lead{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:10px;padding:16px 20px;margin:18px 0}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600}
+ul,ol{margin:8px 0;padding-left:22px}li{margin:5px 0}
+.box{border:1px solid var(--line);border-left-width:4px;border-radius:10px;background:var(--panel);padding:13px 18px;margin:14px 0}
+.box.ok{border-left-color:var(--ok)}.box.warn{border-left-color:var(--warn)}.box.bad{border-left-color:var(--bad)}
+.note{color:var(--dim);font-size:13px}
+.num{font-family:ui-monospace,Consolas,monospace}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>wikily.gg 适配评估：能不能爬，值不值得</h1>
+<p class="note">评估日期 2026-10-26 · 对象：<code>https://wikily.gg/zh-cn/enshrouded</code> · 依据：站点 robots.txt、Terms of Service、页面结构与 sitemap 实测</p>
+
+<div class="lead">
+<p><b>结论：技术上能解析，授权上不行。</b>这个站的 Terms of Service 明确把 <code>spidering</code>、<code>scraping</code> 列为禁止行为，没有“个人非商用可以例外”的条款；地图标注数据还正好落在 robots.txt 禁止抓取的 <code>/api/</code> 下。以现在的用法去爬，等于同时违反两条约束。</p>
+<p><b>唯一正路是书面授权或官方数据合作。</b>如果只是想要更好的中文名与地图标注，有两条成本更低、风险为零的替代路线，见第四节。</p>
+</div>
+
+<h2>一、条款证据</h2>
+
+<h3>1.1 robots.txt：页面允许，API 禁止</h3>
+<pre>User-Agent: *
+Allow: /
+Allow: /api/media/
+Allow: /api/og/
+Allow: /api/map-icon
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*/translations/
+Disallow: /*/extensions/
+Disallow: /*/build/
+Disallow: /*/edit</pre>
+<p>这条只说明“爬虫可以取 HTML 页面”，<b>不是授权</b>。真正决定能不能用的是服务条款。地图标注接口的路径是 <code>/api/ext/tiled-maps/maps/&lt;id&gt;/embed-points</code>，正好在 <code>Disallow: /api/</code> 范围内。</p>
+
+<h3>1.2 Terms of Service：明确禁止 spidering / scraping</h3>
+<pre>Except as expressly set out in this Agreement or as permitted by any applicable law,
+you undertake: not to disassemble, decompile, reverse-engineer or create derivative
+works based on the whole or any part of the source code of our website nor attempt
+to do any such thing, or to reproduce, display or otherwise provide access to the
+Services, our website or any of the contents therein, including but not limited to
+framing, mirroring, linking, spidering, scraping or any other technological means;
+not to provide or otherwise make available our website in whole or in part ...
+in any form to any person without prior written consent from us;</pre>
+<p>同一条款还要求“在所有完整或部分副本上保留版权声明”，并禁止“未经许可把网站内容用于未声明的商业用途”。条款最后更新于 <b>2026-10-25</b>，运营方是法国的 <b>NX Software SAS</b>。</p>
+
+<div class="box bad">
+<p><b>没有“个人非商用例外”。</b>条款用的是 “without prior written consent”，不是“商业用途才需要授权”。所以“我们只是个人群里的机器人、不赚钱”不能作为抓取依据。</p>
+<p class="note">这不是法律意见。真要走授权路线，以站点运营方的书面答复为准。</p>
+</div>
+
+<h3>1.3 版权归属</h3>
+<p>站点页脚署名 <b>© 2026 Wikily · NX Software</b>。中文词条、中文描述、地图标注的整理成果都属于对方。对比现在用的 <code>enshrouded.wiki.gg</code>，那是 <b>CC BY-SA 4.0</b>，允许在署名与相同方式共享的前提下复用。两者的授权基础完全不同。</p>
+
+<h2>二、纯技术可行性：如果只看“能不能解析”</h2>
+
+<h3>2.1 文本页</h3>
+<p>站点是 Next.js App Router，正文<b>服务端渲染</b>在 HTML 里，不需要调 API 就能拿到。以 <code>/zh-cn/enshrouded/ammunition/acid-bite</code> 为例：</p>
+<table>
+<thead><tr><th>项</th><th>实测</th></tr></thead>
+<tbody>
+<tr><td>页面大小</td><td class="num">约 487 KB</td></tr>
+<tr><td>正文标题</td><td><code>&lt;h1 class="wiki-heading ext-gwe-dossier-name"&gt;酸噬&lt;/h1&gt;</code></td></tr>
+<tr><td>简介</td><td><code>p.ext-gwe-dossier-flavour</code>，中文句子完整</td></tr>
+<tr><td>结构化数据</td><td>2 段 <code>application/ld+json</code>：<code>Article</code> 与 <code>BreadcrumbList</code>，含中文 headline / description</td></tr>
+<tr><td>表格</td><td>页面内有 <code>&lt;table&gt;</code>，配方与数值在 DOM 里</td></tr>
+<tr><td>图片</td><td>53 个 <code>&lt;img&gt;</code>，走 <code>img.wikily.gg</code> 与 <code>/api/media/</code>，后者 robots 明确允许</td></tr>
+<tr><td>多语言</td><td>每页有 <code>hreflang</code> 互链，<code>zh-cn</code> 前缀可直接构造</td></tr>
+<tr><td>页面总量</td><td>sitemap 分 6 个 part，每 part 约 1,000 条，<b>约 5,000~6,000 页</b></td></tr>
+</tbody></table>
+<p>所以“解析文本”本身不难：h1、简介、表格、JSON-LD 都是稳定钩子。难的是页面重、没有版本化 API、DOM 类名属于对方内部实现，随时会变。</p>
+
+<h3>2.2 地图标注</h3>
+<table>
+<thead><tr><th>项</th><th>实测</th></tr></thead>
+<tbody>
+<tr><td>地图页</td><td><code>/zh-cn/enshrouded/interactive-map</code>，HTML 约 516 KB</td></tr>
+<tr><td>底图瓦片</td><td><code>media.wikily.gg/.../map-tiles/...</code>，不在 <code>/api/</code> 下</td></tr>
+<tr><td>标注数据</td><td><code>/api/ext/tiled-maps/maps/&lt;id&gt;/embed-points</code>，<b>在 robots 的 Disallow 范围内</b></td></tr>
+<tr><td>图标</td><td><code>/api/map-icon.webp?src=...</code>，robots 明确允许</td></tr>
+<tr><td>坐标系</td><td>需要重新对投影；和 wiki.gg 的 x/y 不是一套，适配要单独写一层</td></tr>
+</tbody></table>
+<p>换句话说：<b>你想要的“更好的地图标注”，恰好是对方唯一明确不让爬的那部分。</b>页面本身给的是渲染后的画布，标注点在运行时由那个被禁的接口补进来。</p>
+
+<h3>2.3 维护成本对比</h3>
+<table>
+<thead><tr><th>维度</th><th>enshrouded.wiki.gg（现在）</th><th>wikily.gg（如果授权）</th></tr></thead>
+<tbody>
+<tr><td>授权</td><td>CC BY-SA 4.0，署名即可</td><td>需书面许可</td></tr>
+<tr><td>取数方式</td><td>MediaWiki API，稳定、有文档</td><td>解析 HTML / RSC，无版本承诺</td></tr>
+<tr><td>单页体积</td><td>17~68 KB</td><td>约 490 KB</td></tr>
+<tr><td>页面总量</td><td>约 4,300 篇</td><td>约 5,000~6,000 篇</td></tr>
+<tr><td>地图</td><td>Map 命名空间 JSON，已接入</td><td>标注接口被 robots 禁止，坐标要重对</td></tr>
+<tr><td>变更风险</td><td>API 稳定</td><td>Next.js 类名与接口随版本变</td></tr>
+</tbody></table>
+
+<h2>三、值不值得为它改架构</h2>
+<p>即使拿到授权，也不建议把它做成“第二个 wiki 源”直接混进现有语料。原因：</p>
+<ul>
+<li><b>块 id 会撞。</b>同一件物品在 wiki.gg 与 wikily 各有一份，直接并库会让检索出现两份近似正文，互相稀释。</li>
+<li><b>中文名是它最大的价值，正文不是。</b>你真正缺的是“中文名 → 英文实体”的对照，而不是又一份中文攻略。</li>
+<li><b>地图坐标系不同。</b>现有 <code>kb.map</code> 的投影、画布、点位表都是按 wiki.gg 的形状建的，换源等于重做一层。</li>
+</ul>
+
+<h2>四、合法且更划算的三条路</h2>
+
+<h3>4.1 官方游戏本地化 → 中文名词表</h3>
+<p>这是收益最大、风险最低的一条。中文物品名、地名、技能名本来就来自游戏官方本地化，不是 wikily 的原创翻译。把官方中文名做成“英文 → 中文”的对照表，再套到现有 wiki.gg 的块上：</p>
+<ul>
+<li>现有 <code>NameZhIndex</code> 与 <code>kb_term</code> 已经支持“中文名（English）”的写法与别名，不需要改检索链路；</li>
+<li>只补名字，不搬正文，语料体积几乎不变；</li>
+<li>中文提问的命中率提升，主要就来自这一步。</li>
+</ul>
+<p class="note">具体从哪里取官方本地化文本，取决于你手上的游戏版本与 EULA。能确认的是：它比爬一个明确禁止抓取的第三方站干净得多。</p>
+
+<h3>4.2 人工核对的高频词表</h3>
+<p>先做最常被问的 200~500 条：武器、护甲、材料、Boss、地点。用管理端「词条」面板逐条补别名，或导一份 xlsx。人工核对的成本一次性，之后长期受益；也不会因为对方改版而失效。</p>
+
+<h3>4.3 继续用 wiki.gg 做结构化与地图源</h3>
+<p>它已经接入、授权清晰、地图数据是 JSON。地图观感不够好，可以在现有渲染器与标注上改，而不是换一个不能碰的源。真要补几个 wikily 上更准的点位，人工核实后作为“本地补充”写进 <code>kb_map_note</code>，不要批量搬运。</p>
+
+<h3>4.4 如果确实想要 wikily 的数据：去谈</h3>
+<p>条款写的是“without prior written consent”，那就去要这份 consent。问清楚这五件事：</p>
+<ol>
+<li>允许抓取的范围：文本、图片、地图标注，分别是否授权；</li>
+<li>用途：个人 QQ 群机器人，非商业，是否需要额外限制；</li>
+<li>署名方式：回答里附来源链接是否足够；</li>
+<li>缓存与保留期限：本地存多久、是否要定期删除；</li>
+<li>速率与频控：每日/每分钟请求上限，是否提供正式 API 或数据导出。</li>
+</ol>
+<p>联系方式在站点页脚「Contact us」与官方 Discord。拿到书面答复再动手，比先爬后补票稳得多。</p>
+
+<h2>五、一句话建议</h2>
+<div class="box">
+<p><b>不要爬 wikily.gg。</b>先用官方本地化 + 人工词表把“中文名”这块补上，这是当前回答质量最直接的杠杆；地图继续用 wiki.gg，必要时人工补点位。真想要 wikily 的中文正文与地图，先拿书面授权，再按“独立来源、独立 docId、独立投影”的方式接，不要和现有语料混在一起。</p>
+</div>
+
+</div></body></html>
