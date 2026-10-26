@@ -252,6 +252,7 @@ public class VoiceAdminController {
             byte[] audio = synthesizer.synthesize(text, str(b.get("voice")));
             return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).body(audio);
         } catch (VoiceException e) {
+            log.warn("[VOICE] TTS 试听失败：{}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -277,6 +278,7 @@ public class VoiceAdminController {
             out.put("seconds", sent.seconds());
             return ResponseEntity.ok(out);
         } catch (VoiceException e) {
+            log.warn("[VOICE] TTS 发送失败：{}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

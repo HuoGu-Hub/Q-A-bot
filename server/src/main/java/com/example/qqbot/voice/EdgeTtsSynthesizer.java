@@ -1,5 +1,6 @@
 package com.example.qqbot.voice;
 
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -56,6 +57,29 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
         this.cache = cache;
     }
 
+    /**
+     * 启动时先探一次，把"能不能用"写进日志。
+     *
+     * <p>否则第一次失败发生在用户点「试听」的时候，日志里又只有一条 400，
+     * 排查要从 PATH 开始猜。
+     */
+    @PostConstruct
+    void init() {
+        if (!policy.isTtsEnabled()) {
+            log.info("[VOICE] TTS 已关闭（app.voice.tts.enabled=false）");
+            return;
+        }
+        String path = policy.getEdgeTtsPath();
+        if (isAvailable()) {
+            log.info("[VOICE] TTS 就绪：{}，声线 {}，缓存 {}", path, policy.getTtsVoice(),
+                    policy.getTtsCacheDir());
+        } else {
+            log.warn("[VOICE] TTS 不可用：找不到可执行文件 \"{}\"。"
+                    + "请把 app.voice.tts.edge-tts-path 或 .env 的 EDGE_TTS 指到 edge-tts 可执行文件，"
+                    + "Windows 上通常在 .toolchain/edge-tts/Scripts/edge-tts.exe", path);
+        }
+    }
+
     @Override
     public boolean isAvailable() {
         if (!policy.isTtsEnabled()) {
@@ -68,11 +92,36 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
         if (path == null || path.isBlank()) {
             return false;
         }
-        // 只有写成路径时才检查存在性；只写命令名时交给 PATH
+        // 写成路径就检查文件；只写命令名就去 PATH 里找，避免"看着可用、一点就 400"
         if (path.contains("/") || path.contains("\\")) {
             return Files.isExecutable(Path.of(path)) || Files.isRegularFile(Path.of(path));
         }
-        return true;
+        return onPath(path);
+    }
+
+    /** 在 PATH 里找命令。Windows 还要补 .exe */
+    private static boolean onPath(String command) {
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isBlank()) {
+            return false;
+        }
+        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        for (String dir : pathEnv.split(java.io.File.pathSeparator)) {
+            if (dir.isBlank()) {
+                continue;
+            }
+            try {
+                if (Files.isRegularFile(Path.of(dir, command))) {
+                    return true;
+                }
+                if (windows && Files.isRegularFile(Path.of(dir, command + ".exe"))) {
+                    return true;
+                }
+            } catch (Exception ignored) {
+                // PATH 里有非法路径就跳过
+            }
+        }
+        return false;
     }
 
     @Override
@@ -157,7 +206,8 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
         try {
             process = new ProcessBuilder(cmd).redirectErrorStream(true).start();
         } catch (IOException e) {
-            throw new VoiceException("启动 edge-tts 失败，检查 app.voice.tts.edge-tts-path："
+            throw new VoiceException("启动 edge-tts 失败（命令：" + cmd.get(0) + "）。"
+                    + "把 .env 的 EDGE_TTS 或 app.voice.tts.edge-tts-path 指到可执行文件再试："
                     + e.getMessage(), e);
         }
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();

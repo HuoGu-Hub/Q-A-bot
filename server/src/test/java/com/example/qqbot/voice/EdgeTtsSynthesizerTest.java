@@ -42,9 +42,13 @@ class EdgeTtsSynthesizerTest {
     }
 
     @Test
-    @DisplayName("只写命令名时交给 PATH，不误判为不可用")
-    void commandNameIsTrusted() {
-        EdgeTtsSynthesizer s = synth(true, "edge-tts", "edge-tts");
+    @DisplayName("指到真实文件：可用")
+    void existingPathIsAvailable() throws Exception {
+        Path exe = tmp.resolve("edge-tts.exe");
+        java.nio.file.Files.writeString(exe, "stub");
+
+        EdgeTtsSynthesizer s = synth(true, "edge-tts", exe.toString());
+
         assertThat(s.isAvailable()).isTrue();
     }
 
