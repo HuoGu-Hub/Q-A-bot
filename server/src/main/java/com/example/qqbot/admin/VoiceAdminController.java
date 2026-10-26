@@ -3,6 +3,7 @@ package com.example.qqbot.admin;
 import com.example.qqbot.voice.VoiceAsset;
 import com.example.qqbot.voice.VoiceException;
 import com.example.qqbot.voice.VoiceLibrary;
+import com.example.qqbot.voice.SpeechSynthesizer;
 import com.example.qqbot.voice.VoicePolicy;
 import com.example.qqbot.voice.VoiceSender;
 import org.slf4j.Logger;
@@ -43,11 +44,14 @@ public class VoiceAdminController {
     private final VoiceLibrary library;
     private final VoiceSender sender;
     private final VoicePolicy policy;
+    private final SpeechSynthesizer synthesizer;
 
-    public VoiceAdminController(VoiceLibrary library, VoiceSender sender, VoicePolicy policy) {
+    public VoiceAdminController(VoiceLibrary library, VoiceSender sender, VoicePolicy policy,
+                                SpeechSynthesizer synthesizer) {
         this.library = library;
         this.sender = sender;
         this.policy = policy;
+        this.synthesizer = synthesizer;
     }
 
     /** 清单 + 上限，面板要显示"最多多大 / 多长" */
@@ -159,6 +163,60 @@ public class VoiceAdminController {
         out.put("ok", true);
         out.put("items", library.list().stream().map(VoiceAdminController::view).toList());
         return ResponseEntity.ok(out);
+    }
+
+    // ==================== TTS ====================
+
+    /** 可选的声线，给下拉框 */
+    @GetMapping("/tts/voices")
+    public Map<String, Object> ttsVoices() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("enabled", synthesizer.isAvailable());
+        out.put("voices", synthesizer.voices());
+        out.put("default", synthesizer.defaultVoice());
+        return out;
+    }
+
+    /** 试听：合成后直接回音频流，不落素材库，也不发群 */
+    @PostMapping("/tts")
+    public ResponseEntity<?> ttsPreview(@RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> b = body == null ? Map.of() : body;
+        String text = str(b.get("text"));
+        if (text.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "先说点什么"));
+        }
+        try {
+            byte[] audio = synthesizer.synthesize(text, str(b.get("voice")));
+            return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).body(audio);
+        } catch (VoiceException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** 合成并直接发到群，用来确认"听起来对不对" */
+    @PostMapping("/tts/send")
+    public ResponseEntity<Map<String, Object>> ttsSend(@RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> b = body == null ? Map.of() : body;
+        String text = str(b.get("text"));
+        long groupId = b.get("groupId") instanceof Number n ? n.longValue() : 0L;
+        if (text.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "先说点什么"));
+        }
+        if (groupId <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "需要 groupId"));
+        }
+        try {
+            byte[] audio = synthesizer.synthesize(text, str(b.get("voice")));
+            VoiceSender.Sent sent = sender.sendToGroup(groupId, audio, "mp3", null);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("messageId", sent.messageId());
+            out.put("seconds", sent.seconds());
+            return ResponseEntity.ok(out);
+        } catch (VoiceException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ==================== 工具 ====================

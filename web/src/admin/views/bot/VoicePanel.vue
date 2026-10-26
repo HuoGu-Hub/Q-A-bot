@@ -8,7 +8,7 @@
  *    JSON.stringify 并强塞 content-type: application/json，multipart 的 boundary
  *    会被它毁掉。整个面板只有这一处绕开 adminApi。
  */
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import Panel from '@shared/ui/Panel.vue'
 import Button from '@shared/ui/Button.vue'
@@ -71,6 +71,15 @@ const sending = ref<VoiceItem | null>(null)
 const groupId = ref(localStorage.getItem('voice.lastGroup') ?? '')
 const sendingBusy = ref(false)
 
+// ---------- TTS ----------
+const ttsText = ref('晚上八点集合，记得带上药水和火把。')
+const ttsVoice = ref('')
+const ttsVoices = ref<string[]>([])
+const ttsEnabled = ref(false)
+const ttsBusy = ref(false)
+const ttsUrl = ref('')
+const ttsAudio = ref<HTMLAudioElement | null>(null)
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -82,6 +91,74 @@ async function load() {
     error.value = describeError(e)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadTtsVoices() {
+  try {
+    const r = await adminApi.get<{ enabled: boolean; voices: string[]; default: string }>('/voice/tts/voices')
+    ttsEnabled.value = r.enabled
+    ttsVoices.value = r.voices ?? []
+    ttsVoice.value = r.default ?? (r.voices?.[0] ?? '')
+  } catch {
+    ttsEnabled.value = false
+  }
+}
+
+/** 试听：合成后拿 blob 直接播，不落素材库 */
+async function previewTts() {
+  if (!ttsText.value.trim()) {
+    toast('先说点什么')
+    return
+  }
+  ttsBusy.value = true
+  try {
+    const res = await fetch('/admin/api/voice/tts', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: ttsText.value, voice: ttsVoice.value }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast(body?.error ?? 'HTTP ' + res.status)
+      return
+    }
+    const blob = await res.blob()
+    if (ttsUrl.value) URL.revokeObjectURL(ttsUrl.value)
+    ttsUrl.value = URL.createObjectURL(blob)
+    await nextTick()
+    void ttsAudio.value?.play()
+  } catch {
+    toast('无法连接服务端')
+  } finally {
+    ttsBusy.value = false
+  }
+}
+
+async function sendTts() {
+  const gid = Number(groupId.value)
+  if (!gid) {
+    toast('先填群号')
+    return
+  }
+  if (!ttsText.value.trim()) {
+    toast('先说点什么')
+    return
+  }
+  ttsBusy.value = true
+  try {
+    await adminApi.post('/voice/tts/send', {
+      text: ttsText.value,
+      voice: ttsVoice.value,
+      groupId: gid,
+    })
+    localStorage.setItem('voice.lastGroup', String(gid))
+    toast('已发到群 ' + gid)
+  } catch (e) {
+    toast(describeError(e))
+  } finally {
+    ttsBusy.value = false
   }
 }
 
@@ -244,7 +321,10 @@ defineExpose({
   isAvailable: () => !error.value,
 })
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadTtsVoices()
+})
 </script>
 
 <template>
@@ -285,6 +365,24 @@ onMounted(load)
           accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg,.amr,.aac"
           @change="pick"
         >
+      </div>
+    </Panel>
+
+    <Panel title="文字转语音" hint="edge-tts，免费但每次都要联网；同一句话第二次走缓存">
+      <div class="tts">
+        <Notice v-if="!ttsEnabled" tone="warn">
+          TTS 当前不可用：检查 app.voice.tts.enabled 与 edge-tts-path。
+        </Notice>
+        <Input v-model="ttsText" multiline :rows="3" placeholder="想让机器人说什么" />
+        <div class="tts-row">
+          <select v-model="ttsVoice" class="select" aria-label="声线">
+            <option v-for="v in ttsVoices" :key="v" :value="v">{{ v }}</option>
+          </select>
+          <Input v-model="groupId" placeholder="群号" mono />
+          <Button :disabled="ttsBusy || !ttsEnabled" @click="previewTts">试听</Button>
+          <Button variant="primary" :disabled="ttsBusy || !ttsEnabled" @click="sendTts">发到群</Button>
+        </div>
+        <audio v-if="ttsUrl" ref="ttsAudio" :src="ttsUrl" controls class="tts-audio" />
       </div>
     </Panel>
 
@@ -382,6 +480,14 @@ onMounted(load)
 .drop-sub { font-size: var(--fs-xs); }
 
 .defaults { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.tts { display: flex; flex-direction: column; gap: var(--sp-3); }
+.tts-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 180px auto auto; gap: var(--sp-2); align-items: center; }
+.select {
+  height: 36px; padding: 0 10px; border-radius: var(--r-sm, 8px);
+  border: 1px solid var(--line); background: var(--surface, transparent); color: var(--fg);
+  font-size: var(--fs-sm);
+}
+.tts-audio { width: 100%; max-width: 420px; }
 .def-label { font-size: var(--fs-xs); color: var(--fg-dim); }
 .hint { color: var(--fg-dim); font-size: var(--fs-xs); margin: 0; }
 .file { display: none; }
@@ -405,6 +511,7 @@ audio { height: 32px; max-width: 200px; }
 @media (max-width: 900px) {
   .drop-row { grid-template-columns: 1fr; }
   .ops { flex-wrap: wrap; }
+  .tts-row { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 760px) {
   .vt audio { max-width: 140px; }
