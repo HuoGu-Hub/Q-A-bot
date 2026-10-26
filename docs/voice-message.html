@@ -75,7 +75,7 @@
 </div>
 
 <h2><span class="num">01</span>实测记录</h2>
-<p>目标：开发群「喵小雪开发」(1046213033)。五条消息都是真实发出的，客户端里可以直接点开听。</p>
+<p>目标：开发群「qqbot开发测试」(1046213033)。前后共发出 8 条，除了标记已删除的那条，其余都能在客户端点开听。</p>
 
 <table>
   <thead><tr><th>#</th><th>输入</th><th>结果</th><th>关键观察</th></tr></thead>
@@ -85,6 +85,9 @@
     <tr><td>3</td><td>MP3 45.0s / 135KB</td><td><span class="tag ok">成功</span> msg 8835045</td><td>转换 + 上传共 1.5s，发出 <code>[语音 45s]</code></td></tr>
     <tr><td>4</td><td>MP3 89.7s / 180KB</td><td><span class="tag ok">成功</span> msg 1729339701</td><td>没有被 60 秒上限拒绝，发出 <code>[语音 89s]</code></td></tr>
     <tr><td>5</td><td>同一段 6.8s MP3，走脚本</td><td><span class="tag ok">成功</span> msg 1235611189</td><td>764ms 完成，<code>scripts/voice-send.ps1</code> 已验证可用</td></tr>
+    <tr><td>6</td><td>同句改男声（SAPI Kangkang）</td><td><span class="tag ok">成功</span> msg 1969726784</td><td>换嗓音即换声线，零成本</td></tr>
+    <tr><td>7</td><td>同段升 5 个半音</td><td><span class="tag ok">成功</span> msg 915983293</td><td>ffmpeg 变调，明显卡通化</td></tr>
+    <tr><td>8</td><td>MP3 179s / 526KB</td><td><span class="tag ok">成功</span> msg 1890983822<br><span class="note">已删除</span></td><td>3 分钟照发，转码约 2s；语音条不适合放整首歌</td></tr>
   </tbody>
 </table>
 
@@ -206,7 +209,63 @@ public void sendVoiceToGroup(long groupId, byte[] audio) {
 
 <p class="note">注意返回的 <code>message_id</code> 与文本一致；QQ 侧没有「时长」回执，想要时长只能自己用 ffprobe 算，或者接受 NapCat 日志里的数值。</p>
 
-<h2><span class="num">05</span>素材与复现</h2>
+<h2><span class="num">05</span>可调配项</h2>
+<p>分两层看：<b>我们这边能改的</b>，和<b>NapCat 写死的</b>。前者几乎都能用 ffmpeg 在发送前处理掉。</p>
+
+<table>
+  <thead><tr><th>项</th><th>能调吗</th><th>怎么做</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>声线（谁在说话）</td><td><span class="tag ok">能</span></td><td>换音源：SAPI 嗓音 / 真人录音 / 音效包</td><td>唯一真正决定听感的东西，见下一节</td></tr>
+    <tr><td>音高</td><td><span class="tag ok">能</span></td><td><code>asetrate</code> + <code>atempo</code></td><td>共振峰一起变，适合卡通音，不适合「像另一个人」</td></tr>
+    <tr><td>语速</td><td><span class="tag ok">能</span></td><td><code>atempo=1.2</code></td><td>不变调，1~2 倍速安全</td></tr>
+    <tr><td>响度</td><td><span class="tag ok">能</span></td><td><code>loudnorm</code> / <code>volume</code></td><td>群里嘈杂时很有用，建议统一到 -16 LUFS</td></tr>
+    <tr><td>裁剪片段</td><td><span class="tag ok">能</span></td><td><code>-ss</code> / <code>-t</code></td><td>歌曲只发副歌，见第 7 节</td></tr>
+    <tr><td>淡入淡出</td><td><span class="tag ok">能</span></td><td><code>afade</code></td><td>防止首尾爆音</td></tr>
+    <tr><td>编码参数</td><td><span class="tag ok">能</span></td><td><code>-ar 24000 -ac 1 -b:a 32k</code></td><td>NapCat 最终统一转 24kHz SILK，源头发烧级参数纯属浪费</td></tr>
+    <tr><td>时长</td><td><span class="tag warn">服务端没卡</span></td><td>—</td><td>实测 179 秒照发；客户端体验是另一回事</td></tr>
+    <tr><td>大小</td><td><span class="tag ok">能</span></td><td>建议 ≤1MB</td><td>3 分钟 24kbps 约 526KB，base64 后 701KB，仍然顺畅</td></tr>
+    <tr><td>发送节奏</td><td><span class="tag ok">能</span></td><td><code>OutboundPacer</code></td><td>与文本共用两条闸，不会额外开侧门</td></tr>
+    <tr><td>波形条</td><td><span class="tag bad">不能</span></td><td>—</td><td>NapCat 写死 15 个值，客户端上那条小波形不是真实振幅</td></tr>
+    <tr><td>「转文字」按钮</td><td><span class="tag bad">不能</span></td><td>—</td><td><code>canConvert2Text</code> 固定 true</td></tr>
+    <tr><td>QQ 变声滤镜</td><td><span class="tag bad">不能</span></td><td>—</td><td><code>voiceChangeType</code> 写死 0；客户端的变声是本地录音时的滤镜，服务端不会替你套</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="num">06</span>声线怎么换</h2>
+<p>先破一个误会：<b>语音条里没有「声线」这个参数</b>。服务端只存一段 SILK 音频，谁在说话完全由音频本身决定 —— 所以「换声线」等于「换音频内容」。四条路，按成本从低到高：</p>
+
+<h3>A. 换嗓音（零成本，已验证）</h3>
+<p>Windows 自带三个中文嗓音：<code>Microsoft Huihui Desktop</code> 女声、<code>Microsoft Kangkang</code> 男声、<code>Microsoft Yaoyao</code> 女声。同一句话换个名字就是另一个声线，群里已经发了一条 Kangkang 版做对比。</p>
+<pre><code>$sp = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$sp.SelectVoice('Microsoft Kangkang')      # 换这行就换声线
+$sp.SetOutputToWaveFile('out.wav')
+$sp.Speak('要说的那句话')</code></pre>
+
+<h3>B. 改音高（零成本，已验证）</h3>
+<p>升 5 个半音就明显「萝莉化」，降 4 个半音变低沉。缺点是共振峰跟着一起变，听起来像捏着嗓子，做卡通音可以，想伪装成另一个真人不行。</p>
+<pre><code># 升 5 个半音：factor = 2^(5/12) ≈ 1.3348，atempo 取倒数抵消变速
+ffmpeg -i in.mp3 -af "asetrate=24000*1.3348,aresample=24000,atempo=0.7492" out.mp3</code></pre>
+
+<h3>C. 换素材（最直接）</h3>
+<p>真人录音、歌曲片段、网上音效包 —— 任何音频都是「声线」。这条路上限最高，也最省事：录好了直接发。</p>
+
+<h3>D. 真·音色转换（需要模型）</h3>
+<p>RVC / so-vits / 商业 TTS 音色这类，属于你说的「以后再说」。它们最终也只是产出一段 MP3，接进来不影响这条发送链路。</p>
+
+<h2><span class="num">07</span>歌曲与录音文件</h2>
+<p>能，而且是同一条路：任何 ffmpeg 能解开的格式都行，NapCat 统一转 SILK。刚实测了一条 3 分钟、526KB 的音频，语音条以 179 秒正常发出，转码只花约 2 秒。</p>
+<p>但「能发」不等于「好听」：语音条不是播放器，3 分钟的东西对方只能从头听到尾。建议截副歌，20~40 秒最舒服：</p>
+<pre><code># 从 00:58 截 30 秒，转成语音友好的参数
+ffmpeg -ss 00:00:58 -t 30 -i song.flac -ac 1 -ar 24000 -b:a 32k clip.mp3
+
+./scripts/voice-send.ps1 -Group 1046213033 -File .\clip.mp3</code></pre>
+<p>两条边界：</p>
+<ul>
+  <li>容器能直连公网（实测 <code>baidu.com</code> 返回 200），所以 <code>file</code> 直接给 URL 也成立，可以省掉一次 base64；但这种外链会被 NapCat 日志记下来。</li>
+  <li>歌曲片段是可传播内容，发群前先确认授权；版权音频不要进仓库。</li>
+</ul>
+
+<h2><span class="num">08</span>素材与复现</h2>
 <p>本机现在有一组可以直接用的测试音频，都在 <code>server/data/tmp-voice/</code>：</p>
 <div class="kv">
   <div><b>voice-test.wav</b>301KB，6.8s，SAPI 合成中文</div>
@@ -222,7 +281,7 @@ public void sendVoiceToGroup(long groupId, byte[] audio) {
 # 发到私聊
 ./scripts/voice-send.ps1 -User 10001 -File .\some\clip.wav</code></pre>
 
-<h2><span class="num">06</span>素材从哪来</h2>
+<h2><span class="num">09</span>素材从哪来</h2>
 <p>本来打算从网上抓几段现成语音，但这台机器的出网被 DNS 劫持到 <code>198.18.x.x</code>（Clash fake-ip），TLS 握手直接失败，<code>web_fetch</code> 也判定为非公网地址。所以这次改用 Windows 自带 SAPI 离线合成，效果上完全够验证链路。</p>
 <p>网络恢复后，可下载的公开音频来源：</p>
 <ul>
@@ -232,15 +291,15 @@ public void sendVoiceToGroup(long groupId, byte[] audio) {
 </ul>
 <p class="note">商用语音包、影视片段、他人语音条不要进仓库，也不要发到群里：语音是可直接传播的内容，版权与隐私风险比文字高。</p>
 
-<h2><span class="num">07</span>还没验证的</h2>
+<h2><span class="num">10</span>还没验证的</h2>
 <ul>
   <li>私聊语音：链路应当一致，但没有实测；</li>
-  <li>群语音的额外风控：短时间内连发多条语音会不会被限流，目前只在开发群试了 4 条；</li>
-  <li>超过 89 秒的行为、以及客户端播放长语音的体验；</li>
+  <li>群语音的额外风控：短时间内连发多条语音会不会被限流，目前只在开发群试了 8 条；</li>
+  <li>179 秒能发出去，但客户端怎么呈现、能不能拖进度，还没找人确认；</li>
   <li>入站语音：收到的 <code>record</code> 段带 <code>url</code>/<code>path</code>/<code>file_size</code>，将来做转写时要走 <code>url</code> 下载，容器内路径不可用。</li>
 </ul>
 
-<h2><span class="num">08</span>建议的下一步</h2>
+<h2><span class="num">11</span>建议的下一步</h2>
 <ol>
   <li><b>先落最小能力</b>：<code>MessageCodec.voiceMessage</code> + <code>OutboundSender.sendVoice</code> + 一个管理端「试听/试发」按钮，验证真实链路。</li>
   <li><b>再做素材层</b>：<code>VoiceLibrary</code> 收一批预置语音，用 <code>[[voice:key]]</code> 触发，不接任何模型。</li>
@@ -248,7 +307,7 @@ public void sendVoiceToGroup(long groupId, byte[] audio) {
 </ol>
 
 <div class="hr"></div>
-<p class="evidence">证据来源：NapCat 4.18.28 容器内 <code>napcat.mjs</code>（<code>createValidSendPttElement</code> / <code>pye</code> / <code>handleOb11FileLikeMessage</code>）；<code>docker logs napcat</code>；<code>get_msg</code> 返回的 <code>record</code> 段；本机实测消息 908573181、1594269379、8835045、1729339701。</p>
+<p class="evidence">证据来源：NapCat 4.18.28 容器内 <code>napcat.mjs</code>（<code>createValidSendPttElement</code> / <code>pye</code> / <code>handleOb11FileLikeMessage</code>）；<code>docker logs napcat</code>；<code>get_msg</code> 返回的 <code>record</code> 段；本机实测消息 908573181、1594269379、8835045、1729339701、1235611189、1969726784、915983293、1890983822（已删除）。</p>
 
 </div>
 </body>
