@@ -835,7 +835,18 @@ defineExpose({
 .cat-loading { padding: var(--sp-4) 0; font-size: var(--fs-meta); text-align: center; }
 
 /* 宽表在窄屏必须自己横滑：只设 overflow-y 时表格的 min-content 会撑破面板。 */
-.src-scroll { max-height: 560px; overflow: auto; overscroll-behavior: contain; }
+/*
+  ⚠️ contain: paint 不能省。实测 252 行时表格高 16,033px，虽然 overflow:auto 已经把它
+  裁在 560px 的容器里，但它的高度仍然会漏进 document.scrollHeight —— 整页多出 1.5 万
+  像素的空白可滚动区，看起来就是"能无限往下滑"。overflow:hidden 也挡不住，只有建立
+  paint containment 才能让滚动区域只属于这个容器。
+*/
+.src-scroll {
+  max-height: 560px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  contain: paint;
+}
 .src-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .src-tbl th {
   position: sticky;
