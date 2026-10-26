@@ -508,7 +508,7 @@ defineExpose({
         <Switch v-model="form.autoEnabled" aria-label="自动蒸馏" />
       </Field>
 
-      <Field label="触发条件" control-width="1fr">
+      <Field label="触发条件">
         <div class="inline">
           <span class="faint">每累计</span>
           <span class="num-box">
@@ -532,7 +532,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="相邻批次重叠" control-width="130px">
+      <Field label="相邻批次重叠">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -546,7 +546,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="对话间隔" control-width="130px">
+      <Field label="对话间隔">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -560,7 +560,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="采集范围" control-width="180px">
+      <Field label="采集范围">
         <Select
           v-model="captureMode"
           :options="CAPTURE_MODES"
@@ -568,7 +568,7 @@ defineExpose({
         />
       </Field>
 
-      <Field v-if="!form.captureAllGroups" label="指定群" hint="逗号分隔" control-width="1fr">
+      <Field v-if="!form.captureAllGroups" label="指定群" hint="逗号分隔">
         <Input
           v-model="form.captureGroups"
           placeholder="例如 209127588, 866095282"
@@ -576,7 +576,7 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏模型" control-width="300px">
+      <Field label="蒸馏模型">
         <Select
           v-model="form.modelProvider"
           :options="providerOptions"
@@ -584,7 +584,7 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏结果" control-width="220px">
+      <Field label="蒸馏结果">
         <Select
           v-model="publishMode"
           :options="PUBLISH_MODES"
@@ -592,7 +592,7 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏关注点" control-width="1fr">
+      <Field label="蒸馏关注点">
         <Input
           v-model="form.focus"
           multiline
@@ -898,7 +898,8 @@ defineExpose({
 .settings-panel :deep(.field:last-child) { padding-bottom: 0; }
 .settings-panel :deep(.field .hint) { margin-top: 0; line-height: 1.4; }
 .chips { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
-.num-box { display: block; width: 92px; }
+.num-box { display: block; width: 72px; }
+.num-box :deep(.inp) { text-align: right; font-variant-numeric: tabular-nums; }
 .faint { color: var(--ink-3); font-size: var(--fs-meta); }
 
 .form-foot {
@@ -958,7 +959,6 @@ defineExpose({
 
 @media (max-width: 760px) {
   .form-foot { align-items: flex-start; }
-  .num-box { width: 100px; }
   .inline { flex-wrap: wrap; }
 }
 </style>
