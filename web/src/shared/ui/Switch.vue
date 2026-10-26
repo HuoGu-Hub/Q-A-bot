@@ -32,14 +32,19 @@ const el = ref<HTMLInputElement | null>(null)
  * 所以键盘、读屏、表单语义一样都没丢。
  */
 function onWrapClick(e: MouseEvent) {
+  // 点在真正的 checkbox 上：停止冒泡即可，别 preventDefault，否则会取消原生切换
   if ((e.target as HTMLElement)?.tagName === 'INPUT') return
+  // 点在滑块上：必须同时阻止冒泡和 label 的默认激活，再手动切换一次
+  e.preventDefault()
   if (props.disabled) return
   el.value?.click()
 }
 </script>
 
 <template>
-  <span class="switch" :class="{ disabled }" @click="onWrapClick">
+  <!-- 阻止冒泡：Field 根元素是 label，点击滑块会触发 label 的默认切换；
+       若再手动 input.click() 就会切换两次，看起来完全没反应。 -->
+  <span class="switch" :class="{ disabled }" @click.stop="onWrapClick">
     <input
       ref="el"
       type="checkbox"
