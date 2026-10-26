@@ -157,6 +157,17 @@ public class OutboundSender {
     }
 
     /**
+     * 立刻同步发出，**不走异步发送队列**。
+     *
+     * <p>只给"必须控制顺序"的调用方用：一条回复里既有文字又有语音时，
+     * 走队列的话文字可能被发送线程延后，先后顺序就不再受调用方控制。
+     * 代价是调用线程要陪着等发车位，所以别在普通回复路径上用。
+     */
+    public String sendNow(OneBotEvent event, String text) {
+        return dispatchSync(Target.of(event), text);
+    }
+
+    /**
      * 发一条**语音条**（不是文件消息）。
      *
      * <h2>为什么它单独一条，不参与分片与合并</h2>

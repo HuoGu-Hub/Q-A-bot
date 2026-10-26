@@ -6,6 +6,7 @@ import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.ToolBudget;
 import com.example.qqbot.text.PromptText;
+import com.example.qqbot.voice.MediaOutbox;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.invocation.InvocationParameters;
@@ -55,7 +56,8 @@ public class KbToolAssistant {
      * 这条设计是刻意的：工具一旦注册进 {@code AiServices} 就能被模型触发，
      * 而"能不能被触发"与"该不该被触发"是两件事。
      */
-    static final Set<String> ALLOWED_TOOLS = Set.of("lookup", "locate", "search_titles");
+    static final Set<String> ALLOWED_TOOLS =
+            Set.of("lookup", "locate", "search_titles", "play_voice", "say");
 
     /**
      * 本轮请求追加到系统提示词末尾的内容。
@@ -102,27 +104,46 @@ public class KbToolAssistant {
     /** 工具调用预算（时限与次数）—— 见 {@link ToolPolicy} */
     private final ToolPolicy toolPolicy;
 
+    /**
+     * 语音工具。生产环境一定有；测试或老调用方构造时可能为 null，
+     * 那种情况下不注册它 —— 模型调不到，白名单里也仍然写着名字。
+     */
+    private final VoiceTool voiceTool;
+
     /** 不给策略时用默认预算（测试与老调用方） */
     public KbToolAssistant(LlmRouter router, ChatModel chatModel, KbRetriever kbRetriever, KbLookupTool tool) {
-        this(router, chatModel, kbRetriever, tool, null);
+        this(router, chatModel, kbRetriever, tool, null, null);
     }
 
-    /** Spring 用这个：预算从 {@code app.llm.tool} 来 */
-    @org.springframework.beans.factory.annotation.Autowired
+    /** 不带语音工具的老签名，保留给现有测试 */
     public KbToolAssistant(LlmRouter router, ChatModel chatModel, KbRetriever kbRetriever, KbLookupTool tool,
                            LlmPolicy policy) {
+        this(router, chatModel, kbRetriever, tool, policy, null);
+    }
+
+    /** Spring 用这个：预算从 {@code app.llm.tool} 来，语音工具一起注册 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public KbToolAssistant(LlmRouter router, ChatModel chatModel, KbRetriever kbRetriever, KbLookupTool tool,
+                           LlmPolicy policy, VoiceTool voiceTool) {
         ToolPolicy tp = policy == null ? null : policy.getTool();
         this.toolPolicy = tp == null ? new ToolPolicy() : tp;
+        this.voiceTool = voiceTool;
+        java.util.List<Object> toolObjects = new java.util.ArrayList<>();
+        toolObjects.add(tool);
+        if (voiceTool != null) {
+            toolObjects.add(voiceTool);
+        }
         this.assistant = AiServices.builder(Assistant.class)
                 .chatModel(chatModel)
                 // 安全底座交给我们自己那份，不用官方默认的空提示词
                 .systemMessageProvider(memoryId -> router.systemPromptWithStyle() + extraPromptSuffix())
                 // 检索与资料注入走我们的官方管线：ContentRetriever → ContentAggregator → ContentInjector
                 .retrievalAugmentor(kbRetriever.augmentor())
-                .tools(tool)
+                .tools(toolObjects)
                 // 模型编了一个不存在的工具名：回一句固定话术，别把“工具不存在”变成异常
                 .hallucinatedToolNameStrategy(request -> ToolExecutionResultMessage.from(request,
-                        "没有这个工具。可用的只有 lookup、locate、search_titles；请直接用已有资料作答。"))
+                        "没有这个工具。可用的只有 lookup、locate、search_titles、play_voice、say；"
+                                + "请直接用已有资料作答。"))
                 // 参数 JSON 坏了：同样只回固定话术，不把解析器的原始报错交给模型
                 .toolArgumentsErrorHandler((error, context) -> ToolErrorHandlerResult.text(
                         "工具参数格式不对。请检查参数后重试，或者直接用已有资料作答。"))
@@ -253,10 +274,21 @@ public class KbToolAssistant {
      */
     public String chat(String message, String kbQuery, KbRetrievalDiagnostics sink, boolean kbEnabled,
                        String caller, String extraPrompt) {
+        return chat(message, kbQuery, sink, kbEnabled, caller, extraPrompt, null);
+    }
+
+    /**
+     * 带待发语音清单的入口。
+     *
+     * <p>{@code outbox} 随请求传进工具，{@code play_voice} / {@code say} 往里记；
+     * 模型返回后由调用方取走，决定什么时候发。为 null 时工具会说自己不可用。
+     */
+    public String chat(String message, String kbQuery, KbRetrievalDiagnostics sink, boolean kbEnabled,
+                       String caller, String extraPrompt, MediaOutbox outbox) {
         String previous = pushExtraPrompt(extraPrompt);
         try {
             ToolBudget budget = newBudget();
-            String out = assistant.chat(message, params(budget, kbQuery, sink, kbEnabled, caller));
+            String out = assistant.chat(message, params(budget, kbQuery, sink, kbEnabled, caller, outbox));
             logBudget(budget);
             return out;
         } finally {
@@ -282,6 +314,13 @@ public class KbToolAssistant {
                                  String extraPrompt) {
         // ⚠️ 这里**不能**自己拼一条多内容 UserMessage 再传 —— 它会被框架当模板 toString 掉。
         //    见 Assistant 的第二个重载：文本走 message，图片走 List<ImageContent> 参数。
+        return chatWithImages(message, images, kbQuery, sink, kbEnabled, caller, extraPrompt, null);
+    }
+
+    /** 带待发语音清单的视觉入口 */
+    public String chatWithImages(String message, List<VisionImage> images, String kbQuery,
+                                 KbRetrievalDiagnostics sink, boolean kbEnabled, String caller,
+                                 String extraPrompt, MediaOutbox outbox) {
         List<ImageContent> contents = new ArrayList<>();
         if (images != null) {
             for (VisionImage img : images) {
@@ -292,7 +331,7 @@ public class KbToolAssistant {
         try {
             ToolBudget budget = newBudget();
             String out = assistant.chat(message == null ? "" : message, contents,
-                    params(budget, kbQuery, sink, kbEnabled, caller));
+                    params(budget, kbQuery, sink, kbEnabled, caller, outbox));
             logBudget(budget);
             return out;
         } finally {
@@ -322,6 +361,11 @@ public class KbToolAssistant {
 
     private static InvocationParameters params(ToolBudget budget, String kbQuery, KbRetrievalDiagnostics sink,
                                                boolean kbEnabled, String caller) {
+        return params(budget, kbQuery, sink, kbEnabled, caller, null);
+    }
+
+    private static InvocationParameters params(ToolBudget budget, String kbQuery, KbRetrievalDiagnostics sink,
+                                               boolean kbEnabled, String caller, MediaOutbox outbox) {
         InvocationParameters params = new InvocationParameters();
         // 工具侧靠它限时与限次（工具方法声明 InvocationContext 参数就能拿到）
         params.put(ToolBudget.KEY, budget);
@@ -331,6 +375,9 @@ public class KbToolAssistant {
         }
         params.put(KbContextQueryTransformer.KEY_ENABLED, kbEnabled);
         params.put(KEY_CALLER, caller == null ? "" : caller);
+        if (outbox != null) {
+            params.put(MediaOutbox.KEY, outbox);
+        }
         return params;
     }
 }

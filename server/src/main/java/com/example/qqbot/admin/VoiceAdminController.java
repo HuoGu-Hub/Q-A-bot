@@ -6,6 +6,7 @@ import com.example.qqbot.voice.VoiceLibrary;
 import com.example.qqbot.voice.SpeechSynthesizer;
 import com.example.qqbot.voice.VoicePolicy;
 import com.example.qqbot.voice.VoiceSender;
+import com.example.qqbot.voice.VoiceTriggerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -45,13 +46,15 @@ public class VoiceAdminController {
     private final VoiceSender sender;
     private final VoicePolicy policy;
     private final SpeechSynthesizer synthesizer;
+    private final VoiceTriggerService triggers;
 
     public VoiceAdminController(VoiceLibrary library, VoiceSender sender, VoicePolicy policy,
-                                SpeechSynthesizer synthesizer) {
+                                SpeechSynthesizer synthesizer, VoiceTriggerService triggers) {
         this.library = library;
         this.sender = sender;
         this.policy = policy;
         this.synthesizer = synthesizer;
+        this.triggers = triggers;
     }
 
     /** 清单 + 上限，面板要显示"最多多大 / 多长" */
@@ -165,6 +168,65 @@ public class VoiceAdminController {
         return ResponseEntity.ok(out);
     }
 
+    // ==================== 触发词 ====================
+
+    /** 规则列表。关键词只决定"要不要语音"，不绑定内容，所以没有 assetId 这类字段 */
+    @GetMapping("/triggers")
+    public Map<String, Object> listTriggers() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("rules", triggers.rules().stream().map(VoiceAdminController::triggerView).toList());
+        return out;
+    }
+
+    /** 新增关键词 */
+    @PostMapping("/triggers")
+    public ResponseEntity<Map<String, Object>> addTrigger(@RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> b = body == null ? Map.of() : body;
+        String keyword = str(b.get("keyword"));
+        if (keyword.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "关键词不能为空"));
+        }
+        int cooldown = b.get("cooldownSeconds") instanceof Number n ? n.intValue() : 120;
+        String scope = str(b.get("groupScope"));
+        String note = str(b.get("note"));
+        VoiceTriggerService.Rule added = triggers.add(keyword, cooldown, scope, note);
+        if (added == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "新增失败，关键词可能重复"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "rule", triggerView(added)));
+    }
+
+    /** 改冷却 / 作用域 / 备注 / 启停 */
+    @PostMapping("/triggers/{id}")
+    public ResponseEntity<Map<String, Object>> updateTrigger(@PathVariable long id,
+                                                             @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> b = body == null ? Map.of() : body;
+        VoiceTriggerService.Rule old = triggers.rules().stream()
+                .filter(r -> r.id() == id).findFirst().orElse(null);
+        if (old == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条规则"));
+        }
+        int cooldown = b.get("cooldownSeconds") instanceof Number n ? n.intValue() : old.cooldownSeconds();
+        String scope = b.containsKey("groupScope") ? str(b.get("groupScope")) : old.groupScope();
+        String note = b.containsKey("note") ? str(b.get("note")) : old.note();
+        Boolean enabled = b.containsKey("enabled") ? Boolean.valueOf(String.valueOf(b.get("enabled"))) : old.enabled();
+        VoiceTriggerService.Rule updated = triggers.update(id, cooldown, scope, note, enabled);
+        if (updated == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条规则"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "rule", triggerView(updated)));
+    }
+
+    @PostMapping("/triggers/{id}/delete")
+    public ResponseEntity<Map<String, Object>> deleteTrigger(@PathVariable long id) {
+        if (!triggers.delete(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条规则"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true,
+                "rules", triggers.rules().stream().map(VoiceAdminController::triggerView).toList()));
+    }
+
     // ==================== TTS ====================
 
     /** 可选的声线，给下拉框 */
@@ -234,6 +296,17 @@ public class VoiceAdminController {
         m.put("enabled", a.enabled());
         m.put("createdAt", a.createdAt());
         m.put("audioUrl", "/admin/api/voice/" + a.id() + "/audio");
+        return m;
+    }
+
+    private static Map<String, Object> triggerView(VoiceTriggerService.Rule r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.id());
+        m.put("keyword", r.keyword());
+        m.put("cooldownSeconds", r.cooldownSeconds());
+        m.put("groupScope", r.groupScope());
+        m.put("enabled", r.enabled());
+        m.put("note", r.note());
         return m;
     }
 

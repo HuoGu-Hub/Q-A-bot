@@ -10,6 +10,9 @@ import com.example.qqbot.guard.GuardContext;
 import com.example.qqbot.guard.GuardPipeline;
 import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.onebot.outbound.OutboundSender;
+import com.example.qqbot.voice.MediaOutbox;
+import com.example.qqbot.voice.VoiceDelivery;
+import com.example.qqbot.voice.VoiceTriggerService;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
@@ -58,7 +61,12 @@ public class MessageRouter {
     private final QaCollector qaCollector;
     /** 指令那一路 —— 它自己的配置、匹配、限流、存储、渲染都在里面 */
     private final CommandHandler commandHandler;
+    /** 待发语音的投递器。测试构造时可以为 null（不投递语音） */
+    private final VoiceDelivery voiceDelivery;
+    /** 关键词触发。测试构造时可以为 null（不触发） */
+    private final VoiceTriggerService voiceTrigger;
 
+    /** 不带语音投递的构造 —— 现有测试与老调用方用 */
     public MessageRouter(OneBotApiClient apiClient,
                          MessageCodec codec,
                          BotIdentity identity,
@@ -72,6 +80,28 @@ public class MessageRouter {
                          BlockNotifier blockNotifier,
                          QaCollector qaCollector,
                          CommandHandler commandHandler) {
+        this(apiClient, codec, identity, chatService, guardPipeline, outboundSender, budgetGuard,
+                asyncProperties, guardRateLimit, guardAccess, blockNotifier, qaCollector,
+                commandHandler, null, null);
+    }
+
+    /** Spring 用这个：语音投递也接进来 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public MessageRouter(OneBotApiClient apiClient,
+                         MessageCodec codec,
+                         BotIdentity identity,
+                         ChatService chatService,
+                         GuardPipeline guardPipeline,
+                         OutboundSender outboundSender,
+                         BudgetGuard budgetGuard,
+                         AsyncPolicy asyncProperties,
+                         RateLimit guardRateLimit,
+                         Access guardAccess,
+                         BlockNotifier blockNotifier,
+                         QaCollector qaCollector,
+                         CommandHandler commandHandler,
+                         VoiceDelivery voiceDelivery,
+                         VoiceTriggerService voiceTrigger) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.identity = identity;
@@ -85,6 +115,8 @@ public class MessageRouter {
         this.blockNotifier = blockNotifier;
         this.qaCollector = qaCollector;
         this.commandHandler = commandHandler;
+        this.voiceDelivery = voiceDelivery;
+        this.voiceTrigger = voiceTrigger;
     }
 
     /**
@@ -338,8 +370,30 @@ public class MessageRouter {
         List<ImageRef> allImages = new ArrayList<>(req.ownImages());
         allImages.addAll(quote.imageRefs());
 
-        ChatService.ReplyResult result = chatService.reply(event, question, quote.text(), allImages, replyMode);
-        String safe = outboundSender.send(event, result.text());
+        // 关键词只决定"这条必须用语音回"，回什么仍交给模型
+        boolean voiceRequired = voiceTrigger != null
+                && voiceTrigger.requiresVoice(event.getGroupId(), question);
+
+        ChatService.ReplyResult result = voiceRequired
+                ? chatService.reply(event, question, quote.text(), allImages, replyMode, true)
+                : chatService.reply(event, question, quote.text(), allImages, replyMode);
+
+        // 语音与文字谁先冒出来：一次随机，避免每条回复都像模板。
+        // 有语音时必须同步发文字 —— 走异步队列的话，文字可能被发送线程推到语音后面。
+        String safe;
+        List<MediaOutbox.Intent> media = result.media();
+        if (media.isEmpty() || voiceDelivery == null) {
+            safe = outboundSender.send(event, result.text());
+        } else {
+            boolean voiceFirst = java.util.concurrent.ThreadLocalRandom.current().nextBoolean();
+            if (voiceFirst) {
+                voiceDelivery.deliver(event, media);
+            }
+            safe = outboundSender.sendNow(event, result.text());
+            if (!voiceFirst) {
+                voiceDelivery.deliver(event, media);
+            }
+        }
 
         // 异步记一笔：不阻塞、不抛异常（记录系统挂了也要照常回答）
         // ⚠️ 记的是 question 不是 text：agent 指令的原始文本是 "/联网 …"，

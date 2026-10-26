@@ -35,6 +35,15 @@ interface VoiceItem {
   audioUrl: string
 }
 
+interface TriggerRule {
+  id: number
+  keyword: string
+  cooldownSeconds: number
+  groupScope: string
+  enabled: boolean
+  note: string
+}
+
 interface VoiceList {
   ok: boolean
   items: VoiceItem[]
@@ -71,6 +80,13 @@ const sending = ref<VoiceItem | null>(null)
 const groupId = ref(localStorage.getItem('voice.lastGroup') ?? '')
 const sendingBusy = ref(false)
 
+// ---------- 触发词 ----------
+const triggers = ref<TriggerRule[]>([])
+const newKeyword = ref('')
+const newCooldown = ref('120')
+const newScope = ref('')
+const addingTrigger = ref(false)
+
 // ---------- TTS ----------
 const ttsText = ref('晚上八点集合，记得带上药水和火把。')
 const ttsVoice = ref('')
@@ -91,6 +107,58 @@ async function load() {
     error.value = describeError(e)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadTriggers() {
+  try {
+    const r = await adminApi.get<{ rules: TriggerRule[] }>('/voice/triggers')
+    triggers.value = r.rules ?? []
+  } catch {
+    triggers.value = []
+  }
+}
+
+async function addTrigger() {
+  const keyword = newKeyword.value.trim()
+  if (!keyword) {
+    toast('先填关键词')
+    return
+  }
+  addingTrigger.value = true
+  try {
+    await adminApi.post('/voice/triggers', {
+      keyword,
+      cooldownSeconds: Number(newCooldown.value) || 0,
+      groupScope: newScope.value,
+    })
+    newKeyword.value = ''
+    await loadTriggers()
+    toast('已添加')
+  } catch (e) {
+    toast(describeError(e))
+  } finally {
+    addingTrigger.value = false
+  }
+}
+
+async function toggleTrigger(rule: TriggerRule, enabled: boolean) {
+  try {
+    await adminApi.post('/voice/triggers/' + rule.id, { enabled })
+    rule.enabled = enabled
+  } catch (e) {
+    toast(describeError(e))
+  }
+}
+
+async function removeTrigger(rule: TriggerRule) {
+  if (!window.confirm('删除触发词「' + rule.keyword + '」？')) return
+  try {
+    await adminApi.post('/voice/triggers/' + rule.id + '/delete')
+    await loadTriggers()
+    toast('已删除')
+  } catch (e) {
+    toast(describeError(e))
   }
 }
 
@@ -323,6 +391,7 @@ defineExpose({
 
 onMounted(() => {
   void load()
+  void loadTriggers()
   void loadTtsVoices()
 })
 </script>
@@ -366,6 +435,30 @@ onMounted(() => {
           @change="pick"
         >
       </div>
+    </Panel>
+
+    <Panel title="触发词" :count="triggers.length" hint="命中就要求这条回复带语音；回什么仍由模型挑">
+      <div class="trigger-add">
+        <Input v-model="newKeyword" placeholder="关键词，例如 唱首歌" />
+        <Input v-model="newCooldown" placeholder="冷却秒数" mono />
+        <Input v-model="newScope" placeholder="限定群号，逗号分隔；空 = 所有群" />
+        <Button variant="primary" :disabled="addingTrigger" @click="addTrigger">添加</Button>
+      </div>
+      <Empty v-if="triggers.length === 0" text="还没有触发词" hint="加一个「唱首歌」，之后这句就会要求语音回复" />
+      <table v-else class="vt">
+        <thead>
+          <tr><th>关键词</th><th>冷却</th><th>作用域</th><th>启用</th><th aria-label="操作"></th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in triggers" :key="r.id" :class="{ off: !r.enabled }">
+            <td class="title">{{ r.keyword }}</td>
+            <td class="num">{{ r.cooldownSeconds }} 秒</td>
+            <td class="num">{{ r.groupScope || '所有群' }}</td>
+            <td><Switch :model-value="r.enabled" aria-label="启用" @update:model-value="(v: boolean) => toggleTrigger(r, v)" /></td>
+            <td class="ops"><Button size="sm" variant="danger" @click="removeTrigger(r)">删除</Button></td>
+          </tr>
+        </tbody>
+      </table>
     </Panel>
 
     <Panel title="文字转语音" hint="edge-tts，免费但每次都要联网；同一句话第二次走缓存">
@@ -480,6 +573,7 @@ onMounted(() => {
 .drop-sub { font-size: var(--fs-xs); }
 
 .defaults { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.trigger-add { display: grid; grid-template-columns: minmax(0, 1.2fr) 120px minmax(0, 1fr) auto; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .tts { display: flex; flex-direction: column; gap: var(--sp-3); }
 .tts-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 180px auto auto; gap: var(--sp-2); align-items: center; }
 .select {
@@ -512,6 +606,7 @@ audio { height: 32px; max-width: 200px; }
   .drop-row { grid-template-columns: 1fr; }
   .ops { flex-wrap: wrap; }
   .tts-row { grid-template-columns: 1fr 1fr; }
+  .trigger-add { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 760px) {
   .vt audio { max-width: 140px; }
