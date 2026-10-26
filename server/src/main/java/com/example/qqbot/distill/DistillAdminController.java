@@ -40,19 +40,22 @@ public class DistillAdminController {
     private final DistillJobService jobs;
     private final DistillWorker worker;
     private final DistillAutoService auto;
+    private final DistillLlm llm;
     private final DistillNoteService notes;
     private final ChatRepository chat;
     private final ChatImageStore imageStore;
 
     public DistillAdminController(ChatCaptureService capture, ChatImportService imports,
                                   DistillJobService jobs, DistillWorker worker,
-                                  DistillAutoService auto, DistillNoteService notes, ChatRepository chat,
+                                  DistillAutoService auto, DistillLlm llm,
+                                  DistillNoteService notes, ChatRepository chat,
                                   ChatImageStore imageStore) {
         this.capture = capture;
         this.imports = imports;
         this.jobs = jobs;
         this.worker = worker;
         this.auto = auto;
+        this.llm = llm;
         this.notes = notes;
         this.chat = chat;
         this.imageStore = imageStore;
@@ -231,9 +234,12 @@ public class DistillAdminController {
     /** 自动蒸馏设置 + 采集群 */
     @GetMapping("/settings")
     public Map<String, Object> settings() {
+        DistillSettingRepository.Settings s = auto.settings();
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("settings", auto.settings());
+        out.put("settings", s);
         out.put("groups", capture.status().groups());
+        out.put("providers", llm.providers());
+        out.put("pendingMessages", chat.countAfter(s.lastMessageId(), capture.status().groups()));
         return out;
     }
 
@@ -253,6 +259,7 @@ public class DistillAdminController {
                     bool(body.get("autoPublish")),
                     dblOf(body.get("minConfidence"), 0.75),
                     str(body.get("focus")) == null ? "" : str(body.get("focus")),
+                    str(body.get("modelProvider")) == null ? "" : str(body.get("modelProvider")),
                     old.lastMessageId(), old.updatedAt());
             return ResponseEntity.ok(Map.of("ok", true, "settings", auto.save(next)));
         } catch (IllegalArgumentException e) {

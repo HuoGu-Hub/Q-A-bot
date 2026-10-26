@@ -46,8 +46,15 @@ interface Settings {
   autoPublish: boolean
   minConfidence: number
   focus: string
+  modelProvider: string
   lastMessageId: number
   updatedAt: string
+}
+
+interface ProviderInfo {
+  provider: string
+  model: string
+  vision: boolean
 }
 
 interface Job {
@@ -108,6 +115,8 @@ const ok = ref('')
 const stats = ref<Stats | null>(null)
 const groups = ref<number[]>([])
 const settings = ref<Settings | null>(null)
+const pendingMessages = ref(0)
+const providers = ref<ProviderInfo[]>([])
 const jobs = ref<Job[]>([])
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
@@ -127,6 +136,7 @@ const form = ref({
   autoPublish: true,
   minConfidence: 0.75,
   focus: '',
+  modelProvider: '',
 })
 
 const filteredNotes = computed(() => {
@@ -142,11 +152,13 @@ async function loadAll() {
   try {
     const [s, cfg] = await Promise.all([
       adminApi.get<Stats>('/distill/stats'),
-      adminApi.get<{ settings: Settings; groups: number[] }>('/distill/settings'),
+      adminApi.get<{ settings: Settings; groups: number[]; providers: ProviderInfo[]; pendingMessages: number }>('/distill/settings'),
     ])
     stats.value = s
     settings.value = cfg.settings
     groups.value = cfg.groups ?? []
+    providers.value = cfg.providers ?? []
+    pendingMessages.value = cfg.pendingMessages ?? 0
     if (cfg.settings) {
       form.value = {
         autoEnabled: cfg.settings.autoEnabled,
@@ -158,6 +170,7 @@ async function loadAll() {
         autoPublish: cfg.settings.autoPublish,
         minConfidence: cfg.settings.minConfidence,
         focus: cfg.settings.focus ?? '',
+        modelProvider: cfg.settings.modelProvider ?? '',
       }
       if (!importGroupId.value) importGroupId.value = groups.value[0] ?? 0
     }
@@ -203,6 +216,7 @@ async function saveSettings() {
         autoPublish: r.settings.autoPublish,
         minConfidence: r.settings.minConfidence,
         focus: r.settings.focus ?? '',
+        modelProvider: r.settings.modelProvider ?? '',
       }
     }
     ok.value = form.value.autoEnabled ? '已保存，达到条件后会自动开始' : '已保存，自动蒸馏已关闭'
@@ -217,7 +231,7 @@ async function runNow() {
   try {
     const r = await adminApi.post<{ jobId: number }>('/distill/settings/run-now')
     ok.value = '任务 #' + r.jobId + ' 已开始，去「运行记录」看进度'
-    await Promise.all([loadJobs(), loadNotes()])
+    await loadAll()
   } catch (e) {
     error.value = describeError(e)
   }
@@ -393,7 +407,7 @@ onMounted(loadAll)
 
       <div class="trigger-row">
         <span class="label">每累计</span>
-        <input v-model.number="form.triggerMessages" class="num" type="number" min="0"
+        <input v-model.number="form.triggerMessages" class="num" type="number" min="1" max="500"
                aria-label="触发消息数" />
         <span>条消息</span>
         <span class="or">或</span>
@@ -402,7 +416,8 @@ onMounted(loadAll)
         <span>张图片</span>
         <span class="label">触发一次蒸馏</span>
       </div>
-      <p class="hint">任一条件先满足就触发；只处理尚未蒸馏的新消息，不会重复。填 0 表示不按这个条件。</p>
+      <p class="hint">每累计 N 条消息触发一批，N 同时也是每批上限；图片达到 M 张可以提前触发。填 0 表示不按图片触发。</p>
+      <p class="hint">当前游标 #{{ settings?.lastMessageId ?? 0 }}，之后还有 {{ pendingMessages }} 条待处理；关机重启不会丢。</p>
 
       <label class="focus-row">
         <span class="label">蒸馏关注点</span>
@@ -411,11 +426,18 @@ onMounted(loadAll)
         <span class="hint">这段只描述“提取什么”，会作为本批次的提取范围交给模型，不改变群聊人格。</span>
       </label>
 
+      <label class="model-row">
+        <span class="label">蒸馏模型</span>
+        <select v-model="form.modelProvider">
+          <option value="">跟随默认链</option>
+          <option v-for="p in providers" :key="p.provider" :value="p.provider">
+            {{ p.provider }} · {{ p.model }}{{ p.vision ? ' · 视觉' : '' }}
+          </option>
+        </select>
+        <span class="hint">只影响蒸馏，不影响群聊回复；所选模型失败时会按 fallback 链降级。</span>
+      </label>
+
       <div class="option-grid">
-        <label>每批最多
-          <input v-model.number="form.batchMessages" class="num" type="number" min="1" max="500" />
-          <span>条</span>
-        </label>
         <label>相邻批次重叠
           <input v-model.number="form.overlap" class="num" type="number" min="0" />
           <span>条</span>
@@ -643,6 +665,8 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--copper-dim)
 .option-grid label { display: flex; align-items: center; gap: 5px; color: var(--ink-dim);
   font-size: var(--fs-meta); }
 .option-grid label.check { gap: 7px; color: var(--ink); }
+.model-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.model-row select { min-width: 240px; }
 .focus-row { display: flex; flex-direction: column; gap: 5px; }
 .focus-row textarea { width: 100%; resize: vertical; line-height: 1.6; }
 .publish-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;

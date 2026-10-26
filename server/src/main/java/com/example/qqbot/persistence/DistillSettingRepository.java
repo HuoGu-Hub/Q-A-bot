@@ -17,7 +17,7 @@ public class DistillSettingRepository {
     public record Settings(boolean autoEnabled, int triggerMessages, int triggerImages,
                            int batchMessages, int batchChars, int overlap, int maxGapMinutes,
                            boolean autoPublish, double minConfidence, String focus,
-                           long lastMessageId, String updatedAt) {
+                           String modelProvider, long lastMessageId, String updatedAt) {
     }
 
     private static final Jdbc.RowMapper<Settings> MAPPER = r -> new Settings(
@@ -26,7 +26,7 @@ public class DistillSettingRepository {
             r.intOf("batch_messages"), r.intOf("batch_chars"),
             r.intOf("overlap"), r.intOf("max_gap_minutes"),
             r.intOf("auto_publish") != 0, r.dbl("min_confidence"), r.str("focus"),
-            r.longOf("last_message_id"), r.str("updated_at"));
+            r.str("model_provider"), r.longOf("last_message_id"), r.str("updated_at"));
 
     private final Jdbc jdbc;
     private final DistillPolicy policy;
@@ -49,6 +49,7 @@ public class DistillSettingRepository {
                 + " auto_publish     INTEGER NOT NULL DEFAULT 1,"
                 + " min_confidence   REAL NOT NULL DEFAULT 0.75,"
                 + " focus            TEXT NOT NULL DEFAULT '',"
+                + " model_provider   TEXT NOT NULL DEFAULT '',"
                 + " last_message_id  INTEGER NOT NULL DEFAULT 0,"
                 + " updated_at       TEXT NOT NULL)");
         // 旧库补列：表已经存在时 CREATE IF NOT EXISTS 不会加字段
@@ -56,6 +57,11 @@ public class DistillSettingRepository {
                 r -> r.str("name")).contains("focus");
         if (!hasFocus) {
             jdbc.execute("ALTER TABLE distill_setting ADD COLUMN focus TEXT NOT NULL DEFAULT ''");
+        }
+        boolean hasProvider = jdbc.query("PRAGMA table_info(distill_setting)",
+                r -> r.str("name")).contains("model_provider");
+        if (!hasProvider) {
+            jdbc.execute("ALTER TABLE distill_setting ADD COLUMN model_provider TEXT NOT NULL DEFAULT ''");
         }
         jdbc.update("INSERT OR IGNORE INTO distill_setting"
                         + " (id, auto_enabled, trigger_messages, trigger_images, batch_messages,"
@@ -80,11 +86,12 @@ public class DistillSettingRepository {
     public Settings save(Settings s) {
         jdbc.update("UPDATE distill_setting SET auto_enabled=?, trigger_messages=?, trigger_images=?,"
                         + " batch_messages=?, batch_chars=?, overlap=?, max_gap_minutes=?,"
-                        + " auto_publish=?, min_confidence=?, focus=?, updated_at=? WHERE id=1",
+                        + " auto_publish=?, min_confidence=?, focus=?, model_provider=?,"
+                        + " updated_at=? WHERE id=1",
                 s.autoEnabled() ? 1 : 0, s.triggerMessages(), s.triggerImages(),
                 s.batchMessages(), s.batchChars(), s.overlap(), s.maxGapMinutes(),
                 s.autoPublish() ? 1 : 0, s.minConfidence(), s.focus() == null ? "" : s.focus(),
-                Instant.now().toString());
+                s.modelProvider() == null ? "" : s.modelProvider(), Instant.now().toString());
         return getOrCreate();
     }
 

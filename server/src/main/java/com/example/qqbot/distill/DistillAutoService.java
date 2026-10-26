@@ -51,15 +51,21 @@ public class DistillAutoService {
     /** 保存设置；游标不动，避免丢弃已经采集但还没蒸馏的消息 */
     public DistillSettingRepository.Settings save(DistillSettingRepository.Settings raw) {
         DistillSettingRepository.Settings old = settingsRepo.getOrCreate();
-        int batchMessages = clamp(raw.batchMessages(), 1, 500);
-        int overlap = clamp(raw.overlap(), 0, Math.max(0, batchMessages - 1));
+        // 触发条数就是每批上限，不再维护两个会互相打架的旋钮
+        int triggerMessages = clamp(raw.triggerMessages(), 1, 500);
+        int batchMessages = triggerMessages;
+        int overlap = clamp(raw.overlap(), 0, Math.max(0, triggerMessages - 1));
         String focus = raw.focus() == null ? "" : raw.focus().strip();
         if (focus.length() > 1000) {
             focus = focus.substring(0, 1000);
         }
+        String provider = raw.modelProvider() == null ? "" : raw.modelProvider().strip();
+        if (provider.length() > 64) {
+            provider = provider.substring(0, 64);
+        }
         DistillSettingRepository.Settings clean = new DistillSettingRepository.Settings(
                 raw.autoEnabled(),
-                clamp(raw.triggerMessages(), 0, 100_000),
+                triggerMessages,
                 clamp(raw.triggerImages(), 0, 10_000),
                 batchMessages,
                 clamp(raw.batchChars(), 1_000, 100_000),
@@ -68,6 +74,7 @@ public class DistillAutoService {
                 raw.autoPublish(),
                 Math.max(0, Math.min(1, raw.minConfidence())),
                 focus,
+                provider,
                 old.lastMessageId(),
                 old.updatedAt());
         DistillSettingRepository.Settings saved = settingsRepo.save(clean);
@@ -112,7 +119,7 @@ public class DistillAutoService {
         if (!force && s.triggerMessages() <= 0 && s.triggerImages() <= 0) {
             return 0;
         }
-        int need = Math.max(s.triggerMessages(), s.triggerImages());
+        int need = Math.max(s.triggerMessages(), Math.max(1, s.triggerImages()));
         int limit = force ? 2000 : Math.min(2000, Math.max(500, need * 10 + 50));
         List<ChatRepository.Message> messages = chat.messagesAfter(s.lastMessageId(), groups, limit);
         if (messages.isEmpty()) {
@@ -139,12 +146,13 @@ public class DistillAutoService {
 
         DistillJobService.JobRequest req = new DistillJobService.JobRequest(
                 "live", groups, first.ts(), last.ts(), 0, "count",
-                s.batchMessages(), s.overlap(), s.maxGapMinutes());
+                s.triggerMessages(), s.overlap(), s.maxGapMinutes());
         long jobId = jobs.create(req);
         worker.start(jobId);
-        settingsRepo.updateCursor(cutoff);
-        log.info("[DISTILL] 自动蒸馏创建任务 {}：消息 {} 条，范围 {}–{}，触发条件 {} 条 / {} 图",
-                jobId, processed, first.id(), cutoff, s.triggerMessages(), s.triggerImages());
+        long next = nextCursor(s.lastMessageId(), cutoff, s.overlap());
+        settingsRepo.updateCursor(next);
+        log.info("[DISTILL] 自动蒸馏创建任务 {}：消息 {} 条，范围 {}–{}，触发条件 {} 条 / {} 图，游标推进到 {}",
+                jobId, processed, first.id(), cutoff, s.triggerMessages(), s.triggerImages(), next);
         return jobId;
     }
 
@@ -176,6 +184,14 @@ public class DistillAutoService {
             return byMessages;
         }
         return Math.min(byMessages, byImages);
+    }
+
+    /**
+     * 下一轮从哪继续：保留 overlap 条上下文，但至少向前推进一条，避免小批次原地打转。
+     */
+    static long nextCursor(long start, long cutoff, int overlap) {
+        long next = Math.max(start + 1, cutoff - Math.max(0, overlap));
+        return Math.min(cutoff, next);
     }
 
     private static int clamp(int v, int min, int max) {

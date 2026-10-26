@@ -176,6 +176,23 @@ public class ChatRepository {
         return jdbc.count("SELECT COALESCE(MAX(id),0) FROM chat_message");
     }
 
+    /** 游标之后还有多少条待蒸馏消息 */
+    public long countAfter(long afterId, List<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return 0;
+        }
+        StringBuilder sql = new StringBuilder(
+                "SELECT COUNT(*) FROM chat_message WHERE id > ? AND group_id IN (");
+        List<Object> args = new ArrayList<>();
+        args.add(afterId);
+        for (int i = 0; i < groupIds.size(); i++) {
+            sql.append(i == 0 ? "?" : ",?");
+            args.add(groupIds.get(i));
+        }
+        sql.append(')');
+        return jdbc.count(sql.toString(), args.toArray());
+    }
+
     /** 自动蒸馏用：按 id 顺序取游标之后、指定群的新消息 */
     public List<Message> messagesAfter(long afterId, List<Long> groupIds, int limit) {
         if (groupIds == null || groupIds.isEmpty()) {

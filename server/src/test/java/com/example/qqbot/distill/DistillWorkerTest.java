@@ -61,7 +61,7 @@ class DistillWorkerTest {
         settings.initSchema();
         props.setMaxNotesPerBatch(5);
         DistillLlm llm = mock(DistillLlm.class);
-        when(llm.summarize(anyString(), anyList())).thenReturn(new DistillLlm.Result(
+        when(llm.summarize(anyString(), anyList(), anyString())).thenReturn(new DistillLlm.Result(
                 "{\"notes\":[{\"title\":\"灵火祭坛位置\",\"aliases\":[\"祭坛\"],"
                         + "\"category\":\"大佬攻略\",\"body\":\"先找灵火祭坛，再把火把放上去，"
                         + "需要三个树脂和两个石头，晚上去更容易看清。\",\"confidence\":0.9,"
@@ -114,7 +114,7 @@ class DistillWorkerTest {
     @DisplayName("开启自动发布后，即使低于旧置信度门槛也直接发布")
     void autoPublishIsBinary() throws Exception {
         settings.save(new DistillSettingRepository.Settings(true, 0, 0, 80, 10000, 0, 30,
-                true, 0.99, "只整理建筑和配方", 0, ""));
+                true, 0.99, "只整理建筑和配方", "", 0, ""));
         String content = String.join("\n",
                 "{\"ts\":\"2026-10-20 21:00:00\",\"sender\":\"甲\",\"text\":\"灵火祭坛怎么去\"}",
                 "{\"ts\":\"2026-10-20 21:01:00\",\"sender\":\"乙\",\"text\":\"东边，带火把\"}");

@@ -42,11 +42,19 @@ public class DistillLlm {
         return router.hasVision();
     }
 
+    public List<LlmRouter.ProviderInfo> providers() {
+        return router.providers();
+    }
+
     public Result summarize(String userPrompt) {
-        return summarize(userPrompt, List.of());
+        return summarize(userPrompt, List.of(), "");
     }
 
     public Result summarize(String userPrompt, List<Attachment> images) {
+        return summarize(userPrompt, images, "");
+    }
+
+    public Result summarize(String userPrompt, List<Attachment> images, String provider) {
         LlmRouter.Reply reply;
         if (images != null && !images.isEmpty() && router.hasVision()) {
             List<VisionImage> vision = new ArrayList<>();
@@ -56,15 +64,15 @@ public class DistillLlm {
                 vision.add(new VisionImage(Base64.getEncoder().encodeToString(a.bytes()), mime));
             }
             try {
-                reply = router.chatWithSystemAndImages(DistillPrompts.SYSTEM, userPrompt, vision);
+                reply = router.chatWithSystemAndImages(DistillPrompts.SYSTEM, userPrompt, vision, provider);
             } catch (RuntimeException e) {
                 // 单张图格式不兼容或视觉端点抖动时，退回纯文本，别让整批失败
                 log.warn("[DISTILL] 视觉调用失败，本批退回纯文本：{}", e.getMessage());
-                reply = router.chatWithSystem(DistillPrompts.SYSTEM, userPrompt);
+                reply = router.chatWithSystem(DistillPrompts.SYSTEM, userPrompt, provider);
             }
         } else {
             // 没有视觉模型或本批没有可读图片时退回纯文本，不让整批失败
-            reply = router.chatWithSystem(DistillPrompts.SYSTEM, userPrompt);
+            reply = router.chatWithSystem(DistillPrompts.SYSTEM, userPrompt, provider);
         }
         return new Result(reply.text(), reply.model(), reply.tokensIn(), reply.tokensOut());
     }

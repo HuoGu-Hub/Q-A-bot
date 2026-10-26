@@ -70,6 +70,8 @@ public class LlmRouter {
     private final Map<String, ChatModel> models = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Provider> configs = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile List<String> chain = new ArrayList<>();
+    /** 记录本次调用实际成功的 provider，供 toReply 写进任务账本 */
+    private final ThreadLocal<String> lastProvider = new ThreadLocal<>();
     private final String systemPrompt;
 
     /**
@@ -377,6 +379,21 @@ public class LlmRouter {
         return models.keySet().stream().anyMatch(n -> configs.get(n).hasCapability(CAP_VISION));
     }
 
+    /** 当前可用 provider 及模型名，供蒸馏页面选择 */
+    public record ProviderInfo(String provider, String model, boolean vision) {
+    }
+
+    public List<ProviderInfo> providers() {
+        List<ProviderInfo> out = new ArrayList<>();
+        for (String name : chain) {
+            Provider cfg = configs.get(name);
+            if (cfg != null && models.containsKey(name)) {
+                out.add(new ProviderInfo(name, cfg.getModelName(), cfg.hasCapability(CAP_VISION)));
+            }
+        }
+        return out;
+    }
+
     /**
      * 纯文本对话（带降级）。
      *
@@ -394,9 +411,14 @@ public class LlmRouter {
      * 不能把 {@code system.md} 叠上去。返回模型名与 token，便于任务账本记录。
      */
     public Reply chatWithSystem(String systemPrompt, String userMessage) {
+        return chatWithSystem(systemPrompt, userMessage, "");
+    }
+
+    /** 指定优先 provider；失败仍按 fallback 链降级 */
+    public Reply chatWithSystem(String systemPrompt, String userMessage, String preferredProvider) {
         ChatRequest req = request(List.of(SystemMessage.from(systemPrompt),
                 new UserMessage(userMessage)));
-        return toReply(callWithFallbackResponse(req, null));
+        return toReply(callWithFallbackResponse(req, null, preferredProvider));
     }
 
     /**
@@ -405,6 +427,11 @@ public class LlmRouter {
      */
     public Reply chatWithSystemAndImages(String systemPrompt, String userMessage,
                                          List<VisionImage> images) {
+        return chatWithSystemAndImages(systemPrompt, userMessage, images, "");
+    }
+
+    public Reply chatWithSystemAndImages(String systemPrompt, String userMessage,
+                                         List<VisionImage> images, String preferredProvider) {
         List<Content> contents = new ArrayList<>();
         contents.add(TextContent.from(userMessage));
         for (VisionImage image : images == null ? List.<VisionImage>of() : images) {
@@ -412,7 +439,7 @@ public class LlmRouter {
         }
         ChatMessage message = UserMessage.from(contents);
         ChatRequest req = request(List.of(SystemMessage.from(systemPrompt), message));
-        return toReply(callWithFallbackResponse(req, CAP_VISION));
+        return toReply(callWithFallbackResponse(req, CAP_VISION, preferredProvider));
     }
 
     private Reply toReply(ChatResponse response) {
@@ -428,7 +455,10 @@ public class LlmRouter {
             out = response.tokenUsage().outputTokenCount() == null
                     ? 0 : response.tokenUsage().outputTokenCount();
         }
-        String provider = chain.isEmpty() ? "" : chain.get(0);
+        String used = lastProvider.get();
+        lastProvider.remove();
+        String provider = used == null || used.isBlank()
+                ? (chain.isEmpty() ? "" : chain.get(0)) : used;
         String model = provider.isBlank() ? "" : currentModelName(provider);
         return new Reply(response.aiMessage().text(), model, in, out);
     }
@@ -569,6 +599,11 @@ public class LlmRouter {
     }
 
     private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability) {
+        return callWithFallbackResponse(request, requiredCapability, "");
+    }
+
+    private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability,
+                                                   String preferredProvider) {
         // 带工具的请求**只能**交给声明了 tools 能力的厂商：不支持工具调用的厂商不会报错，
         // 而是把工具调用当正文吐出来（见 CAP_TOOLS 的说明），那就漏到群里了。
         boolean needsTools = request.toolSpecifications() != null && !request.toolSpecifications().isEmpty();
@@ -581,6 +616,13 @@ public class LlmRouter {
                 continue;
             }
             candidates.add(name);
+        }
+        if (preferredProvider != null && !preferredProvider.isBlank()) {
+            int at = candidates.indexOf(preferredProvider);
+            if (at > 0) {
+                candidates.remove(at);
+                candidates.add(0, preferredProvider);
+            }
         }
         if (candidates.isEmpty()) {
             throw new LlmException(needsTools
@@ -625,6 +667,7 @@ public class LlmRouter {
                 if (response.tokenUsage() != null) {
                     budgetGuard.recordTokens(response.tokenUsage().totalTokenCount());
                 }
+                lastProvider.set(name);
                 return response;
             } catch (Exception e) {
                 // 日志与聚合异常都用人话 —— 否则这里会躺一段原始 JSON，

@@ -56,13 +56,21 @@ class DistillAutoServiceTest {
                 new DistillJobService(chat, jobRepo, props), worker, props);
 
         // 先开启，避免开启动作把游标推到最新；再导入消息
-        auto.save(new DistillSettingRepository.Settings(true, 5, 0, 2, 10000, 0, 30,
-                false, 0.75, "", 0, ""));
+        auto.save(new DistillSettingRepository.Settings(true, 5, 0, 5, 10000, 0, 30,
+                false, 0.75, "", "", 0, ""));
     }
 
     @AfterEach
     void close() {
         db.close();
+    }
+
+    @Test
+    @DisplayName("游标保留重叠条数，但每轮至少向前推进一条")
+    void nextCursorKeepsOverlap() {
+        assertThat(DistillAutoService.nextCursor(0, 5, 2)).isEqualTo(3);
+        assertThat(DistillAutoService.nextCursor(3, 4, 5)).isEqualTo(4);
+        assertThat(DistillAutoService.nextCursor(0, 5, 0)).isEqualTo(5);
     }
 
     @Test
@@ -83,15 +91,15 @@ class DistillAutoServiceTest {
         var job = jobRepo.findJob(1);
         assertThat(job.source()).isEqualTo("live");
         assertThat(job.messageCount()).isEqualTo(5);
-        assertThat(job.batchCount()).isEqualTo(3);
+        assertThat(job.batchCount()).isEqualTo(1);
         assertThat(settings.getOrCreate().lastMessageId()).isEqualTo(5);
     }
 
     @Test
     @DisplayName("累计到 3 张图自动触发，截断在凑够图片的那条消息")
     void triggersAtImageThreshold() {
-        auto.save(new DistillSettingRepository.Settings(true, 0, 3, 2, 10000, 0, 30,
-                false, 0.75, "", 0, ""));
+        auto.save(new DistillSettingRepository.Settings(true, 500, 3, 500, 10000, 0, 30,
+                false, 0.75, "", "", 0, ""));
         String content = String.join("\n",
                 "{\"ts\":\"2026-10-20 21:00:00\",\"group\":209127588,\"sender\":\"甲\",\"text\":\"一\"}",
                 "{\"ts\":\"2026-10-20 21:01:00\",\"group\":209127588,\"sender\":\"乙\",\"text\":\"二\"}",

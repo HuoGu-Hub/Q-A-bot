@@ -21,7 +21,7 @@ class DistillLlmTest {
     void sendsImagesWhenVisionAvailable() {
         LlmRouter router = mock(LlmRouter.class);
         when(router.hasVision()).thenReturn(true);
-        when(router.chatWithSystemAndImages(anyString(), anyString(), anyList()))
+        when(router.chatWithSystemAndImages(anyString(), anyString(), anyList(), anyString()))
                 .thenReturn(new LlmRouter.Reply("{\"notes\":[]}", "fake", 10, 5));
 
         DistillLlm llm = new DistillLlm(router);
@@ -33,6 +33,7 @@ class DistillLlmTest {
                 org.mockito.ArgumentMatchers.eq(DistillPrompts.SYSTEM),
                 org.mockito.ArgumentMatchers.eq("看看这张图"),
                 argThat(images -> images.size() == 1
-                        && "image/png".equals(images.get(0).mimeType())));
+                        && "image/png".equals(images.get(0).mimeType())),
+                org.mockito.ArgumentMatchers.eq(""));
     }
 }

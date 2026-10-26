@@ -198,7 +198,7 @@ public class DistillWorker {
         String prompt = DistillPrompts.batchPrompt(messages, aliases, imagesByMessage, cats,
                 setting.focus(), !attachments.isEmpty());
 
-        DistillLlm.Result result = llm.summarize(prompt, attachments);
+        DistillLlm.Result result = llm.summarize(prompt, attachments, setting.modelProvider());
         lastModel = result.model();
         lastTokensIn = result.tokensIn();
         lastTokensOut = result.tokensOut();
