@@ -19,7 +19,6 @@ import Switch from '@shared/ui/Switch.vue'
 import DataTable from '@shared/ui/DataTable.vue'
 import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
-import Modal from '@shared/ui/Modal.vue'
 import Notice from '@shared/ui/Notice.vue'
 
 interface CaptureStatus {
@@ -138,7 +137,7 @@ const importGroupId = ref('')
 const form = ref({
   autoEnabled: false,
   triggerMessages: 100,
-  triggerImages: 10,
+  triggerImages: 6,
   batchMessages: 80,
   overlap: 5,
   maxGapMinutes: 30,
@@ -186,8 +185,6 @@ const filteredNotes = computed(() => {
     (n.title + ' ' + n.category + ' ' + n.body).toLowerCase().includes(q))
 })
 
-const noteTitle = computed(() => (selected.value ? '整理笔记 #' + selected.value.note.id : '整理笔记'))
-const jobTitle = computed(() => (selectedJob.value ? '任务 #' + selectedJob.value.job.id + ' 的批次' : '任务详情'))
 
 async function loadAll() {
   loading.value = true
@@ -282,17 +279,18 @@ async function selectNote(id: number) {
   try {
     selected.value = await adminApi.get<NoteDetail>('/distill/notes/' + id)
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
   }
 }
 
-function closeNote() {
-  selected.value = null
+async function toggleNote(id: number) {
+  if (selected.value?.note.id === id) {
+    selected.value = null
+    return
+  }
+  await selectNote(id)
 }
 
-function closeJob() {
-  selectedJob.value = null
-}
 
 async function saveNote(): Promise<boolean> {
   if (!selected.value) return false
@@ -356,15 +354,23 @@ async function openJob(id: number) {
   try {
     selectedJob.value = await adminApi.get<{ job: Job; batches: Batch[] }>('/distill/jobs/' + id)
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
   }
 }
 
-async function startJob(id: number) {
-  jobBusy.value = id + ':start'
+async function toggleJob(id: number) {
+  if (selectedJob.value?.job.id === id) {
+    selectedJob.value = null
+    return
+  }
+  await openJob(id)
+}
+
+async function resumeJob(id: number) {
+  jobBusy.value = id + ':resume'
   try {
     const r = await adminApi.post<{ started: boolean }>('/distill/jobs/' + id + '/start')
-    toast(r.started ? '任务 #' + id + ' 已开始' : '任务 #' + id + ' 已在运行')
+    toast(r.started ? '任务 #' + id + ' 已继续' : '任务 #' + id + ' 已在运行')
     await Promise.all([loadJobs(), openJob(id)])
   } catch (e) {
     toast(describeError(e), 'error')
@@ -466,12 +472,12 @@ defineExpose({
   <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <Panel title="自动蒸馏" hint="达到条件自动切批、调用模型整理">
-      <Field label="自动蒸馏" hint="关闭后只采集，不自动调用模型">
+    <Panel title="自动蒸馏">
+      <Field label="自动蒸馏" hint="关闭只采集">
         <Switch v-model="form.autoEnabled" aria-label="自动蒸馏" />
       </Field>
 
-      <Field label="触发条件" hint="N 同时也是每批上限；图片达到 M 张可以提前触发">
+      <Field label="触发条件">
         <div class="inline">
           <span class="faint">每累计</span>
           <span class="num-box">
@@ -495,7 +501,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="相邻批次重叠" hint="保留上一批末尾 K 条作为上下文，0 表示不重叠">
+      <Field label="相邻批次重叠" hint="0 = 不重叠">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -509,7 +515,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="对话间隔" hint="两条消息间隔超过这个分钟数就断开">
+      <Field label="对话间隔">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -523,14 +529,14 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="采集群" :hint="stats?.capture.enabled ? '采集已开启；群号在 application.yml 的 capture-groups 配置' : '采集未开启；先在配置里打开 capture-enabled'">
+      <Field label="采集群" :hint="stats?.capture.enabled ? '采集已开启' : '采集未开启'">
         <div class="chips">
           <Tag v-for="g in groups" :key="g" tone="neutral">{{ g }}</Tag>
           <span v-if="!groups.length" class="faint">未配置采集群</span>
         </div>
       </Field>
 
-      <Field label="蒸馏模型" hint="只影响蒸馏，不影响群聊回复；失败时按 fallback 链降级">
+      <Field label="蒸馏模型" hint="仅用于蒸馏">
         <Select
           v-model="form.modelProvider"
           :options="providerOptions"
@@ -538,7 +544,7 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏结果" hint="自动发布 = 直接进知识库；先整理 = 全部进待处理">
+      <Field label="蒸馏结果">
         <Select
           v-model="publishMode"
           :options="PUBLISH_MODES"
@@ -546,7 +552,7 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏关注点" hint="只描述提取什么；留空则按默认游戏经验规则" control-width="1fr">
+      <Field label="蒸馏关注点" hint="留空用默认规则" control-width="1fr">
         <Input
           v-model="form.focus"
           multiline
@@ -558,7 +564,7 @@ defineExpose({
 
       <div class="form-foot">
         <span class="faint">
-          游标 #{{ settings?.lastMessageId ?? 0 }} · 之后还有 {{ pendingMessages }} 条待处理 · 关机重启不会丢
+          游标 #{{ settings?.lastMessageId ?? 0 }} · 待处理 {{ pendingMessages }} 条
         </span>
         <div class="actions">
           <Button size="sm" variant="primary" @click="saveSettings">保存设置</Button>
@@ -567,7 +573,7 @@ defineExpose({
       </div>
     </Panel>
 
-    <Panel title="知识笔记" :count="filteredNotes.length" hint="模型整理出的经验，确认后发布">
+    <Panel title="知识笔记" :count="filteredNotes.length" hint="确认后发布">
       <div class="toolbar">
         <div class="search">
           <Input
@@ -608,25 +614,106 @@ defineExpose({
           </tr>
         </thead>
         <tbody>
-          <tr v-for="n in filteredNotes" :key="n.id">
-            <td data-label="标题">
-              <button type="button" class="title-btn" @click="selectNote(n.id)">
-                {{ n.title }}
-              </button>
-              <div class="faint meta">#{{ n.id }} · {{ n.model || '未知模型' }}</div>
-            </td>
-            <td class="c-cat" data-label="分类">
-              <Tag tone="flame">{{ n.category || '未分类' }}</Tag>
-            </td>
-            <td class="c-conf num" data-label="置信度">{{ conf(n.confidence) }}</td>
-            <td class="c-status" data-label="状态">
-              <Tag :tone="statusTone(n.status)">{{ statusText(n.status) }}</Tag>
-            </td>
-            <td class="c-time faint" data-label="时间">{{ fmt(n.createdAt) }}</td>
-            <td class="c-ops" data-label="操作">
-              <Button size="sm" @click="selectNote(n.id)">整理</Button>
-            </td>
-          </tr>
+          <template v-for="n in filteredNotes" :key="n.id">
+            <tr>
+              <td data-label="标题">
+                <button type="button" class="title-btn" @click="toggleNote(n.id)">
+                  {{ n.title }}
+                </button>
+                <div class="faint meta">#{{ n.id }} · {{ n.model || '未知模型' }}</div>
+              </td>
+              <td class="c-cat" data-label="分类">
+                <Tag tone="flame">{{ n.category || '未分类' }}</Tag>
+              </td>
+              <td class="c-conf num" data-label="置信度">{{ conf(n.confidence) }}</td>
+              <td class="c-status" data-label="状态">
+                <Tag :tone="statusTone(n.status)">{{ statusText(n.status) }}</Tag>
+              </td>
+              <td class="c-time faint" data-label="时间">{{ fmt(n.createdAt) }}</td>
+              <td class="c-ops" data-label="操作">
+                <Button size="sm" @click="toggleNote(n.id)">
+                  {{ selected?.note.id === n.id ? '收起' : '整理' }}
+                </Button>
+              </td>
+            </tr>
+
+            <tr v-if="selected?.note.id === n.id" class="detail-row">
+              <td colspan="6">
+                <div class="note-editor">
+                  <div class="note-head">
+                    <Tag :tone="statusTone(selected.note.status)">{{ statusText(selected.note.status) }}</Tag>
+                    <span class="faint">{{ selected.note.model || '未知模型' }} · {{ fmt(selected.note.createdAt) }}</span>
+                  </div>
+
+                  <Field label="标题" control-width="1fr">
+                    <Input
+                      :model-value="selected.note.title"
+                      aria-label="笔记标题"
+                      @update:model-value="(v: string) => { if (selected) selected.note.title = v }"
+                    />
+                  </Field>
+                  <Field label="分类">
+                    <Input
+                      :model-value="selected.note.category"
+                      aria-label="笔记分类"
+                      @update:model-value="(v: string) => { if (selected) selected.note.category = v }"
+                    />
+                  </Field>
+                  <Field label="别名">
+                    <Input
+                      :model-value="selected.note.aliases"
+                      aria-label="笔记别名"
+                      @update:model-value="(v: string) => { if (selected) selected.note.aliases = v }"
+                    />
+                  </Field>
+                  <Field label="置信度">
+                    <div class="num-box">
+                      <Input
+                        :model-value="String(selected.note.confidence)"
+                        type="number"
+                        aria-label="笔记置信度"
+                        @update:model-value="(v: string) => { if (selected) selected.note.confidence = toFloat(v, 0, 0, 1) }"
+                      />
+                    </div>
+                  </Field>
+                  <Field label="正文" control-width="1fr">
+                    <Input
+                      :model-value="selected.note.body"
+                      multiline
+                      :rows="10"
+                      aria-label="笔记正文"
+                      @update:model-value="(v: string) => { if (selected) selected.note.body = v }"
+                    />
+                  </Field>
+
+                  <details class="source-box">
+                    <summary>来源消息 {{ selected.sources.length }} 条</summary>
+                    <div v-for="s in selected.sources" :key="s.messageId" class="source">
+                      <div class="faint">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
+                      <p>{{ s.text }}</p>
+                    </div>
+                  </details>
+
+                  <div v-if="selected.imageIds.length" class="image-box">
+                    <div class="source-label">关联图片</div>
+                    <p class="faint">发布后入库；撤回保留。</p>
+                    <div class="images">
+                      <img v-for="id in selected.imageIds" :key="id"
+                           :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
+                    </div>
+                  </div>
+
+                  <div class="editor-actions">
+                    <Button size="sm" variant="danger" @click="deleteNote">彻底删除</Button>
+                    <span class="spacer" />
+                    <Button v-if="selected.note.status !== 'published'" size="sm" @click="publishNote">发布</Button>
+                    <Button v-else size="sm" @click="unpublishNote">撤回</Button>
+                    <Button size="sm" variant="primary" @click="saveNote">保存</Button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </DataTable>
     </Panel>
@@ -634,7 +721,7 @@ defineExpose({
     <Panel
       title="运行记录"
       :count="jobs.length"
-      hint="自动任务、失败批次与重试"
+      hint="任务与批次"
       collapsible
       :default-open="false"
       mobile-collapsed
@@ -658,36 +745,86 @@ defineExpose({
           </tr>
         </thead>
         <tbody>
-          <tr v-for="j in jobs" :key="j.id">
-            <td class="num" data-label="#">{{ j.id }}</td>
-            <td class="num" data-label="消息">{{ j.messageCount }}</td>
-            <td class="num" data-label="批次">{{ j.batchCount }}</td>
-            <td class="num" data-label="笔记">
-              <Tag v-if="j.noteCount > 0" tone="good">{{ j.noteCount }} 条</Tag>
-              <Tag v-else-if="j.status === 'done'" tone="neutral">无产出</Tag>
-              <span v-else class="faint">—</span>
-            </td>
-            <td data-label="状态">
-              <Tag :tone="statusTone(j.status)">{{ statusText(j.status) }}</Tag>
-              <div v-if="j.error" class="faint err">{{ j.error }}</div>
-            </td>
-            <td class="faint" data-label="创建时间">{{ fmt(j.createdAt) }}</td>
-            <td class="c-ops" data-label="操作">
-              <div class="row-actions">
-                <Button size="sm" @click="openJob(j.id)">详情</Button>
-                <Button size="sm" :disabled="j.status === 'running' || jobBusy === j.id + ':start'"
-                        @click="startJob(j.id)">
-                  {{ jobBusy === j.id + ':start' ? '开始中…' : '开始' }}
-                </Button>
-                <Button size="sm" :disabled="jobBusy === j.id + ':pause'" @click="pauseJob(j.id)">
-                  {{ jobBusy === j.id + ':pause' ? '暂停中…' : '暂停' }}
-                </Button>
-                <Button size="sm" :disabled="jobBusy === j.id + ':retry'" @click="retryJob(j.id)">
-                  {{ jobBusy === j.id + ':retry' ? '重试中…' : '重试' }}
-                </Button>
-              </div>
-            </td>
-          </tr>
+          <template v-for="j in jobs" :key="j.id">
+            <tr>
+              <td class="num" data-label="#">{{ j.id }}</td>
+              <td class="num" data-label="消息">{{ j.messageCount }}</td>
+              <td class="num" data-label="批次">{{ j.batchCount }}</td>
+              <td class="num" data-label="笔记">
+                <Tag v-if="j.noteCount > 0" tone="good">{{ j.noteCount }} 条</Tag>
+                <Tag v-else-if="j.status === 'done'" tone="neutral">无产出</Tag>
+                <span v-else class="faint">—</span>
+              </td>
+              <td data-label="状态">
+                <Tag :tone="statusTone(j.status)">{{ statusText(j.status) }}</Tag>
+                <div v-if="j.error" class="faint err">{{ j.error }}</div>
+              </td>
+              <td class="faint" data-label="创建时间">{{ fmt(j.createdAt) }}</td>
+              <td class="c-ops" data-label="操作">
+                <div class="row-actions">
+                  <Button size="sm" @click="toggleJob(j.id)">
+                    {{ selectedJob?.job.id === j.id ? '收起' : '详情' }}
+                  </Button>
+                  <Button v-if="j.status === 'running'" size="sm"
+                          :disabled="jobBusy === j.id + ':pause'" @click="pauseJob(j.id)">
+                    {{ jobBusy === j.id + ':pause' ? '暂停中…' : '暂停' }}
+                  </Button>
+                  <Button v-else-if="j.status === 'paused'" size="sm"
+                          :disabled="jobBusy === j.id + ':resume'" @click="resumeJob(j.id)">
+                    {{ jobBusy === j.id + ':resume' ? '继续中…' : '继续' }}
+                  </Button>
+                  <Button v-else-if="j.status === 'ready' || j.status === 'failed' || (j.status === 'done' && j.error)"
+                          size="sm" :disabled="jobBusy === j.id + ':retry'" @click="retryJob(j.id)">
+                    {{ jobBusy === j.id + ':retry' ? '重试中…' : '重试' }}
+                  </Button>
+                </div>
+              </td>
+            </tr>
+
+            <tr v-if="selectedJob?.job.id === j.id" class="detail-row">
+              <td colspan="7">
+                <div class="job-detail">
+                  <div class="job-detail-head">
+                    <Tag :tone="statusTone(selectedJob.job.status)">{{ statusText(selectedJob.job.status) }}</Tag>
+                    <span class="faint">
+                      {{ selectedJob.job.messageCount }} 条消息 · {{ selectedJob.job.batchCount }} 批 ·
+                      {{ selectedJob.job.noteCount }} 条笔记
+                    </span>
+                  </div>
+                  <p v-if="selectedJob.job.error" class="faint err">{{ selectedJob.job.error }}</p>
+                  <DataTable
+                    label="批次表"
+                    :rows="selectedJob.batches.length"
+                    empty="没有批次"
+                    :cards="selectedJob.batches.length <= 10"
+                  >
+                    <thead>
+                      <tr>
+                        <th class="num">批次</th>
+                        <th class="num">消息</th>
+                        <th class="num">字数</th>
+                        <th>状态</th>
+                        <th>模型</th>
+                        <th>错误</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="b in selectedJob.batches" :key="b.id">
+                        <td class="num" data-label="批次">{{ b.seq }}</td>
+                        <td class="num" data-label="消息">{{ b.messageCount }}</td>
+                        <td class="num" data-label="字数">{{ b.charCount }}</td>
+                        <td data-label="状态">
+                          <Tag :tone="statusTone(b.status)">{{ statusText(b.status) }}</Tag>
+                        </td>
+                        <td class="faint" data-label="模型">{{ b.model || '—' }}</td>
+                        <td class="faint err" data-label="错误">{{ b.error || '—' }}</td>
+                      </tr>
+                    </tbody>
+                  </DataTable>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </DataTable>
 
@@ -695,7 +832,7 @@ defineExpose({
 
     <Panel
       title="高级：导入历史聊天"
-      hint="只有补历史时才用；实时消息会自动采集"
+      hint="补历史用"
       collapsible
       :default-open="false"
       mobile-collapsed
@@ -707,7 +844,7 @@ defineExpose({
           aria-label="历史聊天归属群"
         />
       </Field>
-      <Field label="聊天原文" hint="支持 TXT 或 JSONL；文件名由系统生成" control-width="1fr">
+      <Field label="聊天原文" hint="TXT / JSONL" control-width="1fr">
         <Input
           v-model="importText"
           multiline
@@ -721,123 +858,6 @@ defineExpose({
       </div>
     </Panel>
 
-    <Modal :open="!!selectedJob" :title="jobTitle" width="820px" @close="closeJob">
-      <template v-if="selectedJob">
-        <div class="note-head">
-          <Tag :tone="statusTone(selectedJob.job.status)">{{ statusText(selectedJob.job.status) }}</Tag>
-          <span class="faint">
-            {{ selectedJob.job.messageCount }} 条消息 · {{ selectedJob.job.batchCount }} 批 ·
-            {{ selectedJob.job.noteCount }} 条笔记
-          </span>
-        </div>
-        <p v-if="selectedJob.job.error" class="faint err">{{ selectedJob.job.error }}</p>
-
-        <DataTable
-          label="批次表"
-          :rows="selectedJob.batches.length"
-          empty="没有批次"
-          :cards="selectedJob.batches.length <= 10"
-        >
-          <thead>
-            <tr>
-              <th class="num">批次</th>
-              <th class="num">消息</th>
-              <th class="num">字数</th>
-              <th>状态</th>
-              <th>模型</th>
-              <th>错误</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="b in selectedJob.batches" :key="b.id">
-              <td class="num" data-label="批次">{{ b.seq }}</td>
-              <td class="num" data-label="消息">{{ b.messageCount }}</td>
-              <td class="num" data-label="字数">{{ b.charCount }}</td>
-              <td data-label="状态">
-                <Tag :tone="statusTone(b.status)">{{ statusText(b.status) }}</Tag>
-              </td>
-              <td class="faint" data-label="模型">{{ b.model || '—' }}</td>
-              <td class="faint err" data-label="错误">{{ b.error || '—' }}</td>
-            </tr>
-          </tbody>
-        </DataTable>
-      </template>
-    </Modal>
-
-    <Modal :open="!!selected" :title="noteTitle" width="760px" @close="closeNote">
-      <template v-if="selected">
-        <div class="note-head">
-          <Tag :tone="statusTone(selected.note.status)">{{ statusText(selected.note.status) }}</Tag>
-          <span class="faint">{{ selected.note.model || '未知模型' }} · {{ fmt(selected.note.createdAt) }}</span>
-        </div>
-
-        <Field label="标题" control-width="1fr">
-          <Input
-            :model-value="selected.note.title"
-            aria-label="笔记标题"
-            @update:model-value="(v: string) => { if (selected) selected.note.title = v }"
-          />
-        </Field>
-        <Field label="分类">
-          <Input
-            :model-value="selected.note.category"
-            aria-label="笔记分类"
-            @update:model-value="(v: string) => { if (selected) selected.note.category = v }"
-          />
-        </Field>
-        <Field label="别名" hint="多个用「、」分隔">
-          <Input
-            :model-value="selected.note.aliases"
-            aria-label="笔记别名"
-            @update:model-value="(v: string) => { if (selected) selected.note.aliases = v }"
-          />
-        </Field>
-        <Field label="置信度" hint="0 到 1">
-          <div class="num-box">
-            <Input
-              :model-value="String(selected.note.confidence)"
-              type="number"
-              aria-label="笔记置信度"
-              @update:model-value="(v: string) => { if (selected) selected.note.confidence = toFloat(v, 0, 0, 1) }"
-            />
-          </div>
-        </Field>
-        <Field label="正文" control-width="1fr">
-          <Input
-            :model-value="selected.note.body"
-            multiline
-            :rows="12"
-            aria-label="笔记正文"
-            @update:model-value="(v: string) => { if (selected) selected.note.body = v }"
-          />
-        </Field>
-
-        <details class="source-box">
-          <summary>来源消息 {{ selected.sources.length }} 条</summary>
-          <div v-for="s in selected.sources" :key="s.messageId" class="source">
-            <div class="faint">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
-            <p>{{ s.text }}</p>
-          </div>
-        </details>
-
-        <div v-if="selected.imageIds.length" class="image-box">
-          <div class="source-label">关联图片</div>
-          <p class="faint">发布会复制到知识库并追加 [[img:kb:...]]；撤回保留，彻底删除会清理。</p>
-          <div class="images">
-            <img v-for="id in selected.imageIds" :key="id"
-                 :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <Button size="sm" variant="danger" @click="deleteNote">彻底删除</Button>
-          <span class="spacer" />
-          <Button v-if="selected.note.status !== 'published'" size="sm" @click="publishNote">发布</Button>
-          <Button v-else size="sm" @click="unpublishNote">撤回</Button>
-          <Button size="sm" variant="primary" @click="saveNote">保存</Button>
-        </div>
-      </template>
-    </Modal>
   </div>
 </template>
 
@@ -873,6 +893,9 @@ defineExpose({
 
 .sub-title { font-size: var(--fs-sm); font-weight: var(--fw-medium); margin: var(--sp-4) 0 var(--sp-2); }
 
+.detail-row td { background: var(--surface-inset); padding: var(--sp-3) var(--sp-4); }
+.job-detail, .note-editor { display: flex; flex-direction: column; gap: var(--sp-2); }
+.job-detail-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .note-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
 .source-box { margin-top: var(--sp-3); border-top: 1px solid var(--hairline); padding-top: var(--sp-2); }
 .source-box summary { cursor: pointer; color: var(--ink-2); font-size: var(--fs-sm); }
@@ -882,7 +905,7 @@ defineExpose({
 .image-box { margin-top: var(--sp-3); }
 .images { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2); }
 .images img { max-width: 180px; max-height: 140px; border: 1px solid var(--edge); border-radius: var(--r-sm); }
-.modal-actions { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-4);
+.editor-actions { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2);
   border-top: 1px solid var(--hairline); padding-top: var(--sp-3); flex-wrap: wrap; }
 
 @media (max-width: 760px) {

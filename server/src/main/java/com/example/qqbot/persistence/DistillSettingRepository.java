@@ -41,7 +41,7 @@ public class DistillSettingRepository {
                 + " id               INTEGER PRIMARY KEY CHECK (id = 1),"
                 + " auto_enabled     INTEGER NOT NULL DEFAULT 0,"
                 + " trigger_messages INTEGER NOT NULL DEFAULT 100,"
-                + " trigger_images   INTEGER NOT NULL DEFAULT 10,"
+                + " trigger_images   INTEGER NOT NULL DEFAULT 6,"
                 + " batch_messages   INTEGER NOT NULL DEFAULT 80,"
                 + " batch_chars      INTEGER NOT NULL DEFAULT 10000,"
                 + " overlap          INTEGER NOT NULL DEFAULT 5,"
@@ -67,7 +67,7 @@ public class DistillSettingRepository {
                         + " (id, auto_enabled, trigger_messages, trigger_images, batch_messages,"
                         + " batch_chars, overlap, max_gap_minutes, auto_publish, min_confidence,"
                         + " last_message_id, updated_at)"
-                        + " VALUES (1, 0, 100, 10, ?, ?, ?, ?, ?, ?,"
+                        + " VALUES (1, 0, 100, 6, ?, ?, ?, ?, ?, ?,"
                         + " COALESCE((SELECT MAX(id) FROM chat_message),0), ?)",
                 policy.getBatchMaxMessages(), policy.getBatchMaxChars(), policy.getBatchOverlap(),
                 policy.getBatchMaxGapMinutes(), policy.isAutoPublish() ? 1 : 0,
