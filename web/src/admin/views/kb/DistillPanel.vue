@@ -131,6 +131,9 @@ const providers = ref<ProviderInfo[]>([])
 const jobs = ref<Job[]>([])
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
+/** 多选删除：只在笔记列表里生效，与右侧编辑器互不影响 */
+const selectMode = ref(false)
+const picked = ref<number[]>([])
 const selectedJob = ref<{ job: Job; batches: Batch[] } | null>(null)
 const jobBusy = ref('')
 const search = ref('')
@@ -369,6 +372,56 @@ async function deleteNote() {
     await adminApi.del('/distill/notes/' + selected.value.note.id)
     selected.value = null
     toast('已彻底删除')
+    await loadAll()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
+}
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value
+  picked.value = []
+}
+
+function isPicked(id: number) {
+  return picked.value.includes(id)
+}
+
+function togglePick(id: number) {
+  const i = picked.value.indexOf(id)
+  if (i >= 0) {
+    picked.value.splice(i, 1)
+  } else {
+    picked.value.push(id)
+  }
+}
+
+function selectAllFiltered() {
+  picked.value = filteredNotes.value.map(n => n.id)
+}
+
+function clearPicked() {
+  picked.value = []
+}
+
+/**
+ * 批量彻底删除。
+ *
+ * <p>逐条删除在服务端完成，这里只发一次请求 —— 否则 30 条笔记就是 30 个请求，
+ * 中途失败还会留下"删了一半"的状态，很难说清楚。
+ */
+async function batchDelete() {
+  if (picked.value.length === 0) return
+  const count = picked.value.length
+  if (!window.confirm('彻底删除选中的 ' + count + ' 条笔记？知识库块会一起删除，不能恢复。')) return
+  try {
+    const r = await adminApi.post<{ deleted: number; missing: number }>(
+      '/distill/notes/batch-delete', { ids: picked.value })
+    if (selected.value && picked.value.includes(selected.value.note.id)) {
+      selected.value = null
+    }
+    picked.value = []
+    toast('已删除 ' + r.deleted + ' 条' + (r.missing ? '，' + r.missing + ' 条已不存在' : ''))
     await loadAll()
   } catch (e) {
     toast(describeError(e), 'error')
@@ -628,10 +681,25 @@ defineExpose({
               aria-label="按状态筛选"
               @update:model-value="(v: string) => { statusFilter = v; loadNotes() }"
             />
+            <div class="notes-bulk-row">
+              <Button size="sm" @click="toggleSelectMode">
+                {{ selectMode ? '退出多选' : '多选' }}
+              </Button>
+              <template v-if="selectMode">
+                <Button size="sm" @click="selectAllFiltered">全选</Button>
+                <Button size="sm" :disabled="picked.length === 0" @click="clearPicked">清空</Button>
+              </template>
+            </div>
           </div>
           <div class="notes-summary faint">
             {{ filteredNotes.length }} 条
             <template v-if="stats">· {{ stats.drafts }} 待处理 · {{ stats.publishedNotes }} 已发布</template>
+          </div>
+          <div v-if="selectMode" class="bulk-bar">
+            <span class="faint">已选 {{ picked.length }} 条</span>
+            <Button size="sm" variant="danger" :disabled="picked.length === 0" @click="batchDelete">
+              删除选中
+            </Button>
           </div>
 
           <div class="notes-scroll">
@@ -645,11 +713,14 @@ defineExpose({
               :key="n.id"
               type="button"
               class="note-item"
-              :class="{ on: selected?.note.id === n.id }"
-              @click="toggleNote(n.id)"
+              :class="{ on: selected?.note.id === n.id, picked: selectMode && isPicked(n.id) }"
+              @click="selectMode ? togglePick(n.id) : toggleNote(n.id)"
             >
               <span class="note-line">
-                <span class="note-title">{{ n.title }}</span>
+                <span class="note-headline">
+                  <span v-if="selectMode" class="pick" :class="{ on: isPicked(n.id) }" aria-hidden="true"></span>
+                  <span class="note-title">{{ n.title }}</span>
+                </span>
                 <Tag :tone="statusTone(n.status)">{{ statusText(n.status) }}</Tag>
               </span>
               <span class="note-meta">
@@ -917,6 +988,13 @@ defineExpose({
 .notes-tools { display: flex; flex-direction: column; gap: var(--sp-2); }
 .notes-summary { margin: var(--sp-2) 0; }
 .notes-scroll { max-height: 560px; overflow-y: auto; }
+.notes-bulk-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.bulk-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--hairline); }
+.note-headline { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.pick { width: 14px; height: 14px; flex: none; border: 1px solid var(--edge); border-radius: 3px; }
+.pick.on { background: var(--ember); border-color: var(--ember); box-shadow: inset 0 0 0 2px var(--paper); }
+.note-item.picked { background: color-mix(in srgb, var(--ember) 10%, transparent); }
 .note-item { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left;
   background: transparent; border: 0; border-bottom: 1px solid var(--hairline);
   padding: var(--sp-2) var(--sp-2); color: var(--ink); cursor: pointer; font: inherit; }

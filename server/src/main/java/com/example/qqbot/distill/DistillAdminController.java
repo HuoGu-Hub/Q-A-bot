@@ -336,6 +336,39 @@ public class DistillAdminController {
         return ok ? ResponseEntity.ok(Map.of("ok", true)) : ResponseEntity.notFound().build();
     }
 
+    /**
+     * 批量彻底删除。语义与单条删除完全一致：块、图片、笔记一起删，不可恢复。
+     *
+     * <p>上限 500：一次点太多说明操作方式不对，也避免一个请求把 SQLite 写锁占太久。
+     * 逐条删而不是一条 SQL 全删，是为了让 {@code DistillPublisher.delete} 里的
+     * 块与图片清理保持同一套逻辑 —— 两套删除路径迟早会不一致。
+     */
+    @PostMapping("/notes/batch-delete")
+    public ResponseEntity<?> deleteNotes(@RequestBody(required = false) Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("ids");
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "需要 ids 数组"));
+        }
+        if (list.size() > 500) {
+            return ResponseEntity.badRequest().body(Map.of("error", "一次最多删除 500 条"));
+        }
+        int deleted = 0;
+        int missing = 0;
+        for (Object item : list) {
+            if (!(item instanceof Number number)) {
+                missing++;
+                continue;
+            }
+            if (notes.delete(number.longValue())) {
+                deleted++;
+            } else {
+                missing++;
+            }
+        }
+        log.info("[DISTILL] 批量删除：成功 {}，缺失 {}", deleted, missing);
+        return ResponseEntity.ok(Map.of("ok", true, "deleted", deleted, "missing", missing));
+    }
+
     private static String str(Object o) {
         return o == null ? null : String.valueOf(o);
     }
