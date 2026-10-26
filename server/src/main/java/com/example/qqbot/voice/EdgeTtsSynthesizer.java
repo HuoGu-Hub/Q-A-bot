@@ -49,12 +49,87 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
             "zh-CN-liaoning-XiaobeiNeural",
             "zh-CN-shaanxi-XiaoniNeural");
 
+    /**
+     * 找不到时按顺序在这些位置找 —— 都是常见的虚拟环境布局。
+     *
+     * <p>为什么不要求用户写绝对路径：开发机在仓库根跑、服务器在 {@code /opt/qqbot/server} 跑，
+     * 同一个配置要跨两种目录结构。从工作目录逐级往上找，写相对路径就够了。
+     */
+    private static final List<String> LOCAL_CANDIDATES = List.of(
+            ".toolchain/edge-tts/Scripts/edge-tts.exe",
+            ".toolchain/edge-tts/bin/edge-tts",
+            "venv/Scripts/edge-tts.exe",
+            "venv/bin/edge-tts",
+            ".venv/Scripts/edge-tts.exe",
+            ".venv/bin/edge-tts");
+
     private final TtsPolicy policy;
     private final VoiceCache cache;
+
+    /** 解析结果缓存。null 表示解析过但没找到；用 {@link #resolvedAtLeastOnce} 区分"还没解析" */
+    private volatile String resolvedPath;
+    private volatile boolean resolvedAtLeastOnce;
 
     public EdgeTtsSynthesizer(TtsPolicy policy, VoiceCache cache) {
         this.policy = policy;
         this.cache = cache;
+    }
+
+    /** 真正会被执行的命令。找不到返回 null */
+    String executable() {
+        if (resolvedAtLeastOnce) {
+            return resolvedPath;
+        }
+        synchronized (this) {
+            if (!resolvedAtLeastOnce) {
+                resolvedPath = resolveExecutable();
+                resolvedAtLeastOnce = true;
+            }
+            return resolvedPath;
+        }
+    }
+
+    /**
+     * 解析配置里的命令：
+     * <ol>
+     *   <li>绝对路径：存在就用，不存在直接判不可用，不做猜测；</li>
+     *   <li>带目录的相对路径：相对工作目录解析；</li>
+     *   <li>裸命令名：先查 PATH，再按常见虚拟环境布局逐级往上找；</li>
+     *   <li>都没有：不可用，日志里说清楚找过哪里。</li>
+     * </ol>
+     */
+    private String resolveExecutable() {
+        String configured = policy.getEdgeTtsPath();
+        if (configured == null || configured.isBlank()) {
+            return null;
+        }
+        Path direct = Path.of(configured);
+        if (direct.isAbsolute()) {
+            return Files.isRegularFile(direct) ? direct.toString() : null;
+        }
+        if (configured.contains("/") || configured.contains("\\")) {
+            Path relative = direct.toAbsolutePath().normalize();
+            if (Files.isRegularFile(relative)) {
+                return relative.toString();
+            }
+        } else if (onPath(configured)) {
+            return configured;
+        }
+        // 从工作目录往上找常见布局；顺带把"相对路径"在祖先目录里再试一次
+        Path dir = Path.of("").toAbsolutePath().normalize();
+        for (int depth = 0; dir != null && depth < 5; depth++, dir = dir.getParent()) {
+            Path relative = dir.resolve(configured);
+            if (Files.isRegularFile(relative)) {
+                return relative.normalize().toString();
+            }
+            for (String candidate : LOCAL_CANDIDATES) {
+                Path hit = dir.resolve(candidate);
+                if (Files.isRegularFile(hit)) {
+                    return hit.normalize().toString();
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -71,12 +146,12 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
         }
         String path = policy.getEdgeTtsPath();
         if (isAvailable()) {
-            log.info("[VOICE] TTS 就绪：{}，声线 {}，缓存 {}", path, policy.getTtsVoice(),
-                    policy.getTtsCacheDir());
+            log.info("[VOICE] TTS 就绪：{}（配置 {}），声线 {}，缓存 {}",
+                    executable(), path, policy.getTtsVoice(), policy.getTtsCacheDir());
         } else {
-            log.warn("[VOICE] TTS 不可用：找不到可执行文件 \"{}\"。"
-                    + "请把 app.voice.tts.edge-tts-path 或 .env 的 EDGE_TTS 指到 edge-tts 可执行文件，"
-                    + "Windows 上通常在 .toolchain/edge-tts/Scripts/edge-tts.exe", path);
+            log.warn("[VOICE] TTS 不可用：配置的命令 \"{}\" 找不到。"
+                    + "已尝试：PATH、工作目录及上级的 .toolchain/edge-tts、venv、.venv。"
+                    + "装好后可用裸命令 edge-tts，或写相对路径 .toolchain/edge-tts/Scripts/edge-tts.exe", path);
         }
     }
 
@@ -88,15 +163,7 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
         if (!"edge-tts".equalsIgnoreCase(policy.getTtsProvider())) {
             return false;
         }
-        String path = policy.getEdgeTtsPath();
-        if (path == null || path.isBlank()) {
-            return false;
-        }
-        // 写成路径就检查文件；只写命令名就去 PATH 里找，避免"看着可用、一点就 400"
-        if (path.contains("/") || path.contains("\\")) {
-            return Files.isExecutable(Path.of(path)) || Files.isRegularFile(Path.of(path));
-        }
-        return onPath(path);
+        return executable() != null;
     }
 
     /** 在 PATH 里找命令。Windows 还要补 .exe */
@@ -172,8 +239,12 @@ public class EdgeTtsSynthesizer implements SpeechSynthesizer {
             Files.createDirectories(dir);
             out = Files.createTempFile(dir, "tts-", ".mp3");
 
+            String exe = executable();
+            if (exe == null) {
+                throw new VoiceException("找不到 edge-tts 可执行文件：配置 " + policy.getEdgeTtsPath());
+            }
             List<String> cmd = List.of(
-                    policy.getEdgeTtsPath(),
+                    exe,
                     "--voice", useVoice,
                     "--rate=" + policy.getTtsRate(),
                     "--pitch=" + policy.getTtsPitch(),
