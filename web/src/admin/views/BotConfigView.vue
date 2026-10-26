@@ -33,6 +33,7 @@ import Tag from '@shared/ui/Tag.vue'
 import SettingsPanel from './bot/SettingsPanel.vue'
 import CommandsPanel from './bot/CommandsPanel.vue'
 import VariablesPanel from './bot/VariablesPanel.vue'
+import VoicePanel from './bot/VoicePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,6 +43,8 @@ const TABS = [
   { key: 'commands', label: '命令' },
   // 只读：系统变量由代码决定，做成可编辑的配置只会多出「配了但代码里没有」
   { key: 'variables', label: '变量' },
+  // 语音素材：上传、试听、试发。语言回复的开关与触发词随后放进这里
+  { key: 'voice', label: '语音' },
 ]
 
 const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'settings')
@@ -67,10 +70,12 @@ function setTab(k: string) {
 const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const commandsRef = ref<InstanceType<typeof CommandsPanel> | null>(null)
 const variablesRef = ref<InstanceType<typeof VariablesPanel> | null>(null)
+const voiceRef = ref<InstanceType<typeof VoicePanel> | null>(null)
 
 const settings = computed(() => (tab.value === 'settings' ? settingsRef.value : null))
 const commands = computed(() => (tab.value === 'commands' ? commandsRef.value : null))
 const variables = computed(() => (tab.value === 'variables' ? variablesRef.value : null))
+const voice = computed(() => (tab.value === 'voice' ? voiceRef.value : null))
 </script>
 
 <template>
@@ -90,6 +95,10 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
       <template v-else-if="tab === 'commands'">
         <Button size="sm" :disabled="commands?.isLoading()" @click="commands?.reload()">刷新</Button>
         <Button size="sm" variant="primary" @click="commands?.openNewMenu()">新建命令</Button>
+      </template>
+      <template v-else-if="tab === 'voice'">
+        <Tag v-if="!voice?.isAvailable()" tone="warn">素材库未就绪</Tag>
+        <Button size="sm" :disabled="voice?.isLoading()" @click="voice?.reload()">刷新</Button>
       </template>
       <template v-else>
         <!--
@@ -123,6 +132,7 @@ const variables = computed(() => (tab.value === 'variables' ? variablesRef.value
     <KeepAlive>
       <SettingsPanel v-if="tab === 'settings'" ref="settingsRef" />
       <CommandsPanel v-else-if="tab === 'commands'" ref="commandsRef" />
+      <VoicePanel v-else-if="tab === 'voice'" ref="voiceRef" />
       <VariablesPanel v-else ref="variablesRef" />
     </KeepAlive>
   </AdminPage>
