@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
  *   <li>{@code at} —— @某人</li>
  *   <li>{@code face} —— QQ 自带表情（没有文字内容）</li>
  *   <li>{@code image} —— 图片，带 url</li>
+ *   <li>{@code record} —— 语音（只用于构造；收到的语音段带 url，没有正文）</li>
  *   <li>{@code reply} —— 引用/回复，只有消息 ID，正文要另外调 get_msg 去取</li>
  * </ul>
  */
@@ -231,6 +232,28 @@ public class MessageCodec {
         ArrayNode array = mapper.createArrayNode();
         array.add(segment(TYPE_AT, Map.of("qq", String.valueOf(userId))));
         array.add(segment(TYPE_TEXT, Map.of("text", " " + text)));
+        return array;
+    }
+
+    /**
+     * 构造一条**语音条**（不是文件消息）。
+     *
+     * <p><b>给的是普通音频，不是 SILK</b>：协议端会自己调 ffmpeg 转码。
+     * 直接给 SILK 反而会走"直通"分支 —— ffmpeg 解析不了 SILK 容器，量不出时长，
+     * 客户端上就是一条 0 秒的语音，而且日志里不报错（实测）。
+     *
+     * <p>用 {@code base64://} 而不是文件路径，理由和图片一样：协议端跑在容器里，
+     * 宿主机的路径对它不存在。
+     *
+     * @param audio 任意 ffmpeg 能解的音频字节，建议 mp3 / wav
+     */
+    public JsonNode voiceMessage(byte[] audio) {
+        if (audio == null || audio.length == 0) {
+            throw new IllegalArgumentException("语音内容为空");
+        }
+        ArrayNode array = mapper.createArrayNode();
+        array.add(segment(TYPE_VOICE, Map.of(
+                "file", "base64://" + Base64.getEncoder().encodeToString(audio))));
         return array;
     }
 

@@ -157,6 +157,46 @@ public class OutboundSender {
     }
 
     /**
+     * 发一条**语音条**（不是文件消息）。
+     *
+     * <h2>为什么它单独一条，不参与分片与合并</h2>
+     * 语音天然是一条完整内容，切段没有意义；塞进合并转发卡片里则要展开才听得到，
+     * 等于把语音藏起来。所以它和图片一样走"单条直发"这条路，但仍然要占发车位。
+     *
+     * <p>码率/格式的加工在 {@code voice.VoiceSender} 里做完，这里只管发。
+     *
+     * @param audio 已经加工好的音频字节（mp3 最稳）
+     * @return message_id
+     */
+    public long sendVoiceToGroup(long groupId, byte[] audio) {
+        return sendVoice(true, groupId, audio);
+    }
+
+    /** 私聊语音，语义与 {@link #sendVoiceToGroup} 一致 */
+    public long sendVoiceToPrivate(long userId, byte[] audio) {
+        return sendVoice(false, userId, audio);
+    }
+
+    private long sendVoice(boolean group, long targetId, byte[] audio) {
+        if (audio == null || audio.length == 0) {
+            throw new IllegalArgumentException("语音内容为空");
+        }
+        JsonNode message = codec.voiceMessage(audio);
+        if (group) {
+            sleepQuietly(pacer.reserve(true, targetId));
+            long messageId = apiClient.sendGroupMsg(targetId, message);
+            log.info("[OUT] 已发送语音到群 {}，message_id={}（{} KB）",
+                    targetId, messageId, Math.max(1, audio.length / 1024));
+            return messageId;
+        }
+        sleepQuietly(pacer.reserve(false, 0L));
+        long messageId = apiClient.sendPrivateMsg(targetId, message);
+        log.info("[OUT] 已发送语音给 {}，message_id={}（{} KB）",
+                targetId, messageId, Math.max(1, audio.length / 1024));
+        return messageId;
+    }
+
+    /**
      * 同步发送：调用方需要知道"到底发没发出去"时用它。
      *
      * <p>定时任务就是这种调用方 —— 发失败要重试、要标状态，不能投进队列就不管了。

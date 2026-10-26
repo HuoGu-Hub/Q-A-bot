@@ -15,6 +15,7 @@ import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.config.ScheduleProperties;
 import com.example.qqbot.config.SiteProperties;
+import com.example.qqbot.config.VoiceProperties;
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
@@ -46,7 +47,7 @@ import org.springframework.util.StringUtils;
         AsyncProperties.class, MediaProperties.class, KbProperties.class, QaProperties.class,
         AdminProperties.class, LogProperties.class, CommandProperties.class, ScheduleProperties.class,
         BotProperties.class, SiteProperties.class, PersistenceProperties.class,
-        DistillProperties.class, MapOptions.class})
+        DistillProperties.class, MapOptions.class, VoiceProperties.class})
 public class QqbotServerApplication {
 
     private static final Logger log = LoggerFactory.getLogger(QqbotServerApplication.class);

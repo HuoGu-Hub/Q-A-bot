@@ -58,7 +58,8 @@ class ArchitectureTest {
     void businessPackagesDoNotTouchOneBotClient() {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
-                        "..site..", "..publicapi..", "..settings..", "..admin..", "..logs..", "..guard..")
+                        "..voice..", "..site..", "..publicapi..", "..settings..", "..admin..", "..logs..",
+                        "..guard..")
                 .should().dependOnClassesThat().resideInAPackage("com.example.qqbot.onebot.client..");
         rule.check(CLASSES);
     }
@@ -265,8 +266,8 @@ class ArchitectureTest {
         // **没有任何包读 config**。
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
-                        "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..", "..llm..",
-                        "..onebot..", "..settings..", "..router..", "..persistence..")
+                        "..voice..", "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..",
+                        "..llm..", "..onebot..", "..settings..", "..router..", "..persistence..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
         rule.check(CLASSES);
     }

@@ -432,6 +432,23 @@ app:
       # 公网直链不经过我们的内存，这一项管不到它。0 = 不限制（不建议）
       max-size-kb: 2048
 
+  # ============================ 语音条 ============================
+  # 「发一条能点开播放的语音」，不是发文件。
+  # 链路：VoiceSender → ffmpeg 加工成 24kHz mp3 → OutboundSender → NapCat 转 SILK → QQ。
+  # ⚠️ 不要直接发 SILK：协议端会跳过转码、量不出时长，客户端显示 0 秒（实测）。
+  voice:
+    # 总开关。关掉后 VoiceSender 直接拒绝，不碰 ffmpeg 也不碰协议端
+    enabled: true
+    # 加工后音频大小上限（KB）。base64 会让体积膨胀约 1.33 倍，0 = 不限制（不建议）
+    max-kb: 1024
+    # 单条语音时长上限（秒）。协议端不卡时长，这里卡的是体验。0 = 不限制
+    max-seconds: 300
+    # ffmpeg / ffprobe 路径。只写文件名时从 PATH 找；Windows 上可以写绝对路径
+    ffmpeg: ${VOICE_FFMPEG:ffmpeg}
+    ffprobe: ${VOICE_FFPROBE:ffprobe}
+    # 单次转码超时（秒）。超时直接杀进程，一个坏文件不该卡住发送
+    timeout-seconds: 60
+
   # ============================ 前端静态资源 ============================
   # 前端构建产物（web/dist）由后端直接托管。
   # 路径是相对「运行目录」（server/）的，也可以用 file: 指向别处。

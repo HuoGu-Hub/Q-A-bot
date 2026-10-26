@@ -291,7 +291,44 @@ ffmpeg -ss 00:00:58 -t 30 -i song.flac -ac 1 -ar 24000 -b:a 32k clip.mp3
 </ul>
 <p class="note">商用语音包、影视片段、他人语音条不要进仓库，也不要发到群里：语音是可直接传播的内容，版权与隐私风险比文字高。</p>
 
-<h2><span class="num">10</span>还没验证的</h2>
+<h2><span class="num">10</span>已落地的基座</h2>
+<p>传输层与加工层都已经写进项目，合计 5 个新类 + 2 处扩展，30 个测试全绿，其中 3 个是真实 ffmpeg 转码。</p>
+
+<table>
+  <thead><tr><th>位置</th><th>职责</th></tr></thead>
+  <tbody>
+    <tr><td><code>voice/VoiceSender</code></td><td>业务入口：读文件 → 加工 → 交给发送器。群聊/私聊、开关与大小闸门都在这里</td></tr>
+    <tr><td><code>voice/VoiceProcessor</code></td><td>ffmpeg 封装：裁剪、变速、变调、响度，统一输出 24kHz 单声道 mp3</td></tr>
+    <tr><td><code>voice/VoiceOptions</code></td><td>加工参数，链式构造，越界当场拒绝</td></tr>
+    <tr><td><code>voice/VoicePolicy</code></td><td>业务侧只读配置视图</td></tr>
+    <tr><td><code>config/VoiceProperties</code></td><td>绑定 <code>app.voice.*</code></td></tr>
+    <tr><td><code>MessageCodec.voiceMessage</code></td><td>唯一构造 <code>record</code> 段的地方，复用一直没人用的 <code>TYPE_VOICE</code> 常量</td></tr>
+    <tr><td><code>OutboundSender.sendVoiceToGroup / sendVoiceToPrivate</code></td><td>唯一出口：占发车位、单条发送、记日志</td></tr>
+  </tbody>
+</table>
+
+<pre><code>// 发一首歌的副歌，升 2 个半音，响度归一化
+voiceSender.sendToGroup(groupId, Path.of("song.flac"),
+        VoiceOptions.builder()
+                .start(58).duration(30)   // 从 00:58 取 30 秒
+                .semitones(2)
+                .normalize(true)
+                .build());
+
+// 原样发一段录好的语音
+voiceSender.sendToGroup(groupId, Path.of("clip.mp3"));</code></pre>
+
+<div class="kv">
+  <div><b>app.voice.enabled</b>总开关，关掉后连 ffmpeg 都不启动</div>
+  <div><b>app.voice.max-kb</b>加工后的大小上限，默认 1024</div>
+  <div><b>app.voice.max-seconds</b>单条时长上限，默认 300</div>
+  <div><b>app.voice.ffmpeg / ffprobe</b>可执行文件路径，默认走 PATH</div>
+  <div><b>app.voice.timeout-seconds</b>单次转码超时，默认 60</div>
+</div>
+
+<p class="note">注意：当前正在运行的进程还是旧代码，新能力要重启后生效。ffmpeg 不在 PATH 的机器上，把 <code>app.voice.ffmpeg</code> 指到绝对路径即可。</p>
+
+<h2><span class="num">11</span>还没验证的</h2>
 <ul>
   <li>私聊语音：链路应当一致，但没有实测；</li>
   <li>群语音的额外风控：短时间内连发多条语音会不会被限流，目前只在开发群试了 8 条；</li>
@@ -299,11 +336,11 @@ ffmpeg -ss 00:00:58 -t 30 -i song.flac -ac 1 -ar 24000 -b:a 32k clip.mp3
   <li>入站语音：收到的 <code>record</code> 段带 <code>url</code>/<code>path</code>/<code>file_size</code>，将来做转写时要走 <code>url</code> 下载，容器内路径不可用。</li>
 </ul>
 
-<h2><span class="num">11</span>建议的下一步</h2>
+<h2><span class="num">12</span>建议的下一步</h2>
 <ol>
-  <li><b>先落最小能力</b>：<code>MessageCodec.voiceMessage</code> + <code>OutboundSender.sendVoice</code> + 一个管理端「试听/试发」按钮，验证真实链路。</li>
-  <li><b>再做素材层</b>：<code>VoiceLibrary</code> 收一批预置语音，用 <code>[[voice:key]]</code> 触发，不接任何模型。</li>
-  <li><b>最后才接 TTS</b>：TTS 只是「产出一段 MP3」，出口复用第 1 步，不需要再碰协议。</li>
+  <li><b>试听入口</b>：管理端加一个上传音频、选群、试发的面板，省得每次都写代码或跑脚本。</li>
+  <li><b>语音包</b>：<code>VoiceLibrary</code> 收一批预置语音，用 <code>[[voice:key]]</code> 触发，不接任何模型。</li>
+  <li><b>接 TTS</b>：TTS 只是「产出一段 MP3」，出口复用 <code>VoiceSender</code>，不需要再碰协议。</li>
 </ol>
 
 <div class="hr"></div>
