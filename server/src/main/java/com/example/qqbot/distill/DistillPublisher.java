@@ -26,10 +26,13 @@ public class DistillPublisher {
 
     private final KbBlockAdminService blocks;
     private final DistillNoteRepository notes;
+    private final DistillImageService images;
 
-    public DistillPublisher(KbBlockAdminService blocks, DistillNoteRepository notes) {
+    public DistillPublisher(KbBlockAdminService blocks, DistillNoteRepository notes,
+                            DistillImageService images) {
         this.blocks = blocks;
         this.notes = notes;
+        this.images = images;
     }
 
     /** 发布；返回块 id。失败时笔记仍是草稿 */
@@ -38,12 +41,14 @@ public class DistillPublisher {
         List<String> tags = note.category() == null || note.category().isBlank()
                 ? List.of() : List.of(note.category());
         try {
+            // 先复制图并把标记拼进正文；图缺失时正文照发，不让整篇发布失败
+            String bodyWithImages = images.publishedBody(note);
             var existing = blocks.get(blockId);
             if (existing == null) {
-                blocks.addWithSource(DOC_ID, blockId, note.title(), note.body(), "", tags,
+                blocks.addWithSource(DOC_ID, blockId, note.title(), bodyWithImages, "", tags,
                         "chat-distill");
             } else {
-                blocks.updateMeta(blockId, note.title(), note.body(), tags);
+                blocks.updateMeta(blockId, note.title(), bodyWithImages, tags);
                 if (existing.retired()) {
                     blocks.setRetired(blockId, false);
                 }
@@ -74,6 +79,7 @@ public class DistillPublisher {
         if (note.blockId() != null && !note.blockId().isBlank()) {
             blocks.delete(note.blockId());
         }
+        images.deleteImages(note.id());
         notes.delete(note.id());
         log.warn("[DISTILL] 笔记 {} 已彻底删除", note.id());
     }

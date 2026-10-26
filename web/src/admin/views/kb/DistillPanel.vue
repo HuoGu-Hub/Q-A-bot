@@ -532,6 +532,7 @@ onMounted(loadAll)
 
             <div v-if="selected.imageIds.length" class="image-box">
               <div class="label">关联图片</div>
+              <p class="hint">发布会把图片复制到知识库并追加 [[img:kb:...]]；撤回保留图片，彻底删除会清理。</p>
               <div class="images">
                 <img v-for="id in selected.imageIds" :key="id"
                      :src="'/admin/api/distill/images/' + id" alt="聊天图片" />

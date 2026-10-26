@@ -26,6 +26,10 @@ public class DistillNoteRepository {
     public record Source(long noteId, long messageId, String ts, String senderName, String text) {
     }
 
+    /** 笔记关联的聊天图，以及发布后复制到 kb-images 的文件名 */
+    public record NoteImage(long noteId, long chatImageId, String kbName) {
+    }
+
     /** 待写入的笔记 */
     public record NewNote(long jobId, long batchId, String title, String titleNorm, String aliases,
                           String body, String category, double confidence, String status,
@@ -179,6 +183,18 @@ public class DistillNoteRepository {
     public List<Long> imageIdsOf(long noteId) {
         return jdbc.query("SELECT chat_image_id FROM distill_note_image WHERE note_id = ?",
                 r -> r.longOf("chat_image_id"), noteId);
+    }
+
+    public List<NoteImage> imagesOf(long noteId) {
+        return jdbc.query("SELECT note_id, chat_image_id, kb_name FROM distill_note_image"
+                        + " WHERE note_id = ? ORDER BY chat_image_id",
+                r -> new NoteImage(r.longOf("note_id"), r.longOf("chat_image_id"),
+                        r.str("kb_name")), noteId);
+    }
+
+    public void setKbName(long noteId, long chatImageId, String kbName) {
+        jdbc.update("UPDATE distill_note_image SET kb_name = ?"
+                + " WHERE note_id = ? AND chat_image_id = ?", kbName, noteId, chatImageId);
     }
 
     public boolean updateContent(long id, String title, String titleNorm, String aliases,

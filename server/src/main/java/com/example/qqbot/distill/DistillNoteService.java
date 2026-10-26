@@ -22,12 +22,14 @@ public class DistillNoteService {
     private final DistillNoteRepository notes;
     private final DistillPublisher publisher;
     private final KbBlockAdminService blocks;
+    private final DistillImageService images;
 
     public DistillNoteService(DistillNoteRepository notes, DistillPublisher publisher,
-                              KbBlockAdminService blocks) {
+                              KbBlockAdminService blocks, DistillImageService images) {
         this.notes = notes;
         this.publisher = publisher;
         this.blocks = blocks;
+        this.images = images;
     }
 
     public List<DistillNoteRepository.Note> list(String status, long jobId, int limit) {
@@ -73,7 +75,9 @@ public class DistillNoteService {
 
         if ("published".equals(old.status()) && old.blockId() != null && !old.blockId().isBlank()) {
             List<String> tags = cat == null || cat.isBlank() ? List.of() : List.of(cat);
-            blocks.updateMeta(old.blockId(), t, b, tags);
+            // 已发布的块要同步图片标记；否则改正文会把配图弄丢
+            String bodyWithImages = images.withImages(old.id(), b);
+            blocks.updateMeta(old.blockId(), t, bodyWithImages, tags);
             if (!aliasesValue.isBlank()) {
                 blocks.updateAlias(old.blockId(), aliasesValue);
             }
