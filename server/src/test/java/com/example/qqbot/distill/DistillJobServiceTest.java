@@ -4,6 +4,7 @@ import com.example.qqbot.config.DistillProperties;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
+import com.example.qqbot.persistence.DistillNoteRepository;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +39,7 @@ class DistillJobServiceTest {
         chat.initSchema();
         DistillJobRepository repo = new DistillJobRepository(jdbc);
         repo.initSchema();
+        new DistillNoteRepository(jdbc).initSchema();
         DistillProperties props = new DistillProperties();
         props.setBatchMaxMessages(2);
         props.setBatchOverlap(0);

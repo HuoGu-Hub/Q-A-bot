@@ -44,6 +44,7 @@ class DistillAutoServiceTest {
         chat.initSchema();
         jobRepo = new DistillJobRepository(jdbc);
         jobRepo.initSchema();
+        new com.example.qqbot.persistence.DistillNoteRepository(jdbc).initSchema();
         DistillProperties props = new DistillProperties();
         props.setCaptureGroups(List.of(209127588L));
         props.setBatchMaxMessages(2);

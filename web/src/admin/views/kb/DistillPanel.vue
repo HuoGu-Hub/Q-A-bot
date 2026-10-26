@@ -10,6 +10,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
+import { toast } from '@shared/ui/toast'
 import Panel from '@shared/ui/Panel.vue'
 import Field from '@shared/ui/Field.vue'
 import Input from '@shared/ui/Input.vue'
@@ -74,6 +75,7 @@ interface Job {
   batchSize: number
   messageCount: number
   batchCount: number
+  noteCount: number
   status: string
   error: string
   createdAt: string
@@ -118,7 +120,6 @@ interface NoteDetail {
 
 const loading = ref(false)
 const error = ref('')
-const ok = ref('')
 const stats = ref<Stats | null>(null)
 const groups = ref<number[]>([])
 const settings = ref<Settings | null>(null)
@@ -128,6 +129,7 @@ const jobs = ref<Job[]>([])
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
 const selectedJob = ref<{ job: Job; batches: Batch[] } | null>(null)
+const jobBusy = ref('')
 const search = ref('')
 const statusFilter = ref('')
 const importText = ref('')
@@ -185,6 +187,7 @@ const filteredNotes = computed(() => {
 })
 
 const noteTitle = computed(() => (selected.value ? '整理笔记 #' + selected.value.note.id : '整理笔记'))
+const jobTitle = computed(() => (selectedJob.value ? '任务 #' + selectedJob.value.job.id + ' 的批次' : '任务详情'))
 
 async function loadAll() {
   loading.value = true
@@ -238,7 +241,6 @@ async function loadJobs() {
 
 async function saveSettings() {
   error.value = ''
-  ok.value = ''
   try {
     const r = await adminApi.put<{ settings: Settings }>('/distill/settings', {
       ...form.value,
@@ -259,7 +261,7 @@ async function saveSettings() {
         modelProvider: r.settings.modelProvider ?? '',
       }
     }
-    ok.value = form.value.autoEnabled ? '已保存，达到条件后会自动开始' : '已保存，自动蒸馏已关闭'
+    toast(form.value.autoEnabled ? '已保存，达到条件后会自动开始' : '已保存，自动蒸馏已关闭')
   } catch (e) {
     error.value = describeError(e)
   }
@@ -267,10 +269,9 @@ async function saveSettings() {
 
 async function runNow() {
   error.value = ''
-  ok.value = ''
   try {
     const r = await adminApi.post<{ jobId: number }>('/distill/settings/run-now')
-    ok.value = '任务 #' + r.jobId + ' 已开始，去「运行记录」看进度'
+    toast('任务 #' + r.jobId + ' 已开始，去「运行记录」看进度')
     await loadAll()
   } catch (e) {
     error.value = describeError(e)
@@ -289,10 +290,13 @@ function closeNote() {
   selected.value = null
 }
 
+function closeJob() {
+  selectedJob.value = null
+}
+
 async function saveNote(): Promise<boolean> {
   if (!selected.value) return false
   error.value = ''
-  ok.value = ''
   try {
     const n = selected.value.note
     await adminApi.put('/distill/notes/' + n.id, {
@@ -302,11 +306,11 @@ async function saveNote(): Promise<boolean> {
       body: n.body,
       confidence: n.confidence,
     })
-    ok.value = '已保存'
+    toast('已保存')
     await Promise.all([selectNote(n.id), loadNotes()])
     return true
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
     return false
   }
 }
@@ -317,10 +321,10 @@ async function publishNote() {
   if (!(await saveNote())) return
   try {
     await adminApi.post('/distill/notes/' + selected.value.note.id + '/publish')
-    ok.value = '已发布到知识库'
+    toast('已发布到知识库')
     await Promise.all([selectNote(selected.value.note.id), loadAll()])
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
   }
 }
 
@@ -328,10 +332,10 @@ async function unpublishNote() {
   if (!selected.value) return
   try {
     await adminApi.post('/distill/notes/' + selected.value.note.id + '/unpublish')
-    ok.value = '已撤回；块还在，只是不参与检索'
+    toast('已撤回；块还在，只是不参与检索')
     await Promise.all([selectNote(selected.value.note.id), loadAll()])
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
   }
 }
 
@@ -341,10 +345,10 @@ async function deleteNote() {
   try {
     await adminApi.del('/distill/notes/' + selected.value.note.id)
     selected.value = null
-    ok.value = '已彻底删除'
+    toast('已彻底删除')
     await loadAll()
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
   }
 }
 
@@ -357,35 +361,46 @@ async function openJob(id: number) {
 }
 
 async function startJob(id: number) {
+  jobBusy.value = id + ':start'
   try {
-    await adminApi.post('/distill/jobs/' + id + '/start')
+    const r = await adminApi.post<{ started: boolean }>('/distill/jobs/' + id + '/start')
+    toast(r.started ? '任务 #' + id + ' 已开始' : '任务 #' + id + ' 已在运行')
     await Promise.all([loadJobs(), openJob(id)])
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
+  } finally {
+    jobBusy.value = ''
   }
 }
 
 async function pauseJob(id: number) {
+  jobBusy.value = id + ':pause'
   try {
     await adminApi.post('/distill/jobs/' + id + '/pause')
+    toast('任务 #' + id + ' 已请求暂停，当前批次结束后停止')
     await loadJobs()
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
+  } finally {
+    jobBusy.value = ''
   }
 }
 
 async function retryJob(id: number) {
+  jobBusy.value = id + ':retry'
   try {
-    await adminApi.post('/distill/jobs/' + id + '/retry')
+    const r = await adminApi.post<{ started: boolean }>('/distill/jobs/' + id + '/retry')
+    toast(r.started ? '任务 #' + id + ' 已触发重试' : '任务 #' + id + ' 已重新排队')
     await Promise.all([loadJobs(), openJob(id)])
   } catch (e) {
-    error.value = describeError(e)
+    toast(describeError(e), 'error')
+  } finally {
+    jobBusy.value = ''
   }
 }
 
 async function importHistory() {
   error.value = ''
-  ok.value = ''
   const group = Number(importGroupId.value) || groups.value[0] || 0
   if (!group) {
     error.value = '没有可用的采集群'
@@ -396,7 +411,7 @@ async function importHistory() {
       '/distill/import?filename=' + encodeURIComponent('history-' + Date.now() + '.txt')
         + '&groupId=' + group,
       importText.value)
-    ok.value = '历史导入 #' + r.importId + '：写入 ' + r.inserted + ' 条，重复 ' + r.duplicates + ' 条'
+    toast('历史导入 #' + r.importId + '：写入 ' + r.inserted + ' 条，重复 ' + r.duplicates + ' 条')
     importText.value = ''
     await loadAll()
   } catch (e) {
@@ -450,7 +465,6 @@ defineExpose({
 <template>
   <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
-    <Notice v-else-if="ok" tone="ok">{{ ok }}</Notice>
 
     <Panel title="自动蒸馏" hint="达到条件自动切批、调用模型整理">
       <Field label="自动蒸馏" hint="关闭后只采集，不自动调用模型">
@@ -637,6 +651,7 @@ defineExpose({
             <th class="num">#</th>
             <th class="num">消息</th>
             <th class="num">批次</th>
+            <th class="num">笔记</th>
             <th>状态</th>
             <th>创建时间</th>
             <th class="c-ops">操作</th>
@@ -647,6 +662,11 @@ defineExpose({
             <td class="num" data-label="#">{{ j.id }}</td>
             <td class="num" data-label="消息">{{ j.messageCount }}</td>
             <td class="num" data-label="批次">{{ j.batchCount }}</td>
+            <td class="num" data-label="笔记">
+              <Tag v-if="j.noteCount > 0" tone="good">{{ j.noteCount }} 条</Tag>
+              <Tag v-else-if="j.status === 'done'" tone="neutral">无产出</Tag>
+              <span v-else class="faint">—</span>
+            </td>
             <td data-label="状态">
               <Tag :tone="statusTone(j.status)">{{ statusText(j.status) }}</Tag>
               <div v-if="j.error" class="faint err">{{ j.error }}</div>
@@ -654,18 +674,64 @@ defineExpose({
             <td class="faint" data-label="创建时间">{{ fmt(j.createdAt) }}</td>
             <td class="c-ops" data-label="操作">
               <div class="row-actions">
-                <Button size="sm" @click="openJob(j.id)">批次</Button>
-                <Button size="sm" :disabled="j.status === 'running'" @click="startJob(j.id)">开始</Button>
-                <Button size="sm" @click="pauseJob(j.id)">暂停</Button>
-                <Button size="sm" @click="retryJob(j.id)">重试</Button>
+                <Button size="sm" @click="openJob(j.id)">详情</Button>
+                <Button size="sm" :disabled="j.status === 'running' || jobBusy === j.id + ':start'"
+                        @click="startJob(j.id)">
+                  {{ jobBusy === j.id + ':start' ? '开始中…' : '开始' }}
+                </Button>
+                <Button size="sm" :disabled="jobBusy === j.id + ':pause'" @click="pauseJob(j.id)">
+                  {{ jobBusy === j.id + ':pause' ? '暂停中…' : '暂停' }}
+                </Button>
+                <Button size="sm" :disabled="jobBusy === j.id + ':retry'" @click="retryJob(j.id)">
+                  {{ jobBusy === j.id + ':retry' ? '重试中…' : '重试' }}
+                </Button>
               </div>
             </td>
           </tr>
         </tbody>
       </DataTable>
 
+    </Panel>
+
+    <Panel
+      title="高级：导入历史聊天"
+      hint="只有补历史时才用；实时消息会自动采集"
+      collapsible
+      :default-open="false"
+      mobile-collapsed
+    >
+      <Field label="归属群">
+        <Select
+          v-model="importGroupId"
+          :options="groupOptions"
+          aria-label="历史聊天归属群"
+        />
+      </Field>
+      <Field label="聊天原文" hint="支持 TXT 或 JSONL；文件名由系统生成" control-width="1fr">
+        <Input
+          v-model="importText"
+          multiline
+          :rows="6"
+          placeholder="2026-10-20 21:03:11 甲: 灵火祭坛在东边&#10;2026-10-20 21:03:40 乙: 还要三个树脂"
+          aria-label="历史聊天原文"
+        />
+      </Field>
+      <div class="actions">
+        <Button size="sm" @click="importHistory">导入</Button>
+      </div>
+    </Panel>
+
+    <Modal :open="!!selectedJob" :title="jobTitle" width="820px" @close="closeJob">
       <template v-if="selectedJob">
-        <h3 class="sub-title">任务 #{{ selectedJob.job.id }} 的批次</h3>
+        <div class="note-head">
+          <Tag :tone="statusTone(selectedJob.job.status)">{{ statusText(selectedJob.job.status) }}</Tag>
+          <span class="faint">
+            {{ selectedJob.job.messageCount }} 条消息 · {{ selectedJob.job.batchCount }} 批 ·
+            {{ selectedJob.job.noteCount }} 条笔记
+          </span>
+        </div>
+        <p v-if="selectedJob.job.error" class="faint err">{{ selectedJob.job.error }}</p>
+
         <DataTable
           label="批次表"
           :rows="selectedJob.batches.length"
@@ -696,35 +762,7 @@ defineExpose({
           </tbody>
         </DataTable>
       </template>
-    </Panel>
-
-    <Panel
-      title="高级：导入历史聊天"
-      hint="只有补历史时才用；实时消息会自动采集"
-      collapsible
-      :default-open="false"
-      mobile-collapsed
-    >
-      <Field label="归属群">
-        <Select
-          v-model="importGroupId"
-          :options="groupOptions"
-          aria-label="历史聊天归属群"
-        />
-      </Field>
-      <Field label="聊天原文" hint="支持 TXT 或 JSONL；文件名由系统生成" control-width="1fr">
-        <Input
-          v-model="importText"
-          multiline
-          :rows="6"
-          placeholder="2026-10-20 21:03:11 甲: 灵火祭坛在东边&#10;2026-10-20 21:03:40 乙: 还要三个树脂"
-          aria-label="历史聊天原文"
-        />
-      </Field>
-      <div class="actions">
-        <Button size="sm" @click="importHistory">导入</Button>
-      </div>
-    </Panel>
+    </Modal>
 
     <Modal :open="!!selected" :title="noteTitle" width="760px" @close="closeNote">
       <template v-if="selected">

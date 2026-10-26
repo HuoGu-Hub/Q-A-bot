@@ -17,7 +17,7 @@ public class DistillJobRepository {
     public record Job(long id, String source, String groupIds, String timeFrom, String timeTo,
                       long importId, String batchMode, int batchSize, int overlap, int maxGapMinutes,
                       String status, int messageCount, int batchCount, String error,
-                      String createdAt, String startedAt, String finishedAt) {
+                      String createdAt, String startedAt, String finishedAt, long noteCount) {
     }
 
     /** 一个批次 */
@@ -41,14 +41,16 @@ public class DistillJobRepository {
     private static final String JOB_COLUMNS =
             "id, source, group_ids, time_from, time_to, import_id, batch_mode, batch_size,"
                     + " overlap, max_gap_minutes, status, message_count, batch_count, error,"
-                    + " created_at, started_at, finished_at";
+                    + " created_at, started_at, finished_at,"
+                    + " (SELECT COUNT(*) FROM distill_note n WHERE n.job_id = distill_job.id) AS note_count";
 
     private static final Jdbc.RowMapper<Job> JOB = r -> new Job(
             r.longOf("id"), r.str("source"), r.str("group_ids"), r.str("time_from"),
             r.str("time_to"), r.longOf("import_id"), r.str("batch_mode"), r.intOf("batch_size"),
             r.intOf("overlap"), r.intOf("max_gap_minutes"), r.str("status"),
             r.intOf("message_count"), r.intOf("batch_count"), r.str("error"),
-            r.str("created_at"), r.str("started_at"), r.str("finished_at"));
+            r.str("created_at"), r.str("started_at"), r.str("finished_at"),
+            r.longOf("note_count"));
 
     private static final Jdbc.RowMapper<Batch> BATCH = r -> new Batch(
             r.longOf("id"), r.longOf("job_id"), r.intOf("seq"), r.longOf("message_from"),
