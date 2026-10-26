@@ -72,6 +72,10 @@ public class DistillSettingRepository {
                 policy.getBatchMaxMessages(), policy.getBatchMaxChars(), policy.getBatchOverlap(),
                 policy.getBatchMaxGapMinutes(), policy.isAutoPublish() ? 1 : 0,
                 policy.getMinConfidence(), Instant.now().toString());
+        // 触发图片数不能超过单批视觉上限，否则多出来的图根本送不进模型
+        int maxImages = Math.max(1, policy.getMaxImagesPerBatch());
+        jdbc.update("UPDATE distill_setting SET trigger_images = ?"
+                + " WHERE id = 1 AND trigger_images > ?", maxImages, maxImages);
     }
 
     public Settings getOrCreate() {

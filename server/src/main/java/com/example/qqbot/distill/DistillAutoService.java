@@ -66,7 +66,7 @@ public class DistillAutoService {
         DistillSettingRepository.Settings clean = new DistillSettingRepository.Settings(
                 raw.autoEnabled(),
                 triggerMessages,
-                clamp(raw.triggerImages(), 0, 10_000),
+                clamp(raw.triggerImages(), 0, Math.max(1, props.getMaxImagesPerBatch())),
                 batchMessages,
                 clamp(raw.batchChars(), 1_000, 100_000),
                 overlap,
