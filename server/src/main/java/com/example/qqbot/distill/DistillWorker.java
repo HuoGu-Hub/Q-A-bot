@@ -101,11 +101,23 @@ public class DistillWorker {
         log.info("[DISTILL] 任务 {} 请求暂停", jobId);
     }
 
-    /** 重试失败批次并继续 */
-    public boolean retry(long jobId) {
-        int n = jobs.resetFailedBatches(jobId);
-        log.info("[DISTILL] 任务 {} 重置 {} 个失败批次", jobId, n);
-        return start(jobId);
+    public record RetryResult(int reset, boolean started) {
+    }
+
+    /** 重试失败批次并继续；已无产出且完成的任务允许整批重跑 */
+    public RetryResult retry(long jobId) {
+        DistillJobRepository.Job job = jobs.findJob(jobId);
+        if (job == null) {
+            throw new IllegalArgumentException("任务不存在：" + jobId);
+        }
+        int reset = jobs.resetFailedBatches(jobId);
+        if (reset == 0 && "done".equals(job.status()) && job.noteCount() == 0) {
+            reset = jobs.resetAllBatches(jobId);
+        }
+        boolean canStart = reset > 0 || !"done".equals(job.status()) || job.noteCount() == 0;
+        boolean started = canStart && start(jobId);
+        log.info("[DISTILL] 任务 {} 重试：重置 {} 批，启动 {}", jobId, reset, started);
+        return new RetryResult(reset, started);
     }
 
     private void run(long jobId) {

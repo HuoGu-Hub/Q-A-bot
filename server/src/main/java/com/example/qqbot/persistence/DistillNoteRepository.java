@@ -228,4 +228,8 @@ public class DistillNoteRepository {
     public long countByStatus(String status) {
         return jdbc.count("SELECT COUNT(*) FROM distill_note WHERE status = ?", status);
     }
+
+    public long countByJob(long jobId) {
+        return jdbc.count("SELECT COUNT(*) FROM distill_note WHERE job_id = ?", jobId);
+    }
 }

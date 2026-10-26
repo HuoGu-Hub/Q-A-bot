@@ -224,8 +224,8 @@ public class DistillAdminController {
     @PostMapping("/jobs/{id}/retry")
     public ResponseEntity<?> retry(@PathVariable long id) {
         try {
-            boolean started = worker.retry(id);
-            return ResponseEntity.ok(Map.of("ok", true, "started", started));
+            DistillWorker.RetryResult r = worker.retry(id);
+            return ResponseEntity.ok(Map.of("ok", true, "reset", r.reset(), "started", r.started()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

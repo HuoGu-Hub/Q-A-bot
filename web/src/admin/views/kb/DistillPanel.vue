@@ -395,8 +395,14 @@ async function pauseJob(id: number) {
 async function retryJob(id: number) {
   jobBusy.value = id + ':retry'
   try {
-    const r = await adminApi.post<{ started: boolean }>('/distill/jobs/' + id + '/retry')
-    toast(r.started ? '任务 #' + id + ' 已触发重试' : '任务 #' + id + ' 已重新排队')
+    const r = await adminApi.post<{ reset: number; started: boolean }>('/distill/jobs/' + id + '/retry')
+    if (r.reset > 0) {
+      toast('任务 #' + id + ' 已重置 ' + r.reset + ' 个批次并开始重试')
+    } else if (r.started) {
+      toast('任务 #' + id + ' 已重新开始')
+    } else {
+      toast('任务 #' + id + ' 没有可重试的批次', 'warn')
+    }
     await Promise.all([loadJobs(), openJob(id)])
   } catch (e) {
     toast(describeError(e), 'error')
@@ -472,12 +478,12 @@ defineExpose({
   <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <Panel title="自动蒸馏">
-      <Field label="自动蒸馏" hint="关闭只采集">
+    <Panel title="自动蒸馏" class="settings-panel">
+      <Field label="自动蒸馏" control-width="70px">
         <Switch v-model="form.autoEnabled" aria-label="自动蒸馏" />
       </Field>
 
-      <Field label="触发条件">
+      <Field label="触发条件" control-width="1fr">
         <div class="inline">
           <span class="faint">每累计</span>
           <span class="num-box">
@@ -494,14 +500,14 @@ defineExpose({
               :model-value="String(form.triggerImages)"
               type="number"
               aria-label="触发图片数"
-              @update:model-value="(v: string) => form.triggerImages = toInt(v, 0, 0, 10000)"
+              @update:model-value="(v: string) => form.triggerImages = toInt(v, 0, 0, 6)"
             />
           </span>
           <span class="faint">张图片</span>
         </div>
       </Field>
 
-      <Field label="相邻批次重叠" hint="0 = 不重叠">
+      <Field label="相邻批次重叠" control-width="110px">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -515,7 +521,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="对话间隔">
+      <Field label="对话间隔" control-width="110px">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -529,14 +535,14 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="采集群" :hint="stats?.capture.enabled ? '采集已开启' : '采集未开启'">
+      <Field label="采集群" control-width="1fr" :hint="stats?.capture.enabled ? '已开启' : '未开启'">
         <div class="chips">
           <Tag v-for="g in groups" :key="g" tone="neutral">{{ g }}</Tag>
           <span v-if="!groups.length" class="faint">未配置采集群</span>
         </div>
       </Field>
 
-      <Field label="蒸馏模型" hint="仅用于蒸馏">
+      <Field label="蒸馏模型" control-width="300px">
         <Select
           v-model="form.modelProvider"
           :options="providerOptions"
@@ -544,7 +550,7 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏结果">
+      <Field label="蒸馏结果" control-width="220px">
         <Select
           v-model="publishMode"
           :options="PUBLISH_MODES"
@@ -552,11 +558,11 @@ defineExpose({
         />
       </Field>
 
-      <Field label="蒸馏关注点" hint="留空用默认规则" control-width="1fr">
+      <Field label="蒸馏关注点" control-width="1fr">
         <Input
           v-model="form.focus"
           multiline
-          :rows="3"
+          :rows="2"
           placeholder="例如：只整理建筑、配方、材料、坐标和 BOSS 打法；不要收录剧情闲聊。"
           aria-label="蒸馏关注点"
         />
@@ -773,7 +779,8 @@ defineExpose({
                           :disabled="jobBusy === j.id + ':resume'" @click="resumeJob(j.id)">
                     {{ jobBusy === j.id + ':resume' ? '继续中…' : '继续' }}
                   </Button>
-                  <Button v-else-if="j.status === 'ready' || j.status === 'failed' || (j.status === 'done' && j.error)"
+                  <Button v-else-if="j.status === 'ready' || j.status === 'failed'
+                          || (j.status === 'done' && (j.error || j.noteCount === 0))"
                           size="sm" :disabled="jobBusy === j.id + ':retry'" @click="retryJob(j.id)">
                     {{ jobBusy === j.id + ':retry' ? '重试中…' : '重试' }}
                   </Button>
@@ -865,6 +872,11 @@ defineExpose({
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
 .inline { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.settings-panel :deep(.field) { padding: 6px 0; gap: var(--sp-3); align-items: center; }
+.settings-panel :deep(.field + .field) { border-top: 1px solid var(--hairline); }
+.settings-panel :deep(.field:first-child) { padding-top: 0; }
+.settings-panel :deep(.field:last-child) { padding-bottom: 0; }
+.settings-panel :deep(.field .hint) { margin-top: 0; line-height: 1.4; }
 .chips { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
 .num-box { display: block; width: 92px; }
 .faint { color: var(--ink-3); font-size: var(--fs-meta); }

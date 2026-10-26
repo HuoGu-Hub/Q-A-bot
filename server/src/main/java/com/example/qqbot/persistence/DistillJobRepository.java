@@ -200,6 +200,13 @@ public class DistillJobRepository {
                 + " WHERE job_id = ? AND status = 'failed'", jobId);
     }
 
+    /** 整个任务重新跑：所有批次回到 pending */
+    public int resetAllBatches(long jobId) {
+        return jdbc.update("UPDATE distill_batch SET status='pending', attempts=0, error='',"
+                + " model='', tokens_in=0, tokens_out=0, started_at='', finished_at=''"
+                + " WHERE job_id = ?", jobId);
+    }
+
     public void updateJobStatus(long id, String status, String error) {
         jdbc.update("UPDATE distill_job SET status=?, error=?, started_at=CASE"
                         + " WHEN ?='running' AND (started_at IS NULL OR started_at='') THEN ?"
