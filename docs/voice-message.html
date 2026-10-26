@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QQ 语音条发送探索 · 实测报告</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --panel-2:#1b2029; --line:#272e3a;
+    --fg:#e6e9ef; --fg-dim:#9aa4b2; --accent:#7ee0c0; --accent-2:#8ab4ff;
+    --warn:#ffc46b; --bad:#ff7d84; --ok:#6ee7a8;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Code","JetBrains Mono",Consolas,monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{--bg:#f7f8fa;--panel:#fff;--panel-2:#f2f4f7;--line:#e3e7ee;--fg:#1b2029;--fg-dim:#5a6472;--accent:#0f8f74;--accent-2:#2f6fe0;--warn:#b06a00;--bad:#c0272d;--ok:#0f7a4d;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.75 system-ui,-apple-system,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  .kicker{font:600 12px/1 var(--mono);letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+  h1{font-size:34px;line-height:1.25;margin:14px 0 12px;letter-spacing:-.01em}
+  .sub{color:var(--fg-dim);font-size:15px;margin:0}
+  h2{font-size:22px;margin:52px 0 14px;padding-top:8px;letter-spacing:-.01em}
+  h2 .num{font:600 12px/1 var(--mono);color:var(--accent);margin-right:10px;vertical-align:3px}
+  h3{font-size:16px;margin:28px 0 10px;color:var(--accent-2)}
+  p{margin:12px 0}
+  code{font-family:var(--mono);font-size:.88em;background:var(--panel-2);
+       border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+      padding:16px 18px;overflow:auto;font:13px/1.7 var(--mono);margin:16px 0}
+  pre code{background:none;border:0;padding:0;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase}
+  tbody tr:hover{background:var(--panel)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:20px 0}
+  .tldr{border-left:3px solid var(--accent)}
+  .tldr p{margin:8px 0}
+  .tag{display:inline-block;font:600 11px/1 var(--mono);padding:4px 7px;border-radius:999px;
+       border:1px solid var(--line);color:var(--fg-dim);margin-right:6px;vertical-align:2px}
+  .tag.ok{color:var(--ok);border-color:color-mix(in oklab,var(--ok) 40%,transparent)}
+  .tag.bad{color:var(--bad);border-color:color-mix(in oklab,var(--bad) 40%,transparent)}
+  .tag.warn{color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
+  .note{color:var(--fg-dim);font-size:14px}
+  ul,ol{padding-left:22px}
+  li{margin:7px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:720px){.grid{grid-template-columns:1fr}}
+  .kv{font-size:14px}
+  .kv div{padding:6px 0;border-bottom:1px dashed var(--line)}
+  .kv b{color:var(--fg-dim);font-weight:600;display:inline-block;min-width:96px}
+  figure{margin:26px 0}
+  figcaption{color:var(--fg-dim);font-size:13px;margin-top:8px;text-align:center}
+  .evidence{font-size:13px;color:var(--fg-dim)}
+  .evidence b{color:var(--fg)}
+  a{color:var(--accent-2);text-decoration:none;border-bottom:1px solid color-mix(in oklab,var(--accent-2) 35%,transparent)}
+  .hr{height:1px;background:var(--line);margin:44px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Research / QQ Voice</div>
+  <h1>QQ 语音条发送探索</h1>
+  <p class="sub">不是发文件，是让对方收到一条可以点开播放的语音气泡。基于本机 NapCat 4.18.28 + 本项目的 OneBot 11 出口实测。</p>
+</header>
+
+<div class="card tldr">
+  <p><span class="tag ok">已验证</span>语音条 = 消息段 <code>{"type":"record","data":{"file":"..."}}</code>。<code>file</code> 接受 <code>base64://</code>、公网 URL、协议端可见的路径。</p>
+  <p><span class="tag ok">已验证</span>我们把 <b>MP3 字节</b> base64 塞进去就行：NapCat 自己调 ffmpeg 转成 SILK v3，再算好时长、上传、发出。项目里不用写任何 SILK 编码器。</p>
+  <p><span class="tag bad">必须避开</span>不要直接发 SILK 文件：NapCat 探测不到 SILK 的时长，会发出<b>一条 0 秒的语音</b>，而且日志里不报错。</p>
+</div>
+
+<h2><span class="num">01</span>实测记录</h2>
+<p>目标：开发群「喵小雪开发」(1046213033)。五条消息都是真实发出的，客户端里可以直接点开听。</p>
+
+<table>
+  <thead><tr><th>#</th><th>输入</th><th>结果</th><th>关键观察</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>MP3 6.8s / 27KB</td><td><span class="tag ok">成功</span> msg 908573181</td><td>NapCat 日志：<code>需要转换成silk → 转换成功 时长 6.912</code>，发出 <code>[语音 6s]</code></td></tr>
+    <tr><td>2</td><td>SILK 23KB 直传</td><td><span class="tag warn">成功但异常</span> msg 1594269379</td><td>无转换日志，耗时 845ms，发出 <code>[语音 0s]</code> —— 时长探测失败</td></tr>
+    <tr><td>3</td><td>MP3 45.0s / 135KB</td><td><span class="tag ok">成功</span> msg 8835045</td><td>转换 + 上传共 1.5s，发出 <code>[语音 45s]</code></td></tr>
+    <tr><td>4</td><td>MP3 89.7s / 180KB</td><td><span class="tag ok">成功</span> msg 1729339701</td><td>没有被 60 秒上限拒绝，发出 <code>[语音 89s]</code></td></tr>
+    <tr><td>5</td><td>同一段 6.8s MP3，走脚本</td><td><span class="tag ok">成功</span> msg 1235611189</td><td>764ms 完成，<code>scripts/voice-send.ps1</code> 已验证可用</td></tr>
+  </tbody>
+</table>
+
+<p class="note">测试音频用 Windows 内置 SAPI 中文语音合成，不依赖任何在线语音模型。本机网络当前不可用，见第 7 节说明。</p>
+
+<h3>发出的消息长什么样</h3>
+<pre><code>{
+  "type": "record",
+  "data": {
+    "file": "0ca23dab-85d5-41d0-a6e8-0dc987db1dde",
+    "path": "/app/.config/QQ/nt_qq_.../nt_data/Ptt/2026-10/Ori/775a609a...",
+    "url":  "https://multimedia.nt.qq.com.cn/download?...&amp;format=amr&amp;rkey=...",
+    "file_size": "23159"
+  }
+}</code></pre>
+<p class="note">注意 <code>format=amr</code> 只是腾讯的老命名习惯，文件内容实际是 SILK v3，头部为 <code>02 23 21 53 49 4C 4B 5F 56 33</code>（<code>\x02#!SILK_V3</code>）。</p>
+
+<h2><span class="num">02</span>它在 NapCat 里到底怎么走</h2>
+<p>阅读容器内 <code>/app/napcat/napcat.mjs</code> 得到的确切链路，不是猜测：</p>
+
+<figure>
+<svg viewBox="0 0 880 210" width="100%" role="img" aria-label="语音发送链路">
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#7ee0c0"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace,Consolas,monospace" font-size="12" fill="#9aa4b2">
+    <rect x="8" y="55" width="140" height="72" rx="10" fill="none" stroke="#272e3a"/>
+    <text x="78" y="84" text-anchor="middle" fill="#e6e9ef">MP3 / WAV</text>
+    <text x="78" y="104" text-anchor="middle">base64://</text>
+    <text x="78" y="120" text-anchor="middle">（宿主字节）</text>
+
+    <rect x="188" y="55" width="150" height="72" rx="10" fill="none" stroke="#272e3a"/>
+    <text x="263" y="84" text-anchor="middle" fill="#e6e9ef">send_group_msg</text>
+    <text x="263" y="104" text-anchor="middle">record 段</text>
+    <text x="263" y="120" text-anchor="middle">HTTP :3000</text>
+
+    <rect x="378" y="40" width="180" height="102" rx="10" fill="none" stroke="#7ee0c0"/>
+    <text x="468" y="66" text-anchor="middle" fill="#7ee0c0">NapCat pye()</text>
+    <text x="468" y="88" text-anchor="middle">ffmpeg → 24kHz PCM</text>
+    <text x="468" y="108" text-anchor="middle">→ SILK v3</text>
+    <text x="468" y="128" text-anchor="middle" fill="#ffc46b">时长取自源文件</text>
+
+    <rect x="598" y="55" width="130" height="72" rx="10" fill="none" stroke="#272e3a"/>
+    <text x="663" y="84" text-anchor="middle" fill="#e6e9ef">uploadFile</text>
+    <text x="663" y="104" text-anchor="middle">PTT 元素</text>
+    <text x="663" y="120" text-anchor="middle">带回 md5/size</text>
+
+    <rect x="768" y="55" width="104" height="72" rx="10" fill="none" stroke="#8ab4ff"/>
+    <text x="820" y="88" text-anchor="middle" fill="#8ab4ff">QQ 语音条</text>
+    <text x="820" y="108" text-anchor="middle">pttElement</text>
+  </g>
+  <g stroke="#7ee0c0" stroke-width="1.4" marker-end="url(#a)" fill="none">
+    <path d="M148 91 L182 91"/><path d="M338 91 L372 91"/>
+    <path d="M558 91 L592 91"/><path d="M728 91 L762 91"/>
+  </g>
+</svg>
+<figcaption>宿主只负责给音频字节；编码、时长、上传全部由协议端完成</figcaption>
+</figure>
+
+<pre><code>// napcat.mjs 精简后的真实逻辑
+[ze.voice]: async (e, n) => this.obContext.apis.FileApi.createValidSendPttElement(
+    n, (await this.handleOb11FileLikeMessage(e, n)).path
+);
+
+async function pye(src, tmpDir, log) {
+  if (await isSilk(src)) {
+    let duration = 0;
+    try { duration = await getDuration(src); }        // ffmpeg 没有 SILK 解复用器
+    catch { duration = Math.max(1, size/1024/3); }    // 只有抛异常才按大小估算
+    return { converted: false, path: src, duration };
+  }
+  await convertToNTSilkTct(src, tmp);                 // ffmpeg addon：任意音频 → SILK
+  return { converted: true, path: tmp, duration: await getDuration(src) };  // 时长仍取源文件
+}</code></pre>
+
+<p>最终 ptt 元素里几个固定值：<code>formatType:1</code>、<code>voiceType:1</code>、<code>voiceChangeType:0</code>，以及一个<b>写死的 15 个波形值</b> —— 客户端上那条小波形不是真实音频振幅。</p>
+
+<h2><span class="num">03</span>三条硬规则</h2>
+
+<h3>1. 给协议端「普通音频」，不要给 SILK</h3>
+<p>这是本次最有价值的发现。SILK 走的是 <code>isSilk</code> 直通分支，而 ffmpeg 无法解析 SILK 容器，<code>getDuration</code> 返回 0 且不抛异常，于是估算兜底也不会触发 —— 结果就是 0 秒语音。转换分支反而会拿源文件（MP3）去测时长，准确。</p>
+
+<h3>2. 路径必须是协议端能看到的路径</h3>
+<p>NapCat 跑在容器里，宿主机的 <code>E:\...</code> 对它不存在。图片模块早就踩过这个坑，语音完全同理：用 <code>base64://</code>，或者公网 URL。本项目已有约定，见 <code>OutboundImage</code> 的注释。</p>
+
+<h3>3. 语音是「一条消息」，不要和文本/图片拼在同一个数组里</h3>
+<p>技术上能拼，但客户端呈现会变得不可预期。语音应当独立成条，且不参与现有的分片与合并转发：合并转发卡片里的语音要展开才看得到，等于把语音藏起来。</p>
+
+<h2><span class="num">04</span>接入本项目的设计</h2>
+<p>现有边界不用动：<code>onebot/</code> 是唯一碰协议的地方，<code>OutboundSender</code> 是唯一出口。</p>
+
+<table>
+  <thead><tr><th>位置</th><th>改动</th><th>理由</th></tr></thead>
+  <tbody>
+    <tr><td><code>MessageCodec</code></td><td>新增 <code>voiceMessage(byte[] audio)</code> → <code>[{type:"record",data:{file:"base64://…"}}]</code>。已有的 <code>TYPE_VOICE</code> 常量目前没人用，正好落地。</td><td>段格式只允许出现在这里</td></tr>
+    <tr><td><code>OutboundSender</code></td><td>新增 <code>sendVoice(OneBotEvent, byte[])</code> / <code>sendVoiceToGroup(long, byte[])</code>：占发车位、单条发、记日志。不切片、不合并。</td><td>所有发送必须过同一条路，语音不能开侧门</td></tr>
+    <tr><td><code>MediaPolicy</code></td><td>加 <code>outbound.voice.enabled</code> 与 <code>max-kb</code>（建议 1024）。</td><td>与图片同构，出站闸门集中在媒体层</td></tr>
+    <tr><td><code>media/VoiceLibrary</code></td><td>预置语音包：key → 音频字节，接口照抄 <code>ImageLibrary</code>。</td><td>先跑通「找音频 → 发语音」，TTS 以后接同一个出口</td></tr>
+    <tr><td>回复标记</td><td>可选 <code>[[voice:key]]</code>，与 <code>[[img:...]]</code> 同构。</td><td>让模型能主动指定一条语音</td></tr>
+  </tbody>
+</table>
+
+<pre><code>// MessageCodec 里新增（草案）
+public JsonNode voiceMessage(byte[] audio) {
+    ArrayNode array = mapper.createArrayNode();
+    array.add(segment(TYPE_VOICE, Map.of(
+        "file", "base64://" + Base64.getEncoder().encodeToString(audio))));
+    return array;
+}
+
+// OutboundSender 里新增（草案）
+public void sendVoiceToGroup(long groupId, byte[] audio) {
+    sleepQuietly(pacer.reserve(true, groupId));
+    long id = apiClient.sendGroupMsg(groupId, codec.voiceMessage(audio));
+    log.info("[OUT] 已发送语音到群 {}，message_id={}（{} KB）", groupId, id, audio.length / 1024);
+}</code></pre>
+
+<p class="note">注意返回的 <code>message_id</code> 与文本一致；QQ 侧没有「时长」回执，想要时长只能自己用 ffprobe 算，或者接受 NapCat 日志里的数值。</p>
+
+<h2><span class="num">05</span>素材与复现</h2>
+<p>本机现在有一组可以直接用的测试音频，都在 <code>server/data/tmp-voice/</code>：</p>
+<div class="kv">
+  <div><b>voice-test.wav</b>301KB，6.8s，SAPI 合成中文</div>
+  <div><b>voice-test.mp3</b>27KB，24kHz 单声道，实测成功的那条</div>
+  <div><b>voice-test.silk</b>23KB，NapCat 转出来的成品，用于对比 0 秒问题</div>
+  <div><b>voice-long.mp3</b>45s / <b>voice-70s.mp3</b>89.7s，边界测试</div>
+</div>
+
+<p>复现脚本：<code>scripts/voice-send.ps1</code>。它只做一件事 —— 把任意音频文件用 <code>record</code> 段发出去，方便你拿网上下载的语音片段直接试。</p>
+<pre><code># 发到群
+./scripts/voice-send.ps1 -Group 1046213033 -File .\some\clip.mp3
+
+# 发到私聊
+./scripts/voice-send.ps1 -User 10001 -File .\some\clip.wav</code></pre>
+
+<h2><span class="num">06</span>素材从哪来</h2>
+<p>本来打算从网上抓几段现成语音，但这台机器的出网被 DNS 劫持到 <code>198.18.x.x</code>（Clash fake-ip），TLS 握手直接失败，<code>web_fetch</code> 也判定为非公网地址。所以这次改用 Windows 自带 SAPI 离线合成，效果上完全够验证链路。</p>
+<p>网络恢复后，可下载的公开音频来源：</p>
+<ul>
+  <li>Wikimedia Commons 的语音样本，CC 授权，直接给 <code>upload.wikimedia.org</code> 的直链；</li>
+  <li>LibriVox 公共领域有声书片段，做长语音测试很合适；</li>
+  <li>各语言发音库（如 Forvo 的公开条目）—— 注意逐条核对授权。</li>
+</ul>
+<p class="note">商用语音包、影视片段、他人语音条不要进仓库，也不要发到群里：语音是可直接传播的内容，版权与隐私风险比文字高。</p>
+
+<h2><span class="num">07</span>还没验证的</h2>
+<ul>
+  <li>私聊语音：链路应当一致，但没有实测；</li>
+  <li>群语音的额外风控：短时间内连发多条语音会不会被限流，目前只在开发群试了 4 条；</li>
+  <li>超过 89 秒的行为、以及客户端播放长语音的体验；</li>
+  <li>入站语音：收到的 <code>record</code> 段带 <code>url</code>/<code>path</code>/<code>file_size</code>，将来做转写时要走 <code>url</code> 下载，容器内路径不可用。</li>
+</ul>
+
+<h2><span class="num">08</span>建议的下一步</h2>
+<ol>
+  <li><b>先落最小能力</b>：<code>MessageCodec.voiceMessage</code> + <code>OutboundSender.sendVoice</code> + 一个管理端「试听/试发」按钮，验证真实链路。</li>
+  <li><b>再做素材层</b>：<code>VoiceLibrary</code> 收一批预置语音，用 <code>[[voice:key]]</code> 触发，不接任何模型。</li>
+  <li><b>最后才接 TTS</b>：TTS 只是「产出一段 MP3」，出口复用第 1 步，不需要再碰协议。</li>
+</ol>
+
+<div class="hr"></div>
+<p class="evidence">证据来源：NapCat 4.18.28 容器内 <code>napcat.mjs</code>（<code>createValidSendPttElement</code> / <code>pye</code> / <code>handleOb11FileLikeMessage</code>）；<code>docker logs napcat</code>；<code>get_msg</code> 返回的 <code>record</code> 段；本机实测消息 908573181、1594269379、8835045、1729339701。</p>
+
+</div>
+</body>
+</html>
