@@ -15,8 +15,12 @@ class DistillBatchPlannerTest {
         return new ChatRepository.MessageRef(id, ts, chars, 0);
     }
 
+    private static ChatRepository.MessageRef ref(long id, String ts, int chars, int images) {
+        return new ChatRepository.MessageRef(id, ts, chars, images);
+    }
+
     private static DistillBatchPlanner.Options opts(String mode, int messages, int chars, int gap, int overlap) {
-        return new DistillBatchPlanner.Options(mode, messages, chars, gap, overlap, 100);
+        return new DistillBatchPlanner.Options(mode, messages, chars, gap, overlap, 6, 100);
     }
 
     @Test
@@ -113,9 +117,26 @@ class DistillBatchPlannerTest {
                 ref(3, "2026-10-20T12:00:00Z", 10));
 
         assertThatThrownBy(() -> DistillBatchPlanner.plan(messages,
-                new DistillBatchPlanner.Options("count", 1, 10000, 30, 0, 1)))
+                new DistillBatchPlanner.Options("count", 1, 10000, 30, 0, 6, 1)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("分批太多");
+    }
+
+    @Test
+    @DisplayName("图片超过单批上限时继续拆批，不能把第 7 张图丢掉")
+    void splitsOnImageCap() {
+        var messages = List.of(
+                ref(1, "2026-10-20T10:00:00Z", 10, 2),
+                ref(2, "2026-10-20T10:01:00Z", 10, 2),
+                ref(3, "2026-10-20T10:02:00Z", 10, 3),
+                ref(4, "2026-10-20T10:03:00Z", 10, 1),
+                ref(5, "2026-10-20T10:04:00Z", 10, 0));
+
+        var plan = DistillBatchPlanner.plan(messages, opts("count", 100, 10000, 30, 0));
+
+        assertThat(plan.batches()).hasSize(2);
+        assertThat(plan.batches()).extracting(DistillBatchPlanner.Batch::messageCount)
+                .containsExactly(2, 3);
     }
 
     @Test

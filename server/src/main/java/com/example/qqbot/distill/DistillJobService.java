@@ -65,7 +65,8 @@ public class DistillJobService {
         }
         DistillBatchPlanner.Plan plan = DistillBatchPlanner.plan(messages,
                 new DistillBatchPlanner.Options(n.mode, n.maxMessages, n.maxChars,
-                        n.maxGap, n.overlap, props.getMaxBatchesPerJob()));
+                        n.maxGap, n.overlap, props.getMaxImagesPerBatch(),
+                        props.getMaxBatchesPerJob()));
         List<BatchView> views = new ArrayList<>();
         for (DistillBatchPlanner.Batch b : plan.batches()) {
             views.add(new BatchView(b.seq(), b.messageFrom(), b.messageTo(),
@@ -129,7 +130,7 @@ public class DistillJobService {
 
     private record Normalized(String source, List<Long> groups, String from, String to,
                               long importId, String mode, int batchSize, int maxMessages,
-                              int maxChars, int overlap, int maxGap) {
+                              int maxChars, int maxImages, int overlap, int maxGap) {
     }
 
     private Normalized normalize(JobRequest r) {
@@ -155,11 +156,12 @@ public class DistillJobService {
         int maxChars = "chars".equals(mode) ? Math.max(200, batchSize) : props.getBatchMaxChars();
         int maxMessages = "chars".equals(mode)
                 ? props.getBatchMaxMessages() : Math.max(1, batchSize);
+        int maxImages = Math.max(1, props.getMaxImagesPerBatch());
         int overlap = r.overlap() == null ? props.getBatchOverlap() : Math.max(0, r.overlap());
         int maxGap = r.maxGapMinutes() == null
                 ? props.getBatchMaxGapMinutes() : Math.max(0, r.maxGapMinutes());
         return new Normalized(source, groups, from, to, r.importId(), mode,
-                Math.max(1, batchSize), maxMessages, maxChars, overlap, maxGap);
+                Math.max(1, batchSize), maxMessages, maxChars, maxImages, overlap, maxGap);
     }
 
     private static String normalizeFrom(String raw) {

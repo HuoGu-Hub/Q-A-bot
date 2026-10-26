@@ -19,7 +19,7 @@ public final class DistillBatchPlanner {
     public static final int IMAGE_CHARS = 30;
 
     public record Options(String mode, int maxMessages, int maxChars,
-                          int maxGapMinutes, int overlap, int maxBatches) {
+                          int maxGapMinutes, int overlap, int maxImages, int maxBatches) {
     }
 
     public record Batch(int seq, long messageFrom, long messageTo,
@@ -51,12 +51,18 @@ public final class DistillBatchPlanner {
             int start = i;
             int end = i;
             int chars = 0;
+            int images = 0;
             Instant prev = null;
             while (end < n) {
                 ChatRepository.MessageRef m = messages.get(end);
                 Instant t = ChatTime.parse(m.ts());
                 if (end > start) {
                     if (gapTooLarge(prev, t, o.maxGapMinutes())) {
+                        break;
+                    }
+                    // 图片也要计入批次硬上限：100 条消息里超过 6 张图时继续拆批，
+                    // 让第 7 张之后的图片进入下一批，而不是被 Worker 直接丢掉
+                    if (m.imageCount() > 0 && images + m.imageCount() > o.maxImages()) {
                         break;
                     }
                     if ("day".equals(o.mode()) && !sameDay(prev, t)) {
@@ -70,6 +76,7 @@ public final class DistillBatchPlanner {
                     }
                 }
                 chars += charsOf(m);
+                images += Math.max(0, m.imageCount());
                 prev = t;
                 end++;
             }
@@ -120,7 +127,8 @@ public final class DistillBatchPlanner {
         int maxChars = Math.max(200, o.maxChars());
         int maxGap = Math.max(0, o.maxGapMinutes());
         int overlap = Math.max(0, Math.min(o.overlap(), maxMessages - 1));
+        int maxImages = Math.max(1, o.maxImages());
         int maxBatches = Math.max(1, o.maxBatches());
-        return new Options(mode, maxMessages, maxChars, maxGap, overlap, maxBatches);
+        return new Options(mode, maxMessages, maxChars, maxGap, overlap, maxImages, maxBatches);
     }
 }
