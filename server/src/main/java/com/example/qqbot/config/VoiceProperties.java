@@ -45,6 +45,9 @@ public class VoiceProperties implements VoicePolicy {
     /** 单次转码超时（秒） */
     private int timeoutSeconds = 60;
 
+    /** 素材库目录：上传的音频与 TTS 缓存都落在这里，必须可写 */
+    private String dir = "./data/voices";
+
     @Override
     public boolean isEnabled() {
         return enabled;
@@ -97,5 +100,14 @@ public class VoiceProperties implements VoicePolicy {
 
     public void setTimeoutSeconds(int timeoutSeconds) {
         this.timeoutSeconds = timeoutSeconds;
+    }
+
+    @Override
+    public String getVoicesDir() {
+        return dir;
+    }
+
+    public void setDir(String dir) {
+        this.dir = dir;
     }
 }

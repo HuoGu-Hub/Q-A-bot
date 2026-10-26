@@ -38,4 +38,13 @@ public interface VoicePolicy {
 
     /** 单次转码的超时（秒）。超时直接杀掉进程，不让一个坏文件卡住发送线程 */
     int getTimeoutSeconds();
+
+    /**
+     * 素材库目录。上传的音频、以及将来 TTS 的缓存都落在这里。
+     *
+     * <p>给默认值是刻意的：测试里的假策略不用为它多写一行。
+     */
+    default String getVoicesDir() {
+        return "./data/voices";
+    }
 }

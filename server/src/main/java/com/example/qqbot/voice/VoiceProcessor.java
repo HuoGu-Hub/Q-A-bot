@@ -98,7 +98,7 @@ public class VoiceProcessor {
             if (bytes.length == 0) {
                 throw new VoiceException("ffmpeg 产出的文件是空的：" + tail(stderr));
             }
-            double seconds = probeSeconds(output);
+            double seconds = probe(output);
             log.info("[VOICE] 加工完成：{} 字节 → {} 字节，{} 秒，参数 {}", source.length, bytes.length,
                     String.format(Locale.ROOT, "%.1f", seconds), opts);
             return new Encoded(bytes, seconds);
@@ -173,7 +173,7 @@ public class VoiceProcessor {
     }
 
     /** 用 ffprobe 量时长。量不到就当 0：这只影响日志，不该把一条语音判死 */
-    private double probeSeconds(Path file) {
+    public double probe(Path file) {
         List<String> cmd = List.of(policy.getFfprobe(), "-v", "error",
                 "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file.toString());
         try {
