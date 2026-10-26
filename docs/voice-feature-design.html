@@ -66,7 +66,7 @@
 <div class="card tldr">
   <p><b>一句话结论：</b>语音回复走三条入口 —— 关键词命中直接发素材、大模型判断后调工具发素材、TTS 现场合成。三条都收敛到已有的 <code>VoiceSender</code>，发送只有一条出口。</p>
   <p><b>TTS 的定位：</b>edge-tts 只当「随时能用的免费兜底」，不当主引擎。要稳定就换 Azure 或国内云；要离线就在宿主侧跑小模型。</p>
-  <p><b>工具的关键设计：</b>工具不直接发，只把「要发哪一段」放进本次请求的待发队列；回答文本先发，语音后发。</p>
+  <p><b>工具的关键设计：</b>工具不直接发，只把「要发哪一段」放进本次请求的待发队列；文字与语音谁先谁后随机，避免每条都一样。</p>
 </div>
 
 <h2><span class="num">01</span>TTS 选型：还有哪些路</h2>
@@ -110,29 +110,29 @@
 
 <p>三条入口的优先级是固定的：</p>
 <ol>
-  <li><b>关键词直发</b>：零模型成本、零延迟，命中就发，不再问模型。</li>
-  <li><b>大模型调工具</b>：没命中关键词时正常回答，模型自己判断要不要放一段。</li>
-  <li><b>TTS 合成</b>：工具或指令里要求「说这句话」时现场生成。</li>
+  <li><b>关键词</b>只决定「这条回复必须是语音」，不决定说什么。命中后照样问模型，只是给它加一条硬约束。</li>
+  <li><b>大模型</b>自己挑内容来源：从素材库里放一段现成的，还是让 TTS 现场说一句。</li>
+  <li><b>TTS</b> 是内容来源之一，也是模型不合作时的兜底。</li>
 </ol>
 
-<h2><span class="num">03</span>关键词触发</h2>
+<h2><span class="num">03</span>关键词：只决定「要不要语音」</h2>
 
-<p>放数据库，不放 Yaml —— 你要能随时加一条「唱首歌」而不用重启。</p>
+<p>这是和你确认过的语义：<b>关键词不绑定内容</b>。命中之后，回什么、用素材还是用 TTS，全部交给模型。一个关键词因此可以对应任意多种回答。</p>
 
 <pre><code>voice_trigger(
-  id, keyword, match_type, asset_id, priority,
-  cooldown_seconds, group_scope, enabled, created_at
+  id, keyword, match_type, priority,
+  cooldown_seconds, group_scope, enabled, note, created_at
 )</code></pre>
 
 <div class="kv">
   <div><b>匹配</b>全角转半角、去空白后做包含匹配；同一句命中多条时取关键词最长的那条</div>
-  <div><b>冷却</b>按「群 + 规则」计，默认 120 秒，防止有人刷「唱首歌」</div>
+  <div><b>命中后</b>给这次请求打一个 <code>voice-required</code> 标记，正常进模型，不做直发</div>
+  <div><b>冷却</b>按「群 + 规则」计，默认 120 秒，防止刷「唱首歌」</div>
   <div><b>作用域</b>空 = 所有群；填群号 = 只在指定群生效</div>
-  <div><b>命中但素材被删</b>记日志并放行给大模型，不报错</div>
   <div><b>额度</b>复用现有的每人每分钟限流，不另开一套</div>
 </div>
 
-<p>默认给三条示例：<code>唱首歌 / 唱歌 / 来一首</code> 指向歌曲素材，<code>喵 / 叫一声</code> 指向猫叫，<code>晚安</code> 指向晚安语音。全部可以在后台改。</p>
+<p>默认三条：<code>唱首歌 / 唱歌 / 来一首</code>、<code>喵 / 叫一声</code>、<code>晚安</code>。它们只负责「触发语音」，素材和台词由模型临场决定。</p>
 
 <h2><span class="num">04</span>素材库与上传</h2>
 
@@ -156,24 +156,32 @@
 
 <h2><span class="num">05</span>给大模型的工具</h2>
 
-<p>工具只做两件事：把「哪段素材」查出来，把「发到哪」记下来。<b>它不直接发送</b>，原因见下面「顺序」。</p>
+<p>给模型两个工具，让它自己选内容来源：</p>
 
-<pre><code>@Tool("把语音素材库里的音频发到当前聊天。query 可以是曲名、标签或描述。")
-String playVoice(@P("曲名或描述") String query);</code></pre>
+<pre><code>@Tool("从语音素材库挑一段现成的发到当前聊天。query 可以是曲名、标签或描述。")
+String playVoice(@P("曲名或描述") String query);
+
+@Tool("让机器人现场说一句话。适合没有现成素材时。文字不超过 80 字。")
+String say(@P("要说的话") String text);</code></pre>
+
+<p>两者都<b>不直接发送</b>，只把「要发什么」记下来，原因见下面「顺序」。</p>
+
+<h3>模型不合作怎么办</h3>
+<p>命中关键词但模型没调任何语音工具时，兜底是：把这次回答的文字截到 80 字，用 TTS 说一遍。语音回复是用户明确要的，不能因为模型忘了就静默降级成纯文字。文字本身仍然正常发出。</p>
 
 <h3>目标从哪来</h3>
 <p>不解析 <code>caller</code> 字符串。调用助手时把三个参数放进 <code>InvocationParameters</code>：<code>tool.group_id</code>、<code>tool.user_id</code>、<code>tool.message_type</code>。工具从 <code>InvocationContext</code> 里读，取不到就拒绝发送。</p>
 
 <h3>为什么不在工具里直接发</h3>
-<p>工具在模型生成过程中执行，直接发会让语音<b>先于</b>文字出现，看起来像机器人抢话。正确做法是把意图放进本次请求的待发队列，等回答文本发完再发语音：</p>
+<p>工具在模型生成过程中执行，直接发会把顺序钉死。正确做法是把意图放进本次请求的待发队列，等回答文本生成完，再按一次随机结果决定谁先谁后：</p>
 
 <pre><code>ChatService 造一个 MediaOutbox，塞进 InvocationParameters
-  → 工具查素材，outbox.add(voiceIntent)，返回"已安排，回答后发出"
+  → 工具查素材或合成，outbox.add(voiceIntent)，返回"已安排"
   → 模型正常生成文字
-  → 路由发送文字
-  → 路由按 outbox 顺序发送语音</code></pre>
+  → 路由掷一次硬币：文字先，或语音先
+  → 按这个顺序把两样都发出去</code></pre>
 
-<p>这条设计还带来两个好处：一条回复最多一段语音，天然限流；发送失败只影响语音，不影响文字。</p>
+<p>随机顺序是为了别每条都像模板：有时先甩一句语音再接文字，有时反过来。代价很小，观感差别很大。</p>
 
 <h3>授权与预算</h3>
 <ul>
@@ -208,7 +216,7 @@ String playVoice(@P("曲名或描述") String query);</code></pre>
   <b>P1 · 素材库</b> 表、上传接口、后台页面、试听与试发。做完你就能把歌曲传进去、手动发一条。<span class="note">约 1 天</span>
 </div>
 <div class="phase">
-  <b>P2 · 关键词直发</b> 触发规则表、匹配与冷却、接入路由。做完喊「唱首歌」就会收到素材。<span class="note">约半天</span>
+  <b>P2 · 关键词标记</b> 触发规则表、匹配与冷却、把 voice-required 标记交给模型。做完喊「唱首歌」模型就知道必须用语音回。<span class="note">约半天</span>
 </div>
 <div class="phase">
   <b>P3 · TTS</b> <code>SpeechSynthesizer</code> 接口 + edge-tts 实现 + 磁盘缓存 + 降级到文字。<span class="note">约 1 天</span>
@@ -230,13 +238,16 @@ String playVoice(@P("曲名或描述") String query);</code></pre>
   <li><b>工具滥用</b>：只允许当前会话、只读素材库、不接受路径，三条缺一不可。</li>
 </ul>
 
-<h2><span class="num">09</span>要你拍板的三件事</h2>
+<h2><span class="num">09</span>已定与待定</h2>
 
-<ol>
-  <li><b>TTS 主选</b>：edge-tts 够用就先免费跑，还是要我同时把 Azure 的 provider 留好口子？</li>
-  <li><b>触发词范围</b>：默认三条我还想加「放首歌」和「讲个笑话」，你希望关键词跟素材是多对一还是多对多？</li>
-  <li><b>工具发送时机</b>：回答后发语音，还是允许模型选择「先语音后文字」？前者体验更稳，后者更像真人插话。</li>
-</ol>
+<div class="kv">
+  <div><b>已定</b>TTS 用免费 edge-tts</div>
+  <div><b>已定</b>关键词一对多，只触发语音，不绑定内容</div>
+  <div><b>已定</b>内容来源交给模型：素材库或 TTS</div>
+  <div><b>已定</b>文字与语音的先后随机</div>
+</div>
+
+<p class="note">剩下两个细节可以边做边定：关键词冷却默认 120 秒够不够；TTS 兜底是否要把回答截到 80 字。</p>
 
 <div class="hr"></div>
 <p class="note">流程图为 archify 生成的可交互页面：<a href="diagrams/voice-reply-flow.html">voice-reply-flow.html</a>。TTS 选型依据公开资料与实测：本机 edge-tts 单句 1.7 ~ 2.0 秒，输出 27 ~ 31KB mp3。</p>
