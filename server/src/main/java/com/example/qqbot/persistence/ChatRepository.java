@@ -178,35 +178,36 @@ public class ChatRepository {
 
     /** 游标之后还有多少条待蒸馏消息 */
     public long countAfter(long afterId, List<Long> groupIds) {
-        if (groupIds == null || groupIds.isEmpty()) {
-            return 0;
-        }
         StringBuilder sql = new StringBuilder(
-                "SELECT COUNT(*) FROM chat_message WHERE id > ? AND group_id IN (");
+                "SELECT COUNT(*) FROM chat_message WHERE id > ?");
         List<Object> args = new ArrayList<>();
         args.add(afterId);
-        for (int i = 0; i < groupIds.size(); i++) {
-            sql.append(i == 0 ? "?" : ",?");
-            args.add(groupIds.get(i));
+        if (groupIds != null && !groupIds.isEmpty()) {
+            sql.append(" AND group_id IN (");
+            for (int i = 0; i < groupIds.size(); i++) {
+                sql.append(i == 0 ? "?" : ",?");
+                args.add(groupIds.get(i));
+            }
+            sql.append(')');
         }
-        sql.append(')');
         return jdbc.count(sql.toString(), args.toArray());
     }
 
     /** 自动蒸馏用：按 id 顺序取游标之后、指定群的新消息 */
     public List<Message> messagesAfter(long afterId, List<Long> groupIds, int limit) {
-        if (groupIds == null || groupIds.isEmpty()) {
-            return List.of();
-        }
         StringBuilder sql = new StringBuilder("SELECT " + MESSAGE_COLUMNS
-                + " FROM chat_message WHERE id > ? AND group_id IN (");
+                + " FROM chat_message WHERE id > ?");
         List<Object> args = new ArrayList<>();
         args.add(afterId);
-        for (int i = 0; i < groupIds.size(); i++) {
-            sql.append(i == 0 ? "?" : ",?");
-            args.add(groupIds.get(i));
+        if (groupIds != null && !groupIds.isEmpty()) {
+            sql.append(" AND group_id IN (");
+            for (int i = 0; i < groupIds.size(); i++) {
+                sql.append(i == 0 ? "?" : ",?");
+                args.add(groupIds.get(i));
+            }
+            sql.append(')');
         }
-        sql.append(") ORDER BY id LIMIT ?");
+        sql.append(" ORDER BY id LIMIT ?");
         args.add(Math.min(Math.max(1, limit), 2000));
         return jdbc.query(sql.toString(), MESSAGE, args.toArray());
     }

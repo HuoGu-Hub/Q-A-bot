@@ -58,7 +58,7 @@ class DistillAutoServiceTest {
 
         // 先开启，避免开启动作把游标推到最新；再导入消息
         auto.save(new DistillSettingRepository.Settings(true, 5, 0, 5, 10000, 0, 30,
-                false, 0.75, "", "", "209127588", 0, ""));
+                false, 0.75, "", "", "209127588", false, 0, ""));
     }
 
     @AfterEach
@@ -100,7 +100,7 @@ class DistillAutoServiceTest {
     @DisplayName("累计到 3 张图自动触发，截断在凑够图片的那条消息")
     void triggersAtImageThreshold() {
         auto.save(new DistillSettingRepository.Settings(true, 500, 3, 500, 10000, 0, 30,
-                false, 0.75, "", "", "209127588", 0, ""));
+                false, 0.75, "", "", "209127588", false, 0, ""));
         String content = String.join("\n",
                 "{\"ts\":\"2026-10-20 21:00:00\",\"group\":209127588,\"sender\":\"甲\",\"text\":\"一\"}",
                 "{\"ts\":\"2026-10-20 21:01:00\",\"group\":209127588,\"sender\":\"乙\",\"text\":\"二\"}",

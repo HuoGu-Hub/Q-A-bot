@@ -20,7 +20,7 @@ public class DistillSettingRepository {
                            int batchMessages, int batchChars, int overlap, int maxGapMinutes,
                            boolean autoPublish, double minConfidence, String focus,
                            String modelProvider, String captureGroups,
-                           long lastMessageId, String updatedAt) {
+                           boolean captureAllGroups, long lastMessageId, String updatedAt) {
     }
 
     private static final Jdbc.RowMapper<Settings> MAPPER = r -> new Settings(
@@ -30,6 +30,7 @@ public class DistillSettingRepository {
             r.intOf("overlap"), r.intOf("max_gap_minutes"),
             r.intOf("auto_publish") != 0, r.dbl("min_confidence"), r.str("focus"),
             r.str("model_provider"), r.str("capture_groups"),
+            r.intOf("capture_all_groups") != 0,
             r.longOf("last_message_id"), r.str("updated_at"));
 
     private final Jdbc jdbc;
@@ -55,6 +56,7 @@ public class DistillSettingRepository {
                 + " focus            TEXT NOT NULL DEFAULT '',"
                 + " model_provider   TEXT NOT NULL DEFAULT '',"
                 + " capture_groups   TEXT NOT NULL DEFAULT '',"
+                + " capture_all_groups INTEGER NOT NULL DEFAULT 1,"
                 + " last_message_id  INTEGER NOT NULL DEFAULT 0,"
                 + " updated_at       TEXT NOT NULL)");
         // 旧库补列：表已经存在时 CREATE IF NOT EXISTS 不会加字段
@@ -77,11 +79,16 @@ public class DistillSettingRepository {
                     normalizeGroups(String.join(",", policy.getCaptureGroups().stream()
                             .map(String::valueOf).toList())));
         }
+        boolean hasAll = jdbc.query("PRAGMA table_info(distill_setting)",
+                r -> r.str("name")).contains("capture_all_groups");
+        if (!hasAll) {
+            jdbc.execute("ALTER TABLE distill_setting ADD COLUMN capture_all_groups INTEGER NOT NULL DEFAULT 1");
+        }
         jdbc.update("INSERT OR IGNORE INTO distill_setting"
                         + " (id, auto_enabled, trigger_messages, trigger_images, batch_messages,"
                         + " batch_chars, overlap, max_gap_minutes, auto_publish, min_confidence,"
-                        + " capture_groups, last_message_id, updated_at)"
-                        + " VALUES (1, 0, 100, 6, ?, ?, ?, ?, ?, ?, ?,"
+                        + " capture_groups, capture_all_groups, last_message_id, updated_at)"
+                        + " VALUES (1, 0, 100, 6, ?, ?, ?, ?, ?, ?, ?, 1,"
                         + " COALESCE((SELECT MAX(id) FROM chat_message),0), ?)",
                 policy.getBatchMaxMessages(), policy.getBatchMaxChars(), policy.getBatchOverlap(),
                 policy.getBatchMaxGapMinutes(), policy.isAutoPublish() ? 1 : 0,
@@ -108,17 +115,22 @@ public class DistillSettingRepository {
         jdbc.update("UPDATE distill_setting SET auto_enabled=?, trigger_messages=?, trigger_images=?,"
                         + " batch_messages=?, batch_chars=?, overlap=?, max_gap_minutes=?,"
                         + " auto_publish=?, min_confidence=?, focus=?, model_provider=?,"
-                        + " capture_groups=?, updated_at=? WHERE id=1",
+                        + " capture_groups=?, capture_all_groups=?, updated_at=? WHERE id=1",
                 s.autoEnabled() ? 1 : 0, s.triggerMessages(), s.triggerImages(),
                 s.batchMessages(), s.batchChars(), s.overlap(), s.maxGapMinutes(),
                 s.autoPublish() ? 1 : 0, s.minConfidence(), s.focus() == null ? "" : s.focus(),
                 s.modelProvider() == null ? "" : s.modelProvider(),
-                s.captureGroups() == null ? "" : s.captureGroups(), Instant.now().toString());
+                s.captureGroups() == null ? "" : s.captureGroups(),
+                s.captureAllGroups() ? 1 : 0, Instant.now().toString());
         return getOrCreate();
     }
 
     public List<Long> captureGroups() {
         return parseGroups(getOrCreate().captureGroups());
+    }
+
+    public boolean captureAllGroups() {
+        return getOrCreate().captureAllGroups();
     }
 
     public static List<Long> parseGroups(String raw) {

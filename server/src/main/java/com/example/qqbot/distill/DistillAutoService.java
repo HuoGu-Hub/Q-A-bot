@@ -77,6 +77,7 @@ public class DistillAutoService {
                 focus,
                 provider,
                 captureGroups,
+                raw.captureAllGroups(),
                 old.lastMessageId(),
                 old.updatedAt());
         DistillSettingRepository.Settings saved = settingsRepo.save(clean);
@@ -105,8 +106,10 @@ public class DistillAutoService {
         if (!force && !s.autoEnabled()) {
             return 0;
         }
-        List<Long> groups = DistillSettingRepository.parseGroups(s.captureGroups());
-        if (groups.isEmpty()) {
+        // 全部群模式用空列表表示“不按群过滤”
+        List<Long> groups = s.captureAllGroups()
+                ? List.of() : DistillSettingRepository.parseGroups(s.captureGroups());
+        if (!s.captureAllGroups() && groups.isEmpty()) {
             if (force) {
                 throw new IllegalStateException("没有配置采集群，无法蒸馏");
             }

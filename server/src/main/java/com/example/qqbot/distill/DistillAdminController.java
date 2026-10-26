@@ -261,6 +261,7 @@ public class DistillAdminController {
                     str(body.get("focus")) == null ? "" : str(body.get("focus")),
                     str(body.get("modelProvider")) == null ? "" : str(body.get("modelProvider")),
                     str(body.get("captureGroups")) == null ? "" : str(body.get("captureGroups")),
+                    bool(body.get("captureAllGroups")),
                     old.lastMessageId(), old.updatedAt());
             return ResponseEntity.ok(Map.of("ok", true, "settings", auto.save(next)));
         } catch (IllegalArgumentException e) {

@@ -47,7 +47,7 @@ public class ChatCaptureService {
     }
 
     /** 采集状态，管理页只读 */
-    public record Status(boolean enabled, List<Long> groups, int queueSize,
+    public record Status(boolean enabled, boolean allGroups, List<Long> groups, int queueSize,
                          long recorded, long dropped, long imageSaved) {
     }
 
@@ -94,8 +94,8 @@ public class ChatCaptureService {
         worker = new Thread(this::loop, "chat-capture");
         worker.setDaemon(true);
         worker.start();
-        log.info("[DISTILL] 群聊采集已开启：群 {}，队列 {}", currentGroups(),
-                props.getQueueCapacity());
+        log.info("[DISTILL] 群聊采集已开启：{}，队列 {}",
+                allGroups() ? "全部群" : currentGroups(), props.getQueueCapacity());
     }
 
     @PreDestroy
@@ -118,7 +118,7 @@ public class ChatCaptureService {
             if (groupId <= 0) {
                 return;
             }
-            if (!currentGroups().contains(groupId)) {
+            if (!allGroups() && !currentGroups().contains(groupId)) {
                 if (otherGroups.add(groupId)) {
                     log.info("[DISTILL] 群 {} 不在采集范围，已跳过；可在蒸馏页面添加", groupId);
                 }
@@ -155,8 +155,16 @@ public class ChatCaptureService {
     }
 
     public Status status() {
-        return new Status(running, currentGroups(),
+        return new Status(running, allGroups(), currentGroups(),
                 queue == null ? 0 : queue.size(), recorded.get(), dropped.get(), imageSaved.get());
+    }
+
+    private boolean allGroups() {
+        try {
+            return settings.captureAllGroups();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** 采集范围以页面保存的设置为准；数据库暂不可用时退回 yml 初始值 */

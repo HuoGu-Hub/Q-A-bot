@@ -24,6 +24,7 @@ import Notice from '@shared/ui/Notice.vue'
 
 interface CaptureStatus {
   enabled: boolean
+  allGroups: boolean
   groups: number[]
   queueSize: number
   recorded: number
@@ -56,6 +57,7 @@ interface Settings {
   focus: string
   modelProvider: string
   captureGroups: string
+  captureAllGroups: boolean
   lastMessageId: number
   updatedAt: string
 }
@@ -148,7 +150,13 @@ const form = ref({
   focus: '',
   modelProvider: '',
   captureGroups: '',
+  captureAllGroups: true,
 })
+
+const CAPTURE_MODES = [
+  { value: 'all', label: '全部群' },
+  { value: 'list', label: '指定群' },
+]
 
 const PUBLISH_MODES = [
   { value: 'auto', label: '自动发布到知识库' },
@@ -171,10 +179,19 @@ const providerOptions = computed(() => [
   })),
 ])
 
-const groupOptions = computed(() => groups.value.map(g => ({
-  value: String(g),
-  label: '群 ' + g,
-})))
+const captureMode = computed({
+  get: () => (form.value.captureAllGroups ? 'all' : 'list'),
+  set: (v: string) => { form.value.captureAllGroups = v === 'all' },
+})
+
+const groupOptions = computed(() => {
+  const ids = new Set<number>(groups.value)
+  for (const part of form.value.captureGroups.split(/[,，\s]+/)) {
+    const id = Number(part.trim())
+    if (Number.isFinite(id) && id > 0) ids.add(id)
+  }
+  return [...ids].map(g => ({ value: String(g), label: '群 ' + g }))
+})
 
 const publishMode = computed({
   get: () => (form.value.autoPublish ? 'auto' : 'manual'),
@@ -215,6 +232,7 @@ async function loadAll() {
         focus: cfg.settings.focus ?? '',
         modelProvider: cfg.settings.modelProvider ?? '',
         captureGroups: cfg.settings.captureGroups ?? '',
+        captureAllGroups: cfg.settings.captureAllGroups ?? true,
       }
       if (!importGroupId.value) importGroupId.value = String(groups.value[0] ?? '')
     }
@@ -261,6 +279,7 @@ async function saveSettings() {
         focus: r.settings.focus ?? '',
         modelProvider: r.settings.modelProvider ?? '',
         captureGroups: r.settings.captureGroups ?? '',
+        captureAllGroups: r.settings.captureAllGroups ?? true,
       }
     }
     toast(form.value.autoEnabled ? '已保存，达到条件后会自动开始' : '已保存，自动蒸馏已关闭')
@@ -541,11 +560,19 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="采集群" hint="多个用逗号分隔" control-width="1fr">
+      <Field label="采集范围" control-width="180px">
+        <Select
+          v-model="captureMode"
+          :options="CAPTURE_MODES"
+          aria-label="采集范围"
+        />
+      </Field>
+
+      <Field v-if="!form.captureAllGroups" label="指定群" hint="逗号分隔" control-width="1fr">
         <Input
           v-model="form.captureGroups"
           placeholder="例如 209127588, 866095282"
-          aria-label="采集群"
+          aria-label="指定采集群"
         />
       </Field>
 
