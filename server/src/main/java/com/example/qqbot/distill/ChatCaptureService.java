@@ -5,6 +5,7 @@ import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.persistence.ChatRepository;
+import com.example.qqbot.persistence.DistillSettingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -52,6 +53,7 @@ public class ChatCaptureService {
 
     private final DistillPolicy props;
     private final ChatRepository repo;
+    private final DistillSettingRepository settings;
     private final MessageCodec codec;
     private final ImageFetcher images;
     private final ChatImageStore imageStore;
@@ -65,10 +67,12 @@ public class ChatCaptureService {
     /** 只用于一次性提示"这个群没在白名单"，避免每条消息刷屏 */
     private final java.util.Set<Long> otherGroups = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    public ChatCaptureService(DistillPolicy props, ChatRepository repo, MessageCodec codec,
+    public ChatCaptureService(DistillPolicy props, ChatRepository repo,
+                              DistillSettingRepository settings, MessageCodec codec,
                               ImageFetcher images, ChatImageStore imageStore) {
         this.props = props;
         this.repo = repo;
+        this.settings = settings;
         this.codec = codec;
         this.images = images;
         this.imageStore = imageStore;
@@ -76,9 +80,8 @@ public class ChatCaptureService {
 
     @PostConstruct
     void start() {
-        if (!props.isCaptureEnabled() || props.getCaptureGroups() == null
-                || props.getCaptureGroups().isEmpty()) {
-            log.info("[DISTILL] 群聊采集未开启（app.distill.capture-enabled=false 或群白名单为空）");
+        if (!props.isCaptureEnabled()) {
+            log.info("[DISTILL] 群聊采集未开启（app.distill.capture-enabled=false）");
             return;
         }
         if (!repo.isAvailable()) {
@@ -91,7 +94,7 @@ public class ChatCaptureService {
         worker = new Thread(this::loop, "chat-capture");
         worker.setDaemon(true);
         worker.start();
-        log.info("[DISTILL] 群聊采集已开启：群 {}，队列 {}", props.getCaptureGroups(),
+        log.info("[DISTILL] 群聊采集已开启：群 {}，队列 {}", currentGroups(),
                 props.getQueueCapacity());
     }
 
@@ -115,9 +118,9 @@ public class ChatCaptureService {
             if (groupId <= 0) {
                 return;
             }
-            if (!props.getCaptureGroups().contains(groupId)) {
+            if (!currentGroups().contains(groupId)) {
                 if (otherGroups.add(groupId)) {
-                    log.info("[DISTILL] 群 {} 不在 capture-groups，已跳过；要采集请把它加入配置", groupId);
+                    log.info("[DISTILL] 群 {} 不在采集范围，已跳过；可在蒸馏页面添加", groupId);
                 }
                 return;
             }
@@ -152,8 +155,17 @@ public class ChatCaptureService {
     }
 
     public Status status() {
-        return new Status(running, props.getCaptureGroups() == null ? List.of() : props.getCaptureGroups(),
+        return new Status(running, currentGroups(),
                 queue == null ? 0 : queue.size(), recorded.get(), dropped.get(), imageSaved.get());
+    }
+
+    /** 采集范围以页面保存的设置为准；数据库暂不可用时退回 yml 初始值 */
+    private List<Long> currentGroups() {
+        try {
+            return settings.captureGroups();
+        } catch (Exception e) {
+            return props.getCaptureGroups() == null ? List.of() : props.getCaptureGroups();
+        }
     }
 
     private void loop() {

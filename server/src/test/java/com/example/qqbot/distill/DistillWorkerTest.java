@@ -114,7 +114,7 @@ class DistillWorkerTest {
     @DisplayName("开启自动发布后，即使低于旧置信度门槛也直接发布")
     void autoPublishIsBinary() throws Exception {
         settings.save(new DistillSettingRepository.Settings(true, 0, 0, 80, 10000, 0, 30,
-                true, 0.99, "只整理建筑和配方", "", 0, ""));
+                true, 0.99, "只整理建筑和配方", "", "", 0, ""));
         String content = String.join("\n",
                 "{\"ts\":\"2026-10-20 21:00:00\",\"sender\":\"甲\",\"text\":\"灵火祭坛怎么去\"}",
                 "{\"ts\":\"2026-10-20 21:01:00\",\"sender\":\"乙\",\"text\":\"东边，带火把\"}");

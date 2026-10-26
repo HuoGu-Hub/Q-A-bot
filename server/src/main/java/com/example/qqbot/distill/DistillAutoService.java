@@ -63,6 +63,7 @@ public class DistillAutoService {
         if (provider.length() > 64) {
             provider = provider.substring(0, 64);
         }
+        String captureGroups = DistillSettingRepository.normalizeGroups(raw.captureGroups());
         DistillSettingRepository.Settings clean = new DistillSettingRepository.Settings(
                 raw.autoEnabled(),
                 triggerMessages,
@@ -75,6 +76,7 @@ public class DistillAutoService {
                 Math.max(0, Math.min(1, raw.minConfidence())),
                 focus,
                 provider,
+                captureGroups,
                 old.lastMessageId(),
                 old.updatedAt());
         DistillSettingRepository.Settings saved = settingsRepo.save(clean);
@@ -103,8 +105,8 @@ public class DistillAutoService {
         if (!force && !s.autoEnabled()) {
             return 0;
         }
-        List<Long> groups = props.getCaptureGroups();
-        if (groups == null || groups.isEmpty()) {
+        List<Long> groups = DistillSettingRepository.parseGroups(s.captureGroups());
+        if (groups.isEmpty()) {
             if (force) {
                 throw new IllegalStateException("没有配置采集群，无法蒸馏");
             }

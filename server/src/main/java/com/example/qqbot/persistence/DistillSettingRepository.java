@@ -4,6 +4,8 @@ import com.example.qqbot.distill.DistillPolicy;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * 自动蒸馏设置与游标。单行表，id 固定为 1。
@@ -17,7 +19,8 @@ public class DistillSettingRepository {
     public record Settings(boolean autoEnabled, int triggerMessages, int triggerImages,
                            int batchMessages, int batchChars, int overlap, int maxGapMinutes,
                            boolean autoPublish, double minConfidence, String focus,
-                           String modelProvider, long lastMessageId, String updatedAt) {
+                           String modelProvider, String captureGroups,
+                           long lastMessageId, String updatedAt) {
     }
 
     private static final Jdbc.RowMapper<Settings> MAPPER = r -> new Settings(
@@ -26,7 +29,8 @@ public class DistillSettingRepository {
             r.intOf("batch_messages"), r.intOf("batch_chars"),
             r.intOf("overlap"), r.intOf("max_gap_minutes"),
             r.intOf("auto_publish") != 0, r.dbl("min_confidence"), r.str("focus"),
-            r.str("model_provider"), r.longOf("last_message_id"), r.str("updated_at"));
+            r.str("model_provider"), r.str("capture_groups"),
+            r.longOf("last_message_id"), r.str("updated_at"));
 
     private final Jdbc jdbc;
     private final DistillPolicy policy;
@@ -50,6 +54,7 @@ public class DistillSettingRepository {
                 + " min_confidence   REAL NOT NULL DEFAULT 0.75,"
                 + " focus            TEXT NOT NULL DEFAULT '',"
                 + " model_provider   TEXT NOT NULL DEFAULT '',"
+                + " capture_groups   TEXT NOT NULL DEFAULT '',"
                 + " last_message_id  INTEGER NOT NULL DEFAULT 0,"
                 + " updated_at       TEXT NOT NULL)");
         // 旧库补列：表已经存在时 CREATE IF NOT EXISTS 不会加字段
@@ -63,15 +68,27 @@ public class DistillSettingRepository {
         if (!hasProvider) {
             jdbc.execute("ALTER TABLE distill_setting ADD COLUMN model_provider TEXT NOT NULL DEFAULT ''");
         }
+        boolean hasGroups = jdbc.query("PRAGMA table_info(distill_setting)",
+                r -> r.str("name")).contains("capture_groups");
+        if (!hasGroups) {
+            jdbc.execute("ALTER TABLE distill_setting ADD COLUMN capture_groups TEXT NOT NULL DEFAULT ''");
+            // 旧库没有这一列：把 yml 里的白名单迁移成初始值，之后由页面接管
+            jdbc.update("UPDATE distill_setting SET capture_groups = ? WHERE id = 1",
+                    normalizeGroups(String.join(",", policy.getCaptureGroups().stream()
+                            .map(String::valueOf).toList())));
+        }
         jdbc.update("INSERT OR IGNORE INTO distill_setting"
                         + " (id, auto_enabled, trigger_messages, trigger_images, batch_messages,"
                         + " batch_chars, overlap, max_gap_minutes, auto_publish, min_confidence,"
-                        + " last_message_id, updated_at)"
-                        + " VALUES (1, 0, 100, 6, ?, ?, ?, ?, ?, ?,"
+                        + " capture_groups, last_message_id, updated_at)"
+                        + " VALUES (1, 0, 100, 6, ?, ?, ?, ?, ?, ?, ?,"
                         + " COALESCE((SELECT MAX(id) FROM chat_message),0), ?)",
                 policy.getBatchMaxMessages(), policy.getBatchMaxChars(), policy.getBatchOverlap(),
                 policy.getBatchMaxGapMinutes(), policy.isAutoPublish() ? 1 : 0,
-                policy.getMinConfidence(), Instant.now().toString());
+                policy.getMinConfidence(),
+                normalizeGroups(String.join(",", policy.getCaptureGroups().stream()
+                        .map(String::valueOf).toList())),
+                Instant.now().toString());
         // 触发图片数不能超过单批视觉上限，否则多出来的图根本送不进模型
         int maxImages = Math.max(1, policy.getMaxImagesPerBatch());
         jdbc.update("UPDATE distill_setting SET trigger_images = ?"
@@ -91,12 +108,39 @@ public class DistillSettingRepository {
         jdbc.update("UPDATE distill_setting SET auto_enabled=?, trigger_messages=?, trigger_images=?,"
                         + " batch_messages=?, batch_chars=?, overlap=?, max_gap_minutes=?,"
                         + " auto_publish=?, min_confidence=?, focus=?, model_provider=?,"
-                        + " updated_at=? WHERE id=1",
+                        + " capture_groups=?, updated_at=? WHERE id=1",
                 s.autoEnabled() ? 1 : 0, s.triggerMessages(), s.triggerImages(),
                 s.batchMessages(), s.batchChars(), s.overlap(), s.maxGapMinutes(),
                 s.autoPublish() ? 1 : 0, s.minConfidence(), s.focus() == null ? "" : s.focus(),
-                s.modelProvider() == null ? "" : s.modelProvider(), Instant.now().toString());
+                s.modelProvider() == null ? "" : s.modelProvider(),
+                s.captureGroups() == null ? "" : s.captureGroups(), Instant.now().toString());
         return getOrCreate();
+    }
+
+    public List<Long> captureGroups() {
+        return parseGroups(getOrCreate().captureGroups());
+    }
+
+    public static List<Long> parseGroups(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<Long> out = new LinkedHashSet<>();
+        for (String part : raw.split("[,，\\s]+")) {
+            try {
+                long id = Long.parseLong(part.trim());
+                if (id > 0) {
+                    out.add(id);
+                }
+            } catch (NumberFormatException ignored) {
+                // 页面输入里的空段或坏值直接跳过
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    public static String normalizeGroups(String raw) {
+        return parseGroups(raw).stream().map(String::valueOf).reduce((a, b) -> a + "," + b).orElse("");
     }
 
     public void updateCursor(long messageId) {

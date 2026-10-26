@@ -55,6 +55,7 @@ interface Settings {
   minConfidence: number
   focus: string
   modelProvider: string
+  captureGroups: string
   lastMessageId: number
   updatedAt: string
 }
@@ -146,6 +147,7 @@ const form = ref({
   minConfidence: 0.75,
   focus: '',
   modelProvider: '',
+  captureGroups: '',
 })
 
 const PUBLISH_MODES = [
@@ -212,6 +214,7 @@ async function loadAll() {
         minConfidence: cfg.settings.minConfidence,
         focus: cfg.settings.focus ?? '',
         modelProvider: cfg.settings.modelProvider ?? '',
+        captureGroups: cfg.settings.captureGroups ?? '',
       }
       if (!importGroupId.value) importGroupId.value = String(groups.value[0] ?? '')
     }
@@ -257,9 +260,11 @@ async function saveSettings() {
         minConfidence: r.settings.minConfidence,
         focus: r.settings.focus ?? '',
         modelProvider: r.settings.modelProvider ?? '',
+        captureGroups: r.settings.captureGroups ?? '',
       }
     }
     toast(form.value.autoEnabled ? '已保存，达到条件后会自动开始' : '已保存，自动蒸馏已关闭')
+    await loadAll()
   } catch (e) {
     error.value = describeError(e)
   }
@@ -508,7 +513,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="相邻批次重叠" control-width="110px">
+      <Field label="相邻批次重叠" control-width="130px">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -522,7 +527,7 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="对话间隔" control-width="110px">
+      <Field label="对话间隔" control-width="130px">
         <div class="inline">
           <span class="num-box">
             <Input
@@ -536,11 +541,12 @@ defineExpose({
         </div>
       </Field>
 
-      <Field label="采集群" control-width="1fr" :hint="stats?.capture.enabled ? '已开启' : '未开启'">
-        <div class="chips">
-          <Tag v-for="g in groups" :key="g" tone="neutral">{{ g }}</Tag>
-          <span v-if="!groups.length" class="faint">未配置采集群</span>
-        </div>
+      <Field label="采集群" hint="多个用逗号分隔" control-width="1fr">
+        <Input
+          v-model="form.captureGroups"
+          placeholder="例如 209127588, 866095282"
+          aria-label="采集群"
+        />
       </Field>
 
       <Field label="蒸馏模型" control-width="300px">
@@ -858,7 +864,7 @@ defineExpose({
 <style scoped>
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-.inline { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.inline { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: nowrap; }
 .settings-panel :deep(.field) { padding: 6px 0; gap: var(--sp-3); align-items: center; }
 .settings-panel :deep(.field + .field) { border-top: 1px solid var(--hairline); }
 .settings-panel :deep(.field:first-child) { padding-top: 0; }
@@ -926,5 +932,6 @@ defineExpose({
 @media (max-width: 760px) {
   .form-foot { align-items: flex-start; }
   .num-box { width: 100px; }
+  .inline { flex-wrap: wrap; }
 }
 </style>
