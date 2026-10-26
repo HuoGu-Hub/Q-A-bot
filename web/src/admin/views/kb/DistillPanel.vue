@@ -141,7 +141,7 @@ const importGroupId = ref('')
 const form = ref({
   autoEnabled: false,
   triggerMessages: 100,
-  triggerImages: 6,
+  triggerImages: 0,
   batchMessages: 80,
   overlap: 5,
   maxGapMinutes: 30,
@@ -508,7 +508,7 @@ defineExpose({
         <Switch v-model="form.autoEnabled" aria-label="自动蒸馏" />
       </Field>
 
-      <Field label="触发条件">
+      <Field label="触发条件" hint="0 = 只按消息数">
         <div class="inline">
           <span class="faint">每累计</span>
           <span class="num-box">
