@@ -197,9 +197,14 @@ public class DistillAdminController {
     }
 
     @GetMapping("/jobs")
-    public Map<String, Object> jobs(@RequestParam(defaultValue = "50") int limit) {
-        List<DistillJobRepository.Job> rows = jobs.jobs(limit);
-        return Map.of("rows", rows, "count", rows.size());
+    public Map<String, Object> jobs(@RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(defaultValue = "20") int size) {
+        int p = Math.max(1, page);
+        int s = Math.min(Math.max(1, size), 100);
+        List<DistillJobRepository.Job> rows = jobs.jobs(p, s);
+        long total = jobs.countJobs();
+        long pages = Math.max(1, (total + s - 1) / s);
+        return Map.of("rows", rows, "total", total, "page", p, "size", s, "pages", pages);
     }
 
     @GetMapping("/jobs/{id}")

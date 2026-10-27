@@ -149,6 +149,10 @@ const senders = ref<SenderOption[]>([])
 const blockPick = ref('')
 const blockQqInput = ref('')
 const jobs = ref<Job[]>([])
+const jobPage = ref(1)
+const jobPages = ref(1)
+const jobTotal = ref(0)
+const JOB_PAGE_SIZE = 20
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
 /** 多选删除：只在笔记列表里生效，与右侧编辑器互不影响 */
@@ -284,8 +288,26 @@ async function loadNotes() {
 }
 
 async function loadJobs() {
-  const r = await adminApi.get<{ rows: Job[] }>('/distill/jobs?limit=30')
+  const r = await adminApi.get<{ rows: Job[]; total: number; page: number; pages: number }>(
+    '/distill/jobs?page=' + jobPage.value + '&size=' + JOB_PAGE_SIZE)
+  if (r.page > r.pages) {
+    jobPage.value = r.pages
+    return loadJobs()
+  }
   jobs.value = r.rows ?? []
+  jobTotal.value = r.total ?? 0
+  jobPage.value = r.page ?? 1
+  jobPages.value = r.pages ?? 1
+  if (selectedJob.value && !jobs.value.some(j => j.id === selectedJob.value!.job.id)) {
+    selectedJob.value = null
+  }
+}
+
+async function goJobPage(page: number) {
+  const next = Math.min(Math.max(1, page), jobPages.value)
+  if (next === jobPage.value) return
+  jobPage.value = next
+  await loadJobs()
 }
 
 async function loadBlocklist() {
@@ -982,7 +1004,7 @@ defineExpose({
 
     <Panel
       title="运行记录"
-      :count="jobs.length"
+      :count="jobTotal"
       hint="任务与批次"
       collapsible
       :default-open="false"
@@ -1091,6 +1113,12 @@ defineExpose({
         </tbody>
       </DataTable>
 
+      <div class="pager">
+        <span class="faint">共 {{ jobTotal }} 条</span>
+        <Button size="sm" :disabled="jobPage <= 1" @click="goJobPage(jobPage - 1)">上一页</Button>
+        <span class="faint">{{ jobPage }} / {{ jobPages }}</span>
+        <Button size="sm" :disabled="jobPage >= jobPages" @click="goJobPage(jobPage + 1)">下一页</Button>
+      </div>
     </Panel>
 
     <Panel
@@ -1187,6 +1215,8 @@ defineExpose({
 .preview-body { margin: var(--sp-3) 0; white-space: pre-wrap; line-height: 1.75; }
 .preview-hint { margin-top: var(--sp-4); }
 
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2);
+  padding-top: var(--sp-3); flex-wrap: wrap; }
 .row-actions { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 .err { margin-top: 2px; line-height: 1.5; overflow-wrap: anywhere; }
 

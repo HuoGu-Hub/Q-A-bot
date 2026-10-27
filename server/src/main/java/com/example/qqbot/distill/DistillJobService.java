@@ -96,8 +96,10 @@ public class DistillJobService {
         return id;
     }
 
-    public List<DistillJobRepository.Job> jobs(int limit) {
-        return repo.recentJobs(limit);
+    public List<DistillJobRepository.Job> jobs(int page, int size) {
+        int p = Math.max(1, page);
+        int s = Math.min(Math.max(1, size), 100);
+        return repo.recentJobs(s, (p - 1) * s);
     }
 
     public JobDetail detail(long id) {

@@ -146,10 +146,11 @@ public class DistillJobRepository {
         return jdbc.queryOne("SELECT " + JOB_COLUMNS + " FROM distill_job WHERE id = ?", JOB, id);
     }
 
-    public List<Job> recentJobs(int limit) {
+    public List<Job> recentJobs(int limit, int offset) {
         int capped = Math.min(Math.max(1, limit), 200);
+        int skip = Math.max(0, offset);
         return jdbc.query("SELECT " + JOB_COLUMNS
-                + " FROM distill_job ORDER BY id DESC LIMIT ?", JOB, capped);
+                + " FROM distill_job ORDER BY id DESC LIMIT ? OFFSET ?", JOB, capped, skip);
     }
 
     public List<Batch> batchesOf(long jobId) {
