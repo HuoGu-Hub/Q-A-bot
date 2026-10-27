@@ -319,6 +319,18 @@ async function toggleNote(id: number) {
   await selectNote(id)
 }
 
+/** 多选模式下点击笔记：既勾选，也加载右侧只读预览 */
+async function onNoteClick(id: number) {
+  if (selectMode.value) {
+    togglePick(id)
+    if (selected.value?.note.id !== id) {
+      await selectNote(id)
+    }
+    return
+  }
+  await toggleNote(id)
+}
+
 
 async function saveNote(): Promise<boolean> {
   if (!selected.value) return false
@@ -714,7 +726,7 @@ defineExpose({
               type="button"
               class="note-item"
               :class="{ on: selected?.note.id === n.id, picked: selectMode && isPicked(n.id) }"
-              @click="selectMode ? togglePick(n.id) : toggleNote(n.id)"
+              @click="onNoteClick(n.id)"
             >
               <span class="note-line">
                 <span class="note-headline">
@@ -734,8 +746,41 @@ defineExpose({
         </aside>
 
         <section class="notes-editor">
+          <template v-if="selectMode && selected">
+            <div class="editor-head">
+              <span class="faint">#{{ selected.note.id }} · {{ selected.note.model || '未知模型' }} · {{ fmt(selected.note.createdAt) }}</span>
+              <Tag tone="neutral">只读预览</Tag>
+            </div>
+
+            <h3 class="preview-title">{{ selected.note.title }}</h3>
+            <div class="preview-meta">
+              <Tag tone="flame">{{ selected.note.category || '未分类' }}</Tag>
+              <span class="faint">置信度 {{ conf(selected.note.confidence) }}</span>
+              <span v-if="selected.note.aliases" class="faint">别名 {{ selected.note.aliases }}</span>
+            </div>
+            <p class="preview-body">{{ selected.note.body }}</p>
+
+            <details class="source-box">
+              <summary>来源消息 {{ selected.sources.length }} 条</summary>
+              <div v-for="s in selected.sources" :key="s.messageId" class="source">
+                <div class="faint">{{ fmt(s.ts) }} · {{ s.senderName }}</div>
+                <p>{{ s.text }}</p>
+              </div>
+            </details>
+
+            <div v-if="selected.imageIds.length" class="image-box">
+              <div class="source-label">关联图片</div>
+              <div class="images">
+                <img v-for="id in selected.imageIds" :key="id"
+                     :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
+              </div>
+            </div>
+
+            <p class="faint preview-hint">退出多选后可编辑</p>
+          </template>
+
           <Empty
-            v-if="!selected"
+            v-else-if="!selected"
             text="选择一条笔记"
             hint="左侧选择，右侧整理"
           />
@@ -1007,6 +1052,10 @@ defineExpose({
 .notes-editor { min-width: 0; }
 .editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
   padding-bottom: var(--sp-2); margin-bottom: var(--sp-2); border-bottom: 1px solid var(--hairline); }
+.preview-title { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); font-weight: var(--fw-medium); line-height: 1.4; }
+.preview-meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.preview-body { margin: var(--sp-3) 0; white-space: pre-wrap; line-height: 1.75; }
+.preview-hint { margin-top: var(--sp-4); }
 
 .row-actions { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 .err { margin-top: 2px; line-height: 1.5; overflow-wrap: anywhere; }
