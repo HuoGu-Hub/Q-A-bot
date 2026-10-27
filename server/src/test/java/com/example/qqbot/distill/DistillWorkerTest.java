@@ -38,6 +38,7 @@ class DistillWorkerTest {
     private DistillJobRepository jobRepo;
     private DistillNoteRepository noteRepo;
     private DistillSettingRepository settings;
+    private DistillLlm llm;
     private DistillPublisher publisher;
     private DistillWorker worker;
 
@@ -60,7 +61,7 @@ class DistillWorkerTest {
         settings = new DistillSettingRepository(jdbc, props);
         settings.initSchema();
         props.setMaxNotesPerBatch(5);
-        DistillLlm llm = mock(DistillLlm.class);
+        llm = mock(DistillLlm.class);
         when(llm.summarize(anyString(), anyList(), anyString())).thenReturn(new DistillLlm.Result(
                 "{\"notes\":[{\"title\":\"灵火祭坛位置\",\"aliases\":[\"祭坛\"],"
                         + "\"category\":\"大佬攻略\",\"body\":\"先找灵火祭坛，再把火把放上去，"
@@ -108,6 +109,47 @@ class DistillWorkerTest {
         // mock 返回的 sourceMessageIds 是 1，若真实 id 不是 1 会被过滤，这批就没有笔记；
         // 这个测试只断言批次完成，笔记数量在 parser/repo 测试里单独覆盖。
         assertThat(noteRepo.count()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("重复知识会合并进旧笔记，而不是新增一条")
+    void mergesDuplicateIntoExistingNote() throws Exception {
+        String content = "{\"ts\":\"2026-10-20 21:00:00\",\"sender\":\"甲\",\"text\":\"金色宝箱\"}";
+        var imported = new ChatImportService(chat, new DistillProperties(), new ObjectMapper())
+                .importFile("merge.jsonl", content, 8L);
+        long messageId = chat.recentMessages(10).get(0).id();
+
+        String oldBody = "1. 山崖上有3级金色宝箱\n2. 打开后有一件金色装备";
+        noteRepo.insert(new DistillNoteRepository.NewNote(
+                0, 0, "出生点第一个任务山崖上的3级金色宝箱",
+                DistillResponseParser.normTitle("出生点第一个任务山崖上的3级金色宝箱"),
+                "金箱", oldBody, "大佬攻略", 0.8, "published", "old-model", "v1",
+                DistillResponseParser.hash(DistillResponseParser.normalizeBody(oldBody)),
+                "2026-10-20T09:00:00Z"),
+                List.of(new DistillNoteRepository.Source(0, messageId, "2026-10-20T09:00:00Z", "甲", oldBody)),
+                List.of());
+        String newBody = "山崖上固定刷新3级金色宝箱，打开后里面还有一件稀有物品，建议顺路去拿。";
+        String reply = "{\"notes\":[{\"title\":\"出生点第一个任务山崖的金色宝箱\","
+                + "\"aliases\":[\"三级箱\"],\"category\":\"大佬攻略\","
+                + "\"body\":\"" + newBody + "\",\"confidence\":0.9,"
+                + "\"sourceMessageIds\":[" + messageId + "]}]}";
+        when(llm.summarize(anyString(), anyList(), anyString()))
+                .thenReturn(new DistillLlm.Result(reply, "fake-model", 100, 50));
+        long jobId = new DistillJobService(chat, jobRepo, new DistillProperties())
+                .create(new DistillJobService.JobRequest("file", List.of(), "", "",
+                        imported.importId(), "count", 10, 0, 30));
+
+        worker.start(jobId);
+        for (int i = 0; i < 100; i++) {
+            if ("done".equals(jobRepo.findJob(jobId).status())) {
+                break;
+            }
+            Thread.sleep(50);
+        }
+
+        assertThat(noteRepo.count()).isEqualTo(1);
+        assertThat(noteRepo.find(1).body()).contains("金色装备");
+        assertThat(noteRepo.find(1).body()).contains("稀有物品");
     }
 
     @Test

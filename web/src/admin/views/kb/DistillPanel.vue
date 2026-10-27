@@ -121,6 +121,20 @@ interface NoteDetail {
   imageIds: number[]
 }
 
+interface BlockedSender {
+  senderHash: string
+  senderName: string
+  messageCount: number
+  createdAt: string
+}
+
+interface SenderOption {
+  senderHash: string
+  senderName: string
+  messageCount: number
+  blocked: boolean
+}
+
 const loading = ref(false)
 const error = ref('')
 const stats = ref<Stats | null>(null)
@@ -128,6 +142,9 @@ const groups = ref<number[]>([])
 const settings = ref<Settings | null>(null)
 const pendingMessages = ref(0)
 const providers = ref<ProviderInfo[]>([])
+const blockedSenders = ref<BlockedSender[]>([])
+const senders = ref<SenderOption[]>([])
+const blockPick = ref('')
 const jobs = ref<Job[]>([])
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
@@ -201,6 +218,13 @@ const publishMode = computed({
   set: (v: string) => { form.value.autoPublish = v === 'auto' },
 })
 
+const senderOptions = computed(() => senders.value
+  .filter(s => !s.blocked)
+  .map(s => ({
+    value: s.senderHash,
+    label: (s.senderName || '未命名') + ' · ' + s.messageCount + ' 条',
+  })))
+
 const filteredNotes = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return notes.value
@@ -239,7 +263,7 @@ async function loadAll() {
       }
       if (!importGroupId.value) importGroupId.value = String(groups.value[0] ?? '')
     }
-    await Promise.all([loadNotes(), loadJobs()])
+    await Promise.all([loadNotes(), loadJobs(), loadBlocklist()])
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -259,6 +283,40 @@ async function loadNotes() {
 async function loadJobs() {
   const r = await adminApi.get<{ rows: Job[] }>('/distill/jobs?limit=30')
   jobs.value = r.rows ?? []
+}
+
+async function loadBlocklist() {
+  const r = await adminApi.get<{ blocked: BlockedSender[]; senders: SenderOption[] }>('/distill/blocklist')
+  blockedSenders.value = r.blocked ?? []
+  senders.value = r.senders ?? []
+  if (!blockPick.value || !senderOptions.value.some(o => o.value === blockPick.value)) {
+    blockPick.value = senderOptions.value[0]?.value ?? ''
+  }
+}
+
+async function blockSender() {
+  if (!blockPick.value) return
+  const sender = senders.value.find(s => s.senderHash === blockPick.value)
+  try {
+    await adminApi.post('/distill/blocklist', {
+      senderHash: blockPick.value,
+      senderName: sender?.senderName ?? '',
+    })
+    toast('已屏蔽 ' + (sender?.senderName || '该成员'))
+    await loadBlocklist()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
+}
+
+async function unblockSender(hash: string) {
+  try {
+    await adminApi.del('/distill/blocklist/' + encodeURIComponent(hash))
+    toast('已移出禁学名单')
+    await loadBlocklist()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
 }
 
 async function saveSettings() {
@@ -678,6 +736,34 @@ defineExpose({
       </div>
     </Panel>
 
+    <Panel
+      title="禁学名单"
+      :count="blockedSenders.length"
+      collapsible
+      :default-open="false"
+      mobile-collapsed
+    >
+      <div class="blocklist-tools">
+        <Select
+          v-model="blockPick"
+          :options="senderOptions"
+          aria-label="选择禁学成员"
+        />
+        <Button size="sm" :disabled="!blockPick" @click="blockSender">屏蔽</Button>
+      </div>
+
+      <div v-if="blockedSenders.length" class="blocked-list">
+        <div v-for="b in blockedSenders" :key="b.senderHash" class="blocked-item">
+          <span class="blocked-name">{{ b.senderName || '未命名' }}</span>
+          <span class="faint">{{ b.senderHash.slice(0, 8) }} · {{ b.messageCount }} 条</span>
+          <Button size="sm" @click="unblockSender(b.senderHash)">移除</Button>
+        </div>
+      </div>
+      <Empty v-else text="没有禁学成员" hint="从上方选择要屏蔽的成员" />
+
+      <p class="faint blocklist-hint">被屏蔽成员的消息不会进入蒸馏，也不计入触发。</p>
+    </Panel>
+
     <Panel title="知识笔记" :count="filteredNotes.length">
       <div class="notes-workbench">
         <aside class="notes-list">
@@ -1026,6 +1112,15 @@ defineExpose({
 .actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
 .spacer { flex: 1; }
+
+.blocklist-tools { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.blocklist-tools > :first-child { flex: 1; min-width: 220px; }
+.blocked-list { display: flex; flex-direction: column; margin-top: var(--sp-3); }
+.blocked-item { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--hairline); }
+.blocked-name { flex: 1; min-width: 0; font-size: var(--fs-sm); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.blocklist-hint { margin-top: var(--sp-3); }
 
 .notes-workbench { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr);
   gap: var(--sp-4); align-items: start; }

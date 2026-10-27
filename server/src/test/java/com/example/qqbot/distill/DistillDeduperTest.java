@@ -30,6 +30,20 @@ class DistillDeduperTest {
     }
 
     @Test
+    @DisplayName("合并正文时保留旧内容，只追加新行")
+    void mergesBodyLines() {
+        String oldBody = "1. 山崖上有3级金色宝箱\n2. 打开后有一件金色装备";
+        String newBody = "1. 山崖上有3级金色宝箱\n2. 打开后有一件金色装备\n3. 还会掉一件稀有物品";
+        String merged = DistillDeduper.mergeBody(oldBody, newBody);
+        assertThat(merged).contains("3级金色宝箱");
+        assertThat(merged).contains("金色装备");
+        assertThat(merged).contains("稀有物品");
+        assertThat(merged.lines().count()).isEqualTo(3);
+        assertThat(DistillDeduper.mergeAliases("金箱、宝箱", "宝箱、三级箱"))
+                .isEqualTo("金箱、宝箱、三级箱");
+    }
+
+    @Test
     @DisplayName("完全不同的主题不合并")
     void keepsUnrelated() {
         assertThat(DistillDeduper.isDuplicate(

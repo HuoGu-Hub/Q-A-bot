@@ -1,6 +1,7 @@
 package com.example.qqbot.distill;
 
 import com.example.qqbot.persistence.ChatRepository;
+import com.example.qqbot.persistence.DistillBlocklistRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
 import com.example.qqbot.persistence.DistillNoteRepository;
 import com.example.qqbot.persistence.DistillSettingRepository;
@@ -44,12 +45,14 @@ public class DistillAdminController {
     private final DistillNoteService notes;
     private final ChatRepository chat;
     private final ChatImageStore imageStore;
+    private final DistillBlocklistRepository blocklist;
 
     public DistillAdminController(ChatCaptureService capture, ChatImportService imports,
                                   DistillJobService jobs, DistillWorker worker,
                                   DistillAutoService auto, DistillLlm llm,
                                   DistillNoteService notes, ChatRepository chat,
-                                  ChatImageStore imageStore) {
+                                  ChatImageStore imageStore,
+                                  DistillBlocklistRepository blocklist) {
         this.capture = capture;
         this.imports = imports;
         this.jobs = jobs;
@@ -59,6 +62,7 @@ public class DistillAdminController {
         this.notes = notes;
         this.chat = chat;
         this.imageStore = imageStore;
+        this.blocklist = blocklist;
     }
 
     /** 概览：采集状态 + 各类计数 */
@@ -229,6 +233,28 @@ public class DistillAdminController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /** 禁学名单：已屏蔽成员 + 最近发言成员 */
+    @GetMapping("/blocklist")
+    public Map<String, Object> blocklist() {
+        return Map.of("blocked", blocklist.list(), "senders", blocklist.senders(300));
+    }
+
+    @PostMapping("/blocklist")
+    public ResponseEntity<?> block(@RequestBody Map<String, Object> body) {
+        String hash = str(body.get("senderHash"));
+        if (hash == null || hash.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "缺少 senderHash"));
+        }
+        blocklist.add(hash, str(body.get("senderName")));
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    @DeleteMapping("/blocklist/{hash}")
+    public ResponseEntity<?> unblock(@PathVariable String hash) {
+        blocklist.remove(hash);
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 
     /** 自动蒸馏设置 + 采集群 */

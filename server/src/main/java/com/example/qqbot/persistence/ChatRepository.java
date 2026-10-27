@@ -96,6 +96,13 @@ public class ChatRepository {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_chat_msg_group_ts ON chat_message(group_id, ts)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_chat_msg_import ON chat_message(import_id)");
 
+        // 蒸馏禁学名单；查询这里也建一次，保证单独初始化 ChatRepository 的测试/任务
+        // 不会因为缺少这张表而让 NOT_BLOCKED 子查询报错
+        jdbc.execute("CREATE TABLE IF NOT EXISTS distill_blocked_sender ("
+                + " sender_hash TEXT PRIMARY KEY,"
+                + " sender_name TEXT NOT NULL DEFAULT '',"
+                + " created_at  TEXT NOT NULL)");
+
         jdbc.execute("CREATE TABLE IF NOT EXISTS chat_image ("
                 + " id         INTEGER PRIMARY KEY AUTOINCREMENT,"
                 + " message_id INTEGER NOT NULL,"
@@ -177,9 +184,12 @@ public class ChatRepository {
     }
 
     /** 游标之后还有多少条待蒸馏消息 */
+    private static final String NOT_BLOCKED =
+            " AND sender_hash NOT IN (SELECT sender_hash FROM distill_blocked_sender)";
+
     public long countAfter(long afterId, List<Long> groupIds) {
         StringBuilder sql = new StringBuilder(
-                "SELECT COUNT(*) FROM chat_message WHERE id > ?");
+                "SELECT COUNT(*) FROM chat_message WHERE id > ?" + NOT_BLOCKED);
         List<Object> args = new ArrayList<>();
         args.add(afterId);
         if (groupIds != null && !groupIds.isEmpty()) {
@@ -196,7 +206,7 @@ public class ChatRepository {
     /** 自动蒸馏用：按 id 顺序取游标之后、指定群的新消息 */
     public List<Message> messagesAfter(long afterId, List<Long> groupIds, int limit) {
         StringBuilder sql = new StringBuilder("SELECT " + MESSAGE_COLUMNS
-                + " FROM chat_message WHERE id > ?");
+                + " FROM chat_message WHERE id > ?" + NOT_BLOCKED);
         List<Object> args = new ArrayList<>();
         args.add(afterId);
         if (groupIds != null && !groupIds.isEmpty()) {
@@ -215,7 +225,7 @@ public class ChatRepository {
     /** 取一个批次范围内的消息。批次按候选顺序连续切分，通常 id 也是连续的。 */
     public List<Message> messagesBetween(long fromId, long toId) {
         return jdbc.query("SELECT " + MESSAGE_COLUMNS
-                + " FROM chat_message WHERE id BETWEEN ? AND ? ORDER BY ts, id",
+                + " FROM chat_message WHERE id BETWEEN ? AND ?" + NOT_BLOCKED + " ORDER BY ts, id",
                 MESSAGE, fromId, toId);
     }
 
@@ -250,7 +260,8 @@ public class ChatRepository {
     public List<MessageRef> candidates(String source, List<Long> groups, String from,
                                        String to, long importId) {
         StringBuilder sql = new StringBuilder(
-                "SELECT id, ts, image_count, length(text) AS chars FROM chat_message WHERE 1=1");
+                "SELECT id, ts, image_count, length(text) AS chars FROM chat_message WHERE 1=1"
+                        + NOT_BLOCKED);
         List<Object> args = new ArrayList<>();
         if ("file".equalsIgnoreCase(source) && importId > 0) {
             sql.append(" AND import_id = ?");

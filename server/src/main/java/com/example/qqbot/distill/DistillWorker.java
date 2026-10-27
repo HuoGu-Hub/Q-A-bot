@@ -245,8 +245,9 @@ public class DistillWorker {
             }
             DistillNoteRepository.Note duplicate = DistillDeduper.find(recentNotes, d.title(), d.body());
             if (duplicate != null) {
+                mergeInto(duplicate, d, setting.autoPublish(), recentNotes);
                 notes.appendSources(duplicate.id(), sources, d.imageIds());
-                log.info("[DISTILL] 笔记与已有 #{} 主题重复，已合并来源：{}", duplicate.id(), d.title());
+                log.info("[DISTILL] 笔记与已有 #{} 主题重复，已合并正文/来源：{}", duplicate.id(), d.title());
                 continue;
             }
             DistillNoteRepository.Inserted ins = notes.insert(new DistillNoteRepository.NewNote(
@@ -275,6 +276,40 @@ public class DistillWorker {
             }
         }
         log.info("[DISTILL] 批次 {} 完成：{} 条候选笔记", batch.id(), drafts.size());
+    }
+
+    /** 旧笔记 + 新笔记合并：正文补新行、别名并集、置信度取高，发布过的同步更新块 */
+    private void mergeInto(DistillNoteRepository.Note old, DistillDraft candidate,
+                           boolean autoPublish, List<DistillNoteRepository.Note> recentNotes) {
+        String body = DistillDeduper.mergeBody(old.body(), candidate.body());
+        String aliases = DistillDeduper.mergeAliases(old.aliases(), candidate.aliases());
+        if (body.equals(old.body()) && aliases.equals(old.aliases())) {
+            return;
+        }
+        try {
+            notes.updateContent(old.id(), old.title(), old.titleNorm(), aliases, body,
+                    DistillResponseParser.hash(DistillResponseParser.normalizeBody(body)),
+                    old.category(), Math.max(old.confidence(), candidate.confidence()));
+            DistillNoteRepository.Note updated = notes.find(old.id());
+            if (updated == null) {
+                return;
+            }
+            int index = recentNotes.indexOf(old);
+            if (index >= 0) {
+                recentNotes.set(index, updated);
+            } else {
+                recentNotes.add(0, updated);
+            }
+            if ("published".equals(updated.status()) || autoPublish) {
+                try {
+                    publisher.publish(updated);
+                } catch (Exception e) {
+                    log.warn("[DISTILL] 合并后发布失败，笔记仍是草稿：{}", e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[DISTILL] 合并笔记 {} 失败，仅追加来源：{}", old.id(), e.getMessage());
+        }
     }
 
     private static Map<String, String> senderAliases(List<ChatRepository.Message> messages) {

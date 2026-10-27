@@ -50,6 +50,61 @@ final class DistillDeduper {
         return bodySim >= 0.18;
     }
 
+    /** 合并正文：保留旧内容，只追加新内容里没有出现过的行 */
+    static String mergeBody(String oldBody, String newBody) {
+        String oldText = oldBody == null ? "" : oldBody.strip();
+        String newText = newBody == null ? "" : newBody.strip();
+        if (oldText.isEmpty()) {
+            return newText;
+        }
+        if (newText.isEmpty()) {
+            return oldText;
+        }
+        String oldNorm = norm(oldText);
+        String newNorm = norm(newText);
+        if (oldNorm.contains(newNorm)) {
+            return oldText;
+        }
+        if (newNorm.contains(oldNorm)) {
+            return newText;
+        }
+
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (String line : oldText.split("\\R")) {
+            String clean = line.strip();
+            if (!clean.isEmpty()) {
+                out.add(clean);
+                seen.add(norm(clean));
+            }
+        }
+        for (String line : newText.split("\\R")) {
+            String clean = line.strip();
+            String n = norm(clean);
+            if (!n.isEmpty() && !seen.contains(n) && !oldNorm.contains(n)) {
+                out.add(clean);
+                seen.add(n);
+            }
+        }
+        return String.join("\n", out);
+    }
+
+    /** 别名去重合并，保留顺序 */
+    static String mergeAliases(String oldAliases, String newAliases) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        for (String source : new String[]{oldAliases, newAliases}) {
+            if (source == null) {
+                continue;
+            }
+            for (String part : source.split("[、,，;；\\s]+")) {
+                if (!part.isBlank()) {
+                    out.add(part.strip());
+                }
+            }
+        }
+        return String.join("、", out);
+    }
+
     static String norm(String s) {
         if (s == null) {
             return "";
