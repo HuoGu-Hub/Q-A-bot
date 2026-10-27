@@ -123,6 +123,7 @@ interface NoteDetail {
 
 interface BlockedSender {
   senderHash: string
+  senderId: string
   senderName: string
   messageCount: number
   createdAt: string
@@ -130,6 +131,7 @@ interface BlockedSender {
 
 interface SenderOption {
   senderHash: string
+  senderId: string
   senderName: string
   messageCount: number
   blocked: boolean
@@ -145,6 +147,7 @@ const providers = ref<ProviderInfo[]>([])
 const blockedSenders = ref<BlockedSender[]>([])
 const senders = ref<SenderOption[]>([])
 const blockPick = ref('')
+const blockQqInput = ref('')
 const jobs = ref<Job[]>([])
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
@@ -309,9 +312,29 @@ async function blockSender() {
   }
 }
 
-async function unblockSender(hash: string) {
+async function blockByQq() {
+  const qq = blockQqInput.value.trim()
+  if (!/^\d{5,12}$/.test(qq)) {
+    toast('请输入 5–12 位 QQ 号', 'warn')
+    return
+  }
   try {
-    await adminApi.del('/distill/blocklist/' + encodeURIComponent(hash))
+    const r = await adminApi.post<{ updated: number }>('/distill/blocklist/qq', { qq })
+    toast('已屏蔽 QQ ' + qq + (r.updated ? '，并回填 ' + r.updated + ' 条历史消息' : ''))
+    blockQqInput.value = ''
+    await loadBlocklist()
+  } catch (e) {
+    toast(describeError(e), 'error')
+  }
+}
+
+async function unblockEntry(b: BlockedSender) {
+  try {
+    if (b.senderId) {
+      await adminApi.del('/distill/blocklist/qq/' + encodeURIComponent(b.senderId))
+    } else {
+      await adminApi.del('/distill/blocklist/' + encodeURIComponent(b.senderHash))
+    }
     toast('已移出禁学名单')
     await loadBlocklist()
   } catch (e) {
@@ -744,24 +767,35 @@ defineExpose({
       mobile-collapsed
     >
       <div class="blocklist-tools">
+        <Input
+          v-model="blockQqInput"
+          placeholder="输入 QQ 号"
+          aria-label="QQ号"
+        />
+        <Button size="sm" :disabled="!blockQqInput.trim()" @click="blockByQq">按 QQ 屏蔽</Button>
+      </div>
+
+      <div class="blocklist-tools blocklist-tools--secondary">
         <Select
           v-model="blockPick"
           :options="senderOptions"
           aria-label="选择禁学成员"
         />
-        <Button size="sm" :disabled="!blockPick" @click="blockSender">屏蔽</Button>
+        <Button size="sm" :disabled="!blockPick" @click="blockSender">按成员屏蔽</Button>
       </div>
 
       <div v-if="blockedSenders.length" class="blocked-list">
         <div v-for="b in blockedSenders" :key="b.senderHash" class="blocked-item">
-          <span class="blocked-name">{{ b.senderName || '未命名' }}</span>
-          <span class="faint">{{ b.senderHash.slice(0, 8) }} · {{ b.messageCount }} 条</span>
-          <Button size="sm" @click="unblockSender(b.senderHash)">移除</Button>
+          <span class="blocked-name">{{ b.senderId ? 'QQ ' + b.senderId : (b.senderName || '未命名') }}</span>
+          <span class="faint">
+            {{ b.senderId ? (b.senderName || '未知昵称') + ' · ' : '' }}{{ b.messageCount }} 条
+          </span>
+          <Button size="sm" @click="unblockEntry(b)">移除</Button>
         </div>
       </div>
-      <Empty v-else text="没有禁学成员" hint="从上方选择要屏蔽的成员" />
+      <Empty v-else text="没有禁学成员" hint="输入 QQ 号，或从最近成员选择" />
 
-      <p class="faint blocklist-hint">被屏蔽成员的消息不会进入蒸馏，也不计入触发。</p>
+      <p class="faint blocklist-hint">按 QQ 屏蔽会同时回填已知群里的历史消息；被屏蔽消息不进入蒸馏，也不计入触发。</p>
     </Panel>
 
     <Panel title="知识笔记" :count="filteredNotes.length">
@@ -1115,6 +1149,7 @@ defineExpose({
 
 .blocklist-tools { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .blocklist-tools > :first-child { flex: 1; min-width: 220px; }
+.blocklist-tools--secondary { margin-top: var(--sp-2); }
 .blocked-list { display: flex; flex-direction: column; margin-top: var(--sp-3); }
 .blocked-item { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--hairline); }

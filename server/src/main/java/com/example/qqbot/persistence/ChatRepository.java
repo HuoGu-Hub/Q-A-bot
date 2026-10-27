@@ -19,7 +19,7 @@ public class ChatRepository {
 
     /** 一条群聊消息 */
     public record Message(long id, String source, long importId, long groupId, long messageId,
-                          String ts, String senderHash, String senderName, String text,
+                          String ts, String senderHash, String senderId, String senderName, String text,
                           int imageCount, String rawHash, String createdAt) {
     }
 
@@ -35,7 +35,7 @@ public class ChatRepository {
 
     /** 待写入的消息 */
     public record NewMessage(String source, long importId, long groupId, long messageId,
-                             String ts, String senderHash, String senderName, String text,
+                             String ts, String senderHash, String senderId, String senderName, String text,
                              int imageCount, String rawHash, String createdAt) {
     }
 
@@ -52,13 +52,14 @@ public class ChatRepository {
     public static final int MAX_JOB_MESSAGES = 20_000;
 
     private static final String MESSAGE_COLUMNS =
-            "id, source, import_id, group_id, message_id, ts, sender_hash, sender_name,"
+            "id, source, import_id, group_id, message_id, ts, sender_hash, sender_id, sender_name,"
                     + " text, image_count, raw_hash, created_at";
 
     private static final Jdbc.RowMapper<Message> MESSAGE = r -> new Message(
             r.longOf("id"), r.str("source"), r.longOf("import_id"), r.longOf("group_id"),
-            r.longOf("message_id"), r.str("ts"), r.str("sender_hash"), r.str("sender_name"),
-            r.str("text"), r.intOf("image_count"), r.str("raw_hash"), r.str("created_at"));
+            r.longOf("message_id"), r.str("ts"), r.str("sender_hash"), r.str("sender_id"),
+            r.str("sender_name"), r.str("text"), r.intOf("image_count"), r.str("raw_hash"),
+            r.str("created_at"));
 
     private static final Jdbc.RowMapper<Image> IMAGE = r -> new Image(
             r.longOf("id"), r.longOf("message_id"), r.str("md5"), r.str("path"),
@@ -87,11 +88,18 @@ public class ChatRepository {
                 + " message_id  INTEGER NOT NULL DEFAULT 0,"
                 + " ts          TEXT NOT NULL,"
                 + " sender_hash TEXT NOT NULL DEFAULT '',"
+                + " sender_id   TEXT NOT NULL DEFAULT '',"
                 + " sender_name TEXT NOT NULL DEFAULT '',"
                 + " text        TEXT NOT NULL DEFAULT '',"
                 + " image_count INTEGER NOT NULL DEFAULT 0,"
                 + " raw_hash    TEXT NOT NULL,"
                 + " created_at  TEXT NOT NULL)");
+        // 旧库补列：QQ 号用于按号屏蔽；没有这一列的库先加上
+        boolean hasSenderId = jdbc.query("PRAGMA table_info(chat_message)",
+                r -> r.str("name")).contains("sender_id");
+        if (!hasSenderId) {
+            jdbc.execute("ALTER TABLE chat_message ADD COLUMN sender_id TEXT NOT NULL DEFAULT ''");
+        }
         jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_msg_hash ON chat_message(raw_hash)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_chat_msg_group_ts ON chat_message(group_id, ts)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_chat_msg_import ON chat_message(import_id)");
@@ -139,11 +147,11 @@ public class ChatRepository {
      */
     public Inserted insertMessageIfAbsent(NewMessage m) {
         int n = jdbc.update("INSERT OR IGNORE INTO chat_message"
-                        + " (source, import_id, group_id, message_id, ts, sender_hash, sender_name,"
-                        + " text, image_count, raw_hash, created_at)"
-                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        + " (source, import_id, group_id, message_id, ts, sender_hash, sender_id,"
+                        + " sender_name, text, image_count, raw_hash, created_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 m.source(), m.importId(), m.groupId(), m.messageId(), m.ts(), m.senderHash(),
-                m.senderName(), m.text(), m.imageCount(), m.rawHash(), m.createdAt());
+                m.senderId(), m.senderName(), m.text(), m.imageCount(), m.rawHash(), m.createdAt());
         Long id = jdbc.queryOne("SELECT id FROM chat_message WHERE raw_hash = ?",
                 r -> r.longOf("id"), m.rawHash());
         return new Inserted(id == null ? 0 : id, n > 0);
@@ -185,7 +193,9 @@ public class ChatRepository {
 
     /** 游标之后还有多少条待蒸馏消息 */
     private static final String NOT_BLOCKED =
-            " AND sender_hash NOT IN (SELECT sender_hash FROM distill_blocked_sender)";
+            " AND sender_hash NOT IN (SELECT sender_hash FROM distill_blocked_sender)"
+                    + " AND (sender_id = '' OR sender_id NOT IN (SELECT sender_id"
+                    + " FROM distill_blocked_sender WHERE sender_id <> ''))";
 
     public long countAfter(long afterId, List<Long> groupIds) {
         StringBuilder sql = new StringBuilder(

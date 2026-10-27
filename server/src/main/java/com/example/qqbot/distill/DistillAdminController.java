@@ -257,6 +257,23 @@ public class DistillAdminController {
         return ResponseEntity.ok(Map.of("ok", true));
     }
 
+    @PostMapping("/blocklist/qq")
+    public ResponseEntity<?> blockQq(@RequestBody Map<String, Object> body) {
+        try {
+            String qq = str(body.get("qq"));
+            int updated = blocklist.blockQq(qq, str(body.get("senderName")));
+            return ResponseEntity.ok(Map.of("ok", true, "updated", updated));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/blocklist/qq/{qq}")
+    public ResponseEntity<?> unblockQq(@PathVariable String qq) {
+        blocklist.removeQq(qq);
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
     /** 自动蒸馏设置 + 采集群 */
     @GetMapping("/settings")
     public Map<String, Object> settings() {

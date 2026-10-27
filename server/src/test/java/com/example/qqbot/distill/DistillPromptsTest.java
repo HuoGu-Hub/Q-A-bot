@@ -13,7 +13,8 @@ class DistillPromptsTest {
 
     private static ChatRepository.Message msg(long id, String text) {
         return new ChatRepository.Message(id, "live", 0, 1, 100 + id,
-                "2026-10-26T01:00:00Z", "h" + id, "甲", text, 0, "r" + id, "2026-10-26T01:00:00Z");
+                "2026-10-26T01:00:00Z", "h" + id, "100" + id, "甲", text, 0,
+                "r" + id, "2026-10-26T01:00:00Z");
     }
 
     @Test

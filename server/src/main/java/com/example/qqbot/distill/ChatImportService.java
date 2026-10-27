@@ -89,7 +89,7 @@ public class ChatImportService {
                 long group = m.groupId() > 0 ? m.groupId() : defaultGroupId;
                 ChatRepository.Inserted ins = repo.insertMessageIfAbsent(new ChatRepository.NewMessage(
                         "file", importId, group, 0, m.ts(), hash("sender:" + group + ":" + m.sender()),
-                        m.sender(), m.text(), m.imageCount(), rawHash(m, group), now));
+                        "", m.sender(), m.text(), m.imageCount(), rawHash(m, group), now));
                 if (ins.created()) {
                     inserted++;
                 } else {

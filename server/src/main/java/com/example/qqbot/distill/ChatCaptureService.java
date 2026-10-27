@@ -207,8 +207,9 @@ public class ChatCaptureService {
                     : hash(c.groupId() + "|" + c.ts() + "|" + c.senderHash() + "|"
                     + c.text() + "|" + imageKeys(c.images()));
             ChatRepository.Inserted ins = repo.insertMessageIfAbsent(new ChatRepository.NewMessage(
-                    "live", 0, c.groupId(), c.messageId(), c.ts(), c.senderHash(), c.senderName(),
-                    c.text(), c.images().size(), rawHash, Instant.now().toString()));
+                    "live", 0, c.groupId(), c.messageId(), c.ts(), c.senderHash(),
+                    String.valueOf(c.userId()), c.senderName(), c.text(), c.images().size(),
+                    rawHash, Instant.now().toString()));
             if (!ins.created() || ins.id() <= 0 || c.images().isEmpty()) {
                 recorded.incrementAndGet();
                 return;
