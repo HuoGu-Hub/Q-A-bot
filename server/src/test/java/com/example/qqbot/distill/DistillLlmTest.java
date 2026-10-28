@@ -21,7 +21,8 @@ class DistillLlmTest {
     void sendsImagesWhenVisionAvailable() {
         LlmRouter router = mock(LlmRouter.class);
         when(router.hasVision()).thenReturn(true);
-        when(router.chatWithSystemAndImages(anyString(), anyString(), anyList(), anyString()))
+        when(router.chatWithSystemAndImages(anyString(), anyString(), anyList(), anyString(),
+                org.mockito.ArgumentMatchers.eq(LlmRouter.CallMode.BACKGROUND)))
                 .thenReturn(new LlmRouter.Reply("{\"notes\":[]}", "fake", 10, 5));
 
         DistillLlm llm = new DistillLlm(router);
@@ -34,6 +35,26 @@ class DistillLlmTest {
                 org.mockito.ArgumentMatchers.eq("看看这张图"),
                 argThat(images -> images.size() == 1
                         && "image/png".equals(images.get(0).mimeType())),
-                org.mockito.ArgumentMatchers.eq(""));
+                org.mockito.ArgumentMatchers.eq(""),
+                org.mockito.ArgumentMatchers.eq(LlmRouter.CallMode.BACKGROUND));
+    }
+
+    @Test
+    @DisplayName("没有图片时也走后台长超时，不占用前台 60 秒")
+    void textOnlyUsesBackgroundMode() {
+        LlmRouter router = mock(LlmRouter.class);
+        when(router.hasVision()).thenReturn(false);
+        when(router.chatWithSystem(anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.eq(LlmRouter.CallMode.BACKGROUND)))
+                .thenReturn(new LlmRouter.Reply("ok", "fake", 1, 1));
+
+        DistillLlm llm = new DistillLlm(router);
+        assertThat(llm.summarize("总结一下").text()).isEqualTo("ok");
+
+        verify(router).chatWithSystem(
+                org.mockito.ArgumentMatchers.eq(DistillPrompts.SYSTEM),
+                org.mockito.ArgumentMatchers.eq("总结一下"),
+                org.mockito.ArgumentMatchers.eq(""),
+                org.mockito.ArgumentMatchers.eq(LlmRouter.CallMode.BACKGROUND));
     }
 }

@@ -62,12 +62,30 @@ public class LlmRouter {
     public static final String CAP_TOOLS = "tools";
 
     /**
-     * provider 名 → 模型客户端。
+     * 调用场景 —— 决定用哪一只客户端，**两套超时互不影响**。
+     *
+     * <p>用户聊天走 {@link #INTERACTIVE}，按 provider 的 {@code timeout-seconds}；
+     * 聊天蒸馏这类后台慢任务走 {@link #BACKGROUND}，按
+     * {@code background-timeout-seconds}。共用一套超时只能二选一：
+     * 给聊天 60 秒会把蒸馏逼成必然超时，给蒸馏 180 秒又让用户等太久。
+     */
+    public enum CallMode {
+        /** 前台：用户在等，短超时 */
+        INTERACTIVE,
+        /** 后台：蒸馏等慢任务，长超时 */
+        BACKGROUND
+    }
+
+    /**
+     * provider 名 → 模型客户端（前台）。
      *
      * <p>用 ConcurrentHashMap：支持**热替换**（后台改完模型 ID 立即生效），
      * 替换时正在进行的请求持有的旧引用仍然有效，天然无缝。
      */
     private final Map<String, ChatModel> models = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** provider 名 → 后台慢任务客户端。配置独立，绝不与前台共用 */
+    private final Map<String, ChatModel> backgroundModels = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Provider> configs = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile List<String> chain = new ArrayList<>();
     /** 记录本次调用实际成功的 provider，供 toReply 写进任务账本 */
@@ -83,14 +101,19 @@ public class LlmRouter {
     /** 记 token 用量给成本预算（D6）。token 只有这一层看得到 */
     private final BudgetGuard budgetGuard;
 
-    /** 构建模型客户端 —— 启动时和热替换时共用同一套参数 */
+    /** 构建**前台**客户端 —— 启动时和热替换时共用同一套参数 */
     private static ChatModel buildClient(Provider cfg) {
+        return buildClient(cfg, timeoutSeconds(cfg));
+    }
+
+    /** 构建指定超时的客户端。两套客户端除超时外完全同源，避免调参调出两种行为 */
+    private static ChatModel buildClient(Provider cfg, int timeoutSeconds) {
         OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
                 .baseUrl(cfg.getBaseUrl())
                 .apiKey(cfg.getApiKey())
                 .modelName(cfg.getModelName())
                 .temperature(cfg.getTemperature())
-                .timeout(Duration.ofSeconds(cfg.getTimeoutSeconds()))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
                 .maxRetries(cfg.getMaxRetries())
                 .logRequests(Boolean.TRUE.equals(cfg.getLogRequests()))
                 .logResponses(Boolean.TRUE.equals(cfg.getLogRequests()));
@@ -105,6 +128,18 @@ public class LlmRouter {
             builder.customHeaders(cfg.getHeaders());
         }
         return builder.build();
+    }
+
+    /** 前台超时；没配或非法值退回 60 秒 */
+    static int timeoutSeconds(Provider cfg) {
+        Integer v = cfg.getTimeoutSeconds();
+        return v == null || v <= 0 ? 60 : v;
+    }
+
+    /** 后台超时；没配或非法值退回前台超时，绝不让后台比前台还短 */
+    static int backgroundTimeoutSeconds(Provider cfg) {
+        Integer v = cfg.getBackgroundTimeoutSeconds();
+        return v == null || v <= 0 ? timeoutSeconds(cfg) : Math.max(v, timeoutSeconds(cfg));
     }
 
     public LlmRouter(LlmPolicy props, ResourceLoader resourceLoader, BudgetGuard budgetGuard) {
@@ -126,6 +161,7 @@ public class LlmRouter {
             }
 
             models.put(name, buildClient(cfg));
+            backgroundModels.put(name, buildClient(cfg, backgroundTimeoutSeconds(cfg)));
             configs.put(name, cfg);
             log.info("[LLM] provider 就绪：{}  model={}  能力={}  maxTokens={}  推理强度={}  baseUrl={}",
                     name, cfg.getModelName(), cfg.getCapabilities(),
@@ -189,6 +225,8 @@ public class LlmRouter {
         String old = cfg.getModelName();
         cfg.setModelName(newModelName.trim());
         models.put(provider, buildClient(cfg));
+        // 两套客户端必须一起换：只换前台会让蒸馏继续用旧模型
+        backgroundModels.put(provider, buildClient(cfg, backgroundTimeoutSeconds(cfg)));
 
         log.info("[LLM] 模型已热替换：{}  {} -> {}", provider, old, newModelName);
         return old;
@@ -416,9 +454,20 @@ public class LlmRouter {
 
     /** 指定优先 provider；失败仍按 fallback 链降级 */
     public Reply chatWithSystem(String systemPrompt, String userMessage, String preferredProvider) {
+        return chatWithSystem(systemPrompt, userMessage, preferredProvider, CallMode.INTERACTIVE);
+    }
+
+    /**
+     * 指定调用场景的纯文本旁路。
+     *
+     * <p>蒸馏必须显式传 {@link CallMode#BACKGROUND}：它一批几十条消息、
+     * 正常就要 50~100 秒，用前台 60 秒会稳定超时后降级。
+     */
+    public Reply chatWithSystem(String systemPrompt, String userMessage, String preferredProvider,
+                                CallMode mode) {
         ChatRequest req = request(List.of(SystemMessage.from(systemPrompt),
                 new UserMessage(userMessage)));
-        return toReply(callWithFallbackResponse(req, null, preferredProvider));
+        return toReply(callWithFallbackResponse(req, null, preferredProvider, mode));
     }
 
     /**
@@ -432,6 +481,14 @@ public class LlmRouter {
 
     public Reply chatWithSystemAndImages(String systemPrompt, String userMessage,
                                          List<VisionImage> images, String preferredProvider) {
+        return chatWithSystemAndImages(systemPrompt, userMessage, images, preferredProvider,
+                CallMode.INTERACTIVE);
+    }
+
+    /** 指定调用场景的看图旁路 —— 蒸馏传 {@link CallMode#BACKGROUND} 拿长超时 */
+    public Reply chatWithSystemAndImages(String systemPrompt, String userMessage,
+                                         List<VisionImage> images, String preferredProvider,
+                                         CallMode mode) {
         List<Content> contents = new ArrayList<>();
         contents.add(TextContent.from(userMessage));
         for (VisionImage image : images == null ? List.<VisionImage>of() : images) {
@@ -439,7 +496,7 @@ public class LlmRouter {
         }
         ChatMessage message = UserMessage.from(contents);
         ChatRequest req = request(List.of(SystemMessage.from(systemPrompt), message));
-        return toReply(callWithFallbackResponse(req, CAP_VISION, preferredProvider));
+        return toReply(callWithFallbackResponse(req, CAP_VISION, preferredProvider, mode));
     }
 
     private Reply toReply(ChatResponse response) {
@@ -602,11 +659,23 @@ public class LlmRouter {
     }
 
     private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability) {
-        return callWithFallbackResponse(request, requiredCapability, "");
+        return callWithFallbackResponse(request, requiredCapability, "", CallMode.INTERACTIVE);
     }
 
     private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability,
                                                    String preferredProvider) {
+        return callWithFallbackResponse(request, requiredCapability, preferredProvider,
+                CallMode.INTERACTIVE);
+    }
+
+    /**
+     * 按场景选客户端池：前台用 {@link #models}，后台用 {@link #backgroundModels}。
+     *
+     * <p>降级链、能力筛选、空回复重试三套逻辑完全共用，差别只有"哪只客户端、超时多少"。
+     */
+    private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability,
+                                                   String preferredProvider, CallMode mode) {
+        Map<String, ChatModel> pool = mode == CallMode.BACKGROUND ? backgroundModels : models;
         // 带工具的请求**只能**交给声明了 tools 能力的厂商：不支持工具调用的厂商不会报错，
         // 而是把工具调用当正文吐出来（见 CAP_TOOLS 的说明），那就漏到群里了。
         boolean needsTools = request.toolSpecifications() != null && !request.toolSpecifications().isEmpty();
@@ -637,7 +706,12 @@ public class LlmRouter {
 
         List<String> errors = new ArrayList<>();
         for (String name : candidates) {
-            ChatModel model = models.get(name);
+            ChatModel model = pool.get(name);
+            if (model == null) {
+                // 理论上不会发生：两套客户端同时构建、同时热替换。留一条人话，别让空指针盖住根因
+                errors.add(name + " -> 客户端未就绪");
+                continue;
+            }
             try {
                 long start = System.currentTimeMillis();
                 ChatResponse response = model.chat(request);

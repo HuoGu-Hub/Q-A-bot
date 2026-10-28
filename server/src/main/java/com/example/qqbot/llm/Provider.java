@@ -36,7 +36,17 @@ public class Provider {
 
     private Double temperature = 0.7;
 
+    /** 用户聊天等前台请求的单次超时（秒） */
     private Integer timeoutSeconds = 60;
+
+    /**
+     * 后台慢任务（聊天蒸馏）的单次超时（秒）。
+     *
+     * <p>蒸馏一批可能有几十条消息、几张图，正常也要 50~100 秒；用户聊天通常几秒。
+     * 两个场景共用一个 60 秒会把蒸馏逼成"必然超时后降级"。所以单独放宽，
+     * 前台仍然只看 {@link #timeoutSeconds}。{@code <= 0} 表示沿用前台超时。
+     */
+    private Integer backgroundTimeoutSeconds = 180;
 
     /** LangChain4j 自身的重试次数（不含我们的降级链） */
     private Integer maxRetries = 1;
@@ -82,6 +92,7 @@ public class Provider {
         c.capabilities = new java.util.ArrayList<>(capabilities);
         c.temperature = temperature;
         c.timeoutSeconds = timeoutSeconds;
+        c.backgroundTimeoutSeconds = backgroundTimeoutSeconds;
         c.maxRetries = maxRetries;
         c.maxTokens = maxTokens;
         c.reasoningEffort = reasoningEffort;
@@ -136,6 +147,14 @@ public class Provider {
 
     public void setTimeoutSeconds(Integer timeoutSeconds) {
         this.timeoutSeconds = timeoutSeconds;
+    }
+
+    public Integer getBackgroundTimeoutSeconds() {
+        return backgroundTimeoutSeconds;
+    }
+
+    public void setBackgroundTimeoutSeconds(Integer backgroundTimeoutSeconds) {
+        this.backgroundTimeoutSeconds = backgroundTimeoutSeconds;
     }
 
     public Integer getMaxRetries() {

@@ -49,12 +49,21 @@ class LlmRouterToolForwardingTest {
     private String cannedReply;
     /** 假厂商的状态码 —— 401 那条路要能造出来 */
     private int cannedStatus = 200;
+    /** 假厂商人为延迟，用来验证两套超时是否真的隔离 */
+    private volatile long delayMillis;
 
     @BeforeEach
     void startServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            if (delayMillis > 0) {
+                try {
+                    Thread.sleep(delayMillis);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             byte[] out = cannedReply.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(cannedStatus, out.length);
@@ -84,6 +93,11 @@ class LlmRouterToolForwardingTest {
     }
 
     private LlmRouter router(List<String> capabilities, int maxRoundTrips) {
+        return router(capabilities, maxRoundTrips, 10, 30);
+    }
+
+    private LlmRouter router(List<String> capabilities, int maxRoundTrips,
+                             int timeoutSeconds, int backgroundTimeoutSeconds) {
         LlmProperties props = new LlmProperties();
         props.setSystemPromptFile("system.md");
 
@@ -92,7 +106,8 @@ class LlmRouterToolForwardingTest {
         provider.setApiKey("test-key");
         provider.setModelName("fake-model");
         provider.setCapabilities(capabilities);
-        provider.setTimeoutSeconds(10);
+        provider.setTimeoutSeconds(timeoutSeconds);
+        provider.setBackgroundTimeoutSeconds(backgroundTimeoutSeconds);
         provider.setMaxRetries(0);
         provider.setTemperature(0.0);
 
@@ -193,6 +208,20 @@ class LlmRouterToolForwardingTest {
         assertThat(bodies.get(0).replace(" ", ""))
                 .as("用满之后这轮必须禁止再调工具")
                 .contains("\"tool_choice\":\"none\"");
+    }
+
+    @Test
+    @DisplayName("★ 后台调用用单独的长超时：前台 1 秒也不会把蒸馏的 3 秒拖死")
+    void backgroundCallUsesItsOwnTimeout() {
+        delayMillis = 1500;
+        cannedReply = PLAIN_REPLY;
+        // 前台 1 秒，后台 3 秒；厂商 1.5 秒才回 —— 后台必须成功
+        LlmRouter router = router(List.of("chat"), 3, 1, 3);
+
+        LlmRouter.Reply reply = router.chatWithSystem("你是整理助手", "在吗", "",
+                LlmRouter.CallMode.BACKGROUND);
+
+        assertThat(reply.text()).as("后台若误用前台 1 秒，这里会抛超时").isEqualTo("你好");
     }
 
     @Test
