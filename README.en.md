@@ -1,4 +1,4 @@
-# Piaoxue Miao · QQ Knowledge Base Bot
+# Q-A-bot · QQ Knowledge Base Bot
 
 <p align="center">
   <b>Private retrieval, LLM answers and an operations console in a single Spring Boot process</b>
@@ -16,7 +16,7 @@
 
 ## Overview
 
-Piaoxue Miao is a self-hosted QQ bot for gaming communities, connected through OneBot 11. Each question is first matched against a private knowledge base; the retrieved passages are then passed to an LLM for composition. When no supporting material is found, the bot says so instead of answering from model memory.
+Q-A-bot is a self-hosted QQ bot for gaming communities, connected through OneBot 11. Each question is first matched against a private knowledge base; the retrieved passages are then passed to an LLM for composition. When no supporting material is found, the bot says so instead of answering from model memory.
 
 The same process provides commands and scheduled posts, an interactive map, voice replies, chat distillation, a public site and an admin console. Structured state lives in one SQLite file, while images, map tiles and voice assets use local directories. There is no Redis, message queue or second database.
 

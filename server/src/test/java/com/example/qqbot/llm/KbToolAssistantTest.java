@@ -138,7 +138,7 @@ class KbToolAssistantTest {
 
     private static LlmRouter router() {
         LlmRouter router = mock(LlmRouter.class);
-        when(router.systemPromptWithStyle()).thenReturn("你是飘雪喵，安全规则若干。");
+        when(router.systemPromptWithStyle()).thenReturn("你是 Q-A-bot，安全规则若干。");
         return router;
     }
 

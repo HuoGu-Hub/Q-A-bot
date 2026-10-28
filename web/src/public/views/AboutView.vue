@@ -25,7 +25,7 @@ const howSteps = computed(() =>
     <PageHeader title="关于" desc="一个《雾锁王国》问答助手，和它背后的取舍。" />
 
     <section class="sec">
-      <h2 class="h"><span v-html="renderInline(t('about.what_title', '飘雪喵是什么'))" /></h2>
+      <h2 class="h"><span v-html="renderInline(t('about.what_title', 'Q-A-bot 是什么'))" /></h2>
       <p class="muted">
         <span v-html="renderInline(t('about.what_body', '一个《雾锁王国》（Enshrouded）的问答助手。在 QQ 群里 @ 我提问，我会先在本地资料库里检索，再依据检索到的内容回答 —— 而不是凭空编。'))" />
       </p>

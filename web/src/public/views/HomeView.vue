@@ -115,7 +115,7 @@ onMounted(async () => {
               <Icon name="search" :size="17" />
               去资料库查
             </Button>
-            <span class="alt">或在群里 <b>@ 飘雪喵</b> 直接问</span>
+            <span class="alt">或在群里 <b>@ Q-A-bot</b> 直接问</span>
           </div>
           <p v-if="error" class="err hint">统计数据暂时取不到 · {{ error }}</p>
         </div>

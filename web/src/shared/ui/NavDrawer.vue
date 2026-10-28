@@ -44,7 +44,7 @@ onBeforeUnmount(() => {
         <header class="head">
           <span class="brand">
             <Icon name="flame" :size="17" class="mark" />
-            飘雪喵 · 管理
+            Q-A-bot · 管理
           </span>
           <div class="head-right">
             <ThemeToggle />

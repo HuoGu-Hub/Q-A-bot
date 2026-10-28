@@ -14,20 +14,20 @@
   <groupId>com.example</groupId>
   <artifactId>qqbot-server</artifactId>
   <version>0.0.1-SNAPSHOT</version>
-  <name>qqbot-server</name>
-  <description>QQ Bot 业务层（协议端：NapCat / OneBot 11）</description>
+  <name>Q-A-bot server</name>
+  <description>Q-A-bot 业务层（协议端：NapCat / OneBot 11）</description>
 
   <properties>
     <java.version>17</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <langchain4j.version>1.20.0</langchain4j.version>
-    <!-- 架构护栏：把 README 里的「四条结构铁律」变成会失败的测试，见 ArchitectureTest -->
+    <!-- 架构护栏：把 docs/architecture.md 的模块边界变成会失败的测试，见 ArchitectureTest -->
     <archunit.version>1.3.0</archunit.version>
     <!--
       覆盖 Spring Boot 管理的 Tomcat 版本。
       10.1.55 有 3 条 CVE（DIGEST 重放 / 安全约束绕过 / FORM 认证绕过）。
       实测【都不影响本项目】—— 我们没用容器级认证（认证在自己的 Filter 里），
-      但仍升级到修复版本以消除扫描噪音。详见 docs/依赖漏洞扫描报告.md
+      但仍升级到修复版本以消除扫描噪音。
     -->
     <tomcat.version>10.1.60</tomcat.version>
   </properties>

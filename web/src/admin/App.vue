@@ -49,7 +49,7 @@ const drawerItems = computed(() =>
 const currentLabel = computed(() => {
   if (!hasBar.value) return '管理员登录'
   const hit = nav.find(n => route.path.startsWith(n.to))
-  return hit ? hit.label + ' · 飘雪喵管理后台' : '飘雪喵管理后台'
+  return hit ? hit.label + ' · Q-A-bot 管理后台' : 'Q-A-bot 管理后台'
 })
 
 async function logout() {
@@ -65,11 +65,11 @@ async function logout() {
       <div class="bar-inner">
         <RouterLink to="/stats" class="brand">
           <Icon name="flame" class="mark" :size="18" />
-          <span class="brand-txt">飘雪喵</span>
+          <span class="brand-txt">Q-A-bot</span>
           <span class="brand-sub">管理</span>
           <!-- 窄屏上 .brand-txt / .brand-sub 都被视觉隐藏了，链接就只剩一个图标 ——
                那会被判成「没有可读名字的链接」。这句只在读屏里出现，兜住站名。 -->
-          <span class="sr-only">飘雪喵 管理后台</span>
+          <span class="sr-only">Q-A-bot 管理后台</span>
         </RouterLink>
 
         <nav class="nav" aria-label="后台导航">

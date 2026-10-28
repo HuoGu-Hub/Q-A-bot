@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "飘雪喵 前端 —— 公开站 + 管理后台（双端）",
+  "description": "Q-A-bot 前端 —— 公开站 + 管理后台（双端）",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",

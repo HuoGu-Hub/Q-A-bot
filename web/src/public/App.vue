@@ -68,8 +68,8 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
       <div class="page hdr-inner">
         <RouterLink to="/" class="brand">
           <Icon name="flame" class="mark" :size="19" />
-          <span class="name">飘雪喵</span>
-          <span class="sub">雾锁王国助手</span>
+          <span class="name">Q-A-bot</span>
+          <span class="sub">知识库问答</span>
         </RouterLink>
 
         <nav class="nav" aria-label="主导航">

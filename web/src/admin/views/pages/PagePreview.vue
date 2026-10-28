@@ -101,7 +101,7 @@ const TITLE_TAIL = '灵火'
       <div v-else-if="page === 'home'" class="m-home">
         <div class="m-brand">
           <span class="m-spark" aria-hidden="true">✦</span>
-          <span class="m-brand-name">飘雪喵</span>
+          <span class="m-brand-name">Q-A-bot</span>
         </div>
         <h3 class="m-display">
           {{ TITLE_HEAD }}<span class="m-flame">{{ TITLE_TAIL }}</span>

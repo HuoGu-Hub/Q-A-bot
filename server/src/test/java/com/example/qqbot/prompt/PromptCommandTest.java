@@ -129,7 +129,7 @@ class PromptCommandTest {
     @Test
     @DisplayName("支持 @机器人 /prompt")
     void mentionPrefixIsAccepted() {
-        String created = run("@飘雪喵 /prompt /create 回答短一点", "admin");
+        String created = run("@Q-A-bot /prompt /create 回答短一点", "admin");
         assertThat(created).contains("已添加", "回答短一点");
     }
 

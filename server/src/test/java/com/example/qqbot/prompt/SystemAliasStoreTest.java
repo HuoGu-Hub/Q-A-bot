@@ -52,7 +52,7 @@ class SystemAliasStoreTest {
                 new SystemAliasStore.Alias(SystemAliasStore.KIND_ACTION, "delete", "删除")));
 
         assertThat(store.resolve("/列表")).isEqualTo("/list");
-        assertThat(store.resolve("@飘雪喵 /帮助")).isEqualTo("/help");
+        assertThat(store.resolve("@Q-A-bot /帮助")).isEqualTo("/help");
         assertThat(store.resolve("/提示 /新建 你好")).isEqualTo("/prompt /create 你好");
         assertThat(store.resolve("/预约开黑 /新建 今晚8点")).isEqualTo("/预约开黑 /create 今晚8点");
         assertThat(store.resolve("/预约开黑 /删除 12")).isEqualTo("/预约开黑 /delete 12");
