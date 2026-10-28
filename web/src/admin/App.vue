@@ -6,7 +6,7 @@ import Icon from '@shared/ui/Icon.vue'
 import ThemeToggle from '@shared/ui/ThemeToggle.vue'
 import NavDrawer from '@shared/ui/NavDrawer.vue'
 import { botName, loadBotName } from '@shared/identity/botName'
-import { useAuth } from './useAuth'
+import { useAuth, type AdminRoleId } from './useAuth'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,18 +36,33 @@ const drawerOpen = ref(false)
  * 390px 下「页面信息」和「退出」被挤到屏幕外，等于导航只剩 5 项。
  * desc 只在抽屉里显示：它是解释，不是标签。
  */
-const nav = [
-  { to: '/stats', label: '统计', icon: 'chart', desc: '提问量、命中率与记录' },
-  { to: '/kb', label: '知识库', icon: 'book', desc: '文档、词条与分类' },
-  { to: '/map', label: '地图', icon: 'map-pin', desc: '底图同步与点位维护' },
-  { to: '/system', label: '系统', icon: 'gear', desc: '模型配置与运行日志' },
-  { to: '/bot', label: 'Bot 配置', icon: 'bot', desc: '指令、回复与功能开关' },
-  { to: '/pages', label: '页面信息', icon: 'list', desc: '前台文案与轮播' },
+const nav: { to: string; label: string; icon: string; desc: string; role: AdminRoleId }[] = [
+  { to: '/stats', label: '统计', icon: 'chart', desc: '提问量、命中率与记录', role: 'viewer' },
+  { to: '/kb', label: '知识库', icon: 'book', desc: '文档、词条与分类', role: 'viewer' },
+  { to: '/map', label: '地图', icon: 'map-pin', desc: '底图同步与点位维护', role: 'viewer' },
+  { to: '/bot', label: 'Bot 配置', icon: 'bot', desc: '指令、回复与功能开关', role: 'editor' },
+  { to: '/pages', label: '页面信息', icon: 'list', desc: '前台文案与轮播', role: 'editor' },
+  { to: '/system', label: '系统', icon: 'gear', desc: '模型配置与运行日志', role: 'admin' },
+  { to: '/users', label: '账号', icon: 'lock', desc: '成员、角色与操作记录', role: 'admin' },
 ]
 
 const isActive = (to: string) => route.path.startsWith(to)
+
+/**
+ * 只把「当前角色能进的」摆出来。
+ *
+ * <p>不隐藏也可以，但点进去是一屏 403 —— 那比看不到更让人困惑。
+ * 真正的拦截在后端，这里只是别把人往墙上引。
+ */
+const visibleNav = computed(() => nav.filter(n => auth.can(n.role)))
 const drawerItems = computed(() =>
-  nav.map(n => ({ ...n, active: isActive(n.to) })))
+  visibleNav.value.map(n => ({ to: n.to, label: n.label, icon: n.icon, desc: n.desc, active: isActive(n.to) })))
+
+/** 顶端显示"我是谁"，避免多人共用一个后台时分不清 */
+const meLabel = computed(() => {
+  const m = auth.me.value
+  return m ? m.displayName + ' · ' + m.roleLabel : ''
+})
 
 /**
  * 当前页面的名字，用来给屏幕阅读器一个 h1。
@@ -83,7 +98,7 @@ async function logout() {
 
         <nav class="nav" aria-label="后台导航">
           <RouterLink
-            v-for="n in nav"
+            v-for="n in visibleNav"
             :key="n.to"
             :to="n.to"
             class="nav-link"
@@ -93,6 +108,7 @@ async function logout() {
         </nav>
 
         <div class="bar-right">
+          <span v-if="meLabel" class="who">{{ meLabel }}</span>
           <ThemeToggle />
           <button class="out" type="button" @click="logout">
             <Icon name="lock" :size="14" />
@@ -223,6 +239,13 @@ async function logout() {
 }
 
 .bar-right { display: flex; align-items: center; gap: var(--sp-2); flex: none; margin-left: auto; }
+/* 当前登录者：只是身份提示，不该和导航抢视觉重量 */
+.who {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  white-space: nowrap;
+  padding: 0 var(--sp-1);
+}
 .out {
   display: inline-flex;
   align-items: center;
@@ -267,6 +290,7 @@ async function logout() {
   .bar-inner { gap: var(--sp-2); padding: 0 var(--sp-3); }
   .nav { display: none; }
   .out { display: none; }
+  .who { display: none; }
   .menu-btn { display: grid; }
 }
 </style>

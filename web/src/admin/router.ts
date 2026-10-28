@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuth } from './useAuth'
+import { useAuth, type AdminRoleId } from './useAuth'
 
 /**
  * 管理后台路由。
@@ -42,6 +42,8 @@ export const router = createRouter({
     { path: '/map', name: 'map', component: () => import('./views/MapAdminView.vue') },
     // 公开站的固定文案（首页标语、关于页正文、页脚、404 等）
     { path: '/pages', name: 'pages', component: () => import('./views/PagesView.vue') },
+    // 账号管理：只有管理员能进，前端这一层只是"别让人点进去看 403"
+    { path: '/users', name: 'users', component: () => import('./views/UsersView.vue'), meta: { role: 'admin' } },
   ],
 })
 
@@ -50,5 +52,9 @@ router.beforeEach(async (to) => {
   const auth = useAuth()
   if (!auth.checked.value) await auth.check()
   if (!auth.ok.value) return { name: 'login', query: { r: to.fullPath } }
+
+  // 角色不够就回统计页：留在原地只会看到一屏 403
+  const need = to.meta.role as AdminRoleId | undefined
+  if (need && !auth.can(need)) return { path: '/stats', query: { tab: 'overview' } }
   return true
 })

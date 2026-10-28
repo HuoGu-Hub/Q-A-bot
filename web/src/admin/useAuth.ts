@@ -1,38 +1,75 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { adminApi } from '@shared/api/client'
+
+/** 后端 /admin/api/session 返回的身份 */
+export interface AdminMe {
+  id: number
+  username: string
+  displayName: string
+  role: AdminRoleId
+  roleLabel: string
+}
+
+export type AdminRoleId = 'viewer' | 'editor' | 'admin'
+
+const RANK: Record<AdminRoleId, number> = { viewer: 1, editor: 2, admin: 3 }
 
 /**
  * 会话状态（模块级单例，够用 —— 不需要 pinia）。
  *
  * ⚠️ 这只是**体验层**的判断：真正的安全边界在后端。
- * 前端守卫的作用是"别让用户看到一堆 401"，而不是"防止未授权访问"。
+ * 前端守卫的作用是"别让用户看到一堆 401 / 403"和"别把管不了的入口摆出来"，
+ * 而不是"防止未授权访问"。
  */
 const ok = ref(false)
 const checked = ref(false)
+const me = ref<AdminMe | null>(null)
 
 export function useAuth() {
   return {
     ok,
     checked,
-    /** 问一次后端"我还登录着吗" */
+    me,
+    /** 当前账号是否达到某一级 */
+    can(role: AdminRoleId) {
+      const mine = me.value?.role
+      return !!mine && RANK[mine] >= RANK[role]
+    },
+    /** 问一次后端"我还登录着吗"，顺便把身份拿回来 */
     async check() {
       try {
-        await adminApi.get('/session')
+        const r = await adminApi.get<{ user: AdminMe }>('/session')
+        me.value = r.user
         ok.value = true
       } catch {
         ok.value = false
+        me.value = null
       } finally {
         checked.value = true
       }
     },
-    async login(password: string) {
-      await adminApi.post('/login', { password })
+    async login(username: string, password: string) {
+      const r = await adminApi.post<{ user: AdminMe }>('/login', { username, password })
+      me.value = r.user
       ok.value = true
       checked.value = true
     },
     async logout() {
       try { await adminApi.post('/logout') } catch { /* 忽略 */ }
       ok.value = false
+      me.value = null
     },
   }
+}
+
+/** 角色显示用的顺序，给下拉选项用 */
+export const ADMIN_ROLES: { value: AdminRoleId; label: string; hint: string }[] = [
+  { value: 'viewer', label: '只读', hint: '能看统计与知识库，不能修改' },
+  { value: 'editor', label: '编辑', hint: '能改知识库、命令、文案、地图与公告' },
+  { value: 'admin', label: '管理', hint: '全部权限，含账号管理与系统设置' },
+]
+
+/** 当前登录者是不是管理员（模板里用起来比 auth.can 顺手） */
+export function useIsAdmin() {
+  return computed(() => useAuth().can('admin'))
 }

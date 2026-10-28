@@ -13,6 +13,7 @@ const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
 
+const username = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
@@ -31,11 +32,11 @@ onMounted(() => {
 })
 
 async function submit() {
-  if (!password.value || busy.value) return
+  if (!username.value.trim() || !password.value || busy.value) return
   busy.value = true
   error.value = ''
   try {
-    await auth.login(password.value)
+    await auth.login(username.value.trim(), password.value)
     const r = String(route.query.r ?? '/stats')
     router.replace(r.startsWith('/') ? r : '/stats')
   } catch (e) {
@@ -60,11 +61,19 @@ async function submit() {
       <h1 class="t">管理员登录</h1>
       <form ref="formEl" @submit.prevent="submit">
         <Input
+          v-model="username"
+          name="username"
+          placeholder="账号"
+          autocomplete="username"
+          aria-label="账号"
+        />
+        <Input
           v-model="password"
           type="password"
           name="password"
           placeholder="密码"
           autocomplete="current-password"
+          aria-label="密码"
         />
         <Button variant="primary" type="submit" block :disabled="busy">
           {{ busy ? '登录中…' : '登录' }}
