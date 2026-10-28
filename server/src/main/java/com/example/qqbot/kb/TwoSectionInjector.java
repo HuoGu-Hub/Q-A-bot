@@ -33,8 +33,10 @@ public class TwoSectionInjector implements KbKnowledgeInjector {
             appendHits(sb, curated);
         }
         if (!imported.isEmpty()) {
+            // 不再每段都印"可能已经过期"：模型会把这种提醒抄进回答，变成固定免责声明。
+            // 时效判断交给系统提示词里的"最多一行"规则，资料段只负责把时间说清楚。
             sb.append("【导入的资料").append(timeRange(imported))
-                    .append("】以下是从外部资料整理导入的，**可能已经过期**：\n");
+                    .append("】以下是从外部资料整理导入的：\n");
             appendHits(sb, imported);
         }
         return sb.toString().strip();
@@ -57,9 +59,9 @@ public class TwoSectionInjector implements KbKnowledgeInjector {
     }
 
     /**
-     * 这一批资料的时间跨度，形如 {@code " · 资料时间 2026-09-20 ~ 2026-09-21"}。
+     * 这一批资料的时间跨度，形如 {@code " · 资料导入时间 2026-09-20 ~ 2026-09-21"}。
      *
-     * <p>没有日期就老实说"时间未知" —— 旧语料没有 {@code at} 这一列，
+     * <p>没有日期就老实说"资料导入时间未知" —— 旧语料没有 {@code at} 这一列，
      * 编一个日期出来比没有更糟。
      */
     private static String timeRange(List<KbRetriever.Hit> hits) {
@@ -71,11 +73,11 @@ public class TwoSectionInjector implements KbKnowledgeInjector {
                 .sorted()
                 .toList();
         if (dates.isEmpty()) {
-            return " · 时间未知";
+            return " · 资料导入时间未知";
         }
         if (dates.size() == 1) {
-            return " · 资料时间 " + dates.get(0);
+            return " · 资料导入时间 " + dates.get(0);
         }
-        return " · 资料时间 " + dates.get(0) + " ~ " + dates.get(dates.size() - 1);
+        return " · 资料导入时间 " + dates.get(0) + " ~ " + dates.get(dates.size() - 1);
     }
 }

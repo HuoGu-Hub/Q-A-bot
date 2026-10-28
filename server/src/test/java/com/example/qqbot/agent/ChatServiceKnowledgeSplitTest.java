@@ -27,8 +27,8 @@ import static org.mockito.Mockito.when;
  *
  * <p>这是整套"忠于自己的知识库、而不是忠于 Wiki"在**提示词层面**的落点：
  * <ul>
- *   <li>人工核对过的（{@code src=curated}）→ 单独一段，标注"以它为准"；</li>
- *   <li>导入的资料（{@code source=doc}）→ 另一段，带**资料时间**，标注"可能已过期"。</li>
+ *   <li>人工核对过的（{@code src=curated}）→ 单独一段，只标明出处；</li>
+ *   <li>导入的资料（{@code source=doc}）→ 另一段，带**资料导入时间**，不印"可能过期"。</li>
  * </ul>
  *
  * <p>要断言的不是"回复好不好看"，而是**模型到底看到了什么**：
@@ -78,8 +78,10 @@ class ChatServiceKnowledgeSplitTest {
         assertThat(msg).as("★ 注入文本里不能出现「以它为准」这类权威宣称：改过 ≠ 一定对")
                 .doesNotContain("以它为准")
                 .doesNotContain("最可信");
-        assertThat(msg).as("Wiki 段必须带上资料时间，模型才有依据判断新旧")
-                .contains("资料时间 2026-03-04");
+        assertThat(msg).as("导入段必须带上资料导入时间，模型才有依据判断新旧")
+                .contains("资料导入时间 2026-03-04");
+        assertThat(msg).as("不能在每段资料里反复印「可能已经过期」，否则模型会抄成固定免责声明")
+                .doesNotContain("可能已经过期");
     }
 
     @Test
@@ -88,7 +90,7 @@ class ChatServiceKnowledgeSplitTest {
         KbCorpus.Entry wiki = new KbCorpus.Entry("absorb-0", "Absorb", "Absorb is a skill.",
                 "https://w/Absorb", List.of(), false, "2026-09-21T10:00:00Z", V);
         String msg = rendered(List.of(new KbRetriever.Hit(wiki, 0.9, "vector")));
-        assertThat(msg).contains("【导入的资料 · 资料时间 2026-09-21】");
+        assertThat(msg).contains("【导入的资料 · 资料导入时间 2026-09-21】");
         assertThat(msg).doesNotContain("【我们维护的内容】");
     }
 
@@ -102,7 +104,7 @@ class ChatServiceKnowledgeSplitTest {
         String msg = rendered(List.of(new KbRetriever.Hit(a, 1.0, "vector"),
                 new KbRetriever.Hit(b, 0.9, "vector")));
 
-        assertThat(msg).contains("资料时间 2026-09-20 ~ 2026-09-21");
+        assertThat(msg).contains("资料导入时间 2026-09-20 ~ 2026-09-21");
     }
 
     @Test
@@ -112,7 +114,7 @@ class ChatServiceKnowledgeSplitTest {
                 List.of(), false, "", V);
         String msg = rendered(List.of(new KbRetriever.Hit(old, 0.9, "vector")));
 
-        assertThat(msg).contains("【导入的资料 · 时间未知】");
+        assertThat(msg).contains("【导入的资料 · 资料导入时间未知】");
     }
 
     // 「不用知识库」模式那条用例已随切换搬走：

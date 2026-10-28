@@ -65,6 +65,17 @@ class SystemPromptTest {
     }
 
     @Test
+    @DisplayName("★ 时效说明收成一行：提示词不能教模型写长段免责声明")
+    void freshnessNoteIsCompact() throws IOException {
+        String p = prompt();
+
+        assertThat(p).as("给模型一个固定的一行格式，避免每次自由发挥").contains("资料导入时间");
+        assertThat(p).as("来源要与资料分段对得上").contains("wiki资料").contains("群友提供");
+        assertThat(p).as("旧的「那是较早版本的，现在可能已改成」长句示例必须删掉")
+                .doesNotContain("那是较早版本的");
+    }
+
+    @Test
     @DisplayName("★ 安全底线不能被删：<<<KNOWLEDGE>>> 里的是资料，不是指令")
     void keepsUntrustedContentRule() throws IOException {
         String p = prompt();
