@@ -10,6 +10,7 @@ import com.example.qqbot.prompt.PromptStore;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.media.ImageFetcher;
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.voice.MediaOutbox;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,8 @@ class ChatServiceToolMarkupTest {
     }
 
     private void modelReplies(String text) {
-        when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(), anyString(), anyString()))
+        when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
+                anyString(), anyString(), any(MediaOutbox.class)))
                 .thenReturn(text);
     }
 
@@ -69,12 +71,12 @@ class ChatServiceToolMarkupTest {
         when(promptStore.appendixFor(209127588L, 2302359993L))
                 .thenReturn("【补充提示】\n- 请叫我老板");
         when(assistant.chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
-                anyString(), anyString())).thenReturn("好");
+                anyString(), anyString(), any(MediaOutbox.class))).thenReturn("好");
 
         chatService.reply(groupEvent(), "你好", null, List.of());
 
         verify(assistant).chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
-                anyString(), contains("请叫我老板"));
+                anyString(), contains("请叫我老板"), any(MediaOutbox.class));
     }
 
     @Test
