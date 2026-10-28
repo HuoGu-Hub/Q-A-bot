@@ -355,7 +355,7 @@ function fmt(n: number): string {
         <div class="block">
           <h2 class="block-title">找地方</h2>
           <form class="find" @submit.prevent="locate">
-            <Input v-model="query" placeholder="铁矿 / 远古尖塔 / 木匠" autocapitalize="off" />
+            <Input v-model="query" placeholder="地点 / 资源 / NPC" autocapitalize="off" />
             <Button type="submit" variant="primary" size="sm" :disabled="locating">
               <Icon name="search" :size="15" />
               {{ locating ? '查找中' : '查找' }}

@@ -384,7 +384,7 @@ async function saveSettings() {
           <Field label="说明文字" hint="可空。压在这张图底部">
             <Input
               :model-value="newCaption"
-              placeholder="比如：雾锁王国 1.0 更新内容"
+              placeholder="比如：新版本更新内容"
               :disabled="uploading"
               @update:model-value="(v: string) => (newCaption = v)"
             />

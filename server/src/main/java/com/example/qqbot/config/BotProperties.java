@@ -18,12 +18,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.bot")
 public class BotProperties implements BotPolicy {
 
-    // ⚠️ 默认值是**示例占位**：仓库公开，真实昵称不要写回来。
-    //    真实昵称在后台「设置 → 机器人身份」改（热生效、持久化到 overrides.yml），
-    //    或首次部署时用 .env 的 APP_BOT_NAME 打底。
+    // 默认值面向开源项目。部署方在后台「设置 → 机器人身份」覆盖，
+    // 修改热生效并持久化到 overrides.yml；org / author 留空时公开站不展示。
 
     /** 机器人昵称 —— 用于 {bot} 变量、限流话术等 */
-    private String name = "示例助手";
+    private String name = "Q-A-bot";
 
     @Override
     public String getName() {
@@ -35,10 +34,10 @@ public class BotProperties implements BotPolicy {
     }
 
     /** 运营方 / 组织名 —— 公开站「关于」页展示（留空则不显示那一行） */
-    private String org = "示例组织";
+    private String org = "";
 
     /** 技术支持署名 —— 公开站「关于」页展示（留空则不显示那一行） */
-    private String author = "示例作者";
+    private String author = "";
 
     @Override
     public String getOrg() {

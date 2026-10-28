@@ -156,7 +156,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   <div class="page library">
     <PageHeader
       title="资料库"
-      :desc="t('library.subtitle', '《雾锁王国》Wiki 的中文索引 —— 直接说人话就行，比如「木头怎么弄」「等级上限」。')"
+      :desc="t('library.subtitle', '知识库索引 —— 直接描述你要查的内容即可，比如「怎么合成」「上限是多少」。')"
     />
 
     <!-- 手机上搜索条吸顶：翻到结果第 20 条时还能改词，不用滚回顶部 -->
@@ -164,7 +164,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       <SearchBar
         v-model="q"
         label="搜索资料库"
-        placeholder="搜点什么… 比如「废料杯」「爆炸箭」「游牧高地」"
+        placeholder="输入关键词… 比如「怎么合成」「上限是多少」"
         @submit="submit"
         @clear="clearAll"
       />
@@ -191,7 +191,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
         </h2>
         <Empty v-if="!result.entries.length" icon="search"
                :text="t('library.empty_title', '没找到相关资料')"
-               :hint="t('library.empty_hint', '换个更具体的说法（比如把「怎么搞木头」说成「木头」），或者到群里直接问机器人')" />
+               :hint="t('library.empty_hint', '换个更具体的说法，或者到群里直接问机器人')" />
         <!--
           ⚠️ 整行可点，但必须是真的链接。
           上一版是 div + tabindex + @click —— 读屏念不出目的地、右键开不了新标签。
@@ -315,7 +315,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
         <div class="contribute-text">
           <h2 class="block-title">发现内容有误或缺失？</h2>
           <p class="hint">
-            资料来自 enshrouded.wiki.gg。要补充或修订，请在群里 @ 机器人，写下词条名和要改的内容 ——
+            资料来自本项目的知识库。要补充或修订，请在群里 @ 机器人，写下词条名和要改的内容 ——
             经管理员审核、重建索引后会在站上生效。
           </p>
         </div>

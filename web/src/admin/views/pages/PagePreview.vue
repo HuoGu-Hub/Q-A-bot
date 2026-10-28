@@ -77,9 +77,9 @@ const isChanged = (key: string) =>
   has(key) && props.texts[key] !== props.defaults[key]
 const mark = (key: string) => ({ changed: isChanged(key) })
 
-/** 标题加亮点：站点名「雾中灵火」的「灵火」用火色 —— 与公开站一致，但不可编辑 */
-const TITLE_HEAD = '雾中'
-const TITLE_TAIL = '灵火'
+/** 标题高亮：站点名 Q-A-bot 的「bot」用火色 —— 与公开站一致，但不可编辑 */
+const TITLE_HEAD = 'Q-A-'
+const TITLE_TAIL = 'bot'
 </script>
 
 <template>
@@ -170,7 +170,7 @@ const TITLE_TAIL = '灵火'
           v-html="html('subtitle')"
         />
         <div class="m-search">
-          <span class="m-search-ph faint">搜点什么… 比如「废料杯」「爆炸箭」「游牧高地」</span>
+          <span class="m-search-ph faint">输入关键词… 比如「怎么合成」「上限是多少」</span>
           <span class="m-search-btn">搜索</span>
         </div>
         <div v-if="has('empty_title') || has('empty_hint')" class="m-empty">

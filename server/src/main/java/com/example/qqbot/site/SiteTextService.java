@@ -56,15 +56,15 @@ public class SiteTextService {
             // ---- 全站 ----
             new Block("layout", "全站", "footer_note", "页脚 · 来源声明",
                     "资料版权说明，出现在每页底部", true,
-                    "资料来源于 Enshrouded Wiki（CC BY-NC-SA 3.0）· 游戏素材版权归 Keen Games 所有"),
+                    "内容来自本项目的知识库 · 版权归各自来源所有"),
             new Block("layout", "全站", "footer_copy", "页脚 · 版权行",
                     "年份会自动替换 {year}", false,
-                    "© {year} 示例助手 · 由示例作者提供技术支持"),
+                    "© {year} Q-A-bot"),
 
             // ---- 首页 ----
             new Block("home", "首页", "tagline", "副标语",
                     "{kb} 会自动替换成知识库条目数", false,
-                    "在《雾锁王国》的迷雾里，问一句就好 —— 我帮你翻遍 {kb} 条资料。"),
+                    "有问题就问一句 —— 我在 {kb} 条资料里找答案。"),
             // 首页的「搜索框提示」已随搜索框一起删除（2026-09-27）——
             // 注册表里留着它就等于后台会显示一个页面上根本不存在、改了也没用的块。
             new Block("home", "首页", "howto_title", "小标题", "", false, "怎么用"),
@@ -74,9 +74,9 @@ public class SiteTextService {
             // ⚠️ 老键 howto_1/2/3 已下线；若库里还留着覆盖行，publicOverrides() 会打
             //    WARN 提示清掉（实测生产库里这三块从没被改过，所以没有文案丢失）。
             new Block("home", "首页", "howto_body", "条目", "一行一条，每行渲染成列表的一项", true,
-                    "在群里 @ 我提问 —— 群里直接问，我会查资料后回答。\n"
-                            + "或者去 [资料库](/library) 翻 —— 和群里回答用的是同一套 Wiki 资料。\n"
-                            + "查不到就问点别的 —— 资料来自官方 Wiki，游戏更新后可能有延迟。"),
+                    "在群里 @ 我提问 —— 我会先检索知识库，再依据资料回答。\n"
+                            + "或者去 [资料库](/library) 翻 —— 和群里回答用的是同一套资料。\n"
+                            + "查不到就问点别的 —— 资料由本项目维护，更新可能有延迟。"),
 
             // ---- 关于页 ----
             // 「关于」这一组原先的标签是「标题 · 是什么」「正文 · 是什么」——
@@ -84,34 +84,33 @@ public class SiteTextService {
             // 中途试过把段落名挪到 hint（右侧浅色小字），但这类注释小字本身就是噪声
             // （2026-09-28 决定）：标签只留角色，hint 一律留空。
             // 分不清哪块是哪块？看右边预览 —— 它就是这一页的版式。
-            new Block("about", "关于", "what_title", "标题", "", false, "示例助手是什么"),
+            new Block("about", "关于", "what_title", "标题", "", false, "Q-A-bot 是什么"),
             new Block("about", "关于", "what_body", "正文", "", true,
-                    "一个《雾锁王国》（Enshrouded）的问答助手。在 QQ 群里 @ 我提问，"
-                            + "我会先在本地资料库里检索，再依据检索到的内容回答 —— 而不是凭空编。"),
+                    "一个面向游戏社群的知识库问答机器人。在 QQ 群里 @ 我提问，"
+                            + "我会先在本地知识库里检索，再依据检索到的内容回答 —— 而不是凭空编造。"),
             new Block("about", "关于", "source_title", "标题", "", false, "资料从哪来"),
             new Block("about", "关于", "source_body", "正文", "", true,
-                    "全部来自 [官方 Enshrouded Wiki](https://enshrouded.wiki.gg/wiki/Main_Page)，采用 "
-                            + "[CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/) 许可。"
-                            + "游戏内容与素材的版权归 [Keen Games](https://www.keengames.com/) 所有。本站非商业用途。"),
+                    "资料来自本项目导入的知识库文档。内容与素材的版权归各自来源所有，"
+                            + "本站仅用于非商业问答。"),
             new Block("about", "关于", "how_title", "标题", "", false, "回答是怎么产生的"),
             new Block("about", "关于", "how_body", "正文", "", true,
                     "把问题变成向量，在本地资料库里找最相关的几段\n同时用中英术语表做一次关键词匹配\n两路结果按排名融合，取前几条\n把资料交给大模型，让它依据资料作答"),
             new Block("about", "关于", "privacy_title", "标题", "", false, "隐私"),
             new Block("about", "关于", "privacy_body", "正文", "", true,
-                    "这个公开站**不展示任何群成员的提问记录**。站上能看到的只有游戏资料本身，"
+                    "这个公开站**不展示任何群成员的提问记录**。站上能看到的只有知识库资料本身，"
                             + "以及几个不敏感的汇总数字。"),
 
             // ---- 资料库 ----
             new Block("library", "资料库", "subtitle", "副标题", "", false,
-                    "《雾锁王国》Wiki 的中文索引 —— 直接说人话就行，比如「木头怎么弄」「等级上限」。"),
+                    "知识库索引 —— 直接描述你要查的内容即可，比如「怎么合成」「上限是多少」。"),
             new Block("library", "资料库", "empty_title", "搜索无结果 · 标题", "", false, "没找到相关资料"),
             new Block("library", "资料库", "empty_hint", "搜索无结果 · 提示", "", true,
-                    "换个更具体的说法（比如把「怎么搞木头」说成「木头」），或者到群里直接问机器人"),
+                    "换个更具体的说法，或者到群里直接问机器人"),
 
             // ---- 404 ----
-            new Block("notfound", "404", "title", "标题", "", false, "迷失在雾里了"),
+            new Block("notfound", "404", "title", "标题", "", false, "页面不存在"),
             new Block("notfound", "404", "desc", "说明", "", false,
-                    "这个页面不存在。也许你该回到有火光的地方。"));
+                    "这个页面不存在，返回首页或资料库继续查找。"));
 
     private static final Map<String, Block> BY_KEY = new LinkedHashMap<>();
     /** 页面顺序 = 注册表里第一次出现的顺序，后台二级目录按它排 */

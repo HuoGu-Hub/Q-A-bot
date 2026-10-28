@@ -150,7 +150,7 @@ See [development](docs/development.md) for details.
 |---|---|
 | Single instance | Designed for one 2-core/2 GB host and small communities. SQLite and in-memory caches do not support horizontal scaling |
 | QQ protocol | Depends on NapCat and a dedicated account. Risk control and session loss remain possible |
-| Corpus and map | Defaults target Enshrouded. No game corpus is bundled; other games require their own corpus and map source |
+| Corpus and map | Public copy is game-neutral by default; map and wiki import default to the Enshrouded wiki. Other games require their own source and map data |
 | Models | Requires external OpenAI-compatible APIs plus a separate embedding and rerank service |
 | Admin | Single administrator. No multi-user or role model |
 

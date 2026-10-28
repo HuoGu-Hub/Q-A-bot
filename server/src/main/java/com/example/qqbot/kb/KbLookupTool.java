@@ -44,8 +44,8 @@ public class KbLookupTool {
     }
 
     /** 工具方法名即工具名：{@code lookup} —— 授权白名单里用的就是它 */
-    @Tool("查询《雾锁王国》知识库，返回最相关的资料片段、相关度与是否命中标题。只读，不会改动任何数据。"
-            + "知识库正文是英文的（来自英文 wiki）：中文关键词若结果不佳，请把关键词换成游戏内的英文名再查一次，"
+    @Tool("查询知识库，返回最相关的资料片段、相关度与是否命中标题。只读，不会改动任何数据。"
+            + "知识库正文可能是中文或英文：关键词若结果不佳，请换成资料中的原文再查一次，"
             + "最多重试两次；两次都查不到才说资料里没查到。"
             + "另外：命中资料里若出现了对回答有帮助的材料、地点、技能（例如配方里的铁、布料），"
             + "可以再查它们怎么获得，这样能给出更完整的答案；但要克制，只在明显有用时才查。"
@@ -67,7 +67,7 @@ public class KbLookupTool {
         KbRetriever.Retrieval r = retriever.retrieve(query);
         if (r.hits().isEmpty()) {
             return "知识库里没有查到与「" + PromptText.escapeDelimiters(query) + "」相关的内容（关键词候选 " + r.keywordCandidates()
-                    + " 条）。如果这是中文词，可以换成游戏内的英文名再查一次。";
+                    + " 条）。如果这是中文词，可以换成资料中的原文再查一次。";
         }
         StringBuilder sb = new StringBuilder();
         int n = 0;
@@ -92,7 +92,7 @@ public class KbLookupTool {
                 .append("，标题命中 ").append(titleHits).append(" 条。");
         if (titleHits == 0) {
             sb.append("**这批结果的标题与你的关键词没有一处对上，可能不可靠**：")
-                    .append("如果关键词是中文，请换成游戏内的英文名再查一次；也可以用 search_titles 先确认英文名。");
+                    .append("如果关键词是中文，请换成资料中的原文再查一次；也可以用 search_titles 先确认原文名。");
         }
         log.info("[TOOL] lookup「{}」→ {} 条，最高分 {}，标题命中 {} 条", query, n,
                 String.format("%.3f", best), titleHits);
@@ -100,16 +100,16 @@ public class KbLookupTool {
     }
 
     /**
-     * 按英文词查**条目名**（标题）。
+     * 按关键词查**条目名**（标题）。
      *
-     * <p>解决的是"中文名 ↔ 英文名对不上"：模型猜一个英文词（如 sickle / scythe），
-     * 从返回的标题里认出正确的那个，再用完整英文名去 {@link #lookup}。
+     * <p>解决的是"中文名 ↔ 原文名对不上"：模型猜一个关键词，
+     * 从返回的标题里认出正确的那个，再用完整原文名去 {@link #lookup}。
      * 这一步是纯字面匹配，不花向量钱，也不受跨语言相似度影响。
      */
-    @Tool(name = "search_titles", value = "按英文关键词查知识库里的条目名（标题），返回匹配到的标题列表。只读。"
-            + "当你不知道某个中文名对应的英文名时用它：先猜一个英文词（如 sickle、scythe、critter），"
-            + "看返回的标题里有没有正确的那个，再用完整英文名去 lookup。")
-    public String searchTitles(@P("英文关键词，例如 sickle") String word, InvocationContext ctx) {
+    @Tool(name = "search_titles", value = "按关键词查知识库里的条目名（标题），返回匹配到的标题列表。只读。"
+            + "当你不知道某个中文名对应的原文名时用它：先猜一个关键词，"
+            + "看返回的标题里有没有正确的那个，再用完整原文名去 lookup。")
+    public String searchTitles(@P("关键词或关键词片段") String word, InvocationContext ctx) {
         if (word == null || word.isBlank()) {
             return "没有提供关键词。";
         }
@@ -136,7 +136,7 @@ public class KbLookupTool {
         }
         if (titles.isEmpty()) {
             return "知识库里没有任何条目的名字含「" + PromptText.escapeDelimiters(word)
-                    + "」。换个英文词再试，或直接用中文问。";
+                    + "」。换个关键词再试，或直接用中文问。";
         }
         String list = titles.stream().map(PromptText::escapeDelimiters)
                 .collect(java.util.stream.Collectors.joining("\n- "));
@@ -163,9 +163,9 @@ public class KbLookupTool {
      * <p>问「哪里有铁矿」时应该调它，而不是调 {@link #lookup} ——
      * 后者给的是文本片段，回答不了"在哪"。
      */
-    @Tool("查询《雾锁王国》地图上某类地点或资源的位置，返回它相对最近地标的方位、距离与坐标。"
+    @Tool("查询地图上某类地点或资源的位置，返回它相对最近地标的方位、距离与坐标。"
             + "问『哪里有X』『X在哪』时用这个。只读。")
-    public String locate(@P("要查的地点或资源名，例如 铁矿、远古尖塔、木匠") String place,
+    public String locate(@P("要查的地点或资源名") String place,
                          InvocationContext ctx) {
         if (place == null || place.isBlank()) {
             return "没有提供要查的地点。";

@@ -12,7 +12,7 @@ import java.util.Map;
 public final class DistillPrompts {
 
     public static final String SYSTEM = """
-            你是《雾锁王国》玩家群的知识整理员。输入是一段群聊。
+            你是游戏玩家群的知识整理员。输入是一段群聊。
 
             只提取对后来者有长期价值的经验：
             - 具体做法、配方、材料、数值、坐标、位置、机制、避坑

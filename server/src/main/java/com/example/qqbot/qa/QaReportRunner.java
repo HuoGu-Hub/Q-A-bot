@@ -66,7 +66,7 @@ public class QaReportRunner implements ApplicationRunner {
         if (ov.total() == 0) {
             System.out.println();
             System.out.println("  还没有任何记录。");
-            System.out.println("  去群里 @ 机器人问几个《雾锁王国》的问题，数据就有了。");
+            System.out.println("  去群里 @ 机器人问几个知识库里的问题，数据就有了。");
             System.out.println("=============================================");
             return;
         }

@@ -36,7 +36,7 @@ const slideIntervalMs = ref(4000)
  * 默认值保留原来的硬编码文案 —— 后端文案拿不到时照常显示。
  */
 const tagline = computed(() =>
-  t('home.tagline', '在《雾锁王国》的迷雾里，问一句就好 —— 我帮你翻遍 {kb} 条资料。', {
+  t('home.tagline', '有问题就问一句 —— 我在 {kb} 条资料里找答案。', {
     kb: num(stats.value?.kbEntries ?? 0),
   }))
 
@@ -45,9 +45,9 @@ const tagline = computed(() =>
  * 默认值是硬编码的兜底，内容必须与 SiteTextService 注册表里 home.howto_body 的 defaultText 一致。
  */
 const HOWTO_DEFAULT = [
-  '在群里 @ 我提问 —— 群里直接问，我会查资料后回答。',
-  '或者去 [资料库](/library) 翻 —— 和群里回答用的是同一套 Wiki 资料。',
-  '查不到就问点别的 —— 资料来自官方 Wiki，游戏更新后可能有延迟。',
+  '在群里 @ 我提问 —— 我会先检索知识库，再依据资料回答。',
+  '或者去 [资料库](/library) 翻 —— 和群里回答用的是同一套资料。',
+  '查不到就问点别的 —— 资料由本项目维护，更新可能有延迟。',
 ].join('\n')
 
 const howSteps = computed(() =>
@@ -107,7 +107,7 @@ onMounted(async () => {
     <section class="hero slab">
       <div class="page hero-main" :class="{ 'has-media': !!slides.length }">
         <div class="hero-text">
-          <h1 class="wordmark">雾中<span class="lit">灵火</span></h1>
+          <h1 class="wordmark">Q-A-<span class="lit">bot</span></h1>
           <p class="tagline">{{ tagline }}</p>
 
           <div class="acts">
@@ -138,7 +138,7 @@ onMounted(async () => {
 
     <div class="page how-wrap">
       <h2 class="section-title">怎么用</h2>
-      <!-- 三条路径是并列的，不是步骤 —— 所以不编号。第一张是主路径，只有它带灵火标记 -->
+      <!-- 三条路径是并列的，不是步骤 —— 所以不编号。第一张是主路径，只有它带强调标记 -->
       <ol class="how">
         <li v-for="(step, i) in howSteps" :key="i" class="how-item" :class="{ primary: i === 0 }">
           <span class="how-icon" aria-hidden="true"><Icon :name="iconAt(i)" :size="18" /></span>
@@ -185,7 +185,7 @@ onMounted(async () => {
   /* 刻进石头：暗色在上、微光在下。比整行发光安静得多，也更像碑面 */
   text-shadow: 0 1px 0 rgba(0, 0, 0, .18);
 }
-/* 熔金嵌字：灵火这两个字是「被照到的地方」，不是「在发光的字」。
+/* 熔金嵌字：高亮的那几个字是「被照到的地方」，不是「在发光的字」。
    ⚠️ 全站只有这一处用渐变文字 —— 用第二次就变成模板了。 */
 .lit {
   background: linear-gradient(176deg, var(--ember-hot) 4%, var(--ember) 46%, var(--ember-deep) 100%);

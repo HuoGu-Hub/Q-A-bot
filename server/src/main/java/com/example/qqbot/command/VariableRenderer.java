@@ -107,7 +107,7 @@ public class VariableRenderer {
         List<VarInfo> list = new java.util.ArrayList<>(List.of(
                 VarInfo.value("user", "提问者昵称", "示例用户"),
                 VarInfo.value("group", "群名称", "示例玩家群"),
-                VarInfo.value("bot", "机器人昵称", "示例助手"),
+                VarInfo.value("bot", "机器人昵称", "Q-A-bot"),
                 VarInfo.value("time", "当前时间", "14:32"),
                 VarInfo.value("date", "今天日期", "2026-09-25"),
                 VarInfo.value("datetime", "完整时间", "2026-09-25 14:32:07"),
@@ -265,7 +265,7 @@ public class VariableRenderer {
             case "user" -> ctx.preview() ? "示例用户"
                     : (ctx.nickname() == null || ctx.nickname().isBlank() ? "朋友" : ctx.nickname());
             case "group" -> ctx.preview() ? "示例玩家群" : groupName(ctx);
-            case "bot" -> ctx.preview() ? "示例助手" : botProps.getName();
+            case "bot" -> ctx.preview() ? "Q-A-bot" : botProps.getName();
             case "user.id" -> String.valueOf(ctx.userId() == null ? 0L : ctx.userId());
             case "group.id" -> String.valueOf(ctx.groupId() == null ? 0L : ctx.groupId());
 
@@ -383,7 +383,7 @@ public class VariableRenderer {
      * §{cmd.list}§ —— 渲染所有启用的指令。
      *
      * <p>这是 §/help§ 和 §/list§ 的实现方式（**不写死在代码里**），
-     * 所以你可以自由调整文案，比如前面加一句「我是示例助手，可以这样用：」。
+     * 所以你可以自由调整文案，比如前面加一句「我是 Q-A-bot，可以这样用：」。
      */
     private String cmdList(boolean preview) {
         List<BotCommand> cmds = preview

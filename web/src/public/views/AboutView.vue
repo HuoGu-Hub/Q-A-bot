@@ -22,19 +22,19 @@ const howSteps = computed(() =>
 
 <template>
   <div class="page about read">
-    <PageHeader title="关于" desc="一个《雾锁王国》问答助手，和它背后的取舍。" />
+    <PageHeader title="关于" desc="一个知识库问答机器人，和它背后的取舍。" />
 
     <section class="sec">
       <h2 class="h"><span v-html="renderInline(t('about.what_title', 'Q-A-bot 是什么'))" /></h2>
       <p class="muted">
-        <span v-html="renderInline(t('about.what_body', '一个《雾锁王国》（Enshrouded）的问答助手。在 QQ 群里 @ 我提问，我会先在本地资料库里检索，再依据检索到的内容回答 —— 而不是凭空编。'))" />
+        <span v-html="renderInline(t('about.what_body', '一个面向游戏社群的知识库问答机器人。在 QQ 群里 @ 我提问，我会先在本地知识库里检索，再依据检索到的内容回答 —— 而不是凭空编造。'))" />
       </p>
     </section>
 
     <section class="sec">
       <h2 class="h"><span v-html="renderInline(t('about.source_title', '资料从哪来'))" /></h2>
       <p class="muted">
-        <span v-html="renderInline(t('about.source_body', '全部来自 [官方 Enshrouded Wiki](https://enshrouded.wiki.gg/wiki/Main_Page)，采用 [CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/) 许可。游戏内容与素材的版权归 [Keen Games](https://www.keengames.com/) 所有。本站非商业用途。'))" />
+        <span v-html="renderInline(t('about.source_body', '资料来自本项目导入的知识库文档。内容与素材的版权归各自来源所有，本站仅用于非商业问答。'))" />
       </p>
     </section>
 
@@ -72,7 +72,7 @@ const howSteps = computed(() =>
     <section class="sec last">
       <h2 class="h"><span v-html="renderInline(t('about.privacy_title', '隐私'))" /></h2>
       <p class="muted">
-        <span v-html="renderInline(t('about.privacy_body', '这个公开站**不展示任何群成员的提问记录**。站上能看到的只有游戏资料本身，以及几个不敏感的汇总数字。'))" />
+        <span v-html="renderInline(t('about.privacy_body', '这个公开站**不展示任何群成员的提问记录**。站上能看到的只有知识库资料本身，以及几个不敏感的汇总数字。'))" />
       </p>
     </section>
   </div>

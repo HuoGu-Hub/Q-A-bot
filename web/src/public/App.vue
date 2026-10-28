@@ -110,9 +110,9 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
       <div class="page">
         <hr class="rule">
         <p class="faint">
-          <span v-html="renderInline(t('layout.footer_note', '资料来源于 Enshrouded Wiki（CC BY-NC-SA 3.0）· 游戏素材版权归 Keen Games 所有'))" />
+          <span v-html="renderInline(t('layout.footer_note', '内容来自本项目的知识库 · 版权归各自来源所有'))" />
         </p>
-        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} 示例助手 · 由示例作者提供技术支持'))" /></p>
+        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} Q-A-bot'))" /></p>
       </div>
     </footer>
 

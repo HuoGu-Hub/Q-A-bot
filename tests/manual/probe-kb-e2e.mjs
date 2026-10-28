@@ -44,7 +44,7 @@ http.createServer((req, res) => {
     const action = (req.url || '').replace(/^\//, '')
     let data = {}
     if (action === 'get_login_info') {
-      data = { user_id: BOT_QQ, nickname: '示例助手' }
+      data = { user_id: BOT_QQ, nickname: 'Q-A-bot' }
     } else if (action === 'send_group_msg') {
       const p = JSON.parse(body || '{}')
       sent.push({ group: p.group_id, text: extract(p) })
