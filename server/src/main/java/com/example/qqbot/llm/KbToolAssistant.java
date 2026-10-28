@@ -156,8 +156,16 @@ public class KbToolAssistant {
                     return ToolErrorHandlerResult.text(
                             "工具 " + name + " 执行失败了。请直接用已有资料作答，不要再重复调用它。");
                 })
-                // 防死循环：模型可以反复要求调工具，必须有上限（可配，见 app.llm.tool.max-round-trips）
-                .maxToolCallingRoundTrips(Math.max(1, this.toolPolicy.getMaxRoundTrips()))
+                // 防死循环：模型可以反复要求调工具，必须有上限（可配，见 app.llm.tool.max-round-trips）。
+                //
+                // ★ 这里必须比配置值多 1，否则"最后一轮让模型收尾"根本轮不到：
+                //   langchain4j 的检查发生在**拿到响应之后、判断有没有工具请求之前**
+                //   （ToolService.executeInferenceAndToolsLoop 的 remaining-- == 0）。
+                //   上限设成 3 时，第 4 次调用的响应一到就直接抛
+                //   "exceeded 3 tool calling round trips"，哪怕它只是一段正常文字。
+                //   2026-10-28 线上三次都是这个形状：LlmRouter 已经用 tool_choice=none
+                //   拿到 121/192/131 字的回答，却在返回前被框架丢掉，群友收到兜底话术。
+                .maxToolCallingRoundTrips(frameworkRoundTripLimit(this.toolPolicy))
                 // ★ 授权钩子。模型能调工具之后，"说一句话"就是触发面 ——
                 //   系统提示词里那些约束是写给模型的，**不能当授权机制**。
                 .beforeToolExecution(this::authorize)
@@ -207,6 +215,18 @@ public class KbToolAssistant {
     /** 默认拒绝 */
     static boolean isAllowed(String toolName) {
         return toolName != null && ALLOWED_TOOLS.contains(toolName);
+    }
+
+    /**
+     * 交给 AiServices 的轮次上限 = 配置的工具轮数 + 1。
+     *
+     * <p>多出来的 1 轮不是"允许再查一次"，而是**留给收尾回答**：
+     * 第 N+1 次请求由 {@link LlmRouter#chatMessages} 摘掉工具，模型只负责用已有资料作答。
+     * 框架的计数比这里的语义少 1，所以不能直接把配置值传进去。
+     */
+    static int frameworkRoundTripLimit(ToolPolicy policy) {
+        int max = policy == null ? 3 : policy.getMaxRoundTrips();
+        return Math.max(1, max) + 1;
     }
 
     /** 一次请求的预算 —— 时限与次数上限见 {@link ToolPolicy} */

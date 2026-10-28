@@ -566,7 +566,10 @@ public class LlmRouter {
      * "换一种问法"，同一份预算下用户至少拿得到一个基于已查资料的答案。
      *
      * <p>判据是**请求里已有几条带工具调用的助手消息**，与
-     * {@code app.llm.tool.max-round-trips} 同一个数（AiServices 也用它）。
+     * {@code app.llm.tool.max-round-trips} 同一个数。注意 AiServices 的上限要比它大 1：
+     * 框架在响应返回后、判断工具请求前就检查轮次，正好会在这一轮抛出
+     * {@code exceeded N tool calling round trips}。这个 +1 由
+     * {@code KbToolAssistant#frameworkRoundTripLimit} 负责，两边必须同时改。
      */
     private ChatRequest capToolRoundTrips(ChatRequest request) {
         if (request.toolSpecifications() == null || request.toolSpecifications().isEmpty()) {

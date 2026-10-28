@@ -298,6 +298,38 @@ class KbToolAssistantTest {
     }
 
     @Test
+    @DisplayName("★ 用满三轮后必须还有一次收尾机会：第 4 次的回答不能被框架的轮次上限吞掉")
+    void answersOnTheRoundAfterToolBudgetIsUsedUp() {
+        int[] calls = {0};
+        ChatModel model = new ChatModel() {
+            @Override
+            public ChatResponse doChat(ChatRequest request) {
+                calls[0]++;
+                // 前三轮一直要工具，第四轮才肯用已有资料作答 —— 线上就是这个形状
+                if (calls[0] <= 3) {
+                    return ChatResponse.builder().aiMessage(AiMessage.from(
+                            ToolExecutionRequest.builder()
+                                    .id("call-" + calls[0])
+                                    .name("lookup")
+                                    .arguments("{\"query\":\"力量\"}")
+                                    .build())).build();
+                }
+                return ChatResponse.builder().aiMessage(AiMessage.from("最终答案")).build();
+            }
+        };
+        KbRetriever retriever = mock(KbRetriever.class);
+        when(retriever.retrieve(anyString())).thenReturn(KbRetriever.Retrieval.empty());
+        KbToolAssistant a = new KbToolAssistant(router(), model,
+                kbWith(augmentorReturning(List.of())),
+                new KbLookupTool(retriever, mock(KbCorpus.class), noPlaces(), new MapOptions()));
+
+        assertThat(a.chat("力量有什么用", "力量有什么用", new KbRetrievalDiagnostics(), true, "群:1/用户:2"))
+                .as("第 4 次是收尾回答，不能抛 exceeded tool calling round trips")
+                .isEqualTo("最终答案");
+        assertThat(calls[0]).as("三轮检索 + 一轮收尾").isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("★ 工具定义确实进了 ChatModel 收到的请求（LlmRouterChatModel 靠它转发给厂商）")
     void toolSpecificationsReachTheModel() {
         FakeChatModel model = new FakeChatModel(null);

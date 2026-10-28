@@ -21,7 +21,14 @@ public class ToolPolicy {
     /** 单次请求最多调几次工具。默认 3 */
     private int maxCalls = 3;
 
-    /** 最多几轮工具调用（交给 langchain4j 的 AiServices）。默认 3 */
+    /**
+     * 业务意义上的"最多几轮工具调用"。默认 3。
+     *
+     * <p>到达这个轮数后，下一轮不再给模型工具，只让它用已查到的资料作答。
+     * 交给 langchain4j 的 {@code maxToolCallingRoundTrips} 时必须 **+1**：
+     * 框架的检查发生在响应返回之后，正好会在"收尾那一轮"抛异常，把答案丢掉。
+     * 见 {@link KbToolAssistant#frameworkRoundTripLimit(ToolPolicy)}。
+     */
     private int maxRoundTrips = 3;
 
     public int getDeadlineSeconds() {
