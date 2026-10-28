@@ -1,5 +1,6 @@
 package com.example.qqbot.admin;
 
+import com.example.qqbot.persistence.AdminAuditRepository;
 import com.example.qqbot.qa.QaAnalytics;
 import com.example.qqbot.qa.QaStore;
 import jakarta.servlet.http.Cookie;
@@ -38,13 +39,17 @@ public class AdminController {
     private final AdminAuth auth;
     private final AdminPolicy props;
     private final QaStore store;
+    private final AdminUserService users;
+    private final AdminAuditRepository audit;
 
     public AdminController(QaAnalytics analytics, AdminAuth auth, AdminPolicy props,
-                           QaStore store) {
+                           QaStore store, AdminUserService users, AdminAuditRepository audit) {
         this.analytics = analytics;
         this.auth = auth;
         this.props = props;
         this.store = store;
+        this.users = users;
+        this.audit = audit;
     }
 
     // ==================== 登录 ====================
@@ -52,40 +57,72 @@ public class AdminController {
     /**
      * 登录。
      *
-     * <p>失败保护用的是**连接的对端地址**，不是 {@code X-Forwarded-For}：
+     * <p>失败保护用的是**连接的对端地址 + 账号名**，不是 {@code X-Forwarded-For}：
      * 那个头客户端可以自己伪造，拿它做限流等于没限流。
      *
-     * <p>⚠️ 走 Vite dev server 代理（穿透的常见配置）时，对端恒为代理自己
-     * （127.0.0.1）—— 也就是说这里的「按来源」实际等价于「全局」。
-     * 个人后台只有一个管理员，这样正合适。
+     * <p>为什么键里要带账号：经 Nginx 之后所有人来源都是 127.0.0.1，
+     * 只按来源计数等于全站共用一个计数器 —— 任何人对任意账号连错几次，
+     * 全体管理员一起被锁在门外。
      */
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body,
                                                      HttpServletRequest request,
                                                      HttpServletResponse response) {
+        String username = body == null ? null : body.get("username");
+        String password = body == null ? null : body.get("password");
         String source = request == null ? null : request.getRemoteAddr();
-        AdminAuth.LoginAttempt attempt = auth.login(body == null ? null : body.get("password"), source);
+        String ipHash = AdminAuthFilter.hashIp(source);
+        AdminAuth.LoginAttempt attempt = auth.login(username, password, source);
 
         if (attempt.outcome() == AdminAuth.LoginOutcome.LOCKED) {
             long wait = Math.max(1, attempt.retryAfterSeconds());
+            audit.record(null, username, "login-locked", "POST", "/admin/api/login",
+                    "retryAfterSeconds=" + wait, ipHash);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header("Retry-After", String.valueOf(wait))
                     .body(Map.of(
                             "error", "尝试次数过多，请 " + Math.max(1, wait / 60) + " 分钟后再试（剩 " + wait + " 秒）",
                             "retryAfterSeconds", wait));
         }
-        String token = attempt.token();
-        if (token == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "密码不对，或后台未启用"));
+        if (attempt.outcome() == AdminAuth.LoginOutcome.DISABLED) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "后台未启用或还没有账号"));
         }
-        Cookie cookie = new Cookie(AdminAuthFilter.COOKIE_NAME, token);
+        if (attempt.outcome() != AdminAuth.LoginOutcome.OK || attempt.token() == null) {
+            audit.record(null, username, "login-failed", "POST", "/admin/api/login", null, ipHash);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "账号或密码不对"));
+        }
+
+        Cookie cookie = new Cookie(AdminAuthFilter.COOKIE_NAME, attempt.token());
         cookie.setHttpOnly(true);
         cookie.setPath("/admin");
         cookie.setMaxAge(props.getSessionHours() * 3600);
         cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
-        return ResponseEntity.ok(Map.of("ok", true));
+
+        AdminPrincipal p = attempt.principal();
+        if (p != null) {
+            audit.record(p.id(), p.username(), "login-ok", "POST", "/admin/api/login", null, ipHash);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("user", userDto(p));
+        return ResponseEntity.ok(out);
+    }
+
+    /** 账号信息的对外形状：不含任何哈希或盐 */
+    private static Map<String, Object> userDto(AdminPrincipal p) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (p == null) {
+            return m;
+        }
+        m.put("id", p.id());
+        m.put("username", p.username());
+        m.put("displayName", p.display());
+        m.put("role", p.role().id());
+        m.put("roleLabel", p.role().label());
+        return m;
     }
 
     @PostMapping("/logout")
@@ -105,10 +142,45 @@ public class AdminController {
         return Map.of("ok", true);
     }
 
-    /** 前端用来确认自己还在登录状态 */
+    /** 前端用来确认自己还在登录状态，顺便把自己是谁告诉它 */
     @GetMapping("/session")
-    public Map<String, Object> session() {
-        return Map.of("ok", true, "sessions", auth.sessionCount());
+    public ResponseEntity<Map<String, Object>> session(HttpServletRequest request) {
+        AdminPrincipal p = AdminAuthFilter.current(request);
+        if (p == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "未登录或会话已过期"));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("user", userDto(p));
+        out.put("sessions", auth.sessionCount());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * 改自己的密码。
+     *
+     * <p>对任何已登录账号开放，但必须验证原密码 —— 否则会话被劫持就等于改密。
+     */
+    @PostMapping("/password")
+    public ResponseEntity<Map<String, Object>> changeMyPassword(@RequestBody Map<String, String> body,
+                                                               HttpServletRequest request) {
+        AdminPrincipal p = AdminAuthFilter.current(request);
+        if (p == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+        }
+        String oldPassword = body == null ? null : body.get("oldPassword");
+        String newPassword = body == null ? null : body.get("newPassword");
+        if (users.authenticate(p.username(), oldPassword).isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "原密码不对"));
+        }
+        try {
+            users.changePassword(p.id(), newPassword);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+        audit.record(p.id(), p.username(), "password-self", "POST", "/admin/api/password", null, "");
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 
     // ==================== 统计 ====================

@@ -1,5 +1,6 @@
 package com.example.qqbot.admin;
 
+import com.example.qqbot.persistence.AdminAuditRepository;
 import com.example.qqbot.qa.QaStore;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -15,19 +16,22 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.Set;
 
 /**
- * 管理后台的认证闸门。
+ * 管理后台的认证与授权闸门。
  *
- * <p>规则很简单：
- * <ul>
- *   <li>没配密码 → 整个 {@code /admin} 返回 503（**绝不裸奔**）</li>
- *   <li>白名单（登录页、登录接口）→ 直接放行</li>
- *   <li>其余 → 校验 cookie 里的 token；API 返回 401 JSON，页面重定向到登录页</li>
- * </ul>
+ * <p>四件事，按顺序：
+ * <ol>
+ *   <li>没有账号 → 整个 {@code /admin} 返回 503，**绝不裸奔**</li>
+ *   <li>白名单（登录页、登录接口、前端静态资源）直接放行</li>
+ *   <li>校验会话；API 返回 401 JSON，页面重定向到登录页</li>
+ *   <li>按角色判权：GET 要只读、写操作要编辑、用户管理要管理员</li>
+ * </ol>
  *
- * <p>顺便记一次访问（{@code admin_visit} 表），这就是"统计访问次数"的数据来源。
+ * <p>顺便写两类记录：{@code admin_visit} 供"访问次数"统计；
+ * {@code admin_audit} 记**写操作与登录**，用于回答"这条知识是谁删的"。
  */
 @Component
 public class AdminAuthFilter extends OncePerRequestFilter {
@@ -36,40 +40,38 @@ public class AdminAuthFilter extends OncePerRequestFilter {
 
     public static final String COOKIE_NAME = "admin_token";
     public static final String ATTR_PATH = "admin.path";
+    /** 通过校验后的 {@link AdminPrincipal} 挂在这里，供控制器读取 */
+    public static final String ATTR_PRINCIPAL = "admin.principal";
 
     /**
      * 不需要登录就能访问的路径。
      *
-     * <p>放行的都是**不含任何数据的静态壳子**：
-     * <ul>
-     *   <li>{@code /admin.html} 与 {@code /admin/assets/**} —— 前端构建产物本身不含数据</li>
-     *   <li>{@code /admin/api/login} —— 登录接口</li>
-     * </ul>
-     * 真正的数据全在 {@code /admin/api/**} 后面，那里一律要会话。
-     *
-     * <p>这样做的意义：前端路由（history 模式）能正常加载，
-     * 用户看到登录页而不是一个 401 白屏。
+     * <p>放行的都是**不含任何数据的静态壳子**：前端构建产物本身不含数据，
+     * 登录接口本来就要匿名可达。真正的数据全在 {@code /admin/api/**} 后面。
      */
     private static final Set<String> PUBLIC_PATHS = Set.of(
             "/admin.html",
             "/admin/api/login");
 
-    /**
-     * 放行的前缀。
-     *
-     * <p>{@code /admin/assets/} 是构建产物；{@code /admin/login} 是**前端登录页路由** ——
-     * 它必须能加载（否则"未登录 → 跳登录页 → 又 302 → 死循环"）。
-     */
     private static final String[] PUBLIC_PREFIXES = {"/admin/assets/", "/admin/login"};
 
     private final AdminPolicy props;
     private final AdminAuth auth;
     private final QaStore store;
+    private final AdminAuditRepository audit;
 
-    public AdminAuthFilter(AdminPolicy props, AdminAuth auth, QaStore store) {
+    public AdminAuthFilter(AdminPolicy props, AdminAuth auth, QaStore store,
+                           AdminAuditRepository audit) {
         this.props = props;
         this.auth = auth;
         this.store = store;
+        this.audit = audit;
+    }
+
+    /** 当前请求的登录身份；未登录返回 {@code null} */
+    public static AdminPrincipal current(HttpServletRequest request) {
+        Object v = request == null ? null : request.getAttribute(ATTR_PRINCIPAL);
+        return v instanceof AdminPrincipal p ? p : null;
     }
 
     @Override
@@ -81,9 +83,6 @@ public class AdminAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 没配密码：整个后台关闭。
-        // ⚠️ 这里绝不能用"重定向到登录页" —— 登录页本身也在 /admin 下，
-        // 会变成 302 → 302 的死循环。必须直接返回 503。
         if (!auth.isConfigured()) {
             disabled(response, path);
             return;
@@ -94,14 +93,51 @@ public class AdminAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = readCookie(request);
-        if (!auth.validate(token)) {
+        Optional<AdminPrincipal> principal = auth.principal(readCookie(request));
+        if (principal.isEmpty()) {
             unauthorized(response, path, "未登录或会话已过期");
             return;
         }
 
+        if (path.startsWith("/admin/api/")) {
+            AdminRole required = requiredRole(path, request.getMethod());
+            if (!principal.get().role().atLeast(required)) {
+                forbidden(response, required);
+                return;
+            }
+        }
+
+        request.setAttribute(ATTR_PRINCIPAL, principal.get());
         recordVisit(request, path);
-        chain.doFilter(request, response);
+
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            auditWrite(request, response, path, principal.get());
+        }
+    }
+
+    /**
+     * 这个接口需要哪一级角色。
+     *
+     * <p>规则刻意只有三条，多一条就会有人问"为什么这里和那里不一样"：
+     * <ul>
+     *   <li>用户管理与审计 → 管理员</li>
+     *   <li>只读请求 → 只读</li>
+     *   <li>其余写操作 → 编辑</li>
+     * </ul>
+     * 退出登录与改自己密码对任何已登录账号开放，否则"只读账号连退出都点不了"。
+     */
+    static AdminRole requiredRole(String path, String method) {
+        if (path.equals("/admin/api/logout") || path.equals("/admin/api/password")
+                || path.equals("/admin/api/session")) {
+            return AdminRole.VIEWER;
+        }
+        if (path.startsWith("/admin/api/users")) {
+            return AdminRole.ADMIN;
+        }
+        boolean read = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
+        return read ? AdminRole.VIEWER : AdminRole.EDITOR;
     }
 
     private static boolean hasPublicPrefix(String path) {
@@ -116,25 +152,26 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     /** 后台未启用：API 回 JSON，页面直接渲染一句话。**不重定向**，避免死循环。 */
     private void disabled(HttpServletResponse response, String path) throws IOException {
         response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        String diagnosis = com.example.qqbot.files.ProjectFiles.describe();
         if (path.startsWith("/admin/api/")) {
             response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"error\":\"管理后台未启用：没读到 ADMIN_PASSWORD（"
-                    + com.example.qqbot.files.ProjectFiles.describe() + "）\"}");
+            response.getWriter().write("""
+                    {"error":"管理后台未启用：还没有任何后台账号。在 .env 里设置 ADMIN_PASSWORD 后重启即可自动创建 admin 账号（%s）"}
+                    """.formatted(diagnosis));
         } else {
             response.setContentType("text/html;charset=UTF-8");
-            response.getWriter().write("<meta charset=\"utf-8\">"
-                    + "<div style=\"font:15px/1.7 sans-serif;max-width:420px;margin:80px auto\">"
-                    + "<h3>管理后台未启用</h3>"
-                    + "<p>请在 <code>.env</code> 里设置 <code>ADMIN_PASSWORD</code> 后重启机器人。"
-                    + "（.env 放在工程根目录即可，从子目录启动也能找到）</p>"
-                    + "<p style=\"color:#888;font-size:13px\">诊断："
-                    + com.example.qqbot.files.ProjectFiles.describe() + "</p>"
-                    + "<p style=\"color:#888\">这是安全默认：没配密码就没有后台，而不是无密码可访问。</p>"
-                    + "</div>");
+            response.getWriter().write("""
+                    <meta charset="utf-8">
+                    <div style="font:15px/1.7 sans-serif;max-width:460px;margin:80px auto">
+                    <h3>管理后台未启用</h3>
+                    <p>系统里还没有任何后台账号。在 <code>.env</code> 里设置
+                    <code>ADMIN_PASSWORD</code> 后重启机器人，会自动创建 <code>admin</code> 账号。</p>
+                    <p style="color:#888;font-size:13px">诊断：%s</p>
+                    </div>
+                    """.formatted(diagnosis));
         }
     }
 
-    /** 未登录/会话过期：API 回 401，页面重定向到登录页 */
     private void unauthorized(HttpServletResponse response, String path, String message)
             throws IOException {
         if (path.startsWith("/admin/api/")) {
@@ -142,9 +179,15 @@ public class AdminAuthFilter extends OncePerRequestFilter {
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"error\":\"" + message + "\"}");
         } else {
-            // 指向**前端路由**（不是静态文件）—— 静态页已迁到 Vue，路径也变了
             response.sendRedirect("/admin/login");
         }
+    }
+
+    private void forbidden(HttpServletResponse response, AdminRole required) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"error\":\"权限不足：这个操作需要「"
+                + required.label() + "」及以上权限\"}");
     }
 
     private String readCookie(HttpServletRequest request) {
@@ -173,7 +216,22 @@ public class AdminAuthFilter extends OncePerRequestFilter {
         }
     }
 
-    /** IP 只存哈希 —— 后台访问统计不需要原始 IP */
+    /** 只记写操作：GET 量大又没有信息量，记进去只会把有用的行埋掉 */
+    private void auditWrite(HttpServletRequest request, HttpServletResponse response,
+                            String path, AdminPrincipal principal) {
+        String method = request.getMethod();
+        if (!path.startsWith("/admin/api/") || "GET".equalsIgnoreCase(method)
+                || path.equals("/admin/api/logout")) {
+            return;
+        }
+        String query = request.getQueryString();
+        String detail = "status=" + response.getStatus()
+                + (query == null ? "" : " ?" + query);
+        audit.record(principal.id(), principal.username(), "write", method, path,
+                detail, hashIp(request.getRemoteAddr()));
+    }
+
+    /** IP 只存哈希 —— 统计与审计都不需要原始 IP */
     static String hashIp(String ip) {
         if (ip == null) {
             return "";
