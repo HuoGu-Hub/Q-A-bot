@@ -22,6 +22,8 @@
 param(
   [string]$Server,
   [int]$SshPort = 22,
+  # 私钥文件。服务器只认控制台绑定的那把时，不带这个参数 scp 会 Permission denied
+  [string]$IdentityFile,
   [switch]$SkipBuild,
   [switch]$SkipUpload,
   [switch]$NoRestart,
@@ -158,8 +160,11 @@ if (-not $Server) {
 }
 
 Step "上传到 $Server"
-& scp -P $SshPort $Bundle ("${Server}:/tmp/qqbot-release.tar.gz")
-if ($LASTEXITCODE -ne 0) { throw "scp 失败" }
+$scpArgs = @("-P", $SshPort)
+if ($IdentityFile) { $scpArgs += @("-i", $IdentityFile) }
+$scpArgs += @($Bundle, "${Server}:/tmp/qqbot-release.tar.gz")
+& scp @scpArgs
+if ($LASTEXITCODE -ne 0) { throw "scp 失败：检查 -IdentityFile 是否指向正确的私钥" }
 
 # ---------------------------------------------------------------- 5. 远端安装
 Step "服务器端替换并重启"
@@ -174,7 +179,8 @@ $S systemctl daemon-reload
 $S systemctl enable __SERVICE__ >/dev/null 2>&1 || true
 __RESTART__
 sleep 3
-$S systemctl is-active __SERVICE__ || $S journalctl -u __SERVICE__ -n 40 --no-pager
+# 首次部署时单元还没装，这里必然非零：只当作诊断，不要让整次上传判失败
+$S systemctl is-active __SERVICE__ || $S journalctl -u __SERVICE__ -n 40 --no-pager || true
 '@
 
 # 重启失败不要立刻中断：先让下面的 is-active 与 journalctl 把现场打出来
@@ -185,7 +191,10 @@ $remote = $remote.Replace("__RESTART__", $restart)
 $remote = $remote.Replace("__SERVICE__", $ServiceName)
 
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
-& ssh -t -p $SshPort $Server "echo $b64 | base64 -d | bash"
+$sshArgs = @("-t", "-p", $SshPort)
+if ($IdentityFile) { $sshArgs += @("-i", $IdentityFile) }
+$sshArgs += @($Server, "echo $b64 | base64 -d | bash")
+& ssh @sshArgs
 if ($LASTEXITCODE -ne 0) { throw "远端安装失败，看上面的输出" }
 
 Write-Host ""
