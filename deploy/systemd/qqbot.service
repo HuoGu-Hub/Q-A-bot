@@ -1,0 +1,54 @@
+# ============================================================
+#  QQ Bot 业务层 —— systemd 单元
+#
+#  安装：
+#    sudo cp deploy/systemd/qqbot.service /etc/systemd/system/
+#    sudo systemctl daemon-reload
+#    sudo systemctl enable --now qqbot
+#
+#  ⚠️ 路径必须与 release.ps1 的上传位置一致：/opt/qqbot
+#     WorkingDirectory 决定 data/ 落在哪，改了它等于换一套空库。
+# ============================================================
+[Unit]
+Description=QQ Bot
+# 等网络就绪；NapCat 在容器里，docker 起来之前上报必然失败
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qqbot
+Group=qqbot
+WorkingDirectory=/opt/qqbot/server
+EnvironmentFile=/opt/qqbot/.env
+
+# ---------- JVM ----------
+# -Xmx512m  起步值：7.8k 知识块约需 286m 稳态，重载峰值 372m
+#           块数过万再提到 768m，同时确认 swap 够用
+# -Xss512k  线程池最多 100 条，默认 1M 栈等于白扔 100M
+# UseSerialGC  512m 堆 + 2 核，比 G1 省内存也省 CPU
+# ExitOnOutOfMemoryError  堆炸了就退出，交给 systemd 重启，不带病半死
+# headless 地图出图走 Java2D，无 X11 必须显式无头
+ExecStart=/usr/bin/java -Xmx512m -Xss512k -XX:MaxMetaspaceSize=192m \
+  -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError \
+  -Djava.awt.headless=true -Dfile.encoding=UTF-8 \
+  -jar /opt/qqbot/server/qqbot-server-0.0.1-SNAPSHOT.jar
+
+Restart=always
+RestartSec=10
+
+# ---------- 内存护栏 ----------
+# 先 OOM 自己，不要把同一台机器上的 NapCat 挤掉 —— 它被杀了要重新扫码登录
+MemoryHigh=900M
+MemoryMax=1100M
+
+# ----------  hardening ----------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# 只有这两个目录可写：data 是业务数据，server/config 是后台设置写 overrides.yml 的地方
+ReadWritePaths=/opt/qqbot/server/data /opt/qqbot/server/config
+
+[Install]
+WantedBy=multi-user.target
