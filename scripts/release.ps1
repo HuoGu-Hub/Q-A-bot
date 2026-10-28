@@ -175,6 +175,11 @@ $S systemctl stop __SERVICE__ 2>/dev/null || true
 $S mkdir -p __DIR__
 $S tar xzf /tmp/qqbot-release.tar.gz -C __DIR__ --strip-components=1
 $S chown -R __USER__:__USER__ __DIR__
+# 单元跟着仓库走：不然改了 JVM 参数或启动依赖，服务器上那份永远是旧的
+if [ -f __DIR__/deploy/systemd/__SERVICE__.service ]; then
+  $S cp __DIR__/deploy/systemd/__SERVICE__.service /etc/systemd/system/__SERVICE__.service
+  echo "已同步 systemd 单元"
+fi
 $S systemctl daemon-reload
 $S systemctl enable __SERVICE__ >/dev/null 2>&1 || true
 __RESTART__
