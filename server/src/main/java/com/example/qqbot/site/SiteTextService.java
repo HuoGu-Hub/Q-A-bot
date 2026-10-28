@@ -58,8 +58,8 @@ public class SiteTextService {
                     "资料版权说明，出现在每页底部", true,
                     "内容来自本项目的知识库 · 版权归各自来源所有"),
             new Block("layout", "全站", "footer_copy", "页脚 · 版权行",
-                    "年份会自动替换 {year}", false,
-                    "© {year} Q-A-bot"),
+                    "{year} 与 {bot} 会自动替换", false,
+                    "© {year} {bot}"),
 
             // ---- 首页 ----
             new Block("home", "首页", "tagline", "副标语",
@@ -84,7 +84,7 @@ public class SiteTextService {
             // 中途试过把段落名挪到 hint（右侧浅色小字），但这类注释小字本身就是噪声
             // （2026-09-28 决定）：标签只留角色，hint 一律留空。
             // 分不清哪块是哪块？看右边预览 —— 它就是这一页的版式。
-            new Block("about", "关于", "what_title", "标题", "", false, "Q-A-bot 是什么"),
+            new Block("about", "关于", "what_title", "标题", "", false, "{bot} 是什么"),
             new Block("about", "关于", "what_body", "正文", "", true,
                     "一个面向游戏社群的知识库问答机器人。在 QQ 群里 @ 我提问，"
                             + "我会先在本地知识库里检索，再依据检索到的内容回答 —— 而不是凭空编造。"),

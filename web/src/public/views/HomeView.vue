@@ -18,6 +18,7 @@ import { publicApi, describeError } from '@shared/api/client'
 import type { CarouselItem, CarouselPublicResponse, PublicStats } from '@shared/api/types'
 import { num, pct } from '@shared/utils/format'
 import { t } from '../useSiteText'
+import { botName } from '@shared/identity/botName'
 import Icon from '@shared/ui/Icon.vue'
 import Button from '@shared/ui/Button.vue'
 import ImageCarousel from '../components/ImageCarousel.vue'
@@ -107,7 +108,7 @@ onMounted(async () => {
     <section class="hero slab">
       <div class="page hero-main" :class="{ 'has-media': !!slides.length }">
         <div class="hero-text">
-          <h1 class="wordmark">Q-A-<span class="lit">bot</span></h1>
+          <h1 class="wordmark">知识<span class="lit">问答</span></h1>
           <p class="tagline">{{ tagline }}</p>
 
           <div class="acts">
@@ -115,7 +116,7 @@ onMounted(async () => {
               <Icon name="search" :size="17" />
               去资料库查
             </Button>
-            <span class="alt">或在群里 <b>@ Q-A-bot</b> 直接问</span>
+            <span class="alt">或在群里 <b>@ {{ botName }}</b> 直接问</span>
           </div>
           <p v-if="error" class="err hint">统计数据暂时取不到 · {{ error }}</p>
         </div>

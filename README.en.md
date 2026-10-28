@@ -111,6 +111,8 @@ The scripts are bash; on Windows use WSL or Git Bash. See [deployment](docs/depl
 
 Configuration precedence, lowest to highest: `application.yml`, environment variables and `.env`, `config/overrides.yml`, command-line arguments. Database, corpus, image, tile and log paths are relative to the process working directory; starting from `server/` places them under `server/data/`. The system prompt is `system.md` at the repository root; `system.md.example` is the template.
 
+The public brand, browser title, footer credit and admin console brand all read `app.bot.name`; change it under Bot settings → Bot identity to update the whole site.
+
 See [.env.example](.env.example) and [deployment](docs/deployment.md) for the full set.
 
 ## Layout

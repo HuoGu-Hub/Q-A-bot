@@ -13,10 +13,11 @@ import { RouterLink } from 'vue-router'
 import Icon from './Icon.vue'
 import ThemeToggle from './ThemeToggle.vue'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   open: boolean
+  brandName: string
   items: Array<{ to: string; label: string; icon: string; desc?: string; active: boolean }>
-}>(), {})
+}>()
 
 const emit = defineEmits<{ close: []; logout: [] }>()
 
@@ -44,7 +45,7 @@ onBeforeUnmount(() => {
         <header class="head">
           <span class="brand">
             <Icon name="flame" :size="17" class="mark" />
-            Q-A-bot · 管理
+            {{ brandName }} · 管理
           </span>
           <div class="head-right">
             <ThemeToggle />

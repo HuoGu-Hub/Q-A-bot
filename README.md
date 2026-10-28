@@ -111,6 +111,8 @@ cp .env.example .env
 
 配置优先级从低到高为 `application.yml`、环境变量与 `.env`、`config/overrides.yml`、命令行参数。数据库、知识库、图片、瓦片与日志路径均相对进程工作目录；从 `server/` 启动时位于 `server/data/`。系统提示词为仓库根目录的 `system.md`，模板为 `system.md.example`。
 
+公开站品牌、浏览器标题、页脚署名与管理后台品牌统一读取 `app.bot.name`，在「Bot 配置 → 机器人身份 → 机器人昵称」修改即可全站生效。
+
 完整变量与运行参数见 [.env.example](.env.example) 与[部署指南](docs/deployment.md)。
 
 ## 目录结构

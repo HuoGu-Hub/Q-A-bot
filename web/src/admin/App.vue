@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import Toaster from '@shared/ui/Toaster.vue'
 import Icon from '@shared/ui/Icon.vue'
 import ThemeToggle from '@shared/ui/ThemeToggle.vue'
 import NavDrawer from '@shared/ui/NavDrawer.vue'
+import { botName, loadBotName } from '@shared/identity/botName'
 import { useAuth } from './useAuth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
+
+/** 管理端也读同一份 app.bot.name；登录页没有会话，走公开的站点信息接口 */
+void loadBotName()
+const brandName = computed(() => botName.value)
+
+watchEffect(() => {
+  document.title = `${brandName.value} · 管理后台`
+})
 
 /**
  * 是否显示顶端导航栏。
@@ -49,7 +58,7 @@ const drawerItems = computed(() =>
 const currentLabel = computed(() => {
   if (!hasBar.value) return '管理员登录'
   const hit = nav.find(n => route.path.startsWith(n.to))
-  return hit ? hit.label + ' · Q-A-bot 管理后台' : 'Q-A-bot 管理后台'
+  return hit ? hit.label + ' · ' + brandName.value + ' 管理后台' : brandName.value + ' 管理后台'
 })
 
 async function logout() {
@@ -65,11 +74,11 @@ async function logout() {
       <div class="bar-inner">
         <RouterLink to="/stats" class="brand">
           <Icon name="flame" class="mark" :size="18" />
-          <span class="brand-txt">Q-A-bot</span>
+          <span class="brand-txt">{{ brandName }}</span>
           <span class="brand-sub">管理</span>
           <!-- 窄屏上 .brand-txt / .brand-sub 都被视觉隐藏了，链接就只剩一个图标 ——
                那会被判成「没有可读名字的链接」。这句只在读屏里出现，兜住站名。 -->
-          <span class="sr-only">Q-A-bot 管理后台</span>
+          <span class="sr-only">{{ brandName }} 管理后台</span>
         </RouterLink>
 
         <nav class="nav" aria-label="后台导航">
@@ -115,6 +124,7 @@ async function logout() {
     <NavDrawer
       :open="drawerOpen"
       :items="drawerItems"
+      :brand-name="brandName"
       @close="drawerOpen = false"
       @logout="logout"
     />

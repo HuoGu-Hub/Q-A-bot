@@ -16,6 +16,7 @@
  */
 import { ref } from 'vue'
 import { publicApi } from '@shared/api/client'
+import { botName, setBotName } from '@shared/identity/botName'
 
 /** /api/public/site 的返回：群信息（关于页用）+ 文案覆盖值 */
 export interface SiteInfo {
@@ -48,7 +49,7 @@ export function loadSite(): Promise<void> {
   if (!pending) {
     pending = publicApi
       .get<SiteInfo>('/site')
-      .then((r) => { site.value = r })
+      .then((r) => { site.value = r; setBotName(r.botName) })
       .catch(() => { /* 后端不可用：静默失败，页面继续用默认文案渲染 */ })
   }
   return pending
@@ -60,7 +61,7 @@ export function loadSite(): Promise<void> {
  * @param key      文案块 key（`page.block`），如 `home.tagline`
  * @param fallback 硬编码的当前文案，**必须保留**（见文件头说明）
  * @param params   额外占位符，如 `{ kb: 123 }`；
- *                 `{year}` 永远自动替换成当前年份，不用每处都传
+ *                 `{year}` 与 `{bot}` 永远自动替换，不用每处都传
  */
 export function t(
   key: string,
@@ -68,7 +69,11 @@ export function t(
   params: Record<string, string | number> = {},
 ): string {
   const raw = site.value?.texts?.[key] ?? fallback
-  const vars: Record<string, string | number> = { year: new Date().getFullYear(), ...params }
+  const vars: Record<string, string | number> = {
+    year: new Date().getFullYear(),
+    bot: botName.value,
+    ...params,
+  }
   // 认不出的占位符原样留着 —— 总比被悄悄吞掉、文案缺一块好
   return raw.replace(/\{(\w+)\}/g, (m, name: string) =>
     Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : m)

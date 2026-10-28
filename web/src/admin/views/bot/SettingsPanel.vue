@@ -11,6 +11,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
+import { reloadBotName } from '@shared/identity/botName'
 import type { SettingsView, SettingItem } from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
 import Field from '@shared/ui/Field.vue'
@@ -80,12 +81,14 @@ function onListEdit(item: SettingItem, text: string) {
 
 async function save() {
   if (!Object.keys(changed.value).length) { ok.value = '没有改动'; return }
+  const botNameChanged = 'app.bot.name' in changed.value
   try {
     const r = await adminApi.post<{ ok: boolean; applied: string[]; rejected: string[]; errors: Record<string, string> }>(
       '/settings', { changes: changed.value })
     if (r.rejected?.length) { error.value = '这些配置项不允许修改：' + r.rejected.join(', '); return }
     if (r.errors && Object.keys(r.errors).length) { error.value = Object.values(r.errors).join('；'); return }
     ok.value = '已保存并立即生效（' + r.applied.length + ' 项）'
+    if (botNameChanged) await reloadBotName()
     await load()
   } catch (e) { error.value = describeError(e) }
 }

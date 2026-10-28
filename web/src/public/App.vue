@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watchEffect } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { renderInline } from './renderInline'
 import { t } from './useSiteText'
+import { botName } from '@shared/identity/botName'
 import Icon from '@shared/ui/Icon.vue'
 import ThemeToggle from '@shared/ui/ThemeToggle.vue'
 import BottomNav from '@shared/ui/BottomNav.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+/** 浏览器页签跟随机器人身份；首次渲染用兜底名，站点信息到达后自动替换 */
+watchEffect(() => {
+  document.title = `${botName.value} · 知识库问答机器人`
+})
 
 /**
  * 全屏页：地图要占满一屏、页面本身不滚动。
@@ -68,7 +74,7 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
       <div class="page hdr-inner">
         <RouterLink to="/" class="brand">
           <Icon name="flame" class="mark" :size="19" />
-          <span class="name">Q-A-bot</span>
+          <span class="name">{{ botName }}</span>
           <span class="sub">知识库问答</span>
         </RouterLink>
 
@@ -112,7 +118,7 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
         <p class="faint">
           <span v-html="renderInline(t('layout.footer_note', '内容来自本项目的知识库 · 版权归各自来源所有'))" />
         </p>
-        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} Q-A-bot'))" /></p>
+        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} {bot}'))" /></p>
       </div>
     </footer>
 

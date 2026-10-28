@@ -24,6 +24,7 @@ import Button from '@shared/ui/Button.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Modal from '@shared/ui/Modal.vue'
 import { INLINE_MARKUP_HINT } from '@/public/renderInline'
+import { botName } from '@shared/identity/botName'
 import PagePreview from './pages/PagePreview.vue'
 import CarouselPanel from './pages/CarouselPanel.vue'
 import SiteInfoPanel from './pages/SiteInfoPanel.vue'
@@ -278,6 +279,7 @@ onMounted(load)
           :page="page"
           :texts="previewTexts"
           :defaults="previewDefaults"
+          :bot-name="botName"
         />
       </aside>
     </div>
@@ -310,6 +312,7 @@ onMounted(load)
         <ul class="help-list">
           <li><code>{kb}</code> → 知识库条目数（目前只有首页「副标语」用得上）</li>
           <li><code>{year}</code> → 当前年份（页脚版权行用）</li>
+          <li><code>{bot}</code> → 机器人昵称（读 Bot 配置里的「机器人身份」）</li>
         </ul>
         <p class="help-note">认不出的占位符会原样留在页面上 —— 不会被悄悄吃掉，也就看得出来写错了。</p>
 

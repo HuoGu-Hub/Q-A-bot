@@ -21,12 +21,15 @@ const props = defineProps<{
   texts: Record<string, string>
   /** block key → 默认文案（用来标出哪些块被改过） */
   defaults: Record<string, string>
+  /** 机器人昵称，用于解析 {bot} */
+  botName: string
 }>()
 
 /**
  * 占位符替换。公开站由 useSiteText 的 t() 负责，这里复刻同一套语义：
  *   {kb}   → 知识库条目数；预览拿不到真实统计，用示例数字
  *   {year} → 当前年份
+ *   {bot}  → 机器人昵称，由父页面传入
  * 认不出的占位符原样留着（和 t() 一致）—— 总比被悄悄吞掉好。
  */
 const KB_SAMPLE = 4131
@@ -42,7 +45,9 @@ function raw(key: string): string {
 /** 替换占位符，返回纯文本 */
 function plainText(s: string): string {
   return s.replace(/\{(\w+)\}/g, (m, name: string) =>
-    Object.prototype.hasOwnProperty.call(placeholders, name) ? placeholders[name] : m)
+    name === 'bot'
+      ? props.botName
+      : Object.prototype.hasOwnProperty.call(placeholders, name) ? placeholders[name] : m)
 }
 
 /** 取文案并替换占位符，返回纯文本（不渲染标记） */
@@ -77,9 +82,9 @@ const isChanged = (key: string) =>
   has(key) && props.texts[key] !== props.defaults[key]
 const mark = (key: string) => ({ changed: isChanged(key) })
 
-/** 标题高亮：站点名 Q-A-bot 的「bot」用火色 —— 与公开站一致，但不可编辑 */
-const TITLE_HEAD = 'Q-A-'
-const TITLE_TAIL = 'bot'
+/** 标题高亮：与公开站一致，固定高亮「问答」两字，不跟随机器人昵称 */
+const TITLE_HEAD = '知识'
+const TITLE_TAIL = '问答'
 </script>
 
 <template>
@@ -101,7 +106,7 @@ const TITLE_TAIL = 'bot'
       <div v-else-if="page === 'home'" class="m-home">
         <div class="m-brand">
           <span class="m-spark" aria-hidden="true">✦</span>
-          <span class="m-brand-name">Q-A-bot</span>
+          <span class="m-brand-name">{{ props.botName }}</span>
         </div>
         <h3 class="m-display">
           {{ TITLE_HEAD }}<span class="m-flame">{{ TITLE_TAIL }}</span>
