@@ -44,6 +44,15 @@ function Step([string]$Text) {
   Write-Host "==> $Text" -ForegroundColor Cyan
 }
 
+# 复制到 Linux 上执行的文本文件时统一成 LF。
+# Windows 工作副本可能是 CRLF：bash 会因 \r 报语法错，nginx 与 systemd 直接拒绝解析。
+function Copy-TextLf([string]$From, [string]$ToDir) {
+  $text = [System.IO.File]::ReadAllText($From)
+  $text = $text.Replace([string][char]13 + [string][char]10, [string][char]10)
+  $dest = Join-Path $ToDir (Split-Path $From -Leaf)
+  [System.IO.File]::WriteAllText($dest, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 function Invoke-Native([string]$File, [string[]]$Arguments, [string]$WorkDir) {
   Push-Location $WorkDir
   try {
@@ -107,13 +116,13 @@ Copy-Item (Join-Path $Root "system.md") $pkg
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\nginx") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\systemd") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\server") -Force | Out-Null
-Copy-Item (Join-Path $Root "deploy\nginx\qqbot.conf") (Join-Path $pkg "deploy\nginx")
-Copy-Item (Join-Path $Root "deploy\systemd\qqbot.service") (Join-Path $pkg "deploy\systemd")
-Copy-Item (Join-Path $Root "deploy\server\bootstrap.sh") (Join-Path $pkg "deploy\server")
-Copy-Item (Join-Path $Root "deploy\docker-compose.yml") (Join-Path $pkg "deploy")
+Copy-TextLf (Join-Path $Root "deploy\nginx\qqbot.conf") (Join-Path $pkg "deploy\nginx")
+Copy-TextLf (Join-Path $Root "deploy\systemd\qqbot.service") (Join-Path $pkg "deploy\systemd")
+Copy-TextLf (Join-Path $Root "deploy\server\bootstrap.sh") (Join-Path $pkg "deploy\server")
+Copy-TextLf (Join-Path $Root "deploy\docker-compose.yml") (Join-Path $pkg "deploy")
 
 New-Item -ItemType Directory -Path (Join-Path $pkg "scripts") -Force | Out-Null
-Copy-Item (Join-Path $Root "scripts\health-check.sh") (Join-Path $pkg "scripts")
+Copy-TextLf (Join-Path $Root "scripts\health-check.sh") (Join-Path $pkg "scripts")
 
 # 配置默认不进包：每次发版都覆盖服务器上改过的 overrides.yml 会丢设置
 if ($WithConfig) {
@@ -168,7 +177,8 @@ sleep 3
 $S systemctl is-active __SERVICE__ || $S journalctl -u __SERVICE__ -n 40 --no-pager
 '@
 
-$restart = if ($NoRestart) { "echo skip-restart" } else { '$S systemctl restart __SERVICE__' }
+# 重启失败不要立刻中断：先让下面的 is-active 与 journalctl 把现场打出来
+$restart = if ($NoRestart) { "echo skip-restart" } else { '$S systemctl restart __SERVICE__ || true' }
 $remote = $remote.Replace("__DIR__", $RemoteDir)
 $remote = $remote.Replace("__USER__", $ServiceUser)
 $remote = $remote.Replace("__RESTART__", $restart)
