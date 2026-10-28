@@ -116,7 +116,7 @@ chmod 600 .env
 | `DEEPSEEK_API_KEY` | 否 | 降级 provider |
 | `SILICONFLOW_API_KEY` | 是 | 向量与重排 |
 | `DASHSCOPE_API_KEY` | 否 | 备用向量，默认关闭 |
-| `ADMIN_PASSWORD` | 是 | 为空时管理后台整体返回 503 |
+| `ADMIN_PASSWORD` | 是 | 首次启动用它创建 admin 账号；之后登录以账号表为准 |
 
 其余配置在 `server/src/main/resources/application.yml`，可被环境变量、`config/overrides.yml` 与命令行参数覆盖。后台「设置」页只修改白名单内的键。
 
@@ -275,7 +275,7 @@ sudo systemctl restart qqbot
 |---|---|
 | 机器人不回复 | `journalctl -u qqbot` 搜索「连不上 NapCat」；检查 Token 与 3000 端口 |
 | 公开站 502 | 服务是否启动；Nginx error log |
-| 后台打不开 | IP 是否在白名单；`ADMIN_PASSWORD` 是否为空 |
+| 后台打不开 | IP 是否在白名单；库里有没有账号；首次部署时 `ADMIN_PASSWORD` 是否为空 |
 | 后台返回 503 | `.env` 未加载或密码为空 |
 | 页面 404 但接口正常 | `server/web-dist` 未构建或工作目录不对 |
 | 检索突然变慢 | 向量或重排 API 是否可用；查看 A 路失败日志 |
