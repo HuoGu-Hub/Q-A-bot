@@ -135,6 +135,27 @@ public class MapImageCache {
     }
 
     /**
+     * **只判断有没有**：不读字节、不碰上游。
+     *
+     * <p>状态页的预热覆盖要逐档问「这一格齐没齐」，一次问几百个文件。
+     * 原来走 {@link #cached}，它为了回答「存在吗」把整张图读进内存 ——
+     * 实测 683 次检查 ≈ 125 MB 磁盘读取、约 0.5 秒，全花在打开后台地图时的那一次
+     * {@code /admin/api/map/status} 上。这里只做一次 {@link Files#isRegularFile}。
+     */
+    public boolean exists(String map, String page, String name, int width) {
+        if (!isEnabled()) {
+            return false;
+        }
+        String file;
+        try {
+            file = safeName(name);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        return Files.isRegularFile(pathOf(map, page, file, normalizeWidth(width)));
+    }
+
+    /**
      * **只看缓存**：命中就返回，没命中返回空，一次出站都不发。
      *
      * <p>给"回复路径上的取图"用：地图出图要画十几个分组图标，图标没预热到时，

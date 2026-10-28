@@ -459,13 +459,15 @@ public class MapJobs {
                         continue;
                     }
                     int have = 0;
+                    // ⚠️ 这里只问「有没有」，不要用 cached()：它会读整份图片字节。
+                    //    一次 status 要问几百个格子，实测白读 125 MB、多花 0.5 秒。
                     for (MapViewService.TileView t : c.tiles()) {
-                        if (images.cached(m.map(), c.page(), t.image(), w).isPresent()) {
+                        if (images.exists(m.map(), c.page(), t.image(), w)) {
                             have++;
                         }
                     }
                     if (c.background() != null && !c.background().isBlank()
-                            && images.cached(m.map(), c.page(), c.background(), w).isPresent()) {
+                            && images.exists(m.map(), c.page(), c.background(), w)) {
                         have++;
                     }
                     out.add(new WarmUnit(m.map(), m.label(), c.label(), tier(w), have, need));
@@ -479,7 +481,7 @@ public class MapJobs {
                     continue;
                 }
                 iconNeed++;
-                if (images.cached(m.map(), null, g.icon(), 0).isPresent()) {
+                if (images.exists(m.map(), null, g.icon(), 0)) {
                     iconHave++;
                 }
             }
