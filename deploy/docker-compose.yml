@@ -22,6 +22,18 @@ services:
     restart: unless-stopped
 
     # ============================================================
+    #  Linux 上的 host.docker.internal 映射
+    #
+    #  NapCat 要把事件上报推给业务层：http://host.docker.internal:8080/onebot/event。
+    #  Docker Desktop 自带这个名字，Linux 默认没有 —— 缺了它，容器里解析不到
+    #  宿主机，上报会静默失败，群里看到的现象就是「机器人不说话」，而业务层日志
+    #  一片安静，很容易误判成检索或模型出了问题。
+    #  host-gateway 指向 Docker 默认网桥网关，也就是宿主机。
+    # ============================================================
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # ============================================================
     #  ⚠️ 固定 MAC 地址 —— 解决「重启/重建容器就掉登录」
     #
     #  腾讯的设备指纹：GUID = MD5(/etc/machine-id + MAC)
