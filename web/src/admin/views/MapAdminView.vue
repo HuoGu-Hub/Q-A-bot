@@ -470,13 +470,12 @@ async function boot() {
   loading.value = true
   error.value = ''
   try {
+    // 画地图只需要目录 + 点位。状态、待复核、候选地图都是「补信息」，
+    // 让它们挡在地图的 loading 后面，等于每次打开都要多等一次 status 的往返。
     catalog.value = await adminApi.get<Catalog>('/map/catalog')
     const first = catalog.value.maps[0]
     mapName.value = first ? first.map : ''
     if (mapName.value) await loadMarkers()
-    await loadStatus()
-    await loadAnchor()
-    await loadMaps()
     /*
      * 数据齐了**直接灌一次**图标表，不等 watcher。
      *
@@ -492,6 +491,18 @@ async function boot() {
   } finally {
     loading.value = false
   }
+  // 地图已经能看了，剩下的状态栏在后台补 —— 不 await，慢的只有它自己
+  void loadExtras()
+}
+
+/**
+ * 状态栏的三份数据：运行状态、待复核点位、候选地图。
+ *
+ * <p>并发拉取，且互不影响：任何一份失败只让对应的面板空着，不把整页打回错误态。
+ * 这三份都不参与首屏绘制，所以放在 {@link boot} 的 loading 之外。
+ */
+async function loadExtras() {
+  await Promise.allSettled([loadStatus(), loadAnchor(), loadMaps()])
 }
 
 async function loadMarkers() {
@@ -502,7 +513,11 @@ async function loadMarkers() {
 }
 
 async function loadStatus() {
-  status.value = await adminApi.get<MapStatus>('/map/status')
+  try {
+    status.value = await adminApi.get<MapStatus>('/map/status')
+  } catch (e) {
+    error.value = describeError(e)
+  }
 }
 
 async function loadMaps() {
