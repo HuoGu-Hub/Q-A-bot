@@ -150,7 +150,31 @@ const groupIcons = computed(() => {
 const categoryOptions = computed(() =>
   (catalog.value?.categories ?? []).map((c) => ({ value: c.key, label: c.label })),
 )
-const localPlaces = computed(() => markers.value.filter((m) => m.source === 'admin'))
+/**
+ * 点位列表的数据源 = **当前地图的全部点位**，不只是本地补充点。
+ *
+ * <p>上一版只列 source === 'admin' 的点，而这个库里一条本地补充都没有：
+ * 地图上画着 1064 个 wiki 点位，列表却是空的 —— 名字叫「点位列表」，
+ * 读起来就是"地图上这些点的清单"，空着只会让人以为数据丢了。
+ */
+const mapPlaces = computed(() => markers.value)
+
+/** 列表筛选：名字、分类、备注都能命中 */
+const placeKw = ref('')
+const placeLimit = ref(200)
+const PLACE_STEP = 200
+
+const filteredPlaces = computed(() => {
+  const kw = placeKw.value.trim().toLowerCase()
+  if (!kw) return mapPlaces.value
+  return mapPlaces.value.filter((p) =>
+    p.name.toLowerCase().includes(kw)
+    || p.category.toLowerCase().includes(kw)
+    || (p.note ?? '').toLowerCase().includes(kw))
+})
+/** 一次最多渲染 200 行：1064 行全铺进 DOM 会拖慢整页，而这一页刚做过加载优化 */
+const shownPlaces = computed(() => filteredPlaces.value.slice(0, placeLimit.value))
+watch(placeKw, () => { placeLimit.value = PLACE_STEP })
 
 /**
  * 底图变过、需要人复核的点位。
@@ -1022,7 +1046,7 @@ async function saveLayers(keys: string[] | null) {
     <template #tabs>
       <Tabs v-model="tab" :tabs="[
         { key: 'mark', label: '标注' },
-        { key: 'places', label: '点位列表', count: localPlaces.length },
+        { key: 'places', label: '点位列表', count: mapPlaces.length },
         { key: 'status', label: '同步与状态' },
       ]" />
     </template>
@@ -1234,8 +1258,11 @@ async function saveLayers(keys: string[] | null) {
         </div>
       </div>
 
-      <!-- ==================== 点位列表 ==================== -->
-      <div v-show="tab === 'places'" class="table-wrap">
+      <!-- ==================== 点位列表 ====================
+           ⚠️ 用 v-if 而不是 v-show：这张表现在是全图点位（四位数），
+           v-show 会在打开页面时就把它渲染进 DOM，等于把刚省下的加载时间又还回去。
+           只在切到这个 tab 时才挂载。 -->
+      <div v-if="tab === 'places'" class="table-wrap">
         <!--
           底图变了导致点位可能整体偏移。
           **坐标不会变、也不会报错**，只会悄悄指错地方 —— 所以这里必须主动喊一声。
@@ -1258,24 +1285,62 @@ async function saveLayers(keys: string[] | null) {
           </ul>
         </div>
 
-        <table class="tbl">
+        <div class="place-tools">
+          <Input
+            v-model="placeKw"
+            placeholder="筛选点位：名字 / 分类 / 备注"
+            aria-label="筛选点位"
+          />
+          <span class="hint">{{ filteredPlaces.length }} 个</span>
+        </div>
+
+        <table class="tbl places-tbl">
+          <!-- 列宽：名称给 38%，其余按内容定宽，备注吃掉剩余 —— 否则名称列会撑到 800px，
+               分类被推到屏幕右侧，看起来像两组互不相干的字段 -->
+          <colgroup>
+            <col class="c-name">
+            <col class="c-cat">
+            <col class="c-xy">
+            <col class="c-note">
+            <col class="c-ref">
+            <col class="c-pri">
+          </colgroup>
           <thead>
             <tr>
               <th>名称</th><th>分类</th><th>坐标</th><th>备注</th><th>参照</th><th>优先级</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in localPlaces" :key="p.id" class="row" @click="jumpTo(p)">
-              <td>{{ p.name }}</td>
+            <!--
+              ⚠️ 类名不能叫 row：base.css 里的 .row 是 display:flex，
+              落在 <tr> 上会把表格行拆成 flex 容器 —— 单元格不再对齐表头，
+              实测表头在右边、值在左边。这里用 place-row。
+            -->
+            <tr v-for="p in shownPlaces" :key="p.id" class="place-row" @click="jumpTo(p)">
+              <td>
+                <span class="name-cell">
+                  {{ p.name }}
+                  <Tag :tone="p.source === 'admin' ? 'flame' : 'neutral'">{{ p.source === 'admin' ? '本地' : 'wiki' }}</Tag>
+                </span>
+              </td>
               <td>{{ p.category }}</td>
               <td class="mono">{{ fmt(p.x) }}, {{ fmt(p.y) }}</td>
               <td class="note-cell">{{ p.note }}</td>
               <td>{{ p.landmark ? '是' : '' }}</td>
               <td>{{ p.priority }}</td>
             </tr>
-            <tr v-if="!localPlaces.length"><td colspan="6" class="muted">还没有本地点位。到「标注」页在地图上点一下即可新增。</td></tr>
+            <tr v-if="!filteredPlaces.length">
+              <td colspan="6" class="muted">
+                {{ placeKw ? '没有匹配的点位，换个词试试。' : '这张地图还没有点位。到「标注」页在地图上点一下即可新增。' }}
+              </td>
+            </tr>
           </tbody>
         </table>
+
+        <div v-if="shownPlaces.length < filteredPlaces.length" class="place-more">
+          <Button size="sm" @click="placeLimit += PLACE_STEP">继续显示</Button>
+          <span class="hint">已显示 {{ shownPlaces.length }} / {{ filteredPlaces.length }}</span>
+        </div>
       </div>
 
       <!-- ==================== 状态 ==================== -->
@@ -1801,6 +1866,63 @@ async function saveLayers(keys: string[] | null) {
 }
 
 .anchor-why { flex: 1; color: var(--ink-3); font-size: var(--fs-xs); }
+
+/* 点位列表：筛选条与「继续显示」
+   1064 个点位一次铺开会把这一页拖慢，所以默认只渲染 200 行，靠筛选缩小范围 */
+.place-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) 0;
+}
+.place-tools :deep(.inp) { max-width: 320px; }
+.place-tools .hint { flex: none; white-space: nowrap; }
+
+.name-cell { display: inline-flex; align-items: center; gap: var(--sp-2); }
+
+/* 手写表格：行必须是 table-row。即使调用方误写了别的类，也不能把表格拆掉 */
+.tbl tr { display: table-row; }
+
+/* 点位列表的列宽。名称 38%、备注吃剩余，其余定宽 */
+.places-tbl { table-layout: fixed; }
+.places-tbl .c-name { width: 38%; }
+.places-tbl .c-cat { width: 120px; }
+.places-tbl .c-xy { width: 150px; }
+.places-tbl .c-ref { width: 70px; }
+.places-tbl .c-pri { width: 80px; }
+.places-tbl td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.places-tbl .note-cell { white-space: normal; }
+
+/* 手机上六列必然放不下：固定列宽会按比例压缩，名称列被压到 40px、表头竖排。
+   这里改回自动布局，只留名称 / 分类 / 坐标三列，名称拿 42%。 */
+@media (max-width: 760px) {
+  /* 手机上把 colgroup 整个去掉：留着它，被隐藏的列仍会按 col 宽度占轨道，
+     实测表格被撑到 726px，名称之外的列全跑到屏幕外。 */
+  .places-tbl { table-layout: auto; }
+  .places-tbl colgroup { display: none; }
+  /* ⚠️ 必须允许换行：桌面上为了单行整洁给 td 设了 nowrap，
+     自动布局下 nowrap 会把「最长那个名字」当成列的最小宽度 ——
+     实测有一行名字把名称列撑到 527px，整张表溢出到 726。 */
+  .places-tbl td { white-space: normal; overflow-wrap: anywhere; }
+  .places-tbl td:nth-child(3) { white-space: nowrap; }
+  .places-tbl th:nth-child(1), .places-tbl td:nth-child(1) { width: 44%; }
+  .places-tbl th:nth-child(4), .places-tbl td:nth-child(4),
+  .places-tbl th:nth-child(5), .places-tbl td:nth-child(5),
+  .places-tbl th:nth-child(6), .places-tbl td:nth-child(6) { display: none; }
+  .place-tools { flex-wrap: wrap; gap: var(--sp-2); }
+  .place-tools :deep(.inp) { max-width: none; flex: 1 1 100%; }
+}
+.place-row { cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+.place-row:hover { background: var(--surface-hover); }
+.place-row:hover td:first-child { box-shadow: inset 2px 0 0 var(--ember); }
+
+.place-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0 var(--sp-4);
+}
 
 .anchor-bad { color: var(--warn, #cfa334); }
 .tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
