@@ -29,14 +29,16 @@ NapCat 只绑定 `127.0.0.1`，不暴露到公网。业务层监听 `0.0.0.0`，
 | 内存 | 2 GB 起。应用约占 400 MB，块与向量常驻内存 |
 | 磁盘 | 20 GB。数据库、图片缓存、瓦片缓存、日志 |
 | 系统 | Debian 或 Ubuntu，示例使用 Debian 13 |
-| 运行时 | JDK 17 或更高 |
-| 构建 | Maven 3.9+，Node 20+ |
+| 运行时 | JRE 17 或更高。Debian 13 起默认只提供 21，向下兼容 |
+| 构建 | Maven 3.9+，Node 20+。只在构建机需要，服务器不需要 |
 | 容器 | Docker 与 Docker Compose |
 | 出网 | QQ、模型 API、wiki.gg |
 
 ```bash
 sudo apt update
-sudo apt install -y openjdk-17-jdk nginx sqlite3 curl git
+# 运行时只要 JRE；中文字体装不上会让地图出图的中文变成方块
+sudo apt install -y openjdk-21-jre-headless nginx sqlite3 curl git fonts-noto-cjk
+# 下面三行只在构建机上需要，产物上传到服务器的做法见 plans/html/本地上传部署操作手册.html
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 sudo corepack enable

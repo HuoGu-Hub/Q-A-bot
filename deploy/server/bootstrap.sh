@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  服务器一次性初始化 —— Debian 12 空机器 → 能跑 jar 的状态
+#  服务器一次性初始化 —— Debian 12 / 13 或 Ubuntu 22.04 / 24.04 空机器 → 能跑 jar 的状态
 #
 #  用法，root 执行：
 #    scp deploy/server/bootstrap.sh root@服务器:/tmp/
@@ -20,6 +20,19 @@ APP_USER="${APP_USER:-qqbot}"
 APP_DIR="${APP_DIR:-/opt/qqbot}"
 SWAP_SIZE="${SWAP_SIZE:-4G}"
 
+# ---------- 0. 识别发行版 ----------
+# Docker 源与部分包名按发行版走，写死某一个 codename 会在换系统时直接 404
+. /etc/os-release
+OS_ID="${ID:-unknown}"
+CODENAME="${VERSION_CODENAME:-}"
+ARCH="$(dpkg --print-architecture)"
+
+case "$OS_ID" in
+  debian|ubuntu) ;;
+  *) echo "只支持 Debian 或 Ubuntu，当前系统是 $OS_ID，请重装后再跑"; exit 1 ;;
+esac
+[ -n "$CODENAME" ] || { echo "读不到 VERSION_CODENAME，检查 /etc/os-release"; exit 1; }
+
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 
@@ -29,8 +42,13 @@ step() { printf '\n\033[1;36m==> %s\033[0m\n' "$1"; }
 step "系统包、时区与时间同步"
 apt-get update -qq
 apt-get -y -qq upgrade
-apt-get -y -qq install curl ca-certificates gnupg rsync sqlite3 chrony fontconfig \
-                        fonts-wqy-zenhei openjdk-17-jre-headless nginx
+apt-get -y -qq install curl ca-certificates gnupg rsync sqlite3 chrony fontconfig nginx \
+                        fonts-noto-cjk
+
+# JDK：Debian 13 不再提供 openjdk-17，退回 21 一样能跑 —— jar 的编译目标是 17，
+# 高版本 JRE 向下兼容。两行里有一条成功就够了
+apt-get -y -qq install openjdk-17-jre-headless \
+  || apt-get -y -qq install openjdk-21-jre-headless
 
 timedatectl set-timezone Asia/Shanghai
 systemctl enable --now chrony
@@ -73,18 +91,19 @@ if command -v docker >/dev/null 2>&1; then
   echo "Docker 已安装，跳过"
 else
   install -m 0755 -d /etc/apt/keyrings
-  # 优先腾讯云镜像源，拉不动再回退官方源
-  if curl -fsSL --max-time 20 https://mirrors.cloud.tencent.com/docker-ce/linux/debian/gpg \
+  # 优先腾讯云镜像源，拉不动再回退官方源。路径里的 debian 换成 $OS_ID，
+  # 末尾的 stable 前面用 $CODENAME，Debian 13 是 trixie、Ubuntu 24.04 是 noble
+  if curl -fsSL --max-time 20 "https://mirrors.cloud.tencent.com/docker-ce/linux/$OS_ID/gpg" \
        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
-    REPO="https://mirrors.cloud.tencent.com/docker-ce/linux/debian"
+    REPO="https://mirrors.cloud.tencent.com/docker-ce/linux/$OS_ID"
     echo "使用腾讯云 Docker 镜像源"
   else
-    curl -fsSL https://download.docker.com/linux/debian/gpg \
+    curl -fsSL "https://download.docker.com/linux/$OS_ID/gpg" \
       | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    REPO="https://download.docker.com/linux/debian"
+    REPO="https://download.docker.com/linux/$OS_ID"
     echo "使用 Docker 官方源"
   fi
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] $REPO bookworm stable" \
+  echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] $REPO $CODENAME stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update -qq
   apt-get -y -qq install docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -104,6 +123,7 @@ systemctl restart docker
 
 # ---------- 6. 收尾 ----------
 step "完成"
+echo "系统      : $PRETTY_NAME"
 echo "用户      : $APP_USER"
 echo "目录      : $APP_DIR"
 echo "Java      : $(java -version 2>&1 | head -1)"
