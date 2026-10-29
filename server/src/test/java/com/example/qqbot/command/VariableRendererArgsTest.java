@@ -35,8 +35,10 @@ class VariableRendererArgsTest {
         when(glossary.size()).thenReturn(0);
         QaAnalytics analytics = mock(QaAnalytics.class);
 
+        // 证书监控在参数测试里不参与，给一个"未配置"的空策略即可
+        var certificate = new com.example.qqbot.ops.TlsCertificate(() -> "");
         renderer = new VariableRenderer(new CommandProperties(), mock(CommandStore.class),
-                blockStore, glossary, analytics, new BotProperties());
+                blockStore, glossary, analytics, new BotProperties(), certificate);
     }
 
     @Test

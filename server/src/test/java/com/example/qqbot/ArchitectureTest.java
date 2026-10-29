@@ -267,7 +267,9 @@ class ArchitectureTest {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
                         "..voice..", "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..",
-                        "..llm..", "..onebot..", "..settings..", "..router..", "..persistence..")
+                        "..llm..", "..onebot..", "..settings..", "..router..", "..persistence..",
+                        // 2026-10-29 新增 ops（证书等运维观测）：同样只能依赖自己声明的只读接口
+                        "..ops..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
         rule.check(CLASSES);
     }

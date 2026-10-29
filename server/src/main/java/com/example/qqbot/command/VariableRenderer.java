@@ -1,5 +1,6 @@
 package com.example.qqbot.command;
 
+import com.example.qqbot.ops.TlsCertificate;
 import com.example.qqbot.site.BotPolicy;
 import com.example.qqbot.kb.Glossary;
 import com.example.qqbot.kb.block.KbBlockStore;
@@ -63,18 +64,20 @@ public class VariableRenderer {
     private final Glossary glossary;
     private final QaAnalytics analytics;
     private final BotPolicy botProps;
+    private final TlsCertificate certificate;
 
     private final Instant startedAt = Instant.now();
 
     public VariableRenderer(CommandPolicy props, CommandStore store,
                             KbBlockStore blockStore, Glossary glossary, QaAnalytics analytics,
-                            BotPolicy botProps) {
+                            BotPolicy botProps, TlsCertificate certificate) {
         this.props = props;
         this.store = store;
         this.blockStore = blockStore;
         this.glossary = glossary;
         this.analytics = analytics;
         this.botProps = botProps;
+        this.certificate = certificate;
     }
 
     /**
@@ -113,6 +116,10 @@ public class VariableRenderer {
                 VarInfo.value("datetime", "完整时间", "2026-09-25 14:32:07"),
                 VarInfo.value("weekday", "星期", "星期四"),
                 VarInfo.value("uptime", "已运行时长", "3 小时 12 分"),
+                // 证书是 90 天的 DV，到期那天整站 HTTPS 会直接不可用 —— 让它能被播报
+                VarInfo.value("cert.days", "证书剩余天数", "89"),
+                VarInfo.value("cert.date", "证书到期日期", "2027-01-26"),
+                VarInfo.value("cert.status", "证书状态一句话", "正常（还剩 89 天）"),
                 // ⚠️ 预览值必须是真实量级：kb.count 原来写 4,238，磁盘实际是 4,131
                 VarInfo.value("kb.count", "知识库条目数", "4,131"),
                 VarInfo.value("kb.terms", "术语表词条数", "3,359"),
@@ -275,6 +282,10 @@ public class VariableRenderer {
             case "weekday" -> weekday(ctx);
             case "uptime" -> uptime();
 
+            case "cert.days" -> certValue("days", ctx.preview());
+            case "cert.date" -> certValue("date", ctx.preview());
+            case "cert.status" -> certValue("status", ctx.preview());
+
             case "kb.count" -> ctx.preview() ? "4,131" : num(blockStore.isAvailable() ? blockStore.count() : 0);
             case "kb.terms" -> ctx.preview() ? "3,359" : num(glossary.size());
 
@@ -290,6 +301,29 @@ public class VariableRenderer {
     }
 
     // ==================== 各项取值 ====================
+
+    /**
+     * 证书类变量。
+     *
+     * <p>读不到证书时返回「未知」而不是原样保留占位符 —— 播报里出现
+     * {@code {cert.days}} 会被误认为"模板写错了"，而「未知」至少说明是读取失败。
+     */
+    private String certValue(String kind, boolean preview) {
+        if (preview) {
+            return switch (kind) {
+                case "days" -> "89";
+                case "date" -> "2027-01-26";
+                default -> "正常（还剩 89 天）";
+            };
+        }
+        return certificate.current()
+                .map(info -> switch (kind) {
+                    case "days" -> info.daysText();
+                    case "date" -> info.notAfterDate();
+                    default -> info.status();
+                })
+                .orElse("未知");
+    }
 
     private static String nickname(OneBotEvent event) {
         if (event == null || event.getSender() == null) {

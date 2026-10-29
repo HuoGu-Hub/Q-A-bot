@@ -15,6 +15,7 @@ import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.config.ScheduleProperties;
 import com.example.qqbot.config.SiteProperties;
+import com.example.qqbot.config.TlsProperties;
 import com.example.qqbot.config.VoiceProperties;
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.onebot.BotIdentity;
@@ -43,7 +44,7 @@ import org.springframework.util.StringUtils;
 @SpringBootApplication
 @EnableAsync
 @EnableScheduling
-@EnableConfigurationProperties({OneBotProperties.class, GuardProperties.class, LlmProperties.class,
+@EnableConfigurationProperties({TlsProperties.class, OneBotProperties.class, GuardProperties.class, LlmProperties.class,
         AsyncProperties.class, MediaProperties.class, KbProperties.class, QaProperties.class,
         AdminProperties.class, LogProperties.class, CommandProperties.class, ScheduleProperties.class,
         BotProperties.class, SiteProperties.class, PersistenceProperties.class,
