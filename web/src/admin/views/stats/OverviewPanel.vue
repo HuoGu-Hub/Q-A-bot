@@ -249,11 +249,6 @@ defineExpose({
       </div>
 
       <Panel title="未命中 · 该补什么" corners>
-        <p class="note faint">
-          「A 路余弦」= 向量检索在应用 min-score 阈值<b>之前</b>的最高相似度（当前阈值 0.45）。
-          标红表示 ≥0.35，即"库里其实有、差一点被挡" → 该考虑调低阈值；数值很低说明库里确实没这份资料 →
-          该补资料，调阈值没用。0 表示这次没走向量路（未启用 / 老记录没有这一列）。
-        </p>
         <div class="miss">
           <div>
             <div class="sub faint">认出了词，但知识库没有资料</div>
@@ -363,12 +358,6 @@ defineExpose({
               <span class="lg"><i class="sw side-edge" />阈值所在档 · {{ cosine.edge }}</span>
               <span class="lg"><i class="sw side-blocked" />被挡（记 0）· {{ cosine.blocked }}</span>
             </div>
-            <p class="note faint">
-              纵轴是<b>提问条数</b>，横轴是<b>过阈值之后</b>的最高余弦：被挡下的一律记 0，
-              所以最左那一根就是「压根没检索到」的量。0.1~0.4 空着，说明阈值正卡在缺口上。
-              哪天有量落到虚线<b>左边那一档</b>，就是"库里其实有、只差一点被挡" —— 那时再动
-              <span class="key">app.kb.min-score</span>。
-            </p>
           </div>
         </div>
       </Panel>
@@ -443,9 +432,6 @@ defineExpose({
 .sub--gap { margin-top: var(--sp-4); }
 
 /* 说明文字：元信息字号 + 放宽行距，长句才读得下去 */
-.note { font-size: var(--fs-meta); line-height: 1.8; margin: 0 0 var(--sp-4); }
-.note:last-child { margin-bottom: 0; }
-.key { font-family: var(--font-mono); color: var(--ink-dim); }
 
 /* 「差一点被 min-score 挡住」—— 明显到值得你动手调阈值的那种 */
 .near { color: var(--rust); }
@@ -465,7 +451,6 @@ defineExpose({
   gap: var(--sp-6);
   align-items: start;
 }
-.cosine .note { margin: 0; }
 
 .hist-fig { margin: 0; }
 /* 计数 / 柱 / 刻度三行用同一套「等宽列」网格 —— 列宽一致，三者天然对齐；

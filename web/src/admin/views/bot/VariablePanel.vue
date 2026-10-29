@@ -24,7 +24,6 @@ function insert(name: string) {
   <section class="var-panel" aria-label="变量">
     <header class="var-head">
       <span>变量</span>
-      <span class="var-hint">点一下插入当前编辑区</span>
     </header>
     <div class="var-list">
       <button
@@ -45,7 +44,6 @@ function insert(name: string) {
 .var-panel { display: flex; flex-direction: column; gap: 7px; padding-top: 4px; border-top: 1px solid var(--hairline); }
 .var-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
 .var-head > span:first-child { color: var(--ink-3); font-size: var(--fs-meta); }
-.var-hint { color: var(--ink-4); font-size: 10px; }
 .var-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .var-chip {
   padding: 3px 6px;

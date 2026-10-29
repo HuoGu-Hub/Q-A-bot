@@ -375,7 +375,7 @@ function submit() {
               @update:params="form.params = $event"
             />
             <div v-if="scheduled" class="schedule-hint">
-              <span>需要「重复周期」与「时间点」各一个，名字可以改</span>
+              <span v-if="!hasRepeat || !hasTime">缺「重复周期」或「时间点」</span>
               <Button v-if="!hasRepeat || !hasTime" size="sm" @click="ensureScheduleParams">补全</Button>
             </div>
           </div>
@@ -496,7 +496,6 @@ function submit() {
           <span class="row-label">权限</span>
           <Select v-model="form.access" :options="ACCESS_OPTIONS" aria-label="谁能新增或删除" />
         </label>
-        <p class="faint access-hint">只限制新增 / 删除；查询对所有人生效</p>
 
         <label class="row">
           <span class="row-label">范围</span>
@@ -530,9 +529,6 @@ function submit() {
             </label>
           </template>
         </div>
-        <p v-if="form.scope !== 'GROUP'" class="faint origin-hint">
-          跨群记录才标来源；本群记录不标
-        </p>
 
         <div v-if="needsAcl" class="block">
           <button class="block-head" type="button" :aria-expanded="openAcl" @click="openAcl = !openAcl">
@@ -591,8 +587,6 @@ function submit() {
 }
 .editor-actions { display: flex; gap: var(--sp-2); flex: none; }
 .editor-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: var(--sp-7); align-items: start; }
-.origin-hint { margin: -4px 0 0; font-size: 11px; line-height: 1.4; }
-.access-hint { margin: -4px 0 0; font-size: 11px; line-height: 1.4; }
 .editor-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
 .editor-col--side { position: sticky; top: 0; align-self: start; gap: var(--sp-2); }
 .editor-col--side .row { gap: var(--sp-2); }

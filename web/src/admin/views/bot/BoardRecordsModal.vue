@@ -121,7 +121,6 @@ async function restore(record: AdminBoardRecord) {
       <DataTable
         :rows="records.length"
         empty="这个板块还没有记录"
-        empty-hint="群里发 /板块 /create 添加一条"
       >
         <thead>
           <tr>

@@ -133,7 +133,6 @@ onMounted(load)
         cards
         :rows="tableRows"
         :empty="scope === 'questions' ? '还没有提问记录' : '还没有任何消息记录'"
-        empty-hint="去群里 @ 机器人问几个问题（@ 了并且被有效回应才算提问）"
       >
         <thead>
           <!--

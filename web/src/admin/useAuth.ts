@@ -63,10 +63,10 @@ export function useAuth() {
 }
 
 /** 角色显示用的顺序，给下拉选项用 */
-export const ADMIN_ROLES: { value: AdminRoleId; label: string; hint: string }[] = [
-  { value: 'viewer', label: '只读', hint: '能看统计与知识库，不能修改' },
-  { value: 'editor', label: '编辑', hint: '能改知识库、命令、文案、地图与公告' },
-  { value: 'admin', label: '管理', hint: '全部权限，含账号管理与系统设置' },
+export const ADMIN_ROLES: { value: AdminRoleId; label: string }[] = [
+  { value: 'viewer', label: '只读' },
+  { value: 'editor', label: '编辑' },
+  { value: 'admin', label: '管理' },
 ]
 
 /** 当前登录者是不是管理员（模板里用起来比 auth.can 顺手） */

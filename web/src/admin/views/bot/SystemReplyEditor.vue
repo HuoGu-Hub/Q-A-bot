@@ -82,7 +82,6 @@ async function save() {
     <template #head>
       <div class="reply-head">
         <span class="reply-command">/{{ kind }}</span>
-        <span class="reply-note">留空使用自动生成</span>
       </div>
     </template>
 
@@ -110,7 +109,6 @@ async function save() {
 <style scoped>
 .reply-head { display: flex; align-items: baseline; gap: var(--sp-3); }
 .reply-command { color: var(--ember); font-family: var(--font-mono); font-size: var(--fs-md); }
-.reply-note { color: var(--ink-4); font-size: var(--fs-xs); }
 .reply-empty { color: var(--ink-4); }
 .reply-preview { display: flex; flex-direction: column; gap: 6px; }
 .preview-label { color: var(--ink-4); font-size: 10.5px; letter-spacing: .12em; }

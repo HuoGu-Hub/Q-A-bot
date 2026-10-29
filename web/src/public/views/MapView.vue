@@ -304,10 +304,6 @@ function fmt(n: number): string {
       <div v-else-if="!catalog || !catalog.maps.length" class="overlay empty-state">
         <Icon name="map-pin" :size="26" />
         <h2>还没有地图数据</h2>
-        <p>
-          地图数据由管理员在后台「地图」页触发一次同步后就有了。
-          同步会从 wiki 拉取底图信息与全部点位，只跑一次，之后是增量的。
-        </p>
       </div>
 
       <template v-else>
@@ -361,7 +357,6 @@ function fmt(n: number): string {
               {{ locating ? '查找中' : '查找' }}
             </Button>
           </form>
-          <p class="hint">按名字、别名、备注找；结果会标出它相对最近地标的方位。</p>
 
           <ol v-if="located && located.hits.length" class="hits">
             <li v-for="h in located.hits" :key="h.ref + h.x + h.y">
@@ -378,7 +373,7 @@ function fmt(n: number): string {
             </li>
           </ol>
           <p v-else-if="located && !located.found" class="hint warn">
-            地图上还没有标过「{{ located.q }}」。资源点可以让管理员补一个。
+            地图上还没有标过「{{ located.q }}」。
           </p>
         </div>
 
@@ -413,7 +408,6 @@ function fmt(n: number): string {
           <label v-if="currentMap?.groups.some((g) => g.key.startsWith('Lore'))" class="layer stand-alone">
             <input type="checkbox" :checked="loreOn" @change="toggleLore" />
             <span class="layer-name">世界观文本</span>
-            <span class="layer-n">几百条，默认关</span>
           </label>
         </div>
 

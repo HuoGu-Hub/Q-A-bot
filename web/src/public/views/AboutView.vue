@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { renderInline } from '../renderInline'
 import { site, t } from '../useSiteText'
-import Icon from '@shared/ui/Icon.vue'
 import PageHeader from '@shared/ui/PageHeader.vue'
 
 /**
@@ -63,10 +62,6 @@ const howSteps = computed(() =>
           <span class="step-t">{{ step }}</span>
         </li>
       </ol>
-      <p class="muted note">
-        <Icon name="info" :size="15" />
-        <span>资料里没有的内容，我会说「没查到」而不是编一个 —— 如果你发现我编了，那是 bug，欢迎反馈。</span>
-      </p>
     </section>
 
     <section class="sec last">
@@ -135,9 +130,6 @@ p { font-size: var(--fs-base); line-height: 1.9; }
   color: var(--ember);
 }
 .step-t { min-width: 0; }
-
-.note { display: flex; align-items: flex-start; gap: var(--sp-2); margin-top: var(--sp-4); font-size: var(--fs-sm); }
-.note :deep(svg) { margin-top: 4px; color: var(--ink-4); }
 
 @media (max-width: 760px) {
   .sec { padding: var(--sp-4) 0; }

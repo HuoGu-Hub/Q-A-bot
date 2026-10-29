@@ -94,7 +94,6 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
       </template>
 
       <template v-else-if="tab === 'category'">
-        <span class="stat faint">分类只读分块符号里的标签</span>
         <Button size="sm" :disabled="catLoading" @click="cat?.reload()">
           {{ catLoading ? '读取中…' : '刷新' }}
         </Button>
@@ -139,6 +138,5 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
 </template>
 
 <style scoped>
-.stat { font-size: var(--fs-meta); color: var(--ink-dim); }
 .stat b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: var(--fw-semi); }
 </style>

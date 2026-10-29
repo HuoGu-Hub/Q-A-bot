@@ -8,7 +8,6 @@ import Icon from '@shared/ui/Icon.vue'
   <div class="page nf">
     <span class="glyph" aria-hidden="true"><Icon name="flame" :size="26" /></span>
     <h1 class="t"><span v-html="renderInline(t('notfound.title', '页面不存在'))" /></h1>
-    <p class="muted"><span v-html="renderInline(t('notfound.desc', '这个页面不存在，返回首页或资料库继续查找。'))" /></p>
     <RouterLink class="go" to="/">
       <Icon name="home" :size="16" /> 回到首页
     </RouterLink>

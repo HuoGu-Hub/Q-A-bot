@@ -75,7 +75,6 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
         <RouterLink to="/" class="brand">
           <Icon name="flame" class="mark" :size="19" />
           <span class="name">{{ botName }}</span>
-          <span class="sub">知识库问答</span>
         </RouterLink>
 
         <nav class="nav" aria-label="主导航">
@@ -241,16 +240,6 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
   /* 灯芯那一点光：这是全站唯一允许"发光"的图标 */
   filter: drop-shadow(0 0 7px var(--ember-glow));
 }
-.sub {
-  font-family: var(--font-body);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-normal);
-  letter-spacing: .04em;
-  color: var(--ink-3);
-  padding-left: var(--sp-3);
-  border-left: 1px solid var(--hairline);
-}
-
 .nav { margin-left: auto; display: flex; align-items: center; gap: var(--sp-1); }
 .nav-link {
   position: relative;
@@ -299,7 +288,6 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
 
 /* ==================== 窄屏 ==================== */
 @media (max-width: 760px) {
-  .sub { display: none; }
   .nav { display: none; }
   /* 站名 + 主题开关各占一头 */
   .theme-slot { margin-left: auto; }

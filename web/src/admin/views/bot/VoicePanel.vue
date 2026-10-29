@@ -418,12 +418,11 @@ onMounted(() => {
             <span class="drop-main">
               {{ pending > 0 ? '正在上传 ' + (total - pending + 1) + ' / ' + total : '把音频拖到这里' }}
             </span>
-            <span class="drop-sub">也可以点击选择，支持 mp3 / wav / m4a / flac / ogg / amr / aac</span>
+            <span class="drop-sub">mp3 / wav / m4a / flac / ogg / amr / aac</span>
           </button>
           <div class="defaults">
             <label class="def-label" for="voice-tags">默认标签</label>
             <Input id="voice-tags" v-model="defaultTags" placeholder="例如 歌曲,副歌" />
-            <p class="hint">只影响这一次拖进来的文件，之后可以在列表里改。</p>
           </div>
         </div>
         <input
@@ -444,7 +443,7 @@ onMounted(() => {
         <Input v-model="newScope" placeholder="限定群号，逗号分隔；空 = 所有群" />
         <Button variant="primary" :disabled="addingTrigger" @click="addTrigger">添加</Button>
       </div>
-      <Empty v-if="triggers.length === 0" text="还没有触发词" hint="加一个「唱首歌」，之后这句就会要求语音回复" />
+      <Empty v-if="triggers.length === 0" text="还没有触发词" />
       <table v-else class="vt">
         <thead>
           <tr><th>关键词</th><th>冷却</th><th>作用域</th><th>启用</th><th aria-label="操作"></th></tr>
@@ -480,7 +479,7 @@ onMounted(() => {
     </Panel>
 
     <Panel title="素材库" :count="items.length">
-      <Empty v-if="!loading && items.length === 0" text="还没有语音" hint="拖一段音频到上面的框里就能用了" />
+      <Empty v-if="!loading && items.length === 0" text="还没有语音" />
       <table v-else class="vt">
         <thead>
           <tr>
@@ -534,9 +533,7 @@ onMounted(() => {
     </Modal>
 
     <Modal :open="!!sending" title="发到群" width="420px" @close="sending = null">
-      <p class="hint">
-        {{ sending?.title }} · {{ sending?.durationText }}，会立刻作为语音条发出。
-      </p>
+      <p class="hint">{{ sending?.title }} · {{ sending?.durationText }}</p>
       <Input v-model="groupId" placeholder="群号" mono />
       <div class="modal-actions">
         <Button @click="sending = null">取消</Button>

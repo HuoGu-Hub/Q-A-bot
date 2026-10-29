@@ -355,7 +355,6 @@ onMounted(load)
               @click="form.role = r.value"
             >
               <span class="role-name">{{ r.label }}</span>
-              <span class="role-hint">{{ r.hint }}</span>
             </button>
           </div>
         </fieldset>
@@ -402,7 +401,6 @@ onMounted(load)
               @click="roleDraft = r.value"
             >
               <span class="role-name">{{ r.label }}</span>
-              <span class="role-hint">{{ r.hint }}</span>
             </button>
           </div>
         </fieldset>
@@ -436,9 +434,6 @@ onMounted(load)
         <div class="zone">
           <div class="zone-text">
             <div class="zone-title">停用或删除</div>
-            <p class="hint">
-              停用之后对方登不进来，历史记录仍然保留。删除不可撤销，这个人的名字会从这里消失。
-            </p>
           </div>
           <div class="zone-actions">
             <Button
@@ -626,7 +621,6 @@ onMounted(load)
 .role-card:disabled { opacity: .4; cursor: not-allowed; }
 .role-card:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 .role-name { font-family: var(--font-title); font-size: var(--fs-base); letter-spacing: .04em; }
-.role-hint { font-size: var(--fs-micro); line-height: 1.6; color: var(--ink-3); }
 .role-card.on .role-name { color: var(--ember-hot); }
 
 .form-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }

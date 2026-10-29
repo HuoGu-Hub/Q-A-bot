@@ -61,7 +61,7 @@ function lines(p: string): string[] {
     <div v-else-if="notFound" class="missing">
       <span class="missing-ico" aria-hidden="true"><Icon name="search" :size="22" /></span>
       <h1 class="nf">没有这个词条</h1>
-      <p class="muted">资料库里找不到「{{ props.title }}」。可能是名称不完全一致。</p>
+      <p class="muted">资料库里找不到「{{ props.title }}」。</p>
       <RouterLink class="nf-go" to="/library">
         <Icon name="book" :size="16" /> 去资料库搜索
       </RouterLink>

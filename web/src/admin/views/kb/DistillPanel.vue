@@ -815,9 +815,7 @@ defineExpose({
           <Button size="sm" @click="unblockEntry(b)">移除</Button>
         </div>
       </div>
-      <Empty v-else text="没有禁学成员" hint="输入 QQ 号，或从最近成员选择" />
-
-      <p class="faint blocklist-hint">按 QQ 屏蔽会同时回填已知群里的历史消息；被屏蔽消息不进入蒸馏，也不计入触发。</p>
+      <Empty v-else text="没有禁学成员" />
     </Panel>
 
     <Panel title="知识笔记" :count="filteredNotes.length">
@@ -860,7 +858,6 @@ defineExpose({
             <Empty
               v-if="!filteredNotes.length"
               text="没有匹配的笔记"
-              hint="调整筛选条件"
             />
             <button
               v-for="n in filteredNotes"
@@ -918,13 +915,11 @@ defineExpose({
               </div>
             </div>
 
-            <p class="faint preview-hint">退出多选后可编辑</p>
           </template>
 
           <Empty
             v-else-if="!selected"
             text="选择一条笔记"
-            hint="左侧选择，右侧整理"
           />
           <template v-else>
             <div class="editor-head">
@@ -983,7 +978,6 @@ defineExpose({
 
             <div v-if="selected.imageIds.length" class="image-box">
               <div class="source-label">关联图片</div>
-              <p class="faint">发布后入库；撤回保留。</p>
               <div class="images">
                 <img v-for="id in selected.imageIds" :key="id"
                      :src="'/admin/api/distill/images/' + id" alt="聊天图片" />
@@ -1014,7 +1008,6 @@ defineExpose({
         label="蒸馏任务表"
         :rows="jobs.length"
         empty="还没有任务"
-        empty-hint="达到触发条件后会自动创建"
       >
         <thead>
           <tr>
@@ -1181,7 +1174,6 @@ defineExpose({
   border-bottom: 1px solid var(--hairline); }
 .blocked-name { flex: 1; min-width: 0; font-size: var(--fs-sm); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
-.blocklist-hint { margin-top: var(--sp-3); }
 
 .notes-workbench { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr);
   gap: var(--sp-4); align-items: start; }
@@ -1211,7 +1203,6 @@ defineExpose({
 .preview-title { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); font-weight: var(--fw-medium); line-height: 1.4; }
 .preview-meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .preview-body { margin: var(--sp-3) 0; white-space: pre-wrap; line-height: 1.75; }
-.preview-hint { margin-top: var(--sp-4); }
 
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2);
   padding-top: var(--sp-3); flex-wrap: wrap; }

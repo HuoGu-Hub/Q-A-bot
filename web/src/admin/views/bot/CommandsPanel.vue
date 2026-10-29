@@ -835,7 +835,6 @@ onMounted(load)
             </label>
           </div>
           <!-- 指令不读跨群数据，数据范围与来源显示对它没有意义，只放在板块编辑器 -->
-          <p class="faint scope-hint">数据范围与来源显示只对板块生效</p>
 
           <div v-if="needsList" class="block">
             <button class="block-head" type="button" :aria-expanded="openBlocks.acl" @click="toggleBlock('acl')">
@@ -1116,12 +1115,6 @@ onMounted(load)
   gap: var(--sp-5);
   padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--hairline-lit);
-}
-.eyebrow {
-  font-size: 10.5px;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-  color: var(--ink-4);
 }
 .index-title h2 {
   margin: 2px 0 0;
@@ -1537,6 +1530,5 @@ onMounted(load)
 .editor-col--side .row-label { flex-basis: 64px; }
 .editor-col--side .col-title { padding-bottom: 4px; }
 .editor-col--side .checks { gap: var(--sp-3); }
-.scope-hint { margin: -2px 0 0; font-size: 11px; line-height: 1.4; }
 @media (max-width: 1000px) { .editor-col--side { position: static; } }
 </style>

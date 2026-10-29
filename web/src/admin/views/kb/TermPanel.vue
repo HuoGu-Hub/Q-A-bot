@@ -480,7 +480,6 @@ defineExpose({
         label="词条表"
         :rows="items.length"
         empty="没有匹配的词条"
-        empty-hint="换个筛选条件，或者先去「文档」面板导入资料"
       >
         <thead>
           <tr>
@@ -601,12 +600,10 @@ defineExpose({
       <div class="export-opts">
         <ActionOption
           title="Excel 表格（.xlsx）"
-          hint="在 WPS / Excel 里改别名，再用「导入别名表」导回"
           @select="chooseExport('xlsx')"
         />
         <ActionOption
           title="纯文本（.tsv）"
-          hint="给脚本或调试用：制表符分隔、不带 BOM"
           @select="chooseExport('tsv')"
         />
       </div>

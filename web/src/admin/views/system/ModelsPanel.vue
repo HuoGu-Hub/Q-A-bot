@@ -143,9 +143,6 @@ onMounted(load)
           </span>
         </template>
       </div>
-      <p class="faint note">
-        按这个顺序尝试，谁先成功用谁。这是只读的 —— 想调整顺序请改 application.yml。
-      </p>
     </Panel>
 
     <Panel v-for="m in data?.providers ?? []" :key="m.name" :title="m.name">
@@ -160,7 +157,7 @@ onMounted(load)
            密钥没有任何出口路径，这里连掩码都不显示。 -->
       <div class="edit-box">
         <div class="edit-label">
-          模型 ID <span class="faint">— 唯一可改项，保存后立即生效</span>
+          模型 ID
         </div>
         <div class="edit-row">
           <div class="grow">

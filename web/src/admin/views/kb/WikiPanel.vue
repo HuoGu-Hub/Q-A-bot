@@ -576,7 +576,6 @@ defineExpose({
 
       <template v-if="running">
         <Bar :label="status.phase || '准备中…'" :value="status.done" :max="progressMax" />
-        <p class="job-note">导入在服务端后台跑，关掉这个页面也会继续。</p>
       </template>
 
       <template v-else-if="report">
@@ -591,7 +590,7 @@ defineExpose({
         </div>
 
         <p v-if="report.dryRun" class="job-note">
-          <Tag tone="neutral">空跑</Tag> 什么都没写。数量没问题就点「开始抓取 → 增量导入」；改了清洗规则用「开始抓取 → 强制重洗全部」。
+          <Tag tone="neutral">空跑</Tag> 什么都没写。
         </p>
 
         <table v-if="report.bySource && Object.keys(report.bySource).length" class="mini">
@@ -608,17 +607,9 @@ defineExpose({
         </ul>
       </template>
 
-      <template v-else>
-        <p class="job-idle">
-          还没跑过。点右上角<b>开始抓取</b>：先「空跑」确认会拉到多少页，再「增量导入」写进库。
-          改了清洗规则、或要让老页补抓配图，用<b>开始抓取</b>里的「强制重洗全部」。
-        </p>
-      </template>
-
       <div class="purge">
         <template v-if="!purgeArmed">
           <Button size="sm" :disabled="running" @click="purgeArmed = true">回滚：清空 wiki 块</Button>
-          <span class="faint">删掉全部 wiki 文章块与导入状态，之后可以重新导入</span>
         </template>
         <template v-else>
           <span class="warn-text">确认清空？会删掉全部 wiki 文章块与导入状态，不可撤销。</span>
@@ -673,7 +664,6 @@ defineExpose({
       <Empty
         v-else-if="!filteredRows.length"
         text="没有匹配的来源"
-        hint="换个关键词，或把筛选切到「全部分类」"
       />
       <div v-else class="src-scroll">
         <table class="src-tbl">
@@ -731,8 +721,6 @@ defineExpose({
 
       <p class="faint cat-note">
         共 {{ catalogTotal }} 个分类<template v-if="catalogAt">（缓存于 {{ catalogAt }}）</template>。
-        「页数」是分类里的文章页数，已排除子分类与文件；「知识库」按来源数生效的块 ——
-        <b>未入库</b>说明这个来源还没拉过，「拉过 · 无正文」说明拉过但清洗后没有可入库的正文。
       </p>
     </Panel>
 
@@ -740,23 +728,23 @@ defineExpose({
     <Modal :open="runOpen" title="开始抓取" width="540px" @close="closeRun">
       <template v-if="!forceConfirm">
         <p class="run-lede">
-          跑在服务端后台，关掉页面也会继续。本次要拉 <b class="num">{{ checkedCount }}</b> 个来源、约
-          <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个前缀来源页数未知）</template>。选一种方式：
+          本次要拉 <b class="num">{{ checkedCount }}</b> 个来源、约
+          <b class="num">{{ fmt(estimatedPages.pages) }}</b> 页<template v-if="estimatedPages.unknown">（另有 {{ estimatedPages.unknown }} 个前缀来源页数未知）</template>。
         </p>
         <div class="run-opts">
           <ActionOption
             title="空跑"
-            hint="只统计会拉到多少页、清洗出多少字。不写库、不算向量、不花钱。"
+            hint="只统计，不写库、不算向量。"
             @select="chooseRun('dry-run')"
           />
           <ActionOption
             title="增量导入"
-            hint="只处理 wiki 上版本变过的页。日常更新用这个。"
+            hint="只处理版本变过的页。"
             @select="chooseRun('incremental')"
           />
           <ActionOption
             title="强制重洗全部"
-            hint="全部页重洗并重算向量，同时补抓配图。改了清洗规则、或要让老页补图，才用这个。"
+            hint="全部页重洗、重算向量，并补抓配图。"
             @select="pickForce"
           />
         </div>
@@ -780,7 +768,6 @@ defineExpose({
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
 /* ==================== 作业面板 ==================== */
-.job-idle { margin: 0; font-size: var(--fs-base); color: var(--ink-2); line-height: 1.8; }
 .job-note { margin: var(--sp-3) 0 0; font-size: var(--fs-meta); color: var(--ink-3); line-height: 1.8; }
 
 .stats {

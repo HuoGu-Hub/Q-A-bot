@@ -166,7 +166,7 @@ onBeforeUnmount(closeStream)
 
     <Panel>
       <div ref="box" class="logbox" @scroll="onScroll">
-        <Empty v-if="!filtered.length" text="还没有日志" hint="等一会儿，或降低级别筛选" />
+        <Empty v-if="!filtered.length" text="还没有日志" />
         <div
           v-for="e in filtered"
           :key="e.seq"

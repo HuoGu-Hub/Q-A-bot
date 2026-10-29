@@ -412,11 +412,7 @@ async function saveSettings() {
         </div>
 
         <!-- ---------- 列表 ---------- -->
-        <Empty
-          v-if="!items.length"
-          text="还没有图"
-          hint="用上面的按钮传一张 —— 它会出现在公开站首页"
-        />
+        <Empty v-if="!items.length" text="还没有图" />
 
         <DataTable v-else :rows="items.length">
           <thead>
@@ -477,8 +473,7 @@ async function saveSettings() {
       <!-- 「单张大小上限」填得比服务器接收上限还大是没用的（请求会被容器掐断），
            所以把那道上限直接显示出来，省得人以为改大了就一定能传 -->
       <p v-if="ceilingKb > 0" class="cap-note faint">
-        服务器接收上限 <b>{{ ceilingText(ceilingKb) }}</b> ——「单张大小上限」填得比它大不会生效：
-        超过这个数的请求会在读完之前被容器掐断，浏览器只显示一句「Failed to fetch」。
+        服务器接收上限 <b>{{ ceilingText(ceilingKb) }}</b>
       </p>
 
       <!-- 三种状态要分得开：还在读 / 读失败（上面的 Notice）/ 读到了但一项都没有 -->
@@ -514,7 +509,6 @@ async function saveSettings() {
             {{ savingSettings ? '保存中…' : '保存设置' }}
           </Button>
           <Button :disabled="savingSettings || !settingsDirty" @click="loadSettings">放弃改动</Button>
-          <span class="faint">切换间隔单位是毫秒（4000 = 4 秒）</span>
         </div>
       </template>
     </Panel>

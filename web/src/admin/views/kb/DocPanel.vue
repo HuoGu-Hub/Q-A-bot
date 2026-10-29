@@ -469,15 +469,6 @@ onMounted(load)
         </Button>
         <Tag v-if="!stats.available" tone="bad">存储不可用</Tag>
       </div>
-      <p class="note faint">
-        块是检索的最小单位。<b>改正文会重算向量</b> —— 只改文本不重算，检索会按旧正文匹配。
-        「下架」保留数据可恢复，「删除」是物理删除。
-      </p>
-      <p class="note faint">
-        <b>标题向量</b>是"用物品名提问"那一路：正文是简介、几乎不重复标题里的名字，
-        所以只有正文向量时，问「酸蚀之咬」会把「永恒酸蚀咬击」排在前面。
-        它比块数少不影响使用，点「补标题向量」补齐即可 —— 只补缺的和标题改过的，不会重复花钱。
-      </p>
     </Panel>
 
     <!-- 导入 -->
@@ -491,7 +482,6 @@ onMounted(load)
         @drop.prevent="onDrop"
       >
         <p class="drop-main">把 <b>.md</b> 文件 —— 或者<b>整个文件夹</b> —— 拖到这里</p>
-        <p class="drop-sub">一次拖多少份都行。会先逐份预览「会改多少条」，确认后再一起导入。</p>
         <label class="file">
           <input type="file" multiple accept=".md,.markdown,.txt,text/plain,text/markdown" @change="pickFiles" />
           <span class="fbtn">或者点这里选文件…</span>
@@ -552,10 +542,6 @@ onMounted(load)
             </tr>
           </tbody>
         </table>
-        <p class="faint batch-note">
-          每份文件的预览是**各自按当前库**算的。一起导入时若两份含同 id 的块，以后导的那份为准 ——
-          「结果」列显示的是**实际发生的事**。
-        </p>
       </div>
 
       <p class="imp-sep faint">— 或者只处理一份：粘贴到下面 —</p>
@@ -612,7 +598,7 @@ onMounted(load)
 
     <!-- 文档列表 -->
     <Panel title="文档" :count="docs.length">
-      <div v-if="!docs.length"><Empty text="还没有任何文档" hint="用上面的「确认导入」加第一份" /></div>
+      <div v-if="!docs.length"><Empty text="还没有任何文档" /></div>
       <template v-else>
         <div class="doc-filter">
           <Input
@@ -676,7 +662,6 @@ onMounted(load)
                             @update:model-value="(v: string) => { if (editing) editing.text = v }"
                           />
                           <div class="edit-actions">
-                            <span class="faint note">保存会**重算这一块的向量**（一次 embedding 调用）</span>
                             <Button size="sm" @click="editing = null">取消</Button>
                             <Button size="sm" variant="primary" :disabled="busy === 'save'" @click="saveEdit">
                               {{ busy === 'save' ? '保存中…' : '保存' }}
@@ -780,7 +765,6 @@ onMounted(load)
 .drop.on { border-color: var(--flame); background: var(--flame-veil); }
 .drop.busy { opacity: .55; pointer-events: none; }
 .drop-main { margin: 0; font-size: var(--fs-sm); color: var(--ink); }
-.drop-sub { margin: 0; font-size: var(--fs-meta); color: var(--ink-faint); }
 .imp-sep { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-meta); text-align: center; }
 
 .batch { margin-bottom: var(--sp-3); }
@@ -802,6 +786,5 @@ onMounted(load)
 .bt tr.off td { opacity: .5; }
 .bt .num { text-align: right; white-space: nowrap; }
 .fname { font-family: var(--font-mono); word-break: break-all; }
-.batch-note { margin: var(--sp-2) 0 0; font-size: var(--fs-meta); line-height: 1.7; }
 
 </style>

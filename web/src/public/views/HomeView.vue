@@ -18,7 +18,6 @@ import { publicApi, describeError } from '@shared/api/client'
 import type { CarouselItem, CarouselPublicResponse, PublicStats } from '@shared/api/types'
 import { num, pct } from '@shared/utils/format'
 import { t } from '../useSiteText'
-import { botName } from '@shared/identity/botName'
 import Icon from '@shared/ui/Icon.vue'
 import Button from '@shared/ui/Button.vue'
 import ImageCarousel from '../components/ImageCarousel.vue'
@@ -116,7 +115,6 @@ onMounted(async () => {
               <Icon name="search" :size="17" />
               去资料库查
             </Button>
-            <span class="alt">或在群里 <b>@ {{ botName }}</b> 直接问</span>
           </div>
           <p v-if="error" class="err hint">统计数据暂时取不到 · {{ error }}</p>
         </div>
@@ -206,8 +204,6 @@ onMounted(async () => {
 }
 
 .acts { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
-.alt { font-size: var(--fs-sm); color: var(--ink-3); }
-.alt b { color: var(--ink-2); font-weight: var(--fw-medium); }
 .err { margin: var(--sp-3) 0 0; }
 
 /* ==================== 家底：首屏底部的数据带 ====================
@@ -305,8 +301,6 @@ onMounted(async () => {
   .wordmark { font-size: clamp(36px, 11vw, 46px); margin-bottom: var(--sp-3); }
   .tagline { font-size: var(--fs-base); margin-bottom: var(--sp-4); }
   .acts { gap: var(--sp-3); }
-  /* 手机上一行放不下「按钮 + 说明」，说明另起一行，不要挤 */
-  .alt { width: 100%; }
   .how-wrap { margin-top: var(--sp-6); }
   .how { grid-template-columns: 1fr; }
   .idx dd { font-size: var(--fs-lg); }

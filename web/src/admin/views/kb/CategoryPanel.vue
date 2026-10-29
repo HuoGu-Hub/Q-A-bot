@@ -184,10 +184,6 @@ defineExpose({
         />
         <Button size="sm" variant="primary" @click="addCategory">新增分类</Button>
       </div>
-      <p class="faint tip">
-        分类只读分块符号里的标签：文档头写 <code>tags: 武器</code>，词条就归到「武器」；
-        标签没登记过就归「未分类」。wiki 抓取的来源名与页面分类会自动登记。
-      </p>
     </Panel>
 
     <Panel title="分类清单" :count="items.length">
@@ -197,7 +193,7 @@ defineExpose({
         hint="问答库没就绪，先检查后端日志"
       />
       <template v-else>
-        <DataTable cards :rows="items.length" empty="还没有任何分类" empty-hint="用上面的表单新增一个">
+        <DataTable cards :rows="items.length" empty="还没有任何分类">
           <thead>
             <tr>
               <th>分类名</th>
@@ -277,7 +273,6 @@ defineExpose({
       <Empty
         v-else-if="!entryItems.length"
         text="这个分类下没有词条"
-        hint="检查一下文档头的 tags 是不是写成了别的分类名"
       />
       <ul v-else class="ent-list">
         <li v-for="e in entryItems" :key="e.id" class="ent-row">
@@ -302,8 +297,6 @@ defineExpose({
 .add-row { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
 .add-name { flex: 1; min-width: 200px; }
 .add-label { flex: 1; min-width: 200px; }
-.tip { font-size: var(--fs-meta); margin-top: var(--sp-3); }
-.tip code { font-family: var(--font-mono); font-size: var(--fs-xs); }
 
 .panel-wrap :deep(th.c-count), .panel-wrap :deep(td.c-count) { width: 110px; text-align: right; }
 .panel-wrap :deep(th.c-ops), .panel-wrap :deep(td.c-ops) { width: 190px; text-align: right; white-space: nowrap; }

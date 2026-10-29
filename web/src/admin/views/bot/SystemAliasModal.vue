@@ -84,7 +84,6 @@ function commandText(item: EditItem) {
   <Modal :open="open" title="命令别名" width="680px" @close="emit('close')">
     <div class="alias-page">
       <Notice v-if="error" tone="error">{{ error }}</Notice>
-      <p class="alias-hint">命令名和动作词分开声明。动作词只配一次，所有模块共用，例如“新建”对 /prompt /create 和 /预约 /create 都生效。</p>
 
       <div v-if="loading" class="alias-empty">正在读取…</div>
       <div v-else class="alias-groups">
@@ -112,7 +111,6 @@ function commandText(item: EditItem) {
 
 <style scoped>
 .alias-page { display: flex; flex-direction: column; gap: var(--sp-3); max-height: 70vh; }
-.alias-hint { margin: 0; color: var(--ink-3); font-size: var(--fs-meta); line-height: 1.6; }
 .alias-groups { overflow: auto; padding-right: 4px; }
 .alias-group { display: flex; flex-direction: column; }
 .alias-group h3 {

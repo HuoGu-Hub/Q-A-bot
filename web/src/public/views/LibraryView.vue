@@ -187,8 +187,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
                 title="本地关键词匹配，只认术语表里的标准名词">关键词搜索</span>
         </h2>
         <Empty v-if="!result.entries.length" icon="search"
-               :text="t('library.empty_title', '没找到相关资料')"
-               :hint="t('library.empty_hint', '换个更具体的说法，或者到群里直接问机器人')" />
+               :text="t('library.empty_title', '没找到相关资料')" />
         <!--
           ⚠️ 整行可点，但必须是真的链接。
           上一版是 div + tabindex + @click —— 读屏念不出目的地、右键开不了新标签。
@@ -221,7 +220,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       <section v-if="curGroup && groupOf(curGroup) && !curTag && groupOf(curGroup)!.tags.length" class="block">
         <div class="block-head">
           <h2 class="block-title">细分标签</h2>
-          <span class="hint">点标签缩小范围</span>
         </div>
         <div class="tags">
           <Chip v-for="tg in groupOf(curGroup)!.tags" :key="tg.raw" :count="tg.count" @click="openTag(tg.raw)">
@@ -272,7 +270,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
             @click="openGroup(g)"
           />
         </div>
-        <p v-else class="hint center empty-hint">分类载入中…（如果一直没有，说明后端还没重启）</p>
+        <p v-else class="hint center empty-hint">分类载入中…</p>
 
         <div v-if="groups.length > CAT_TOP" class="cats-more">
           <button type="button" class="more-btn" :aria-expanded="catsOpen" @click="catsOpen = !catsOpen">
@@ -311,10 +309,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       <section class="block contribute">
         <div class="contribute-text">
           <h2 class="block-title">发现内容有误或缺失？</h2>
-          <p class="hint">
-            资料来自本项目的知识库。要补充或修订，请在群里 @ 机器人，写下词条名和要改的内容 ——
-            经管理员审核、重建索引后会在站上生效。
-          </p>
+          <p class="hint">在群里 @ 机器人，写下词条名和要改的内容。</p>
         </div>
       </section>
     </template>

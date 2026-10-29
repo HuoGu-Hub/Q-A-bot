@@ -1086,7 +1086,7 @@ async function saveLayers(keys: string[] | null) {
           </button>
         </li>
       </ol>
-      <p v-else class="hint">没找到。换个词试试，比如只写「铁矿」。</p>
+      <p v-else class="hint">没找到。</p>
     </div>
 
     <p v-if="error" class="alert" role="alert">{{ error }}</p>
@@ -1272,10 +1272,7 @@ async function saveLayers(keys: string[] | null) {
             <Icon name="alert" :size="16" />
             <strong>底图变了，{{ anchor.pending }} 个点位要看一眼</strong>
           </div>
-          <p class="hint">
-            它们的坐标没动，但所在底图的取景窗口或切图方式变了 —— 落点可能已经整体偏移。
-            点名字跳过去，把点拖到正确位置后保存；确认位置没错就点「位置无误」。
-          </p>
+          <p class="hint">它们的坐标没动，但落点可能已经整体偏移。</p>
           <ul class="anchor-list">
             <li v-for="a in anchor.items" :key="a.id">
               <button type="button" class="anchor-name" @click="jumpToAnchor(a)">{{ a.name }}</button>
@@ -1368,11 +1365,6 @@ async function saveLayers(keys: string[] | null) {
           >恢复未配置</Button>
         </template>
       <div class="defaults">
-        <p class="hint">
-          公开地图页首屏默认打开哪些分组。分组多的时候全开会密密麻麻一片，
-          所以只有在这里挑过的才会显示；新同步进来的分组默认是关着的，不会自己冒出来。
-        </p>
-
         <p v-if="layerLoading" class="muted">正在载入…</p>
 
         <template v-else-if="layerMaps.length">
@@ -1413,7 +1405,7 @@ async function saveLayers(keys: string[] | null) {
             <p class="hint">
               选中 <b>{{ layerOn.size }}</b> / {{ layerCurrent.groups.length }} 个分组。
               <template v-if="!layerCurrent.configured">
-                这张地图<strong>还没配置过</strong>，公开页当前用的是内置经验值（非收集品全开）。
+                这张地图<strong>还没配置过</strong>。
               </template>
             </p>
 
@@ -1509,7 +1501,7 @@ async function saveLayers(keys: string[] | null) {
               </tr>
             </tbody>
           </table>
-          <p v-else class="hint">还没有地图数据 —— 先同步一次。</p>
+          <p v-else class="hint">还没有地图数据。</p>
         </details>
 
         <!-- ══════════ 长任务 ══════════
@@ -1634,7 +1626,6 @@ async function saveLayers(keys: string[] | null) {
               <Icon name="chevron-right" :size="14" class="caret" />
               <span class="diag-name">同步页</span>
               <span class="diag-count bad">{{ failedPages.length }}</span>
-              <span class="diag-note">下一轮同步自动重试</span>
             </summary>
             <table class="tbl small">
               <thead><tr><th>页面</th><th>revid</th><th>点位</th><th>错误</th></tr></thead>
@@ -2087,7 +2078,6 @@ async function saveLayers(keys: string[] | null) {
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }
-.diag-note { font-size: var(--fs-xs); color: var(--ink-3); }
 /* 健康时的一行：与可展开的行同款石板，但没有箭头、不可点 —— 它只是告诉你"这没事" */
 .diag-flat { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); cursor: default; }
 .ok { color: var(--vital); }
