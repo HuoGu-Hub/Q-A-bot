@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   本地构建 → 打包 → 上传 → 服务器替换并重启。
 
@@ -17,6 +17,7 @@
   .\scripts\release.ps1 -Server root@1.2.3.4
   .\scripts\release.ps1 -SkipBuild -Server root@1.2.3.4
   .\scripts\release.ps1 -SkipUpload
+  .\scripts\release.ps1 -WebOnly -Server root@1.2.3.4
 #>
 [CmdletBinding()]
 param(
@@ -28,6 +29,8 @@ param(
   [switch]$SkipUpload,
   [switch]$NoRestart,
   [switch]$WithConfig,
+  # 只发前端：构建 web-dist、上传替换，不动 jar、不重启服务
+  [switch]$WebOnly,
   [string]$RemoteDir = "/opt/qqbot",
   [string]$ServiceUser = "qqbot",
   [string]$ServiceName = "qqbot"
@@ -79,6 +82,76 @@ if (-not $SkipBuild) {
   $files = @(Get-ChildItem $target -Recurse -File)
   $mb = ($files | Measure-Object Length -Sum).Sum / 1MB
   Write-Host ("    web-dist: {0:N1} MB / {1} 个文件" -f $mb, $files.Count)
+}
+
+# ---------------------------------------------------------------- 1b. 只发前端
+# 前端是 file:./web-dist/ 直接读磁盘，替换文件就生效，不用重启服务，也不碰 jar
+if ($WebOnly) {
+  Step "只发前端"
+  $webDist = Join-Path $Root "server\web-dist"
+  if (-not (Test-Path $webDist)) {
+    throw "server\web-dist 不存在；先去掉 -SkipBuild 跑一次完整流程"
+  }
+  $webBundle = Join-Path $BuildDir "qqbot-web-dist.tar.gz"
+  if (Test-Path $webBundle) { Remove-Item $webBundle -Force }
+  & tar -czf $webBundle -C (Join-Path $Root "server") "web-dist"
+  if ($LASTEXITCODE -ne 0) { throw "tar 打包失败" }
+  Write-Host ("    {0}  {1:N1} MB" -f $webBundle, ((Get-Item $webBundle).Length / 1MB))
+
+  if ($SkipUpload) {
+    Step "已跳过上传"
+    Write-Host "    包在 $webBundle"
+    return
+  }
+  if (-not $Server) {
+    throw "缺少 -Server，例如 -Server root@1.2.3.4；只想打包就加 -SkipUpload"
+  }
+
+  Step "上传到 $Server"
+  $scpArgs = @("-P", $SshPort)
+  if ($IdentityFile) { $scpArgs += @("-i", $IdentityFile) }
+  $scpArgs += @($webBundle, "${Server}:/tmp/qqbot-web-dist.tar.gz")
+  & scp @scpArgs
+  if ($LASTEXITCODE -ne 0) { throw "scp 失败：检查 -IdentityFile 是否指向正确的私钥" }
+
+  Step "服务器端替换 web-dist"
+  # 只解包 web-dist，chown 完就结束。服务一直在跑，浏览器强刷即可看到新页面
+  $remote = @'
+set -e
+if [ "$(id -u)" = 0 ]; then S=""; else S="sudo"; fi
+
+# 先解到临时目录：归档损坏时不会把线上那份拆坏
+rm -rf /tmp/qqbot-web-new
+mkdir -p /tmp/qqbot-web-new
+tar xzf /tmp/qqbot-web-dist.tar.gz -C /tmp/qqbot-web-new
+
+$S mkdir -p __DIR__/server
+if command -v rsync >/dev/null 2>&1; then
+  # --delete 清掉旧 hash 资源，避免目录越滚越大
+  $S rsync -a --delete /tmp/qqbot-web-new/web-dist/ __DIR__/server/web-dist/
+else
+  $S tar xzf /tmp/qqbot-web-dist.tar.gz -C __DIR__/server
+fi
+$S chown -R __USER__:__USER__ __DIR__/server/web-dist
+rm -rf /tmp/qqbot-web-new
+
+if curl -s -m 5 -o /dev/null http://127.0.0.1:8080/; then
+  echo "首页可达"
+else
+  echo "首页不可达，查 systemctl status qqbot"
+fi
+'@
+  $remote = $remote.Replace("__DIR__", $RemoteDir).Replace("__USER__", $ServiceUser)
+  $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
+  $sshArgs = @("-t", "-p", $SshPort)
+  if ($IdentityFile) { $sshArgs += @("-i", $IdentityFile) }
+  $sshArgs += @($Server, "echo $b64 | base64 -d | bash")
+  & ssh @sshArgs
+  if ($LASTEXITCODE -ne 0) { throw "远端替换失败，看上面的输出" }
+
+  Write-Host ""
+  Write-Host "前端已更新，服务没有重启。浏览器按 Ctrl+F5 强刷。" -ForegroundColor Green
+  return
 }
 
 # ---------------------------------------------------------------- 2. 后端
