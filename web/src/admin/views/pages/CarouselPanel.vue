@@ -366,7 +366,7 @@ async function saveSettings() {
   <div class="wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <Panel title="轮播图" :count="listCount" hint="按这里的顺序在公开站首页展示">
+    <Panel title="轮播图" :count="listCount">
       <div v-if="loading" class="muted">读取中…</div>
 
       <template v-else>
@@ -470,7 +470,7 @@ async function saveSettings() {
     </Panel>
 
     <!-- ---------- 设置 ---------- -->
-    <Panel title="轮播设置" hint="保存后公开站刷新即生效">
+    <Panel title="轮播设置">
       <Notice v-if="settingsErr" tone="error">{{ settingsErr }}</Notice>
       <Notice v-if="settingsOk" tone="ok">{{ settingsOk }}</Notice>
 

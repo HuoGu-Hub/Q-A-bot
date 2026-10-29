@@ -85,8 +85,7 @@ onMounted(load)
 
 <template>
   <div class="panel-wrap">
-    <Panel title="站点信息" hint="公开站上的加群信息，保存后刷新即生效"
-           :count="items.length ? items.length + ' 项' : ''">
+    <Panel title="站点信息" :count="items.length ? items.length + ' 项' : ''">
       <Notice v-if="error" tone="error">{{ error }}</Notice>
       <Notice v-if="ok" tone="ok">{{ ok }}</Notice>
 

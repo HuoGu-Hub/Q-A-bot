@@ -241,9 +241,9 @@ defineExpose({
              真要显示真正的最长，得让后端多回一个 MAX 字段（现在只算了 P50/P95，见 QaAnalytics）。
              两个数字在这个卡片宽度下会折成两行（斜杠留在第一行末尾）—— 这是接受的代价：
              只放一个数就看不出"差的时候多差"，那正是这张卡要回答的问题。 -->
-        <Stat label="资料搜索耗时" :value="`${ms(ov.p50RetrieveMs)} / ${ms(ov.p95RetrieveMs)}`"
+        <Stat label="资料搜索耗时 P50 / P95" :value="`${ms(ov.p50RetrieveMs)} / ${ms(ov.p95RetrieveMs)}`"
               hint="中位数 / 最慢的 5%" tone="mist" />
-        <Stat label="回答耗时" :value="`${ms(ov.p50TotalMs)} / ${ms(ov.p95TotalMs)}`"
+        <Stat label="回答耗时 P50 / P95" :value="`${ms(ov.p50TotalMs)} / ${ms(ov.p95TotalMs)}`"
               hint="中位数 / 最慢的 5%" tone="mist" />
         <Stat label="后台访问" :value="num(visits?.total ?? 0)" tone="mist" />
       </div>

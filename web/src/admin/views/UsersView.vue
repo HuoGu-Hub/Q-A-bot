@@ -310,7 +310,7 @@ onMounted(load)
     </Panel>
 
     <!-- ==================== 痕迹 ==================== -->
-    <Panel title="最近改动" :count="audit.length" hint="写操作与登录，浏览不记">
+    <Panel title="最近改动" :count="audit.length">
       <div v-if="auditGroups.length" class="trail">
         <section v-for="g in auditGroups" :key="g.day" class="day">
           <h3 class="day-label">{{ g.label }}</h3>

@@ -16,7 +16,7 @@ import ThemeToggle from './ThemeToggle.vue'
 const props = defineProps<{
   open: boolean
   brandName: string
-  items: Array<{ to: string; label: string; icon: string; desc?: string; active: boolean }>
+  items: Array<{ to: string; label: string; icon: string; active: boolean }>
 }>()
 
 const emit = defineEmits<{ close: []; logout: [] }>()
@@ -66,10 +66,7 @@ onBeforeUnmount(() => {
             @click="emit('close')"
           >
             <span class="ico" aria-hidden="true"><Icon :name="n.icon" :size="18" /></span>
-            <span class="txt">
-              <span class="l">{{ n.label }}</span>
-              <span v-if="n.desc" class="d">{{ n.desc }}</span>
-            </span>
+            <span class="l">{{ n.label }}</span>
             <Icon name="chevron-right" :size="15" class="go" />
           </RouterLink>
         </nav>
@@ -175,9 +172,7 @@ onBeforeUnmount(() => {
   color: var(--ink-3);
 }
 .item.active .ico { color: var(--ember); }
-.txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.l { font-size: var(--fs-base); }
-.d { font-size: var(--fs-xs); color: var(--ink-3); }
+.l { flex: 1; min-width: 0; font-size: var(--fs-base); }
 .go { flex: none; color: var(--ink-4); }
 
 .foot { flex: none; padding: var(--sp-3); border-top: 1px solid var(--hairline); }

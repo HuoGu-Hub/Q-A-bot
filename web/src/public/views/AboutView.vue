@@ -22,7 +22,7 @@ const howSteps = computed(() =>
 
 <template>
   <div class="page about read">
-    <PageHeader title="关于" desc="一个知识库问答机器人，和它背后的取舍。" />
+    <PageHeader title="关于" />
 
     <section class="sec">
       <h2 class="h"><span v-html="renderInline(t('about.what_title', '{bot} 是什么'))" /></h2>

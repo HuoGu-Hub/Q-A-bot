@@ -168,12 +168,6 @@ const TITLE_TAIL = '问答'
       <!-- ==================== 资料库 ==================== -->
       <div v-else-if="page === 'library'" class="m-library">
         <h3 class="m-title">资料库</h3>
-        <p
-          v-if="has('subtitle')"
-          class="m-sub m-html"
-          :class="mark('subtitle')"
-          v-html="html('subtitle')"
-        />
         <div class="m-search">
           <span class="m-search-ph faint">输入关键词… 比如「怎么合成」「上限是多少」</span>
           <span class="m-search-btn">搜索</span>

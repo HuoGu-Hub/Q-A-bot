@@ -7,6 +7,8 @@
  *
  * <p>数值一律 nowrap + 等宽：手机上 8 张卡并排时，"34,821 / 21" 折成两行
  * 会让每张卡高度不一致，整片网格跟着参差。
+ *
+ * <p>hint 是这张卡的口径说明，只在悬浮时以 title 出现 —— 卡片里不再有第二行灰字。
  */
 import Icon from './Icon.vue'
 
@@ -20,13 +22,12 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <div class="stat" :class="'tone-' + tone">
+  <div class="stat" :class="'tone-' + tone" :title="hint || undefined">
     <div class="head">
       <Icon v-if="icon" :name="icon" :size="14" class="ic" />
       <span class="l">{{ label }}</span>
     </div>
     <div class="v num">{{ value }}</div>
-    <div v-if="hint" class="h">{{ hint }}</div>
   </div>
 </template>
 
@@ -75,7 +76,6 @@ withDefaults(defineProps<{
 }
 .tone-moss .v { color: var(--vital); }
 .tone-rust .v { color: var(--blight-lift); }
-.h { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 3px; line-height: 1.5; }
 
 @media (max-width: 760px) {
   /* 两列排布时卡片内宽只有约 145px，「640 ms / 2.0 s」这种组合值在 19px 下会被切掉。

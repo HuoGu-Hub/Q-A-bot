@@ -1005,7 +1005,6 @@ defineExpose({
     <Panel
       title="运行记录"
       :count="jobTotal"
-      hint="任务与批次"
       collapsible
       :default-open="false"
       mobile-collapsed
@@ -1123,7 +1122,6 @@ defineExpose({
 
     <Panel
       title="高级：导入历史聊天"
-      hint="补历史用"
       collapsible
       :default-open="false"
       mobile-collapsed

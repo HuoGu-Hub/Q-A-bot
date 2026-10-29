@@ -154,10 +154,7 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 
 <template>
   <div class="page library">
-    <PageHeader
-      title="资料库"
-      :desc="t('library.subtitle', '知识库索引 —— 直接描述你要查的内容即可，比如「怎么合成」「上限是多少」。')"
-    />
+    <PageHeader title="资料库" />
 
     <!-- 手机上搜索条吸顶：翻到结果第 20 条时还能改词，不用滚回顶部 -->
     <div class="search-wrap">

@@ -629,7 +629,7 @@ defineExpose({
     </Panel>
 
     <!-- ============ 来源表：勾选即范围 ============ -->
-    <Panel class="src-panel" title="wiki 来源" :count="checkedCount" hint="勾选即范围，改动自动保存；开始抓取只拉勾上的">
+    <Panel class="src-panel" title="wiki 来源" :count="checkedCount">
       <template #actions>
         <div class="bulk-actions">
           <Button

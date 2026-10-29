@@ -101,8 +101,6 @@ public class SiteTextService {
                             + "以及几个不敏感的汇总数字。"),
 
             // ---- 资料库 ----
-            new Block("library", "资料库", "subtitle", "副标题", "", false,
-                    "知识库索引 —— 直接描述你要查的内容即可，比如「怎么合成」「上限是多少」。"),
             new Block("library", "资料库", "empty_title", "搜索无结果 · 标题", "", false, "没找到相关资料"),
             new Block("library", "资料库", "empty_hint", "搜索无结果 · 提示", "", true,
                     "换个更具体的说法，或者到群里直接问机器人"),

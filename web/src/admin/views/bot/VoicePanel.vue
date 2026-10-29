@@ -400,7 +400,7 @@ onMounted(() => {
   <div class="voice">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <Panel title="上传音频" hint="拖进来就行，支持一次拖多个；单条不超过 5 分钟">
+    <Panel title="上传音频">
       <div class="upload">
         <div class="drop-row">
           <button
@@ -437,7 +437,7 @@ onMounted(() => {
       </div>
     </Panel>
 
-    <Panel title="触发词" :count="triggers.length" hint="命中就要求这条回复带语音；回什么仍由模型挑">
+    <Panel title="触发词" :count="triggers.length">
       <div class="trigger-add">
         <Input v-model="newKeyword" placeholder="关键词，例如 唱首歌" />
         <Input v-model="newCooldown" placeholder="冷却秒数" mono />
@@ -461,7 +461,7 @@ onMounted(() => {
       </table>
     </Panel>
 
-    <Panel title="文字转语音" hint="edge-tts，免费但每次都要联网；同一句话第二次走缓存">
+    <Panel title="文字转语音">
       <div class="tts">
         <Notice v-if="!ttsEnabled" tone="warn">
           TTS 当前不可用：检查 app.voice.tts.enabled 与 edge-tts-path。
@@ -479,7 +479,7 @@ onMounted(() => {
       </div>
     </Panel>
 
-    <Panel title="素材库" :count="items.length" hint="关键词只负责触发语音，具体放哪一段由模型挑">
+    <Panel title="素材库" :count="items.length">
       <Empty v-if="!loading && items.length === 0" text="还没有语音" hint="拖一段音频到上面的框里就能用了" />
       <table v-else class="vt">
         <thead>

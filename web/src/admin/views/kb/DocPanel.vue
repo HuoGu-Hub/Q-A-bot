@@ -453,7 +453,7 @@ onMounted(load)
     <Notice v-else-if="okMsg" tone="ok">{{ okMsg }}</Notice>
 
     <!-- 概览 -->
-    <Panel title="块存储" hint="文档导入之后的新模型：一切按块 id" collapsible mobile-collapsed default-open>
+    <Panel title="块存储" collapsible mobile-collapsed default-open>
       <div v-if="stats" class="stats">
         <span class="st"><b class="num">{{ stats.blocks }}</b> 块</span>
         <span class="st"><b class="num">{{ stats.documents }}</b> 份文档</span>
@@ -481,7 +481,7 @@ onMounted(load)
     </Panel>
 
     <!-- 导入 -->
-    <Panel title="导入文档" hint="先预览，再决定导不导" collapsible mobile-collapsed default-open>
+    <Panel title="导入文档" collapsible mobile-collapsed default-open>
       <!-- 拖拽批量导入：拖文件、拖文件夹都行 -->
       <div
         class="drop"

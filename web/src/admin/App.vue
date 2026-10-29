@@ -32,18 +32,17 @@ const hasBar = computed(() => route.name !== 'login')
 const drawerOpen = ref(false)
 
 /**
- * 6 个目的地。桌面端平铺，手机端收进抽屉 —— 上一版 7 个 tab 横排，
+ * 7 个目的地。桌面端平铺，手机端收进抽屉 —— 上一版 7 个 tab 横排，
  * 390px 下「页面信息」和「退出」被挤到屏幕外，等于导航只剩 5 项。
- * desc 只在抽屉里显示：它是解释，不是标签。
  */
-const nav: { to: string; label: string; icon: string; desc: string; role: AdminRoleId }[] = [
-  { to: '/stats', label: '统计', icon: 'chart', desc: '提问量、命中率与记录', role: 'viewer' },
-  { to: '/kb', label: '知识库', icon: 'book', desc: '文档、词条与分类', role: 'viewer' },
-  { to: '/map', label: '地图', icon: 'map-pin', desc: '底图同步与点位维护', role: 'viewer' },
-  { to: '/bot', label: 'Bot 配置', icon: 'bot', desc: '指令、回复与功能开关', role: 'editor' },
-  { to: '/pages', label: '页面信息', icon: 'list', desc: '前台文案与轮播', role: 'editor' },
-  { to: '/system', label: '系统', icon: 'gear', desc: '模型配置与运行日志', role: 'admin' },
-  { to: '/users', label: '账号', icon: 'lock', desc: '成员、角色与操作记录', role: 'admin' },
+const nav: { to: string; label: string; icon: string; role: AdminRoleId }[] = [
+  { to: '/stats', label: '统计', icon: 'chart', role: 'viewer' },
+  { to: '/kb', label: '知识库', icon: 'book', role: 'viewer' },
+  { to: '/map', label: '地图', icon: 'map-pin', role: 'viewer' },
+  { to: '/bot', label: 'Bot 配置', icon: 'bot', role: 'editor' },
+  { to: '/pages', label: '页面信息', icon: 'list', role: 'editor' },
+  { to: '/system', label: '系统', icon: 'gear', role: 'admin' },
+  { to: '/users', label: '账号', icon: 'lock', role: 'admin' },
 ]
 
 const isActive = (to: string) => route.path.startsWith(to)
@@ -56,7 +55,7 @@ const isActive = (to: string) => route.path.startsWith(to)
  */
 const visibleNav = computed(() => nav.filter(n => auth.can(n.role)))
 const drawerItems = computed(() =>
-  visibleNav.value.map(n => ({ to: n.to, label: n.label, icon: n.icon, desc: n.desc, active: isActive(n.to) })))
+  visibleNav.value.map(n => ({ to: n.to, label: n.label, icon: n.icon, active: isActive(n.to) })))
 
 /** 顶端显示"我是谁"，避免多人共用一个后台时分不清 */
 const meLabel = computed(() => {
