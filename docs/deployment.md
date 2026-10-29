@@ -71,6 +71,39 @@ Host 必须是 `0.0.0.0`。Docker 把连接转发到容器网卡，监听回环�
 
 业务层会校验上报请求的 `Authorization: Bearer <ONEBOT_TOKEN>`。没配 Token 时入口直接拒绝，不会降级放行。Nginx 对公网的 `/onebot/` 一律返回 404，NapCat 必须直连 `http://host.docker.internal:8080/onebot/event`。
 
+### 3.1.1 从本机访问 WebUI
+
+`6099` 只绑定 `127.0.0.1`，公网直连必然失败，这是安全设计。不要改 compose，也不要在安全组开放它。
+
+本机 PowerShell 建 SSH 隧道：
+
+```powershell
+ssh -N -L 6099:127.0.0.1:6099 qqbot@服务器IP
+```
+
+保持这个窗口不关，浏览器打开 `http://127.0.0.1:6099/webui`。SSH 端口不是 22 时加 `-p`，用密钥时加 `-i`。
+
+WebUI Token 从服务器日志或配置里取：
+
+```bash
+cd /opt/qqbot/deploy
+docker compose logs napcat | grep -iE 'webui|token' | tail -20
+# 或者
+docker exec napcat sh -c 'grep -R "token" /app/napcat/config | head'
+```
+
+SSH 隧道不通时，可以直接用 `docker cp` 改配置：
+
+```bash
+docker exec napcat ls /app/napcat/config
+docker cp napcat:/app/napcat/config/onebot11_<QQ>.json ./onebot11.json
+# 本地改好 Token 后传回
+docker cp ./onebot11.json napcat:/app/napcat/config/onebot11_<QQ>.json
+docker restart napcat
+```
+
+三处 Token 必须一致：根目录 `.env` 的 `ONEBOT_TOKEN`、WebUI「HTTP 服务器」Token、WebUI「HTTP 客户端」Token。
+
 Linux 上需要给容器加 `host.docker.internal` 映射：
 
 ```yaml
