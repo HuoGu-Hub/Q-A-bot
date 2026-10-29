@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上线前安全设计与代码审查 · qqbot</title>
+<style>
+:root{
+  --paper:#f6f3ec; --card:#fffdf8; --ink:#1f1c18; --ink-2:#4c463d; --ink-3:#7b7367;
+  --line:#ddd5c6; --line-2:#eae3d6; --oxide:#a83a2a; --oxide-2:#7f2a1e;
+  --amber:#a56a12; --green:#3f6b49; --blue:#355f7a;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --serif:"Noto Serif SC","Songti SC","SimSun",Georgia,serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.78 var(--sans);}
+.wrap{max-width:1080px;margin:0 auto;padding:52px 28px 80px}
+header.top{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:8px}
+.kicker{font:600 12px/1 var(--mono);letter-spacing:.14em;color:var(--oxide);text-transform:uppercase}
+h1{font:700 34px/1.25 var(--serif);letter-spacing:.01em;margin:14px 0 12px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--ink-3);font-size:12.5px}
+.meta span{white-space:nowrap}
+.verdict{margin:26px 0 8px;padding:20px 24px;background:#241f1a;color:#f7f2e8;border-radius:3px}
+.verdict strong{display:block;font:700 20px/1.4 var(--serif);color:#ffd9cf;margin-bottom:6px}
+.verdict p{margin:0;color:#ded5c6;max-width:900px}
+.verdict.ok{background:#22402d}
+.toc{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:28px 0 44px}
+.toc a{display:block;padding:12px 14px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);text-decoration:none;border-radius:3px;font-size:13px}
+.toc a b{display:block;color:var(--ink);font-size:14px;margin-bottom:2px}
+.toc a:hover{border-color:var(--ink)}
+section{margin:54px 0 0}
+h2{font:700 24px/1.35 var(--serif);margin:0 0 6px;padding-bottom:10px;border-bottom:1px solid var(--ink)}
+h2 .no{font:600 12px/1 var(--mono);color:var(--oxide);letter-spacing:.1em;display:block;margin-bottom:8px}
+h3{font:700 17px/1.45 var(--serif);margin:30px 0 10px}
+h4{font:700 14px/1.5 var(--sans);margin:20px 0 8px;color:var(--ink)}
+p{margin:0 0 12px}
+ul,ol{margin:0 0 14px;padding-left:22px}
+li{margin:5px 0}
+code{font:12.5px/1.5 var(--mono);background:#efe9dd;border:1px solid #e2d9c8;border-radius:2px;padding:1px 5px;word-break:break-word}
+pre{font:12.5px/1.65 var(--mono);background:#221f1a;color:#efe8da;padding:16px 18px;border-radius:3px;overflow:auto;margin:12px 0 16px}
+pre code{background:none;border:0;padding:0;color:inherit}
+table{width:100%;border-collapse:collapse;margin:14px 0 20px;font-size:13px;background:var(--card)}
+th,td{text-align:left;vertical-align:top;padding:9px 11px;border:1px solid var(--line)}
+th{background:#ece6d9;font-weight:700;color:var(--ink);white-space:nowrap}
+tr:nth-child(even) td{background:#fbf8f1}
+.note{color:var(--ink-3);font-size:12.5px}
+.tag{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:2px;vertical-align:middle}
+.tag.crit{background:#f2d9d2;color:#8d2d1d;border:1px solid #dfb8ad}
+.tag.warn{background:#f5e7c9;color:#7d5310;border:1px solid #e2cc9f}
+.tag.sugg{background:#dfe9e2;color:#315b3d;border:1px solid #c3d5c9}
+.tag.ok{background:#dce8dd;color:#2e5b3b;border:1px solid #bfd3c2}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.panel{border:1px solid var(--line);background:var(--card);padding:16px 18px;border-radius:3px}
+.panel h4{margin-top:0}
+.finding{border:1px solid var(--line);background:var(--card);border-left:4px solid var(--line);padding:16px 18px 14px;margin:14px 0;border-radius:2px}
+.finding.crit{border-left-color:var(--oxide)}
+.finding.warn{border-left-color:var(--amber)}
+.finding.sugg{border-left-color:var(--green)}
+.fh{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.fh .num{font:700 13px/1 var(--mono);color:var(--ink-3);min-width:22px}
+.fh h3{font:700 16px/1.45 var(--serif);margin:0;flex:1;min-width:260px}
+.loc{font:11.5px/1.6 var(--mono);color:var(--ink-3);margin:8px 0 12px;word-break:break-all}
+.four{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+.four div{border-top:1px solid var(--line-2);padding-top:8px}
+.four b{display:block;font:700 11.5px/1 var(--mono);letter-spacing:.08em;color:var(--oxide-2);text-transform:uppercase;margin-bottom:4px}
+.four p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+.stat{border:1px solid var(--line);background:var(--card);padding:14px 15px;border-radius:3px}
+.stat .v{font:700 26px/1.2 var(--serif);color:var(--ink)}
+.stat .k{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.dim{display:grid;grid-template-columns:180px 90px 1fr;gap:0;border:1px solid var(--line);background:var(--card)}
+.dim>div{padding:11px 14px;border-bottom:1px solid var(--line-2)}
+.dim>div:nth-last-child(-n+3){border-bottom:0}
+.dim .h{background:#ece6d9;font-weight:700;font-size:12.5px}
+.bar{height:7px;background:#e7dfd0;border-radius:4px;overflow:hidden;margin-top:7px;max-width:220px}
+.bar i{display:block;height:100%;background:var(--oxide)}
+.check td:first-child{font-family:var(--mono);color:var(--ink-3);white-space:nowrap}
+.check .b{color:var(--oxide);font-weight:700}
+.mermaid{background:var(--card);border:1px solid var(--line);padding:14px;margin:14px 0}
+details{border:1px solid var(--line);background:var(--card);padding:10px 14px;border-radius:3px;margin:12px 0}
+summary{cursor:pointer;font-weight:700;font-size:13px}
+footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:var(--ink-3);font-size:12px}
+@media (max-width:820px){
+  .wrap{padding:30px 16px 60px}
+  h1{font-size:27px}
+  .toc,.summary-grid,.split,.four{grid-template-columns:1fr}
+  .dim{grid-template-columns:1fr}
+  .dim>div{border-bottom:1px solid var(--line-2)!important}
+  table{font-size:12px}
+  th,td{padding:7px 8px}
+}
+@media print{
+  body{background:#fff}
+  .wrap{max-width:none;padding:0}
+  .toc{display:none}
+  .summary-grid{grid-template-columns:repeat(4,1fr)}
+  .dim{grid-template-columns:160px 80px 1fr}
+  .four{grid-template-columns:1fr 1fr}
+  .finding,.panel,.stat,table{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">Pre-launch review · 2026-10-29</div>
+  <h1>上线前安全设计与代码审查</h1>
+  <div class="meta">
+    <span>仓库 qqbot @ f17ba5e</span>
+    <span>后端 373 个 Java 文件 / 51,302 行</span>
+    <span>测试 160 个类 / 1,093 个 @Test</span>
+    <span>前端 94 个文件 / 24,040 行</span>
+    <span>审查依据：brooks-health + ponytail-audit</span>
+  </div>
+</header>
+
+<div class="verdict">
+  <strong>上线结论：不通过</strong>
+  <p>5 个阻塞项未关闭。入口鉴权、后台提权、默认聊天采集、跨群删除、主机暴露，任意一项都足以在公网运营中造成事故。代码结构本身不差，问题集中在信任边界与默认值。</p>
+</div>
+
+<nav class="toc">
+  <a href="#security"><b>01 安全设计</b>资产、边界、威胁、控制、验收、响应</a>
+  <a href="#audit"><b>02 代码审查</b>19 项发现，按严重度排序</a>
+  <a href="#health"><b>03 健康仪表盘</b>三维评分、依赖图、Top 5</a>
+</nav>
+
+<section id="security">
+  <h2><span class="no">01 / SECURITY DESIGN</span>安全设计</h2>
+
+  <h3>1.1 资产与分级</h3>
+  <table>
+    <thead><tr><th>资产</th><th>位置</th><th>泄露后果</th><th>完整性后果</th><th>级别</th></tr></thead>
+    <tbody>
+      <tr><td>NapCat 登录态与 QQ 账号</td><td><code>deploy/data/qq</code>、容器</td><td>他人可冒用机器人身份发言</td><td>被盗号、封号、群管理权限丢失</td><td>最高</td></tr>
+      <tr><td>管理员密码与会话</td><td>SQLite <code>admin_user</code>、内存 token 表</td><td>后台完全接管，可改知识库、页面、账号</td><td>可创建新管理员，持久化控制</td><td>最高</td></tr>
+      <tr><td>模型与向量 API Key</td><td><code>.env</code>、进程环境</td><td>直接产生费用，可被用于其他业务</td><td>额度耗尽导致机器人失答</td><td>高</td></tr>
+      <tr><td>群聊原文、图片、QQ 号</td><td><code>chat_message</code>、<code>chat_image</code>、<code>chat-images</code></td><td>群成员隐私泄露，含发言习惯与社交关系</td><td>被篡改后污染蒸馏与知识库</td><td>高</td></tr>
+      <tr><td>问答原文与统计</td><td><code>qa_raw</code>、<code>qa_stat</code></td><td>提问内容与用户群号泄露</td><td>统计失真，运营判断错误</td><td>中高</td></tr>
+      <tr><td>知识库与页面文案</td><td>SQLite、<code>kb-images</code>、<code>site-images</code></td><td>公开内容，本身不敏感</td><td>错误资料被当作依据，公开站被篡改</td><td>中</td></tr>
+      <tr><td>数据库与备份</td><td><code>server/data</code>、<code>/opt/qqbot/backup</code></td><td>以上全部数据打包泄露</td><td>误删、损坏、勒索</td><td>最高</td></tr>
+      <tr><td>服务器与容器</td><td><code>/opt/qqbot</code>、Docker</td><td>可读 <code>.env</code> 与全部数据</td><td>可改 jar、配置、定时任务</td><td>最高</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.2 信任边界</h3>
+  <table>
+    <thead><tr><th>边界</th><th>对面是谁</th><th>现有控制</th><th>缺口</th></tr></thead>
+    <tbody>
+      <tr><td>公网 → Nginx 443</td><td>匿名访客、群友、攻击者</td><td>TLS、限流、安全响应头</td><td>域名版后台没有 IP 白名单，只有密码</td></tr>
+      <tr><td>公网 → 应用 8080</td><td>任何能连到 8080 的人</td><td>仅依赖云安全组</td><td>应用监听 <code>0.0.0.0</code>，初始化脚本不装主机防火墙</td></tr>
+      <tr><td>Nginx → <code>/onebot/event</code></td><td>本应只有 NapCat</td><td>无</td><td>公网可 POST，应用不校验 Token，<code>sender.role</code> 被直接信任</td></tr>
+      <tr><td>浏览器 → <code>/admin/api</code></td><td>管理员</td><td>会话 Cookie、三角色、失败锁定</td><td>角色按原始 URI 字符串判定；Cookie 缺 <code>Secure</code></td></tr>
+      <tr><td>应用 → NapCat 3000</td><td>协议层</td><td>Bearer Token</td><td>方向正确，Token 只用于出站</td></tr>
+      <tr><td>应用 → 模型、向量、wiki</td><td>外部服务</td><td>TLS、Key、超时</td><td>图片下载跟随重定向，SSRF 预检可被绕过</td></tr>
+      <tr><td>应用 → 本地文件与 SQLite</td><td>同一进程</td><td>PathGuard、目录隔离、预编译 SQL</td><td>数据库、日志、备份的文件权限没有定义</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.3 威胁模型</h3>
+  <table>
+    <thead><tr><th>类别</th><th>具体场景</th><th>现状</th><th>结论</th></tr></thead>
+    <tbody>
+      <tr><td>伪造</td><td>攻击者向 <code>/onebot/event</code> POST 一条群消息，带上机器人的 @ 段和 <code>sender.role=owner</code></td><td>无入口鉴别，角色直接取自请求体</td><td class="b">阻塞</td></tr>
+      <tr><td>提权</td><td>编辑账号请求 <code>/admin/api;x/users</code>，Spring 归一化为 <code>/admin/api/users</code>，过滤器只要求 EDITOR</td><td>角色判定与路由归一化不一致</td><td class="b">阻塞</td></tr>
+      <tr><td>篡改</td><td>任何群成员发 <code>/公告 /delete 12</code>，按全局编号删除别群记录</td><td>删除不看群号与作者</td><td class="b">阻塞</td></tr>
+      <tr><td>泄露</td><td>首次启动即采集全部群消息与图片，90 天保留期不生效</td><td>采集默认开，数据库默认全群，清理代码不存在</td><td class="b">阻塞</td></tr>
+      <tr><td>拒绝服务</td><td>连续 5 次错误密码锁住唯一管理员</td><td>经 Nginx 后来源恒为 127.0.0.1，锁定键退化为账号名</td><td>高</td></tr>
+      <tr><td>泄露</td><td>日志与 journal 中出现 QQ 号、群号、消息正文、异常事件对象</td><td>脱敏只作用于后台日志页</td><td>中</td></tr>
+      <tr><td>成本</td><td>伪造事件轮换 user_id 与 group_id，绕开单用户限流，持续调用模型</td><td>全局预算默认为 0，等于不限</td><td>高</td></tr>
+      <tr><td>抵赖</td><td>通过 <code>;x</code> 路径调用账号管理，审计因路径前缀不匹配而漏记</td><td>审计同样使用原始 URI</td><td>高</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.4 目标控制</h3>
+
+  <h4>入口鉴别</h4>
+  <ul>
+    <li>应用层校验 <code>Authorization: Bearer &lt;ONEBOT_TOKEN 的值&gt;</code>，使用常量时间比较；Token 为空时拒绝启动或拒绝全部事件，不能默认放行。</li>
+    <li>NapCat 的 HTTP 客户端配置里填入同一个 secret；部署文档把这一步写成必做项。</li>
+    <li>Nginx 对 <code>/onebot/event</code> 单独建 location，只允许 <code>172.16.0.0/12</code> 与 <code>127.0.0.1</code>，<code>client_max_body_size 1m</code>，其余 <code>deny all</code>。</li>
+    <li>事件体做最小校验：<code>post_type</code>、<code>message_type</code>、<code>self_id</code>、<code>time</code> 必需；时间偏离超过 5 分钟拒绝，防重放。</li>
+    <li>入口限流单独一个 zone，例如 300r/m，不和公开页面的 120r/m 混用。</li>
+  </ul>
+  <pre><code>location = /onebot/event {
+    allow 172.16.0.0/12;
+    allow 127.0.0.1;
+    deny all;
+    client_max_body_size 1m;
+    proxy_pass http://qqbot;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}</code></pre>
+
+  <h4>后台会话与授权</h4>
+  <ul>
+    <li>角色判定必须使用归一化后的路径。先拒绝原始 URI 中的 <code>;</code>、<code>..</code>、<code>%2f</code>，再用 <code>UrlPathHelper.getPathWithinApplication</code> 取路径。</li>
+    <li>更稳的做法：把权限写在 Controller 方法或路由元数据上，过滤器只做会话校验，避免“路由表”和“字符串前缀表”两套真相。</li>
+    <li>写操作增加 CSRF 防护。单管理员场景用 Origin 白名单加双提交 Token 即可，不引入 Spring Security 也能做。</li>
+    <li>Cookie 加 <code>Secure</code>；<code>SameSite</code> 用 <code>Strict</code>，若登录跳转受影响则用 <code>Lax</code> 并校验 Origin。</li>
+    <li>改密、删号、降权后立即失效该账号全部会话；会话设置绝对上限与空闲上限。</li>
+    <li>登录失败按真实客户端 IP 加账号计数；再加一个账号级全局阈值，超过后拉长锁定并告警，避免单点锁死管理员。</li>
+    <li>后台域名保留 IP 白名单，或改为仅 VPN / SSH 隧道访问。密码只能是最后一道防线。</li>
+    <li>后台未启用时返回通用文案，路径诊断只写日志，不回给匿名访问者。</li>
+  </ul>
+
+  <h4>命令与数据授权</h4>
+  <ul>
+    <li>不要信任事件里的 <code>sender.role</code>。入口鉴权只能证明事件来自 NapCat，不能证明角色没被篡改；管理员命令应再调用 <code>get_group_member_info</code> 核对一次，或只允许通过后台配置。</li>
+    <li>板块删除校验群号与作者：本群记录允许作者或管理员删除；跨群记录只允许管理员，且必须有明确提示。</li>
+    <li><code>/prompt</code> 的群级提示改为管理员或群主才能写、删、清空；个人提示可以继续对所有人开放。</li>
+    <li>所有按编号操作的命令都当作越权入口审查一遍，编号必须和群、作者一起查。</li>
+  </ul>
+
+  <h4>数据保护</h4>
+  <ul>
+    <li>聊天采集默认关闭，数据库默认 <code>capture_all_groups=0</code>；开启时必须显式填写群号，管理页显示“当前采集 N 个群”。</li>
+    <li>实现保留期清理：按 <code>message-retention-days</code> 删除 <code>chat_message</code>，按 <code>image-retention-days</code> 删除 <code>chat_image</code> 行与磁盘文件；清理任务要有日志、计数、失败告警。</li>
+    <li>能存哈希就不存原文：<code>sender_id</code> 目前是明文 QQ 号，除蒸馏需要外，统计侧只保留 <code>sender_hash</code>。</li>
+    <li>数据库、日志、备份文件权限设为 <code>600</code>，目录 <code>700</code>；备份加密后异地保存，至少做一次恢复演练。</li>
+    <li>日志在写入端脱敏，或在 Logback 里挂一个 Converter 调用现有 <code>LogMasker</code>；不要记录完整事件对象。</li>
+    <li>管理审计表也要有保留期，避免成为另一份长期行为记录。</li>
+  </ul>
+
+  <h4>出站与网络</h4>
+  <ul>
+    <li>图片下载禁止跟随重定向，或对每一跳重新做公网校验；补齐 IPv6 ULA <code>fc00::/7</code>、IPv4-mapped IPv6、<code>0.0.0.0</code>。</li>
+    <li>NapCat 镜像固定 digest，不用 <code>latest</code>；容器用非 root UID/GID，配置与登录态目录按最小权限挂载。</li>
+    <li>服务器出站只放行 QQ、模型、向量、wiki 所需域名；至少对 80/443 做日志与告警。</li>
+    <li>云安全组不开放 8080、3000、3001、6099；主机防火墙只放行 22、80、443，8080 只允许 Docker 网桥与回环。</li>
+  </ul>
+
+  <h4>成本与可用性</h4>
+  <ul>
+    <li>上线前设置全局每日回复数与 token 上限，以及每群、每用户上限；0 只作为明确的“关闭预算”开关，不作为默认值。</li>
+    <li>预算用到 80% 时告警，100% 时熔断并保留 ERROR 日志；不要只静默丢弃。</li>
+    <li>发送队列满、采集队列满、检索降级、模型全失败都要有计数与告警，不能只在日志里留一行。</li>
+    <li>入口、公开 API、后台登录三层限流分别配置，避免一个 zone 被所有路径共享。</li>
+  </ul>
+
+  <h4>运维</h4>
+  <ul>
+    <li>证书到期前 30 天告警。域名版使用固定路径证书，没有自动续期，必须加 systemd timer 或日历提醒。</li>
+    <li>每周跑依赖漏洞扫描与镜像扫描；每月打一次系统补丁；每季度做一次恢复演练。</li>
+    <li>发布前跑密钥扫描，确认 <code>.env</code>、<code>overrides.yml</code>、备份没有进版本库。</li>
+    <li>保留一份“断网也能看”的运行手册：如何停机器人、如何轮换 Token、如何回滚、如何从备份恢复。</li>
+  </ul>
+
+  <h3>1.5 上线验收清单</h3>
+  <table class="check">
+    <thead><tr><th>#</th><th>检查</th><th>通过标准</th><th>验证方式</th></tr></thead>
+    <tbody>
+      <tr><td class="b">B1</td><td>事件入口鉴权</td><td>无 Token 返回 401 或 403，有正确 Token 返回 204</td><td><code>curl -X POST https://域名/onebot/event -d '{}'</code></td></tr>
+      <tr><td class="b">B2</td><td>事件入口网络隔离</td><td>公网不能直连 8080；Nginx 只允许 Docker 网段访问该路径</td><td>从外网 <code>nc -zv IP 8080</code>；查 Nginx 配置</td></tr>
+      <tr><td class="b">B3</td><td>后台路径归一化</td><td>编辑账号访问 <code>/admin/api;x/users</code> 返回 403 或 404，审计有记录</td><td>用编辑会话 curl；查 <code>admin_audit</code></td></tr>
+      <tr><td class="b">B4</td><td>聊天采集默认值</td><td>首次启动显示“未开启”或只采集显式群号</td><td>后台蒸馏页；查 <code>distill_setting</code></td></tr>
+      <tr><td class="b">B5</td><td>保留期清理</td><td>把保留期设为 1 天，任务跑完后旧消息与图片消失</td><td>插入测试行；触发清理；查计数</td></tr>
+      <tr><td class="b">B6</td><td>跨群删除</td><td>A 群删除 B 群记录被拒绝</td><td>两个测试群各建一条，交叉删</td></tr>
+      <tr><td class="b">B7</td><td>主机防火墙</td><td>公网端口扫描只见 22、80、443</td><td>外部主机 <code>nmap</code></td></tr>
+      <tr><td class="b">B8</td><td>成本上限</td><td>达到全局上限后熔断，日志有 ERROR</td><td>把上限设为 1，发两次提问</td></tr>
+      <tr><td>B9</td><td>Cookie 属性</td><td>登录响应含 <code>Secure; HttpOnly; SameSite</code></td><td>浏览器开发者工具</td></tr>
+      <tr><td>B10</td><td>改密失效会话</td><td>改密后旧 Cookie 立即 401</td><td>两个浏览器登录同一账号</td></tr>
+      <tr><td>B11</td><td>日志脱敏</td><td>文件与 journal 中搜不到完整 QQ 号与消息正文</td><td><code>grep -E '[0-9]{5,11}' data/logs/qqbot.log</code></td></tr>
+      <tr><td>B12</td><td>后台入口</td><td>非白名单 IP 访问后台域名返回 403</td><td>手机流量访问</td></tr>
+      <tr><td>B13</td><td>证书</td><td>TLS 1.2 以上，证书剩余有效期大于 30 天</td><td><code>openssl s_client</code></td></tr>
+      <tr><td>B14</td><td>备份可恢复</td><td>备份通过 <code>quick_check</code>，恢复到临时目录后能启动</td><td><code>qqbot-backup.sh</code>；临时实例</td></tr>
+      <tr><td>B15</td><td>依赖与镜像</td><td>无已知 Critical CVE；NapCat 固定 digest</td><td>依赖扫描；<code>docker inspect</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.6 事件响应</h3>
+  <table>
+    <thead><tr><th>场景</th><th>第一动作</th><th>后续</th></tr></thead>
+    <tbody>
+      <tr><td>怀疑事件入口被刷</td><td>停机器人或打开 <code>kill-switch</code>；封来源 IP；轮换 <code>ONEBOT_TOKEN</code></td><td>查 <code>qa_stat</code>、模型账单、<code>chat_message</code> 增量；补入口告警</td></tr>
+      <tr><td>管理员账号失守</td><td>重启进程使全部会话失效；改密码；检查管理员列表与审计</td><td>对比知识库、页面、命令配置；确认没有新增账号</td></tr>
+      <tr><td>API Key 泄露</td><td>在供应商侧吊销并换新；限制额度</td><td>查账单与调用日志；确认没有把 Key 写进仓库</td></tr>
+      <tr><td>聊天数据泄露</td><td>停采集；限制备份与日志访问；评估范围</td><td>按适用法规与群规通知；删除超期数据；补保留期任务</td></tr>
+      <tr><td>QQ 账号被风控</td><td>停容器，保留现场；不要反复重启登录</td><td>核对设备指纹与登录态；换备用号；通知群管理</td></tr>
+      <tr><td>数据库损坏</td><td>停服务；保留损坏文件；用最近备份恢复</td><td>跑 <code>quick_check</code>；检查磁盘与写入错误；复盘备份频率</td></tr>
+    </tbody>
+  </table>
+
+  <h3>1.7 残余风险</h3>
+  <ul>
+    <li>QQ 协议依赖 NapCat 与专用账号，协议变更、风控、封号都不在应用控制范围内。需要备用号与明确的停机预案。</li>
+    <li>单实例 SQLite 与内存缓存不支持水平扩展。用户量增长后先拆读路径或换 PostgreSQL，不要直接加副本。</li>
+    <li>提示词注入无法靠系统提示完全消除。知识库与群聊内容始终是“资料”，但模型仍可能被诱导。高风险群建议关闭 <code>/prompt</code> 群级写入。</li>
+    <li>DNS 重绑定在 Java HttpClient 上没有便宜的彻底解法。禁用重定向并接受残余风险，或在容器网络层限制出站。</li>
+    <li>自签证书方案会有浏览器警告，也会训练用户忽略警告。正式运营应使用受信任证书。</li>
+    <li>没有 WAF 与 DDoS 清洗。公开站被打时，先保机器人，必要时在云侧封禁或切维护页。</li>
+  </ul>
+</section>
+
+<section id="audit">
+  <h2><span class="no">02 / CODE AUDIT</span>代码审查</h2>
+
+  <p><b>这个仓库做什么：</b>一个自托管的 QQ 群知识库问答机器人。它通过 NapCat 接 OneBot 11，先检索本地 SQLite 知识库，再让大模型依据资料回答；同一个进程还跑命令、定时板块、交互地图、语音、聊天蒸馏、公开站和管理后台。</p>
+  <p><b>假设的负载：</b>2 核 2 GB 单机，两个活跃群，日提问量数百到数千，公开站偶发访问；单个管理员，少量编辑账号。判断按这个量级做，不按大规模多租户。</p>
+
+  <h3>Must fix</h3>
+
+  <article class="finding crit" id="f1">
+    <div class="fh"><span class="num">1</span><h3>事件入口没有鉴权，公网可以伪造 QQ 消息</h3><span class="tag crit">Must fix</span></div>
+    <p class="loc">incoming/OneBotEventController.java:40-52 · command/CommandRole.java:43-52 · deploy/nginx/qqbot-domain.conf:126 · docs/architecture.md:46</p>
+    <div class="four">
+      <div><b>这是什么</b><p><code>/onebot/event</code> 接收 NapCat 上报的 JSON，去重后立刻返回 204，再异步处理。</p></div>
+      <div><b>问题</b><p>控制器和过滤器都没有校验任何 Token；Nginx 的 <code>location /</code> 把它一起代理到公网；下游又直接信任请求体里的 <code>sender.role</code>。攻击者可以伪造任意群、任意用户、任意角色的事件。</p></div>
+      <div><b>修法</b><p>在入口校验 <code>Authorization: Bearer &lt;ONEBOT_TOKEN 的值&gt;</code>，常量时间比较，失败返回 401；NapCat 的 HTTP 客户端填同一个 secret；Nginx 对该路径只允许 Docker 网段。再加 1 MB body 上限与事件时间窗。</p></div>
+      <div><b>不修的后果</b><p>任何人都能让机器人发消息、执行群主命令、写数据库、烧模型额度。身份、审计、成本三件事同时失真。</p></div>
+    </div>
+  </article>
+
+  <article class="finding crit" id="f2">
+    <div class="fh"><span class="num">2</span><h3>后台角色校验可被分号路径绕过，编辑能提权到管理员</h3><span class="tag crit">Must fix</span></div>
+    <p class="loc">admin/AdminAuthFilter.java:80,102,131-141 · admin/AdminUsersController.java:50-103</p>
+    <div class="four">
+      <div><b>这是什么</b><p>过滤器用 <code>request.getRequestURI()</code> 的字符串前缀决定角色：<code>/admin/api/users</code> 要 ADMIN，其余写操作要 EDITOR。</p></div>
+      <div><b>问题</b><p>Spring 匹配路径时会去掉矩阵参数，<code>/admin/api;x/users</code> 仍然命中 <code>/admin/api/users</code> 的控制器；但过滤器看到的前缀不是 <code>/admin/api/users</code>，于是只要求 EDITOR。我用 spring-web 6.2.19 的 <code>PathPatternParser</code> 验证过，这个 URI 匹配成功。编辑可以创建管理员、重置管理员密码，审计还会因为路径前缀不匹配而漏记。</p></div>
+      <div><b>修法</b><p>先拒绝原始 URI 里的 <code>;</code>、<code>..</code>、<code>%2f</code>，再用 <code>UrlPathHelper.defaultInstance.getPathWithinApplication(request)</code> 取归一化路径做角色判定和审计。更彻底的做法是把权限声明放到 Controller 方法上，过滤器只负责会话。补一个使用 <code>/admin/api;x/users</code> 的回归测试。</p></div>
+      <div><b>不修的后果</b><p>任何一个编辑账号都等价于管理员。只要有一个帮忙维护知识库的人，后台就已经被接管了。</p></div>
+    </div>
+  </article>
+
+  <article class="finding crit" id="f3">
+    <div class="fh"><span class="num">3</span><h3>群聊采集默认开启并默认采集所有群，保留期配置是死代码</h3><span class="tag crit">Must fix</span></div>
+    <p class="loc">resources/application.yml:121-124,137-140 · persistence/DistillSettingRepository.java:59,85 · distill/DistillPolicy.java:37-40</p>
+    <div class="four">
+      <div><b>这是什么</b><p>聊天蒸馏会把群消息与图片落库，供后面生成知识笔记。</p></div>
+      <div><b>问题</b><p><code>capture-enabled</code> 默认 true，数据库表 <code>capture_all_groups</code> 默认 1，于是首次启动就采集机器人所在的所有群，不只是 yml 里那两个群。配置里的 90 天、30 天保留期没有任何代码读取，消息与图片永远不会被清理，QQ 号还是明文存储。</p></div>
+      <div><b>修法</b><p>两个默认值都改成关闭；开启时必须显式填群号。实现定时清理：按 <code>message-retention-days</code> 删消息，按 <code>image-retention-days</code> 删图片行与文件；清理要有计数和失败告警。补迁移，让已有库也回到关闭状态，由管理员主动开启。</p></div>
+      <div><b>不修的后果</b><p>你在没有告知群友的情况下长期保存他们的发言和图片，磁盘也会随图片增长。这是隐私承诺与运维成本的双重问题。</p></div>
+    </div>
+  </article>
+
+  <article class="finding crit" id="f4">
+    <div class="fh"><span class="num">4</span><h3>板块删除不校验群和作者，任何人可按编号删别群记录</h3><span class="tag crit">Must fix</span></div>
+    <p class="loc">command/BoardRunner.java:232-245 · command/BoardRecordStore.java:178-180</p>
+    <div class="four">
+      <div><b>这是什么</b><p><code>/板块 /delete 编号</code> 用来撤销一条板块记录，删除是软删，数据还在。</p></div>
+      <div><b>问题</b><p>代码只按全局编号取记录，然后只比对板块名，不比对群号，也不比对作者。编号是自增的，很容易枚举。A 群的人可以删 B 群的公告，普通成员也可以删别人的记录。</p></div>
+      <div><b>修法</b><p>把事件和角色传进删除逻辑：本群记录允许作者本人或管理员删除；跨群记录只允许管理员；<code>DataScope.ALL</code> 的板块明确写清谁能删。补两个群的交叉删除测试。</p></div>
+      <div><b>不修的后果</b><p>跨群数据被恶意删除，公告和预约失效，而且软删不会立刻引起注意。</p></div>
+    </div>
+  </article>
+
+  <article class="finding crit" id="f5">
+    <div class="fh"><span class="num">5</span><h3>应用监听所有网卡，初始化脚本没有主机防火墙</h3><span class="tag crit">Must fix</span></div>
+    <p class="loc">resources/application.yml:3-5 · deploy/server/bootstrap.sh:42-54 · deploy/nginx/qqbot.conf:120-122</p>
+    <div class="four">
+      <div><b>这是什么</b><p>Spring 监听 <code>0.0.0.0:8080</code>，Nginx 反向代理到 <code>127.0.0.1:8080</code>；服务器初始化只装 Nginx、Docker、JDK，不配置防火墙。</p></div>
+      <div><b>问题</b><p>如果云安全组忘了关 8080，公网可以绕过 Nginx 直接访问应用，TLS、限流、后台 IP 白名单全部失效，未鉴权的事件入口也直接暴露。文档只提醒关闭 3000、3001、6099，没有提醒 8080。域名版 Nginx 配置还删掉了后台 IP 白名单。</p></div>
+      <div><b>修法</b><p>云安全组只放行 22、80、443；主机再配 nftables 或 ufw 做第二层；8080 只允许 Docker 网桥与回环。把 <code>ss -lntp</code> 和外部端口扫描写进上线清单。后台域名恢复 <code>allow</code> 白名单，或改成 VPN / SSH 隧道。</p></div>
+      <div><b>不修的后果</b><p>一次安全组误配，等于把后台和未鉴权入口同时放到公网。你以为是两层防护，实际只有一层，而且那层还缺鉴权。</p></div>
+    </div>
+  </article>
+
+  <h3>Should fix</h3>
+
+  <article class="finding warn" id="f6">
+    <div class="fh"><span class="num">6</span><h3>成本预算默认关闭，伪造事件可以绕开单用户限流</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">resources/application.yml:330-339 · guard/BudgetGuard.java:86-110</p>
+    <div class="four">
+      <div><b>这是什么</b><p>预算层按用户、群、全局统计每天的回复数与 token，超限后提示、静默或熔断。</p></div>
+      <div><b>问题</b><p>四个上限默认都是 0，等于不启用。单用户限流是 1 次/20 秒，但事件里的 user_id 可以随便换，攻击者能一直换人。全局没有上限，账单就没有天花板。</p></div>
+      <div><b>修法</b><p>上线前设一个保守的全局日回复数与 token 上限，再设每群、每用户上限。80% 告警，100% 熔断。0 只用于明确关闭预算，不作为默认值。</p></div>
+      <div><b>不修的后果</b><p>一条被转发的提问或一次恶意刷接口，就能把当天的模型额度烧完。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f7">
+    <div class="fh"><span class="num">7</span><h3>登录失败锁定会锁死唯一管理员</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">admin/AdminController.java:73-75 · admin/AdminAuth.java:114-149</p>
+    <div class="four">
+      <div><b>这是什么</b><p>连续 5 次失败后锁定 10 分钟，键是“来源 + 账号”。</p></div>
+      <div><b>问题</b><p>经 Nginx 之后，所有请求的来源都是 127.0.0.1，于是键退化成账号名。任何人每 10 分钟输错 5 次，就能让唯一管理员一直登不进去。Nginx 的 5 次/分钟限流拦不住这种低频攻击。</p></div>
+      <div><b>修法</b><p>让 Nginx 覆盖写入 <code>X-Real-IP $remote_addr</code>，应用只在直连对端是回环时信任它；用真实 IP 加账号做键。再加一个账号级全局阈值，比如每小时 20 次后锁 1 小时并告警。</p></div>
+      <div><b>不修的后果</b><p>出事时你正好被锁在后台外面，只能重启进程清空内存计数器。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f8">
+    <div class="fh"><span class="num">8</span><h3>公开接口直接取 X-Forwarded-For 第一个值，限流可被绕过</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">publicapi/PublicController.java:337-344 · publicapi/PublicMapController.java:302-309</p>
+    <div class="four">
+      <div><b>这是什么</b><p>公开接口按 IP 做滑动窗口限流，IP 从 <code>X-Forwarded-For</code> 的第一个值取。</p></div>
+      <div><b>问题</b><p>Nginx 用 <code>$proxy_add_x_forwarded_for</code>，会把客户端自己写的值留在前面。攻击者每次换一个伪造 IP，就能让应用层的 60 次/分钟形同虚设。5000 个 key 之后限流表还会整体清空，连别人的窗口也一起放掉。</p></div>
+      <div><b>修法</b><p>Nginx 改成 <code>proxy_set_header X-Real-IP $remote_addr;</code>，并覆盖 XFF；应用只在直连对端是回环或 Docker 网段时读 <code>X-Real-IP</code>。两个控制器合并成一个取 IP 的工具，顺带做格式校验。</p></div>
+      <div><b>不修的后果</b><p>双层限流只剩 Nginx 一层。公开检索配额更快被刷完，日志里还会出现伪造 IP。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f9">
+    <div class="fh"><span class="num">9</span><h3>后台 Cookie 缺 Secure，改密后旧会话仍然有效</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">admin/AdminController.java:97-102,165-184 · admin/AdminAuth.java:38,154</p>
+    <div class="four">
+      <div><b>这是什么</b><p>登录后下发 <code>admin_token</code>，HttpOnly、Path=/admin、SameSite=Lax，有效期 24 小时。</p></div>
+      <div><b>问题</b><p>没有 <code>Secure</code>。只要 8080 或 HTTP 可达，Cookie 就可能走明文。改密接口只更新哈希，不清理已有会话，被偷的 Cookie 还能用满 24 小时。</p></div>
+      <div><b>修法</b><p>加 <code>Secure</code>；写操作校验 Origin；改密、删号、降权时清掉该账号全部会话；加空闲超时与单账号会话数上限。</p></div>
+      <div><b>不修的后果</b><p>你以为改密已经赶走了攻击者，其实他的会话还在。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f10">
+    <div class="fh"><span class="num">10</span><h3>SSRF 防护被 HTTP 重定向绕过</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">media/ImageFetcher.java:44-47,123-169</p>
+    <div class="four">
+      <div><b>这是什么</b><p>下载用户消息里的图片前，先解析域名并拒绝回环、内网、链路本地地址，限制 5 MB 与 10 秒。</p></div>
+      <div><b>问题</b><p><code>HttpClient</code> 设置了 <code>Redirect.NORMAL</code>。预检只看第一个 URL；一个公网地址返回 302 到 <code>http://127.0.0.1:8080/...</code> 或 <code>169.254.169.254</code>，请求照样发出去。IPv6 ULA <code>fc00::/7</code> 也不在现有判断里。</p></div>
+      <div><b>修法</b><p>改成 <code>Redirect.NEVER</code>；确实需要跟随时，对每个 Location 重新做公网校验并限制跳数。补齐 IPv6 ULA、IPv4-mapped IPv6。<code>isPublicHttpUrl</code> 加一个本地重定向测试。</p></div>
+      <div><b>不修的后果</b><p>机器人可以被用来探测内网和云元数据，虽然拿不到图片，但请求已经发出去了。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f11">
+    <div class="fh"><span class="num">11</span><h3>发送队列满时静默丢弃，统计却记为已回复</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">onebot/outbound/OutboundSender.java:241-253 · onebot/outbound/SendQueue.java:40-48</p>
+    <div class="four">
+      <div><b>这是什么</b><p>异步发送把消息放进容量 2000 的队列，发送线程按 500 毫秒一条的节奏发。</p></div>
+      <div><b>问题</b><p><code>queue.offer</code> 的返回值被丢掉。队列满时消息直接没了，但 <code>dispatch</code> 仍返回过滤后的文本，调用方照常记录为已回复。用户没收到，后台看板显示正常。</p></div>
+      <div><b>修法</b><p><code>offer</code> 返回 false 时改为同步发送，或返回失败并记录 <code>send_dropped</code>；把 <code>droppedTotal</code> 接到后台与告警。不要用“已回复”掩盖“没发出去”。</p></div>
+      <div><b>不修的后果</b><p>高峰期限流一紧，丢的是真实回复，而你从统计上看不出来。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f12">
+    <div class="fh"><span class="num">12</span><h3>采集判断在 HTTP 请求线程里查库，拖慢 204</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">distill/ChatCaptureService.java:112-126 · persistence/DistillSettingRepository.java:105-134</p>
+    <div class="four">
+      <div><b>这是什么</b><p>入口先调 <code>capture.capture</code>，再返回 204。采集方法要判断是否全群、群是否在白名单。</p></div>
+      <div><b>问题</b><p>每次判断都调用 <code>settings.captureAllGroups()</code> 或 <code>captureGroups()</code>，每次都执行一次 <code>SELECT * FROM distill_setting</code>，还要拿全局 SQLite 锁。群消息一多，NapCat 的 204 会被数据库排队拖慢，处理线程也在等锁。</p></div>
+      <div><b>修法</b><p>把采集设置缓存在内存，保存设置时刷新；入口只做内存判断与入队，真正的过滤放到 worker。这样 204 不再依赖数据库。</p></div>
+      <div><b>不修的后果</b><p>聊天越活跃，入口越慢；极端情况下事件在队列里等到超时被丢。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f13">
+    <div class="fh"><span class="num">13</span><h3>日志脱敏只作用于后台页面，文件和 journal 是原文</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">logs/LogController.java:181-183 · logs/MemoryLogAppender.java:49-52 · resources/logback-spring.xml:29-41</p>
+    <div class="four">
+      <div><b>这是什么</b><p>有一个 <code>LogMasker</code>，会把 Token、QQ 号、签名 URL 打码。</p></div>
+      <div><b>问题</b><p>只有管理后台的日志页调用它。CONSOLE 和 FILE 两个 appender 直接写原始消息；<code>MessageRouter</code> 的异常日志还会把整个事件对象打出来，包含消息正文和用户号。文档却写着“日志默认脱敏”。</p></div>
+      <div><b>修法</b><p>在 Logback 里挂一个调用 <code>LogMasker</code> 的 Converter，或在日志源头就不打完整事件；日志文件与 journal 权限设为 600；保留期与轮转已有，补上访问控制。</p></div>
+      <div><b>不修的后果</b><p>日志和备份变成第二份聊天数据库，排障截图也会带出隐私。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f14">
+    <div class="fh"><span class="num">14</span><h3>四份 Nginx 配置复制粘贴，安全策略已经漂移</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">deploy/nginx/qqbot.conf · qqbot-domain.conf · qqbot-ip.conf · qqbot-ip-public.conf · scripts/release.ps1:194</p>
+    <div class="four">
+      <div><b>这是什么</b><p>仓库里有四份站点配置，按域名 / IP、是否暴露后台两两组合。</p></div>
+      <div><b>问题</b><p><code>qqbot.conf</code> 的后台有 <code>allow</code> 白名单；<code>qqbot-domain.conf</code> 是公网可达，只靠登录限流。发布脚本只打包 <code>qqbot.conf</code>，实际用的域名版却不在发布物里。四份配置各改一次，漂移是必然的。</p></div>
+      <div><b>修法</b><p>保留一份主配置，用 <code>include</code> 拆公共段；后台的 allow/deny 做成一个片段，所有版本都包含。发布脚本打包实际使用的那一份，并在验收里检查非白名单 IP 返回 403。</p></div>
+      <div><b>不修的后果</b><p>你以为后台有 IP 白名单，线上那份其实没有。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f15">
+    <div class="fh"><span class="num">15</span><h3>群级补充提示对所有人开放，任何成员能改全群行为</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">prompt/PromptCommand.java:82-85,119-147,182-208</p>
+    <div class="four">
+      <div><b>这是什么</b><p><code>/prompt /create 文本</code> 会写一条群级提示，最多 5 条、每条 300 字，之后被追加到系统提示后面。</p></div>
+      <div><b>问题</b><p>种子命令的 <code>min_role</code> 是 member，权限判定因此对所有成员放行。任何群友都能写、删、清空群级提示。内容会进入系统提示，虽然提示词声明“只调整语气”，但模型并不保证遵守。</p></div>
+      <div><b>修法</b><p>群级提示的写、删、清空改成 ADMIN 或 OWNER；个人提示继续开放。加长度与条数限制已有，补内容审计与后台可见的差异记录。</p></div>
+      <div><b>不修的后果</b><p>一个人可以给全群注入“忽略边界”的话术，或者把别人写好的提示清空。</p></div>
+    </div>
+  </article>
+
+  <article class="finding warn" id="f16">
+    <div class="fh"><span class="num">16</span><h3>三条最危险的路径没有测试</h3><span class="tag warn">Should fix</span></div>
+    <p class="loc">server/src/test/java · admin/AdminAuthTest.java:191-209 · command/BoardStoreTest.java</p>
+    <div class="four">
+      <div><b>这是什么</b><p>测试规模不小：160 个测试类、1,093 个 <code>@Test</code>、84 个 <code>@TempDir</code>，架构规则也有 14 条。</p></div>
+      <div><b>问题</b><p>入口鉴权、路径归一化、跨群删除这三类没有用例。角色矩阵只测了正常路径，没测 <code>;x</code>；板块测试没测两个群的交叉删除；事件入口根本没有鉴权测试可写，因为功能不存在。</p></div>
+      <div><b>修法</b><p>补三个测试：无 Token 的 POST 返回 401；编辑访问 <code>/admin/api;x/users</code> 返回 403 且审计有记录；A 群删除 B 群记录被拒绝。这三个测试会直接锁住本次的 Critical。</p></div>
+      <div><b>不修的后果</b><p>修完也可能被下一次重构改回去，尤其是路径和权限这种靠约定维持的代码。</p></div>
+    </div>
+  </article>
+
+  <h3>Nice to have</h3>
+
+  <article class="finding sugg" id="f17">
+    <div class="fh"><span class="num">17</span><h3>后台未启用时把绝对路径回给匿名访问者</h3><span class="tag sugg">Nice</span></div>
+    <p class="loc">admin/AdminAuthFilter.java:153-172 · files/ProjectFiles.java:164-171</p>
+    <div class="four">
+      <div><b>这是什么</b><p>没有管理员账号时，<code>/admin</code> 返回 503 并附带 <code>ProjectFiles.describe()</code>。</p></div>
+      <div><b>问题</b><p>描述里包含当前工作目录、工程根、<code>.env</code> 路径。公网可以访问 <code>/admin.html</code>，于是匿名者能看到服务器目录结构。</p></div>
+      <div><b>修法</b><p>路径诊断只写日志，响应改成通用文案加一个错误编号；管理员登录后可以看诊断。</p></div>
+      <div><b>不修的后果</b><p>给攻击者省了探测目录的时间。单独看不致命，但没必要送。</p></div>
+    </div>
+  </article>
+
+  <article class="finding sugg" id="f18">
+    <div class="fh"><span class="num">18</span><h3>LlmRouter 一个类承担了供应商生命周期、路由、探活和提示加载</h3><span class="tag sugg">Nice</span></div>
+    <p class="loc">llm/LlmRouter.java 694 行</p>
+    <div class="four">
+      <div><b>这是什么</b><p>模型路由负责默认 provider、降级链、视觉与工具能力选择、模型热切换、探活、系统提示加载。</p></div>
+      <div><b>问题</b><p>改一个供应商的超时，要读 694 行；加一个能力标签，也要动这个类。它不是“长所以坏”，是四个不相关的变更原因挤在一起。</p></div>
+      <div><b>修法</b><p>拆出 <code>ProviderRegistry</code> 管客户端和热切换，<code>SystemPromptLoader</code> 管提示与占位符，<code>LlmRouter</code> 只保留选择与降级。按变更原因拆，不按行数拆。</p></div>
+      <div><b>不修的后果</b><p>每次改模型配置都在高风险文件里做小手术，回归面越来越大。</p></div>
+    </div>
+  </article>
+
+  <article class="finding sugg" id="f19">
+    <div class="fh"><span class="num">19</span><h3>两个后台页面各有两千行，改一个字段要读完整个文件</h3><span class="tag sugg">Nice</span></div>
+    <p class="loc">web/src/admin/views/MapAdminView.vue 2,040 行 · web/src/admin/views/bot/CommandsPanel.vue 1,415 行</p>
+    <div class="four">
+      <div><b>这是什么</b><p>地图管理页同时管点位、备注、分组、找点、同步状态、候选表；命令管理页同时管列表、编辑器、参数表、变量插入、预览。</p></div>
+      <div><b>问题</b><p>状态、请求、表单、模板都在一个文件里。加一个地图字段要跨几个区块改，评审时也很难确认没碰到别的逻辑。</p></div>
+      <div><b>修法</b><p>按页签或业务块拆组件，把请求与表单状态收到各自的 composable；父组件只留当前页签与共享的 catalog。不要为了拆而拆工具函数。</p></div>
+      <div><b>不修的后果</b><p>前端改动越来越慢，且容易误伤旁边的功能。当前能用，属于维护成本。</p></div>
+    </div>
+  </article>
+
+  <h3>结论</h3>
+  <p><b>Verdict:</b> 不要上线。先修 1 到 5，再按 1.5 的 B1 到 B8 验收。修完这五项，剩下的都属于运营期可以排期的加固。</p>
+  <p><b>Lean:</b> 约 370 行配置与重复代码可删，0 个依赖可删。四份 Nginx 合并能省约 340 行，两个 <code>clientIp</code> 合并省约 20 行，死保留期配置省几行。</p>
+  <p><b>Not checked:</b> 没有在本窗口跑完整测试。最近一次记录是 2026-10-15，648 个测试、0 失败、64 秒；当前源码的 <code>@Test</code> 数量是 1,093。没有做依赖 CVE 扫描、动态渗透、真实 NapCat 联调。没有逐行读 wiki 导入、地图出图、语音合成和 2,000 行以上的 Vue 页面。</p>
+</section>
+
+<section id="health">
+  <h2><span class="no">03 / HEALTH DASHBOARD</span>Brooks-Lint 健康仪表盘</h2>
+
+  <p><b>Mode:</b> Health Dashboard · <b>Scope:</b> 整个仓库 · <b>Composite Score:</b> 80/100 · <b>Trend:</b> First run — no trend data</p>
+
+  <div class="summary-grid">
+    <div class="stat"><div class="v">80</div><div class="k">Composite Score / 100</div></div>
+    <div class="stat"><div class="v">2</div><div class="k">Critical</div></div>
+    <div class="stat"><div class="v">5</div><div class="k">Warning</div></div>
+    <div class="stat"><div class="v">1</div><div class="k">Suggestion</div></div>
+  </div>
+
+  <div class="dim">
+    <div class="h">Dimension</div><div class="h">Score</div><div class="h">Top Finding</div>
+    <div>Code Quality</div><div>—</div><div>PR 维度跳过：工作区没有代码改动，只有未跟踪的临时目录与压缩包</div>
+    <div>Architecture</div><div><b>65</b><div class="bar"><i style="width:65%"></i></div></div><div>入口未鉴权；鉴权策略按原始 URI 字符串判定</div>
+    <div>Tech Debt</div><div><b>89</b><div class="bar"><i style="width:89%"></i></div></div><div>采集默认全群开启；保留期配置无人读取</div>
+    <div>Test Quality</div><div><b>90</b><div class="bar"><i style="width:90%"></i></div></div><div>入口鉴权、路径归一化、跨群删除没有测试</div>
+  </div>
+  <p class="note">这里的计数是仪表盘三维度上限内的发现，和第二章的 19 项审计不是同一口径。权重：Architecture 0.40、Tech Debt 0.33、Test 0.27。PR 维度因无改动跳过，原 0.25 权重按规则分摊。Architecture 扣分来自 2 个 Critical 和 1 个 Warning，Warning 是 MessageRouter 的 15 个构造依赖；Tech Debt 是 2 个 Warning 和 1 个 Suggestion；Test 是 2 个 Warning。History：这是 Health Dashboard 的首次运行，没有同模式趋势；2026-10-10 的 PR Review 得分 55，口径不同，不直接比较。</p>
+
+  <h3>Module Dependency Graph</h3>
+  <div class="mermaid">
+flowchart TD
+  E["入口层<br/>incoming · publicapi · admin"] --> O["编排层<br/>router · command · agent"]
+  O --> C["能力层<br/>guard · kb · llm · site · qa · settings"]
+  O --> P["出口层<br/>onebot.outbound · onebot.client"]
+  C --> B["基础层<br/>persistence · media · trace · config"]
+  P --> B
+  </div>
+  <p class="note">箭头表示允许的依赖方向，不表示每一对节点都有调用。具体边界由 14 条 ArchUnit 规则强制：guard 不依赖 kb、qa、llm；kb 不依赖 admin、settings、publicapi、qa；业务包不依赖 config。</p>
+  <table>
+    <thead><tr><th>来源</th><th>允许依赖</th></tr></thead>
+    <tbody>
+      <tr><td>incoming</td><td>router、onebot 事件模型</td></tr>
+      <tr><td>router</td><td>guard、command、agent、onebot.outbound</td></tr>
+      <tr><td>command</td><td>kb、llm、persistence、onebot.outbound</td></tr>
+      <tr><td>agent</td><td>kb、llm、media</td></tr>
+      <tr><td>publicapi</td><td>kb、site、qa</td></tr>
+      <tr><td>admin</td><td>kb、site、qa、persistence、settings</td></tr>
+      <tr><td>kb</td><td>persistence、media、trace</td></tr>
+      <tr><td>qa</td><td>persistence、trace</td></tr>
+      <tr><td>onebot.outbound</td><td>onebot.client、guard</td></tr>
+      <tr><td>llm、settings</td><td>config 的只读接口</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Top Findings</h3>
+
+  <article class="finding crit">
+    <div class="fh"><h3>入口信任边界缺失</h3><span class="tag crit">Critical</span></div>
+    <p><b>Symptom:</b> <code>/onebot/event</code> 无鉴权，下游直接使用请求体里的 <code>sender.role</code> 与 <code>group_id</code>。</p>
+    <p><b>Source:</b> Clean Architecture — 边界与策略；A Philosophy of Software Design — 信息隐藏与接口契约。</p>
+    <p><b>Consequence:</b> 攻击者可以伪造群主、执行管理命令、烧模型额度、写采集库，审计也失去可信度。</p>
+    <p><b>Remedy:</b> 在 HTTP 边界校验 OneBot Token，Nginx 限制来源网段；角色从可信协议端核对，不从事件体直接采信。</p>
+  </article>
+
+  <article class="finding crit">
+    <div class="fh"><h3>授权策略与路由匹配各说各话</h3><span class="tag crit">Critical</span></div>
+    <p><b>Symptom:</b> <code>AdminAuthFilter</code> 用原始 URI 前缀判角色，Spring MVC 用归一化路径匹配；<code>/admin/api;x/users</code> 落在两者之间。</p>
+    <p><b>Source:</b> A Philosophy of Software Design — Information Leakage；Clean Architecture — 策略与细节分离。</p>
+    <p><b>Consequence:</b> 编辑可以创建管理员、重置密码；审计漏记，事后无法还原。</p>
+    <p><b>Remedy:</b> 用同一份归一化路径做授权与审计，拒绝分号与点段；把权限声明放到路由元数据上，消灭第二套真相。</p>
+  </article>
+
+  <article class="finding warn">
+    <div class="fh"><h3>采集默认值与承诺相反</h3><span class="tag warn">Warning</span></div>
+    <p><b>Symptom:</b> <code>capture-enabled=true</code>，数据库 <code>capture_all_groups=1</code>，保留期 getter 无人调用。</p>
+    <p><b>Source:</b> Code Complete — YAGNI 与默认值；Refactoring — Speculative Generality。</p>
+    <p><b>Consequence:</b> 首次启动即长期保存所有群的发言与图片，磁盘增长且隐私承诺失效。</p>
+    <p><b>Remedy:</b> 默认关闭并显式选群；实现清理任务；把保留期写进测试，而不是只写进 yml。</p>
+  </article>
+
+  <article class="finding warn">
+    <div class="fh"><h3>保留期配置是空承诺</h3><span class="tag warn">Warning</span></div>
+    <p><b>Symptom:</b> <code>message-retention-days</code> 与 <code>image-retention-days</code> 只出现在配置类和策略接口里，没有调用方。</p>
+    <p><b>Source:</b> Refactoring — Speculative Generality；Code Complete — 配置与行为必须一致。</p>
+    <p><b>Consequence:</b> 运维以为 90 天会自动删，实际永远不删；备份越来越大。</p>
+    <p><b>Remedy:</b> 实现清理并加指标；如果暂时不做，删掉配置与文档承诺，避免虚假安全感。</p>
+  </article>
+
+  <article class="finding warn">
+    <div class="fh"><h3>安全路径没有测试保护</h3><span class="tag warn">Warning</span></div>
+    <p><b>Symptom:</b> 角色矩阵只测正常路径；板块删除没有跨群用例；入口鉴权没有测试，因为功能不存在。</p>
+    <p><b>Source:</b> Working Effectively with Legacy Code — 修改高风险区域前先有 characterization test；How Google Tests Software — 按风险分配测试。</p>
+    <p><b>Consequence:</b> 修完也可能被下一次重构改回去；评审只能靠人记得。</p>
+    <p><b>Remedy:</b> 补三个失败测试，先红后绿；把 <code>/admin/api;x/users</code> 与跨群删除固定进 CI。</p>
+  </article>
+
+  <h3>Recommendation</h3>
+  <p>先处理 Architecture 维度。健康分 80 不是“快好了”，而是“结构本来不错，但两个入口级缺陷把分数拉下来了”。修掉入口鉴权与路径归一化后，Architecture 会回到 90 附近，Composite 大约 92；那时再排 Tech Debt 的采集默认值与保留期。Test 维度的分数高，是因为测试总量和架构护栏做得好，不是因为安全路径覆盖得好。</p>
+</section>
+
+<footer>
+  <p>审查对象：E:\Project\agentWs\qqbot，提交 f17ba5e。工作区无代码改动。源码路径均相对仓库根。行号以本次读取为准。</p>
+  <p>方法：brooks-health 三维扫描；ponytail-audit 全仓审查；spring-web 6.2.19 PathPatternParser 路径归一化验证。未运行完整测试、依赖 CVE 扫描与动态渗透。</p>
+</footer>
+
+</div>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'strict' });
+</script>
+</body>
+</html>
