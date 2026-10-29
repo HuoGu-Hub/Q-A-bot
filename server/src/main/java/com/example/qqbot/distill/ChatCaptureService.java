@@ -94,6 +94,9 @@ public class ChatCaptureService {
         worker = new Thread(this::loop, "chat-capture");
         worker.setDaemon(true);
         worker.start();
+        if (!allGroups() && currentGroups().isEmpty()) {
+            log.warn("[DISTILL] 采集已开启，但没有配置任何群，所有消息都会被跳过");
+        }
         log.info("[DISTILL] 群聊采集已开启：{}，队列 {}",
                 allGroups() ? "全部群" : currentGroups(), props.getQueueCapacity());
     }

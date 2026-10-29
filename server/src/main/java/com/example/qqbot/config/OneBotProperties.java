@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.incoming.InboundTokenPolicy;
 import com.example.qqbot.onebot.client.OneBotPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -7,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * OneBot / NapCat 相关配置，对应 application.yml 里的 app.onebot.*
  */
 @ConfigurationProperties(prefix = "app.onebot")
-public class OneBotProperties implements OneBotPolicy {
+public class OneBotProperties implements OneBotPolicy, InboundTokenPolicy {
 
     /** NapCat 的 HTTP 接口地址，例如 http://127.0.0.1:3000 */
     private String apiBase = "http://127.0.0.1:3000";
@@ -29,6 +30,11 @@ public class OneBotProperties implements OneBotPolicy {
 
     @Override
     public String getAccessToken() {
+        return accessToken;
+    }
+
+    @Override
+    public String getInboundToken() {
         return accessToken;
     }
 

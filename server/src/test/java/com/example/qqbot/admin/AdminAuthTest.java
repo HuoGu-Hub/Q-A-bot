@@ -197,6 +197,8 @@ class AdminAuthTest {
                 .isEqualTo(AdminRole.EDITOR);
         assertThat(AdminAuthFilter.requiredRole("/admin/api/users", "GET"))
                 .isEqualTo(AdminRole.ADMIN);
+        assertThat(AdminAuthFilter.requiredRole("/admin/api/users", "POST"))
+                .isEqualTo(AdminRole.ADMIN);
         assertThat(AdminAuthFilter.requiredRole("/admin/api/users/3/password", "POST"))
                 .isEqualTo(AdminRole.ADMIN);
         // 退出与改自己密码对任何已登录账号都开放，否则只读账号连退出都点不了

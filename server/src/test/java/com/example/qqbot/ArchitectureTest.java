@@ -57,7 +57,7 @@ class ArchitectureTest {
     @DisplayName("铁律①：业务包不得直接依赖 OneBot 的 HTTP 客户端")
     void businessPackagesDoNotTouchOneBotClient() {
         ArchRule rule = noClasses()
-                .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
+                .that().resideInAnyPackage("..incoming..", "..agent..", "..kb..", "..qa..", "..command..", "..media..",
                         "..voice..", "..site..", "..publicapi..", "..settings..", "..admin..", "..logs..",
                         "..guard..")
                 .should().dependOnClassesThat().resideInAPackage("com.example.qqbot.onebot.client..");
@@ -265,7 +265,7 @@ class ArchitectureTest {
         // persistence/PersistencePolicy，依赖方向摆正。至此除了 config 自己和组合根，
         // **没有任何包读 config**。
         ArchRule rule = noClasses()
-                .that().resideInAnyPackage("..agent..", "..kb..", "..qa..", "..command..", "..media..",
+                .that().resideInAnyPackage("..incoming..", "..agent..", "..kb..", "..qa..", "..command..", "..media..",
                         "..voice..", "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..",
                         "..llm..", "..onebot..", "..settings..", "..router..", "..persistence..",
                         // 2026-10-29 新增 ops（证书等运维观测）：同样只能依赖自己声明的只读接口

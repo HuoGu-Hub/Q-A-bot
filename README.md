@@ -91,7 +91,7 @@ cp .env.example .env
 (cd server && mvn spring-boot:run)    # 启动业务层
 ```
 
-服务监听 `0.0.0.0:8080`。公开站为 `/`，管理后台为 `/admin/`。启动后可执行健康自检：
+服务监听 `0.0.0.0:8080`。8080 必须由云安全组与主机防火墙限制为只允许 Docker 网段和回环，公网只开放 80/443。公开站为 `/`，管理后台为 `/admin/`。启动后可执行健康自检：
 
 ```bash
 ./scripts/health-check.sh
@@ -103,7 +103,7 @@ cp .env.example .env
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
-| `ONEBOT_TOKEN` | 是 | 与 NapCat 的 Access Token 一致 |
+| `ONEBOT_TOKEN` | 是 | 与 NapCat 的 HTTP 服务器、HTTP 客户端 Token 一致；入站事件也用它校验 |
 | `OPENCODE_GO_API_KEY` | 是 | 默认对话模型 |
 | `SILICONFLOW_API_KEY` | 是 | 向量与重排模型 |
 | `ADMIN_PASSWORD` | 是 | 为空时管理后台整体返回 503 |

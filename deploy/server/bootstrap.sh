@@ -19,6 +19,9 @@ set -euo pipefail
 APP_USER="${APP_USER:-qqbot}"
 APP_DIR="${APP_DIR:-/opt/qqbot}"
 SWAP_SIZE="${SWAP_SIZE:-4G}"
+SSH_PORT="${SSH_PORT:-22}"
+# 默认开启。云厂商安全组是主防线，这里是第二层；已有自定义防火墙时设为 0。
+ENABLE_FIREWALL="${ENABLE_FIREWALL:-1}"
 
 # ---------- 0. 识别发行版 ----------
 # Docker 源与部分包名按发行版走，写死某一个 codename 会在换系统时直接 404
@@ -121,7 +124,28 @@ EOF
 systemctl enable --now docker
 systemctl restart docker
 
-# ---------- 6. 收尾 ----------
+# ---------- 6. 主机防火墙 ----------
+step "主机防火墙"
+if [ "${ENABLE_FIREWALL}" = "1" ]; then
+  apt-get -y -qq install ufw
+  # Docker 的转发不能被默认 forward 策略掐断
+  sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+  ufw --force default deny incoming >/dev/null
+  ufw --force default allow outgoing >/dev/null
+  ufw allow "${SSH_PORT}/tcp" >/dev/null
+  ufw allow 80/tcp >/dev/null
+  ufw allow 443/tcp >/dev/null
+  # NapCat 在 Docker 网桥里直连宿主机 8080；只放私有网段与回环
+  ufw allow from 172.16.0.0/12 to any port 8080 proto tcp >/dev/null
+  ufw allow from 127.0.0.1/32 to any port 8080 proto tcp >/dev/null
+  ufw --force enable >/dev/null
+  ufw status verbose
+  echo "8080 只对 Docker 网段与回环开放；请从外部主机再扫一次确认"
+else
+  echo "ENABLE_FIREWALL=0，已跳过。上线前必须自己确认 8080 未暴露到公网"
+fi
+
+# ---------- 7. 收尾 ----------
 step "完成"
 echo "系统      : $PRETTY_NAME"
 echo "用户      : $APP_USER"
@@ -133,3 +157,4 @@ echo "下一步："
 echo "  1) 本地执行 scripts/release.ps1 上传产物"
 echo "  2) 在 $APP_DIR 放 .env 与 system.md"
 echo "  3) 安装 systemd 单元并启动"
+echo "  4) 从外部主机确认 8080/3000/3001/6099 不可达"

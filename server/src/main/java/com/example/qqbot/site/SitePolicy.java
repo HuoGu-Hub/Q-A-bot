@@ -33,4 +33,29 @@ public interface SitePolicy {
 
     /** 首页图片轮播 */
     Carousel getCarousel();
+
+    /**
+     * 把群号规范成纯数字。
+     *
+     * <p>真实故障（2026-10-29）：后台从 Excel / WPS 粘进来的群号被表格改成科学计数法，
+     * 覆盖层文件里落成 {@code group-number: 2.09127588E8}；读回来时因为带小数点被当成
+     * {@code double}，再转字符串就还是「2.09127588E8」。
+     *
+     * <p>「2.09127588E8」「209127588.0」「209127588」都得到「209127588」。
+     * 不是数字的（比如「见群公告」）原样返回。
+     */
+    static String normalizeGroupNumber(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim();
+        if (!s.matches("[+]?\\d+(\\.\\d+)?([eE][+-]?\\d+)?")) {
+            return s;
+        }
+        try {
+            return new java.math.BigDecimal(s).stripTrailingZeros().toBigIntegerExact().toString();
+        } catch (ArithmeticException | NumberFormatException e) {
+            return s;
+        }
+    }
 }

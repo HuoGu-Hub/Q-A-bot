@@ -143,7 +143,7 @@ public class BoardRunner {
 
         return Optional.of(new Reply(switch (action) {
             case Board.ACT_CREATE -> create(board, event, userId, groupId, rest);
-            case Board.ACT_DELETE -> delete(board, rest);
+            case Board.ACT_DELETE -> delete(board, event, rest);
             case Board.ACT_LIST -> list(board, event);
             case Board.ACT_HELP -> help(board, event);
             // 传本群号：跨群查询时，列表要给别群的记录标出来源
@@ -229,7 +229,7 @@ public class BoardRunner {
 
     // ==================== 删 ====================
 
-    private String delete(Board board, String rest) {
+    private String delete(Board board, OneBotEvent event, String rest) {
         long id = firstNumber(rest);
         if (id <= 0) {
             return "要删哪一条？写编号，例：/" + board.path() + " /delete 12";
@@ -238,10 +238,28 @@ public class BoardRunner {
         if (record == null || !board.path().equals(record.board()) || record.isDeleted()) {
             return "没有 #" + id + " 这一条";
         }
+        long userId = event.getUserId() == null ? 0L : event.getUserId();
+        long groupId = event.getGroupId() == null ? 0L : event.getGroupId();
+        if (!canDelete(record, userId, groupId, CommandRole.ofSender(event))) {
+            return "只能删自己发的，或找本群管理员";
+        }
         if (!records.softDelete(id, Instant.now())) {
             return "没有 #" + id + " 这一条";
         }
         return "已撤销 #" + id + "（数据还在，可以恢复）";
+    }
+
+    /**
+     * 谁能删这条记录。
+     *
+     * <p>编号是全局自增的，只按编号删除会让 A 群的人删掉 B 群的公告。
+     * 作者本人可以删自己的；同群管理员可以删本群的；跨群只认作者。
+     */
+    static boolean canDelete(BoardRecord record, long userId, long groupId, CommandRole role) {
+        if (record.userId() == userId) {
+            return true;
+        }
+        return record.groupId() == groupId && role != null && role.atLeast(CommandRole.ADMIN);
     }
 
     // ==================== 参数 ====================

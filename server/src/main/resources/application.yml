@@ -2,6 +2,8 @@ server:
   port: 8080
   # 必须是 0.0.0.0（监听所有网卡），不能改成 127.0.0.1！
   # 因为 NapCat 在容器里，它发过来的连接源地址是 Docker 网桥网关，不是本机回环。
+  # ⚠️ 因此 8080 必须由云安全组与主机防火墙限制：只允许 Docker 网段和回环，
+  #    公网只开放 80/443。否则 Nginx 的 TLS、限流、后台白名单全部会被绕过。
   address: 0.0.0.0
   shutdown: graceful
 
@@ -117,11 +119,11 @@ app:
   # 把群聊整理成知识库笔记。采集默认关闭，先配好群白名单再打开。
   # 这些都是【热生效】的；采集开关改了要重启才会启停 worker。
   distill:
-    # 是否采集群消息。关掉后不落新消息，但导入和已有数据仍可用
-    capture-enabled: ${DISTILL_CAPTURE_ENABLED:true}
+    # 是否采集群消息。默认关闭：开启即保存群友原文与图片，必须是明确决定
+    capture-enabled: ${DISTILL_CAPTURE_ENABLED:false}
     # 采集群白名单。空表示一个都不采；示例：[123456789, 987654321]
-    # 209127588 / 866095282 是现有问答量最大的两个群；新群直接往这里加
-    capture-groups: [209127588, 866095282]
+    # 不再内置任何真实群号，必须由部署方显式填写
+    capture-groups: []
     # 采集队列容量；满了丢消息并计数，绝不阻塞机器人回复
     queue-capacity: 500
     # 一次批量落库多少条
@@ -134,10 +136,12 @@ app:
     images-dir: ./data/chat-images
     # 单张图片上限，KB
     max-image-size-kb: 5120
-    # 原始消息保留天数；0 = 不清理
+    # 原始消息保留天数；0 = 不清理。由 ChatRetentionCleaner 执行
     message-retention-days: 90
-    # 聊天图片保留天数；0 = 不清理
+    # 聊天图片保留天数；0 = 不清理。由 ChatRetentionCleaner 执行
     image-retention-days: 30
+    # 每天几点清理；默认 04:40，避开问答清理与地图预热
+    cleanup-cron: "0 40 4 * * *"
     # 每批最多多少条消息
     batch-max-messages: 80
     # 每批最多多少字；chars 模式下就是 batch-size 的默认值
@@ -245,7 +249,8 @@ app:
   # ============================ 协议层（NapCat）============================
   onebot:
     api-base: ${ONEBOT_API_BASE:http://127.0.0.1:3000}
-    # 必须和 NapCat「网络配置 → HTTP服务器 → Token」完全一致
+    # 出站调 NapCat 与入站 /onebot 事件共用。NapCat 的 HTTP 服务器和 HTTP 客户端都要填同一个值。
+    # 为空时入站事件一律拒绝，不会降级放行。
     access-token: ${ONEBOT_TOKEN:}
     request-timeout-ms: 10000
 

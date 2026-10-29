@@ -118,9 +118,24 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
   </div>
 </header>
 
-<div class="verdict">
-  <strong>上线结论：不通过</strong>
-  <p>5 个阻塞项未关闭。入口鉴权、后台提权、默认聊天采集、跨群删除、主机暴露，任意一项都足以在公网运营中造成事故。代码结构本身不差，问题集中在信任边界与默认值。</p>
+<div class="verdict ok">
+  <strong>修复已实施，待上线验收</strong>
+  <p>2026-10-29：1 至 5 的代码与部署配置已修改，新增 17 个回归测试。全量后端 1,109 个测试中 1 个失败、3 个跳过，其余通过；唯一失败是既有的检索黄金集质量门禁，与本次安全改动无关。按 1.5 的 B1 至 B8 在服务器验收后才算通过。</p>
+</div>
+
+<div class="panel">
+  <h4>修复状态</h4>
+  <table>
+    <thead><tr><th>#</th><th>项</th><th>状态</th><th>落点</th><th>验收</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>事件入口鉴权</td><td>已修</td><td><code>incoming/OneBotAuthFilter</code>、四份 Nginx 配置</td><td>B1、B2</td></tr>
+      <tr><td>2</td><td>后台路径提权</td><td>已修</td><td><code>AdminAuthFilter.canonicalPath</code></td><td>B3</td></tr>
+      <tr><td>3</td><td>采集默认值与保留期</td><td>已修</td><td><code>application.yml</code>、<code>DistillSettingRepository</code>、<code>ChatRetentionCleaner</code></td><td>B4、B5</td></tr>
+      <tr><td>4</td><td>跨群删除</td><td>已修</td><td><code>BoardRunner.canDelete</code></td><td>B6</td></tr>
+      <tr><td>5</td><td>主机暴露与后台白名单</td><td>已修</td><td><code>bootstrap.sh</code>、Nginx allow/deny、<code>release.ps1</code></td><td>B7、B12</td></tr>
+    </tbody>
+  </table>
+  <p class="note">6 至 19 未动，保留为后续加固清单。下面的审查正文保留修复前的证据，便于对照。</p>
 </div>
 
 <nav class="toc">
@@ -131,6 +146,8 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
 
 <section id="security">
   <h2><span class="no">01 / SECURITY DESIGN</span>安全设计</h2>
+
+  <p class="note">本节描述审查时的状态与目标控制。1 至 5 的修复已经落地，当前验收以 1.5 与部署文档为准。</p>
 
   <h3>1.1 资产与分级</h3>
   <table>
@@ -301,6 +318,7 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
 
   <p><b>这个仓库做什么：</b>一个自托管的 QQ 群知识库问答机器人。它通过 NapCat 接 OneBot 11，先检索本地 SQLite 知识库，再让大模型依据资料回答；同一个进程还跑命令、定时板块、交互地图、语音、聊天蒸馏、公开站和管理后台。</p>
   <p><b>假设的负载：</b>2 核 2 GB 单机，两个活跃群，日提问量数百到数千，公开站偶发访问；单个管理员，少量编辑账号。判断按这个量级做，不按大规模多租户。</p>
+  <p class="note">以下 1 至 5 已在本次修复中关闭，正文保留审查时的证据；6 至 19 仍未处理。</p>
 
   <h3>Must fix</h3>
 
@@ -310,7 +328,7 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
     <div class="four">
       <div><b>这是什么</b><p><code>/onebot/event</code> 接收 NapCat 上报的 JSON，去重后立刻返回 204，再异步处理。</p></div>
       <div><b>问题</b><p>控制器和过滤器都没有校验任何 Token；Nginx 的 <code>location /</code> 把它一起代理到公网；下游又直接信任请求体里的 <code>sender.role</code>。攻击者可以伪造任意群、任意用户、任意角色的事件。</p></div>
-      <div><b>修法</b><p>在入口校验 <code>Authorization: Bearer &lt;ONEBOT_TOKEN 的值&gt;</code>，常量时间比较，失败返回 401；NapCat 的 HTTP 客户端填同一个 secret；Nginx 对该路径只允许 Docker 网段。再加 1 MB body 上限与事件时间窗。</p></div>
+      <div><b>修法</b><p>在入口校验 <code>Authorization: Bearer &lt;ONEBOT_TOKEN 的值&gt;</code>，常量时间比较，失败返回 401；NapCat 的 HTTP 客户端填同一个 secret；Nginx 对公网 <code>/onebot/</code> 返回 404，NapCat 只直连 8080。再加 1 MB body 上限。</p></div>
       <div><b>不修的后果</b><p>任何人都能让机器人发消息、执行群主命令、写数据库、烧模型额度。身份、审计、成本三件事同时失真。</p></div>
     </div>
   </article>
@@ -542,7 +560,7 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
     <div>Tech Debt</div><div><b>89</b><div class="bar"><i style="width:89%"></i></div></div><div>采集默认全群开启；保留期配置无人读取</div>
     <div>Test Quality</div><div><b>90</b><div class="bar"><i style="width:90%"></i></div></div><div>入口鉴权、路径归一化、跨群删除没有测试</div>
   </div>
-  <p class="note">这里的计数是仪表盘三维度上限内的发现，和第二章的 19 项审计不是同一口径。权重：Architecture 0.40、Tech Debt 0.33、Test 0.27。PR 维度因无改动跳过，原 0.25 权重按规则分摊。Architecture 扣分来自 2 个 Critical 和 1 个 Warning，Warning 是 MessageRouter 的 15 个构造依赖；Tech Debt 是 2 个 Warning 和 1 个 Suggestion；Test 是 2 个 Warning。History：这是 Health Dashboard 的首次运行，没有同模式趋势；2026-10-10 的 PR Review 得分 55，口径不同，不直接比较。</p>
+  <p class="note">分数是审查时的快照，不是修复后的复测。这里的计数是仪表盘三维度上限内的发现，和第二章的 19 项审计不是同一口径。权重：Architecture 0.40、Tech Debt 0.33、Test 0.27。PR 维度因无改动跳过，原 0.25 权重按规则分摊。Architecture 扣分来自 2 个 Critical 和 1 个 Warning，Warning 是 MessageRouter 的 15 个构造依赖；Tech Debt 是 2 个 Warning 和 1 个 Suggestion；Test 是 2 个 Warning。History：这是 Health Dashboard 的首次运行，没有同模式趋势；2026-10-10 的 PR Review 得分 55，口径不同，不直接比较。</p>
 
   <h3>Module Dependency Graph</h3>
   <div class="mermaid">

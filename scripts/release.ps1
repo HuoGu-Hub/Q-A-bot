@@ -192,6 +192,9 @@ New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\nginx") -Force | Out-
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\systemd") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\server") -Force | Out-Null
 Copy-TextLf (Join-Path $Root "deploy\nginx\qqbot.conf") (Join-Path $pkg "deploy\nginx")
+Copy-TextLf (Join-Path $Root "deploy\nginx\qqbot-domain.conf") (Join-Path $pkg "deploy\nginx")
+Copy-TextLf (Join-Path $Root "deploy\nginx\qqbot-ip.conf") (Join-Path $pkg "deploy\nginx")
+Copy-TextLf (Join-Path $Root "deploy\nginx\qqbot-ip-public.conf") (Join-Path $pkg "deploy\nginx")
 Copy-TextLf (Join-Path $Root "deploy\systemd\qqbot.service") (Join-Path $pkg "deploy\systemd")
 Copy-TextLf (Join-Path $Root "deploy\server\bootstrap.sh") (Join-Path $pkg "deploy\server")
 Copy-TextLf (Join-Path $Root "deploy\docker-compose.yml") (Join-Path $pkg "deploy")

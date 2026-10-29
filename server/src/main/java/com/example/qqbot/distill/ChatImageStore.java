@@ -12,6 +12,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * 聊天图片的落盘。
@@ -29,6 +30,9 @@ public class ChatImageStore {
             "image/jpeg", "jpg", "image/png", "png", "image/webp", "webp",
             "image/gif", "gif", "image/bmp", "bmp"
     };
+
+    /** 服务端生成的文件名：32 位 MD5 + 小写扩展名 */
+    private static final Pattern FILE_NAME = Pattern.compile("[a-f0-9]{32}\\.[a-z0-9]{1,8}");
 
     private final DistillPolicy props;
 
@@ -70,7 +74,7 @@ public class ChatImageStore {
 
     /** 读一张图；文件名不合法或不存在返回 null */
     public byte[] read(String filename) {
-        if (filename == null || !filename.matches("[a-f0-9]{32}\\.[a-z0-9]{1,8}")) {
+        if (filename == null || !FILE_NAME.matcher(filename).matches()) {
             return null;
         }
         Path file = resolveInside(dir(), filename);
@@ -82,6 +86,23 @@ public class ChatImageStore {
         } catch (IOException e) {
             log.warn("[DISTILL] 读聊天图片失败：{} —— {}", file, e.getMessage());
             return null;
+        }
+    }
+
+    /** 删除一张聊天图片；文件名不合法或不存在返回 false */
+    public boolean delete(String filename) {
+        if (filename == null || !FILE_NAME.matcher(filename).matches()) {
+            return false;
+        }
+        Path file = resolveInside(dir(), filename);
+        if (file == null) {
+            return false;
+        }
+        try {
+            return Files.deleteIfExists(file);
+        } catch (IOException e) {
+            log.warn("[DISTILL] 删除聊天图片失败：{} —— {}", file, e.getMessage());
+            return false;
         }
     }
 

@@ -11,11 +11,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -77,9 +79,14 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String path = request.getRequestURI();
-        if (!path.startsWith("/admin")) {
+        String raw = request.getRequestURI();
+        if (raw == null || !raw.startsWith("/admin")) {
             chain.doFilter(request, response);
+            return;
+        }
+        String path = canonicalPath(request);
+        if (path == null || !path.startsWith("/admin")) {
+            badRequest(response, raw.startsWith("/admin/api"));
             return;
         }
 
@@ -118,16 +125,41 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 这个接口需要哪一级角色。
+     * 把请求路径归一化，并拒绝一切可能造成路径歧义的写法。
      *
-     * <p>规则刻意只有三条，多一条就会有人问"为什么这里和那里不一样"：
-     * <ul>
-     *   <li>用户管理与审计 → 管理员</li>
-     *   <li>只读请求 → 只读</li>
-     *   <li>其余写操作 → 编辑</li>
-     * </ul>
-     * 退出登录与改自己密码对任何已登录账号开放，否则"只读账号连退出都点不了"。
+     * <p>过滤器如果用 {@code getRequestURI()} 的原始字符串判权，而 Spring MVC 用
+     * 去掉矩阵参数后的路径匹配，{@code /admin/api;x/users} 就会命中账号管理控制器，
+     * 却只被要求 EDITOR —— 编辑可以创建管理员。这里先拒绝分号、点段与编码分隔符，
+     * 再交给 Spring 的 {@link UrlPathHelper} 做同一套归一化。
+     *
+     * @return 归一化路径；疑似路径混淆时返回 {@code null}
      */
+    static String canonicalPath(HttpServletRequest request) {
+        String raw = request.getRequestURI();
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String lower = raw.toLowerCase(Locale.ROOT);
+        if (raw.indexOf(';') >= 0 || raw.indexOf('\\') >= 0 || raw.contains("..")
+                || lower.contains("%2f") || lower.contains("%5c")
+                || lower.contains("%2e") || lower.contains("%3b")) {
+            return null;
+        }
+        try {
+            return UrlPathHelper.defaultInstance.getPathWithinApplication(request);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private void badRequest(HttpServletResponse response, boolean api) throws IOException {
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        response.setContentType(api
+                ? "application/json;charset=UTF-8" : "text/plain;charset=UTF-8");
+        response.getWriter().write(api ? "{\"error\":\"请求路径不合法\"}" : "请求路径不合法");
+    }
+
+    /** 用户管理与审计 → ADMIN；只读 → VIEWER；其余写操作 → EDITOR。 */
     static AdminRole requiredRole(String path, String method) {
         if (path.equals("/admin/api/logout") || path.equals("/admin/api/password")
                 || path.equals("/admin/api/session")) {

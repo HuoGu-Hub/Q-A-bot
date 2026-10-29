@@ -150,7 +150,7 @@ public class SettingsService {
      */
     private static Object sanitize(String key, Object value) {
         if ("app.site.group-number".equals(key) && value != null) {
-            return com.example.qqbot.config.SiteProperties.normalizeGroupNumber(String.valueOf(value));
+            return com.example.qqbot.site.SitePolicy.normalizeGroupNumber(String.valueOf(value));
         }
         return value;
     }

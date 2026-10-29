@@ -321,4 +321,29 @@ public class ChatRepository {
         int capped = Math.min(Math.max(1, limit), 200);
         return jdbc.query("SELECT * FROM distill_import ORDER BY id DESC LIMIT ?", IMPORT, capped);
     }
+
+    // ==================== 保留期清理 ====================
+
+    /** 一批过期图片的文件名。先取名字再删行，文件删除失败也还能重试 */
+    public List<String> oldImageFiles(String cutoff, int limit) {
+        int capped = Math.min(Math.max(1, limit), 1000);
+        return jdbc.query("SELECT path FROM chat_image WHERE created_at < ? ORDER BY id LIMIT ?",
+                r -> r.str("path"), cutoff, capped);
+    }
+
+    /** 按 created_at 删一批图片行；返回实际删除数 */
+    public int deleteImagesBatch(String cutoff, int limit) {
+        int capped = Math.min(Math.max(1, limit), 1000);
+        return jdbc.update("DELETE FROM chat_image WHERE id IN ("
+                        + " SELECT id FROM chat_image WHERE created_at < ? ORDER BY id LIMIT ?)",
+                cutoff, capped);
+    }
+
+    /** 按 created_at 删一批消息；返回实际删除数 */
+    public int deleteMessagesBatch(String cutoff, int limit) {
+        int capped = Math.min(Math.max(1, limit), 1000);
+        return jdbc.update("DELETE FROM chat_message WHERE id IN ("
+                        + " SELECT id FROM chat_message WHERE created_at < ? ORDER BY id LIMIT ?)",
+                cutoff, capped);
+    }
 }

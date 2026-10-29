@@ -70,6 +70,18 @@ else
   bad "管理接口状态异常（$C），期望 401"
 fi
 
+C=$(curl -s -m 8 -o /dev/null -w "%{http_code}" -X POST "$B/onebot/event" \
+  -H 'Content-Type: application/json' -d '{}' 2>/dev/null || echo "000")
+if [ "$C" = "401" ]; then
+  ok "事件入口需鉴权（401）"
+elif [ "$C" = "503" ]; then
+  bad "事件入口未配置 ONEBOT_TOKEN（503）—— 配好并同步到 NapCat"
+elif [ "$C" = "404" ]; then
+  ok "公网 Nginx 已拒绝事件入口（404）"
+else
+  bad "事件入口状态异常（$C），期望 401"
+fi
+
 echo
 echo "=== 7. 公开接口不含隐私字段 ==="
 LEAK=$(curl -s -m 8 "$B/api/public/stats" 2>/dev/null | grep -oE '"(userId|groupId|user_id|group_id|bestCosine)"' | head -1)

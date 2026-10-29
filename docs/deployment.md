@@ -65,9 +65,11 @@ docker compose logs -f
 | 方向 | 类型 | 配置 |
 |---|---|---|
 | 业务层调用 NapCat | HTTP 服务器 | Host `0.0.0.0`，端口 3000，消息格式 Array，保留 Token |
-| NapCat 上报业务层 | HTTP 客户端 | URL `http://host.docker.internal:8080/onebot/event`，消息格式 Array，关闭 reportSelfMessage |
+| NapCat 上报业务层 | HTTP 客户端 | URL `http://host.docker.internal:8080/onebot/event`，消息格式 Array，关闭 reportSelfMessage，Token 填与 `.env` 的 `ONEBOT_TOKEN` 相同的值 |
 
 Host 必须是 `0.0.0.0`。Docker 把连接转发到容器网卡，监听回环地址会拒绝宿主机流量。Token 不能留空，否则 NapCat 会把 Host 强制改回 `127.0.0.1`。
+
+业务层会校验上报请求的 `Authorization: Bearer <ONEBOT_TOKEN>`。没配 Token 时入口直接拒绝，不会降级放行。Nginx 对公网的 `/onebot/` 一律返回 404，NapCat 必须直连 `http://host.docker.internal:8080/onebot/event`。
 
 Linux 上需要给容器加 `host.docker.internal` 映射：
 
@@ -109,7 +111,7 @@ chmod 600 .env
 
 | 变量 | 必填 | 用途 |
 |---|---|---|
-| `ONEBOT_TOKEN` | 是 | 与 NapCat 的 Access Token 一致 |
+| `ONEBOT_TOKEN` | 是 | 与 NapCat 的 HTTP 服务器、HTTP 客户端 Token 一致；入站也用它校验 |
 | `ONEBOT_API_BASE` | 否 | 默认 `http://127.0.0.1:3000` |
 | `OPENCODE_GO_API_KEY` | 是 | 默认对话 provider |
 | `OPENCODE_GO_MODEL` | 否 | 默认模型名 |
@@ -137,6 +139,12 @@ APP_MEDIA_WIKIIMAGES_DIR=/opt/qqbot/data/wiki-images
 APP_KB_MAP_TILE_DIR=/opt/qqbot/data/map-tiles
 APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 ```
+
+### 4.2 主机防火墙
+
+`deploy/server/bootstrap.sh` 默认安装并启用 ufw：只放行 22、80、443，8080 只允许 `172.16.0.0/12` 与回环。SSH 不是 22 时先设置 `SSH_PORT`；已有自定义防火墙时用 `ENABLE_FIREWALL=0` 跳过。
+
+云安全组仍是主防线，必须确认 8080、3000、3001、6099 不对公网开放。改动后用外部主机 `nc -zv` 或 `nmap` 复验，不要只看配置文件。
 
 ## 5. 构建
 
@@ -187,26 +195,40 @@ sudo systemctl status qqbot
 
 ## 7. Nginx
 
+按域名形态选一份配置，不要同时启用多份：
+
 ```bash
-sudo cp deploy/nginx/qqbot.conf /etc/nginx/sites-available/qqbot.conf
+# 有域名和正规证书
+sudo cp deploy/nginx/qqbot-domain.conf /etc/nginx/sites-available/qqbot.conf
+# 或者：两个域名，后台走独立域名
+# sudo cp deploy/nginx/qqbot.conf /etc/nginx/sites-available/qqbot.conf
 sudo ln -s /etc/nginx/sites-available/qqbot.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-需要修改两处：
+需要修改三处：
 
 1. `server_name` 改成实际域名。
-2. 管理后台的 `allow` 改成固定 IP。
+2. 后台 `allow` 改成固定 IP。默认只允许 `127.0.0.1` 与 `::1`。
+3. 没有固定 IP 时保留默认值，用 SSH 隧道访问：
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@服务器
+# 浏览器打开 http://127.0.0.1:8080/admin/
+```
 
 关键约束：
 
 | 项 | 值 | 原因 |
 |---|---|---|
 | 公开站 `/admin/` | `return 404` | 公网域名下不暴露后台入口 |
+| 公开站 `/admin.html` | `return 404` | 后台前端壳子也不放行 |
+| 公网 `/onebot/` | `return 404` | 事件入口只给 NapCat 直连 8080 |
 | 管理后台 | IP 白名单 | 密码不是第一道防线 |
 | 公开 API 限流 | 60 次/分钟 | 与应用层限流形成双层 |
 | 登录接口限流 | 5 次/分钟 | 防密码爆破 |
 | `client_max_body_size` | 16m | 与 Spring 上传上限对齐，否则只看到 413 |
+| 8080 | 只允许 Docker 网段与回环 | 公网 8080 会绕过 TLS、限流与后台白名单 |
 
 HTTPS 使用 certbot：
 
@@ -229,6 +251,9 @@ sudo certbot --nginx -d www.example.com -d admin.example.com
 | 8 | 刷新后台子路由 | 前端 fallback 正常 |
 | 9 | 群内 @ 机器人 | 正常回答，后台有记录 |
 | 10 | 连续请求公开 API | 出现 429 |
+| 11 | 无 Token POST `/onebot/event` | 公网 404，直连 8080 为 401 |
+| 12 | 外部扫描 8080、3000、3001、6099 | 全部不可达 |
+| 13 | 编辑账号访问 `/admin/api;x/users` | 400 或 403，审计有记录 |
 
 ```bash
 ./scripts/health-check.sh https://www.example.com
@@ -289,9 +314,11 @@ sudo systemctl restart qqbot
 |---|---|
 | NapCat 端口 | 只绑定 `127.0.0.1`，安全组不开放 3000、3001、6099 |
 | WebUI | 只通过 SSH 隧道访问 |
-| Token | 随机长串，不使用默认值 |
-| 管理后台 | 独立域名、IP 白名单、Nginx 限流 |
+| 应用 8080 | 安全组不开放；主机防火墙只允许 Docker 网段与回环 |
+| OneBot Token | 随机长串，HTTP 服务器与 HTTP 客户端填同一个值；入站无 Token 直接 401 |
+| 管理后台 | IP 白名单默认只允许回环；没有固定 IP 就用 SSH 隧道 |
+| 聊天采集 | 默认关闭；开启前确认群白名单，保留期清理每天执行 |
 | 公开接口 | 独立 DTO，上线后抓包确认无隐私字段 |
-| 日志 | 保持脱敏开启 |
+| 日志 | 文件与 journal 权限 600；后台日志页保持脱敏 |
 | 账号 | 使用专用小号，不与日常号共用 |
-| 备份 | 数据库与轮播图定期异地保存 |
+| 备份 | 数据库、轮播图、语音、知识库图片、配置定期异地保存 |

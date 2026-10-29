@@ -1,6 +1,8 @@
 package com.example.qqbot.persistence;
 
 import com.example.qqbot.distill.DistillPolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -15,6 +17,11 @@ import java.util.List;
  */
 @Repository
 public class DistillSettingRepository {
+
+    private static final Logger log = LoggerFactory.getLogger(DistillSettingRepository.class);
+
+    /** 旧版本默认全群采集；这次迁移只执行一次，之后由管理员显式选择 */
+    private static final String CAPTURE_DEFAULT_KEY = "distill.capture_all_default_off_v1";
 
     public record Settings(boolean autoEnabled, int triggerMessages, int triggerImages,
                            int batchMessages, int batchChars, int overlap, int maxGapMinutes,
@@ -56,7 +63,7 @@ public class DistillSettingRepository {
                 + " focus            TEXT NOT NULL DEFAULT '',"
                 + " model_provider   TEXT NOT NULL DEFAULT '',"
                 + " capture_groups   TEXT NOT NULL DEFAULT '',"
-                + " capture_all_groups INTEGER NOT NULL DEFAULT 1,"
+                + " capture_all_groups INTEGER NOT NULL DEFAULT 0,"
                 + " last_message_id  INTEGER NOT NULL DEFAULT 0,"
                 + " updated_at       TEXT NOT NULL)");
         // 旧库补列：表已经存在时 CREATE IF NOT EXISTS 不会加字段
@@ -82,24 +89,49 @@ public class DistillSettingRepository {
         boolean hasAll = jdbc.query("PRAGMA table_info(distill_setting)",
                 r -> r.str("name")).contains("capture_all_groups");
         if (!hasAll) {
-            jdbc.execute("ALTER TABLE distill_setting ADD COLUMN capture_all_groups INTEGER NOT NULL DEFAULT 1");
+            jdbc.execute("ALTER TABLE distill_setting ADD COLUMN capture_all_groups INTEGER NOT NULL DEFAULT 0");
+        }
+        // 采集关闭时 chat_message 可能还没建；此时游标只能是 0，不能直接查表
+        long lastMessageId = 0;
+        if (jdbc.count("SELECT COUNT(*) FROM sqlite_master"
+                + " WHERE type='table' AND name='chat_message'") > 0) {
+            lastMessageId = jdbc.count("SELECT COALESCE(MAX(id),0) FROM chat_message");
         }
         jdbc.update("INSERT OR IGNORE INTO distill_setting"
                         + " (id, auto_enabled, trigger_messages, trigger_images, batch_messages,"
                         + " batch_chars, overlap, max_gap_minutes, auto_publish, min_confidence,"
                         + " capture_groups, capture_all_groups, last_message_id, updated_at)"
-                        + " VALUES (1, 0, 100, 0, ?, ?, ?, ?, ?, ?, ?, 1,"
-                        + " COALESCE((SELECT MAX(id) FROM chat_message),0), ?)",
+                        + " VALUES (1, 0, 100, 0, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
                 policy.getBatchMaxMessages(), policy.getBatchMaxChars(), policy.getBatchOverlap(),
                 policy.getBatchMaxGapMinutes(), policy.isAutoPublish() ? 1 : 0,
                 policy.getMinConfidence(),
                 normalizeGroups(String.join(",", policy.getCaptureGroups().stream()
                         .map(String::valueOf).toList())),
-                Instant.now().toString());
+                lastMessageId, Instant.now().toString());
         // 触发图片数不能超过单批视觉上限，否则多出来的图根本送不进模型
         int maxImages = Math.max(1, policy.getMaxImagesPerBatch());
         jdbc.update("UPDATE distill_setting SET trigger_images = ?"
                 + " WHERE id = 1 AND trigger_images > ?", maxImages, maxImages);
+        migrateCaptureDefaults();
+    }
+
+    /**
+     * 旧版本把 {@code capture_all_groups} 默认成 1，首次启动就会采集机器人所在的所有群。
+     * 这次升级强制关一次，之后管理员可以在蒸馏页重新打开；用 bot_meta 标记，避免每次重启都覆盖。
+     */
+    private void migrateCaptureDefaults() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS bot_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
+        if (jdbc.count("SELECT COUNT(*) FROM bot_meta WHERE k = ?", CAPTURE_DEFAULT_KEY) > 0) {
+            return;
+        }
+        int changed = jdbc.update("UPDATE distill_setting SET capture_all_groups = 0"
+                + " WHERE id = 1 AND capture_all_groups <> 0");
+        jdbc.update("INSERT INTO bot_meta(k, v) VALUES(?, ?)"
+                + " ON CONFLICT(k) DO UPDATE SET v = excluded.v", CAPTURE_DEFAULT_KEY, "1");
+        if (changed > 0) {
+            log.warn("[DISTILL] 已关闭全群采集。旧默认值会保存机器人所在的所有群，"
+                    + "请到蒸馏页确认采集范围后再重新开启");
+        }
     }
 
     public Settings getOrCreate() {
