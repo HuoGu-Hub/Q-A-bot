@@ -797,3 +797,44 @@ export interface CarouselItemsResponse {
   ok: boolean
   items: CarouselItem[]
 }
+
+/* ==================== 流量（GET /admin/api/traffic） ==================== */
+
+/** 一分钟的流量读数。{@code p50/p95/max} 只统计 API 请求，单位毫秒 */
+export interface TrafficPoint {
+  /** epoch 分钟 */
+  minute: number
+  requests: number
+  /** 其中 API 请求（/api/ 与 /admin/api/） */
+  api: number
+  /** 5xx 数 */
+  errors: number
+  p50: number
+  p95: number
+  max: number
+}
+
+export interface TrafficSummary {
+  requests: number
+  api: number
+  errors: number
+  /** 0~1，分母是全部请求 */
+  errorRate: number
+  /** 单分钟最多几次 */
+  peakPerMinute: number
+  avgPerMinute: number
+  /** 窗口内最高的单分钟 P95（毫秒） */
+  worstP95: number
+}
+
+/**
+ * 流量窗口。
+ *
+ * <p>后端已经把窗口内**每分钟都铺平**了：没有请求的分钟是 0，不是缺失。
+ * 前端画图不需要再补零，也不需要理解 epoch 分钟以外的约定。
+ */
+export interface TrafficResponse {
+  minutes: number
+  points: TrafficPoint[]
+  summary: TrafficSummary
+}

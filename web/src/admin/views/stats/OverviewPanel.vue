@@ -3,6 +3,7 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, 
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   Overview, KeywordStat, MissResponse, Bucket, SourcesResponse, VisitSummary,
+  TrafficResponse, TrafficPoint,
 } from '@shared/api/types'
 import { cosine as fmtCosine, ms, num, pct, shortTime } from '@shared/utils/format'
 import { sourceLabel } from '@shared/utils/source'
@@ -47,6 +48,14 @@ const cosineDist = ref<Bucket[]>([])
 const src = ref<SourcesResponse>({ sources: [], verdicts: [] })
 const visits = ref<VisitSummary | null>(null)
 
+/**
+ * 流量窗口（最近 60 分钟）。
+ *
+ * <p>它是**进程内采集**的读数，不随顶部的「时间范围」变化 ——
+ * 那个范围是问答记录的窗口（天），流量看的是分钟。
+ */
+const traffic = ref<TrafficResponse | null>(null)
+
 /** 「更新于」：只保留时分秒 —— 判断数据新不新用不到日期 */
 const updatedAt = computed(() => {
   const d = lastAt.value
@@ -56,6 +65,38 @@ const updatedAt = computed(() => {
 })
 
 const maxKw = computed(() => Math.max(1, ...keywords.value.map(k => k.count)))
+
+/* ==================== 流量 ==================== */
+
+/** 窗口内单分钟最多几次；全 0 时用 1 兜底，避免除零 */
+const trafficPeak = computed(() => Math.max(1, ...(traffic.value?.points ?? []).map(p => p.requests)))
+
+/** 当前 QPS：最近一分钟的请求数 / 60。固定两位小数 —— 0.02 和 0.00 是两种不同的状态 */
+const curQps = computed(() => {
+  const pts = traffic.value?.points ?? []
+  const last = pts[pts.length - 1]
+  return last ? (last.requests / 60).toFixed(2) : '0.00'
+})
+
+const peakQps = computed(() => ((traffic.value?.summary.peakPerMinute ?? 0) / 60).toFixed(2))
+
+/** API 请求占全部请求的比例 —— 这个数直接回答「静态资源该不该交给 nginx」 */
+const apiShare = computed(() => {
+  const s = traffic.value?.summary
+  if (!s || s.requests === 0) return '—'
+  return pct(s.api / s.requests)
+})
+
+/** 一根柱的高度百分比 */
+const barHeight = (requests: number) => (requests === 0 ? '0' : Math.max(4, (requests / trafficPeak.value) * 100) + '%')
+
+/** 柱子的悬浮说明：这一分钟发生了什么 */
+const barTip = (p: TrafficPoint) => {
+  const d = new Date(p.minute * 60_000)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm} · 请求 ${p.requests}（API ${p.api}）· 错误 ${p.errors} · P95 ${p.p95}ms`
+}
 
 /**
  * 最高余弦分布 —— 不是「画 10 根柱子」就完了：这张图的用途是**调阈值**，
@@ -181,7 +222,7 @@ async function load() {
   error.value = ''
   const q = `?days=${props.days}`
   try {
-    const [o, k, m, c, s, v] = await Promise.all([
+    const [o, k, m, c, s, v, t] = await Promise.all([
       adminApi.get<Overview>(`/overview${q}`),
       // 只取前 8 —— 后端按次数倒序，多了没人看，还会把面板拉得很长
       adminApi.get<KeywordStat[]>(`/keywords${q}&limit=8`),
@@ -189,6 +230,7 @@ async function load() {
       adminApi.get<Bucket[]>(`/cosine${q}`),
       adminApi.get<SourcesResponse>(`/sources${q}`),
       adminApi.get<VisitSummary>(`/visits${q}`),
+      adminApi.get<TrafficResponse>('/traffic?minutes=60'),
     ])
     ov.value = o
     keywords.value = k
@@ -196,6 +238,7 @@ async function load() {
     cosineDist.value = c
     src.value = s
     visits.value = v
+    traffic.value = t
     lastAt.value = new Date()
   } catch (e) {
     error.value = describeError(e)
@@ -247,6 +290,57 @@ defineExpose({
               hint="中位数 / 最慢的 5%" tone="mist" />
         <Stat label="后台访问" :value="num(visits?.total ?? 0)" tone="mist" />
       </div>
+
+      <!-- ==================== 流量 ====================
+           读数是每分钟一行的历史，不是问答记录，所以不受顶部「时间范围」影响。 -->
+      <Panel title="流量 · 最近 60 分钟">
+        <template v-if="traffic">
+          <Empty v-if="traffic.summary.requests === 0" text="还没有流量数据" />
+
+          <template v-else>
+            <div class="tf-kpis">
+              <div class="tf-k">
+                <span class="tf-l">当前 QPS</span>
+                <b class="tf-v num">{{ curQps }}</b>
+              </div>
+              <div class="tf-k">
+                <span class="tf-l">峰值 QPS</span>
+                <b class="tf-v num">{{ peakQps }}</b>
+              </div>
+              <div class="tf-k">
+                <span class="tf-l">P95（窗口最差）</span>
+                <b class="tf-v num">{{ ms(traffic.summary.worstP95) }}</b>
+              </div>
+              <div class="tf-k">
+                <span class="tf-l">错误率</span>
+                <b class="tf-v num">{{ pct(traffic.summary.errorRate) }}</b>
+              </div>
+            </div>
+
+            <div class="tf-plot" role="img" :aria-label="`最近 60 分钟每分钟请求数，峰值 ${traffic.summary.peakPerMinute} 次`">
+              <i
+                v-for="pt in traffic.points"
+                :key="pt.minute"
+                class="tf-bar"
+                :class="{ 'tf-bar--err': pt.errors > 0 }"
+                :style="{ height: barHeight(pt.requests) }"
+                :title="barTip(pt)"
+              />
+            </div>
+            <div class="tf-axis">
+              <span class="faint num">60 分钟前</span>
+              <span class="faint num">现在</span>
+            </div>
+
+            <p class="tf-note">
+              窗口内共 <b class="num">{{ num(traffic.summary.requests) }}</b> 次请求，其中 API
+              <b class="num">{{ num(traffic.summary.api) }}</b> 次（{{ apiShare }}）。
+              延迟只统计 API 请求。
+            </p>
+          </template>
+        </template>
+        <div v-else class="muted">读取中…</div>
+      </Panel>
 
       <Panel title="未命中 · 该补什么" corners>
         <div class="miss">
@@ -507,6 +601,50 @@ defineExpose({
 }
 .hist-axis { margin-top: 6px; }
 .h-lbl { text-align: center; font-size: var(--fs-meta); }
+
+/* ==================== 流量 ====================
+   60 根柱 = 60 分钟。柱高按窗口内的峰值归一 ——
+   所以"整体看着很矮"不等于没流量，要配左边的峰值 QPS 一起读。
+   出过错的分钟单独染红，扫一眼就能定位到出事的时间点。 */
+.tf-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.tf-k { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tf-l { font-size: var(--fs-xs); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-v { font-size: var(--fs-lg); line-height: 1.2; color: var(--ink); font-weight: var(--fw-medium); }
+
+.tf-plot {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  align-items: end;
+  height: 96px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.tf-bar {
+  display: block;
+  width: 100%;
+  border-radius: 1px 1px 0 0;
+  background: var(--mist);
+}
+.tf-bar--err { background: var(--rust); }
+
+.tf-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: var(--fs-meta);
+}
+.tf-note {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--ink-3);
+  line-height: 1.7;
+}
 
 .cosine-side { display: flex; flex-direction: column; gap: var(--sp-3); }
 .legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-meta); color: var(--ink-dim); }
