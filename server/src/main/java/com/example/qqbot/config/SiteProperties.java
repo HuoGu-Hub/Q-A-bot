@@ -24,7 +24,7 @@ public class SiteProperties implements SitePolicy {
     /** 群名称 */
     private String groupName = "";
 
-    /** 群号（留空则不在公开站显示） */
+    /** 群号（留空则不在公开站显示）。对外一律给规范形式，见 {@link #normalizeGroupNumber} */
     private String groupNumber = "";
 
     /** 群说明：这个群是干什么的 */
@@ -47,11 +47,36 @@ public class SiteProperties implements SitePolicy {
 
     @Override
     public String getGroupNumber() {
-        return groupNumber;
+        return normalizeGroupNumber(groupNumber);
     }
 
     public void setGroupNumber(String groupNumber) {
         this.groupNumber = groupNumber;
+    }
+
+    /**
+     * 把群号规范成纯数字。
+     *
+     * <p><b>真实故障（2026-10-29）</b>：后台从 Excel / WPS 粘进来的群号被表格改成科学计数法，
+     * 覆盖层文件里落成 {@code group-number: 2.09127588E8}；读回来时因为带小数点被当成
+     * {@code double}，再转字符串就还是「2.09127588E8」—— 公开站「关于」页原样显示了它。
+     *
+     * <p>「2.09127588E8」「209127588.0」「209127588」都得到「209127588」。
+     * 不是数字的（比如「见群公告」）原样返回 —— 不替人决定写什么。
+     */
+    public static String normalizeGroupNumber(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim();
+        if (!s.matches("[+]?\\d+(\\.\\d+)?([eE][+-]?\\d+)?")) {
+            return s;
+        }
+        try {
+            return new java.math.BigDecimal(s).stripTrailingZeros().toBigIntegerExact().toString();
+        } catch (ArithmeticException | NumberFormatException e) {
+            return s;
+        }
     }
 
     @Override

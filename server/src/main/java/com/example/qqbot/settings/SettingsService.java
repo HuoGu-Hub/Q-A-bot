@@ -99,6 +99,10 @@ public class SettingsService {
         List<String> rejected = new ArrayList<>();
         Map<String, String> errors = new LinkedHashMap<>();
 
+        // 规整过的值（不是原始入参）：写进对象和落盘必须是同一个值，
+        // 否则「页面显示对了、重启又变回去」
+        Map<String, Object> accepted = new LinkedHashMap<>();
+
         for (Map.Entry<String, Object> e : changes.entrySet()) {
             String key = e.getKey();
             if (!whitelist.isAllowed(key)) {
@@ -107,7 +111,9 @@ public class SettingsService {
                 continue;
             }
             try {
-                writeValue(key, e.getValue());
+                Object value = sanitize(key, e.getValue());
+                writeValue(key, value);
+                accepted.put(key, value);
                 applied.add(key);
             } catch (Exception ex) {
                 errors.put(key, ex.getMessage());
@@ -117,11 +123,7 @@ public class SettingsService {
         if (!applied.isEmpty()) {
             // 交给 OverridesFile 统一写入 —— 它是该文件的唯一入口，
             // 保证不会因为"两边各写各的"而产生重复顶层键
-            Map<String, Object> toPersist = new LinkedHashMap<>();
-            for (String key : applied) {
-                toPersist.put(key, changes.get(key));
-            }
-            overrides.putAll(toPersist);
+            overrides.putAll(accepted);
             applyCount.addAndGet(applied.size());
             log.info("[SETTINGS] 已热生效 {} 项配置：{}", applied.size(), applied);
         }
@@ -137,6 +139,20 @@ public class SettingsService {
 
     public int applyCount() {
         return applyCount.get();
+    }
+
+    /**
+     * 写入前的规整。
+     *
+     * <p>群号只可能是整数：从 Excel / WPS 粘进来会变成 {@code 2.09127588E8}，
+     * 落盘后因为带小数点又被当成 double 读回，公开站就显示成科学计数法。
+     * 在写的时候就规范掉，存的和显示的就都是纯数字了。
+     */
+    private static Object sanitize(String key, Object value) {
+        if ("app.site.group-number".equals(key) && value != null) {
+            return com.example.qqbot.config.SiteProperties.normalizeGroupNumber(String.valueOf(value));
+        }
+        return value;
     }
 
     // ==================== 反射读写 ====================
