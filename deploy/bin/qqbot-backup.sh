@@ -43,7 +43,17 @@ done
 
 # 3) 备份完整性自检，不通过就不落地
 [ -s "$TMP/qqbot.sqlite" ] || { echo "数据库备份为空，终止"; exit 1; }
-[ "$(sqlite3 "$TMP/qqbot.sqlite" 'pragma quick_check;')" = "ok" ] || { echo "数据库自检失败，终止"; exit 1; }
+
+CHECK=$(sqlite3 "$TMP/qqbot.sqlite" 'pragma quick_check;' 2>&1 || true)
+if [ "$CHECK" != "ok" ]; then
+  echo "数据库自检失败："
+  echo "$CHECK" | head -20
+  # 保留现场供排查，否则下次又只能靠猜
+  trap - EXIT
+  mv -T -- "$TMP" "$DEST/.failed-$STAMP"
+  echo "临时目录已保留：$DEST/.failed-$STAMP"
+  exit 1
+fi
 
 # 4) 全部完成才重命名成正式备份，中途失败不会留下半份
 mv -T -- "$TMP" "$FINAL"
