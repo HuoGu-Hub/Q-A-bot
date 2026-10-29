@@ -13,22 +13,31 @@
  */
 import { computed, useSlots } from 'vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     width?: 'narrow' | 'wide'
+    /** 页面标题。没有二级目录的页面用它占住左边，标题与动作就落在同一行 */
+    title?: string
+    /** 标题右侧的计数，例如「4」 */
+    count?: number | string
   }>(),
-  { width: 'wide' }
+  { width: 'wide', title: '', count: '' }
 )
 
 const slots = useSlots()
-/** 既没有二级目录也没有动作的页面，不该凭空多一条空栏 */
-const hasBar = computed(() => !!(slots.tabs || slots.actions))
+/** 既没有标题、二级目录，也没有动作的页面，不该凭空多一条空栏 */
+const hasBar = computed(() => !!(props.title || slots.tabs || slots.actions))
 </script>
 
 <template>
   <div class="page" :class="'w-' + width">
     <div v-if="hasBar" class="page-bar">
-      <div class="bar-tabs"><slot name="tabs" /></div>
+      <div v-if="title" class="bar-title">
+        <h2>{{ title }}</h2>
+        <span v-if="count !== ''" class="bar-count num">{{ count }}</span>
+      </div>
+      <!-- 没有二级目录的页面不渲染这一格：它在手机上占满整行，会把标题和动作挤到两行 -->
+      <div v-if="$slots.tabs" class="bar-tabs"><slot name="tabs" /></div>
       <span class="spacer" />
       <div class="bar-actions"><slot name="actions" /></div>
     </div>
@@ -66,6 +75,32 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
   border-bottom: 1px solid var(--hairline);
   min-height: 0;
 }
+/* 没有二级目录的页面：标题占左边，动作靠右，同一行 */
+.bar-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex: none;
+  padding-bottom: var(--sp-2);
+}
+.bar-title h2 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tracking-ink);
+  color: var(--ink);
+}
+.bar-count {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  background: var(--stone-void);
+  border-radius: var(--r-pill);
+  padding: 1px 9px;
+  box-shadow: var(--bevel-inset);
+}
+
 .spacer { flex: 1; }
 /* 目录吃掉剩余宽度；不够时它自己横向滚 */
 .bar-tabs { min-width: 0; flex: 0 1 auto; }
@@ -95,7 +130,10 @@ const hasBar = computed(() => !!(slots.tabs || slots.actions))
     五个以上的页面折成两行 —— 比被裁掉一颗好。
   */
   .bar-actions {
-    flex: 1 1 100%;
+    /* auto 而不是 100%：没有二级目录的页面，标题与动作就能共用一行；
+       有目录的页面目录已经占了整行，动作自然落到下一行 */
+    flex: 1 1 auto;
+    margin-left: auto;
     justify-content: flex-end;
     flex-wrap: wrap;
     padding-bottom: var(--sp-2);

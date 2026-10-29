@@ -274,7 +274,7 @@ onMounted(load)
 </script>
 
 <template>
-  <AdminPage width="wide">
+  <AdminPage width="wide" title="账号" :count="rows.length">
     <template #actions>
       <Button size="sm" :disabled="loading" @click="load">{{ loading ? '刷新中…' : '刷新' }}</Button>
       <Button size="sm" variant="primary" @click="openCreate">
@@ -284,13 +284,9 @@ onMounted(load)
 
     <Notice v-if="loadError" tone="error">{{ loadError }}</Notice>
 
-    <!-- ==================== 名册 ==================== -->
-    <Panel title="账号" :count="rows.length" hint="谁能进来，各自是什么身份">
-      <p v-if="adminCount <= 1" class="guard">
-        <Icon name="lock" :size="14" />
-        <span>只剩一名可用管理员。再加一个之前，这个账号既不能删除也不能降级 —— 这是有意的保护。</span>
-      </p>
-
+    <!-- ==================== 名册 ====================
+         没有标题：标题已经在吸顶栏，和「新增账号」同一行。 -->
+    <Panel>
       <p v-if="loading && !rows.length" class="hint">读取中…</p>
 
       <ul v-else class="people">
