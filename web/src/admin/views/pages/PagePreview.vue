@@ -172,12 +172,11 @@ const TITLE_TAIL = '问答'
           <span class="m-search-ph faint">输入关键词… 比如「怎么合成」「上限是多少」</span>
           <span class="m-search-btn">搜索</span>
         </div>
-        <div v-if="has('empty_title') || has('empty_hint')" class="m-empty">
+        <div v-if="has('empty_title')" class="m-empty">
           <div class="m-empty-glyph" aria-hidden="true">✦</div>
-          <div v-if="has('empty_title')" class="m-empty-t" :class="mark('empty_title')">
+          <div class="m-empty-t" :class="mark('empty_title')">
             {{ plain('empty_title') }}
           </div>
-          <div v-if="has('empty_hint')" class="m-empty-h m-html" :class="mark('empty_hint')" v-html="html('empty_hint')" />
         </div>
       </div>
 
@@ -185,7 +184,6 @@ const TITLE_TAIL = '问答'
       <div v-else-if="page === 'notfound'" class="m-nf">
         <div class="m-nf-box">
           <h3 v-if="has('title')" class="m-nf-title" :class="mark('title')">{{ plain('title') }}</h3>
-          <p v-if="has('desc')" class="m-nf-desc m-html" :class="mark('desc')" v-html="html('desc')" />
           <span class="m-nf-btn">回到首页</span>
         </div>
       </div>
@@ -310,7 +308,6 @@ const TITLE_TAIL = '问答'
 }
 .m-empty-glyph { color: var(--copper-dim); font-size: var(--fs-body); margin-bottom: var(--sp-1); }
 .m-empty-t { color: var(--ink-dim); font-size: var(--fs-meta); }
-.m-empty-h { color: var(--ink-faint); font-size: var(--fs-meta); margin-top: var(--sp-1); line-height: var(--lh-normal); }
 
 /* ---------- 404 ---------- */
 .m-nf { display: flex; align-items: center; justify-content: center; padding: var(--sp-5) 0; }
@@ -332,7 +329,6 @@ const TITLE_TAIL = '问答'
   margin: 0;
   line-height: var(--lh-tight);
 }
-.m-nf-desc { color: var(--ink-dim); font-size: var(--fs-meta); margin: 0; line-height: var(--lh-normal); }
 /* 纯装饰按钮：不可点，所以不做悬浮反馈，也不给 pointer */
 .m-nf-btn {
   background: linear-gradient(180deg, var(--flame), var(--flame-deep));

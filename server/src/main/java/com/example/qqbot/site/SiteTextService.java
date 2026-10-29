@@ -55,7 +55,7 @@ public class SiteTextService {
     private static final List<Block> REGISTRY = List.of(
             // ---- 全站 ----
             new Block("layout", "全站", "footer_note", "页脚 · 来源声明",
-                    "资料版权说明，出现在每页底部", true,
+                    "", true,
                     "内容来自本项目的知识库 · 版权归各自来源所有"),
             new Block("layout", "全站", "footer_copy", "页脚 · 版权行",
                     "{year} 与 {bot} 会自动替换", false,
@@ -102,13 +102,9 @@ public class SiteTextService {
 
             // ---- 资料库 ----
             new Block("library", "资料库", "empty_title", "搜索无结果 · 标题", "", false, "没找到相关资料"),
-            new Block("library", "资料库", "empty_hint", "搜索无结果 · 提示", "", true,
-                    "换个更具体的说法，或者到群里直接问机器人"),
 
             // ---- 404 ----
-            new Block("notfound", "404", "title", "标题", "", false, "页面不存在"),
-            new Block("notfound", "404", "desc", "说明", "", false,
-                    "这个页面不存在，返回首页或资料库继续查找。"));
+            new Block("notfound", "404", "title", "标题", "", false, "页面不存在"));
 
     private static final Map<String, Block> BY_KEY = new LinkedHashMap<>();
     /** 页面顺序 = 注册表里第一次出现的顺序，后台二级目录按它排 */

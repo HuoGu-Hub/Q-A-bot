@@ -233,7 +233,6 @@ onMounted(load)
             <div class="blk-head">
               <span class="blk-label">{{ b.label }}</span>
               <Tag v-if="b.overridden" tone="flame">改过</Tag>
-              <span v-if="b.hint" class="faint blk-hint">{{ b.hint }}</span>
               <!--
                 动作放在**标题行右侧**，不单开一行 —— 单开一行会把条目撑高，
                 而这一页一屏要看十几条。
@@ -440,7 +439,6 @@ onMounted(load)
 
 .blk-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .blk-label { font-size: var(--fs-body); font-weight: var(--fw-medium); }
-.blk-hint { font-size: var(--fs-meta); }
 /* 每块下面的那行填写提示已删（2026-10-15）：怎么写标记、能用哪些占位符，
    在「填写说明」弹窗里有一份完整的，同一句话在十几块下面各来一遍只是噪声。
    ⚠️ 往模板里加提示文字之前先看这里：说明只留一处，就在那个弹窗里。 */
