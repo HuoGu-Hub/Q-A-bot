@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# qqbot 服务器运维入口。任何目录下都能执行，内部一律使用绝对路径。
+# 安装一次：
+#   scp deploy/bin/qq qqbot:/usr/local/bin/qq
+#   ssh qqbot 'chmod +x /usr/local/bin/qq'
+set -uo pipefail
+
+APP_DIR=/opt/qqbot
+SERVICE=qqbot
+DB="$APP_DIR/server/data/qa/qqbot.sqlite"
+BACKUP_DIR="$APP_DIR/backup"
+COMPOSE="docker compose -f $APP_DIR/deploy/docker-compose.yml"
+
+say() { printf '\n\033[36m— %s\033[0m\n' "$*"; }
+
+cmd_st() {
+  say 服务
+  systemctl is-active "$SERVICE"
+  local mem
+  mem=$(systemctl show "$SERVICE" -p MemoryCurrent --value 2>/dev/null)
+  [[ "$mem" =~ ^[0-9]+$ ]] && awk -v m="$mem" 'BEGIN{printf "内存 %.0f MB\n", m/1048576}'
+  systemctl show "$SERVICE" -p ActiveEnterTimestamp --value
+  say 端口
+  ss -tlnp 2>/dev/null | grep -E ':(8080|3000)[[:space:]]' || echo "8080 / 3000 未监听"
+  say 容器
+  $COMPOSE ps --format '{{.Name}}  {{.Status}}' 2>/dev/null || true
+}
+
+cmd_restart() {
+  systemctl restart "$SERVICE"
+  sleep 8
+  systemctl is-active "$SERVICE"
+  journalctl -u "$SERVICE" -n 40 --no-pager | grep -E "协议层|机器人|连不上|ERROR" || true
+}
+
+cmd_logs()  { journalctl -u "$SERVICE" -n "${1:-80}" --no-pager; }
+cmd_follow(){ journalctl -u "$SERVICE" -f; }
+cmd_err()   {
+  journalctl -u "$SERVICE" --since "${1:-15 min ago}" --no-pager \
+    | grep -iE "error|exception|失败|超时|拦截" | tail -40
+}
+
+cmd_health() { bash "$APP_DIR/scripts/health-check.sh" http://127.0.0.1:8080; }
+
+cmd_nap() {
+  case "${1:-ps}" in
+    ps)      $COMPOSE ps ;;
+    logs)    $COMPOSE logs --tail "${2:-50}" ;;
+    follow)  $COMPOSE logs -f --tail 100 ;;
+    restart) $COMPOSE restart && sleep 15 && $COMPOSE logs --tail 20 ;;
+    sh)      $COMPOSE exec napcat bash ;;
+    *)       $COMPOSE "$@" ;;
+  esac
+}
+
+cmd_ping() {
+  local token
+  token=$(grep -E '^ONEBOT_TOKEN=' "$APP_DIR/.env" 2>/dev/null | cut -d= -f2- | xargs)
+  curl -s -m 8 http://127.0.0.1:3000/get_login_info \
+    -H "Authorization: Bearer $token" | head -c 300; echo
+}
+
+cmd_bak() {
+  mkdir -p "$BACKUP_DIR"
+  local f="$BACKUP_DIR/qqbot-$(date +%F-%H%M).sqlite"
+  sqlite3 "$DB" ".backup '$f'" && ls -lh "$f"
+  ls -t "$BACKUP_DIR"/qqbot-*.sqlite 2>/dev/null | tail -n +11 | xargs -r rm -f
+}
+
+cmd_db() {
+  if [ $# -gt 0 ]; then
+    sqlite3 -header -column "$DB" "$*"
+  else
+    sqlite3 -header -column "$DB" "$(cat)"
+  fi
+}
+
+cmd_check() {
+  date; free -h; df -h /
+  systemctl is-active "$SERVICE"
+  $COMPOSE ps --format '{{.Names}} {{.Status}}' 2>/dev/null
+  journalctl -u "$SERVICE" -n 30 --no-pager
+}
+
+cmd_disk() {
+  say 分区; df -h /
+  say 应用目录; du -sh "$APP_DIR"/* 2>/dev/null | sort -h
+  say 日志占用; journalctl --disk-usage
+}
+
+case "${1:-help}" in
+  st|status)   cmd_st ;;
+  rs|restart)  cmd_restart ;;
+  stop)        systemctl stop "$SERVICE" && systemctl is-active "$SERVICE" ;;
+  start)       systemctl start "$SERVICE" && sleep 6 && systemctl is-active "$SERVICE" ;;
+  logs)        shift; cmd_logs "$@" ;;
+  log|tail)    cmd_follow ;;
+  err)         shift; cmd_err "$@" ;;
+  health)      cmd_health ;;
+  nap|napcat)  shift; cmd_nap "$@" ;;
+  ping)        cmd_ping ;;
+  bak|backup)  cmd_bak ;;
+  db)          shift; cmd_db "$@" ;;
+  check)       cmd_check ;;
+  disk)        cmd_disk ;;
+  where)       echo "$APP_DIR" ;;
+  *)
+    cat <<'EOF'
+qq —— qqbot 服务器运维入口，任意目录可用
+
+  qq st | status      服务、内存、端口、容器
+  qq rs | restart     重启并确认协议层
+  qq stop / start     停服、起服
+  qq logs [n]         最近 n 行日志，默认 80
+  qq log              实时跟日志
+  qq err [since]      只看报错，默认 15 min ago
+  qq health           跑 scripts/health-check.sh
+  qq ping             查 NapCat 协议层
+  qq nap [ps|logs|follow|restart|sh]   NapCat 容器
+  qq bak              备份数据库到 /opt/qqbot/backup
+  qq db "SQL"         查库，也可从 stdin 读
+  qq check            出事收现场
+  qq disk             磁盘与日志占用
+EOF
+    ;;
+esac
