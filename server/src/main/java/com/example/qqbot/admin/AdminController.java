@@ -70,7 +70,7 @@ public class AdminController {
                                                      HttpServletResponse response) {
         String username = body == null ? null : body.get("username");
         String password = body == null ? null : body.get("password");
-        String source = request == null ? null : request.getRemoteAddr();
+        String source = request == null ? null : AdminClientIp.of(request);
         String ipHash = AdminAuthFilter.hashIp(source);
         AdminAuth.LoginAttempt attempt = auth.login(username, password, source);
 
@@ -98,6 +98,7 @@ public class AdminController {
         cookie.setHttpOnly(true);
         cookie.setPath("/admin");
         cookie.setMaxAge(props.getSessionHours() * 3600);
+        cookie.setSecure(request != null && AdminClientIp.isHttps(request));
         cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
 

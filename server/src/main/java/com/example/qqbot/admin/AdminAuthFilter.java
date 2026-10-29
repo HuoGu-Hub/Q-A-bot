@@ -14,6 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -112,6 +113,10 @@ public class AdminAuthFilter extends OncePerRequestFilter {
                 forbidden(response, required);
                 return;
             }
+            if (isWrite(request.getMethod()) && !originAllowed(request)) {
+                forbiddenOrigin(response);
+                return;
+            }
         }
 
         request.setAttribute(ATTR_PRINCIPAL, principal.get());
@@ -172,6 +177,37 @@ public class AdminAuthFilter extends OncePerRequestFilter {
         return read ? AdminRole.VIEWER : AdminRole.EDITOR;
     }
 
+    private static boolean isWrite(String method) {
+        return !"GET".equalsIgnoreCase(method) && !"HEAD".equalsIgnoreCase(method)
+                && !"OPTIONS".equalsIgnoreCase(method);
+    }
+
+    /**
+     * 写操作的 Origin 校验。浏览器跨站写会带 Origin，命令行 curl 通常不带。
+     * 只比 host，比整个 Origin 更宽容端口变化。
+     */
+    static boolean originAllowed(HttpServletRequest request) {
+        String origin = request.getHeader("Origin");
+        if (origin == null || origin.isBlank()) {
+            return true;
+        }
+        String host = request.getHeader("Host");
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        try {
+            String originHost = URI.create(origin).getHost();
+            if (originHost == null) {
+                return false;
+            }
+            int colon = host.lastIndexOf(':');
+            String hostName = colon > 0 ? host.substring(0, colon) : host;
+            return originHost.equalsIgnoreCase(hostName);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     private static boolean hasPublicPrefix(String path) {
         for (String p : PUBLIC_PREFIXES) {
             if (path.startsWith(p)) {
@@ -222,6 +258,12 @@ public class AdminAuthFilter extends OncePerRequestFilter {
                 + required.label() + "」及以上权限\"}");
     }
 
+    private void forbiddenOrigin(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"error\":\"请求来源不合法\"}");
+    }
+
     private String readCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
@@ -240,7 +282,7 @@ public class AdminAuthFilter extends OncePerRequestFilter {
             return;
         }
         try {
-            store.recordVisit(path, hashIp(request.getRemoteAddr()),
+            store.recordVisit(path, hashIp(AdminClientIp.of(request)),
                     request.getHeader("User-Agent"),
                     request.getMethod().equals("GET") ? "view" : "action");
         } catch (Exception e) {
@@ -260,7 +302,7 @@ public class AdminAuthFilter extends OncePerRequestFilter {
         String detail = "status=" + response.getStatus()
                 + (query == null ? "" : " ?" + query);
         audit.record(principal.id(), principal.username(), "write", method, path,
-                detail, hashIp(request.getRemoteAddr()));
+                detail, hashIp(AdminClientIp.of(request)));
     }
 
     /** IP 只存哈希 —— 统计与审计都不需要原始 IP */

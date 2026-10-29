@@ -181,6 +181,18 @@ APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 
 云安全组仍是主防线，必须确认 8080、3000、3001、6099 不对公网开放。改动后用外部主机 `nc -zv` 或 `nmap` 复验，不要只看配置文件。
 
+### 4.3 多人后台的身份层
+
+后台账号是应用自己的密码体系，没有 MFA。多人公网使用时，建议在 Nginx 前再加一层：
+
+| 方式 | 用户怎么进 | 代价 |
+|---|---|---|
+| Cloudflare Access | 浏览器打开后台，按邮箱收验证码或用 SSO | 域名要托管在 Cloudflare；源站只允许 Cloudflare 回源或走 Tunnel |
+| Tailscale、WireGuard | 先连 VPN，再打开后台 | 每个用户装客户端，但不是 SSH 密钥 |
+| Authelia、oauth2-proxy | 自建统一登录页 | 多一个容器与维护成本 |
+
+没有身份层时，至少做到：每人独立账号，不共用 `admin`；密码 12 位以上；只给需要的人 EDITOR 或 ADMIN；定期看 `admin_audit`。
+
 ## 5. 构建
 
 ```bash
@@ -241,16 +253,25 @@ sudo ln -s /etc/nginx/sites-available/qqbot.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-需要修改三处：
+需要修改两处：
 
 1. `server_name` 改成实际域名。
-2. 后台 `allow` 改成固定 IP。默认只允许 `127.0.0.1` 与 `::1`。
-3. 没有固定 IP 时保留默认值，用 SSH 隧道访问：
+2. 只有一个管理员且有固定 IP 时，按配置里的 `allow`/`deny` 注释把后台锁到你的 IP。多人后台保持公开，靠账号密码与登录限流。
+
+后台默认公网可达，有账号的人直接浏览器访问：
+
+```text
+https://admin.example.com/admin/
+```
+
+SSH 隧道只用于应急和首次配置，不是普通后台用户的入口：
 
 ```bash
 ssh -L 8080:127.0.0.1:8080 user@服务器
 # 浏览器打开 http://127.0.0.1:8080/admin/
 ```
+
+多人后台建议在 Nginx 前再加一层身份代理，见 4.3。
 
 关键约束：
 
@@ -259,7 +280,7 @@ ssh -L 8080:127.0.0.1:8080 user@服务器
 | 公开站 `/admin/` | `return 404` | 公网域名下不暴露后台入口 |
 | 公开站 `/admin.html` | `return 404` | 后台前端壳子也不放行 |
 | 公网 `/onebot/` | `return 404` | 事件入口只给 NapCat 直连 8080 |
-| 管理后台 | IP 白名单 | 密码不是第一道防线 |
+| 管理后台 | 账号密码 + 登录限流 | 多人公网访问；单管理员可改用 IP 白名单 |
 | 公开 API 限流 | 60 次/分钟 | 与应用层限流形成双层 |
 | 登录接口限流 | 5 次/分钟 | 防密码爆破 |
 | `client_max_body_size` | 16m | 与 Spring 上传上限对齐，否则只看到 413 |
@@ -279,8 +300,8 @@ sudo certbot --nginx -d www.example.com -d admin.example.com
 | 1 | 打开公开站 | 首页正常 |
 | 2 | 搜索一个词 | 返回结果 |
 | 3 | 公网域名访问 `/admin/` | 404 |
-| 4 | 非白名单 IP 访问后台域名 | 403 |
-| 5 | 白名单 IP 访问后台 | 登录页 |
+| 4 | 公网访问后台域名 | 登录页，不是 404 |
+| 5 | 未登录访问 `/admin/` | 跳转登录页 |
 | 6 | 错误密码 | 401 |
 | 7 | 正确密码 | 进入统计页 |
 | 8 | 刷新后台子路由 | 前端 fallback 正常 |
@@ -289,6 +310,9 @@ sudo certbot --nginx -d www.example.com -d admin.example.com
 | 11 | 无 Token POST `/onebot/event` | 公网 404，直连 8080 为 401 |
 | 12 | 外部扫描 8080、3000、3001、6099 | 全部不可达 |
 | 13 | 编辑账号访问 `/admin/api;x/users` | 400 或 403，审计有记录 |
+| 14 | 登录响应 Cookie | 含 `Secure; HttpOnly; SameSite` |
+
+启用单管理员 `allow` 白名单时，非白名单 IP 访问后台应为 403。
 
 ```bash
 ./scripts/health-check.sh https://www.example.com
@@ -351,7 +375,7 @@ sudo systemctl restart qqbot
 | WebUI | 只通过 SSH 隧道访问 |
 | 应用 8080 | 安全组不开放；主机防火墙只允许 Docker 网段与回环 |
 | OneBot Token | 随机长串，HTTP 服务器与 HTTP 客户端填同一个值；入站无 Token 直接 401 |
-| 管理后台 | IP 白名单默认只允许回环；没有固定 IP 就用 SSH 隧道 |
+| 管理后台 | 独立域名、HTTPS、VIEWER/EDITOR/ADMIN 分权；多人公网访问建议加身份代理 |
 | 聊天采集 | 默认关闭；开启前确认群白名单，保留期清理每天执行 |
 | 公开接口 | 独立 DTO，上线后抓包确认无隐私字段 |
 | 日志 | 文件与 journal 权限 600；后台日志页保持脱敏 |
