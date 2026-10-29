@@ -1,0 +1,68 @@
+name: CI
+
+# 什么时候跑：
+#   · 往 main 推代码 —— 保护主干
+#   · 任何 PR —— 合并前先看结果
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支连续推两次时，取消前一次没跑完的 —— 省额度，也避免旧结果盖新结果
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- 后端
+  server:
+    name: 后端测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          # pom 在 server/ 下，缓存键要指到这里，否则每次都重下依赖
+          cache-dependency-path: server/pom.xml
+
+      # 1113 个测试，本地约 1 分 44 秒。
+      # RetrievalGoldenTest 需要生产语料，CI 里没有库时它会自己跳过（Assumptions），不算失败。
+      - name: mvn test
+        working-directory: server
+        run: mvn -B test
+
+  # ---------------------------------------------------------------- 前端
+  web:
+    name: 前端类型检查与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⚠️ 必须用 pnpm 11：pnpm-workspace.yaml 里的 allowBuilds 是 11 的写法，
+      #    换低版本会读不到，esbuild 的原生二进制装不上，vite build 直接失败。
+      - name: 装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: 装 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: 安装依赖
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # build 脚本本身就是 vue-tsc --noEmit && vite build，
+      # 所以这一步同时兜住类型错误和打包错误
+      - name: 类型检查 + 构建
+        working-directory: web
+        run: pnpm run build
