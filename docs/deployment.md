@@ -245,13 +245,15 @@ sudo systemctl status qqbot
 按域名形态选一份配置，不要同时启用多份：
 
 ```bash
-# 有域名和正规证书
+# 只有一张证书：公开站和后台共用 firefire.online
 sudo cp deploy/nginx/qqbot-domain.conf /etc/nginx/sites-available/qqbot.conf
 # 或者：两个域名，后台走独立域名
 # sudo cp deploy/nginx/qqbot.conf /etc/nginx/sites-available/qqbot.conf
 sudo ln -s /etc/nginx/sites-available/qqbot.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+`qqbot-domain.conf` 是单域名配置，`server_name` 写 `firefire.online` 与 `www`。`qqbot.conf` 是双域名模板，里面的 `admin.example.com` 只是占位符；没有对应 DNS 与证书时不要启用它。
 
 需要修改两处：
 
