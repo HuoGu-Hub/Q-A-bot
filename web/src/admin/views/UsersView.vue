@@ -335,10 +335,10 @@ onMounted(load)
         <Field label="账号" hint="字母、数字、下划线，3–32 位" control-width="240px">
           <Input v-model="form.username" placeholder="例如 xiaoxue" autocomplete="off" name="username" />
         </Field>
-        <Field label="昵称" hint="可选，显示在后台顶端" control-width="240px">
+        <Field label="昵称" control-width="240px">
           <Input v-model="form.displayName" placeholder="例如 小雪" autocomplete="off" name="displayName" />
         </Field>
-        <Field label="初始密码" hint="至少 8 位，创建后当面或私下告诉对方" control-width="240px">
+        <Field label="初始密码" hint="至少 8 位" control-width="240px">
           <Input v-model="form.password" type="password" placeholder="至少 8 位" autocomplete="new-password" name="password" />
         </Field>
 
@@ -414,7 +414,7 @@ onMounted(load)
 
         <hr class="rule">
 
-        <Field label="重置密码" hint="改完对方的旧密码立即失效，需要重新登录" control-width="200px">
+        <Field label="重置密码" control-width="200px">
           <Input
             v-model="newPassword"
             type="password"

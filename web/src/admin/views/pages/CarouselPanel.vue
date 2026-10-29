@@ -372,7 +372,7 @@ async function saveSettings() {
       <template v-else>
         <!-- ---------- 上传 ---------- -->
         <div class="upload">
-          <Field label="跳转链接" hint="可空。点图片去哪；不填就是纯展示。站内写 /library，外链写全 https://">
+          <Field label="跳转链接" hint="站内写 /library，外链写全 https://">
             <Input
               :model-value="newLink"
               mono
@@ -381,7 +381,7 @@ async function saveSettings() {
               @update:model-value="(v: string) => (newLink = v)"
             />
           </Field>
-          <Field label="说明文字" hint="可空。压在这张图底部">
+          <Field label="说明文字">
             <Input
               :model-value="newCaption"
               placeholder="比如：新版本更新内容"
@@ -516,7 +516,7 @@ async function saveSettings() {
     <!-- ---------- 编辑弹窗 ---------- -->
     <Modal :open="!!editing" title="编辑这张图" @close="editing = null">
       <div class="edit-form">
-        <Field label="跳转链接" hint="可空。站内写 /library，外链写全 https://">
+        <Field label="跳转链接" hint="站内写 /library，外链写全 https://">
           <Input
             :model-value="editLink"
             mono
@@ -525,7 +525,7 @@ async function saveSettings() {
             @update:model-value="(v: string) => (editLink = v)"
           />
         </Field>
-        <Field label="说明文字" hint="可空。压在这张图底部">
+        <Field label="说明文字">
           <Input
             :model-value="editCaption"
             :disabled="savingEdit"
