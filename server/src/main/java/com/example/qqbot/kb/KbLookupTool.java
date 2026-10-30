@@ -7,6 +7,7 @@ import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.invocation.InvocationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
@@ -35,12 +36,22 @@ public class KbLookupTool {
     private final KbCorpus corpus;
     private final PlaceDirectory places;
     private final MapOptions options;
+    private final ResourceDirectory resources;
 
+    /** 老签名：没有资源层目录时，locate 只查具名地点（测试与旧调用方用） */
     public KbLookupTool(KbRetriever retriever, KbCorpus corpus, PlaceDirectory places, MapOptions options) {
+        this(retriever, corpus, places, options, null);
+    }
+
+    /** Spring 用这个：资源层目录可选，生产环境一定有 */
+    @Autowired
+    public KbLookupTool(KbRetriever retriever, KbCorpus corpus, PlaceDirectory places, MapOptions options,
+                        ResourceDirectory resources) {
         this.retriever = retriever;
         this.corpus = corpus;
         this.places = places;
         this.options = options;
+        this.resources = resources;
     }
 
     /** 工具方法名即工具名：{@code lookup} —— 授权白名单里用的就是它 */
@@ -163,8 +174,10 @@ public class KbLookupTool {
      * <p>问「哪里有铁矿」时应该调它，而不是调 {@link #lookup} ——
      * 后者给的是文本片段，回答不了"在哪"。
      */
-    @Tool("查询地图上某类地点或资源的位置，返回它相对最近地标的方位、距离与坐标。"
-            + "问『哪里有X』『X在哪』时用这个。只读。")
+    @Tool("查询地图上某类地点或资源的位置。地点返回相对最近地标的方位、距离与坐标；"
+            + "铜矿、铁矿这类整层资源返回最密的几片点位与坐标。"
+            + "问『哪里有X』『X在哪』时用这个，尤其是『哪里有密集的铜矿』这类问题。"
+            + "资源结果给的是文字结论，不要拿物品图标代替地图。只读。")
     public String locate(@P("要查的地点或资源名") String place,
                          InvocationContext ctx) {
         if (place == null || place.isBlank()) {
@@ -180,17 +193,52 @@ public class KbLookupTool {
             return "本次检索预算已用完（" + budget.reason() + "），请直接用已有资料作答，不要再调用工具。";
         }
         if (!places.isAvailable()) {
+            ResourceDirectory.Answer resource = resourceAnswer(place);
+            if (resource != null) {
+                return PromptText.escapeDelimiters(resource.text());
+            }
             return "地图点位数据暂时不可用。";
         }
         PlaceAnswer.Answer answer = PlaceAnswer.answer(place.strip(), places,
                 options.getAnswerLimit(), options.getUnitsPerMeter());
-        String text = PromptText.escapeDelimiters(answer.text(options.getUnitsPerMeter()));
-        if (!options.getShot().isEnabled() || !answer.found()) {
-            return text;
+        if (answer.found()) {
+            String text = PromptText.escapeDelimiters(answer.text(options.getUnitsPerMeter()));
+            if (!options.getShot().isEnabled()) {
+                return text;
+            }
+            // 附上"取图凭据"：模型不认识坐标，也不该去猜身份 —— 它只需要把这行原样抄进回答。
+            // 只给最匹配的那一处：地图图比较大，一次回两张会刷屏。
+            return text + "\n配图：[[img:map:" + PromptText.escapeDelimiters(
+                    answer.hits().get(0).place().imageKey()) + "]]";
         }
-        // 附上"取图凭据"：模型不认识坐标，也不该去猜身份 —— 它只需要把这行原样抄进回答。
-        // 只给最匹配的那一处：地图图比较大，一次回两张会刷屏。
-        return text + "\n配图：[[img:map:" + PromptText.escapeDelimiters(
-                answer.hits().get(0).place().imageKey()) + "]]";
+        // 具名地点没有命中：再看是不是在问某层资源的分布（铜矿、铁矿……）
+        ResourceDirectory.Answer resource = resourceAnswer(place);
+        if (resource != null) {
+            return PromptText.escapeDelimiters(resource.text());
+        }
+        return PromptText.escapeDelimiters(answer.text(options.getUnitsPerMeter()));
+    }
+
+    /**
+     * 资源层兜底：具名地点查不到时，看看问的是不是「铜矿 / 铁矿」这类整层资源。
+     *
+     * <p>资源点没有独立名字，匹配的是"层"（{@code ore:copper}），回答的是"哪一片最密"。
+     * 第一阶段只给文字 —— 点云截图需要另一种画法，还没接。
+     */
+    private ResourceDirectory.Answer resourceAnswer(String place) {
+        if (resources == null) {
+            return null;
+        }
+        try {
+            ResourceDirectory.Answer answer = resources.answer(place);
+            if (answer != null && answer.hotspots() != null && !answer.hotspots().isEmpty()) {
+                log.info("[TOOL] locate「{}」→ 资源层 {}：{} 个点，{} 处热点",
+                        place.strip(), answer.layer().key(), answer.total(), answer.hotspots().size());
+                return answer;
+            }
+        } catch (Exception e) {
+            log.warn("[TOOL] locate 查资源层失败：{} —— {}", place, e.getMessage());
+        }
+        return null;
     }
 }
