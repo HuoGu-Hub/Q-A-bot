@@ -69,15 +69,13 @@ class KbWikiControllerTest {
     void fallsBackToYmlDefaults() {
         when(store.all()).thenReturn(List.of());
 
-        Map<String, Object> out = controller.sources();
+        var out = controller.sources();
 
-        assertThat(out.get("saved")).isEqualTo(false);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> defaults = (List<Map<String, Object>>) out.get("defaults");
-        assertThat(defaults).extracting(m -> m.get("name"))
+        assertThat(out.saved()).isFalse();
+        assertThat(out.defaults()).extracting(KbWikiController.SourceRow::name)
                 .containsExactly("Quests/", "Gameplay", "Lore");
-        assertThat(out.get("maxPagesPerSource")).as("原样回显配置里的上限").isEqualTo(500);
-        assertThat(out.get("wikiBase")).as("页面用它拼'点开看'的链接").isEqualTo("https://enshrouded.wiki.gg");
+        assertThat(out.maxPagesPerSource()).as("原样回显配置里的上限").isEqualTo(500);
+        assertThat(out.wikiBase()).as("页面用它拼'点开看'的链接").isEqualTo("https://enshrouded.wiki.gg");
     }
 
     @Test
@@ -91,15 +89,12 @@ class KbWikiControllerTest {
                 "other·X", 5));
         when(pageStore.lastSyncBySource()).thenReturn(Map.of("Lore", "2026-10-17T02:00:00Z"));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> cov = (Map<String, Object>) controller.sources().get("coverage");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> melee = (Map<String, Object>) cov.get("Melee Armor");
-        assertThat(melee.get("blocks")).as("docId 去掉 wiki· 前缀后的块数").isEqualTo(112);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> lore = (Map<String, Object>) cov.get("Lore");
-        assertThat(lore.get("blocks")).as("没入库的来源算 0，不是缺失").isEqualTo(0);
-        assertThat(lore.get("lastSync")).as("拉过但清洗后没正文 → 靠同步时间区分").isEqualTo("2026-10-17T02:00:00Z");
+        Map<String, KbWikiController.CoverageItem> cov = controller.sources().coverage();
+        var melee = cov.get("Melee Armor");
+        assertThat(melee.blocks()).as("docId 去掉 wiki· 前缀后的块数").isEqualTo(112);
+        var lore = cov.get("Lore");
+        assertThat(lore.blocks()).as("没入库的来源算 0，不是缺失").isZero();
+        assertThat(lore.lastSync()).as("拉过但清洗后没正文 → 靠同步时间区分").isEqualTo("2026-10-17T02:00:00Z");
         assertThat(cov).as("别的 source 的 docId 不算进来").doesNotContainKey("other·X");
     }
 
@@ -145,11 +140,10 @@ class KbWikiControllerTest {
         when(client.listCategoryMembers(anyString(), anyInt()))
                 .thenReturn(new WikiApiClient.Collected(List.of("X"), false, 1));
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) controller.catalog().get("items");
+        List<KbWikiController.CategoryRow> items = controller.catalog().items();
         Map<String, String> klass = new java.util.HashMap<>();
-        for (Map<String, Object> m : items) {
-            klass.put(String.valueOf(m.get("name")), String.valueOf(m.get("klass")));
+        for (KbWikiController.CategoryRow m : items) {
+            klass.put(m.name(), m.klass());
         }
         assertThat(klass.get("Pages with navboxes")).as("维护清单").isEqualTo("maintenance");
         assertThat(klass.get("Wake Of Water Update")).as("更新日期类").isEqualTo("update");
@@ -168,21 +162,18 @@ class KbWikiControllerTest {
         when(client.listCategoryMembers(anyString(), anyInt()))
                 .thenReturn(new WikiApiClient.Collected(List.of("A", "B"), false, 1));
 
-        Map<String, Object> first = controller.catalog();
-        Map<String, Object> second = controller.catalog();
+        var first = controller.catalog();
+        var second = controller.catalog();
 
-        assertThat(first.get("total")).isEqualTo(2);
+        assertThat(first.total()).isEqualTo(2);
         assertThat(second).isSameAs(first);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) first.get("items");
-        assertThat(items.get(0).get("name")).as("按正文页数降序").isEqualTo("Lore");
-        assertThat(items.get(0).get("pages")).as("★ 每个分类都要有准确页数").isEqualTo(264);
-        assertThat(items.get(1).get("pages")).as("非内容类也有页数").isEqualTo(95);
-        assertThat(items.get(0).get("klass")).isEqualTo("content");
-        assertThat(items.get(0).get("advice")).isEqualTo("内容类：可以选");
-        @SuppressWarnings("unchecked")
-        List<String> samples = (List<String>) items.get(0).get("samples");
-        assertThat(samples).as("示例页名，让英文分类名能看懂").containsExactly("A", "B");
+        List<KbWikiController.CategoryRow> items = first.items();
+        assertThat(items.get(0).name()).as("按正文页数降序").isEqualTo("Lore");
+        assertThat(items.get(0).pages()).as("★ 每个分类都要有准确页数").isEqualTo(264);
+        assertThat(items.get(1).pages()).as("非内容类也有页数").isEqualTo(95);
+        assertThat(items.get(0).klass()).isEqualTo("content");
+        assertThat(items.get(0).advice()).isEqualTo("内容类：可以选");
+        assertThat(items.get(0).samples()).as("示例页名，让英文分类名能看懂").containsExactly("A", "B");
         verify(client, times(1)).listAllCategories();
         verify(client, times(1)).fetchCategoryPages(any());
         // 示例页名只给内容类取：Music 是索引类，页面上没有「选它」，取来没人看

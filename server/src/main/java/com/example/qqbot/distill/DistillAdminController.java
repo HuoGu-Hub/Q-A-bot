@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import com.example.qqbot.web.ApiException;
 
+import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.persistence.ChatRepository;
 import com.example.qqbot.persistence.DistillBlocklistRepository;
 import com.example.qqbot.persistence.DistillJobRepository;
@@ -77,82 +78,47 @@ public class DistillAdminController {
 
     /** 概览：采集状态 + 各类计数 */
     @GetMapping("/stats")
-    public Map<String, Object> stats() {
+    public DistillStats stats() {
         ChatCaptureService.Status s = capture.status();
-        Map<String, Object> cap = new LinkedHashMap<>();
-        cap.put("enabled", s.enabled());
-        cap.put("groups", s.groups());
-        cap.put("queueSize", s.queueSize());
-        cap.put("recorded", s.recorded());
-        cap.put("dropped", s.dropped());
-        cap.put("imageSaved", s.imageSaved());
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("available", jobs.available());
-        out.put("capture", cap);
-        out.put("messages", jobs.countMessages());
-        out.put("images", jobs.countImages());
-        out.put("imports", jobs.countImports());
-        out.put("jobs", jobs.countJobs());
-        out.put("batches", jobs.countBatches());
-        out.put("notes", notes.count(null));
-        out.put("drafts", notes.count("draft"));
-        out.put("publishedNotes", notes.count("published"));
-        return out;
+        return new DistillStats(jobs.available(),
+                new CaptureStatus(s.enabled(), s.groups(), s.queueSize(), s.recorded(),
+                        s.dropped(), s.imageSaved()),
+                jobs.countMessages(), jobs.countImages(), jobs.countImports(),
+                jobs.countJobs(), jobs.countBatches(), notes.count(null),
+                notes.count("draft"), notes.count("published"));
     }
 
     /** 最近采集到的消息，用来确认采集是否真的通 */
     @GetMapping("/messages")
-    public Map<String, Object> messages(@RequestParam(defaultValue = "50") int limit) {
-        List<Map<String, Object>> rows = new ArrayList<>();
+    public MessageList messages(@RequestParam(defaultValue = "50") int limit) {
+        List<MessageRow> rows = new ArrayList<>();
         for (ChatRepository.Message m : chat.recentMessages(limit)) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", m.id());
-            row.put("ts", m.ts());
-            row.put("groupId", m.groupId());
-            row.put("senderName", m.senderName());
-            row.put("text", m.text());
-            row.put("textLength", m.text() == null ? 0 : m.text().length());
-            row.put("imageCount", m.imageCount());
-            row.put("source", m.source());
-            row.put("importId", m.importId());
-            rows.add(row);
+            rows.add(new MessageRow(m.id(), m.ts(), m.groupId(), m.senderName(), m.text(),
+                    m.text() == null ? 0 : m.text().length(), m.imageCount(),
+                    m.source(), m.importId()));
         }
-        return Map.of("rows", rows, "count", rows.size());
+        return new MessageList(rows, rows.size());
     }
 
     /** 一条消息与它的图片元数据 */
     @GetMapping("/messages/{id}")
-    public ResponseEntity<?> message(@PathVariable long id) {
+    public ResponseEntity<MessageDetail> message(@PathVariable long id) {
         ChatRepository.Message m = chat.findMessage(id);
         if (m == null) {
             throw ApiException.notFound("资源不存在");
         }
-        List<Map<String, Object>> images = new ArrayList<>();
+        List<ImageRow> images = new ArrayList<>();
         for (ChatRepository.Image img : chat.imagesOfMessage(id)) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", img.id());
-            row.put("md5", img.md5());
-            row.put("mime", img.mime());
-            row.put("bytes", img.bytes());
-            row.put("caption", img.caption());
-            images.add(row);
+            images.add(new ImageRow(img.id(), img.md5(), img.mime(), img.bytes(),
+                    img.caption()));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", m.id());
-        out.put("ts", m.ts());
-        out.put("groupId", m.groupId());
-        out.put("senderName", m.senderName());
-        out.put("text", m.text());
-        out.put("imageCount", m.imageCount());
-        out.put("source", m.source());
-        out.put("images", images);
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new MessageDetail(m.id(), m.ts(), m.groupId(),
+                m.senderName(), m.text(), m.imageCount(), m.source(), images));
     }
 
     /** 导入预览：只解析，不写库 */
     @PostMapping(value = "/import/preview", consumes = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<?> previewImport(@RequestParam(defaultValue = "chat.txt") String filename,
+    public ResponseEntity<ChatImportService.Preview> previewImport(@RequestParam(defaultValue = "chat.txt") String filename,
                                            @RequestBody String content) {
         try {
             return ResponseEntity.ok(imports.preview(filename, content));
@@ -163,7 +129,7 @@ public class DistillAdminController {
 
     /** 导入聊天文件；请求体就是文件原文 */
     @PostMapping(value = "/import", consumes = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<?> importFile(@RequestParam(defaultValue = "chat.txt") String filename,
+    public ResponseEntity<ChatImportService.ImportResult> importFile(@RequestParam(defaultValue = "chat.txt") String filename,
                                         @RequestParam(defaultValue = "0") long groupId,
                                         @RequestBody String content) {
         try {
@@ -177,14 +143,14 @@ public class DistillAdminController {
     }
 
     @GetMapping("/imports")
-    public Map<String, Object> imports(@RequestParam(defaultValue = "50") int limit) {
+    public ImportList imports(@RequestParam(defaultValue = "50") int limit) {
         List<ChatRepository.ImportRow> rows = chat.recentImports(limit);
-        return Map.of("rows", rows, "count", rows.size());
+        return new ImportList(rows, rows.size());
     }
 
     /** 分批预览：算批次数与 token 估算，不建任务 */
     @PostMapping("/jobs/preview")
-    public ResponseEntity<?> previewJob(@RequestBody DistillJobService.JobRequest request) {
+    public ResponseEntity<DistillJobService.Preview> previewJob(@RequestBody DistillJobService.JobRequest request) {
         try {
             return ResponseEntity.ok(jobs.preview(request));
         } catch (IllegalArgumentException e) {
@@ -194,10 +160,10 @@ public class DistillAdminController {
 
     /** 创建任务与批次 */
     @PostMapping("/jobs")
-    public ResponseEntity<?> createJob(@RequestBody DistillJobService.JobRequest request) {
+    public ResponseEntity<JobCreated> createJob(@RequestBody DistillJobService.JobRequest request) {
         try {
             long id = jobs.create(request);
-            return ResponseEntity.ok(Map.of("ok", true, "id", id));
+            return ResponseEntity.ok(new JobCreated(true, id));
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         } catch (Exception e) {
@@ -207,18 +173,18 @@ public class DistillAdminController {
     }
 
     @GetMapping("/jobs")
-    public Map<String, Object> jobs(@RequestParam(defaultValue = "1") int page,
-                                    @RequestParam(defaultValue = "20") int size) {
+    public JobPage jobs(@RequestParam(defaultValue = "1") int page,
+                        @RequestParam(defaultValue = "20") int size) {
         int p = Math.max(1, page);
         int s = Math.min(Math.max(1, size), 100);
         List<DistillJobRepository.Job> rows = jobs.jobs(p, s);
         long total = jobs.countJobs();
         long pages = Math.max(1, (total + s - 1) / s);
-        return Map.of("rows", rows, "total", total, "page", p, "size", s, "pages", pages);
+        return new JobPage(rows, total, p, s, pages);
     }
 
     @GetMapping("/jobs/{id}")
-    public ResponseEntity<?> job(@PathVariable long id) {
+    public ResponseEntity<DistillJobService.JobDetail> job(@PathVariable long id) {
         DistillJobService.JobDetail detail = jobs.detail(id);
         if (detail == null) {
             throw ApiException.notFound("没有这个任务");
@@ -228,26 +194,26 @@ public class DistillAdminController {
 
     /** 开始或继续一个任务 */
     @PostMapping("/jobs/{id}/start")
-    public ResponseEntity<?> start(@PathVariable long id) {
+    public ResponseEntity<StartedResult> start(@PathVariable long id) {
         try {
             boolean started = worker.start(id);
-            return ResponseEntity.ok(Map.of("ok", true, "started", started));
+            return ResponseEntity.ok(new StartedResult(true, started));
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @PostMapping("/jobs/{id}/pause")
-    public ResponseEntity<?> pause(@PathVariable long id) {
+    public ResponseEntity<Void> pause(@PathVariable long id) {
         worker.pause(id);
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/jobs/{id}/retry")
-    public ResponseEntity<?> retry(@PathVariable long id) {
+    public ResponseEntity<RetryView> retry(@PathVariable long id) {
         try {
             DistillWorker.RetryResult r = worker.retry(id);
-            return ResponseEntity.ok(Map.of("ok", true, "reset", r.reset(), "started", r.started()));
+            return ResponseEntity.ok(new RetryView(true, r.reset(), r.started()));
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
@@ -255,57 +221,53 @@ public class DistillAdminController {
 
     /** 禁学名单：已屏蔽成员 + 最近发言成员 */
     @GetMapping("/blocklist")
-    public Map<String, Object> blocklist() {
-        return Map.of("blocked", blocklist.list(), "senders", blocklist.senders(300));
+    public BlocklistView blocklist() {
+        return new BlocklistView(blocklist.list(), blocklist.senders(300));
     }
 
     @PostMapping("/blocklist")
-    public ResponseEntity<?> block(@RequestBody BlockSenderRequest body) {
+    public ResponseEntity<Void> block(@RequestBody BlockSenderRequest body) {
         String hash = body.senderHash();
         if (hash == null || hash.isBlank()) {
             throw ApiException.badRequest("缺少 senderHash");
         }
         blocklist.add(hash, body.senderName());
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/blocklist/{hash}")
-    public ResponseEntity<?> unblock(@PathVariable String hash) {
+    public ResponseEntity<Void> unblock(@PathVariable String hash) {
         blocklist.remove(hash);
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/blocklist/qq")
-    public ResponseEntity<?> blockQq(@RequestBody BlockQqRequest body) {
+    public ResponseEntity<BlockQqResult> blockQq(@RequestBody BlockQqRequest body) {
         try {
             int updated = blocklist.blockQq(body.qq(), body.senderName());
-            return ResponseEntity.ok(Map.of("ok", true, "updated", updated));
+            return ResponseEntity.ok(new BlockQqResult(true, updated));
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @DeleteMapping("/blocklist/qq/{qq}")
-    public ResponseEntity<?> unblockQq(@PathVariable String qq) {
+    public ResponseEntity<Void> unblockQq(@PathVariable String qq) {
         blocklist.removeQq(qq);
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     /** 自动蒸馏设置 + 采集群 */
     @GetMapping("/settings")
-    public Map<String, Object> settings() {
+    public SettingsView settings() {
         DistillSettingRepository.Settings s = auto.settings();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("settings", s);
-        out.put("groups", capture.status().groups());
-        out.put("providers", llm.providers());
-        out.put("pendingMessages", chat.countAfter(s.lastMessageId(), capture.status().groups()));
-        return out;
+        return new SettingsView(s, capture.status().groups(), llm.providers(),
+                chat.countAfter(s.lastMessageId(), capture.status().groups()));
     }
 
     /** 保存触发条件与分批参数 */
     @PutMapping("/settings")
-    public ResponseEntity<?> saveSettings(@RequestBody DistillSettingsRequest body) {
+    public ResponseEntity<SettingsSaved> saveSettings(@RequestBody DistillSettingsRequest body) {
         try {
             DistillSettingRepository.Settings old = auto.settings();
             DistillSettingRepository.Settings next = new DistillSettingRepository.Settings(
@@ -323,7 +285,7 @@ public class DistillAdminController {
                     body.captureGroups() == null ? "" : body.captureGroups(),
                     Boolean.TRUE.equals(body.captureAllGroups()),
                     old.lastMessageId(), old.updatedAt());
-            return ResponseEntity.ok(Map.of("ok", true, "settings", auto.save(next)));
+            return ResponseEntity.ok(new SettingsSaved(true, auto.save(next)));
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
@@ -331,9 +293,9 @@ public class DistillAdminController {
 
     /** 立即蒸馏一次；忽略阈值，处理游标之后的新消息 */
     @PostMapping("/settings/run-now")
-    public ResponseEntity<?> runNow() {
+    public ResponseEntity<RunNowResult> runNow() {
         try {
-            return ResponseEntity.ok(Map.of("ok", true, "jobId", auto.runNow()));
+            return ResponseEntity.ok(new RunNowResult(true, auto.runNow()));
         } catch (IllegalStateException e) {
             throw ApiException.conflict("CONFLICT", e.getMessage());
         } catch (Exception e) {
@@ -344,16 +306,16 @@ public class DistillAdminController {
 
     /** 笔记列表 */
     @GetMapping("/notes")
-    public Map<String, Object> notes(@RequestParam(required = false) String status,
-                                     @RequestParam(defaultValue = "0") long jobId,
-                                     @RequestParam(defaultValue = "100") int limit) {
+    public NoteList notes(@RequestParam(required = false) String status,
+                          @RequestParam(defaultValue = "0") long jobId,
+                          @RequestParam(defaultValue = "100") int limit) {
         List<DistillNoteRepository.Note> rows = notes.list(status, jobId, limit);
-        return Map.of("rows", rows, "count", rows.size());
+        return new NoteList(rows, rows.size());
     }
 
     /** 笔记详情：正文 + 来源 + 图片 */
     @GetMapping("/notes/{id}")
-    public ResponseEntity<?> note(@PathVariable long id) {
+    public ResponseEntity<DistillNoteService.Detail> note(@PathVariable long id) {
         DistillNoteService.Detail detail = notes.detail(id);
         if (detail == null) {
             throw ApiException.notFound("没有这条笔记");
@@ -363,7 +325,7 @@ public class DistillAdminController {
 
     /** 编辑标题 / 别名 / 分类 / 正文 / 置信度 */
     @PutMapping("/notes/{id}")
-    public ResponseEntity<?> updateNote(@PathVariable long id, @RequestBody UpdateNoteRequest body) {
+    public ResponseEntity<DistillNoteRepository.Note> updateNote(@PathVariable long id, @RequestBody UpdateNoteRequest body) {
         try {
             var note = notes.update(id, body.title(), body.aliases(), body.category(),
                     body.body(), body.confidence());
@@ -380,7 +342,7 @@ public class DistillAdminController {
     }
 
     @PostMapping("/notes/{id}/publish")
-    public ResponseEntity<?> publish(@PathVariable long id) {
+    public ResponseEntity<DistillNoteRepository.Note> publish(@PathVariable long id) {
         try {
             var note = notes.publish(id);
             if (note == null) {
@@ -394,7 +356,7 @@ public class DistillAdminController {
     }
 
     @PostMapping("/notes/{id}/unpublish")
-    public ResponseEntity<?> unpublish(@PathVariable long id) {
+    public ResponseEntity<DistillNoteRepository.Note> unpublish(@PathVariable long id) {
         var note = notes.unpublish(id);
         if (note == null) {
             throw ApiException.notFound("没有这条笔记");
@@ -403,11 +365,11 @@ public class DistillAdminController {
     }
 
     @DeleteMapping("/notes/{id}")
-    public ResponseEntity<?> deleteNote(@PathVariable long id) {
+    public ResponseEntity<Void> deleteNote(@PathVariable long id) {
         if (!notes.delete(id)) {
             throw ApiException.notFound("没有这条笔记");
         }
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -418,7 +380,7 @@ public class DistillAdminController {
      * 块与图片清理保持同一套逻辑 —— 两套删除路径迟早会不一致。
      */
     @PostMapping("/notes/actions/batch-delete")
-    public ResponseEntity<?> deleteNotes(@RequestBody(required = false) BatchDeleteRequest body) {
+    public ResponseEntity<BatchDeleteResult> deleteNotes(@RequestBody(required = false) BatchDeleteRequest body) {
         List<Long> ids = body == null ? null : body.ids();
         if (ids == null || ids.isEmpty()) {
             throw ApiException.badRequest("需要 ids 数组");
@@ -440,7 +402,7 @@ public class DistillAdminController {
             }
         }
         log.info("[DISTILL] 批量删除：成功 {}，缺失 {}", deleted, missing);
-        return ResponseEntity.ok(Map.of("ok", true, "deleted", deleted, "missing", missing));
+        return ResponseEntity.ok(new BatchDeleteResult(true, deleted, missing));
     }
 
     private static String str(Object o) {
@@ -542,5 +504,68 @@ public class DistillAdminController {
 
     private static int intOr(Integer value, int fallback) {
         return value == null ? fallback : value;
+    }
+
+    public record CaptureStatus(boolean enabled, List<Long> groups, int queueSize,
+                                long recorded, long dropped, long imageSaved) {
+    }
+
+    public record DistillStats(boolean available, CaptureStatus capture, long messages,
+                               long images, long imports, long jobs, long batches, long notes,
+                               long drafts, long publishedNotes) {
+    }
+
+    public record MessageRow(long id, String ts, long groupId, String senderName, String text,
+                             int textLength, int imageCount, String source, long importId) {
+    }
+
+    public record MessageList(List<MessageRow> rows, int count) {
+    }
+
+    public record ImportList(List<ChatRepository.ImportRow> rows, int count) {
+    }
+
+    public record JobPage(List<DistillJobRepository.Job> rows, long total, int page,
+                          int size, long pages) {
+    }
+
+    public record BlocklistView(List<DistillBlocklistRepository.Blocked> blocked,
+                                List<DistillBlocklistRepository.Sender> senders) {
+    }
+
+    public record SettingsView(DistillSettingRepository.Settings settings, List<Long> groups,
+                               List<LlmRouter.ProviderInfo> providers, long pendingMessages) {
+    }
+
+    public record NoteList(List<DistillNoteRepository.Note> rows, int count) {
+    }
+
+    public record ImageRow(long id, String md5, String mime, int bytes, String caption) {
+    }
+
+    public record MessageDetail(long id, String ts, long groupId, String senderName,
+                                String text, int imageCount, String source,
+                                List<ImageRow> images) {
+    }
+
+    public record JobCreated(boolean ok, long id) {
+    }
+
+    public record StartedResult(boolean ok, boolean started) {
+    }
+
+    public record RetryView(boolean ok, int reset, boolean started) {
+    }
+
+    public record BlockQqResult(boolean ok, int updated) {
+    }
+
+    public record SettingsSaved(boolean ok, DistillSettingRepository.Settings settings) {
+    }
+
+    public record RunNowResult(boolean ok, long jobId) {
+    }
+
+    public record BatchDeleteResult(boolean ok, int deleted, int missing) {
     }
 }

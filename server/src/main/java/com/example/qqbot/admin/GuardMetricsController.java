@@ -41,19 +41,10 @@ public class GuardMetricsController {
      * 拦截率、各层拦截分布、回话术分布、被拦最多的用户、当日预算用量。
      */
     @GetMapping("/metrics")
-    public Map<String, Object> snapshot() {
-        Map<String, Object> out = new LinkedHashMap<>(metrics.snapshot());
+    public GuardView snapshot() {
+        return new GuardView(metrics.snapshot(), budget.snapshot());
+    }
 
-        BudgetGuard.Snapshot b = budget.snapshot();
-        Map<String, Object> bm = new LinkedHashMap<>();
-        bm.put("day", b.day());
-        bm.put("globalCalls", b.globalCalls());
-        bm.put("globalTokens", b.globalTokens());
-        bm.put("trackedUsers", b.trackedUsers());
-        bm.put("trackedGroups", b.trackedGroups());
-        bm.put("globalPerDay", b.globalPerDay());
-        bm.put("globalTokensPerDay", b.globalTokensPerDay());
-        out.put("budget", bm);
-        return out;
+    public record GuardView(GuardMetrics.GuardSnapshot metrics, BudgetGuard.Snapshot budget) {
     }
 }

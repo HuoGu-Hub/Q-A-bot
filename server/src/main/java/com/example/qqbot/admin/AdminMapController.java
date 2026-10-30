@@ -99,103 +99,52 @@ public class AdminMapController {
 
     /** 资源点位的快照状态：版本、点数、图层数 */
     @GetMapping("/resources/status")
-    public Map<String, Object> resourceStatus() {
+    public ResourceStatus resourceStatus() {
         MapResourceService.CatalogView catalog = resources.catalog("Embervale");
         int layers = catalog.categories().stream().mapToInt(c -> c.layers().size()).sum();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("imported", catalog.imported());
-        out.put("version", catalog.version());
-        out.put("importedAt", catalog.importedAt());
-        out.put("message", catalog.message());
-        out.put("layers", layers);
-        out.put("categories", catalog.categories().size());
-        return out;
+        return new ResourceStatus(true, catalog.imported(), catalog.version(),
+                catalog.importedAt(), catalog.message(), layers, catalog.categories().size());
     }
 
     /** 强制重导资源点位；文件没变时它会跳过，除非 force=true */
     @PostMapping("/resources/import")
-    public Map<String, Object> importResources(
+    public ResourceImportResult importResources(
             @RequestParam(name = "force", defaultValue = "false") boolean force) {
         MapResourceImporter.ImportReport report = force
                 ? resourceImporter.importNow() : resourceImporter.ensureLoaded();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("imported", report.imported());
-        out.put("found", report.found());
-        out.put("version", report.version());
-        out.put("layers", report.layers());
-        out.put("points", report.points());
-        out.put("areas", report.areas());
-        out.put("message", report.message());
-        return out;
+        return new ResourceImportResult(true, report.imported(), report.found(),
+                report.version(), report.layers(), report.points(), report.areas(),
+                report.message());
     }
 
     /* ==================== 状态 ==================== */
 
     /** 一眼看尽状态：库里有几张画布、点位从哪来、缓存多大、长任务跑到哪了 */
     @GetMapping("/status")
-    public Map<String, Object> status() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("enabled", options.isEnabled());
-        out.put("unitsPerMeter", options.getUnitsPerMeter());
-        out.put("directory", view.describe());
-        out.put("mapStoreAvailable", mapStore.isAvailable());
-        out.put("placesAvailable", places.isAvailable());
-        out.put("notesAvailable", notes.isAvailable());
-
+    public MapStatusView status() {
         MapImageCache.Stats st = images.stats();
-        Map<String, Object> cache = new LinkedHashMap<>();
-        cache.put("enabled", st.enabled());
-        cache.put("root", st.root());
-        cache.put("files", st.files());
-        cache.put("bytes", st.bytes());
-        // 最近写入时间：任务状态是本进程的，缓存是磁盘上的 —— 前端靠它说明"重启不用重新预热"
-        cache.put("latestAt", st.latestAt());
-        out.put("tileCache", cache);
+        TileCache cache = new TileCache(st.enabled(), st.root(), st.files(), st.bytes(),
+                st.latestAt());
 
-        // 底图变了导致点位可能整体偏移 —— "待复核几条"必须一眼可见，
-        // 这是这套机制存在的全部意义（否则它只是个没人看的字段）
-        out.put("anchorPending", places.pendingReview().size());
-        out.put("placeTotal", places.count());
-
-        out.put("jobs", jobs.states());
-        // 分单位覆盖：出图要的是"某一档齐没齐"，总文件数回答不了这个
-        out.put("warmCoverage", jobs.coverage());
-
-        // 磁盘上的语料：任务状态是本进程的，语料是库里的 —— 状态页两个都要，但先说库里那个
-        LocationCorpusBuilder.Derived derived = corpus.derived();
-        out.put("corpus", Map.of("blocks", derived.blocks(), "latestAt", derived.latestAt()));
-
-        // 只输出界面真正会读的四个字段。它原先还带 page / hasCrs / extent / syncedAt，
-        // 那些是给已经删掉的「画布」表用的 —— 没人读的字段留着只会让下一个人以为它在被用。
-        // 注意这里**不过滤启用范围**：候选地图表要靠它显示"未启用那张能不能渲染"
-        List<Map<String, Object>> canvases = new ArrayList<>();
+        List<CanvasRow> canvases = new ArrayList<>();
         for (KbMapStore.Canvas c : mapStore.canvases()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("map", c.map());
-            m.put("renderable", c.renderable());
-            m.put("background", c.backgroundImage());
-            m.put("tiles", view.tilesOf(c.tilesJson()).size());
-            canvases.add(m);
+            canvases.add(new CanvasRow(c.map(), c.renderable(), c.backgroundImage(),
+                    view.tilesOf(c.tilesJson()).size()));
         }
-        out.put("canvases", canvases);
 
-        List<Map<String, Object>> pages = new ArrayList<>();
+        List<PageRow> pages = new ArrayList<>();
         for (KbMapStore.PageState p : mapStore.pages()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("page", p.page());
-            m.put("map", p.map());
-            m.put("revid", p.revid());
-            m.put("markerCount", p.markerCount());
-            m.put("syncedAt", p.syncedAt());
-            m.put("error", p.parseError());
-            pages.add(m);
+            pages.add(new PageRow(p.page(), p.map(), p.revid(), p.markerCount(),
+                    p.syncedAt(), p.parseError()));
         }
-        out.put("pages", pages);
-        out.put("categories", MapViewService.categoryLabels());
-        return out;
+
+        LocationCorpusBuilder.Derived derived = corpus.derived();
+        return new MapStatusView(true, options.isEnabled(), options.getUnitsPerMeter(),
+                view.describe(), mapStore.isAvailable(), places.isAvailable(),
+                notes.isAvailable(), places.pendingReview().size(), places.count(),
+                cache, jobs.states(), canvases, pages,
+                new Corpus(derived.blocks(), derived.latestAt()), jobs.coverage(),
+                MapViewService.categoryLabels());
     }
 
     /**
@@ -206,28 +155,19 @@ public class AdminMapController {
      * 鉴权已经由 {@link AdminAuthFilter} 拦在前面，这里复用视图层即可。
      */
     @GetMapping("/catalog")
-    public Map<String, Object> catalog() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("enabled", options.isEnabled());
-        out.put("unitsPerMeter", options.getUnitsPerMeter());
-        out.put("maxZoom", options.getMaxZoom());
-        out.put("categories", MapViewService.categoryLabels());
-        out.put("maps", view.catalog());
-        return out;
+    public AdminCatalog catalog() {
+        return new AdminCatalog(true, options.isEnabled(), options.getUnitsPerMeter(),
+                options.getMaxZoom(), MapViewService.categoryLabels(), view.catalog());
     }
 
     /** 一张地图的**全部**点位（含隐藏的），标注页要能看到自己藏了什么 */
     @GetMapping("/markers")
-    public ResponseEntity<?> markers(@RequestParam("map") String map) {
+    public ResponseEntity<MarkersView> markers(@RequestParam("map") String map) {
         if (map == null || map.isBlank()) {
             throw ApiException.badRequest("缺少 map 参数");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("map", map.strip());
-        out.put("markers", view.markers(map.strip(), false));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new MarkersView(true, map.strip(),
+                view.markers(map.strip(), false)));
     }
 
     /** 可供点位选用的图标（去重）—— 复用 wiki 已有的那套，不额外做图片上传 */
@@ -240,34 +180,18 @@ public class AdminMapController {
      * 两份数据来自同一次 {@code catalog()}，也就不会出现"界面上的分组和实际对不上"。
      */
     @GetMapping("/layers")
-    public Map<String, Object> layers() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("available", layers.isAvailable());
-        List<Map<String, Object>> maps = new ArrayList<>();
+    public LayersView layers() {
+        List<LayerMap> maps = new ArrayList<>();
         for (MapViewService.MapView m : view.catalog()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("map", m.map());
-            item.put("label", m.label());
-            item.put("markerCount", m.markerCount());
-            // configured 与"选中了几个"是两件事：前者决定前端要不要用经验值兜底
-            item.put("configured", m.defaultGroups() != null);
-            List<Map<String, Object>> groups = new ArrayList<>();
+            List<LayerGroup> groups = new ArrayList<>();
             for (MapViewService.GroupView g : m.groups()) {
-                Map<String, Object> gi = new LinkedHashMap<>();
-                gi.put("key", g.key());
-                gi.put("name", g.name());
-                gi.put("icon", g.icon());
-                gi.put("category", g.category());
-                gi.put("count", g.count());
-                gi.put("on", m.defaultGroups() != null && m.defaultGroups().contains(g.key()));
-                groups.add(gi);
+                groups.add(new LayerGroup(g.key(), g.name(), g.icon(), g.category(), g.count(),
+                        m.defaultGroups() != null && m.defaultGroups().contains(g.key())));
             }
-            item.put("groups", groups);
-            maps.add(item);
+            maps.add(new LayerMap(m.map(), m.label(), m.markerCount(),
+                    m.defaultGroups() != null, groups));
         }
-        out.put("maps", maps);
-        return out;
+        return new LayersView(true, layers.isAvailable(), maps);
     }
 
     /* ==================== 当前用哪几张地图 ==================== */
@@ -280,12 +204,8 @@ public class AdminMapController {
      * 而不是像白名单那样被静默跳过、让旧图继续以"最新"的样子留着。
      */
     @GetMapping("/maps")
-    public Map<String, Object> maps() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("active", scope.activeMaps());
-        out.put("candidates", scope.candidates());
-        return out;
+    public MapsView maps() {
+        return new MapsView(true, new ArrayList<>(scope.activeMaps()), scope.candidates());
     }
 
     /** 启停请求。{@code active} 缺省视为 true */
@@ -294,7 +214,7 @@ public class AdminMapController {
     }
 
     @PutMapping("/maps/active")
-    public ResponseEntity<?> setActive(@RequestBody ActiveRequest body) {
+    public ResponseEntity<ActiveView> setActive(@RequestBody ActiveRequest body) {
         return handle(() -> {
             if (body == null || body.map() == null || body.map().isBlank()) {
                 throw new IllegalArgumentException("缺少地图名");
@@ -303,7 +223,8 @@ public class AdminMapController {
             if (!scope.setActive(body.map(), on)) {
                 throw new IllegalStateException("地图启用状态存不了（问答库没起来）");
             }
-            return ResponseEntity.ok(Map.of("ok", true, "active", scope.activeMaps()));
+            return ResponseEntity.ok(new ActiveView(true,
+                    new ArrayList<>(scope.activeMaps())));
         });
     }
 
@@ -313,7 +234,7 @@ public class AdminMapController {
     }
 
     @PutMapping("/layers")
-    public ResponseEntity<?> saveLayers(@RequestBody LayerRequest body) {
+    public ResponseEntity<Void> saveLayers(@RequestBody LayerRequest body) {
         if (body == null || body.map() == null || body.map().isBlank()) {
             throw ApiException.badRequest("缺少 map");
         }
@@ -321,30 +242,24 @@ public class AdminMapController {
             throw ApiException.badRequest("数据库不可用，配置无法保存");
         }
         layers.save(body.map(), body.groups());
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/icons")
-    public Map<String, Object> icons() {
+    public IconsView icons() {
         List<String> icons = new ArrayList<>(view.allIcons());
         icons.sort(String::compareTo);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("icons", icons);
-        return out;
+        return new IconsView(true, icons);
     }
 
     /* ==================== 自定义点位 ==================== */
 
     @GetMapping("/places")
-    public Map<String, Object> listPlaces(@RequestParam(name = "map", required = false) String map,
-                                          @RequestParam(name = "visibleOnly", defaultValue = "false")
-                                          boolean visibleOnly) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("places", places.list(map, visibleOnly));
-        out.put("categories", MapViewService.categoryLabels());
-        return out;
+    public PlacesView listPlaces(@RequestParam(name = "map", required = false) String map,
+                                 @RequestParam(name = "visibleOnly", defaultValue = "false")
+                                 boolean visibleOnly) {
+        return new PlacesView(true, places.list(map, visibleOnly),
+                MapViewService.categoryLabels());
     }
 
     /** 新增点位的请求体。字段全部用包装类型：缺省与"显式给了 0"必须能区分 */
@@ -355,31 +270,31 @@ public class AdminMapController {
     }
 
     @PostMapping("/places")
-    public ResponseEntity<?> createPlace(@RequestBody PlaceRequest body) {
+    public ResponseEntity<PlaceView> createPlace(@RequestBody PlaceRequest body) {
         return handle(() -> {
             MapPlaceService.Place created = places.create(toPlace(body, 0));
-            return ResponseEntity.ok(Map.of("ok", true, "place", created));
+            return ResponseEntity.ok(new PlaceView(true, created));
         });
     }
 
     @PutMapping("/places/{id}")
-    public ResponseEntity<?> updatePlace(@PathVariable long id, @RequestBody PlaceRequest body) {
+    public ResponseEntity<PlaceView> updatePlace(@PathVariable long id, @RequestBody PlaceRequest body) {
         return handle(() -> {
             MapPlaceService.Place updated = places.update(toPlace(body, id));
             if (updated == null) {
                 throw ApiException.notFound("没有 id=" + id + " 的点位");
             }
-            return ResponseEntity.ok(Map.of("ok", true, "place", updated));
+            return ResponseEntity.ok(new PlaceView(true, updated));
         });
     }
 
     @DeleteMapping("/places/{id}")
-    public ResponseEntity<?> deletePlace(@PathVariable long id) {
+    public ResponseEntity<Void> deletePlace(@PathVariable long id) {
         return handle(() -> {
             if (!places.delete(id)) {
                 throw ApiException.notFound("没有 id=" + id + " 的点位");
             }
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         });
     }
 
@@ -391,14 +306,9 @@ public class AdminMapController {
      * 而且**不会有任何报错**。这个接口就是那个"不会有报错"的替代品。
      */
     @GetMapping("/anchor")
-    public Map<String, Object> anchor() {
+    public AnchorView anchor() {
         List<MapPlaceService.Review> pending = places.pendingReview();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("total", places.count());
-        out.put("pending", pending.size());
-        out.put("items", pending);
-        return out;
+        return new AnchorView(true, places.count(), pending.size(), pending);
     }
 
     /**
@@ -407,12 +317,12 @@ public class AdminMapController {
      * <p>只更新指纹，不碰坐标。真的偏了的话应该走 {@code PUT /places/{id}} 把坐标改对。
      */
     @PostMapping("/places/{id}/confirm-anchor")
-    public ResponseEntity<?> confirmAnchor(@PathVariable long id) {
+    public ResponseEntity<Void> confirmAnchor(@PathVariable long id) {
         return handle(() -> {
             if (!places.confirmAnchor(id)) {
                 throw ApiException.notFound("没有 id=" + id + " 的点位，或者它的画布现在找不到");
             }
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         });
     }
 
@@ -428,7 +338,7 @@ public class AdminMapController {
      * —— 就是他把它从哪拖到了哪。剩下的点照搬即可，不必逐个再拖一遍。
      */
     @PostMapping("/anchor/apply-offset")
-    public ResponseEntity<?> applyOffset(@RequestBody OffsetRequest body) {
+    public ResponseEntity<OffsetResult> applyOffset(@RequestBody OffsetRequest body) {
         return handle(() -> {
             if (body == null || body.referenceId() == null) {
                 throw new IllegalArgumentException("缺少基准点位 id");
@@ -438,18 +348,16 @@ public class AdminMapController {
             if (r == null) {
                 throw ApiException.notFound("没有 id=" + body.referenceId() + " 的点位");
             }
-            return ResponseEntity.ok(Map.of("ok", true, "moved", r.moved(), "skipped", r.skipped()));
+            return ResponseEntity.ok(new OffsetResult(true, r.moved(), r.skipped()));
         });
     }
 
     /* ==================== wiki 点位备注 ==================== */
 
     @GetMapping("/notes")
-    public Map<String, Object> listNotes(@RequestParam(name = "map", required = false) String map) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("notes", map == null || map.isBlank() ? notes.all() : new ArrayList<>(notes.byMap(map).values()));
-        return out;
+    public NotesView listNotes(@RequestParam(name = "map", required = false) String map) {
+        return new NotesView(true, map == null || map.isBlank()
+                ? notes.all() : new ArrayList<>(notes.byMap(map).values()));
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
@@ -459,7 +367,7 @@ public class AdminMapController {
     }
 
     @PostMapping("/notes")
-    public ResponseEntity<?> upsertNote(@RequestBody NoteRequest body) {
+    public ResponseEntity<NoteView> upsertNote(@RequestBody NoteRequest body) {
         return handle(() -> {
             if (body == null) {
                 throw new IllegalArgumentException("缺少内容");
@@ -468,19 +376,19 @@ public class AdminMapController {
                     body.map(), body.page(), body.markerId(), body.alias(), body.note(),
                     body.category(), bool(body.landmark()), num(body.priority()), bool(body.hidden()),
                     ""));
-            return ResponseEntity.ok(Map.of("ok", true, "note", saved));
+            return ResponseEntity.ok(new NoteView(true, saved));
         });
     }
 
     @DeleteMapping("/notes")
-    public ResponseEntity<?> deleteNote(@RequestParam("map") String map,
+    public ResponseEntity<Void> deleteNote(@RequestParam("map") String map,
                                         @RequestParam(name = "page", required = false) String page,
                                         @RequestParam("markerId") String markerId) {
         return handle(() -> {
             if (!notes.delete(map, page, markerId)) {
                 throw ApiException.notFound("没有这条备注");
             }
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         });
     }
 
@@ -488,11 +396,11 @@ public class AdminMapController {
 
     /** 触发 wiki 地图同步。**立即返回**，进度看 /status 的 jobs */
     @PostMapping("/sync")
-    public ResponseEntity<?> sync(@RequestParam(name = "dryRun", defaultValue = "false") boolean dryRun) {
+    public ResponseEntity<Void> sync(@RequestParam(name = "dryRun", defaultValue = "false") boolean dryRun) {
         if (!jobs.startSync(dryRun)) {
             throw ApiException.conflict("CONFLICT", "同步已经在跑了");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "started", true));
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -502,11 +410,11 @@ public class AdminMapController {
      * 而不是让第一个打开地图的群友在空白里等。
      */
     @PostMapping("/warm")
-    public ResponseEntity<?> warm() {
+    public ResponseEntity<Void> warm() {
         if (!jobs.startWarm()) {
             throw ApiException.conflict("CONFLICT", "预热已经在跑了");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "started", true));
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -518,11 +426,11 @@ public class AdminMapController {
      * 高峰期点它等于拿访客的首屏去换一张没人立刻要的图。
      */
     @PostMapping("/warm-full")
-    public ResponseEntity<?> warmFull() {
+    public ResponseEntity<Void> warmFull() {
         if (!jobs.startFullWarm()) {
             throw ApiException.conflict("CONFLICT", "预热已经在跑了");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "started", true));
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -536,21 +444,21 @@ public class AdminMapController {
      * @param tiles 连瓦片缓存一起删。删了要重新预热，所以默认 true 但要由调用方明说
      */
     @DeleteMapping("/cache")
-    public ResponseEntity<?> reset(@RequestParam(name = "tiles", defaultValue = "true") boolean tiles) {
+    public ResponseEntity<Void> reset(@RequestParam(name = "tiles", defaultValue = "true") boolean tiles) {
         if (!jobs.startReset(tiles)) {
             throw ApiException.conflict("CONFLICT", "清空任务已经在跑了");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "started", true, "tiles", tiles));
+        return ResponseEntity.noContent().build();
     }
 
     /** 派生或清除地点语料。同样立即返回 */
     @PostMapping("/corpus")
-    public ResponseEntity<?> corpus(@RequestParam(name = "purge", defaultValue = "false") boolean purge,
+    public ResponseEntity<Void> corpus(@RequestParam(name = "purge", defaultValue = "false") boolean purge,
                                     @RequestParam(name = "dryRun", defaultValue = "false") boolean dryRun) {
         if (!jobs.startCorpus(purge, dryRun)) {
             throw ApiException.conflict("CONFLICT", "语料任务已经在跑了");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "started", true));
+        return ResponseEntity.noContent().build();
     }
 
     /* ==================== 转换与错误 ==================== */
@@ -585,7 +493,7 @@ public class AdminMapController {
      * 分清它们是因为**排查方向完全不同** —— 400 是调用方写错了，
      * 503 是问答库没起来，500 才是真的代码出问题。
      */
-    private ResponseEntity<?> handle(java.util.concurrent.Callable<ResponseEntity<?>> body) {
+    private <T> ResponseEntity<T> handle(java.util.concurrent.Callable<ResponseEntity<T>> body) {
         try {
             return body.call();
         } catch (IllegalArgumentException e) {
@@ -596,5 +504,83 @@ public class AdminMapController {
             log.warn("[MAP-ADMIN] 操作失败：{}", e.getMessage(), e);
             throw ApiException.internal("操作失败：" + e.getMessage());
         }
+    }
+
+    public record ResourceStatus(boolean ok, boolean imported, String version, String importedAt,
+                                 String message, int layers, int categories) {
+    }
+
+    public record ResourceImportResult(boolean ok, boolean imported, boolean found, String version,
+                                       int layers, int points, int areas, String message) {
+    }
+
+    public record TileCache(boolean enabled, String root, long files, long bytes, String latestAt) {
+    }
+
+    public record CanvasRow(String map, boolean renderable, String background, int tiles) {
+    }
+
+    public record PageRow(String page, String map, long revid, int markerCount,
+                          String syncedAt, String error) {
+    }
+
+    public record Corpus(int blocks, String latestAt) {
+    }
+
+    public record MapStatusView(boolean ok, boolean enabled, double unitsPerMeter, String directory,
+                                boolean mapStoreAvailable, boolean placesAvailable,
+                                boolean notesAvailable, int anchorPending, long placeTotal,
+                                TileCache tileCache, Map<String, MapJobs.JobState> jobs,
+                                List<CanvasRow> canvases, List<PageRow> pages, Corpus corpus,
+                                List<MapJobs.WarmUnit> warmCoverage,
+                                List<MapViewService.CategoryLabel> categories) {
+    }
+
+    public record AdminCatalog(boolean ok, boolean enabled, double unitsPerMeter, double maxZoom,
+                               List<MapViewService.CategoryLabel> categories,
+                               List<MapViewService.MapView> maps) {
+    }
+
+    public record LayerGroup(String key, String name, String icon, String category, int count,
+                             boolean on) {
+    }
+
+    public record LayerMap(String map, String label, int markerCount, boolean configured,
+                           List<LayerGroup> groups) {
+    }
+
+    public record LayersView(boolean ok, boolean available, List<LayerMap> maps) {
+    }
+
+    public record MapsView(boolean ok, List<String> active, List<MapScope.Candidate> candidates) {
+    }
+
+    public record IconsView(boolean ok, List<String> icons) {
+    }
+
+    public record PlacesView(boolean ok, List<MapPlaceService.Place> places,
+                             List<MapViewService.CategoryLabel> categories) {
+    }
+
+    public record AnchorView(boolean ok, long total, int pending,
+                             List<MapPlaceService.Review> items) {
+    }
+
+    public record NotesView(boolean ok, List<MapNoteService.Note> notes) {
+    }
+
+    public record MarkersView(boolean ok, String map, List<MapViewService.MarkerView> markers) {
+    }
+
+    public record ActiveView(boolean ok, List<String> active) {
+    }
+
+    public record PlaceView(boolean ok, MapPlaceService.Place place) {
+    }
+
+    public record NoteView(boolean ok, MapNoteService.Note note) {
+    }
+
+    public record OffsetResult(boolean ok, int moved, int skipped) {
     }
 }

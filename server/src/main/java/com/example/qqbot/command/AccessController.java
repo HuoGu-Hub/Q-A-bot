@@ -49,13 +49,13 @@ public class AccessController {
 
     /** 某条命令自己的名单 */
     @GetMapping("/commands/{id}/acl")
-    public Map<String, Object> commandAcl(@PathVariable long id) {
+    public AclView commandAcl(@PathVariable long id) {
         return view(aclStore.ofCommand(id));
     }
 
     /** 整份替换某条命令的名单 */
     @PostMapping("/commands/{id}/acl")
-    public ResponseEntity<Map<String, Object>> saveCommandAcl(@PathVariable long id,
+    public ResponseEntity<AclView> saveCommandAcl(@PathVariable long id,
                                                               @RequestBody AclRequest body) {
         if (id <= 0) {
             throw ApiException.badRequest("命令编号不对");
@@ -66,13 +66,13 @@ public class AccessController {
 
     /** 某个板块自己的名单 */
     @GetMapping("/boards/{id}/acl")
-    public Map<String, Object> boardAcl(@PathVariable long id) {
+    public AclView boardAcl(@PathVariable long id) {
         return view(aclStore.ofBoard(id));
     }
 
     /** 整份替换某个板块的名单 */
     @PostMapping("/boards/{id}/acl")
-    public ResponseEntity<Map<String, Object>> saveBoardAcl(@PathVariable long id,
+    public ResponseEntity<AclView> saveBoardAcl(@PathVariable long id,
                                                             @RequestBody AclRequest body) {
         if (id <= 0) {
             throw ApiException.badRequest("板块编号不对");
@@ -83,12 +83,12 @@ public class AccessController {
 
     /** 全局名单：对所有命令与板块生效 */
     @GetMapping("/acl/global")
-    public Map<String, Object> globalAcl() {
+    public AclView globalAcl() {
         return view(aclStore.global());
     }
 
     @PostMapping("/acl/global")
-    public ResponseEntity<Map<String, Object>> saveGlobalAcl(@RequestBody AclRequest body) {
+    public ResponseEntity<AclView> saveGlobalAcl(@RequestBody AclRequest body) {
         aclStore.replaceGlobal(parse(body));
         return ResponseEntity.ok(view(aclStore.global()));
     }
@@ -96,12 +96,12 @@ public class AccessController {
     // ==================== 数据范围 ====================
 
     @GetMapping("/commands/{id}/policy")
-    public Map<String, Object> policy(@PathVariable long id) {
+    public PolicyView policy(@PathVariable long id) {
         return viewOf(policyStore.of(id));
     }
 
     @PostMapping("/commands/{id}/policy")
-    public ResponseEntity<Map<String, Object>> savePolicy(@PathVariable long id,
+    public ResponseEntity<PolicyView> savePolicy(@PathVariable long id,
                                                           @RequestBody PolicyRequest body) {
         if (id <= 0) {
             throw ApiException.badRequest("命令编号不对");
@@ -123,29 +123,29 @@ public class AccessController {
 
     // ==================== 出参形状 ====================
 
-    private static Map<String, Object> view(List<AclEntry> entries) {
-        List<Map<String, Object>> white = new ArrayList<>();
-        List<Map<String, Object>> black = new ArrayList<>();
+    private static AclView view(List<AclEntry> entries) {
+        List<AclItemView> white = new ArrayList<>();
+        List<AclItemView> black = new ArrayList<>();
         for (AclEntry entry : entries) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("type", entry.type());
-            item.put("value", entry.value());
+            AclItemView item = new AclItemView(entry.type(), entry.value());
             (entry.isWhite() ? white : black).add(item);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("white", white);
-        out.put("black", black);
-        return out;
+        return new AclView(white, black);
     }
 
-    private static Map<String, Object> viewOf(DataPolicy policy) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("scope", policy.scope().name());
-        out.put("groups", policy.groups());
-        out.put("showGroup", policy.showGroup());
-        out.put("showUser", policy.showUser());
-        out.put("allowPrivate", policy.allowPrivate());
-        return out;
+    private static PolicyView viewOf(DataPolicy policy) {
+        return new PolicyView(policy.scope().name(), policy.groups(),
+                policy.showGroup(), policy.showUser(), policy.allowPrivate());
+    }
+
+    public record AclItemView(String type, long value) {
+    }
+
+    public record AclView(List<AclItemView> white, List<AclItemView> black) {
+    }
+
+    public record PolicyView(String scope, List<Long> groups, boolean showGroup,
+                             boolean showUser, boolean allowPrivate) {
     }
 
     // ==================== 入参解析 ====================

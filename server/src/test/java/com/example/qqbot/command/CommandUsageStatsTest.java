@@ -45,7 +45,7 @@ class CommandUsageStatsTest {
         store.logUsage("list", 1L, 2L, true);
         store.logUsage("set/output", 1L, 2L, true);
 
-        assertThat(store.topUsed(30, 10)).extracting(m -> m.get("trigger"))
+        assertThat(store.topUsed(30, 10)).extracting(CommandRepository.UsageStat::trigger)
                 .contains("help", "list").doesNotContain("set/output");
     }
 }

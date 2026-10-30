@@ -349,8 +349,8 @@ class CommandMatcherTest {
 
         var unmatched = store.unmatched(30, 10);
         assertThat(unmatched).hasSize(1);
-        assertThat(unmatched.get(0).get("trigger")).isEqualTo("不存在的命令");
-        assertThat(unmatched.get(0).get("count")).isEqualTo(2L);
+        assertThat(unmatched.get(0).trigger()).isEqualTo("不存在的命令");
+        assertThat(unmatched.get(0).count()).isEqualTo(2L);
     }
 
     private static BotCommand command(String path, String kind) {

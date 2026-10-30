@@ -15,8 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 
 /**
  * 板块记录的管理接口（管理后台专用）。
@@ -43,33 +42,33 @@ public class BoardRecordController {
      * @param withDeleted 连已撤销的一起看
      */
     @GetMapping("")
-    public Map<String, Object> list(@RequestParam String board,
-                                    @RequestParam(defaultValue = "0") long groupId,
-                                    @RequestParam(defaultValue = "false") boolean withDeleted,
-                                    @RequestParam(defaultValue = "100") int limit) {
+    public RecordList list(@RequestParam String board,
+                           @RequestParam(defaultValue = "0") long groupId,
+                           @RequestParam(defaultValue = "false") boolean withDeleted,
+                           @RequestParam(defaultValue = "100") int limit) {
         var records = service.list(board, groupId, withDeleted, limit);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("board", board);
-        out.put("records", records);
-        out.put("count", records.size());
-        return out;
+        return new RecordList(board, records, records.size());
+    }
+
+    public record RecordList(String board,
+                             List<BoardRecordAdminService.RecordView> records, int count) {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+    public ResponseEntity<Void> delete(@PathVariable long id) {
         try {
             service.softDelete(id);
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @PostMapping("/{id}/restore")
-    public ResponseEntity<Map<String, Object>> restore(@PathVariable long id) {
+    public ResponseEntity<Void> restore(@PathVariable long id) {
         try {
             service.restore(id);
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }

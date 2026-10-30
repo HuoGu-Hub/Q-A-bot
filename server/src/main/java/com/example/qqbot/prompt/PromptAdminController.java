@@ -43,19 +43,19 @@ public class PromptAdminController {
     }
 
     @GetMapping("")
-    public Map<String, Object> list() {
-        List<PromptView> views = store.listAll().stream().map(PromptView::of).toList();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("available", store.isAvailable());
-        out.put("prompts", views);
-        return out;
+    public PromptList list() {
+        return new PromptList(store.isAvailable(),
+                store.listAll().stream().map(PromptView::of).toList());
+    }
+
+    public record PromptList(boolean available, List<PromptView> prompts) {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+    public ResponseEntity<Void> delete(@PathVariable long id) {
         if (!store.delete(id)) {
             throw ApiException.notFound("没有这条提示");
         }
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 }

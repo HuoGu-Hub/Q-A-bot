@@ -2,12 +2,18 @@ package com.example.qqbot.web;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.tags.Tag;
+import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -20,6 +26,25 @@ import java.util.List;
  */
 @Configuration
 public class OpenApiConfig {
+
+    /**
+     * {@code ResponseEntity<Void>} 的实际状态是 204，但 springdoc 默认记成 200。
+     * 统一改掉，契约里的状态码才和运行时一致。
+     */
+    @Bean
+    public OperationCustomizer noContentResponses() {
+        return (Operation operation, org.springframework.web.method.HandlerMethod handlerMethod) -> {
+            ResolvableType type = ResolvableType.forMethodReturnType(handlerMethod.getMethod());
+            if (ResponseEntity.class.isAssignableFrom(type.resolve(Object.class))
+                    && type.getGeneric(0).resolve() == Void.class) {
+                ApiResponses responses = operation.getResponses();
+                if (responses != null && responses.remove("200") != null) {
+                    responses.addApiResponse("204", new ApiResponse().description("无内容"));
+                }
+            }
+            return operation;
+        };
+    }
 
     @Bean
     public OpenAPI qqbotOpenApi() {

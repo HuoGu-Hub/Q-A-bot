@@ -58,35 +58,34 @@ public class GuardMetrics {
     }
 
     /** 快照，直接作为后台接口的响应体 */
-    public Map<String, Object> snapshot() {
+    public GuardSnapshot snapshot() {
         long in = inbound.get();
         long pass = passed.get();
         long blocked = blockedByStage.values().stream().mapToLong(AtomicLong::get).sum();
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("inbound", in);
-        out.put("passed", pass);
-        out.put("blocked", blocked);
-        out.put("blockRate", in == 0 ? 0.0 : (double) blocked / in);
-        out.put("byStage", toSortedMap(blockedByStage));
-        out.put("replyByStage", toSortedMap(repliedByStage));
-        out.put("topBlockedUsers", topUsers(5));
-        out.put("uptimeSeconds", (System.currentTimeMillis() - startedAt) / 1000);
-        return out;
+        return new GuardSnapshot(in, pass, blocked,
+                in == 0 ? 0.0 : (double) blocked / in,
+                toSortedMap(blockedByStage), toSortedMap(repliedByStage),
+                topUsers(5), (System.currentTimeMillis() - startedAt) / 1000);
     }
 
-    private List<Map<String, Object>> topUsers(int limit) {
+    public record GuardSnapshot(long inbound, long passed, long blocked, double blockRate,
+                                Map<String, Long> byStage, Map<String, Long> replyByStage,
+                                List<BlockedUser> topBlockedUsers, long uptimeSeconds) {
+    }
+
+    public record BlockedUser(long userId, long count) {
+    }
+
+    private List<BlockedUser> topUsers(int limit) {
         List<Map.Entry<Long, AtomicLong>> entries = new ArrayList<>(blockedUsers.entrySet());
         entries.sort(Comparator.comparingLong((Map.Entry<Long, AtomicLong> e) -> e.getValue().get()).reversed());
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<BlockedUser> out = new ArrayList<>();
         for (Map.Entry<Long, AtomicLong> e : entries) {
-            if (out.size() >= limit || e.getValue().get() <= 0) {
+            if (out.size() >= limit) {
                 break;
             }
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("userId", e.getKey());
-            row.put("count", e.getValue().get());
-            out.add(row);
+            out.add(new BlockedUser(e.getKey(), e.getValue().get()));
         }
         return out;
     }

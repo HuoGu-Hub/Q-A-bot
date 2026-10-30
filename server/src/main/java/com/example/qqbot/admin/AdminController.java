@@ -82,7 +82,7 @@ public class AdminController {
      * 全体管理员一起被锁在门外。
      */
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest body,
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest body,
                                                      HttpServletRequest request,
                                                      HttpServletResponse response) {
         String username = body == null ? null : body.username();
@@ -122,12 +122,8 @@ public class AdminController {
             try {
                 AdminQqCodeService.Issued issued = qqCodes.issue(
                         user.id(), user.qq(), AdminQqCodeService.PURPOSE_LOGIN, null);
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("ok", true);
-                out.put("needCode", true);
-                out.put("challengeId", issued.challengeId());
-                out.put("qq", issued.qqMasked());
-                return ResponseEntity.ok(out);
+                return ResponseEntity.ok(LoginResponse.challenge(
+                        issued.challengeId(), issued.qqMasked()));
             } catch (AdminQqCodeService.CodeException e) {
                 audit.record(user.id(), user.username(), "qq-code-send-failed",
                         "POST", "/admin/api/login", e.getMessage(), ipHash);
@@ -141,7 +137,7 @@ public class AdminController {
 
     /** 登录第二步：QQ 验证码。成功后才发正式会话 */
     @PostMapping("/login/qq-code")
-    public ResponseEntity<Map<String, Object>> loginWithQqCode(@RequestBody QqCodeRequest body,
+    public ResponseEntity<LoginResponse> loginWithQqCode(@RequestBody QqCodeRequest body,
                                                                HttpServletRequest request,
                                                                HttpServletResponse response) {
         String challengeId = body == null ? null : body.challengeId();
@@ -168,7 +164,7 @@ public class AdminController {
         }
     }
 
-    private ResponseEntity<Map<String, Object>> sessionResponse(AdminUser user,
+    private ResponseEntity<LoginResponse> sessionResponse(AdminUser user,
                                                                 HttpServletRequest request,
                                                                 HttpServletResponse response,
                                                                 String ipHash,
@@ -194,26 +190,16 @@ public class AdminController {
         }
 
         audit.record(user.id(), user.username(), "login-ok", "POST", "/admin/api/login", null, ipHash);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("user", userDto(AdminPrincipal.of(user)));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(LoginResponse.session(userDto(AdminPrincipal.of(user)), null));
     }
 
     /** 账号信息的对外形状：不含任何哈希或盐 */
-    private static Map<String, Object> userDto(AdminPrincipal p) {
-        Map<String, Object> m = new LinkedHashMap<>();
+    private static AdminUserView userDto(AdminPrincipal p) {
         if (p == null) {
-            return m;
+            return null;
         }
-        m.put("id", p.id());
-        m.put("username", p.username());
-        m.put("displayName", p.display());
-        m.put("role", p.role().id());
-        m.put("roleLabel", p.role().label());
-        m.put("qq", p.qq());
-        m.put("qqVerified", p.qqVerified());
-        return m;
+        return new AdminUserView(p.id(), p.username(), p.display(), p.role().id(),
+                p.role().label(), p.qq(), p.qqVerified());
     }
 
     private static String readCookie(HttpServletRequest request, String name) {
@@ -230,7 +216,7 @@ public class AdminController {
     }
 
     @PostMapping("/logout")
-    public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (Cookie c : cookies) {
@@ -243,21 +229,17 @@ public class AdminController {
         clear.setPath("/admin");
         clear.setMaxAge(0);
         response.addCookie(clear);
-        return Map.of("ok", true);
+        return ResponseEntity.noContent().build();
     }
 
     /** 前端用来确认自己还在登录状态，顺便把自己是谁告诉它 */
     @GetMapping("/session")
-    public ResponseEntity<Map<String, Object>> session(HttpServletRequest request) {
+    public ResponseEntity<LoginResponse> session(HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
             throw ApiException.unauthorized("未登录或会话已过期");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("user", userDto(p));
-        out.put("sessions", auth.sessionCount());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(LoginResponse.session(userDto(p), auth.sessionCount()));
     }
 
     /**
@@ -266,7 +248,7 @@ public class AdminController {
      * <p>对任何已登录账号开放，但必须验证原密码 —— 否则会话被劫持就等于改密。
      */
     @PostMapping("/password")
-    public ResponseEntity<Map<String, Object>> changeMyPassword(@RequestBody PasswordRequest body,
+    public ResponseEntity<Void> changeMyPassword(@RequestBody PasswordRequest body,
                                                                HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
@@ -285,12 +267,12 @@ public class AdminController {
             throw ApiException.badRequest(e.getMessage());
         }
         audit.record(p.id(), p.username(), "password-self", "POST", "/admin/api/password", null, "");
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     /** 绑定 QQ：先发码到目标 QQ，验证通过后才标记 verified */
     @PostMapping("/me/qq/send-code")
-    public ResponseEntity<Map<String, Object>> sendQqBindCode(@RequestBody(required = false) BindCodeRequest body,
+    public ResponseEntity<BindCodeChallenge> sendQqBindCode(@RequestBody(required = false) BindCodeRequest body,
                                                               HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
@@ -312,15 +294,15 @@ public class AdminController {
                     p.id(), qq, AdminQqCodeService.PURPOSE_BIND, null);
             audit.record(p.id(), p.username(), "qq-bind-code", "POST",
                     "/admin/api/me/qq/send-code", "qq=" + issued.qqMasked(), "");
-            return ResponseEntity.ok(Map.of("ok", true,
-                    "challengeId", issued.challengeId(), "qq", issued.qqMasked()));
+            return ResponseEntity.ok(new BindCodeChallenge(
+                    issued.challengeId(), issued.qqMasked()));
         } catch (IllegalArgumentException | AdminQqCodeService.CodeException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @PostMapping("/me/qq/verify")
-    public ResponseEntity<Map<String, Object>> verifyQqBind(@RequestBody QqCodeRequest body,
+    public ResponseEntity<Void> verifyQqBind(@RequestBody QqCodeRequest body,
                                                             HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
@@ -339,7 +321,7 @@ public class AdminController {
             devices.revokeAll(p.id());
             audit.record(p.id(), p.username(), "qq-bind-ok", "POST",
                     "/admin/api/me/qq/verify", "qq=" + AdminQqCodeService.mask(consumed.qq()), "");
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (AdminQqCodeService.CodeException e) {
             throw ApiException.badRequest(e.getMessage());
         }
@@ -347,7 +329,7 @@ public class AdminController {
 
     /** 退出所有设备：撤销所有会话和信任设备 */
     @PostMapping("/logout-all")
-    public Map<String, Object> logoutAll(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> logoutAll(HttpServletRequest request, HttpServletResponse response) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p != null) {
             auth.invalidateUser(p.id());
@@ -363,7 +345,7 @@ public class AdminController {
         device.setPath("/admin");
         device.setMaxAge(0);
         response.addCookie(device);
-        return Map.of("ok", true);
+        return ResponseEntity.noContent().build();
     }
 
     // ==================== 统计 ====================
@@ -380,12 +362,10 @@ public class AdminController {
     }
 
     @GetMapping("/misses")
-    public Map<String, Object> misses(@RequestParam(defaultValue = "30") int days,
-                                      @RequestParam(defaultValue = "20") int limit) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("withKeyword", analytics.misses(days, limit, 3));
-        out.put("unmatched", analytics.unmatchedMisses(days, limit));
-        return out;
+    public MissesView misses(@RequestParam(defaultValue = "30") int days,
+                             @RequestParam(defaultValue = "20") int limit) {
+        return new MissesView(analytics.misses(days, limit, 3),
+                analytics.unmatchedMisses(days, limit));
     }
 
     @GetMapping("/cosine")
@@ -394,11 +374,8 @@ public class AdminController {
     }
 
     @GetMapping("/sources")
-    public Map<String, Object> sources(@RequestParam(defaultValue = "30") int days) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("sources", analytics.sources(days));
-        out.put("verdicts", analytics.verdicts(days));
-        return out;
+    public SourcesView sources(@RequestParam(defaultValue = "30") int days) {
+        return new SourcesView(analytics.sources(days), analytics.verdicts(days));
     }
 
     /**
@@ -410,16 +387,15 @@ public class AdminController {
      *              是没 @ 机器人的闲聊，却挂着"去群里 @ 机器人问几个问题"的提示语。
      */
     @GetMapping("/records")
-    public Map<String, Object> records(@RequestParam(defaultValue = "30") int days,
-                                       @RequestParam(defaultValue = "50") int limit,
-                                       @RequestParam(defaultValue = "0") int offset,
-                                       @RequestParam(defaultValue = "questions") String scope) {
+    public RecordsView records(@RequestParam(defaultValue = "30") int days,
+                               @RequestParam(defaultValue = "50") int limit,
+                               @RequestParam(defaultValue = "0") int offset,
+                               @RequestParam(defaultValue = "questions") String scope) {
         boolean onlyQuestions = !"all".equalsIgnoreCase(scope);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("rows", analytics.recentRecords(days, Math.min(limit, 500), Math.max(0, offset), onlyQuestions));
-        out.put("total", analytics.countRecords(days, onlyQuestions));
-        out.put("scope", onlyQuestions ? "questions" : "all");
-        return out;
+        return new RecordsView(
+                analytics.recentRecords(days, Math.min(limit, 500), Math.max(0, offset), onlyQuestions),
+                analytics.countRecords(days, onlyQuestions),
+                onlyQuestions ? "questions" : "all");
     }
 
     @GetMapping("/visits")
@@ -436,7 +412,7 @@ public class AdminController {
      * verdict 取值：§good§ / §bad§ / §no_source§ / §hallucination§ / §follow_up§ / §unknown§
      */
     @PostMapping("/annotate")
-    public ResponseEntity<Map<String, Object>> annotate(@RequestBody AnnotateRequest body) {
+    public ResponseEntity<Void> annotate(@RequestBody AnnotateRequest body) {
         long id = body.id() == null ? 0L : body.id();
         String verdict = body.verdict() == null ? null : body.verdict().trim();
         if (id <= 0 || verdict == null) {
@@ -449,7 +425,7 @@ public class AdminController {
         if (!ok) {
             throw ApiException.notFound("没有这条记录");
         }
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     private static final java.util.Set<String> VALID_VERDICTS =
@@ -496,5 +472,34 @@ public class AdminController {
     @JsonIgnoreProperties(ignoreUnknown = false)
 
     public record AnnotateRequest(Long id, String verdict, String note) {
+    }
+
+    public record AdminUserView(long id, String username, String displayName, String role,
+                                String roleLabel, String qq, boolean qqVerified) {
+    }
+
+    public record LoginResponse(AdminUserView user, Boolean needCode, String challengeId,
+                                String qq, Integer sessions) {
+        static LoginResponse challenge(String challengeId, String qq) {
+            return new LoginResponse(null, true, challengeId, qq, null);
+        }
+
+        static LoginResponse session(AdminUserView user, Integer sessions) {
+            return new LoginResponse(user, null, null, null, sessions);
+        }
+    }
+
+    public record BindCodeChallenge(String challengeId, String qq) {
+    }
+
+    public record MissesView(List<QaAnalytics.MissStat> withKeyword,
+                             List<QaAnalytics.UnmatchedMiss> unmatched) {
+    }
+
+    public record SourcesView(List<QaAnalytics.SourceStat> sources,
+                              List<QaAnalytics.VerdictStat> verdicts) {
+    }
+
+    public record RecordsView(List<QaAnalytics.RecordRow> rows, long total, String scope) {
     }
 }

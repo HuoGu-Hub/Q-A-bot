@@ -430,34 +430,22 @@ public class CommandStore {
     }
 
     /** 使用排行：命中次数 */
-    public List<Map<String, Object>> topUsed(int days, int limit) {
+    public List<CommandRepository.UsageStat> topUsed(int days, int limit) {
         return stats(() -> repo.topUsed(days, limit));
     }
 
     /** ★ 未配置的命令排行：群友发了但没配 —— 直接告诉你该加什么 */
-    public List<Map<String, Object>> unmatched(int days, int limit) {
+    public List<CommandRepository.UsageStat> unmatched(int days, int limit) {
         return stats(() -> repo.unmatched(days, limit));
     }
 
-    /**
-     * 统计结果的对外形状就是 JSON（前端直接吃 {@code [{trigger, count}]}），
-     * 所以这里保留 {@code Map} 而不是换个记录 —— 换掉只会让三个调用点跟着改一遍。
-     */
-    private List<Map<String, Object>> stats(
+    private List<CommandRepository.UsageStat> stats(
             java.util.function.Supplier<List<CommandRepository.UsageStat>> source) {
         if (!available) {
             return List.of();
         }
         try {
-            List<CommandRepository.UsageStat> rows = source.get();
-            List<Map<String, Object>> out = new ArrayList<>(rows.size());
-            for (CommandRepository.UsageStat s : rows) {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("trigger", s.trigger());
-                m.put("count", s.count());
-                out.add(m);
-            }
-            return out;
+            return source.get();
         } catch (Exception e) {
             log.warn("[CMD] 统计失败：{}", e.getMessage());
             return List.of();

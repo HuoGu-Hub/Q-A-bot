@@ -11,6 +11,7 @@ import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.persistence.KbWikiSourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -64,7 +65,7 @@ public class KbWikiController {
     private final KbBlockStore blockStore;
     private final KbWikiPageStore pageStore;
 
-    private volatile Map<String, Object> catalogCache;
+    private volatile CatalogView catalogCache;
     private volatile long catalogAt;
 
     public KbWikiController(KbWikiSourceStore store, WikiApiClient client,
@@ -89,7 +90,7 @@ public class KbWikiController {
      *       "拉过但清洗后没正文"（这两种 {@code blocks} 都是 0）。</li>
      * </ul>
      */
-    private Map<String, Object> coverage() {
+    private Map<String, CoverageItem> coverage() {
         String docPrefix = props.getWikiImport().getDocIdPrefix() + "·";
         Map<String, Integer> blocks = new LinkedHashMap<>();
         try {
@@ -108,52 +109,43 @@ public class KbWikiController {
         } catch (Exception e) {
             log.warn("[KB-WIKI] 统计来源最近同步时间失败：{}", e.getMessage());
         }
-        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, CoverageItem> out = new LinkedHashMap<>();
         LinkedHashSet<String> names = new LinkedHashSet<>(blocks.keySet());
         names.addAll(lastSync.keySet());
         for (String name : names) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("blocks", blocks.getOrDefault(name, 0));
-            m.put("lastSync", lastSync.getOrDefault(name, ""));
-            out.put(name, m);
+            out.put(name, new CoverageItem(blocks.getOrDefault(name, 0),
+                    lastSync.getOrDefault(name, "")));
         }
         return out;
     }
 
     /** 当前范围 + yml 默认值（页面据此判断是不是还没配过） */
     @GetMapping("/sources")
-    public Map<String, Object> sources() {
-        List<Map<String, Object>> saved = new ArrayList<>();
+    public SourcesView sources() {
+        List<SourceRow> saved = new ArrayList<>();
         for (KbWikiSourceRepository.Source s : store.all()) {
-            saved.add(row(s.name(), s.kind(), s.enabled()));
+            saved.add(new SourceRow(s.name(), s.kind(), s.enabled()));
         }
-        List<Map<String, Object>> defaults = new ArrayList<>();
+        List<SourceRow> defaults = new ArrayList<>();
         for (String p : props.getWikiImport().getPrefixes()) {
             if (p != null && !p.isBlank()) {
-                defaults.add(row(p.trim(), "prefix", true));
+                defaults.add(new SourceRow(p.trim(), "prefix", true));
             }
         }
         for (String c : props.getWikiImport().getCategories()) {
             if (c != null && !c.isBlank()) {
-                defaults.add(row(c.trim(), "category", true));
+                defaults.add(new SourceRow(c.trim(), "category", true));
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("items", saved);
-        out.put("defaults", defaults);
-        out.put("saved", !saved.isEmpty());
-        out.put("maxPagesPerSource", props.getWikiImport().getMaxPagesPerSource());
-        // 页面上的"点开看"链接用：api-base 去掉 /api.php 就是站点根
-        out.put("wikiBase", props.getMapSync().getApiBase().replace("/api.php", ""));
-        out.put("renderEnabled", props.getWikiImport().getRender().isEnabled());
-        // 知识库里的生效情况（未缓存：导入完必须立刻反映出来）
-        out.put("coverage", coverage());
-        return out;
+        return new SourcesView(saved, defaults, !saved.isEmpty(),
+                props.getWikiImport().getMaxPagesPerSource(),
+                props.getMapSync().getApiBase().replace("/api.php", ""),
+                props.getWikiImport().getRender().isEnabled(), coverage());
     }
 
     /** 保存范围：整表替换（页面上勾选的结果就是完整范围） */
     @PutMapping("/sources")
-    public Map<String, Object> saveSources(@RequestBody SourcesRequest body) {
+    public ResponseEntity<Void> saveSources(@RequestBody SourcesRequest body) {
         List<KbWikiSourceRepository.Source> items = new ArrayList<>();
         if (body.items() != null) {
             for (SourceItem item : body.items()) {
@@ -166,11 +158,7 @@ public class KbWikiController {
             }
         }
         store.replace(items);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("count", store.count());
-        out.put("enabled", store.enabled().size());
-        return out;
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -185,8 +173,8 @@ public class KbWikiController {
      * <p>仍然逐个请求的只剩"前三个示例页名"，且只给内容类的前若干个。
      */
     @GetMapping("/catalog")
-    public Map<String, Object> catalog() {
-        Map<String, Object> cached = catalogCache;
+    public CatalogView catalog() {
+        CatalogView cached = catalogCache;
         if (cached != null && System.currentTimeMillis() - catalogAt < CATALOG_TTL_MILLIS) {
             return cached;
         }
@@ -213,7 +201,7 @@ public class KbWikiController {
                 pagesByName.getOrDefault(b.name(), b.size()),
                 pagesByName.getOrDefault(a.name(), a.size())));
 
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<CategoryRow> rows = new ArrayList<>();
         Map<String, List<String>> samples = new java.util.HashMap<>();
         int sampled = 0;
         for (WikiApiClient.CategoryInfo c : all) {
@@ -229,20 +217,10 @@ public class KbWikiController {
                 }
                 sampled++;
             }
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("name", c.name());
-            m.put("size", c.size());
-            m.put("pages", pagesByName.get(c.name()));
-            m.put("klass", klass);
-            m.put("advice", adviceOf(c.name()));
-            // 示例页名：让"Crafting Materials"这种英文分类名一眼能看懂装的是什么
-            m.put("samples", samples.getOrDefault(c.name(), List.of()));
-            rows.add(m);
+            rows.add(new CategoryRow(c.name(), c.size(), pagesByName.get(c.name()),
+                    klass, adviceOf(c.name()), samples.getOrDefault(c.name(), List.of())));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("items", rows);
-        out.put("total", rows.size());
-        out.put("cachedAt", java.time.Instant.now().toString());
+        CatalogView out = new CatalogView(rows, rows.size(), java.time.Instant.now().toString());
         catalogCache = out;
         catalogAt = System.currentTimeMillis();
         return out;
@@ -250,7 +228,7 @@ public class KbWikiController {
 
     /** 触发一次导入 */
     @PostMapping("/imports")
-    public Map<String, Object> start(@RequestBody(required = false) StartImportRequest body) {
+    public StartImportResult start(@RequestBody(required = false) StartImportRequest body) {
         String mode = body == null || body.mode() == null ? "incremental" : body.mode();
         WikiImportService.Mode m = switch (mode) {
             case "dry-run" -> WikiImportService.Mode.DRY_RUN;
@@ -258,30 +236,13 @@ public class KbWikiController {
             case "purge" -> WikiImportService.Mode.PURGE;
             default -> WikiImportService.Mode.INCREMENTAL;
         };
-        WikiImportService.Status st = service.start(m);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("accepted", true);
-        out.put("status", statusMap(st));
-        return out;
+        return new StartImportResult(true, service.start(m));
     }
 
     /** 轮询进度与报告 */
     @GetMapping("/imports/status")
-    public Map<String, Object> status() {
-        return statusMap(service.status());
-    }
-
-    private static Map<String, Object> statusMap(WikiImportService.Status st) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("state", st.state());
-        m.put("phase", st.phase());
-        m.put("done", st.done());
-        m.put("total", st.total());
-        m.put("startedAt", st.startedAt());
-        m.put("finishedAt", st.finishedAt());
-        m.put("report", st.report());
-        m.put("errors", st.errors());
-        return m;
+    public WikiImportService.Status status() {
+        return service.status();
     }
 
     /**
@@ -316,12 +277,25 @@ public class KbWikiController {
         };
     }
 
-    private static Map<String, Object> row(String name, String kind, boolean enabled) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", name);
-        m.put("kind", kind);
-        m.put("enabled", enabled);
-        return m;
+    public record CoverageItem(int blocks, String lastSync) {
+    }
+
+    public record SourceRow(String name, String kind, boolean enabled) {
+    }
+
+    public record SourcesView(List<SourceRow> items, List<SourceRow> defaults, boolean saved,
+                              int maxPagesPerSource, String wikiBase, boolean renderEnabled,
+                              Map<String, CoverageItem> coverage) {
+    }
+
+    public record CategoryRow(String name, int size, Integer pages, String klass,
+                              String advice, List<String> samples) {
+    }
+
+    public record CatalogView(List<CategoryRow> items, int total, String cachedAt) {
+    }
+
+    public record StartImportResult(boolean accepted, WikiImportService.Status status) {
     }
 
     public record SourceItem(String name, String kind, Boolean enabled) {

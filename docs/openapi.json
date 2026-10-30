@@ -71,8 +71,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -148,7 +148,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/PlaceView"
                 }
               }
             }
@@ -171,15 +171,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -207,7 +200,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ActiveView"
                 }
               }
             }
@@ -228,8 +221,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LayersView"
                 }
               }
             }
@@ -253,15 +245,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -279,8 +264,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SourcesView"
                 }
               }
             }
@@ -304,16 +288,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -331,8 +307,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SettingsView"
                 }
               }
             }
@@ -361,7 +336,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/SettingsSaved"
                 }
               }
             }
@@ -391,7 +366,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Detail"
                 }
               }
             }
@@ -429,7 +404,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Note"
                 }
               }
             }
@@ -452,15 +427,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -483,8 +451,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -743,8 +711,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -848,8 +816,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -891,8 +859,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -965,16 +933,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1016,8 +976,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1040,8 +1000,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1103,16 +1063,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1139,8 +1091,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BindCodeChallenge"
                 }
               }
             }
@@ -1156,15 +1107,8 @@
         "tags" : [ "Admin" ],
         "operationId" : "warm",
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1177,15 +1121,8 @@
         "tags" : [ "Admin" ],
         "operationId" : "warmFull",
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1207,15 +1144,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1242,8 +1172,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ResourceImportResult"
                 }
               }
             }
@@ -1280,8 +1209,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/PlacesView"
                 }
               }
             }
@@ -1310,7 +1238,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/PlaceView"
                 }
               }
             }
@@ -1335,15 +1263,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1369,8 +1290,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/NotesView"
                 }
               }
             }
@@ -1399,7 +1319,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/NoteView"
                 }
               }
             }
@@ -1435,15 +1355,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1473,15 +1386,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1509,7 +1415,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/OffsetResult"
                 }
               }
             }
@@ -1525,16 +1431,8 @@
         "tags" : [ "Admin" ],
         "operationId" : "logout",
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1547,16 +1445,8 @@
         "tags" : [ "Admin" ],
         "operationId" : "logoutAll",
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1584,8 +1474,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -1616,8 +1505,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -1647,8 +1535,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/StartImportResult"
                 }
               }
             }
@@ -1724,8 +1611,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1802,8 +1689,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -1973,7 +1860,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/RunNowResult"
                 }
               }
             }
@@ -2003,7 +1890,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Note"
                 }
               }
             }
@@ -2033,7 +1920,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Note"
                 }
               }
             }
@@ -2063,7 +1950,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/BatchDeleteResult"
                 }
               }
             }
@@ -2103,8 +1990,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/JobPage"
                 }
               }
             }
@@ -2133,7 +2019,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/JobCreated"
                 }
               }
             }
@@ -2163,7 +2049,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/StartedResult"
                 }
               }
             }
@@ -2193,7 +2079,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/RetryView"
                 }
               }
             }
@@ -2218,15 +2104,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -2254,7 +2133,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Preview"
                 }
               }
             }
@@ -2303,7 +2182,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ImportResult"
                 }
               }
             }
@@ -2343,7 +2222,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Preview"
                 }
               }
             }
@@ -2364,8 +2243,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlocklistView"
                 }
               }
             }
@@ -2389,15 +2267,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -2425,7 +2296,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/BlockQqResult"
                 }
               }
             }
@@ -2510,8 +2381,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -2538,8 +2409,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/PolicyView"
                 }
               }
             }
@@ -2577,8 +2447,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/PolicyView"
                 }
               }
             }
@@ -2608,8 +2477,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AclView"
                 }
               }
             }
@@ -2647,8 +2515,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AclView"
                 }
               }
             }
@@ -2683,8 +2550,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -2902,8 +2769,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AclView"
                 }
               }
             }
@@ -2941,8 +2807,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AclView"
                 }
               }
             }
@@ -2967,16 +2832,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -2999,16 +2856,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3026,8 +2875,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AclView"
                 }
               }
             }
@@ -3056,8 +2904,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AclView"
                 }
               }
             }
@@ -3215,8 +3062,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3266,8 +3113,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3296,8 +3143,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3381,8 +3228,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3412,8 +3259,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3502,8 +3349,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -3533,8 +3380,8 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -4197,8 +4044,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/TrafficResponse"
                 }
               }
             }
@@ -4229,8 +4075,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SourcesView"
                 }
               }
             }
@@ -4251,8 +4096,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -4309,8 +4153,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/RecordsView"
                 }
               }
             }
@@ -4331,8 +4174,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/PromptList"
                 }
               }
             }
@@ -4453,8 +4295,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/MissesView"
                 }
               }
             }
@@ -4475,8 +4316,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/MapStatusView"
                 }
               }
             }
@@ -4497,8 +4337,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ResourceStatus"
                 }
               }
             }
@@ -4527,7 +4366,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/MarkersView"
                 }
               }
             }
@@ -4548,8 +4387,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/MapsView"
                 }
               }
             }
@@ -4570,8 +4408,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/IconsView"
                 }
               }
             }
@@ -4592,8 +4429,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AdminCatalog"
                 }
               }
             }
@@ -4614,8 +4450,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AnchorView"
                 }
               }
             }
@@ -4752,8 +4587,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LlmResponse"
                 }
               }
             }
@@ -4817,8 +4651,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/Status"
                 }
               }
             }
@@ -4839,8 +4672,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CatalogView"
                 }
               }
             }
@@ -5104,8 +4936,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/GuardView"
                 }
               }
             }
@@ -5126,8 +4957,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/DistillStats"
                 }
               }
             }
@@ -5174,8 +5004,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/NoteList"
                 }
               }
             }
@@ -5206,8 +5035,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/MessageList"
                 }
               }
             }
@@ -5237,7 +5065,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/MessageDetail"
                 }
               }
             }
@@ -5267,7 +5095,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/JobDetail"
                 }
               }
             }
@@ -5298,8 +5126,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ImportList"
                 }
               }
             }
@@ -5416,8 +5243,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CommandStats"
                 }
               }
             }
@@ -5544,8 +5370,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/RecordList"
                 }
               }
             }
@@ -5570,16 +5395,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5601,15 +5418,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5622,8 +5432,8 @@
         "tags" : [ "Admin" ],
         "operationId" : "clear_1",
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5666,8 +5476,8 @@
         "tags" : [ "Admin" ],
         "operationId" : "clear_2",
         "responses" : {
-          "200" : {
-            "description" : "OK"
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5688,15 +5498,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5717,15 +5520,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5747,16 +5543,8 @@
           }
         } ],
         "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+          "204" : {
+            "description" : "无内容"
           }
         },
         "security" : [ {
@@ -5895,6 +5683,83 @@
           }
         }
       },
+      "Place" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "map" : {
+            "type" : "string"
+          },
+          "page" : {
+            "type" : "string"
+          },
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "color" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "boolean"
+          },
+          "priority" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "visible" : {
+            "type" : "boolean"
+          },
+          "canvasFp" : {
+            "type" : "string"
+          },
+          "anchorOk" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlaceView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "place" : {
+            "$ref" : "#/components/schemas/Place"
+          }
+        }
+      },
       "ActiveRequest" : {
         "type" : "object",
         "properties" : {
@@ -5903,6 +5768,20 @@
           },
           "active" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "ActiveView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "active" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },
@@ -5996,6 +5875,75 @@
           }
         }
       },
+      "Settings" : {
+        "type" : "object",
+        "properties" : {
+          "autoEnabled" : {
+            "type" : "boolean"
+          },
+          "triggerMessages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "triggerImages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batchMessages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batchChars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "overlap" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxGapMinutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "autoPublish" : {
+            "type" : "boolean"
+          },
+          "minConfidence" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "focus" : {
+            "type" : "string"
+          },
+          "modelProvider" : {
+            "type" : "string"
+          },
+          "captureGroups" : {
+            "type" : "string"
+          },
+          "captureAllGroups" : {
+            "type" : "boolean"
+          },
+          "lastMessageId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SettingsSaved" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "settings" : {
+            "$ref" : "#/components/schemas/Settings"
+          }
+        }
+      },
       "UpdateNoteRequest" : {
         "type" : "object",
         "properties" : {
@@ -6014,6 +5962,70 @@
           "confidence" : {
             "type" : "number",
             "format" : "double"
+          }
+        }
+      },
+      "Note" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "jobId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "titleNorm" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "confidence" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "blockId" : {
+            "type" : "string"
+          },
+          "duplicateOf" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "promptVersion" : {
+            "type" : "string"
+          },
+          "bodyHash" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "reviewedAt" : {
+            "type" : "string"
           }
         }
       },
@@ -6435,6 +6447,49 @@
           }
         }
       },
+      "BindCodeChallenge" : {
+        "type" : "object",
+        "properties" : {
+          "challengeId" : {
+            "type" : "string"
+          },
+          "qq" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResourceImportResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "imported" : {
+            "type" : "boolean"
+          },
+          "found" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "layers" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "points" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "areas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
       "NoteRequest" : {
         "type" : "object",
         "properties" : {
@@ -6468,6 +6523,17 @@
           }
         }
       },
+      "NoteView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "note" : {
+            "$ref" : "#/components/schemas/Note"
+          }
+        }
+      },
       "OffsetRequest" : {
         "type" : "object",
         "properties" : {
@@ -6485,6 +6551,22 @@
           }
         }
       },
+      "OffsetResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "moved" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skipped" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "LoginRequest" : {
         "type" : "object",
         "properties" : {
@@ -6499,11 +6581,78 @@
           }
         }
       },
+      "LoginResponse" : {
+        "type" : "object",
+        "properties" : {
+          "user" : {
+            "$ref" : "#/components/schemas/AdminUserView"
+          },
+          "needCode" : {
+            "type" : "boolean"
+          },
+          "challengeId" : {
+            "type" : "string"
+          },
+          "qq" : {
+            "type" : "string"
+          },
+          "sessions" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "StartImportRequest" : {
         "type" : "object",
         "properties" : {
           "mode" : {
             "type" : "string"
+          }
+        }
+      },
+      "StartImportResult" : {
+        "type" : "object",
+        "properties" : {
+          "accepted" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/Status"
+          }
+        }
+      },
+      "Status" : {
+        "type" : "object",
+        "properties" : {
+          "state" : {
+            "type" : "string"
+          },
+          "phase" : {
+            "type" : "string"
+          },
+          "done" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startedAt" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string"
+          },
+          "report" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          },
+          "errors" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },
@@ -6758,6 +6907,18 @@
           }
         }
       },
+      "RunNowResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "jobId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "BatchDeleteRequest" : {
         "type" : "object",
         "properties" : {
@@ -6767,6 +6928,22 @@
               "type" : "integer",
               "format" : "int64"
             }
+          }
+        }
+      },
+      "BatchDeleteResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "deleted" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "missing" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -6810,6 +6987,96 @@
           }
         }
       },
+      "JobCreated" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "StartedResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "started" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "RetryView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "reset" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "started" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "BatchView" : {
+        "type" : "object",
+        "properties" : {
+          "seq" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "messageFrom" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "messageTo" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "charCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Preview" : {
+        "type" : "object",
+        "properties" : {
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "charCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "estimatedTokens" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batches" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BatchView"
+            }
+          }
+        }
+      },
       "BlockSenderRequest" : {
         "type" : "object",
         "properties" : {
@@ -6829,6 +7096,18 @@
           },
           "senderName" : {
             "type" : "string"
+          }
+        }
+      },
+      "BlockQqResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "updated" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -6972,6 +7251,30 @@
           }
         }
       },
+      "PolicyView" : {
+        "type" : "object",
+        "properties" : {
+          "scope" : {
+            "type" : "string"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "showGroup" : {
+            "type" : "boolean"
+          },
+          "showUser" : {
+            "type" : "boolean"
+          },
+          "allowPrivate" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "AclItemRequest" : {
         "type" : "object",
         "properties" : {
@@ -6997,6 +7300,35 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/AclItemRequest"
+            }
+          }
+        }
+      },
+      "AclItemView" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "AclView" : {
+        "type" : "object",
+        "properties" : {
+          "white" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AclItemView"
+            }
+          },
+          "black" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AclItemView"
             }
           }
         }
@@ -8285,6 +8617,90 @@
           }
         }
       },
+      "TrafficPoint" : {
+        "type" : "object",
+        "properties" : {
+          "minute" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "requests" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "api" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "errors" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p50" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "p95" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "max" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "TrafficResponse" : {
+        "type" : "object",
+        "properties" : {
+          "minutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrafficPoint"
+            }
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/TrafficSummary"
+          }
+        }
+      },
+      "TrafficSummary" : {
+        "type" : "object",
+        "properties" : {
+          "requests" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "api" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "errors" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "errorRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "peakPerMinute" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "avgPerMinute" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "worstP95" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "SystemReplyItem" : {
         "type" : "object",
         "properties" : {
@@ -8352,6 +8768,35 @@
           }
         }
       },
+      "SourcesView" : {
+        "type" : "object",
+        "properties" : {
+          "sources" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SourceStat"
+            }
+          },
+          "verdicts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VerdictStat"
+            }
+          }
+        }
+      },
+      "VerdictStat" : {
+        "type" : "object",
+        "properties" : {
+          "verdict" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "ItemView" : {
         "type" : "object",
         "properties" : {
@@ -8390,6 +8835,112 @@
             "format" : "int32"
           },
           "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RecordRow" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ts" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "userId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hitCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "bestCosine" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "sources" : {
+            "type" : "string"
+          },
+          "guardAction" : {
+            "type" : "string"
+          },
+          "retrieveMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "answer" : {
+            "type" : "string"
+          },
+          "verdict" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RecordsView" : {
+        "type" : "object",
+        "properties" : {
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecordRow"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "scope" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PromptList" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "prompts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PromptView"
+            }
+          }
+        }
+      },
+      "PromptView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "userId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "content" : {
             "type" : "string"
           }
         }
@@ -8560,6 +9111,557 @@
           }
         }
       },
+      "MissStat" : {
+        "type" : "object",
+        "properties" : {
+          "zh" : {
+            "type" : "string"
+          },
+          "en" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "bestCosineRaw" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "samples" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "MissesView" : {
+        "type" : "object",
+        "properties" : {
+          "withKeyword" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MissStat"
+            }
+          },
+          "unmatched" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UnmatchedMiss"
+            }
+          }
+        }
+      },
+      "UnmatchedMiss" : {
+        "type" : "object",
+        "properties" : {
+          "ts" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "bestCosineRaw" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "CanvasRow" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "renderable" : {
+            "type" : "boolean"
+          },
+          "background" : {
+            "type" : "string"
+          },
+          "tiles" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Corpus" : {
+        "type" : "object",
+        "properties" : {
+          "blocks" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "latestAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "JobState" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "running" : {
+            "type" : "boolean"
+          },
+          "ok" : {
+            "type" : "boolean"
+          },
+          "startedAt" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "done" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "MapStatusView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "unitsPerMeter" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "directory" : {
+            "type" : "string"
+          },
+          "mapStoreAvailable" : {
+            "type" : "boolean"
+          },
+          "placesAvailable" : {
+            "type" : "boolean"
+          },
+          "notesAvailable" : {
+            "type" : "boolean"
+          },
+          "anchorPending" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "placeTotal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tileCache" : {
+            "$ref" : "#/components/schemas/TileCache"
+          },
+          "jobs" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/JobState"
+            }
+          },
+          "canvases" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CanvasRow"
+            }
+          },
+          "pages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PageRow"
+            }
+          },
+          "corpus" : {
+            "$ref" : "#/components/schemas/Corpus"
+          },
+          "warmCoverage" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/WarmUnit"
+            }
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryLabel"
+            }
+          }
+        }
+      },
+      "PageRow" : {
+        "type" : "object",
+        "properties" : {
+          "page" : {
+            "type" : "string"
+          },
+          "map" : {
+            "type" : "string"
+          },
+          "revid" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "markerCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "syncedAt" : {
+            "type" : "string"
+          },
+          "error" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TileCache" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "root" : {
+            "type" : "string"
+          },
+          "files" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "bytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "latestAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "WarmUnit" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "mapLabel" : {
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "tier" : {
+            "type" : "string"
+          },
+          "have" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "need" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ResourceStatus" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "imported" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "importedAt" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "layers" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "categories" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "PlacesView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "places" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Place"
+            }
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryLabel"
+            }
+          }
+        }
+      },
+      "NotesView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "notes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Note"
+            }
+          }
+        }
+      },
+      "MarkersView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "map" : {
+            "type" : "string"
+          },
+          "markers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MarkerView"
+            }
+          }
+        }
+      },
+      "Candidate" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "markers" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lastChanged" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "auto" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "MapsView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "active" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "candidates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Candidate"
+            }
+          }
+        }
+      },
+      "LayerGroup" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "on" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "LayerMap" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "markerCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LayerGroup"
+            }
+          }
+        }
+      },
+      "LayersView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "available" : {
+            "type" : "boolean"
+          },
+          "maps" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LayerMap"
+            }
+          }
+        }
+      },
+      "IconsView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "icons" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "AdminCatalog" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "unitsPerMeter" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "maxZoom" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryLabel"
+            }
+          },
+          "maps" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MapView"
+            }
+          }
+        }
+      },
+      "AnchorView" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "pending" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Review"
+            }
+          }
+        }
+      },
+      "Review" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "map" : {
+            "type" : "string"
+          },
+          "page" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "storedFp" : {
+            "type" : "string"
+          },
+          "currentFp" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
       "SseEmitter" : {
         "type" : "object",
         "properties" : {
@@ -8640,6 +9742,94 @@
           }
         }
       },
+      "LlmPoint" : {
+        "type" : "object",
+        "properties" : {
+          "minute" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "calls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failures" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p50" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "p95" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "max" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "LlmResponse" : {
+        "type" : "object",
+        "properties" : {
+          "minutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LlmPoint"
+            }
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/LlmSummary"
+          }
+        }
+      },
+      "LlmSummary" : {
+        "type" : "object",
+        "properties" : {
+          "calls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failures" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "peakPerMinute" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "worstP95" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "KeywordStat" : {
         "type" : "object",
         "properties" : {
@@ -8656,6 +9846,52 @@
           "missCount" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "CatalogView" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryRow"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cachedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CategoryRow" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "klass" : {
+            "type" : "string"
+          },
+          "advice" : {
+            "type" : "string"
+          },
+          "samples" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },
@@ -8892,6 +10128,625 @@
           }
         }
       },
+      "BlockedUser" : {
+        "type" : "object",
+        "properties" : {
+          "userId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "GuardSnapshot" : {
+        "type" : "object",
+        "properties" : {
+          "inbound" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "passed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "blocked" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "blockRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "byStage" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "replyByStage" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "topBlockedUsers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BlockedUser"
+            }
+          },
+          "uptimeSeconds" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "GuardView" : {
+        "type" : "object",
+        "properties" : {
+          "metrics" : {
+            "$ref" : "#/components/schemas/GuardSnapshot"
+          },
+          "budget" : {
+            "$ref" : "#/components/schemas/Snapshot"
+          }
+        }
+      },
+      "Snapshot" : {
+        "type" : "object",
+        "properties" : {
+          "day" : {
+            "type" : "string"
+          },
+          "globalCalls" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "globalTokens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "trackedUsers" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "trackedGroups" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "globalPerDay" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "globalTokensPerDay" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "CaptureStatus" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "queueSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "recorded" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dropped" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "imageSaved" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "DistillStats" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "capture" : {
+            "$ref" : "#/components/schemas/CaptureStatus"
+          },
+          "messages" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "images" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "imports" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "jobs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batches" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "notes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "drafts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "publishedNotes" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "NoteList" : {
+        "type" : "object",
+        "properties" : {
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Note"
+            }
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Detail" : {
+        "type" : "object",
+        "properties" : {
+          "note" : {
+            "$ref" : "#/components/schemas/Note"
+          },
+          "sources" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Source"
+            }
+          },
+          "imageIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          }
+        }
+      },
+      "Source" : {
+        "type" : "object",
+        "properties" : {
+          "noteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "messageId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ts" : {
+            "type" : "string"
+          },
+          "senderName" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MessageList" : {
+        "type" : "object",
+        "properties" : {
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MessageRow"
+            }
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "MessageRow" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ts" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "senderName" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "textLength" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "imageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "importId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "ImageRow" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "md5" : {
+            "type" : "string"
+          },
+          "mime" : {
+            "type" : "string"
+          },
+          "bytes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "caption" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MessageDetail" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ts" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "senderName" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "imageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "images" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ImageRow"
+            }
+          }
+        }
+      },
+      "Job" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "groupIds" : {
+            "type" : "string"
+          },
+          "timeFrom" : {
+            "type" : "string"
+          },
+          "timeTo" : {
+            "type" : "string"
+          },
+          "importId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batchMode" : {
+            "type" : "string"
+          },
+          "batchSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "overlap" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxGapMinutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string"
+          },
+          "noteCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "JobPage" : {
+        "type" : "object",
+        "properties" : {
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Job"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pages" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Batch" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "jobId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "seq" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "messageFrom" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "messageTo" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "charCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "JobDetail" : {
+        "type" : "object",
+        "properties" : {
+          "job" : {
+            "$ref" : "#/components/schemas/Job"
+          },
+          "batches" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Batch"
+            }
+          }
+        }
+      },
+      "ImportList" : {
+        "type" : "object",
+        "properties" : {
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRow"
+            }
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ImportRow" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "filename" : {
+            "type" : "string"
+          },
+          "format" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Blocked" : {
+        "type" : "object",
+        "properties" : {
+          "senderHash" : {
+            "type" : "string"
+          },
+          "senderId" : {
+            "type" : "string"
+          },
+          "senderName" : {
+            "type" : "string"
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BlocklistView" : {
+        "type" : "object",
+        "properties" : {
+          "blocked" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Blocked"
+            }
+          },
+          "senders" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Sender"
+            }
+          }
+        }
+      },
+      "Sender" : {
+        "type" : "object",
+        "properties" : {
+          "senderHash" : {
+            "type" : "string"
+          },
+          "senderId" : {
+            "type" : "string"
+          },
+          "senderName" : {
+            "type" : "string"
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "blocked" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "Bucket" : {
         "type" : "object",
         "properties" : {
@@ -9045,6 +10900,45 @@
           }
         }
       },
+      "CommandStats" : {
+        "type" : "object",
+        "properties" : {
+          "topUsed" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UsageStat"
+            }
+          },
+          "usage" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UsageStat"
+            }
+          },
+          "unmatched" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UsageStat"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "UsageStat" : {
+        "type" : "object",
+        "properties" : {
+          "trigger" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "CommandPolicies" : {
         "type" : "object",
         "properties" : {
@@ -9167,6 +11061,94 @@
             "items" : {
               "$ref" : "#/components/schemas/BoardView"
             }
+          }
+        }
+      },
+      "RecordList" : {
+        "type" : "object",
+        "properties" : {
+          "board" : {
+            "type" : "string"
+          },
+          "records" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecordView"
+            }
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "RecordView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "board" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "userId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nickname" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "delivery" : {
+            "type" : "string"
+          },
+          "when" : {
+            "type" : "string"
+          },
+          "line" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "fireAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "sentAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "deletedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "deleted" : {
+            "type" : "boolean"
           }
         }
       },

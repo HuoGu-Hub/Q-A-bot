@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import com.example.qqbot.persistence.CommandRepository;
 import com.example.qqbot.web.ApiException;
 
 import jakarta.validation.Valid;
@@ -369,15 +370,15 @@ public class CommandController {
     // ==================== C6：使用统计 ====================
 
     @GetMapping("/stats")
-    public Map<String, Object> stats(@RequestParam(defaultValue = "30") int days) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("topUsed", store.topUsed(days, 20));
-        // 全部命中过的命令（不限 20 条）：统一命令表按行显示使用次数
-        out.put("usage", store.topUsed(days, 1000));
-        // ★ 未配置的命令 —— 直接告诉你该加什么
-        out.put("unmatched", store.unmatched(days, 20));
-        out.put("total", store.count());
-        return out;
+    public CommandStats stats(@RequestParam(defaultValue = "30") int days) {
+        // usage 是全部命中过的命令（不限 20 条）：统一命令表按行显示使用次数
+        return new CommandStats(store.topUsed(days, 20), store.topUsed(days, 1000),
+                store.unmatched(days, 20), store.count());
+    }
+
+    public record CommandStats(List<CommandRepository.UsageStat> topUsed,
+                               List<CommandRepository.UsageStat> usage,
+                               List<CommandRepository.UsageStat> unmatched, long total) {
     }
 
     // ==================== 内部 ====================
