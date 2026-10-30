@@ -1,5 +1,7 @@
 package com.example.qqbot.incoming;
 
+import com.example.qqbot.web.ProblemWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -21,7 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OneBotAuthFilterTest {
 
     private static OneBotAuthFilter filter(String token) {
-        return new OneBotAuthFilter(() -> token);
+        // 真实 ProblemWriter：错误响应的状态码与形状就是要验的东西
+        return new OneBotAuthFilter(() -> token, new ProblemWriter(new ObjectMapper()));
     }
 
     @Test
