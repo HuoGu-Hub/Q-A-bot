@@ -6,7 +6,12 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -91,6 +96,49 @@ class OneBotAuthFilterTest {
 
         assertThat(called).isFalse();
         assertThat(res.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("NapCat 的 x-signature 通过，并且 body 可被控制器再次读取")
+    void validNapCatSignaturePassesAndReplaysBody() throws Exception {
+        String body = "{\"post_type\":\"message\"}";
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/onebot/event");
+        req.setContent(body.getBytes(StandardCharsets.UTF_8));
+        req.addHeader("x-signature", hmac("secret-token", body));
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        AtomicBoolean called = new AtomicBoolean();
+        AtomicReference<String> seen = new AtomicReference<>();
+
+        filter("secret-token").doFilter(req, res, (rq, rs) -> {
+            called.set(true);
+            seen.set(new String(rq.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+        });
+
+        assertThat(called).isTrue();
+        assertThat(res.getStatus()).isEqualTo(200);
+        assertThat(seen.get()).isEqualTo(body);
+    }
+
+    @Test
+    @DisplayName("错误的 x-signature 返回 401")
+    void wrongNapCatSignatureRejected() throws Exception {
+        String body = "{\"post_type\":\"message\"}";
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/onebot/event");
+        req.setContent(body.getBytes(StandardCharsets.UTF_8));
+        req.addHeader("x-signature", "sha1=deadbeef");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        AtomicBoolean called = new AtomicBoolean();
+
+        filter("secret-token").doFilter(req, res, (rq, rs) -> called.set(true));
+
+        assertThat(called).isFalse();
+        assertThat(res.getStatus()).isEqualTo(401);
+    }
+
+    private static String hmac(String token, String body) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA1");
+        mac.init(new SecretKeySpec(token.getBytes(StandardCharsets.UTF_8), "HmacSHA1"));
+        return "sha1=" + HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test

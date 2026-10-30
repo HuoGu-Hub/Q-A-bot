@@ -198,8 +198,8 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
 
   <h4>入口鉴别</h4>
   <ul>
-    <li>应用层校验 <code>Authorization: Bearer &lt;ONEBOT_TOKEN 的值&gt;</code>，使用常量时间比较；Token 为空时拒绝启动或拒绝全部事件，不能默认放行。</li>
-    <li>NapCat 的 HTTP 客户端配置里填入同一个 secret；部署文档把这一步写成必做项。</li>
+    <li>应用层校验 NapCat 的 <code>x-signature: sha1=HMAC-SHA1(token, body)</code>，兼容手工测试的 <code>Authorization: Bearer</code>，使用常量时间比较；Token 为空时拒绝全部事件，不能默认放行。</li>
+    <li>NapCat 的 HTTP 客户端 Token 填同一个值；它用 HMAC 签名，不发 Bearer。</li>
     <li>Nginx 对 <code>/onebot/event</code> 单独建 location，只允许 <code>172.16.0.0/12</code> 与 <code>127.0.0.1</code>，<code>client_max_body_size 1m</code>，其余 <code>deny all</code>。</li>
     <li>事件体做最小校验：<code>post_type</code>、<code>message_type</code>、<code>self_id</code>、<code>time</code> 必需；时间偏离超过 5 分钟拒绝，防重放。</li>
     <li>入口限流单独一个 zone，例如 300r/m，不和公开页面的 120r/m 混用。</li>
@@ -329,7 +329,7 @@ footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:v
     <div class="four">
       <div><b>这是什么</b><p><code>/onebot/event</code> 接收 NapCat 上报的 JSON，去重后立刻返回 204，再异步处理。</p></div>
       <div><b>问题</b><p>控制器和过滤器都没有校验任何 Token；Nginx 的 <code>location /</code> 把它一起代理到公网；下游又直接信任请求体里的 <code>sender.role</code>。攻击者可以伪造任意群、任意用户、任意角色的事件。</p></div>
-      <div><b>修法</b><p>在入口校验 <code>Authorization: Bearer &lt;ONEBOT_TOKEN 的值&gt;</code>，常量时间比较，失败返回 401；NapCat 的 HTTP 客户端填同一个 secret；Nginx 对公网 <code>/onebot/</code> 返回 404，NapCat 只直连 8080。再加 1 MB body 上限。</p></div>
+      <div><b>修法</b><p>入口校验 NapCat 的 <code>x-signature: sha1=HMAC-SHA1(token, body)</code>，兼容手工测试的 <code>Authorization: Bearer</code>，常量时间比较，失败返回 401；Nginx 对公网 <code>/onebot/</code> 返回 404，NapCat 只直连 8080。再加 1 MB body 上限。</p></div>
       <div><b>不修的后果</b><p>任何人都能让机器人发消息、执行群主命令、写数据库、烧模型额度。身份、审计、成本三件事同时失真。</p></div>
     </div>
   </article>

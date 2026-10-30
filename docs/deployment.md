@@ -69,7 +69,7 @@ docker compose logs -f
 
 Host 必须是 `0.0.0.0`。Docker 把连接转发到容器网卡，监听回环地址会拒绝宿主机流量。Token 不能留空，否则 NapCat 会把 Host 强制改回 `127.0.0.1`。
 
-业务层会校验上报请求的 `Authorization: Bearer <ONEBOT_TOKEN>`。没配 Token 时入口直接拒绝，不会降级放行。Nginx 对公网的 `/onebot/` 一律返回 404，NapCat 必须直连 `http://host.docker.internal:8080/onebot/event`。
+业务层会校验上报请求。NapCat 的 HTTP 客户端发的是 `x-signature: sha1=<HMAC-SHA1(token, body)>`；手工测试可以用 `Authorization: Bearer <ONEBOT_TOKEN>`，两种都认。没配 Token 时入口直接拒绝，不会降级放行。Nginx 对公网的 `/onebot/` 一律返回 404，NapCat 必须直连 `http://host.docker.internal:8080/onebot/event`。
 
 ### 3.1.1 从本机访问 WebUI
 
