@@ -10,6 +10,12 @@ import type { Schemas } from './generated'
 /** 从生成的 schema 取字段，但保留手写类型里“一定存在”的字段 */
 type RequiredFields<T, K extends keyof T> = Required<Pick<T, K>> & Omit<T, K>
 
+type DeepRequired<T> = T extends (infer U)[]
+  ? DeepRequired<U>[]
+  : T extends object
+    ? { [K in keyof T]-?: DeepRequired<T[K]> }
+    : T
+
 /* ==================== 知识库 ==================== */
 
 /** 一条知识库分块（公开站只暴露 title/url/text，不暴露内部分数） */
@@ -47,46 +53,13 @@ export type PublicStats = Required<Schemas['PublicStats']>
  *   commands ← 有回应，但不是提问
  *   total ← 群消息总数，含闲聊与被拦的，**不是**提问数
  */
-export interface Overview {
-  /** 群消息总数：含没 @ 机器人的闲聊、被黑名单/限流拦下的。不是提问数 */
-  total: number
-  /** 提问量（= pass）。@ 了机器人 + 有效回应且未被拦截 */
-  questions: number
-  /** 提问中检索到资料的条数 */
-  hits: number
-  /** 提问命中率。分母是 questions，不是 total */
-  hitRate: number
-  /** 提过问的独立用户数。⚠️ 原先没按提问过滤，会把闲聊的人也算进来 */
-  users: number
-  /** 提过问的独立群数 */
-  groups: number
-  /** 被拦：没 @ / 黑名单 / Guard 拦截 / 预算超限 / kill-switch */
-  dropped: number
-  /** 被拦：回固定话术（限流提示 / 敏感词 / 纯表情兜底 / 预算） */
-  fixedReplies: number
-  /** 命中的指令数（如 /help）。有回应，但不是提问 */
-  commands: number
-  p50RetrieveMs: number
-  p95RetrieveMs: number
-  p50TotalMs: number
-  p95TotalMs: number
-  guardActions: Record<string, number>
-  /** 每日提问量（不是每日消息量） */
-  daily: DayCount[]
-}
+export type Overview = DeepRequired<Schemas['Overview']>
 
-export interface DayCount { day: string; count: number }
+export type DayCount = DeepRequired<Schemas['DayCount']>
 
-export interface KeywordStat { zh: string; en: string; count: number; missCount: number }
+export type KeywordStat = DeepRequired<Schemas['KeywordStat']>
 
-export interface MissStat {
-  zh: string
-  en: string
-  count: number
-  /** 向量检索卡 min-score 阈值【之前】的最高余弦（见 UnmatchedMiss 的说明） */
-  bestCosineRaw: number
-  samples: string[]
-}
+export type MissStat = DeepRequired<Schemas['MissStat']>
 
 /**
  * bestCosineRaw = 向量检索在应用 min-score 阈值【之前】的最高余弦。
@@ -96,48 +69,29 @@ export interface MissStat {
  *   · 很低（0.2 以下）：库里确实没有这份资料 → 该补资料，调阈值没用
  *   · 0：这次没走向量路（向量未启用 / 老记录没有这一列）
  */
-export interface UnmatchedMiss { ts: string; question: string; bestCosineRaw: number }
+export type UnmatchedMiss = DeepRequired<Schemas['UnmatchedMiss']>
 
 export interface MissResponse {
   withKeyword: MissStat[]
   unmatched: UnmatchedMiss[]
 }
 
-export interface Bucket { range: string; count: number }
+export type Bucket = DeepRequired<Schemas['Bucket']>
 
-export interface SourceStat { source: string; count: number; hits: number; hitRate: number }
+export type SourceStat = DeepRequired<Schemas['SourceStat']>
 
-export interface VerdictStat { verdict: string; count: number }
+export type VerdictStat = DeepRequired<Schemas['VerdictStat']>
 
 export interface SourcesResponse {
   sources: SourceStat[]
   verdicts: VerdictStat[]
 }
 
-export interface RecordRow {
-  id: number
-  ts: string
-  groupId: number
-  userId: number
-  hitCount: number
-  bestCosine: number | null
-  sources: string
-  guardAction: string
-  retrieveMs: number
-  totalMs: number
-  question: string | null
-  answer: string | null
-  verdict: string | null
-}
+export type RecordRow = DeepRequired<Schemas['RecordRow']>
 
-export interface VisitDay { day: string; count: number }
+export type VisitDay = DeepRequired<Schemas['VisitDay']>
 
-export interface VisitSummary {
-  total: number
-  visitors: number
-  daily: VisitDay[]
-  paths: SourceStat[]
-}
+export type VisitSummary = DeepRequired<Schemas['VisitSummary']>
 
 /* ==================== 系统日志 ==================== */
 
@@ -149,21 +103,9 @@ export interface LogEntry {
   throwable?: string
 }
 
-export interface LogHistory {
-  entries: LogEntry[]
-  currentSeq: number
-}
+export type LogHistory = DeepRequired<Schemas['LogHistory']>
 
-export interface LogStatus {
-  enabled: boolean
-  bufferSize: number
-  capacity: number
-  totalWritten: number
-  dropped: number
-  maskSensitive: boolean
-  currentSeq: number
-  activeStreams: number
-}
+export type LogStatus = DeepRequired<Schemas['LogStatus']>
 
 /* ==================== 词条（一个词条 = 一个分块） ====================
    词条不再是独立的名字表：块本身就是词条，字段是 id / 标题 / 别名 / 分类。
@@ -334,9 +276,7 @@ export interface CommandPolicy {
   allowPrivate: boolean
 }
 
-export interface CommandPolicies {
-  policies: CommandPolicy[]
-}
+export type CommandPolicies = DeepRequired<Schemas['CommandPolicies']>
 
 /** 名单条目：uid = QQ 号，gid = 群号 */
 export interface AclItem {
@@ -366,17 +306,11 @@ export interface SystemAliasGroup {
   items: SystemAliasEntry[]
 }
 
-export interface SystemReplyItem {
-  content: string
-  defaultContent: string
-}
+export type SystemReplyItem = DeepRequired<Schemas['SystemReplyItem']>
 
-export interface SystemReplyList {
-  list: SystemReplyItem
-  help: SystemReplyItem
-}
+export type SystemReplyList = DeepRequired<Schemas['SystemReplyList']>
 
-export interface SystemAliasList {
+export type SystemAliasList = {
   groups: SystemAliasGroup[]
 }
 
@@ -505,13 +439,7 @@ export interface AdminBoardRecordsResponse {
   count: number
 }
 
-export interface CommandList {
-  available: boolean
-  commands: BotCommand[]
-  /** 已移除：群里是否必须 @ 改读准入设置 app.guard.access.require-mention-in-group */
-  rateLimitPerMinute: number
-  allowUserIds: boolean
-}
+export type CommandList = DeepRequired<Schemas['CommandList']>
 
 export interface CommandVariable {
   name: string
@@ -538,13 +466,7 @@ export interface CommandUsage {
   count: number
 }
 
-export interface CommandStats {
-  topUsed: CommandUsage[]
-  /** 全部命中过的命令（不限 20 条），统一命令表按行显示次数 */
-  usage: CommandUsage[]
-  unmatched: CommandUsage[]
-  total: number
-}
+export type CommandStats = DeepRequired<Schemas['CommandStats']>
 
 /* ==================== 知识库块（文档导入之后的新模型） ====================
    与旧的「词条 / 文本块（按行号操作）」并存到切换为止。
@@ -626,11 +548,7 @@ export interface SettingItem {
   value: unknown
 }
 
-export interface SettingsView {
-  groups: Record<string, SettingItem[]>
-  applyCount: number
-  note: string
-}
+export type SettingsView = DeepRequired<Schemas['SettingsView']>
 
 /* ==================== 模型配置 ==================== */
 
@@ -641,26 +559,11 @@ export interface ModelProvider {
   modelName: string
 }
 
-export interface ModelList {
-  providers: ModelProvider[]
-  defaultProvider: string
-  fallbackChain: string[]
-  note: string
-}
+export type ModelList = DeepRequired<Schemas['ModelList']>
 
-export interface ProbeResult {
-  ok: boolean
-  elapsedMs?: number
-  reply?: string
-  error?: string
-}
+export type ProbeResult = Schemas['ProbeResult']
 
-export interface AvailableModels {
-  ok: boolean
-  models: string[]
-  count?: number
-  error?: string
-}
+export type AvailableModels = DeepRequired<Schemas['AvailableModels']>
 
 /* ==================== 知识库管理 ==================== */
 
@@ -671,13 +574,7 @@ export interface AvailableModels {
    分类只有一份人工清单：分块符号里带什么标签就归什么分类，认不出就是「未分类」。
    没有"原始标签 → 9 大类"的智能归类。 */
 
-export interface CategoryList {
-  items: KbCategoryStat[]
-  uncategorized: number
-  uncategorizedName: string
-  total: number
-  available: boolean
-}
+export type CategoryList = DeepRequired<Schemas['CategoryList']>
 
 /** 分类穿透里的一条：一个条目 = 一个分块 */
 export interface CategoryEntry {
@@ -794,31 +691,9 @@ export interface CarouselItemsResponse {
 /* ==================== 流量（GET /admin/api/traffic） ==================== */
 
 /** 一分钟的流量读数。{@code p50/p95/max} 只统计 API 请求，单位毫秒 */
-export interface TrafficPoint {
-  /** epoch 分钟 */
-  minute: number
-  requests: number
-  /** 其中 API 请求（/api/ 与 /admin/api/） */
-  api: number
-  /** 5xx 数 */
-  errors: number
-  p50: number
-  p95: number
-  max: number
-}
+export type TrafficPoint = DeepRequired<Schemas['TrafficPoint']>
 
-export interface TrafficSummary {
-  requests: number
-  api: number
-  errors: number
-  /** 0~1，分母是全部请求 */
-  errorRate: number
-  /** 单分钟最多几次 */
-  peakPerMinute: number
-  avgPerMinute: number
-  /** 窗口内最高的单分钟 P95（毫秒） */
-  worstP95: number
-}
+export type TrafficSummary = DeepRequired<Schemas['TrafficSummary']>
 
 /**
  * 流量窗口。
@@ -826,39 +701,13 @@ export interface TrafficSummary {
  * <p>后端已经把窗口内**每分钟都铺平**了：没有请求的分钟是 0，不是缺失。
  * 前端画图不需要再补零，也不需要理解 epoch 分钟以外的约定。
  */
-export interface TrafficResponse {
-  minutes: number
-  points: TrafficPoint[]
-  summary: TrafficSummary
-}
+export type TrafficResponse = DeepRequired<Schemas['TrafficResponse']>
 
 /* ==================== 模型调用（GET /admin/api/llm） ==================== */
 
 /** 一分钟的模型调用读数。一次群聊回答可能包含多轮工具调用，每轮各算一次 */
-export interface LlmPoint {
-  minute: number
-  calls: number
-  failures: number
-  tokensIn: number
-  tokensOut: number
-  p50: number
-  p95: number
-  max: number
-}
+export type LlmPoint = DeepRequired<Schemas['LlmPoint']>
 
-export interface LlmSummary {
-  calls: number
-  failures: number
-  tokensIn: number
-  tokensOut: number
-  /** 0~1，分母是调用次数 */
-  failRate: number
-  peakPerMinute: number
-  worstP95: number
-}
+export type LlmSummary = DeepRequired<Schemas['LlmSummary']>
 
-export interface LlmResponse {
-  minutes: number
-  points: LlmPoint[]
-  summary: LlmSummary
-}
+export type LlmResponse = DeepRequired<Schemas['LlmResponse']>
