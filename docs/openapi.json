@@ -512,8 +512,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/VoiceList"
                 }
               }
             }
@@ -570,8 +569,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/UploadResult"
                 }
               }
             }
@@ -610,8 +608,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SendResult"
                 }
               }
             }
@@ -641,7 +638,8 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "type" : "string",
+                  "format" : "byte"
                 }
               }
             }
@@ -671,8 +669,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SendResult"
                 }
               }
             }
@@ -693,8 +690,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/TriggerList"
                 }
               }
             }
@@ -722,8 +718,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/TriggerResult"
                 }
               }
             }
@@ -1761,8 +1756,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CategoryList"
                 }
               }
             }
@@ -1787,15 +1781,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -1821,8 +1807,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlockList"
                 }
               }
             }
@@ -1851,8 +1836,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlockItem"
                 }
               }
             }
@@ -1875,15 +1859,7 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -1909,8 +1885,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlockItem"
                 }
               }
             }
@@ -1940,8 +1915,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BackfillResult"
                 }
               }
             }
@@ -1972,8 +1946,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlockItem"
                 }
               }
             }
@@ -2004,8 +1977,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ImportResult"
                 }
               }
             }
@@ -2036,8 +2008,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ImportPreview"
                 }
               }
             }
@@ -2531,8 +2502,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CommandList"
                 }
               }
             }
@@ -2561,8 +2531,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SavedCommand"
                 }
               }
             }
@@ -2598,15 +2567,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -2779,15 +2740,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -2815,8 +2768,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/PreviewResult"
                 }
               }
             }
@@ -2837,8 +2789,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CarouselAdminList"
                 }
               }
             }
@@ -2888,8 +2839,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ItemResult"
                 }
               }
             }
@@ -2928,8 +2878,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ItemsResult"
                 }
               }
             }
@@ -2950,8 +2899,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BoardList"
                 }
               }
             }
@@ -2980,8 +2928,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BoardSaved"
                 }
               }
             }
@@ -3196,8 +3143,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ItemsResult"
                 }
               }
             }
@@ -3234,8 +3180,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ItemResult"
                 }
               }
             }
@@ -3265,8 +3210,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/TriggerList"
                 }
               }
             }
@@ -3303,8 +3247,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/TriggerResult"
                 }
               }
             }
@@ -3387,15 +3330,7 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3425,15 +3360,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3461,8 +3388,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/RetireResult"
                 }
               }
             }
@@ -3493,8 +3419,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/RetireDocResult"
                 }
               }
             }
@@ -3520,15 +3445,7 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3559,15 +3476,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3594,8 +3503,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ItemsResult"
                 }
               }
             }
@@ -3632,8 +3540,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ItemResult"
                 }
               }
             }
@@ -3659,15 +3566,7 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3698,15 +3597,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3724,7 +3615,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/PublicStats"
                 }
               }
             }
@@ -3742,8 +3633,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SiteInfo"
                 }
               }
             }
@@ -3826,7 +3716,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/MapSearch"
                 }
               }
             }
@@ -3859,7 +3749,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ResourcePoints"
                 }
               }
             }
@@ -3912,7 +3802,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ResourceCatalog"
                 }
               }
             }
@@ -3945,7 +3835,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ResourceAreas"
                 }
               }
             }
@@ -3971,7 +3861,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/MapMarkers"
                 }
               }
             }
@@ -4006,7 +3896,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/LocateResult"
                 }
               }
             }
@@ -4024,7 +3914,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/MapCatalog"
                 }
               }
             }
@@ -4059,7 +3949,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/KbSearchResult"
                 }
               }
             }
@@ -4085,7 +3975,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/KbEntry"
                 }
               }
             }
@@ -4103,7 +3993,10 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/PublicCategory"
+                  }
                 }
               }
             }
@@ -4145,7 +4038,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/BrowsePage"
                 }
               }
             }
@@ -4163,8 +4056,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CarouselList"
                 }
               }
             }
@@ -4248,8 +4140,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/TtsVoices"
                 }
               }
             }
@@ -5190,8 +5081,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/EntryPage"
                 }
               }
             }
@@ -5212,8 +5102,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlockStats"
                 }
               }
             }
@@ -5242,8 +5131,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/BlockItem"
                 }
               }
             }
@@ -5264,8 +5152,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/DocList"
                 }
               }
             }
@@ -5567,8 +5454,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/Variables"
                 }
               }
             }
@@ -5621,8 +5507,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CommandPolicies"
                 }
               }
             }
@@ -5652,8 +5537,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CatalogEntries"
                 }
               }
             }
@@ -5674,8 +5558,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/Actions"
                 }
               }
             }
@@ -5861,15 +5744,7 @@
         "operationId" : "clear_2",
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -6219,12 +6094,77 @@
           }
         }
       },
+      "UploadResult" : {
+        "type" : "object",
+        "properties" : {
+          "duplicate" : {
+            "type" : "boolean"
+          },
+          "item" : {
+            "$ref" : "#/components/schemas/VoiceItem"
+          }
+        }
+      },
+      "VoiceItem" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "string"
+          },
+          "mime" : {
+            "type" : "string"
+          },
+          "sizeKb" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "durationMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "durationText" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "audioUrl" : {
+            "type" : "string"
+          }
+        }
+      },
       "SendVoiceRequest" : {
         "type" : "object",
         "properties" : {
           "groupId" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "SendResult" : {
+        "type" : "object",
+        "properties" : {
+          "messageId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "seconds" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },
@@ -6266,6 +6206,39 @@
           },
           "groupScope" : {
             "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TriggerResult" : {
+        "type" : "object",
+        "properties" : {
+          "rule" : {
+            "$ref" : "#/components/schemas/TriggerRuleView"
+          }
+        }
+      },
+      "TriggerRuleView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "keyword" : {
+            "type" : "string"
+          },
+          "cooldownSeconds" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "groupScope" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
           },
           "note" : {
             "type" : "string"
@@ -6551,11 +6524,88 @@
           }
         }
       },
+      "BlockItem" : {
+        "type" : "object",
+        "properties" : {
+          "block" : {
+            "$ref" : "#/components/schemas/BlockView"
+          }
+        }
+      },
+      "BlockView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "docId" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "retired" : {
+            "type" : "boolean"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          }
+        }
+      },
       "BackfillRequest" : {
         "type" : "object",
         "properties" : {
           "dryRun" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "BackfillResult" : {
+        "type" : "object",
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "blocks" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "missing" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "stale" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "embedded" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pending" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "message" : {
+            "type" : "string"
           }
         }
       },
@@ -6587,11 +6637,77 @@
           }
         }
       },
+      "ImportResult" : {
+        "type" : "object",
+        "properties" : {
+          "added" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "updated" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "unchanged" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "untouched" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
       "PreviewImportRequest" : {
         "type" : "object",
         "properties" : {
           "text" : {
             "type" : "string"
+          }
+        }
+      },
+      "ImportPreview" : {
+        "type" : "object",
+        "properties" : {
+          "added" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "updated" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "unchanged" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "untouchedExisting" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "addedIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "updatedIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },
@@ -6765,6 +6881,15 @@
           }
         }
       },
+      "SavedCommand" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "TextsRequest" : {
         "type" : "object",
         "properties" : {
@@ -6857,12 +6982,79 @@
           }
         }
       },
+      "PreviewResult" : {
+        "type" : "object",
+        "properties" : {
+          "rendered" : {
+            "type" : "string"
+          },
+          "length" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "CarouselItemView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "imageUrl" : {
+            "type" : "string"
+          },
+          "link" : {
+            "type" : "string"
+          },
+          "caption" : {
+            "type" : "string"
+          },
+          "width" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "height" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "sort" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ItemResult" : {
+        "type" : "object",
+        "properties" : {
+          "item" : {
+            "$ref" : "#/components/schemas/CarouselItemView"
+          }
+        }
+      },
       "MoveRequest" : {
         "type" : "object",
         "properties" : {
           "delta" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "ItemsResult" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItemView"
+            }
           }
         }
       },
@@ -6933,6 +7125,101 @@
             "type" : "string"
           },
           "helpReply" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BoardSaved" : {
+        "type" : "object",
+        "properties" : {
+          "board" : {
+            "$ref" : "#/components/schemas/BoardView"
+          }
+        }
+      },
+      "BoardView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamSpec"
+            }
+          },
+          "delivery" : {
+            "type" : "string"
+          },
+          "access" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "showGroup" : {
+            "type" : "boolean"
+          },
+          "showUser" : {
+            "type" : "boolean"
+          },
+          "allowPrivate" : {
+            "type" : "boolean"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "builtin" : {
+            "type" : "boolean"
+          },
+          "usage" : {
+            "type" : "string"
+          },
+          "listHeader" : {
+            "type" : "string"
+          },
+          "listItem" : {
+            "type" : "string"
+          },
+          "listEmpty" : {
+            "type" : "string"
+          },
+          "listLimit" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "listReply" : {
+            "type" : "string"
+          },
+          "helpReply" : {
+            "type" : "string"
+          },
+          "defaultList" : {
+            "type" : "string"
+          },
+          "defaultHelp" : {
             "type" : "string"
           },
           "description" : {
@@ -7027,6 +7314,14 @@
         },
         "required" : [ "id" ]
       },
+      "RetireResult" : {
+        "type" : "object",
+        "properties" : {
+          "retired" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "RetireDocRequest" : {
         "type" : "object",
         "properties" : {
@@ -7039,6 +7334,18 @@
           }
         },
         "required" : [ "doc" ]
+      },
+      "RetireDocResult" : {
+        "type" : "object",
+        "properties" : {
+          "affected" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        }
       },
       "ToggleCommandRequest" : {
         "type" : "object",
@@ -7067,6 +7374,768 @@
         "properties" : {
           "enabled" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "PublicStats" : {
+        "type" : "object",
+        "properties" : {
+          "questions" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hitRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "kbEntries" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "glossaryTerms" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "since" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SiteInfo" : {
+        "type" : "object",
+        "properties" : {
+          "groupName" : {
+            "type" : "string"
+          },
+          "groupNumber" : {
+            "type" : "string"
+          },
+          "groupDesc" : {
+            "type" : "string"
+          },
+          "joinHint" : {
+            "type" : "string"
+          },
+          "botName" : {
+            "type" : "string"
+          },
+          "org" : {
+            "type" : "string"
+          },
+          "author" : {
+            "type" : "string"
+          },
+          "texts" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "MapSearch" : {
+        "type" : "object",
+        "properties" : {
+          "q" : {
+            "type" : "string"
+          },
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MarkerView"
+            }
+          }
+        }
+      },
+      "MarkerView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "map" : {
+            "type" : "string"
+          },
+          "page" : {
+            "type" : "string"
+          },
+          "canvas" : {
+            "type" : "string"
+          },
+          "group" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "original" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "article" : {
+            "type" : "string"
+          },
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "image" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "boolean"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "priority" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResourcePoint" : {
+        "type" : "object",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "z" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "region" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "regionName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResourcePoints" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "layer" : {
+            "type" : "string"
+          },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ResourcePoint"
+            }
+          }
+        }
+      },
+      "CategoryView" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "layers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LayerView"
+            }
+          }
+        }
+      },
+      "LayerView" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "subtype" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "color" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "shape" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResourceCatalog" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "imported" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "importedAt" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryView"
+            }
+          }
+        }
+      },
+      "ResourceArea" : {
+        "type" : "object",
+        "properties" : {
+          "x0" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "z0" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "x1" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "z1" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResourceAreas" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "layer" : {
+            "type" : "string"
+          },
+          "areas" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ResourceArea"
+            }
+          }
+        }
+      },
+      "MapMarkers" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "markers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MarkerView"
+            }
+          }
+        }
+      },
+      "LocateAnchor" : {
+        "type" : "object",
+        "properties" : {
+          "ref" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "category" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LocateHit" : {
+        "type" : "object",
+        "properties" : {
+          "ref" : {
+            "type" : "string"
+          },
+          "map" : {
+            "type" : "string"
+          },
+          "canvas" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "relative" : {
+            "$ref" : "#/components/schemas/LocateRelative"
+          }
+        }
+      },
+      "LocateRelative" : {
+        "type" : "object",
+        "properties" : {
+          "direction" : {
+            "type" : "string"
+          },
+          "screenHint" : {
+            "type" : "string"
+          },
+          "distance" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "bucket" : {
+            "type" : "string"
+          },
+          "bearing" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "phrase" : {
+            "type" : "string"
+          },
+          "anchor" : {
+            "$ref" : "#/components/schemas/LocateAnchor"
+          }
+        }
+      },
+      "LocateResult" : {
+        "type" : "object",
+        "properties" : {
+          "q" : {
+            "type" : "string"
+          },
+          "found" : {
+            "type" : "boolean"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "hits" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LocateHit"
+            }
+          }
+        }
+      },
+      "CanvasView" : {
+        "type" : "object",
+        "properties" : {
+          "page" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "topLeft" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "double"
+            }
+          },
+          "bottomRight" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "double"
+            }
+          },
+          "tileAt" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "double"
+            }
+          },
+          "tileSize" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "double"
+            }
+          },
+          "tiles" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TileView"
+            }
+          },
+          "background" : {
+            "type" : "string"
+          },
+          "backdrop" : {
+            "type" : "string"
+          },
+          "zoomMin" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "zoomMax" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "CategoryLabel" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "GroupView" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "collectible" : {
+            "type" : "boolean"
+          },
+          "landmark" : {
+            "type" : "boolean"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "MapCatalog" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "unitsPerMeter" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "maxZoom" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryLabel"
+            }
+          },
+          "maps" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MapView"
+            }
+          }
+        }
+      },
+      "MapView" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "markerCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "adminCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "canvases" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CanvasView"
+            }
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GroupView"
+            }
+          },
+          "defaultGroups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "TileView" : {
+        "type" : "object",
+        "properties" : {
+          "image" : {
+            "type" : "string"
+          },
+          "col" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "row" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "KbEntry" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "cats" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "KbSearchResult" : {
+        "type" : "object",
+        "properties" : {
+          "query" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/KbEntry"
+            }
+          }
+        }
+      },
+      "PublicCategory" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "desc" : {
+            "type" : "string"
+          },
+          "entryCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "BrowseEntry" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "BrowsePage" : {
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BrowseEntry"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "CarouselList" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItemView"
+            }
+          },
+          "intervalMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "VoiceList" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VoiceItem"
+            }
+          },
+          "maxSizeKb" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxSeconds" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "TtsVoices" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "voices" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "default" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TriggerList" : {
+        "type" : "object",
+        "properties" : {
+          "rules" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TriggerRuleView"
+            }
           }
         }
       },
@@ -7271,6 +8340,162 @@
           }
         }
       },
+      "CategoryList" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Stat"
+            }
+          },
+          "uncategorized" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "uncategorizedName" : {
+            "type" : "string"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "available" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "Stat" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "EntryItem" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "docId" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "snippet" : {
+            "type" : "string"
+          }
+        }
+      },
+      "EntryPage" : {
+        "type" : "object",
+        "properties" : {
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EntryItem"
+            }
+          }
+        }
+      },
+      "BlockList" : {
+        "type" : "object",
+        "properties" : {
+          "doc" : {
+            "type" : "string"
+          },
+          "blocks" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BlockView"
+            }
+          }
+        }
+      },
+      "BlockStats" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "blocks" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "retired" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "documents" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "vectors" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "titleVectors" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "DocList" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "documents" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DocSummary"
+            }
+          }
+        }
+      },
+      "DocSummary" : {
+        "type" : "object",
+        "properties" : {
+          "docId" : {
+            "type" : "string"
+          },
+          "blocks" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "retired" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "Bucket" : {
         "type" : "object",
         "properties" : {
@@ -7280,6 +8505,272 @@
           "count" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "CommandList" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "commands" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CommandView"
+            }
+          },
+          "rateLimitPerMinute" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "allowUserIds" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "CommandView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "trigger" : {
+            "type" : "string"
+          },
+          "reply" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "groupIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "access" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "builtin" : {
+            "type" : "boolean"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamSpec"
+            }
+          },
+          "help" : {
+            "type" : "string"
+          },
+          "listReply" : {
+            "type" : "string"
+          },
+          "action" : {
+            "type" : "string"
+          },
+          "usage" : {
+            "type" : "string"
+          },
+          "defaultList" : {
+            "type" : "string"
+          },
+          "defaultHelp" : {
+            "type" : "string"
+          }
+        }
+      },
+      "VarInfo" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "example" : {
+            "type" : "string"
+          },
+          "advanced" : {
+            "type" : "boolean"
+          },
+          "inParam" : {
+            "type" : "boolean"
+          },
+          "inText" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "Variables" : {
+        "type" : "object",
+        "properties" : {
+          "variables" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VarInfo"
+            }
+          },
+          "preview" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "current" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "allowUserIds" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "CommandPolicies" : {
+        "type" : "object",
+        "properties" : {
+          "policies" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CommandPolicyView"
+            }
+          }
+        }
+      },
+      "CommandPolicyView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "showGroup" : {
+            "type" : "boolean"
+          },
+          "showUser" : {
+            "type" : "boolean"
+          },
+          "allowPrivate" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "CatalogEntries" : {
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            }
+          }
+        }
+      },
+      "ActionView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "defaultPath" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamSpec"
+            }
+          }
+        }
+      },
+      "Actions" : {
+        "type" : "object",
+        "properties" : {
+          "actions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ActionView"
+            }
+          }
+        }
+      },
+      "CarouselAdminList" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItemView"
+            }
+          },
+          "maxCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxSizeKb" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "uploadCeilingKb" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "intervalMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "BoardList" : {
+        "type" : "object",
+        "properties" : {
+          "boards" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BoardView"
+            }
           }
         }
       }

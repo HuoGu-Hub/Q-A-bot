@@ -242,7 +242,6 @@ export interface KbEntryImportResponse {
 
 /** 按 id 取单块（含正文）—— 词条面板编辑正文用 */
 export interface KbBlockItemResponse {
-  ok: boolean
   block: KbBlockView
 }
 
@@ -599,6 +598,8 @@ export interface KbBlockView {
   source: string
   retired: boolean
   updatedAt: string
+  /** 人工别名；空串 = 用标题派生 */
+  alias: string
 }
 
 /**
@@ -607,7 +608,6 @@ export interface KbBlockView {
  * 规则：文件里出现的 id 存在就覆盖、不存在就新增；**没出现的块一个都不动**。
  */
 export interface KbImportPreview {
-  ok: boolean
   added: number
   updated: number
   unchanged: number
@@ -620,7 +620,6 @@ export interface KbImportPreview {
 
 /** 导入结果 */
 export interface KbImportResult {
-  ok: boolean
   added: number
   updated: number
   unchanged: number
@@ -757,7 +756,6 @@ export interface CarouselItem {
 
 /** GET /admin/api/carousel —— 列表 + 当前限额（限额用来决定上传控件能不能点） */
 export interface CarouselListResponse {
-  ok: boolean
   items: CarouselItem[]
   maxCount: number
   /** 业务上限（KB）：超过它后端会明确告诉你"图片太大" */
@@ -788,13 +786,11 @@ export interface CarouselPublicResponse {
 
 /** 单张图的上传 / 编辑响应 */
 export interface CarouselItemResponse {
-  ok: boolean
   item: CarouselItem
 }
 
 /** 排序 / 删除之后返回整份新列表 —— 前端直接拿它替换，不自己猜顺序 */
 export interface CarouselItemsResponse {
-  ok: boolean
   items: CarouselItem[]
 }
 

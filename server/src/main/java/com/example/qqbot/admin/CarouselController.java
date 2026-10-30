@@ -1,23 +1,18 @@
 package com.example.qqbot.admin;
 
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-import com.example.qqbot.web.ApiException;
-
-import com.example.qqbot.site.SitePolicy;
 import com.example.qqbot.site.Carousel;
 import com.example.qqbot.site.CarouselService;
 import com.example.qqbot.site.CarouselStore;
+import com.example.qqbot.site.SitePolicy;
+import com.example.qqbot.web.ApiException;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.util.unit.DataSize;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -31,18 +26,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 首页轮播图的管理接口。
- *
- * <p>图片走 {@code multipart/form-data} 上传（整个项目**唯一**一处在管理端收文件的地方），
- * 其余字段是普通 JSON。校验与落盘都在 {@link CarouselService} 里，
- * 这里只负责把异常翻成人话。
- *
- * <p>认证由 {@link AdminAuthFilter} 统一拦在 {@code /admin/api/**} 前面。
  */
 @Tag(name = "Admin")
 @SecurityRequirement(name = "adminSession")
@@ -52,12 +39,6 @@ public class CarouselController {
 
     private static final Logger log = LoggerFactory.getLogger(CarouselController.class);
 
-    /**
-     * 容器的接收上限（{@code spring.servlet.multipart.max-file-size}）。
-     *
-     * <p>回给前端是为了让它能先说一句"这张 15 MB，服务器最多收 12 MB" ——
-     * 否则用户只会看到浏览器那句 {@code Failed to fetch}。
-     */
     @Value("${spring.servlet.multipart.max-file-size:12MB}")
     private DataSize uploadCeiling;
 
@@ -71,37 +52,31 @@ public class CarouselController {
         this.props = props;
     }
 
-    /** 清单 + 当前配置（配置也回给前端，面板上要显示"最多几张 / 上限多大"） */
+    /** 清单 + 当前配置 */
     @GetMapping("")
-    public Map<String, Object> list() {
+    public CarouselAdminList list() {
         Carousel cfg = props.getCarousel();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("items", views(store.list()));
-        out.put("maxCount", cfg.getMaxCount());
-        out.put("maxSizeKb", cfg.getMaxSizeKb());
-        out.put("uploadCeilingKb", (int) (uploadCeiling.toBytes() / 1024));
-        out.put("intervalMs", service.publicIntervalMs());
-        out.put("enabled", cfg.isEnabled());
-        return out;
+        return new CarouselAdminList(
+                views(store.list()),
+                cfg.getMaxCount(),
+                cfg.getMaxSizeKb(),
+                (int) (uploadCeiling.toBytes() / 1024),
+                service.publicIntervalMs(),
+                cfg.isEnabled());
     }
 
     /** 上传一张 */
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> upload(@RequestParam("file") MultipartFile file,
-                                                     @RequestParam(value = "link", required = false) String link,
-                                                     @RequestParam(value = "caption", required = false) String caption) {
+    public ResponseEntity<ItemResult> upload(@RequestParam("file") MultipartFile file,
+                                             @RequestParam(value = "link", required = false) String link,
+                                             @RequestParam(value = "caption", required = false) String caption) {
         try {
             CarouselStore.Item saved = service.add(file, link, caption);
             if (saved == null) {
                 throw ApiException.internal("保存失败");
             }
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("ok", true);
-            out.put("item", view(saved));
-            return ResponseEntity.ok(out);
+            return ResponseEntity.ok(new ItemResult(view(saved)));
         } catch (CarouselService.CarouselException e) {
-            // 超张数 / 太大 / 不是图片 —— 都是用户能自己修的问题，400 + 原话
             throw ApiException.badRequest(e.getMessage());
         } catch (IOException e) {
             log.warn("[SITE] 轮播图落盘失败：{}", e.getMessage());
@@ -111,8 +86,8 @@ public class CarouselController {
 
     /** 改说明 / 链接 / 启停 */
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable long id,
-                                                      @RequestBody(required = false) UpdateCarouselRequest body) {
+    public ResponseEntity<ItemResult> update(@PathVariable long id,
+                                             @RequestBody(required = false) UpdateCarouselRequest body) {
         String link = body == null ? null : body.link();
         String caption = body == null ? null : body.caption();
         Boolean enabled = body == null ? null : body.enabled();
@@ -121,85 +96,69 @@ public class CarouselController {
         if (updated == null) {
             throw ApiException.notFound("没有这张图");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("item", view(updated));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ItemResult(view(updated)));
     }
 
     /** 上移 / 下移一位 */
     @PostMapping("/{id}/actions/move")
-    public ResponseEntity<Map<String, Object>> move(@PathVariable long id,
-                                                    @RequestBody(required = false) MoveRequest body) {
+    public ResponseEntity<ItemsResult> move(@PathVariable long id,
+                                            @RequestBody(required = false) MoveRequest body) {
         int delta = body == null || body.delta() == null ? 0 : body.delta();
         if (delta == 0) {
             throw ApiException.badRequest("需要 delta = -1（上移）或 1（下移）");
         }
         if (!store.move(id, delta)) {
-            // 已经在头/尾了：不是错误，前端按钮本来就该是禁用的，这里只是兜底
             throw ApiException.badRequest("已经到头了");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("items", views(store.list()));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ItemsResult(views(store.list())));
     }
 
     /** 删除（连磁盘文件一起） */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+    public ResponseEntity<ItemsResult> delete(@PathVariable long id) {
         CarouselStore.Item gone = service.delete(id);
         if (gone == null) {
             throw ApiException.notFound("没有这张图");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("items", views(store.list()));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ItemsResult(views(store.list())));
     }
 
-    // ==================== 工具 ====================
-
-    /**
-     * 对外的形状。
-     *
-     * <p>{@code imageUrl} 带一个 {@code ?v=} 版本号（用磁盘文件名算），
-     * 这样"删掉再传一张"即使碰巧复用了同一个 id，URL 也变了 ——
-     * 图片接口给的是 {@code immutable} 长缓存，没有这个版本号就会看到上一张的缓存。
-     */
-    private static Map<String, Object> view(CarouselStore.Item it) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", it.id());
-        m.put("imageUrl", "/api/public/carousel/image/" + it.id() + "?v=" + CarouselService.versionOf(it));
-        m.put("link", it.link());
-        m.put("caption", it.caption());
-        m.put("width", it.width());
-        m.put("height", it.height());
-        m.put("enabled", it.enabled());
-        m.put("sort", it.sort());
-        m.put("createdAt", it.createdAt());
-        return m;
+    public record CarouselItemView(long id, String imageUrl, String link, String caption,
+                                   int width, int height, boolean enabled, int sort,
+                                   String createdAt) {
     }
 
-    private static List<Map<String, Object>> views(List<CarouselStore.Item> items) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public record CarouselAdminList(List<CarouselItemView> items, int maxCount, int maxSizeKb,
+                                    int uploadCeilingKb, long intervalMs, boolean enabled) {
+    }
+
+    public record ItemResult(CarouselItemView item) {
+    }
+
+    public record ItemsResult(List<CarouselItemView> items) {
+    }
+
+    private static CarouselItemView view(CarouselStore.Item it) {
+        return new CarouselItemView(
+                it.id(),
+                "/api/public/carousel/image/" + it.id() + "?v=" + CarouselService.versionOf(it),
+                it.link(), it.caption(), it.width(), it.height(),
+                it.enabled(), it.sort(), it.createdAt());
+    }
+
+    private static List<CarouselItemView> views(List<CarouselStore.Item> items) {
+        List<CarouselItemView> out = new ArrayList<>();
         for (CarouselStore.Item it : items) {
             out.add(view(it));
         }
         return out;
     }
 
-    private static String str(Object o) {
-        return o == null ? "" : String.valueOf(o).trim();
-    }
-
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record UpdateCarouselRequest(String link, String caption, Boolean enabled) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record MoveRequest(Integer delta) {
     }
 }

@@ -64,17 +64,13 @@ public class CommandController {
 
     /** 指令列表 */
     @GetMapping("")
-    public Map<String, Object> list() {
+    public CommandList list() {
         List<CommandView> views = new ArrayList<>();
         for (BotCommand command : store.listAll()) {
             views.add(CommandView.of(command, commandHelp));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("available", store.isAvailable());
-        out.put("commands", views);
-        out.put("rateLimitPerMinute", props.getRateLimitPerMinute());
-        out.put("allowUserIds", props.isAllowUserIds());
-        return out;
+        return new CommandList(store.isAvailable(), views,
+                props.getRateLimitPerMinute(), props.isAllowUserIds());
     }
 
     /**
@@ -84,8 +80,8 @@ public class CommandController {
      * 必须一样"的落点。{@code includeDisabled=true} 供后台显示停用项。
      */
     @GetMapping("/catalog")
-    public Map<String, Object> catalog(@RequestParam(defaultValue = "true") boolean includeDisabled) {
-        return Map.of("entries", catalog.entries(includeDisabled));
+    public CatalogEntries catalog(@RequestParam(defaultValue = "true") boolean includeDisabled) {
+        return new CatalogEntries(catalog.entries(includeDisabled));
     }
 
     /**
@@ -95,32 +91,22 @@ public class CommandController {
      * 权限总览页把两条响应按 id 合起来看。
      */
     @GetMapping("/policies")
-    public Map<String, Object> policies() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public CommandPolicies policies() {
+        List<CommandPolicyView> out = new ArrayList<>();
         for (BotCommand cmd : store.listAll()) {
             DataPolicy policy = policyStore.of(cmd.id());
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", cmd.id());
-            item.put("scope", policy.scope().name());
-            item.put("groups", policy.groups());
-            item.put("showGroup", policy.showGroup());
-            item.put("showUser", policy.showUser());
-            item.put("allowPrivate", policy.allowPrivate());
-            out.add(item);
+            out.add(new CommandPolicyView(cmd.id(), policy.scope().name(), policy.groups(),
+                    policy.showGroup(), policy.showUser(), policy.allowPrivate()));
         }
-        return Map.of("policies", out);
+        return new CommandPolicies(out);
     }
 
     /** 可用变量（配置界面靠它渲染"点击插入"按钮，变量页靠它列清单） */
     @GetMapping("/variables")
-    public Map<String, Object> variables() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("variables", renderer.available());
+    public Variables variables() {
         // preview = 示例值，current = 真实值。会话相关的变量在管理端取不到，两者都是占位
-        out.put("preview", renderer.previewAll());
-        out.put("current", renderer.currentValues());
-        out.put("allowUserIds", props.isAllowUserIds());
-        return out;
+        return new Variables(renderer.available(), renderer.previewAll(),
+                renderer.currentValues(), props.isAllowUserIds());
     }
 
     /**
@@ -131,23 +117,18 @@ public class CommandController {
      * 于是管理员有权增删可选参数，而不用等代码改。
      */
     @GetMapping("/actions")
-    public Map<String, Object> actions() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public Actions actions() {
+        List<ActionView> out = new ArrayList<>();
         for (CommandAction action : actionRegistry.all()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", action.id());
-            item.put("label", action.label());
-            item.put("description", action.description());
-            item.put("defaultPath", action.defaultPath());
-            item.put("params", action.params());
-            out.add(item);
+            out.add(new ActionView(action.id(), action.label(), action.description(),
+                    action.defaultPath(), action.params()));
         }
-        return Map.of("actions", out);
+        return new Actions(out);
     }
 
     /** 新增或更新 */
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> upsert(@Valid @RequestBody UpsertCommandRequest body) {
+    public ResponseEntity<SavedCommand> upsert(@Valid @RequestBody UpsertCommandRequest body) {
         String trigger = trimToNull(body.trigger());
         String reply = trimToNull(body.reply());
 
@@ -241,7 +222,7 @@ public class CommandController {
                 savedId = store.upsert(cmd);
             }
             log.info("[CMD] 保存指令 /{}（id={}，类型={}，模式={}）", t, savedId, kind, mode);
-            return ResponseEntity.ok(Map.of("ok", true, "id", savedId));
+            return ResponseEntity.ok(new SavedCommand(savedId));
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -251,7 +232,7 @@ public class CommandController {
 
     /** 删除 */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+    public ResponseEntity<Void> delete(@PathVariable long id) {
         BotCommand cmd = store.findById(id);
         if (cmd == null) {
             throw ApiException.notFound("没有这条指令");
@@ -260,7 +241,7 @@ public class CommandController {
             if (!store.delete(cmd.trigger())) {
                 throw ApiException.notFound("没有这条指令");
             }
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -270,14 +251,14 @@ public class CommandController {
 
     /** 只改准入档位：/prompt 的编辑弹窗用，避免走通用命令表单 */
     @PostMapping("/{id}/access")
-    public ResponseEntity<Map<String, Object>> access(@PathVariable long id,
+    public ResponseEntity<Void> access(@PathVariable long id,
                                                       @RequestBody AccessRequest body) {
         String access = trimToNull(body.access());
         try {
             if (!store.setAccess(id, access)) {
                 throw ApiException.notFound("没有这条指令");
             }
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -287,7 +268,7 @@ public class CommandController {
 
     /** 启用/停用 */
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> toggle(@PathVariable long id,
+    public ResponseEntity<Void> toggle(@PathVariable long id,
                                                       @RequestBody ToggleCommandRequest body) {
         BotCommand cmd = store.findById(id);
         if (cmd == null) {
@@ -298,7 +279,7 @@ public class CommandController {
             if (!store.setEnabled(cmd.trigger(), enabled)) {
                 throw ApiException.notFound("没有这条指令");
             }
-            return ResponseEntity.ok(Map.of("ok", true, "enabled", enabled));
+            return ResponseEntity.noContent().build();
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -310,7 +291,7 @@ public class CommandController {
      * 预览渲染结果 —— 配置界面的"实时预览"靠它。
      */
     @PostMapping("/actions/preview")
-    public Map<String, Object> preview(@RequestBody PreviewRequest body) {
+    public PreviewResult preview(@RequestBody PreviewRequest body) {
         String template = body.template();
         boolean real = Boolean.TRUE.equals(body.real());
         String args = body.args();
@@ -331,7 +312,7 @@ public class CommandController {
             rendered = renderer.render(template == null ? "" : template,
                     RenderContext.preview(args == null ? "" : args, named));
         }
-        return Map.of("rendered", rendered, "length", rendered.length());
+        return new PreviewResult(rendered, rendered.length());
     }
 
     /**
@@ -367,7 +348,7 @@ public class CommandController {
 
     /** 只改单命令的 list/help 回复，prompt 这类独立编辑器也能复用 */
     @PostMapping("/{id}/texts")
-    public ResponseEntity<Map<String, Object>> texts(@PathVariable long id,
+    public ResponseEntity<Void> texts(@PathVariable long id,
                                                      @RequestBody TextsRequest body) {
         BotCommand cmd = store.findById(id);
         if (cmd == null) {
@@ -379,7 +360,7 @@ public class CommandController {
                     cmd.sortOrder(), cmd.builtin(), cmd.kindName(), cmd.modeName(), cmd.params(),
                     trimToNull(body.help()), trimToNull(body.listReply()), cmd.action());
             store.saveExisting(id, updated);
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (Exception e) {
             throw ApiException.badRequest("保存失败：" + e.getMessage());
         }
@@ -482,5 +463,37 @@ public class CommandController {
     @JsonIgnoreProperties(ignoreUnknown = false)
 
     public record TextsRequest(String help, String listReply) {
+    }
+
+    public record CommandList(boolean available, List<CommandView> commands,
+                              int rateLimitPerMinute, boolean allowUserIds) {
+    }
+
+    public record CatalogEntries(List<CommandCatalog.Entry> entries) {
+    }
+
+    public record CommandPolicyView(long id, String scope, List<Long> groups,
+                                    boolean showGroup, boolean showUser, boolean allowPrivate) {
+    }
+
+    public record CommandPolicies(List<CommandPolicyView> policies) {
+    }
+
+    public record Variables(List<VariableRenderer.VarInfo> variables,
+                            Map<String, String> preview, Map<String, String> current,
+                            boolean allowUserIds) {
+    }
+
+    public record ActionView(String id, String label, String description,
+                             String defaultPath, List<ParamSpec> params) {
+    }
+
+    public record Actions(List<ActionView> actions) {
+    }
+
+    public record SavedCommand(long id) {
+    }
+
+    public record PreviewResult(String rendered, int length) {
     }
 }

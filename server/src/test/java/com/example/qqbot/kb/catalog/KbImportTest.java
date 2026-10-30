@@ -217,11 +217,12 @@ class KbImportTest {
         controller.importDoc(new KbImportController.ImportRequest(
                 single("d", "d-1", "乙", "乙正文")));
 
-        ResponseEntity<Map<String, Object>> res = controller.importDoc(
+        var out = controller.importDoc(
                 new KbImportController.ImportRequest(single("d", "d-1", "乙", "乙新正文")));
 
-        Map<String, Object> out = res.getBody();
-        assertThat(out).containsEntry("added", 0).containsEntry("updated", 1).containsEntry("untouched", 1);
+        assertThat(out.added()).isZero();
+        assertThat(out.updated()).isEqualTo(1);
+        assertThat(out.untouched()).isEqualTo(1);
         assertThat(blocks.get(EntryId.of("d-0")).body()).as("没出现的那块原样").isEqualTo("甲正文");
         assertThat(blocks.get(EntryId.of("d-1")).body()).isEqualTo("乙新正文");
     }

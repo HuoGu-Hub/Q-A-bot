@@ -283,11 +283,13 @@ async function toggleResource(layer: ResourceLayer) {
   try {
     const canvasPage = currentCanvas.value?.page ?? ''
     if (layer.shape === 'area') {
-      const r = await publicApi.get<{ areas: [number, number, number, number, string][] }>(
+      const r = await publicApi.get<{
+        areas: { x0: number; z0: number; x1: number; z1: number; name: string }[]
+      }>(
         '/map/resource-areas?map=' + encodeURIComponent(mapName.value) +
           '&layer=' + encodeURIComponent(layer.key),
       )
-      const add: MapArea[] = r.areas.map(([x0, z0, x1, z1, name], i) => ({
+      const add: MapArea[] = r.areas.map(({ x0, z0, x1, z1, name }, i) => ({
         id: 'area:' + layer.key + ':' + i,
         group: layer.key,
         canvas: canvasPage,
@@ -305,11 +307,13 @@ async function toggleResource(layer: ResourceLayer) {
       loadedResources.value = done
       return
     }
-    const r = await publicApi.get<{ points: [number, number, string][] }>(
+    const r = await publicApi.get<{
+      points: { x: number; z: number; name: string; region: number; regionName: string }[]
+    }>(
       '/map/resources?map=' + encodeURIComponent(mapName.value) +
         '&layer=' + encodeURIComponent(layer.key),
     )
-    const add: Marker[] = r.points.map(([x, z, name], i) => ({
+    const add: Marker[] = r.points.map(({ x, z, name }, i) => ({
       id: 'res:' + layer.key + ':' + i,
       map: mapName.value,
       page: '',

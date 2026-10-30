@@ -1,23 +1,19 @@
 package com.example.qqbot.admin;
 
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-import com.example.qqbot.web.ApiException;
-
+import com.example.qqbot.voice.SpeechSynthesizer;
 import com.example.qqbot.voice.VoiceAsset;
 import com.example.qqbot.voice.VoiceException;
 import com.example.qqbot.voice.VoiceLibrary;
-import com.example.qqbot.voice.SpeechSynthesizer;
 import com.example.qqbot.voice.VoicePolicy;
 import com.example.qqbot.voice.VoiceSender;
 import com.example.qqbot.voice.VoiceTriggerService;
+import com.example.qqbot.web.ApiException;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,19 +28,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * 语音素材库的管理接口 —— 上传、试听、试发、删除。
- *
- * <p>和轮播图一样：音频走 {@code multipart/form-data}，其余字段是普通表单值。
- * 校验与落盘在 {@link VoiceLibrary} 里，这里只把异常翻成人话。
- *
- * <p>认证由 {@link AdminAuthFilter} 统一拦在 {@code /admin/api/**} 前面，
- * 所以试听地址虽然是裸 URL，未登录也拿不到。
  */
 @Tag(name = "Admin")
 @SecurityRequirement(name = "adminSession")
@@ -71,30 +60,21 @@ public class VoiceAdminController {
 
     /** 清单 + 上限，面板要显示"最多多大 / 多长" */
     @GetMapping("")
-    public Map<String, Object> list() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("items", library.list().stream().map(VoiceAdminController::view).toList());
-        out.put("maxSizeKb", 8192);
-        out.put("maxSeconds", policy.getMaxSeconds());
-        out.put("enabled", policy.isEnabled());
-        return out;
+    public VoiceList list() {
+        return new VoiceList(views(library.list()), 8192,
+                policy.getMaxSeconds(), policy.isEnabled());
     }
 
     /** 上传一段音频 */
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> upload(@RequestParam("file") MultipartFile file,
-                                                      @RequestParam(value = "title", required = false) String title,
-                                                      @RequestParam(value = "aliases", required = false) String aliases,
-                                                      @RequestParam(value = "tags", required = false) String tags) {
+    public ResponseEntity<UploadResult> upload(@RequestParam("file") MultipartFile file,
+                                               @RequestParam(value = "title", required = false) String title,
+                                               @RequestParam(value = "aliases", required = false) String aliases,
+                                               @RequestParam(value = "tags", required = false) String tags) {
         try {
             VoiceLibrary.Uploaded saved = library.upload(file.getOriginalFilename(), file.getContentType(),
                     file.getBytes(), title, aliases, tags);
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("ok", true);
-            out.put("duplicate", saved.duplicate());
-            out.put("item", view(saved.asset()));
-            return ResponseEntity.ok(out);
+            return ResponseEntity.ok(new UploadResult(saved.duplicate(), view(saved.asset())));
         } catch (VoiceException e) {
             throw ApiException.badRequest(e.getMessage());
         } catch (IOException e) {
@@ -121,8 +101,8 @@ public class VoiceAdminController {
 
     /** 改名 / 改别名 / 改标签 / 启停 */
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable long id,
-                                                      @RequestBody(required = false) UpdateVoiceRequest body) {
+    public ResponseEntity<ItemResult> update(@PathVariable long id,
+                                             @RequestBody(required = false) UpdateVoiceRequest body) {
         String title = body == null ? null : body.title();
         String aliases = body == null ? null : body.aliases();
         String tags = body == null ? null : body.tags();
@@ -132,16 +112,13 @@ public class VoiceAdminController {
         if (updated == null) {
             throw ApiException.notFound("没有这条语音");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("item", view(updated));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ItemResult(view(updated)));
     }
 
     /** 试发：立刻发到指定群，用来确认"听起来对不对" */
     @PostMapping("/{id}/actions/send")
-    public ResponseEntity<Map<String, Object>> send(@PathVariable long id,
-                                                    @RequestBody(required = false) SendVoiceRequest body) {
+    public ResponseEntity<SendResult> send(@PathVariable long id,
+                                           @RequestBody(required = false) SendVoiceRequest body) {
         VoiceAsset asset = library.get(id);
         if (asset == null) {
             throw ApiException.notFound("没有这条语音");
@@ -152,11 +129,7 @@ public class VoiceAdminController {
         }
         try {
             VoiceSender.Sent sent = sender.sendToGroup(groupId, library.pathOf(asset));
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("ok", true);
-            out.put("messageId", sent.messageId());
-            out.put("seconds", sent.seconds());
-            return ResponseEntity.ok(out);
+            return ResponseEntity.ok(new SendResult(sent.messageId(), sent.seconds()));
         } catch (VoiceException e) {
             throw ApiException.badRequest(e.getMessage());
         }
@@ -164,31 +137,26 @@ public class VoiceAdminController {
 
     /** 删除，连磁盘文件一起 */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+    public ResponseEntity<ItemsResult> delete(@PathVariable long id) {
         VoiceAsset gone = library.delete(id);
         if (gone == null) {
             throw ApiException.notFound("没有这条语音");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("items", library.list().stream().map(VoiceAdminController::view).toList());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ItemsResult(views(library.list())));
     }
 
     // ==================== 触发词 ====================
 
-    /** 规则列表。关键词只决定"要不要语音"，不绑定内容，所以没有 assetId 这类字段 */
+    /** 规则列表。关键词只决定"要不要语音"，不绑定内容 */
     @GetMapping("/triggers")
-    public Map<String, Object> listTriggers() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("rules", triggers.rules().stream().map(VoiceAdminController::triggerView).toList());
-        return out;
+    public TriggerList listTriggers() {
+        return new TriggerList(triggerViews(triggers.rules()));
     }
 
     /** 新增关键词 */
     @PostMapping("/triggers")
-    public ResponseEntity<Map<String, Object>> addTrigger(@RequestBody(required = false) CreateTriggerRequest body) {
+    public ResponseEntity<TriggerResult> addTrigger(
+            @RequestBody(required = false) CreateTriggerRequest body) {
         String keyword = body == null || body.keyword() == null ? "" : body.keyword().trim();
         if (keyword.isBlank()) {
             throw ApiException.badRequest("关键词不能为空");
@@ -200,13 +168,14 @@ public class VoiceAdminController {
         if (added == null) {
             throw ApiException.badRequest("新增失败，关键词可能重复");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "rule", triggerView(added)));
+        return ResponseEntity.ok(new TriggerResult(triggerView(added)));
     }
 
     /** 改冷却 / 作用域 / 备注 / 启停 */
     @PatchMapping("/triggers/{id}")
-    public ResponseEntity<Map<String, Object>> updateTrigger(@PathVariable long id,
-                                                             @RequestBody(required = false) UpdateTriggerRequest body) {
+    public ResponseEntity<TriggerResult> updateTrigger(
+            @PathVariable long id,
+            @RequestBody(required = false) UpdateTriggerRequest body) {
         VoiceTriggerService.Rule old = triggers.rules().stream()
                 .filter(r -> r.id() == id).findFirst().orElse(null);
         if (old == null) {
@@ -221,34 +190,29 @@ public class VoiceAdminController {
         if (updated == null) {
             throw ApiException.notFound("没有这条规则");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "rule", triggerView(updated)));
+        return ResponseEntity.ok(new TriggerResult(triggerView(updated)));
     }
 
     @DeleteMapping("/triggers/{id}")
-    public ResponseEntity<Map<String, Object>> deleteTrigger(@PathVariable long id) {
+    public ResponseEntity<TriggerList> deleteTrigger(@PathVariable long id) {
         if (!triggers.delete(id)) {
             throw ApiException.notFound("没有这条规则");
         }
-        return ResponseEntity.ok(Map.of("ok", true,
-                "rules", triggers.rules().stream().map(VoiceAdminController::triggerView).toList()));
+        return ResponseEntity.ok(new TriggerList(triggerViews(triggers.rules())));
     }
 
     // ==================== TTS ====================
 
     /** 可选的声线，给下拉框 */
     @GetMapping("/tts/voices")
-    public Map<String, Object> ttsVoices() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("enabled", synthesizer.isAvailable());
-        out.put("voices", synthesizer.voices());
-        out.put("default", synthesizer.defaultVoice());
-        return out;
+    public TtsVoices ttsVoices() {
+        return new TtsVoices(synthesizer.isAvailable(), synthesizer.voices(),
+                synthesizer.defaultVoice());
     }
 
     /** 试听：合成后直接回音频流，不落素材库，也不发群 */
     @PostMapping("/tts/previews")
-    public ResponseEntity<?> ttsPreview(@RequestBody(required = false) TtsRequest body) {
+    public ResponseEntity<byte[]> ttsPreview(@RequestBody(required = false) TtsRequest body) {
         String text = body == null || body.text() == null ? "" : body.text();
         if (text.isBlank()) {
             throw ApiException.badRequest("先说点什么");
@@ -262,9 +226,9 @@ public class VoiceAdminController {
         }
     }
 
-    /** 合成并直接发到群，用来确认"听起来对不对" */
+    /** 合成并直接发到群 */
     @PostMapping("/tts/actions/send")
-    public ResponseEntity<Map<String, Object>> ttsSend(@RequestBody(required = false) TtsSendRequest body) {
+    public ResponseEntity<SendResult> ttsSend(@RequestBody(required = false) TtsSendRequest body) {
         String text = body == null || body.text() == null ? "" : body.text();
         long groupId = body == null || body.groupId() == null ? 0L : body.groupId();
         if (text.isBlank()) {
@@ -276,79 +240,104 @@ public class VoiceAdminController {
         try {
             byte[] audio = synthesizer.synthesize(text, body.voice());
             VoiceSender.Sent sent = sender.sendToGroup(groupId, audio, "mp3", null);
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("ok", true);
-            out.put("messageId", sent.messageId());
-            out.put("seconds", sent.seconds());
-            return ResponseEntity.ok(out);
+            return ResponseEntity.ok(new SendResult(sent.messageId(), sent.seconds()));
         } catch (VoiceException e) {
             log.warn("[VOICE] TTS 发送失败：{}", e.getMessage());
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
+    // ==================== 出参 ====================
+
+    public record VoiceItem(long id, String title, String aliases, String tags, String mime,
+                            long sizeKb, long durationMs, String durationText,
+                            boolean enabled, String createdAt, String audioUrl) {
+    }
+
+    public record VoiceList(List<VoiceItem> items, int maxSizeKb, int maxSeconds, boolean enabled) {
+    }
+
+    public record UploadResult(boolean duplicate, VoiceItem item) {
+    }
+
+    public record ItemResult(VoiceItem item) {
+    }
+
+    public record ItemsResult(List<VoiceItem> items) {
+    }
+
+    public record SendResult(long messageId, double seconds) {
+    }
+
+    public record TriggerRuleView(long id, String keyword, int cooldownSeconds,
+                                  String groupScope, boolean enabled, String note) {
+    }
+
+    public record TriggerList(List<TriggerRuleView> rules) {
+    }
+
+    public record TriggerResult(TriggerRuleView rule) {
+    }
+
+    public record TtsVoices(boolean enabled, List<String> voices,
+                            @JsonProperty("default") String defaultVoice) {
+    }
+
     // ==================== 工具 ====================
 
-    private static Map<String, Object> view(VoiceAsset a) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", a.id());
-        m.put("title", a.title());
-        m.put("aliases", a.aliases());
-        m.put("tags", a.tags());
-        m.put("mime", a.mime());
-        m.put("sizeKb", Math.round(a.sizeBytes() / 1024.0));
-        m.put("durationMs", a.durationMs());
-        m.put("durationText", String.format(Locale.ROOT, "%.1f 秒", a.durationMs() / 1000.0));
-        m.put("enabled", a.enabled());
-        m.put("createdAt", a.createdAt());
-        m.put("audioUrl", "/admin/api/voice/" + a.id() + "/audio");
-        return m;
+    private static VoiceItem view(VoiceAsset a) {
+        return new VoiceItem(a.id(), a.title(), a.aliases(), a.tags(), a.mime(),
+                Math.round(a.sizeBytes() / 1024.0), a.durationMs(),
+                String.format(Locale.ROOT, "%.1f 秒", a.durationMs() / 1000.0),
+                a.enabled(), a.createdAt(), "/admin/api/voice/" + a.id() + "/audio");
     }
 
-    private static Map<String, Object> triggerView(VoiceTriggerService.Rule r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.id());
-        m.put("keyword", r.keyword());
-        m.put("cooldownSeconds", r.cooldownSeconds());
-        m.put("groupScope", r.groupScope());
-        m.put("enabled", r.enabled());
-        m.put("note", r.note());
-        return m;
+    private static List<VoiceItem> views(List<VoiceAsset> assets) {
+        List<VoiceItem> out = new ArrayList<>();
+        for (VoiceAsset a : assets) {
+            out.add(view(a));
+        }
+        return out;
     }
 
-    private static String str(Object v) {
-        return v == null ? "" : String.valueOf(v);
+    private static TriggerRuleView triggerView(VoiceTriggerService.Rule r) {
+        return new TriggerRuleView(r.id(), r.keyword(), r.cooldownSeconds(),
+                r.groupScope(), r.enabled(), r.note());
     }
+
+    private static List<TriggerRuleView> triggerViews(List<VoiceTriggerService.Rule> rules) {
+        List<TriggerRuleView> out = new ArrayList<>();
+        for (VoiceTriggerService.Rule r : rules) {
+            out.add(triggerView(r));
+        }
+        return out;
+    }
+
+    // ==================== 入参 ====================
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record UpdateVoiceRequest(String title, String aliases, String tags, Boolean enabled) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record SendVoiceRequest(Long groupId) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record CreateTriggerRequest(String keyword, Integer cooldownSeconds,
                                        String groupScope, String note) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record UpdateTriggerRequest(Integer cooldownSeconds, String groupScope,
                                        String note, Boolean enabled) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record TtsRequest(String text, String voice) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
-
     public record TtsSendRequest(String text, Long groupId, String voice) {
     }
 }

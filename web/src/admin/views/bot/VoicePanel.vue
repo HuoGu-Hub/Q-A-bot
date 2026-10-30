@@ -45,7 +45,6 @@ interface TriggerRule {
 }
 
 interface VoiceList {
-  ok: boolean
   items: VoiceItem[]
   maxSizeKb: number
   maxSeconds: number

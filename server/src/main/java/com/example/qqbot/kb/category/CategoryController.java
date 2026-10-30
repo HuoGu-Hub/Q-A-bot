@@ -1,14 +1,9 @@
 package com.example.qqbot.kb.category;
 
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import com.example.qqbot.web.ApiException;
-
-import org.springframework.http.HttpStatus;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,10 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 分类管理接口（管理后台）。
@@ -46,27 +38,15 @@ public class CategoryController {
 
     /** 分类清单 + 每个分类的词条数 + 未分类数 */
     @GetMapping("")
-    public Map<String, Object> list() {
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (CategoryService.Stat s : service.stats()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("name", s.name());
-            m.put("label", s.label());
-            m.put("count", s.count());
-            rows.add(m);
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("items", rows);
-        out.put("uncategorized", service.uncategorizedCount());
-        out.put("uncategorizedName", CategoryService.UNCATEGORIZED);
-        out.put("total", rows.size());
-        out.put("available", service.isAvailable());
-        return out;
+    public CategoryList list() {
+        List<CategoryService.Stat> items = service.stats();
+        return new CategoryList(items, service.uncategorizedCount(),
+                CategoryService.UNCATEGORIZED, items.size(), service.isAvailable());
     }
 
     /** 新增一个分类。名字就是分块符号里要写的标签值 */
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> add(@RequestBody CategoryRequest body) {
+    public ResponseEntity<Void> add(@RequestBody CategoryRequest body) {
         String name = trim(body.name());
         String label = body.label() == null ? "" : body.label();
         if (name == null) {
@@ -78,25 +58,25 @@ public class CategoryController {
         if (!service.add(name, label)) {
             throw ApiException.badRequest("分类「" + name + "」已存在或存储不可用");
         }
-        return ResponseEntity.ok(Map.of("ok", true, "name", name));
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{name}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable String name,
-                                                      @RequestBody CategoryRequest body) {
+    public ResponseEntity<Void> update(@PathVariable String name,
+                                       @RequestBody CategoryRequest body) {
         String label = body.label() == null ? "" : body.label();
         if (!service.rename(name, label)) {
             throw ApiException.notFound("没有这个分类：" + name);
         }
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{name}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable String name) {
+    public ResponseEntity<Void> delete(@PathVariable String name) {
         if (!service.remove(name)) {
             throw ApiException.badRequest("删除失败：" + name);
         }
-        return ResponseEntity.ok(Map.of("ok", true, "name", name));
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -105,15 +85,11 @@ public class CategoryController {
      * <p>{@code category} 不传 = 全部；传 {@code 未分类} = 只看没分类的。
      */
     @GetMapping("/entries")
-    public Map<String, Object> entries(@RequestParam(required = false) String category,
-                                       @RequestParam(required = false) String q,
-                                       @RequestParam(defaultValue = "200") int limit,
-                                       @RequestParam(defaultValue = "0") int offset) {
-        CategoryService.EntryPage page = service.entries(category, q, limit, offset);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("total", page.total());
-        out.put("items", page.items());
-        return out;
+    public CategoryService.EntryPage entries(@RequestParam(required = false) String category,
+                                             @RequestParam(required = false) String q,
+                                             @RequestParam(defaultValue = "200") int limit,
+                                             @RequestParam(defaultValue = "0") int offset) {
+        return service.entries(category, q, limit, offset);
     }
 
     private static String trim(String value) {
@@ -124,8 +100,11 @@ public class CategoryController {
         return s.isEmpty() ? null : s;
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record CategoryList(List<CategoryService.Stat> items, int uncategorized,
+                               String uncategorizedName, int total, boolean available) {
+    }
 
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record CategoryRequest(String name, String label) {
     }
 }

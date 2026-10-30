@@ -62,27 +62,19 @@ public class PublicCarouselController {
      * 首页那边看到空数组就不渲染这一块。
      */
     @GetMapping("")
-    public Map<String, Object> list() {
+    public PublicDtos.CarouselList list() {
         Carousel cfg = site.getCarousel();
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<PublicDtos.CarouselItemView> items = new ArrayList<>();
         if (cfg.isEnabled() && store.isAvailable()) {
             for (CarouselStore.Item it : store.listEnabled()) {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("id", it.id());
-                m.put("imageUrl", "/api/public/carousel/image/" + it.id()
-                        + "?v=" + CarouselService.versionOf(it));
-                m.put("link", it.link());
-                m.put("caption", it.caption());
-                m.put("width", it.width());
-                m.put("height", it.height());
-                items.add(m);
+                items.add(new PublicDtos.CarouselItemView(
+                        it.id(),
+                        "/api/public/carousel/image/" + it.id()
+                                + "?v=" + CarouselService.versionOf(it),
+                        it.link(), it.caption(), it.width(), it.height()));
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("intervalMs", service.publicIntervalMs());
-        out.put("items", items);
-        return out;
+        return new PublicDtos.CarouselList(items, service.publicIntervalMs());
     }
 
     /**

@@ -102,28 +102,19 @@ public class PublicController {
      * 这些值都是运营方自己填的展示文案（默认是示例值，留空则前端不渲染那一行）。
      */
     @GetMapping("/site")
-    public Map<String, Object> siteInfo() {
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        out.put("groupName", site.getGroupName());
-        out.put("groupNumber", site.getGroupNumber());
-        out.put("groupDesc", site.getGroupDesc());
-        out.put("joinHint", site.getJoinHint());
-        out.put("botName", botProps.getName());
-        out.put("org", botProps.getOrg());
-        out.put("author", botProps.getAuthor());
+    public PublicDtos.SiteInfo siteInfo() {
         // 页面固定文案的**覆盖值**（键是 "page.block"）。
         // 只回被改过的：没改过的由前端用自带默认文案渲染 ——
         // 这样接口小，而且后端不可用时站点也不会变空白。
-        out.put("texts", siteText.publicOverrides());
-        return out;
+        return new PublicDtos.SiteInfo(
+                site.getGroupName(), site.getGroupNumber(), site.getGroupDesc(),
+                site.getJoinHint(), botProps.getName(), botProps.getOrg(),
+                botProps.getAuthor(), siteText.publicOverrides());
     }
 
     @GetMapping("/stats")
-    public ResponseEntity<?> stats(HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.PublicStats> stats(HttpServletRequest request) {
+        rateLimit(request);
 
         QaAnalytics.Overview ov = analytics.overview(0);
         List<QaAnalytics.DayCount> daily = ov.daily();
@@ -153,13 +144,10 @@ public class PublicController {
      * <p>只返回标题/链接/正文片段，不返回余弦分数（那是内部调优指标）。
      */
     @GetMapping("/kb/search")
-    public ResponseEntity<?> search(@RequestParam("q") String q,
+    public ResponseEntity<PublicDtos.KbSearchResult> search(@RequestParam("q") String q,
                                     @RequestParam(defaultValue = "20") int limit,
                                     HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+        rateLimit(request);
         String query = q == null ? "" : q.trim();
         if (query.isEmpty()) {
             return ResponseEntity.ok(new PublicDtos.KbSearchResult("", 0, PublicSearchService.MODE_KEYWORD, List.of()));
@@ -187,23 +175,14 @@ public class PublicController {
      * "原始标签自动归到 9 个大类"。所以这里直接把清单给出去，附带各自的词条数。
      */
     @GetMapping("/kb/groups")
-    public ResponseEntity<?> groups(HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<List<PublicDtos.PublicCategory>> groups(HttpServletRequest request) {
+        rateLimit(request);
 
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<PublicDtos.PublicCategory> out = new ArrayList<>();
         for (CategoryService.Stat s : categoryService.stats()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("key", s.name());
-            m.put("label", s.label());
-            m.put("icon", "");
-            m.put("desc", "");
-            m.put("entryCount", s.count());
             // 平铺分类没有"细分标签"这一层；前端看到空数组就不渲染标签云
-            m.put("tags", List.of());
-            out.add(m);
+            out.add(new PublicDtos.PublicCategory(
+                    s.name(), s.label(), "", "", s.count(), List.of()));
         }
         return ResponseEntity.ok(out);
     }
@@ -214,16 +193,13 @@ public class PublicController {
      * <p>不走向量检索 —— 这是分类浏览，不是搜索。直接扫索引里的分类字段。
      */
     @GetMapping("/kb/browse")
-    public ResponseEntity<?> browse(@RequestParam(required = false) String group,
+    public ResponseEntity<PublicDtos.BrowsePage> browse(@RequestParam(required = false) String group,
                                     @RequestParam(required = false) String tag,
                                     @RequestParam(defaultValue = "0") int page,
                                     HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+        rateLimit(request);
         if (!kbCorpus.isReady()) {
-            return ResponseEntity.ok(Map.of("entries", List.of(), "total", 0, "page", 0));
+            return ResponseEntity.ok(new PublicDtos.BrowsePage(List.of(), 0, 0, 40));
         }
 
         // 分类是平铺的：group 与 tag 都是分类名（保留两个参数只是为了兼容前端的两种入口）
@@ -254,13 +230,9 @@ public class PublicController {
         int from = Math.max(0, page) * size;
         int to = Math.min(total, from + size);
 
-        List<Map<String, Object>> entries = new ArrayList<>();
+        List<PublicDtos.BrowseEntry> entries = new ArrayList<>();
         if (from < total) {
             for (com.example.qqbot.kb.KbCorpus.Entry c : all.subList(from, to)) {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("title", c.title());
-                m.put("url", c.url());
-                m.put("text", com.example.qqbot.kb.KbTextDisplay.excerpt(c.text(), 170));
                 // 展示分类的中文名（分类清单里人工维护的显示名）
                 List<String> shown = new ArrayList<>();
                 for (String lbl : categoryService.displayNames(c.tags())) {
@@ -271,25 +243,17 @@ public class PublicController {
                         break;
                     }
                 }
-                m.put("tags", shown);
-                entries.add(m);
+                entries.add(new PublicDtos.BrowseEntry(
+                        c.title(), c.url(),
+                        com.example.qqbot.kb.KbTextDisplay.excerpt(c.text(), 170), shown));
             }
         }
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("entries", entries);
-        out.put("total", total);
-        out.put("page", page);
-        out.put("pageSize", size);
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.BrowsePage(entries, total, page, size));
     }
 
     @GetMapping("/kb/page")
-    public ResponseEntity<?> page(@RequestParam("title") String title, HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.KbEntry> page(@RequestParam("title") String title, HttpServletRequest request) {
+        rateLimit(request);
         if (!kbCorpus.isReady() || title == null || title.isBlank()) {
             throw ApiException.notFound("词条不存在");
         }
@@ -325,13 +289,12 @@ public class PublicController {
     // ==================== 内部 ====================
 
     /** 统一的限流检查。返回非 null 表示已拦截，直接回响应。 */
-    private ResponseEntity<?> rateLimit(HttpServletRequest request) {
+    private void rateLimit(HttpServletRequest request) {
         String ip = clientIp(request);
         if (!limiter.allow(ip)) {
             log.warn("[PUBLIC] 限流触发：ip={}", ip);
             throw ApiException.tooManyRequests("请求太频繁，请稍后再试");
         }
-        return null;
     }
 
     /** 取真实客户端 IP（上公网后通常挂在反向代理后面） */

@@ -97,17 +97,18 @@ public class MapViewService {
             PlaceCategory.CUSTOM, "其它");
 
     /** 分类清单（键 + 中文名）—— 管理端的下拉框与公开站的图例共用这一份 */
-    public static List<Map<String, Object>> categoryLabels() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public static List<CategoryLabel> categoryLabels() {
+        List<CategoryLabel> out = new ArrayList<>();
         for (String key : List.of(PlaceCategory.RESOURCE, PlaceCategory.LANDMARK,
                 PlaceCategory.POI, PlaceCategory.NPC, PlaceCategory.REGION,
                 PlaceCategory.COLLECTION, PlaceCategory.CUSTOM)) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("key", key);
-            m.put("label", CATEGORY_ZH.getOrDefault(key, key));
-            out.add(m);
+            out.add(new CategoryLabel(key, CATEGORY_ZH.getOrDefault(key, key)));
         }
         return out;
+    }
+
+    /** 图例的一项 */
+    public record CategoryLabel(String key, String label) {
     }
 
     /** 画布页面的后缀中文名 */

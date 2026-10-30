@@ -92,37 +92,26 @@ public class PublicMapController {
      * <p>不含点位 —— 点位是最大的一块，单独一个接口拉，页面首屏才能先出骨架。
      */
     @GetMapping("/catalog")
-    public ResponseEntity<?> catalog(HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("enabled", options.isEnabled());
-        out.put("unitsPerMeter", options.getUnitsPerMeter());
-        // 缩放上限交给前端：它是"屏幕像素 / 原图像素"的比例，只有前端知道屏幕
-        out.put("maxZoom", options.getMaxZoom());
-        out.put("categories", MapViewService.categoryLabels());
-        out.put("maps", view.catalog());
-        return ResponseEntity.ok(out);
+    public ResponseEntity<PublicDtos.MapCatalog> catalog(HttpServletRequest request) {
+        rateLimit(request);
+        return ResponseEntity.ok(new PublicDtos.MapCatalog(
+                options.isEnabled(),
+                options.getUnitsPerMeter(),
+                // 缩放上限交给前端：它是"屏幕像素 / 原图像素"的比例，只有前端知道屏幕
+                options.getMaxZoom(),
+                MapViewService.categoryLabels(),
+                view.catalog()));
     }
 
     /** 一张地图的全部点位（wiki 点 + 自定义点，已合并为同一形状） */
     @GetMapping("/markers")
-    public ResponseEntity<?> markers(@RequestParam("map") String map, HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.MapMarkers> markers(@RequestParam("map") String map,
+                                                          HttpServletRequest request) {
+        rateLimit(request);
         if (map == null || map.isBlank()) {
-            return badRequest("缺少 map 参数");
+            throw ApiException.badRequest("缺少 map 参数");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("map", map.strip());
-        out.put("markers", view.markers(map.strip()));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.MapMarkers(map.strip(), view.markers(map.strip())));
     }
 
     /**
@@ -132,25 +121,16 @@ public class PublicMapController {
      * 36k 个点一次下发，首屏就白屏了。
      */
     @GetMapping("/resource-groups")
-    public ResponseEntity<?> resourceGroups(@RequestParam("map") String map,
-                                            HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.ResourceCatalog> resourceGroups(
+            @RequestParam("map") String map, HttpServletRequest request) {
+        rateLimit(request);
         if (map == null || map.isBlank()) {
-            return badRequest("缺少 map 参数");
+            throw ApiException.badRequest("缺少 map 参数");
         }
         MapResourceService.CatalogView catalog = resources.catalog(map.strip());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("map", map.strip());
-        out.put("imported", catalog.imported());
-        out.put("version", catalog.version());
-        out.put("importedAt", catalog.importedAt());
-        out.put("message", catalog.message());
-        out.put("categories", catalog.categories());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.ResourceCatalog(
+                map.strip(), catalog.imported(), catalog.version(), catalog.importedAt(),
+                catalog.message(), catalog.categories()));
     }
 
     /**
@@ -158,52 +138,41 @@ public class PublicMapController {
      * 13,000 个点的层也不会因为重复的字段名膨胀。
      */
     @GetMapping("/resources")
-    public ResponseEntity<?> resources(@RequestParam("map") String map,
-                                       @RequestParam("layer") String layer,
-                                       HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.ResourcePoints> resources(
+            @RequestParam("map") String map,
+            @RequestParam("layer") String layer,
+            HttpServletRequest request) {
+        rateLimit(request);
         if (map == null || map.isBlank() || layer == null || layer.isBlank()) {
-            return badRequest("缺少 map 或 layer 参数");
+            throw ApiException.badRequest("缺少 map 或 layer 参数");
         }
-        List<Object[]> points = new ArrayList<>();
+        List<PublicDtos.ResourcePoint> points = new ArrayList<>();
         for (MapResourceService.PointView p : resources.points(map.strip(), layer.strip())) {
-            points.add(new Object[]{p.x(), p.z(), p.name(), p.region()});
+            points.add(new PublicDtos.ResourcePoint(
+                    p.x(), p.z(), p.name(), p.region(), p.regionName()));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("map", map.strip());
-        out.put("layer", layer.strip());
-        out.put("points", points);
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.ResourcePoints(
+                map.strip(), layer.strip(), points));
     }
 
     /**
      * 一层面数据（林地）。坐标是矩形的西南角与东北角，前端直接画成矩形。
      */
     @GetMapping("/resource-areas")
-    public ResponseEntity<?> resourceAreas(@RequestParam("map") String map,
-                                           @RequestParam("layer") String layer,
-                                           HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.ResourceAreas> resourceAreas(
+            @RequestParam("map") String map,
+            @RequestParam("layer") String layer,
+            HttpServletRequest request) {
+        rateLimit(request);
         if (map == null || map.isBlank() || layer == null || layer.isBlank()) {
-            return badRequest("缺少 map 或 layer 参数");
+            throw ApiException.badRequest("缺少 map 或 layer 参数");
         }
-        List<Object[]> areas = new ArrayList<>();
+        List<PublicDtos.ResourceArea> areas = new ArrayList<>();
         for (MapResourceService.AreaView a : resources.areas(map.strip(), layer.strip())) {
-            areas.add(new Object[]{a.x0(), a.z0(), a.x1(), a.z1(), a.name()});
+            areas.add(new PublicDtos.ResourceArea(a.x0(), a.z0(), a.x1(), a.z1(), a.name()));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("map", map.strip());
-        out.put("layer", layer.strip());
-        out.put("areas", areas);
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.ResourceAreas(
+                map.strip(), layer.strip(), areas));
     }
 
     /**
@@ -232,23 +201,17 @@ public class PublicMapController {
 
     /** 按名字 / 别名 / 备注搜点位 */
     @GetMapping("/search")
-    public ResponseEntity<?> search(@RequestParam("q") String q,
-                                    @RequestParam(name = "limit", defaultValue = "20") int limit,
-                                    HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.MapSearch> search(
+            @RequestParam("q") String q,
+            @RequestParam(name = "limit", defaultValue = "20") int limit,
+            HttpServletRequest request) {
+        rateLimit(request);
         String term = q == null ? "" : q.strip();
         if (term.isEmpty()) {
-            return ResponseEntity.ok(Map.of("ok", true, "q", "", "results", List.of()));
+            return ResponseEntity.ok(new PublicDtos.MapSearch("", List.of()));
         }
         int want = Math.min(Math.max(limit, 1), MAX_SEARCH);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("q", term);
-        out.put("results", view.search(term, want));
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.MapSearch(term, view.search(term, want)));
     }
 
     /**
@@ -258,62 +221,42 @@ public class PublicMapController {
      * 可观测版本：同一个算法、同一份数据，页面上看到什么，群里就该看到什么。
      */
     @GetMapping("/locate")
-    public ResponseEntity<?> locate(@RequestParam("q") String q,
-                                    @RequestParam(name = "limit", defaultValue = "5") int limit,
-                                    HttpServletRequest request) {
-        ResponseEntity<?> denied = rateLimit(request);
-        if (denied != null) {
-            return denied;
-        }
+    public ResponseEntity<PublicDtos.LocateResult> locate(
+            @RequestParam("q") String q,
+            @RequestParam(name = "limit", defaultValue = "5") int limit,
+            HttpServletRequest request) {
+        rateLimit(request);
         String term = q == null ? "" : q.strip();
         if (term.isEmpty()) {
-            return badRequest("缺少 q 参数");
+            throw ApiException.badRequest("缺少 q 参数");
         }
         double perMeter = options.getUnitsPerMeter();
         int want = Math.min(Math.max(limit, 1), MAX_SEARCH);
         PlaceAnswer.Answer answer = PlaceAnswer.answer(term, directory, want, perMeter);
 
-        List<Map<String, Object>> hits = new ArrayList<>();
+        List<PublicDtos.LocateHit> hits = new ArrayList<>();
         for (PlaceAnswer.Hit h : answer.hits()) {
             PlacePoint p = h.place();
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("ref", p.ref());
-            m.put("map", p.map());
-            m.put("canvas", p.canvas());
-            m.put("name", p.name());
-            m.put("x", p.x());
-            m.put("y", p.y());
-            m.put("category", p.category());
-            m.put("note", p.note());
-            m.put("source", p.source());
             RelativeLocation.Neighbour n = h.neighbour();
+            PublicDtos.LocateRelative rel = null;
             if (n != null) {
-                Map<String, Object> rel = new LinkedHashMap<>();
-                rel.put("direction", n.direction());
-                rel.put("screenHint", n.screenHint());
-                rel.put("distance", Math.round(n.distance()));
-                rel.put("bucket", n.bucket());
-                rel.put("bearing", Math.round(RelativeLocation.bearingDegrees(n.dx(), n.dy())));
-                rel.put("phrase", n.phrase(perMeter));
-                Map<String, Object> anchor = new LinkedHashMap<>();
-                anchor.put("ref", n.anchor().ref());
-                anchor.put("name", n.anchor().name());
-                anchor.put("x", n.anchor().x());
-                anchor.put("y", n.anchor().y());
-                anchor.put("category", n.anchor().category());
-                rel.put("anchor", anchor);
-                m.put("relative", rel);
+                rel = new PublicDtos.LocateRelative(
+                        n.direction(),
+                        n.screenHint(),
+                        Math.round(n.distance()),
+                        n.bucket(),
+                        Math.round(RelativeLocation.bearingDegrees(n.dx(), n.dy())),
+                        n.phrase(perMeter),
+                        new PublicDtos.LocateAnchor(
+                                n.anchor().ref(), n.anchor().name(), n.anchor().x(),
+                                n.anchor().y(), n.anchor().category()));
             }
-            hits.add(m);
+            hits.add(new PublicDtos.LocateHit(
+                    p.ref(), p.map(), p.canvas(), p.name(), p.x(), p.y(),
+                    p.category(), p.note(), p.source(), rel));
         }
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("q", term);
-        out.put("found", answer.found());
-        out.put("text", answer.text(perMeter));
-        out.put("hits", hits);
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new PublicDtos.LocateResult(
+                term, answer.found(), answer.text(perMeter), hits));
     }
 
     /**
@@ -398,15 +341,10 @@ public class PublicMapController {
         }
     }
 
-    private ResponseEntity<?> badRequest(String message) {
-        throw ApiException.badRequest(message);
-    }
-
-    private ResponseEntity<?> rateLimit(HttpServletRequest request) {
+    private void rateLimit(HttpServletRequest request) {
         if (!limiter.allow(clientIp(request))) {
             throw ApiException.tooManyRequests("请求太频繁，请稍后再试");
         }
-        return null;
     }
 
     /** 取真实客户端 IP —— 与 {@link PublicController} 读同一个头，两处必须一致 */

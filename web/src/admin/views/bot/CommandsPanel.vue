@@ -435,7 +435,7 @@ async function saveBoard(draft: BoardDraft, acl: AclBody) {
   boardSaving.value = true
   boardError.value = ''
   try {
-    const res = await adminApi.post<{ ok: boolean; board: AdminBoard }>('/boards', draft)
+    const res = await adminApi.post<{ board: AdminBoard }>('/boards', draft)
     // 新建时草稿还没有 id，用后端回的那一条拿 id，再把名单落下去
     const savedId = res?.board?.id
     if (savedId) {

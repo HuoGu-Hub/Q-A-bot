@@ -98,18 +98,20 @@ class KbBlockControllerTest {
     @Test
     @DisplayName("stats / docs / blocks 三个读接口的形状")
     void readEndpoints() {
-        assertThat(controller.stats()).containsEntry("available", true)
-                .containsEntry("blocks", 0);
+        var stats = controller.stats();
+        assertThat(stats.available()).isTrue();
+        assertThat(stats.blocks()).isZero();
 
         service.importBlocks(doc("flame-altar", "flame-altar-0", "灵火祭坛", "祭坛是复活点。"));
 
-        assertThat(controller.stats()).containsEntry("blocks", 1).containsEntry("documents", 1);
-        assertThat(controller.docs()).extracting("documents").asInstanceOf(
-                org.assertj.core.api.InstanceOfAssertFactories.LIST).hasSize(1);
+        var after = controller.stats();
+        assertThat(after.blocks()).isEqualTo(1);
+        assertThat(after.documents()).isEqualTo(1);
+        assertThat(controller.docs().documents()).hasSize(1);
 
-        Map<String, Object> blocks = controller.blocks("flame-altar");
-        assertThat(blocks).containsEntry("doc", "flame-altar");
-        assertThat((List<?>) blocks.get("blocks")).hasSize(1);
+        var blocks = controller.blocks("flame-altar");
+        assertThat(blocks.doc()).isEqualTo("flame-altar");
+        assertThat(blocks.blocks()).hasSize(1);
     }
 
     // ==================== 预览 / 导入 ====================
@@ -119,16 +121,15 @@ class KbBlockControllerTest {
     void previewShape() {
         service.importBlocks(doc("flame-altar", "flame-altar-0", "灵火祭坛", "旧正文"));
 
-        ResponseEntity<Map<String, Object>> res = controller.preview(
+        var out = controller.preview(
                 new KbBlockController.PreviewImportRequest(
                         doc("flame-altar", "flame-altar-0", "灵火祭坛", "新正文")));
 
-        Map<String, Object> out = res.getBody();
-        assertThat(out).containsEntry("added", 0)
-                .containsEntry("updated", 1)
-                .containsEntry("unchanged", 0)
-                .containsEntry("untouchedExisting", 0);
-        assertThat(out.get("updatedIds")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).containsExactly("flame-altar-0");
+        assertThat(out.added()).isZero();
+        assertThat(out.updated()).isEqualTo(1);
+        assertThat(out.unchanged()).isZero();
+        assertThat(out.untouchedExisting()).isZero();
+        assertThat(out.updatedIds()).containsExactly("flame-altar-0");
         assertThat(store.get(EntryId.of("flame-altar-0")).body()).as("预览不改数据").isEqualTo("旧正文");
     }
 
@@ -156,9 +157,9 @@ class KbBlockControllerTest {
     @Test
     @DisplayName("add：tags 用数组；中文文档名不给 id 要报错")
     void addShapes() {
-        ResponseEntity<Map<String, Object>> ok = controller.add(add(
+        var ok = controller.add(add(
                 "kiln", "kiln-0", "熔炉", "熔炉用来烧制。", List.of("制作", "基础")));
-        assertThat(ok.getStatusCode().value()).isEqualTo(200);
+        assertThat(ok.block().id()).isEqualTo("kiln-0");
 
         assertThatThrownBy(() -> controller.add(add("灵火祭坛", null, "灵火祭坛", "正文", List.of())))
                 .isInstanceOf(ApiException.class)
@@ -170,18 +171,18 @@ class KbBlockControllerTest {
     void retireAndDelete() {
         controller.add(add("d", "d-0", "甲", "正文", List.of()));
 
-        assertThat(controller.retire(new KbBlockController.RetireBlockRequest("d-0", null))
-                .getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.retire(
+                new KbBlockController.RetireBlockRequest("d-0", null)).retired()).isTrue();
         assertThat(store.get(EntryId.of("d-0")).retired()).isTrue();
 
-        assertThat(controller.retire(new KbBlockController.RetireBlockRequest("d-0", false))
-                .getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.retire(
+                new KbBlockController.RetireBlockRequest("d-0", false)).retired()).isFalse();
         assertThat(store.get(EntryId.of("d-0")).retired()).isFalse();
 
         assertThatThrownBy(() -> controller.retire(new KbBlockController.RetireBlockRequest("没有", null)))
                 .isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> controller.delete("没有")).isInstanceOf(ApiException.class);
-        assertThat(controller.delete("d-0").getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.delete("d-0").getStatusCode().value()).isEqualTo(204);
         assertThat(store.count()).isZero();
     }
 
@@ -192,10 +193,9 @@ class KbBlockControllerTest {
         controller.add(add("d", "d-1", "乙", "正文", List.of()));
         controller.add(add("e", "e-0", "丙", "正文", List.of()));
 
-        ResponseEntity<Map<String, Object>> res = controller.retireDoc(
-                new KbBlockController.RetireDocRequest("d", true));
+        var res = controller.retireDoc(new KbBlockController.RetireDocRequest("d", true));
 
-        assertThat(res.getBody()).containsEntry("affected", 2);
+        assertThat(res.affected()).isEqualTo(2);
         assertThat(store.get(EntryId.of("e-0")).retired()).as("别的文档不受影响").isFalse();
     }
 
@@ -203,7 +203,7 @@ class KbBlockControllerTest {
     @DisplayName("clear：清空全部块")
     void clear() {
         service.importBlocks(doc("d", "d-0", "甲", "正文"));
-        assertThat(controller.clear().getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.clear().getStatusCode().value()).isEqualTo(204);
         assertThat(store.count()).isZero();
     }
 
@@ -215,18 +215,20 @@ class KbBlockControllerTest {
         service.importBlocks(doc("d", "d-0", "酸蚀之咬（Acid Bite）", "魔法弹药。"));
         store.deleteTitleVector(EntryId.of("d-0"));
 
-        Map<String, Object> dry = controller.backfillTitleVectors(
-                new KbBlockController.BackfillRequest(true)).getBody();
-        assertThat(dry).containsEntry("dryRun", true).containsEntry("pending", 1)
-                .containsEntry("missing", 1).containsEntry("stale", 0).containsEntry("embedded", 0);
+        var dry = controller.backfillTitleVectors(new KbBlockController.BackfillRequest(true));
+        assertThat(dry.dryRun()).isTrue();
+        assertThat(dry.pending()).isEqualTo(1);
+        assertThat(dry.missing()).isEqualTo(1);
+        assertThat(dry.stale()).isZero();
+        assertThat(dry.embedded()).isZero();
         assertThat(store.countTitleVectors()).as("dryRun 不写库").isZero();
 
-        Map<String, Object> real = controller.backfillTitleVectors(
-                new KbBlockController.BackfillRequest(null)).getBody();
-        assertThat(real).containsEntry("dryRun", false).containsEntry("embedded", 1);
+        var real = controller.backfillTitleVectors(new KbBlockController.BackfillRequest(null));
+        assertThat(real.dryRun()).isFalse();
+        assertThat(real.embedded()).isEqualTo(1);
         assertThat(store.countTitleVectors()).isEqualTo(1);
 
-        Map<String, Object> again = controller.backfillTitleVectors(null).getBody();
-        assertThat(again).as("body 可以不传；幂等：没有要补的").containsEntry("pending", 0);
+        var again = controller.backfillTitleVectors(null);
+        assertThat(again.pending()).as("body 可以不传；幂等：没有要补的").isZero();
     }
 }

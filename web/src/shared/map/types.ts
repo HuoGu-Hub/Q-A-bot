@@ -81,7 +81,6 @@ export interface ResourceCategory {
 }
 
 export interface ResourceCatalog {
-  ok: boolean
   map: string
   imported: boolean
   version: string
@@ -104,7 +103,6 @@ export interface MapArea {
 }
 
 export interface Catalog {
-  ok: boolean
   enabled: boolean
   /** 1 米等于多少坐标单位；0 = 后端没有输出米 */
   unitsPerMeter: number
@@ -173,7 +171,6 @@ export interface LocateHit {
 }
 
 export interface LocateResult {
-  ok: boolean
   q: string
   found: boolean
   text: string
