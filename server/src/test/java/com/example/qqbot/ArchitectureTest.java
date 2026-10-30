@@ -175,6 +175,18 @@ class ArchitectureTest {
         rule.check(CLASSES);
     }
 
+    @Test
+    @DisplayName("★ 控制器不得返回裸 Map —— 响应体必须是 record")
+    void controllersDoNotReturnRawMaps() {
+        // 2026-10-31：控制器里的 Map 与 ResponseEntity<?> 返回已清零。
+        // Map 响应不会进 OpenAPI schema，前端只能手写类型；这条规则防回退。
+        ArchRule rule = methods()
+                .that().arePublic()
+                .and().areDeclaredInClassesThat().haveSimpleNameEndingWith("Controller")
+                .should().notHaveRawReturnType(java.util.Map.class);
+        rule.check(CLASSES);
+    }
+
     /* ==================== 目标：还债清单 ==================== */
 
     @Test

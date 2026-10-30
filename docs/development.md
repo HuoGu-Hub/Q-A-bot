@@ -156,6 +156,7 @@ node tests/ui/verify-theme.mjs
 | 契约来源 | `docs/openapi.json`，由 `OpenApiSpecTest` 启动一次 Web 上下文生成 |
 | 生成类型 | `cd web && pnpm gen:api`，输出 `src/shared/api/schema.d.ts`，该文件不提交 |
 | 请求体 | 控制器只收 record，不收 `@RequestBody Map`；`ArchitectureTest` 会拦 |
+| 响应体 | 控制器只返回 record 或 `ResponseEntity<Void>`，不返回 `Map`；后者在规范里记为 204 |
 | 错误响应 | `application/problem+json`，字段 `type / title / status / code / detail / requestId` |
 | 请求标识 | 响应头 `X-Request-Id`，错误体里同名字段，日志 MDC 可直接检索 |
 | 写操作 | 创建 POST、整体替换 PUT、局部更新 PATCH、删除 DELETE；动作走 `/actions/{verb}` |
