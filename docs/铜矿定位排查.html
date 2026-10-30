@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>铜矿定位问题排查</title>
+<style>
+  :root { color-scheme: light; --ink:#1c1c1e; --muted:#5f6368; --line:#e3e3e6; --bg:#faf9f7; --accent:#a3541f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.75 "Microsoft YaHei","PingFang SC",system-ui,sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:56px 28px 80px; }
+  h1 { font-size:28px; margin:0 0 28px; letter-spacing:.02em; }
+  h2 { font-size:19px; margin:36px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  p { margin:10px 0; }
+  ul,ol { margin:10px 0; padding-left:22px; }
+  li { margin:6px 0; }
+  code { font-family:Consolas,"Cascadia Mono",monospace; font-size:.9em; background:#efede9; padding:1px 5px; border-radius:4px; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:14.5px; background:#fff; }
+  th,td { border:1px solid var(--line); padding:9px 11px; text-align:left; vertical-align:top; }
+  th { background:#f2efea; font-weight:600; }
+  .note { border-left:3px solid var(--accent); padding:2px 0 2px 14px; color:#3c3a37; margin:16px 0; }
+  .tag { display:inline-block; font-size:12px; padding:1px 7px; border-radius:10px; background:#efe6dc; color:#7a4519; margin-right:6px; }
+  .flow { background:#fff; border:1px solid var(--line); padding:14px 16px; font-size:14px; line-height:2; }
+</style>
+</head>
+<body>
+<main>
+<h1>铜矿定位问题排查</h1>
+
+<div class="note">
+  结论：<strong>猜测 1 成立，猜测 2 不成立。</strong>
+  <code>locate</code> 查不到「铜矿」——1703 个地点里没有一条含「铜」或「矿」；
+  那张图是知识库里「铜矿石（Copper Ore）」词条的物品图标，不是地图截图失败后的兜底。
+  代码里也不存在「截图与图标冲突、只留图标」的分支。
+</div>
+
+<h2>一、现场实测</h2>
+<p>直接用线上那份数据调机器人同款接口（<code>/api/public/map/locate</code>，与 <code>locate</code> 工具同一份算法）：</p>
+<table>
+  <tr><th>查询词</th><th>结果</th></tr>
+  <tr><td>铜矿 / 铜矿脉 / 铜 / 矿 / 铁矿</td><td><code>found:false</code>，「地图上没有标记过……」</td></tr>
+  <tr><td>mine</td><td><code>found:true</code>，5 处英文矿点（Mine、Glimmer Rock Mine……）</td></tr>
+</table>
+<p>数据侧复核：启用地图的 1703 个地点中，名称、别名、备注含「铜」或「矿」的都是 0 条；含英文 <code>mine</code> 的有 29 条。
+中文「铁矿 / 银矿 / 金矿 / 煤炭」同样 0 条——这不是铜矿一个词的问题，是所有「某矿」中文问法都查不到。</p>
+
+<h2>二、wiki 点位是怎么走通搜索与截图的</h2>
+<div class="flow">
+  wiki「Map:」命名空间 32 页<br>
+  → <code>KbMapSyncService</code> 解析成 <code>kb_map_marker</code>：每行一个具名地点，带 page / markerId / 分组 / 名称 / article / 描述 / 坐标<br>
+  → <code>WikiPlaceDirectory</code> 现场拼 <code>PlacePoint</code>：中文名、区域、分类、<code>ref = page#markerId</code><br>
+  → <code>locate</code> 子串匹配 → <code>PlaceAnswer</code> 算最近地标与方位<br>
+  → 命中后追加 <code>[[img:map:page#markerId]]</code><br>
+  → <code>MapShotSource</code> 用同一个 key 回查 marker，拿画布、坐标、分组图标 → 渲染瓦片 + 图标 + 红圈
+</div>
+<p>另外还有一条并行的：<code>LocationCorpusBuilder</code> 把 marker 按 article 聚成 83 个「地点」块，块尾也带 <code>[[img:map:...]]</code>。
+所以就算模型不调 <code>locate</code>，资料注入或 <code>lookup</code> 也能把地点和截图带出来。</p>
+<p>这套链路成立的前提是 marker 行同时具备四样东西：<strong>身份</strong>（page#markerId）、<strong>词条</strong>（article → 中文名/分类）、<strong>分组</strong>（grp → 图标）、<strong>坐标</strong>。wiki 的 marker 四样全有。</p>
+
+<h2>三、mod 资源点为什么没有同样生效</h2>
+<p>它不是同一类数据。mod 的 <code>points.json</code> 经 <code>MapResourceImporter</code> 落成 <code>kb_map_resource</code>：</p>
+<table>
+  <tr><th></th><th>wiki 点位</th><th>mod 资源点</th></tr>
+  <tr><td>表</td><td><code>kb_map_marker</code></td><td><code>kb_map_resource</code></td></tr>
+  <tr><td>数量</td><td>1703</td><td>36126（112 层；铜 747、铁 1398）</td></tr>
+  <tr><td>身份</td><td><code>page#markerId</code></td><td><code>source_id</code>，如 <code>p:874</code>，没有 page</td></tr>
+  <tr><td>名字</td><td>每个点有独立名字，可配中文</td><td>只有层名「铜」，747 个点同名</td></tr>
+  <tr><td>词条</td><td><code>article</code> → 中文名、分类</td><td>没有 article</td></tr>
+  <tr><td>图标</td><td><code>grp</code> → Mine.png</td><td>没有图标，网页按颜色画圆点</td></tr>
+  <tr><td>消费方</td><td><code>locate</code>、截图、地点语料</td><td>只有公开站/管理端地图接口</td></tr>
+</table>
+<p>接线只存在于网页这一侧：<code>MapResourceService</code> 被 <code>PublicMapController</code> 和 <code>AdminMapController</code> 注入，
+<code>MapView.vue</code> 按层拉点、<code>MapCanvas.vue</code> 画点。机器人这一侧的 <code>PlaceDirectory</code>、<code>MapShotSource</code>、
+<code>LocationCorpusBuilder</code> 没有任何一处读 <code>kb_map_resource</code>。</p>
+<p>所以不是「搜不到」或「截图坏了」，而是<strong>这批数据从导入那天起就没进问答链路</strong>。提交 <code>c7649cf</code> 改的是
+web / public API / 管理端，没有动 <code>KbLookupTool</code> 和 <code>MapShotSource</code>。</p>
+
+<h2>四、为什么不能直接把资源点塞进 marker 表</h2>
+<ul>
+  <li><strong>答法不对</strong>：<code>PlaceAnswer</code> 是「几个同名地点，按距离列 5 条」。747 个「铜」会变成 5 条一模一样的坐标，回答不了「哪里密集」。</li>
+  <li><strong>身份对不上</strong>：截图协议是 <code>[[img:map:page#markerId]]</code>，资源点没有 page 和 markerId，<code>MapShotSource</code> 回查不到。</li>
+  <li><strong>画法不对</strong>：现有截图是「一个目标点套红圈 + 邻近地标名字」，资源层要的是「一层点云」；两种图的取景和画法不同。</li>
+  <li><strong>体量不对</strong>：36k 行是 1703 的 20 倍，目录每次调用都重建，语料派生也会被灌进上千条近似块。</li>
+</ul>
+<p>坐标本身不是问题：网页上 wiki 图标与资源点是叠在同一张底图上的，说明两套坐标已经对齐。缺的是「按层聚合 + 聚类 + 资源层截图」这层适配。</p>
+
+<h2>五、图标是从哪来的</h2>
+<p>知识库块 <code>wiki-copper-ore</code> 的正文末尾带着：</p>
+<p><code>[[img:wiki:copper-ore/copper-ore.png]]</code></p>
+<ul>
+  <li>图片文件存在：<code>server/data/wiki-images/copper-ore/copper-ore.png</code>（44 KB，物品图标）；</li>
+  <li>检索「铜矿」时，前五条里出现两次「铜矿石（Copper Ore）」，标题向量闸门以 0.770 把 <code>copper-ore</code> 置顶；</li>
+  <li>资料注入与 <code>lookup</code> 都会把标记提到块尾单独一行（<code>TwoSectionInjector.java:57</code>、<code>KbLookupTool.java:89</code>）；</li>
+  <li>提示词明确允许「看到标记就原样抄进回答」，于是模型抄了图标标记。</li>
+</ul>
+<p>这条链路不需要模型调用任何工具，注入的资料里就已经有图标凭据。</p>
+
+<h2>六、为什么不是「截图与图标冲突」</h2>
+<ul>
+  <li>图片标记逐个独立解析（<code>ImageLibrary.java:69</code>），一条回复上限 2 张，互不替代；</li>
+  <li>截图失败只有一种表现：<code>MapShotSource</code> 返回空、该 <code>map:</code> 标记被丢弃，日志记 <code>[MAP-SHOT] … 本次不出图</code>，不会改发图标；</li>
+  <li>而这次 <code>locate</code> 没有命中，连 <code>map:</code> 标记都没生成，谈不到冲突。</li>
+</ul>
+
+<h2>七、日志上怎么确认</h2>
+<ol>
+  <li>搜该次回答前后的 <code>[TOOL] 放行工具 locate</code>：参数就是模型传的地名；</li>
+  <li>搜 <code>[MAP-SHOT]</code>：一条都没有 = 截图没被触发（本次情况）；有「缺瓦片 / 超预算」= 尝试过但失败；</li>
+  <li>搜 <code>[IMG] 丢弃图片标记 map:</code>：出现才说明截图标记生成后被丢弃。</li>
+</ol>
+
+<h2>八、修复方向</h2>
+<p><span class="tag">A</span><strong>新增资源层适配器</strong>：中文名/别名 → layer（铜矿 → <code>ore:copper</code>），对点做网格或 DBSCAN 聚类，取最密的几簇给区域、最近地标、点数；再新增一种资源层截图，按簇的包围盒画点云。这是能真正回答「哪里密集」的做法。</p>
+<p><span class="tag">B</span><strong>只补文字</strong>：同样聚类，先只回「铜矿最密的一片在××区域，坐标……」，不承诺截图。</p>
+<p><span class="tag">C</span><strong>只补别名</strong>：给地点目录补「Mine → 矿坑」。只能让「矿井在哪」有结果，回答不了铜矿，且会截到随机一个矿点，不建议单独做。</p>
+
+</main>
+</body>
+</html>
