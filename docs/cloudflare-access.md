@@ -1,118 +1,235 @@
 # Cloudflare Access 接入
 
-当前状态：`firefire.online` 的 NS 是 DNSPod，源站是 `193.112.199.24`，单域名同时承载公开站与后台。Cloudflare Access 不能直接套在 DNSPod 上，必须先把域名的 NS 迁到 Cloudflare。这一步只能由域名持有人操作。
+## 先理解三件事
 
-## 0. 迁移前
+这三个东西很容易混：
 
-1. 在 DNSPod 导出全部 DNS 记录，尤其是 MX、TXT、CNAME。只迁 A 记录会把邮件或验证记录弄丢。
-2. 在 Cloudflare 添加站点 `firefire.online`，选择 Free 计划，按提示导入记录。
-3. 到域名注册商把 NS 改成 Cloudflare 给的两条。等待生效，通常几分钟到 24 小时。
-4. 确认 `firefire.online` 的 A 记录仍是 `193.112.199.24`，并打开橙色云朵代理。
+| 名字 | 作用 | 你现在的情况 |
+|---|---|---|
+| 域名注册商 | 域名在哪买的，改 NS 要去这里 | 腾讯云或其他注册商 |
+| DNS 托管商 | 谁在回答“firefire.online 指向哪个 IP” | DNSPod |
+| Cloudflare | 新的 DNS 托管商，同时提供 Access 登录门 | 还没接 |
 
-迁移期间公开站可能短暂解析不一致，建议在低峰做。
+NS 就是域名的“地址簿”。现在地址簿在 DNSPod，所以要先把地址簿交给 Cloudflare，Cloudflare 才能在你的后台前面加一道登录门。
 
-## 1. 创建 Access 应用
+这一步不是装软件，是改域名的 NS。改完之前，Cloudflare Access 无法启用。
 
-Cloudflare 控制台 → Zero Trust → Access → Applications → Add an application → Self-hosted。
+## 0. 开工前准备
 
-| 项 | 值 |
+你需要有：
+
+- DNSPod 账号，能看 <code>firefire.online</code> 的记录。
+- 域名注册商账号，能改 NS。
+- Cloudflare 账号，免费注册。
+- 一个能收邮件的邮箱，Access 用它发验证码。
+
+还要确认一件事：域名现在有没有用来收邮件。如果有 MX 记录，迁移时不能漏，否则邮箱会断。
+
+## 1. 从 DNSPod 导出记录
+
+登录 DNSPod 控制台，进入 <code>firefire.online</code> 的“记录管理”。
+
+先把现有记录抄下来，至少包括：
+
+- A 记录：<code>@</code> 和 <code>www</code>，现在应该都指向 <code>193.112.199.24</code>
+- MX 记录：邮件服务
+- TXT 记录：SPF、DKIM、域名验证
+- CNAME 记录：其他子域
+
+DNSPod 如果有“导出记录”，直接导出。没有就截图或逐条复制。
+
+不要在这一步删任何记录。DNSPod 还会继续工作，直到 NS 真正切走。
+
+## 2. 在 Cloudflare 添加站点
+
+1. 登录 Cloudflare，点“Add a site”。
+2. 输入 <code>firefire.online</code>，选 Free 计划。
+3. Cloudflare 会自动扫描现有 DNS 记录。
+4. 对照第 1 步抄下来的记录，缺的补上，多的删掉。
+5. 确认 <code>@</code> 和 <code>www</code> 的 A 记录都指向 <code>193.112.199.24</code>，并且云朵是橙色，表示走 Cloudflare 代理。
+6. 点继续，Cloudflare 会给你两条 NS，类似 <code>xxx.ns.cloudflare.com</code>。
+
+这两条 NS 是后面要填到注册商的，不是填到 DNSPod。
+
+## 3. 到注册商改 NS
+
+去你买域名的平台，找到 <code>firefire.online</code> 的“DNS 服务器”或“Nameservers”设置。
+
+把原来的：
+
+~~~text
+john.dnspod.net
+modify.dnspod.net
+~~~
+
+改成 Cloudflare 给你的两条。不要保留 DNSPod 的 NS。
+
+保存后等待生效，通常几分钟到 24 小时。Cloudflare 首页会从“Pending Nameserver Update”变成“Active”。
+
+验证：
+
+~~~bash
+nslookup -type=ns firefire.online
+~~~
+
+看到 <code>*.ns.cloudflare.com</code> 就对了。
+
+## 4. 先确认站点正常，再开 Access
+
+NS 生效后，先不要急着建 Access。先打开：
+
+~~~text
+https://firefire.online/
+https://firefire.online/admin/
+~~~
+
+两个都应该正常。
+
+如果打不开，先查 Cloudflare 的 SSL/TLS 设置：
+
+- 选“Full (strict)”。
+- 不要选“Flexible”，那会让 Cloudflare 到源站走 HTTP。
+- 源站证书还是 <code>/etc/nginx/certs/qqbot.crt</code>，它要覆盖 <code>firefire.online</code>。
+
+如果出现 522，说明 Cloudflare 连不到源站 443；检查 UFW 是否还放行 443，以及 Nginx 是否正常。
+
+这一步正常后再往下。
+
+## 5. 建 Access 应用
+
+进入 Cloudflare Zero Trust 控制台，左侧选 Access → Applications → Add an application → Self-hosted。
+
+按下面填：
+
+| 字段 | 填什么 |
 |---|---|
 | Application name | qqbot admin |
 | Session duration | 24 hours |
-| Application domain | `firefire.online`，path 填 `admin*` |
+| Application domain | <code>firefire.online</code> |
+| Path | <code>admin*</code> |
 
-路径用 `admin*`，这样只拦后台，公开站不受影响。不要用 `admin/`，否则 `/admin` 与 `/admin.html` 可能漏掉。
+Path 用 <code>admin*</code>，这样 <code>/admin</code>、<code>/admin/</code>、<code>/admin.html</code>、<code>/admin/api/...</code> 都被拦住。公开站不受影响。
 
-Policy：
+如果界面不接受 <code>admin*</code>，就建两个应用，Path 分别填 <code>admin</code> 和 <code>admin.html</code>。
 
+然后建 Policy：
+
+- Policy name：team
 - Action：Allow
-- Include：Emails，填团队成员邮箱；或 Emails ending in 你的域名
-- 登录方式：One-time PIN 最省事；有 Google/GitHub 身份源就接 SSO
+- Include：Emails，填团队每个人的邮箱
+- 需要更严就再加 Require，比如邮箱域名必须是你的公司域名
 
-Free 计划最多 50 个用户，够小团队用。
+保存后，在 Access 的 Authentication 里确认 One-time PIN 是开启的。这是最省事的方式，用户不用装任何东西，收邮件验证码就能进。
 
-## 2. 源站只允许 Cloudflare 回源
+Free 计划最多 50 个用户，小团队够用。
 
-Access 只保护经过 Cloudflare 的请求。源站 IP 如果还能被直接访问，攻击者可以绕过 Access。两步都要做。
+## 6. 测试 Access
 
-### 2.1 Nginx 取真实 IP
+用无痕窗口打开：
 
-把 `deploy/nginx/cloudflare-real-ip.conf` 放到：
+~~~text
+https://firefire.online/admin/
+~~~
 
-```bash
+期望顺序：
+
+1. 先跳到 <code>https://&lt;你的团队名&gt;.cloudflareaccess.com/...</code>
+2. 输入邮箱，收验证码
+3. 验证通过后跳回 <code>https://firefire.online/admin/</code>
+4. 再看到 qqbot 自己的登录页
+5. 输入后台账号密码
+
+这就叫双层登录：Cloudflare 管“谁能到门口”，qqbot 管“进来能做什么”。
+
+如果直接看到 qqbot 登录页，说明 Access 没拦住，检查：
+
+- Path 是不是 <code>admin*</code>
+- 域名的云朵是不是橙色
+- 应用是不是 Self-hosted
+- 有没有点 Save
+
+## 7. 锁源站
+
+Access 只保护经过 Cloudflare 的请求。如果别人知道源站 IP，还能绕过 Access 直接访问。所以要做两步。
+
+### 7.1 Nginx 取真实 IP
+
+把仓库里的 <code>deploy/nginx/cloudflare-real-ip.conf</code> 放到服务器：
+
+~~~bash
 sudo mkdir -p /etc/nginx/snippets
 sudo cp deploy/nginx/cloudflare-real-ip.conf /etc/nginx/snippets/
-```
+~~~
 
-在 `/etc/nginx/sites-available/qqbot.conf` 的 HTTPS server 块里取消这一行注释：
+在 <code>/etc/nginx/sites-available/qqbot.conf</code> 的 HTTPS server 块里加：
 
-```nginx
+~~~nginx
 include /etc/nginx/snippets/cloudflare-real-ip.conf;
-```
+~~~
 
 然后：
 
-```bash
+~~~bash
 sudo nginx -t && sudo systemctl reload nginx
-```
+~~~
 
-地址段会变，接完后定期用 `https://www.cloudflare.com/ips-v4` 与 `ips-v6` 刷新这个文件。
+### 7.2 UFW 只放 Cloudflare
 
-### 2.2 UFW 只放 Cloudflare
+先把 Cloudflare 的回源段加进去，再删 443 的全放行。顺序反了会断站。
 
-先把 443 的全放行删掉，再按 Cloudflare 段逐条加。**不要先删再加**，中间会断站；先加新规则，再删旧的。
-
-```bash
-# 先加 Cloudflare 回源段
+~~~bash
 for cidr in $(curl -fsS https://www.cloudflare.com/ips-v4) $(curl -fsS https://www.cloudflare.com/ips-v6); do
   ufw allow from "$cidr" to any port 443 proto tcp
 done
 
-# 确认新规则在，再删旧的 Anywhere 443
 ufw status numbered
 ufw delete allow 443/tcp
-```
+~~~
 
-80 端口保留给 HTTP 跳转与证书；如果也想收紧，按同样方式只放 Cloudflare。
+80 端口保留给 HTTP 跳转和证书。8080 不用动，它只给 Docker 和回环。
 
-### 2.3 验证
+验证：从一台不是 Cloudflare 的机器直接打源站 IP，应该连不上。
 
-从一台不是 Cloudflare 的机器直接打源站 IP：
+## 8. 常见问题
 
-```bash
-curl -k --max-time 5 https://193.112.199.24/ -H 'Host: firefire.online'
-```
+**Access 登录后一直循环**
 
-期望超时或拒绝。通过域名访问：
+检查浏览器有没有禁用第三方 Cookie；Cloudflare Access 需要它。再检查 Path 是否覆盖了当前 URL。
 
-```bash
-curl -I https://firefire.online/admin/
-```
+**收不到验证码**
 
-期望 302 到 `*.cloudflareaccess.com`，登录后再到应用自己的登录页。
+检查垃圾邮件；One-time PIN 的发件人是 Cloudflare。企业邮箱可能拦，换个人邮箱先测。
 
-## 3. 应用侧仍然要登录
+**公开站也跳 Access**
 
-Cloudflare Access 是外层身份，应用自己的账号体系仍然生效：
+Path 写成了 <code>/</code> 或空。改成 <code>admin*</code>。
 
-1. 浏览器先过 Cloudflare 的邮箱验证码或 SSO。
-2. 再输入 qqbot 后台账号密码。
-3. 角色仍是 `VIEWER` / `EDITOR` / `ADMIN`。
+**后台 502 / 522**
 
-这叫双层登录，不是重复建设：Cloudflare 负责“谁能到门口”，应用负责“进来后能做什么”。以后想只登录一次，需要应用校验 Cloudflare Access JWT，属于另一项改造。
+Cloudflare 连不到源站。检查 Nginx、443、UFW。不要把 443 全删了再慢慢加。
 
-## 4. 与现有功能的关系
+**邮箱断了**
 
-- NapCat 走 `http://host.docker.internal:8080/onebot/event`，不经过 Cloudflare，不受影响。
-- 公开站仍是公开的，只有 `/admin*` 被 Access 拦。
-- 后台 API 的 `X-Real-IP` 会变成真实客户端 IP，登录锁定与审计不再按 Cloudflare 节点 IP 计算。
-- 8080 仍然只允许 Docker 网段与回环，不需要对 Cloudflare 开放。
+MX 记录没导入 Cloudflare。回 DNSPod 对照补上。
 
-## 5. 回滚
+## 9. 回滚
 
-1. Cloudflare 控制台删除 Access 应用，后台恢复为直接公网登录。
-2. UFW 恢复 `ufw allow 443/tcp`。
-3. 删除 Nginx 里的 `include`，`nginx -t && systemctl reload nginx`。
-4. 如 DNS 也要回退，把 NS 改回 DNSPod。
+如果迁移后发现问题：
 
-回滚不会动应用数据库和账号。
+1. 到注册商把 NS 改回：
+
+   ~~~text
+   john.dnspod.net
+   modify.dnspod.net
+   ~~~
+
+2. 等 NS 生效。
+3. Cloudflare 那边的记录先别删，留作对照。
+
+Access 单独回滚：
+
+1. 删除 Cloudflare Access 应用。
+2. 恢复 UFW 的 <code>ufw allow 443/tcp</code>。
+3. 删除 Nginx 的 <code>include</code>，<code>nginx -t && systemctl reload nginx</code>。
+
+应用数据库和账号不受影响。
