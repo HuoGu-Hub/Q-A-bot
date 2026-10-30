@@ -193,6 +193,8 @@ APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 
 没有身份层时，至少做到：每人独立账号，不共用 `admin`；密码 12 位以上；只给需要的人 EDITOR 或 ADMIN；定期看 `admin_audit`。
 
+Cloudflare Access 的完整步骤见 [cloudflare-access.md](cloudflare-access.md)。
+
 ## 5. 构建
 
 ```bash
