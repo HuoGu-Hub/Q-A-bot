@@ -278,6 +278,7 @@ public class AdminController {
         try {
             users.changePassword(p.id(), newPassword);
             auth.invalidateUser(p.id());
+            devices.revokeAll(p.id());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

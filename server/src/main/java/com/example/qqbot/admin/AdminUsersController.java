@@ -33,14 +33,17 @@ public class AdminUsersController {
     private final AdminAuditRepository audit;
     private final AdminAuth auth;
     private final AdminQqCodeService qqCodes;
+    private final AdminTrustedDeviceService devices;
     private final ObjectMapper mapper;
 
     public AdminUsersController(AdminUserService users, AdminAuditRepository audit, AdminAuth auth,
-                                AdminQqCodeService qqCodes, ObjectMapper mapper) {
+                                AdminQqCodeService qqCodes, AdminTrustedDeviceService devices,
+                                ObjectMapper mapper) {
         this.users = users;
         this.audit = audit;
         this.auth = auth;
         this.qqCodes = qqCodes;
+        this.devices = devices;
         this.mapper = mapper;
     }
 
@@ -147,6 +150,7 @@ public class AdminUsersController {
                     role == null ? current.role() : role,
                     enabled == null || enabled);
             auth.invalidateUser(id);
+            devices.revokeAll(id);
             return ResponseEntity.ok(dto(u));
         } catch (IllegalArgumentException e) {
             return bad(e);
@@ -159,6 +163,7 @@ public class AdminUsersController {
         try {
             users.changePassword(id, str(body, "password"));
             auth.invalidateUser(id);
+            devices.revokeAll(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
             return bad(e);
@@ -173,6 +178,7 @@ public class AdminUsersController {
         try {
             users.delete(id, actorId);
             auth.invalidateUser(id);
+            devices.revokeAll(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
             return bad(e);
