@@ -1,7 +1,18 @@
 package com.example.qqbot.command;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +26,8 @@ import java.util.Map;
  * <p>认证由 {@link com.example.qqbot.admin.AdminAuthFilter} 统一拦在前面。
  * 校验与保存规则在 {@link BoardAdminService}，这里只做 HTTP 形状。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/boards")
 public class BoardController {
@@ -37,35 +50,43 @@ public class BoardController {
         try {
             return ResponseEntity.ok(Map.of("ok", true, "board", service.save(body)));
         } catch (IllegalArgumentException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    @PostMapping("/toggle")
-    public ResponseEntity<Map<String, Object>> toggle(@RequestBody Map<String, Object> body) {
+    @PatchMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> toggle(@PathVariable long id,
+                                                      @RequestBody ToggleBoardRequest body) {
+        BoardAdminService.BoardView board = find(id);
+        boolean enabled = body.enabled() == null ? !board.enabled() : body.enabled();
         try {
-            service.toggle(str(body.get("path")), !Boolean.FALSE.equals(body.get("enabled")));
+            service.toggle(board.path(), enabled);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    @PostMapping("/delete")
-    public ResponseEntity<Map<String, Object>> delete(@RequestBody Map<String, Object> body) {
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+        BoardAdminService.BoardView board = find(id);
         try {
-            service.delete(str(body.get("path")));
+            service.delete(board.path());
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    private static ResponseEntity<Map<String, Object>> bad(String message) {
-        return ResponseEntity.badRequest().body(Map.of("error", message));
+    private BoardAdminService.BoardView find(long id) {
+        return service.list().stream()
+                .filter(b -> b.id() == id)
+                .findFirst()
+                .orElseThrow(() -> ApiException.notFound("没有这个板块"));
     }
 
-    private static String str(Object value) {
-        return value == null ? null : String.valueOf(value).trim();
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record ToggleBoardRequest(Boolean enabled) {
     }
 }

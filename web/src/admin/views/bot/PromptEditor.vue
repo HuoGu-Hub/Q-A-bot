@@ -143,7 +143,7 @@ async function saveTexts() {
 async function deletePrompt(prompt: AdminPrompt) {
   if (!window.confirm('删除这条补充提示？')) return
   try {
-    await adminApi.post('/prompts/delete', { id: prompt.id })
+    await adminApi.del('/prompts/' + prompt.id)
     prompts.value = prompts.value.filter((p) => p.id !== prompt.id)
     emit('changed')
   } catch (e) {

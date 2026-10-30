@@ -1,5 +1,13 @@
 package com.example.qqbot.site;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -20,6 +28,8 @@ import java.util.Map;
  * <p>块的清单（有哪些页、每页有哪些块）由后端的注册表决定，前端只负责渲染。
  * 这样「哪些字可以改」只有一处真相，不会前后端各写一份清单然后对不上。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/pages")
 public class SiteTextController {
@@ -47,58 +57,66 @@ public class SiteTextController {
      * <p>body：{@code {page, key, text}}。{@code text} 传空串 = 恢复默认。
      */
     @PostMapping("")
-    public ResponseEntity<?> save(@RequestBody Map<String, Object> body) {
-        String page = str(body.get("page"));
-        String key = str(body.get("key"));
-        Object text = body.get("text");
+    public ResponseEntity<?> save(@RequestBody SaveTextRequest body) {
+        String page = trim(body.page());
+        String key = trim(body.key());
         if (page == null || key == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 page 和 key"));
+            throw ApiException.badRequest("需要 page 和 key");
         }
+        boolean ok;
         try {
-            boolean ok = service.save(page, key, text == null ? "" : String.valueOf(text));
-            if (!ok) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "没有这个文案块：" + page + "." + key));
-            }
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("ok", true);
-            out.put("pages", service.grouped());
-            return ResponseEntity.ok(out);
+            ok = service.save(page, key, body.text() == null ? "" : body.text());
         } catch (Exception e) {
             log.warn("[SITE] 保存文案失败 {}.{}：{}", page, key, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+            throw ApiException.internal(e.getMessage());
         }
+        if (!ok) {
+            throw ApiException.badRequest("没有这个文案块：" + page + "." + key);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("pages", service.grouped());
+        return ResponseEntity.ok(out);
     }
 
     /** 恢复一块文案的默认值 */
-    @PostMapping("/reset")
-    public ResponseEntity<?> reset(@RequestBody Map<String, Object> body) {
-        String page = str(body.get("page"));
-        String key = str(body.get("key"));
+    @PostMapping("/actions/reset")
+    public ResponseEntity<?> reset(@RequestBody ResetTextRequest body) {
+        String page = trim(body.page());
+        String key = trim(body.key());
         if (page == null || key == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 page 和 key"));
+            throw ApiException.badRequest("需要 page 和 key");
         }
+        boolean ok;
         try {
-            if (!service.reset(page, key)) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "没有这个文案块：" + page + "." + key));
-            }
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("ok", true);
-            out.put("pages", service.grouped());
-            return ResponseEntity.ok(out);
+            ok = service.reset(page, key);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+            throw ApiException.internal(e.getMessage());
         }
+        if (!ok) {
+            throw ApiException.badRequest("没有这个文案块：" + page + "." + key);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("pages", service.grouped());
+        return ResponseEntity.ok(out);
     }
 
-    private static String str(Object o) {
-        if (o == null) {
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record SaveTextRequest(String page, String key, String text) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record ResetTextRequest(String page, String key) {
+    }
+
+    private static String trim(String value) {
+        if (value == null) {
             return null;
         }
-        String s = String.valueOf(o).trim();
+        String s = value.trim();
         return s.isEmpty() ? null : s;
     }
 }

@@ -3,11 +3,13 @@ package com.example.qqbot.kb.block;
 import com.example.qqbot.config.PersistenceProperties;
 import com.example.qqbot.config.QaProperties;
 import com.example.qqbot.kb.EmbeddingClient;
+import com.example.qqbot.kb.EntryId;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.QaStoreRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
 import com.example.qqbot.qa.QaStore;
+import com.example.qqbot.web.ApiException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,24 +19,20 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.ResponseEntity;
 
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import com.example.qqbot.kb.EntryId;
 
 /**
  * 块管理接口的契约测试。
  *
  * <p>不起 Spring MVC，直接调控制器方法 —— 验的是**请求体怎么解、响应体长什么样、
  * 出错回什么码**这三件事。界面就是照这个契约写的，改了这里界面就会对不上。
- *
- * <p>为什么要有它：真机验收要起服务（宿主 Vite / 后端），环境不具备时就断了；
- * 契约测试不需要任何外部依赖，永远能跑。
  */
 class KbBlockControllerTest {
 
@@ -79,18 +77,15 @@ class KbBlockControllerTest {
         controller = new KbBlockController(service);
     }
 
-    private static Map<String, Object> body(Object... kv) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        for (int i = 0; i + 1 < kv.length; i += 2) {
-            m.put(String.valueOf(kv[i]), kv[i + 1]);
-        }
-        return m;
-    }
-
     private static String doc(String name, String id, String title, String text) {
         return String.join("\n",
                 "<!-- doc", "name: " + name, "url: https://w/" + name, "tags: 基础", "-->", "",
                 "=== " + title + " === <!-- id: " + id + " -->", text);
+    }
+
+    private static KbBlockController.AddBlockRequest add(String docId, String id, String title,
+                                                        String text, List<String> tags) {
+        return new KbBlockController.AddBlockRequest(docId, id, title, text, null, tags);
     }
 
     // ==================== 读 ====================
@@ -125,7 +120,8 @@ class KbBlockControllerTest {
         service.importBlocks(doc("flame-altar", "flame-altar-0", "灵火祭坛", "旧正文"));
 
         ResponseEntity<Map<String, Object>> res = controller.preview(
-                body("text", doc("flame-altar", "flame-altar-0", "灵火祭坛", "新正文")));
+                new KbBlockController.PreviewImportRequest(
+                        doc("flame-altar", "flame-altar-0", "灵火祭坛", "新正文")));
 
         Map<String, Object> out = res.getBody();
         assertThat(out).containsEntry("added", 0)
@@ -141,63 +137,63 @@ class KbBlockControllerTest {
     @Test
     @DisplayName("update：缺 id / 块不存在 / 正文为空 三种错都要分得清")
     void updateErrorPaths() {
-        assertThat(controller.update(body("text", "x")).getStatusCode().value()).isEqualTo(400);
+        assertThatThrownBy(() -> controller.update(new KbBlockController.UpdateBlockRequest(null, "x")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("id");
 
-        assertThat(controller.update(body("id", "没有这个", "text", "正文")).getStatusCode().value())
-                .isEqualTo(404);
+        assertThatThrownBy(() -> controller.update(
+                new KbBlockController.UpdateBlockRequest("没有这个", "正文")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("没有这个块");
 
         service.importBlocks(doc("d", "d-0", "甲", "正文"));
-        ResponseEntity<Map<String, Object>> empty = controller.update(body("id", "d-0", "text", "   "));
-        assertThat(empty.getStatusCode().value()).isEqualTo(400);
-        assertThat(String.valueOf(empty.getBody().get("error"))).contains("下架");
+        assertThatThrownBy(() -> controller.update(
+                new KbBlockController.UpdateBlockRequest("d-0", "   ")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("下架");
     }
 
     @Test
-    @DisplayName("add：tags 支持数组和逗号字符串两种写法；中文文档名不给 id 要报错")
+    @DisplayName("add：tags 用数组；中文文档名不给 id 要报错")
     void addShapes() {
-        ResponseEntity<Map<String, Object>> ok = controller.add(body(
-                "docId", "kiln", "id", "kiln-0", "title", "熔炉", "text", "熔炉用来烧制。",
-                "tags", List.of("制作", "基础")));
+        ResponseEntity<Map<String, Object>> ok = controller.add(add(
+                "kiln", "kiln-0", "熔炉", "熔炉用来烧制。", List.of("制作", "基础")));
         assertThat(ok.getStatusCode().value()).isEqualTo(200);
 
-        ResponseEntity<Map<String, Object>> viaString = controller.add(body(
-                "docId", "kiln", "id", "kiln-1", "title", "熔炉2", "text", "正文",
-                "tags", "制作, 基础"));
-        assertThat(viaString.getStatusCode().value()).isEqualTo(200);
-        assertThat(store.get(EntryId.of("kiln-1")).tags()).containsExactly("制作", "基础");
-
-        ResponseEntity<Map<String, Object>> bad = controller.add(body(
-                "docId", "灵火祭坛", "title", "灵火祭坛", "text", "正文"));
-        assertThat(bad.getStatusCode().value()).isEqualTo(400);
-        assertThat(String.valueOf(bad.getBody().get("error"))).contains("无法自动生成 id");
+        assertThatThrownBy(() -> controller.add(add("灵火祭坛", null, "灵火祭坛", "正文", List.of())))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("无法自动生成 id");
     }
 
     @Test
     @DisplayName("retire / delete：默认 retired=true；块不存在回 404")
     void retireAndDelete() {
-        controller.add(body("docId", "d", "id", "d-0", "title", "甲", "text", "正文"));
+        controller.add(add("d", "d-0", "甲", "正文", List.of()));
 
-        assertThat(controller.retire(body("id", "d-0")).getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.retire(new KbBlockController.RetireBlockRequest("d-0", null))
+                .getStatusCode().value()).isEqualTo(200);
         assertThat(store.get(EntryId.of("d-0")).retired()).isTrue();
 
-        assertThat(controller.retire(body("id", "d-0", "retired", false)).getStatusCode().value())
-                .isEqualTo(200);
+        assertThat(controller.retire(new KbBlockController.RetireBlockRequest("d-0", false))
+                .getStatusCode().value()).isEqualTo(200);
         assertThat(store.get(EntryId.of("d-0")).retired()).isFalse();
 
-        assertThat(controller.retire(body("id", "没有")).getStatusCode().value()).isEqualTo(404);
-        assertThat(controller.delete(body("id", "没有")).getStatusCode().value()).isEqualTo(404);
-        assertThat(controller.delete(body("id", "d-0")).getStatusCode().value()).isEqualTo(200);
+        assertThatThrownBy(() -> controller.retire(new KbBlockController.RetireBlockRequest("没有", null)))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.delete("没有")).isInstanceOf(ApiException.class);
+        assertThat(controller.delete("d-0").getStatusCode().value()).isEqualTo(200);
         assertThat(store.count()).isZero();
     }
 
     @Test
     @DisplayName("retire-doc：整份下架并回报影响了几块")
     void retireDoc() {
-        controller.add(body("docId", "d", "id", "d-0", "title", "甲", "text", "正文"));
-        controller.add(body("docId", "d", "id", "d-1", "title", "乙", "text", "正文"));
-        controller.add(body("docId", "e", "id", "e-0", "title", "丙", "text", "正文"));
+        controller.add(add("d", "d-0", "甲", "正文", List.of()));
+        controller.add(add("d", "d-1", "乙", "正文", List.of()));
+        controller.add(add("e", "e-0", "丙", "正文", List.of()));
 
-        ResponseEntity<Map<String, Object>> res = controller.retireDoc(body("doc", "d", "retired", true));
+        ResponseEntity<Map<String, Object>> res = controller.retireDoc(
+                new KbBlockController.RetireDocRequest("d", true));
 
         assertThat(res.getBody()).containsEntry("affected", 2);
         assertThat(store.get(EntryId.of("e-0")).retired()).as("别的文档不受影响").isFalse();
@@ -217,15 +213,16 @@ class KbBlockControllerTest {
     @DisplayName("title-vectors/backfill：dryRun 只报数量不写库，真跑才补；再跑一遍报 0（界面就靠这个契约）")
     void backfillTitleVectorsShape() {
         service.importBlocks(doc("d", "d-0", "酸蚀之咬（Acid Bite）", "魔法弹药。"));
-        // 手工把标题向量删掉，模拟"功能上线前就在库里的老数据"
         store.deleteTitleVector(EntryId.of("d-0"));
 
-        Map<String, Object> dry = controller.backfillTitleVectors(body("dryRun", true)).getBody();
+        Map<String, Object> dry = controller.backfillTitleVectors(
+                new KbBlockController.BackfillRequest(true)).getBody();
         assertThat(dry).containsEntry("dryRun", true).containsEntry("pending", 1)
                 .containsEntry("missing", 1).containsEntry("stale", 0).containsEntry("embedded", 0);
         assertThat(store.countTitleVectors()).as("dryRun 不写库").isZero();
 
-        Map<String, Object> real = controller.backfillTitleVectors(body()).getBody();
+        Map<String, Object> real = controller.backfillTitleVectors(
+                new KbBlockController.BackfillRequest(null)).getBody();
         assertThat(real).containsEntry("dryRun", false).containsEntry("embedded", 1);
         assertThat(store.countTitleVectors()).isEqualTo(1);
 

@@ -1,8 +1,19 @@
 package com.example.qqbot.kb.category;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +32,8 @@ import java.util.Map;
  * 标签不在清单里就归「未分类」。所以这里只有四个动作：看清单、新增、改名、删除，
  * 外加一个"这个分类下有哪些词条"的穿透。没有自动归类、没有批量改归属。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/kb/categories")
 public class CategoryController {
@@ -52,45 +65,36 @@ public class CategoryController {
     }
 
     /** 新增一个分类。名字就是分块符号里要写的标签值 */
-    @PostMapping("/add")
-    public ResponseEntity<Map<String, Object>> add(@RequestBody Map<String, Object> body) {
-        String name = str(body.get("name"));
-        String label = body.get("label") == null ? "" : String.valueOf(body.get("label"));
+    @PostMapping("")
+    public ResponseEntity<Map<String, Object>> add(@RequestBody CategoryRequest body) {
+        String name = trim(body.name());
+        String label = body.label() == null ? "" : body.label();
         if (name == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "分类名不能为空"));
+            throw ApiException.badRequest("分类名不能为空");
         }
         if (CategoryService.UNCATEGORIZED.equals(name)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "「未分类」是系统保留名，不能新增"));
+            throw ApiException.badRequest("「未分类」是系统保留名，不能新增");
         }
         if (!service.add(name, label)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "分类「" + name + "」已存在或存储不可用"));
+            throw ApiException.badRequest("分类「" + name + "」已存在或存储不可用");
         }
         return ResponseEntity.ok(Map.of("ok", true, "name", name));
     }
 
-    /** 改分类的显示名（分类名本身是标签，不改） */
-    @PostMapping("/update")
-    public ResponseEntity<Map<String, Object>> update(@RequestBody Map<String, Object> body) {
-        String name = str(body.get("name"));
-        String label = body.get("label") == null ? "" : String.valueOf(body.get("label"));
-        if (name == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 name"));
-        }
+    @PatchMapping("/{name}")
+    public ResponseEntity<Map<String, Object>> update(@PathVariable String name,
+                                                      @RequestBody CategoryRequest body) {
+        String label = body.label() == null ? "" : body.label();
         if (!service.rename(name, label)) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个分类：" + name));
+            throw ApiException.notFound("没有这个分类：" + name);
         }
         return ResponseEntity.ok(Map.of("ok", true));
     }
 
-    /** 删除一个分类。词条不会消失，只是回到「未分类」 */
-    @PostMapping("/delete")
-    public ResponseEntity<Map<String, Object>> delete(@RequestBody Map<String, Object> body) {
-        String name = str(body.get("name"));
-        if (name == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 name"));
-        }
+    @DeleteMapping("/{name}")
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable String name) {
         if (!service.remove(name)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "删除失败：" + name));
+            throw ApiException.badRequest("删除失败：" + name);
         }
         return ResponseEntity.ok(Map.of("ok", true, "name", name));
     }
@@ -112,11 +116,16 @@ public class CategoryController {
         return out;
     }
 
-    private static String str(Object o) {
-        if (o == null) {
+    private static String trim(String value) {
+        if (value == null) {
             return null;
         }
-        String s = String.valueOf(o).trim();
+        String s = value.trim();
         return s.isEmpty() ? null : s;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record CategoryRequest(String name, String label) {
     }
 }

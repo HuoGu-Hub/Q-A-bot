@@ -1,9 +1,16 @@
 package com.example.qqbot.command;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +23,8 @@ import java.util.Map;
  *
  * <p>只读 + 撤销/恢复。记录内容属于群友，后台不改正文。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/board-records")
 public class BoardRecordController {
@@ -46,38 +55,23 @@ public class BoardRecordController {
         return out;
     }
 
-    @PostMapping("/delete")
-    public ResponseEntity<Map<String, Object>> delete(@RequestBody Map<String, Object> body) {
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
         try {
-            service.softDelete(longOf(body.get("id")));
+            service.softDelete(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    @PostMapping("/restore")
-    public ResponseEntity<Map<String, Object>> restore(@RequestBody Map<String, Object> body) {
+    @PostMapping("/{id}/restore")
+    public ResponseEntity<Map<String, Object>> restore(@PathVariable long id) {
         try {
-            service.restore(longOf(body.get("id")));
+            service.restore(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return bad(e.getMessage());
-        }
-    }
-
-    private static ResponseEntity<Map<String, Object>> bad(String message) {
-        return ResponseEntity.badRequest().body(Map.of("error", message));
-    }
-
-    private static long longOf(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            return value == null ? 0L : Long.parseLong(String.valueOf(value).trim());
-        } catch (NumberFormatException e) {
-            return 0L;
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 }

@@ -5,6 +5,7 @@ import com.example.qqbot.persistence.AclRepository;
 import com.example.qqbot.persistence.CommandPolicyRepository;
 import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.SqliteDatabase;
+import com.example.qqbot.web.ApiException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,9 +15,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 权限与数据范围的管理接口。
@@ -57,6 +58,19 @@ class AccessControllerTest {
         db.close();
     }
 
+    private static AccessController.PolicyRequest policy(String scope, List<Long> groups) {
+        return new AccessController.PolicyRequest(scope, groups, null, null, null);
+    }
+
+    private static AccessController.AclItemRequest item(String type, long value) {
+        return new AccessController.AclItemRequest(type, value);
+    }
+
+    private static AccessController.AclRequest acl(List<AccessController.AclItemRequest> white,
+                                                   List<AccessController.AclItemRequest> black) {
+        return new AccessController.AclRequest(white, black);
+    }
+
     // ==================== 数据范围 ====================
 
     @Test
@@ -73,8 +87,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("★ 存进去再读出来还是那份")
     void policyRoundTrips() {
-        controller.savePolicy(CMD, Map.of("scope", "SOME", "groups", List.of(1, 2),
-                "showGroup", true, "showUser", false));
+        controller.savePolicy(CMD, new AccessController.PolicyRequest(
+                "SOME", List.of(1L, 2L), true, false, null));
 
         DataPolicy policy = policyStore.of(CMD);
         assertThat(policy.scope()).isEqualTo(DataPolicy.DataScope.SOME);
@@ -86,8 +100,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("换一份策略是整份覆盖，不会残留旧的群")
     void policyIsReplacedNotMerged() {
-        controller.savePolicy(CMD, Map.of("scope", "SOME", "groups", List.of(1, 2)));
-        controller.savePolicy(CMD, Map.of("scope", "SOME", "groups", List.of(3)));
+        controller.savePolicy(CMD, policy("SOME", List.of(1L, 2L)));
+        controller.savePolicy(CMD, policy("SOME", List.of(3L)));
 
         assertThat(policyStore.of(CMD).groups()).containsExactly(3L);
     }
@@ -95,11 +109,11 @@ class AccessControllerTest {
     @Test
     @DisplayName("非法的数据范围被拒，且不会把原策略改坏")
     void badScopeIsRejected() {
-        controller.savePolicy(CMD, Map.of("scope", "ALL"));
+        controller.savePolicy(CMD, policy("ALL", List.of()));
 
-        var response = controller.savePolicy(CMD, Map.of("scope", "到处都看"));
-
-        assertThat(response.getStatusCode().is4xxClientError()).isTrue();
+        assertThatThrownBy(() -> controller.savePolicy(CMD, policy("到处都看", List.of())))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("GROUP");
         assertThat(policyStore.of(CMD).scope()).as("原值保持不动").isEqualTo(DataPolicy.DataScope.ALL);
     }
 
@@ -108,7 +122,8 @@ class AccessControllerTest {
     void privateSwitchDefaultsOffAndRoundTrips() {
         assertThat(policyStore.of(CMD).allowPrivate()).as("没配过就是关").isFalse();
 
-        controller.savePolicy(CMD, Map.of("allowPrivate", true));
+        controller.savePolicy(CMD, new AccessController.PolicyRequest(
+                null, null, null, null, true));
 
         assertThat(policyStore.of(CMD).allowPrivate()).isTrue();
     }
@@ -127,9 +142,9 @@ class AccessControllerTest {
     @Test
     @DisplayName("★ 名单整份覆盖，白黑两色分开存")
     void aclRoundTrips() {
-        controller.saveCommandAcl(CMD, Map.of(
-                "white", List.of(Map.of("type", "uid", "value", 1001)),
-                "black", List.of(Map.of("type", "gid", "value", 2001))));
+        controller.saveCommandAcl(CMD, acl(
+                List.of(item("uid", 1001)),
+                List.of(item("gid", 2001))));
 
         List<AclEntry> entries = aclStore.ofCommand(CMD);
         assertThat(entries).hasSize(2);
@@ -140,8 +155,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("再存一次是替换，不是追加")
     void aclIsReplaced() {
-        controller.saveCommandAcl(CMD, Map.of("white", List.of(Map.of("type", "uid", "value", 1))));
-        controller.saveCommandAcl(CMD, Map.of("white", List.of(Map.of("type", "uid", "value", 2))));
+        controller.saveCommandAcl(CMD, acl(List.of(item("uid", 1)), List.of()));
+        controller.saveCommandAcl(CMD, acl(List.of(item("uid", 2)), List.of()));
 
         assertThat(aclStore.ofCommand(CMD)).extracting(AclEntry::value).containsExactly(2L);
     }
@@ -149,12 +164,9 @@ class AccessControllerTest {
     @Test
     @DisplayName("★ 认不出来的条目类型与坏值被丢掉，不会写进库")
     void badEntriesAreDropped() {
-        controller.saveCommandAcl(CMD, Map.of(
-                "white", List.of(
-                        Map.of("type", "uid", "value", 1001),
-                        Map.of("type", "什么都不是", "value", 1002),
-                        Map.of("type", "uid", "value", "abc"),
-                        Map.of("type", "uid", "value", 0))));
+        controller.saveCommandAcl(CMD, acl(
+                List.of(item("uid", 1001), item("什么都不是", 1002), item("uid", 0)),
+                List.of()));
 
         assertThat(aclStore.ofCommand(CMD)).extracting(AclEntry::value).containsExactly(1001L);
     }
@@ -162,9 +174,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("重复条目只留一条")
     void duplicatesCollapse() {
-        controller.saveCommandAcl(CMD, Map.of("white", List.of(
-                Map.of("type", "uid", "value", 1001),
-                Map.of("type", "uid", "value", 1001))));
+        controller.saveCommandAcl(CMD, acl(
+                List.of(item("uid", 1001), item("uid", 1001)), List.of()));
 
         assertThat(aclStore.ofCommand(CMD)).hasSize(1);
     }
@@ -172,10 +183,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("★ 板块名单与指令名单分开存：同 id 不串")
     void boardAclIsSeparateFromCommandAcl() {
-        controller.saveCommandAcl(7L, Map.of(
-                "white", List.of(Map.of("type", "uid", "value", 1001))));
-        controller.saveBoardAcl(7L, Map.of(
-                "black", List.of(Map.of("type", "gid", "value", 2001))));
+        controller.saveCommandAcl(7L, acl(List.of(item("uid", 1001)), List.of()));
+        controller.saveBoardAcl(7L, acl(List.of(), List.of(item("gid", 2001))));
 
         assertThat(aclStore.ofCommand(7L)).extracting(AclEntry::value).containsExactly(1001L);
         assertThat(aclStore.ofBoard(7L)).extracting(AclEntry::value).containsExactly(2001L);
@@ -184,8 +193,7 @@ class AccessControllerTest {
     @Test
     @DisplayName("板块删除时名单一起清掉")
     void deleteBoardClearsAcl() {
-        controller.saveBoardAcl(7L, Map.of(
-                "white", List.of(Map.of("type", "uid", "value", 1001))));
+        controller.saveBoardAcl(7L, acl(List.of(item("uid", 1001)), List.of()));
 
         aclStore.deleteBoard(7L);
 
@@ -195,8 +203,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("全局名单与某条命令的名单互不干扰")
     void globalAndCommandListsAreSeparate() {
-        controller.saveCommandAcl(CMD, Map.of("white", List.of(Map.of("type", "uid", "value", 1))));
-        controller.saveGlobalAcl(Map.of("black", List.of(Map.of("type", "uid", "value", 2))));
+        controller.saveCommandAcl(CMD, acl(List.of(item("uid", 1)), List.of()));
+        controller.saveGlobalAcl(acl(List.of(), List.of(item("uid", 2))));
 
         assertThat(aclStore.ofCommand(CMD)).extracting(AclEntry::value).containsExactly(1L);
         assertThat(aclStore.global()).extracting(AclEntry::value).containsExactly(2L);
@@ -205,8 +213,8 @@ class AccessControllerTest {
     @Test
     @DisplayName("清空名单就是传空表")
     void emptyListClears() {
-        controller.saveCommandAcl(CMD, Map.of("white", List.of(Map.of("type", "uid", "value", 1))));
-        controller.saveCommandAcl(CMD, Map.of());
+        controller.saveCommandAcl(CMD, acl(List.of(item("uid", 1)), List.of()));
+        controller.saveCommandAcl(CMD, acl(null, null));
 
         assertThat(aclStore.ofCommand(CMD)).isEmpty();
     }

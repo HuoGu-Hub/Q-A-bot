@@ -1,5 +1,13 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.persistence.AdminAuditRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +33,8 @@ import java.util.Map;
  * <p>只有「管理」角色能进 —— 这条在 {@link AdminAuthFilter#requiredRole} 里统一判，
  * 本类不重复写权限判断，避免两处规则漂移。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/users")
 public class AdminUsersController {
@@ -64,18 +74,18 @@ public class AdminUsersController {
      * <p>待创建数据只存密码哈希，不存明文；验证码通过后才落库。
      */
     @PostMapping("/request")
-    public ResponseEntity<Map<String, Object>> requestCreate(@RequestBody Map<String, Object> body,
+    public ResponseEntity<Map<String, Object>> requestCreate(@RequestBody CreateUserRequest body,
                                                              HttpServletRequest request) {
         AdminPrincipal me = AdminAuthFilter.current(request);
         if (me == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+            throw ApiException.unauthorized("未登录");
         }
         try {
-            String username = str(body, "username");
-            String displayName = str(body, "displayName");
-            String password = str(body, "password");
-            String qq = str(body, "qq");
-            AdminRole role = AdminRole.parseStrict(str(body, "role"));
+            String username = body.username();
+            String displayName = body.displayName();
+            String password = body.password();
+            String qq = body.qq();
+            AdminRole role = AdminRole.parseStrict(body.role());
             if (users.usernameExists(username)) {
                 throw new IllegalArgumentException("账号名已存在：" + username);
             }
@@ -98,22 +108,22 @@ public class AdminUsersController {
             return ResponseEntity.ok(Map.of("ok", true,
                     "challengeId", issued.challengeId(), "adminQq", issued.qqMasked()));
         } catch (IllegalArgumentException | AdminQqCodeService.CodeException e) {
-            return bad(new IllegalArgumentException(e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         } catch (Exception e) {
-            return bad(new IllegalArgumentException("创建请求失败：" + e.getMessage()));
+            throw ApiException.badRequest("创建请求失败：" + e.getMessage());
         }
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<Map<String, Object>> confirmCreate(@RequestBody Map<String, Object> body,
+    public ResponseEntity<Map<String, Object>> confirmCreate(@RequestBody ConfirmUserRequest body,
                                                              HttpServletRequest request) {
         AdminPrincipal me = AdminAuthFilter.current(request);
         if (me == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+            throw ApiException.unauthorized("未登录");
         }
         try {
             AdminQqCodeService.Consumed consumed = qqCodes.consume(
-                    str(body, "challengeId"), str(body, "code"),
+                    body.challengeId(), body.code(),
                     AdminQqCodeService.PURPOSE_CREATE_USER);
             if (consumed.userId() != me.id()) {
                 throw new IllegalArgumentException("验证码不属于当前管理员");
@@ -132,41 +142,41 @@ public class AdminUsersController {
                     "/admin/api/users/confirm", "target=" + u.username(), "");
             return ResponseEntity.ok(dto(u));
         } catch (IllegalArgumentException | AdminQqCodeService.CodeException e) {
-            return bad(new IllegalArgumentException(e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         } catch (Exception e) {
-            return bad(new IllegalArgumentException("创建失败：" + e.getMessage()));
+            throw ApiException.badRequest("创建失败：" + e.getMessage());
         }
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> update(@PathVariable long id,
-                                                      @RequestBody Map<String, Object> body) {
+                                                      @RequestBody UpdateUserRequest body) {
         try {
-            AdminRole role = AdminRole.parseStrict(str(body, "role"));
-            Boolean enabled = body.get("enabled") instanceof Boolean b ? b : null;
+            AdminRole role = AdminRole.parseStrict(body.role());
+            Boolean enabled = body.enabled();
             AdminUser current = users.find(id).orElseThrow(
                     () -> new IllegalArgumentException("账号不存在：" + id));
-            AdminUser u = users.update(id, str(body, "displayName"),
+            AdminUser u = users.update(id, body.displayName(),
                     role == null ? current.role() : role,
                     enabled == null || enabled);
             auth.invalidateUser(id);
             devices.revokeAll(id);
             return ResponseEntity.ok(dto(u));
         } catch (IllegalArgumentException e) {
-            return bad(e);
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @PostMapping("/{id}/password")
     public ResponseEntity<Map<String, Object>> resetPassword(@PathVariable long id,
-                                                             @RequestBody Map<String, Object> body) {
+                                                             @RequestBody ResetPasswordRequest body) {
         try {
-            users.changePassword(id, str(body, "password"));
+            users.changePassword(id, body.password());
             auth.invalidateUser(id);
             devices.revokeAll(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return bad(e);
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
@@ -181,18 +191,8 @@ public class AdminUsersController {
             devices.revokeAll(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return bad(e);
+            throw ApiException.badRequest(e.getMessage());
         }
-    }
-
-    private static ResponseEntity<Map<String, Object>> bad(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", e.getMessage() == null ? "参数不合法" : e.getMessage()));
-    }
-
-    private static String str(Map<String, Object> body, String key) {
-        Object v = body == null ? null : body.get(key);
-        return v == null ? null : String.valueOf(v);
     }
 
     private static Map<String, Object> dto(AdminUser u) {
@@ -208,5 +208,26 @@ public class AdminUsersController {
         m.put("createdAt", u.createdAt());
         m.put("lastLoginAt", u.lastLoginAt());
         return m;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record CreateUserRequest(String username, String displayName, String password,
+                                    String qq, String role) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record ConfirmUserRequest(String challengeId, String code) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record UpdateUserRequest(String displayName, String role, Boolean enabled) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record ResetPasswordRequest(String password) {
     }
 }

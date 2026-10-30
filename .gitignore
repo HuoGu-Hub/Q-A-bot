@@ -31,6 +31,8 @@ napcat-source-ref/
 node_modules/
 web/dist/
 server/web-dist/
+# OpenAPI 生成物：需要时跑 pnpm gen:api，不提交
+web/src/shared/api/schema.d.ts
 .toolchain/pnpm-store/
 
 # ============================================================

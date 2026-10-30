@@ -1,5 +1,11 @@
 package com.example.qqbot.kb.wiki;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.persistence.KbWikiSourceRepository;
@@ -7,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,6 +37,8 @@ import java.util.Map;
  *   <li>GET  /import/status —— 轮询进度与报告。</li>
  * </ul>
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/kb/wiki")
 public class KbWikiController {
@@ -143,20 +152,17 @@ public class KbWikiController {
     }
 
     /** 保存范围：整表替换（页面上勾选的结果就是完整范围） */
-    @PostMapping("/sources")
-    public Map<String, Object> saveSources(@RequestBody Map<String, Object> body) {
-        Object raw = body.get("items");
+    @PutMapping("/sources")
+    public Map<String, Object> saveSources(@RequestBody SourcesRequest body) {
         List<KbWikiSourceRepository.Source> items = new ArrayList<>();
-        if (raw instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof Map<?, ?> m) {
-                    String name = String.valueOf(m.get("name") == null ? "" : m.get("name")).strip();
-                    String kind = "prefix".equals(String.valueOf(m.get("kind"))) ? "prefix" : "category";
-                    boolean enabled = !Boolean.FALSE.equals(m.get("enabled"));
-                    if (!name.isEmpty()) {
-                        items.add(new KbWikiSourceRepository.Source(name, kind, enabled, ""));
-                    }
+        if (body.items() != null) {
+            for (SourceItem item : body.items()) {
+                if (item == null || item.name() == null || item.name().isBlank()) {
+                    continue;
                 }
+                String kind = "prefix".equals(item.kind()) ? "prefix" : "category";
+                boolean enabled = item.enabled() == null || item.enabled();
+                items.add(new KbWikiSourceRepository.Source(item.name().strip(), kind, enabled, ""));
             }
         }
         store.replace(items);
@@ -243,9 +249,9 @@ public class KbWikiController {
     }
 
     /** 触发一次导入 */
-    @PostMapping("/import")
-    public Map<String, Object> start(@RequestBody(required = false) Map<String, Object> body) {
-        String mode = body == null ? "incremental" : String.valueOf(body.getOrDefault("mode", "incremental"));
+    @PostMapping("/imports")
+    public Map<String, Object> start(@RequestBody(required = false) StartImportRequest body) {
+        String mode = body == null || body.mode() == null ? "incremental" : body.mode();
         WikiImportService.Mode m = switch (mode) {
             case "dry-run" -> WikiImportService.Mode.DRY_RUN;
             case "force" -> WikiImportService.Mode.FORCE;
@@ -260,7 +266,7 @@ public class KbWikiController {
     }
 
     /** 轮询进度与报告 */
-    @GetMapping("/import/status")
+    @GetMapping("/imports/status")
     public Map<String, Object> status() {
         return statusMap(service.status());
     }
@@ -316,5 +322,18 @@ public class KbWikiController {
         m.put("kind", kind);
         m.put("enabled", enabled);
         return m;
+    }
+
+    public record SourceItem(String name, String kind, Boolean enabled) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record SourcesRequest(List<SourceItem> items) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record StartImportRequest(String mode) {
     }
 }

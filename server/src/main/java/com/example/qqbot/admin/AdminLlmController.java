@@ -1,5 +1,9 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import com.example.qqbot.persistence.LlmMetricRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +25,8 @@ import java.util.Map;
  * 流量的分母是 HTTP 请求，调用的分母是模型往返 —— 混在一份汇总里，
  * "错误率"到底是 5xx 还是模型超时，读的人要猜。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/llm")
 public class AdminLlmController {

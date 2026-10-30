@@ -118,7 +118,7 @@ function togglePause() {
 async function clearBuffer() {
   if (!window.confirm('清空内存缓冲？文件里的日志不受影响。')) return
   try {
-    await adminApi.post('/logs/clear')
+    await adminApi.del('/logs')
     entries.value = []
     await loadStatus()
   } catch (e) { error.value = describeError(e) }

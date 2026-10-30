@@ -531,7 +531,7 @@ async function batchDelete() {
   if (!window.confirm('彻底删除选中的 ' + count + ' 条笔记？知识库块会一起删除，不能恢复。')) return
   try {
     const r = await adminApi.post<{ deleted: number; missing: number }>(
-      '/distill/notes/batch-delete', { ids: picked.value })
+      '/distill/notes/actions/batch-delete', { ids: picked.value })
     if (selected.value && picked.value.includes(selected.value.note.id)) {
       selected.value = null
     }

@@ -144,7 +144,7 @@ async function addTrigger() {
 
 async function toggleTrigger(rule: TriggerRule, enabled: boolean) {
   try {
-    await adminApi.post('/voice/triggers/' + rule.id, { enabled })
+    await adminApi.patch('/voice/triggers/' + rule.id, { enabled })
     rule.enabled = enabled
   } catch (e) {
     toast(describeError(e))
@@ -154,7 +154,7 @@ async function toggleTrigger(rule: TriggerRule, enabled: boolean) {
 async function removeTrigger(rule: TriggerRule) {
   if (!window.confirm('删除触发词「' + rule.keyword + '」？')) return
   try {
-    await adminApi.post('/voice/triggers/' + rule.id + '/delete')
+    await adminApi.del('/voice/triggers/' + rule.id)
     await loadTriggers()
     toast('已删除')
   } catch (e) {
@@ -181,7 +181,7 @@ async function previewTts() {
   }
   ttsBusy.value = true
   try {
-    const res = await fetch('/admin/api/voice/tts', {
+    const res = await fetch('/admin/api/voice/tts/previews', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
@@ -189,7 +189,7 @@ async function previewTts() {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      toast(body?.error ?? 'HTTP ' + res.status)
+      toast(body?.detail ?? body?.message ?? body?.error ?? 'HTTP ' + res.status)
       return
     }
     const blob = await res.blob()
@@ -216,7 +216,7 @@ async function sendTts() {
   }
   ttsBusy.value = true
   try {
-    await adminApi.post('/voice/tts/send', {
+    await adminApi.post('/voice/tts/actions/send', {
       text: ttsText.value,
       voice: ttsVoice.value,
       groupId: gid,
@@ -315,7 +315,7 @@ async function uploadFiles(files: File[]) {
 
 async function toggle(item: VoiceItem, enabled: boolean) {
   try {
-    await adminApi.post('/voice/' + item.id, { enabled })
+    await adminApi.patch('/voice/' + item.id, { enabled })
     item.enabled = enabled
   } catch (e) {
     toast(describeError(e))
@@ -325,7 +325,7 @@ async function toggle(item: VoiceItem, enabled: boolean) {
 async function remove(item: VoiceItem) {
   if (!window.confirm('删除「' + item.title + '」？文件也会一起删掉。')) return
   try {
-    await adminApi.post('/voice/' + item.id + '/delete')
+    await adminApi.del('/voice/' + item.id)
     await load()
     toast('已删除')
   } catch (e) {
@@ -344,7 +344,7 @@ async function saveEdit() {
   if (!editing.value) return
   savingEdit.value = true
   try {
-    await adminApi.post('/voice/' + editing.value.id, {
+    await adminApi.patch('/voice/' + editing.value.id, {
       title: editTitle.value,
       aliases: editAliases.value,
       tags: editTags.value,
@@ -372,7 +372,7 @@ async function confirmSend() {
   }
   sendingBusy.value = true
   try {
-    await adminApi.post('/voice/' + sending.value.id + '/send', { groupId: gid })
+    await adminApi.post('/voice/' + sending.value.id + '/actions/send', { groupId: gid })
     localStorage.setItem('voice.lastGroup', String(gid))
     toast('已发到群 ' + gid)
     sending.value = null

@@ -1,5 +1,9 @@
 package com.example.qqbot.publicapi;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.site.SitePolicy;
 import com.example.qqbot.site.Carousel;
 import com.example.qqbot.site.CarouselService;
@@ -34,6 +38,7 @@ import java.util.Map;
  * 认证不需要（首页本来就要给所有人看），Nginx 那层另有速率限制；
  * 图片请求单独给了长缓存 + 独立 location，不吃 API 那份配额。
  */
+@Tag(name = "Public")
 @RestController
 @RequestMapping("/api/public/carousel")
 public class PublicCarouselController {
@@ -97,7 +102,7 @@ public class PublicCarouselController {
         try {
             CarouselService.ImageData data = service.read(id, parseWidth(w));
             if (data == null) {
-                return ResponseEntity.notFound().build();
+                throw ApiException.notFound("资源不存在");
             }
             return ResponseEntity.ok()
                     .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
@@ -105,7 +110,7 @@ public class PublicCarouselController {
                     .body(data.bytes());
         } catch (IOException e) {
             log.warn("[SITE] 读取轮播图失败：id={} {}", id, e.getMessage());
-            return ResponseEntity.internalServerError().build();
+            throw ApiException.internal("服务端处理失败");
         }
     }
 

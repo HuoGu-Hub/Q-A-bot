@@ -78,7 +78,7 @@ async function remove(record: AdminBoardRecord) {
   busyId.value = record.id
   error.value = ''
   try {
-    await adminApi.post('/board-records/delete', { id: record.id })
+    await adminApi.del('/board-records/' + record.id)
     await load()
   } catch (e) {
     error.value = describeError(e)
@@ -91,7 +91,7 @@ async function restore(record: AdminBoardRecord) {
   busyId.value = record.id
   error.value = ''
   try {
-    await adminApi.post('/board-records/restore', { id: record.id })
+    await adminApi.post('/board-records/' + record.id + '/restore')
     await load()
   } catch (e) {
     error.value = describeError(e)

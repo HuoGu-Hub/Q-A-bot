@@ -1,5 +1,13 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.kb.map.KbMapStore;
 import com.example.qqbot.kb.map.LocationCorpusBuilder;
@@ -40,6 +48,8 @@ import java.util.Map;
  * <p><b>写操作全部走服务层校验</b>：控制器只把"HTTP 的形状"翻译成服务层的类型，
  * 不重复实现"名字不能为空"这类规则（见 {@link MapPlaceService} 的注释）。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/map")
 public class AdminMapController {
@@ -211,7 +221,7 @@ public class AdminMapController {
     @GetMapping("/markers")
     public ResponseEntity<?> markers(@RequestParam("map") String map) {
         if (map == null || map.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "缺少 map 参数"));
+            throw ApiException.badRequest("缺少 map 参数");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
@@ -279,6 +289,7 @@ public class AdminMapController {
     }
 
     /** 启停请求。{@code active} 缺省视为 true */
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record ActiveRequest(String map, Boolean active) {
     }
 
@@ -297,17 +308,17 @@ public class AdminMapController {
     }
 
     /** 保存请求。{@code groups} 为 null = 恢复"未配置" */
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record LayerRequest(String map, List<String> groups) {
     }
 
     @PutMapping("/layers")
     public ResponseEntity<?> saveLayers(@RequestBody LayerRequest body) {
         if (body == null || body.map() == null || body.map().isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", "缺少 map"));
+            throw ApiException.badRequest("缺少 map");
         }
         if (!layers.isAvailable()) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("ok", false, "error", "数据库不可用，配置无法保存"));
+            throw ApiException.badRequest("数据库不可用，配置无法保存");
         }
         layers.save(body.map(), body.groups());
         return ResponseEntity.ok(Map.of("ok", true));
@@ -337,6 +348,7 @@ public class AdminMapController {
     }
 
     /** 新增点位的请求体。字段全部用包装类型：缺省与"显式给了 0"必须能区分 */
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record PlaceRequest(String map, String page, Double x, Double y, String name,
                                List<String> aliases, String category, String note, String icon,
                                String color, Boolean landmark, Integer priority, Boolean visible) {
@@ -355,8 +367,7 @@ public class AdminMapController {
         return handle(() -> {
             MapPlaceService.Place updated = places.update(toPlace(body, id));
             if (updated == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "没有 id=" + id + " 的点位"));
+                throw ApiException.notFound("没有 id=" + id + " 的点位");
             }
             return ResponseEntity.ok(Map.of("ok", true, "place", updated));
         });
@@ -366,8 +377,7 @@ public class AdminMapController {
     public ResponseEntity<?> deletePlace(@PathVariable long id) {
         return handle(() -> {
             if (!places.delete(id)) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "没有 id=" + id + " 的点位"));
+                throw ApiException.notFound("没有 id=" + id + " 的点位");
             }
             return ResponseEntity.ok(Map.of("ok", true));
         });
@@ -400,14 +410,14 @@ public class AdminMapController {
     public ResponseEntity<?> confirmAnchor(@PathVariable long id) {
         return handle(() -> {
             if (!places.confirmAnchor(id)) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "没有 id=" + id + " 的点位，或者它的画布现在找不到"));
+                throw ApiException.notFound("没有 id=" + id + " 的点位，或者它的画布现在找不到");
             }
             return ResponseEntity.ok(Map.of("ok", true));
         });
     }
 
     /** 批量搬移请求。{@code dx/dy} 由前端算：它手里同时有"原来在哪"和"现在拖到哪" */
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record OffsetRequest(Long referenceId, Double dx, Double dy) {
     }
 
@@ -426,8 +436,7 @@ public class AdminMapController {
             MapPlaceService.OffsetReport r = places.applyOffset(body.referenceId(),
                     body.dx() == null ? 0 : body.dx(), body.dy() == null ? 0 : body.dy());
             if (r == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "没有 id=" + body.referenceId() + " 的点位"));
+                throw ApiException.notFound("没有 id=" + body.referenceId() + " 的点位");
             }
             return ResponseEntity.ok(Map.of("ok", true, "moved", r.moved(), "skipped", r.skipped()));
         });
@@ -442,6 +451,8 @@ public class AdminMapController {
         out.put("notes", map == null || map.isBlank() ? notes.all() : new ArrayList<>(notes.byMap(map).values()));
         return out;
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
 
     public record NoteRequest(String map, String page, String markerId, String alias, String note,
                               String category, Boolean landmark, Integer priority, Boolean hidden) {
@@ -467,8 +478,7 @@ public class AdminMapController {
                                         @RequestParam("markerId") String markerId) {
         return handle(() -> {
             if (!notes.delete(map, page, markerId)) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "没有这条备注"));
+                throw ApiException.notFound("没有这条备注");
             }
             return ResponseEntity.ok(Map.of("ok", true));
         });
@@ -480,8 +490,7 @@ public class AdminMapController {
     @PostMapping("/sync")
     public ResponseEntity<?> sync(@RequestParam(name = "dryRun", defaultValue = "false") boolean dryRun) {
         if (!jobs.startSync(dryRun)) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "同步已经在跑了"));
+            throw ApiException.conflict("CONFLICT", "同步已经在跑了");
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
     }
@@ -495,8 +504,7 @@ public class AdminMapController {
     @PostMapping("/warm")
     public ResponseEntity<?> warm() {
         if (!jobs.startWarm()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "预热已经在跑了"));
+            throw ApiException.conflict("CONFLICT", "预热已经在跑了");
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
     }
@@ -512,8 +520,7 @@ public class AdminMapController {
     @PostMapping("/warm-full")
     public ResponseEntity<?> warmFull() {
         if (!jobs.startFullWarm()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "预热已经在跑了"));
+            throw ApiException.conflict("CONFLICT", "预热已经在跑了");
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
     }
@@ -528,11 +535,10 @@ public class AdminMapController {
      *
      * @param tiles 连瓦片缓存一起删。删了要重新预热，所以默认 true 但要由调用方明说
      */
-    @PostMapping("/reset")
+    @DeleteMapping("/cache")
     public ResponseEntity<?> reset(@RequestParam(name = "tiles", defaultValue = "true") boolean tiles) {
         if (!jobs.startReset(tiles)) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "清空任务已经在跑了"));
+            throw ApiException.conflict("CONFLICT", "清空任务已经在跑了");
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true, "tiles", tiles));
     }
@@ -542,8 +548,7 @@ public class AdminMapController {
     public ResponseEntity<?> corpus(@RequestParam(name = "purge", defaultValue = "false") boolean purge,
                                     @RequestParam(name = "dryRun", defaultValue = "false") boolean dryRun) {
         if (!jobs.startCorpus(purge, dryRun)) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "语料任务已经在跑了"));
+            throw ApiException.conflict("CONFLICT", "语料任务已经在跑了");
         }
         return ResponseEntity.ok(Map.of("ok", true, "started", true));
     }
@@ -584,14 +589,12 @@ public class AdminMapController {
         try {
             return body.call();
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("error", e.getMessage()));
+            throw ApiException.serviceUnavailable("SERVICE_UNAVAILABLE", e.getMessage());
         } catch (Exception e) {
             log.warn("[MAP-ADMIN] 操作失败：{}", e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "操作失败：" + e.getMessage()));
+            throw ApiException.internal("操作失败：" + e.getMessage());
         }
     }
 }

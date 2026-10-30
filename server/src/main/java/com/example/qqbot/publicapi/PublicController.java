@@ -1,5 +1,9 @@
 package com.example.qqbot.publicapi;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.site.BotPolicy;
 import com.example.qqbot.site.SitePolicy;
 import com.example.qqbot.kb.Glossary;
@@ -39,6 +43,7 @@ import java.util.TreeMap;
  * 即使某个字段"看起来可以公开"，也要在这里显式拷贝一次 ——
  * 这样以后给管理接口加字段时，不会顺手泄露出去。
  */
+@Tag(name = "Public")
 @RestController
 @RequestMapping("/api/public")
 public class PublicController {
@@ -286,8 +291,7 @@ public class PublicController {
             return denied;
         }
         if (!kbCorpus.isReady() || title == null || title.isBlank()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "词条不存在"));
+            throw ApiException.notFound("词条不存在");
         }
 
         String want = title.trim().toLowerCase(Locale.ROOT);
@@ -298,8 +302,7 @@ public class PublicController {
             }
         }
         if (matched.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "词条不存在"));
+            throw ApiException.notFound("词条不存在");
         }
         matched.sort(Comparator.comparing(e -> e.id().value()));
 
@@ -326,9 +329,7 @@ public class PublicController {
         String ip = clientIp(request);
         if (!limiter.allow(ip)) {
             log.warn("[PUBLIC] 限流触发：ip={}", ip);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .header("Retry-After", "60")
-                    .body(Map.of("error", "请求太频繁，请稍后再试"));
+            throw ApiException.tooManyRequests("请求太频繁，请稍后再试");
         }
         return null;
     }

@@ -74,7 +74,7 @@ async function addCategory() {
   error.value = ''
   ok.value = ''
   try {
-    await adminApi.post('/kb/categories/add', { name, label: newLabel.value.trim() })
+    await adminApi.post('/kb/categories', { name, label: newLabel.value.trim() })
     ok.value = '已新增分类：' + name
     newName.value = ''
     newLabel.value = ''
@@ -89,7 +89,7 @@ async function saveLabel(c: KbCategoryStat) {
   error.value = ''
   ok.value = ''
   try {
-    await adminApi.post('/kb/categories/update', { name: c.name, label: labelDrafts.value[c.name] ?? '' })
+    await adminApi.patch('/kb/categories/' + encodeURIComponent(c.name), { label: labelDrafts.value[c.name] ?? '' })
     ok.value = '已保存显示名：' + c.name
     await load()
   } catch (e) {
@@ -102,7 +102,7 @@ async function removeCategory(c: KbCategoryStat) {
   error.value = ''
   ok.value = ''
   try {
-    await adminApi.post('/kb/categories/delete', { name: c.name })
+    await adminApi.del('/kb/categories/' + encodeURIComponent(c.name))
     ok.value = '已删除分类：' + c.name
     await load()
   } catch (e) {

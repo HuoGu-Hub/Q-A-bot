@@ -140,6 +140,11 @@ class MapResourceImporterTest {
         when(repo.meta(anyString())).thenReturn(
                 new MapResourceRepository.MetaRow("Embervale", "test-1", hash.getValue(), "", 3, 0,
                         "t"));
+        // 图标列是后加的：旧库哈希没变也要重导一次补图标。这里模拟"已经有图标"，
+        // 否则 hasIcons() 会把这次导入判成需要重跑。
+        when(repo.layers("Embervale")).thenReturn(List.of(
+                new MapResourceRepository.LayerRow("chest:iron", "chest", "iron", "铁矿", "铁矿",
+                        "#888888", "iron.png", 3, 0)));
         MapResourceImporter.ImportReport second =
                 new MapResourceImporter(repo, store, new ObjectMapper(), options(tmp)).ensureLoaded();
 

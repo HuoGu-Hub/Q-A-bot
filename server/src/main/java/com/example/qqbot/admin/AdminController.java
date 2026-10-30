@@ -1,5 +1,13 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.persistence.AdminAuditRepository;
 import com.example.qqbot.qa.QaAnalytics;
 import com.example.qqbot.qa.QaStore;
@@ -29,6 +37,8 @@ import java.util.Map;
  *
  * <p>认证由 {@link AdminAuthFilter} 统一拦在前面，本类只关心数据。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api")
 public class AdminController {
@@ -72,14 +82,14 @@ public class AdminController {
      * 全体管理员一起被锁在门外。
      */
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body,
+    public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest body,
                                                      HttpServletRequest request,
                                                      HttpServletResponse response) {
-        String username = body == null ? null : body.get("username");
+        String username = body == null ? null : body.username();
         if (username == null && body != null) {
-            username = body.get("identifier");
+            username = body.identifier();
         }
-        String password = body == null ? null : body.get("password");
+        String password = body == null ? null : body.password();
         String source = request == null ? null : AdminClientIp.of(request);
         String ipHash = AdminAuthFilter.hashIp(source);
         AdminAuth.PasswordResult result = auth.authenticate(username, password, source);
@@ -88,20 +98,15 @@ public class AdminController {
             long wait = Math.max(1, result.retryAfterSeconds());
             audit.record(null, username, "login-locked", "POST", "/admin/api/login",
                     "retryAfterSeconds=" + wait, ipHash);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .header("Retry-After", String.valueOf(wait))
-                    .body(Map.of(
-                            "error", "尝试次数过多，请 " + Math.max(1, wait / 60) + " 分钟后再试（剩 " + wait + " 秒）",
-                            "retryAfterSeconds", wait));
+            throw ApiException.tooManyRequests(
+                    "尝试次数过多，请 " + Math.max(1, wait / 60) + " 分钟后再试（剩 " + wait + " 秒）", wait);
         }
         if (result.outcome() == AdminAuth.LoginOutcome.DISABLED) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("error", "后台未启用或还没有账号"));
+            throw ApiException.serviceUnavailable("SERVICE_UNAVAILABLE", "后台未启用或还没有账号");
         }
         if (result.outcome() != AdminAuth.LoginOutcome.OK || result.user() == null) {
             audit.record(null, username, "login-failed", "POST", "/admin/api/login", null, ipHash);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "账号或密码不对"));
+            throw ApiException.unauthorized("账号或密码不对");
         }
 
         AdminUser user = result.user();
@@ -126,8 +131,7 @@ public class AdminController {
             } catch (AdminQqCodeService.CodeException e) {
                 audit.record(user.id(), user.username(), "qq-code-send-failed",
                         "POST", "/admin/api/login", e.getMessage(), ipHash);
-                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(Map.of("error", e.getMessage()));
+                throw ApiException.serviceUnavailable("SERVICE_UNAVAILABLE", e.getMessage());
             }
         }
 
@@ -137,12 +141,12 @@ public class AdminController {
 
     /** 登录第二步：QQ 验证码。成功后才发正式会话 */
     @PostMapping("/login/qq-code")
-    public ResponseEntity<Map<String, Object>> loginWithQqCode(@RequestBody Map<String, Object> body,
+    public ResponseEntity<Map<String, Object>> loginWithQqCode(@RequestBody QqCodeRequest body,
                                                                HttpServletRequest request,
                                                                HttpServletResponse response) {
-        String challengeId = body == null ? null : String.valueOf(body.get("challengeId"));
-        String code = body == null ? null : String.valueOf(body.get("code"));
-        boolean trust = body != null && Boolean.parseBoolean(String.valueOf(body.get("trustDevice")));
+        String challengeId = body == null ? null : body.challengeId();
+        String code = body == null ? null : body.code();
+        boolean trust = body != null && Boolean.TRUE.equals(body.trustDevice());
         String source = request == null ? null : AdminClientIp.of(request);
         String ipHash = AdminAuthFilter.hashIp(source);
         try {
@@ -160,8 +164,7 @@ public class AdminController {
         } catch (AdminQqCodeService.CodeException e) {
             audit.record(null, null, "login-qq-failed", "POST",
                     "/admin/api/login/qq-code", e.getMessage(), ipHash);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
+            throw ApiException.unauthorized(e.getMessage());
         }
     }
 
@@ -248,8 +251,7 @@ public class AdminController {
     public ResponseEntity<Map<String, Object>> session(HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "未登录或会话已过期"));
+            throw ApiException.unauthorized("未登录或会话已过期");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
@@ -264,23 +266,23 @@ public class AdminController {
      * <p>对任何已登录账号开放，但必须验证原密码 —— 否则会话被劫持就等于改密。
      */
     @PostMapping("/password")
-    public ResponseEntity<Map<String, Object>> changeMyPassword(@RequestBody Map<String, String> body,
+    public ResponseEntity<Map<String, Object>> changeMyPassword(@RequestBody PasswordRequest body,
                                                                HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+            throw ApiException.unauthorized("未登录");
         }
-        String oldPassword = body == null ? null : body.get("oldPassword");
-        String newPassword = body == null ? null : body.get("newPassword");
+        String oldPassword = body == null ? null : body.oldPassword();
+        String newPassword = body == null ? null : body.newPassword();
         if (users.authenticate(p.username(), oldPassword).isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "原密码不对"));
+            throw ApiException.badRequest("原密码不对");
         }
         try {
             users.changePassword(p.id(), newPassword);
             auth.invalidateUser(p.id());
             devices.revokeAll(p.id());
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         }
         audit.record(p.id(), p.username(), "password-self", "POST", "/admin/api/password", null, "");
         return ResponseEntity.ok(Map.of("ok", true));
@@ -288,21 +290,21 @@ public class AdminController {
 
     /** 绑定 QQ：先发码到目标 QQ，验证通过后才标记 verified */
     @PostMapping("/me/qq/send-code")
-    public ResponseEntity<Map<String, Object>> sendQqBindCode(@RequestBody Map<String, String> body,
+    public ResponseEntity<Map<String, Object>> sendQqBindCode(@RequestBody(required = false) BindCodeRequest body,
                                                               HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+            throw ApiException.unauthorized("未登录");
         }
         if (p.qqVerified()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "这个账号已经绑定 QQ"));
+            throw ApiException.badRequest("这个账号已经绑定 QQ");
         }
-        String qq = body == null ? null : body.get("qq");
+        String qq = body == null ? null : body.qq();
         if (qq == null || qq.isBlank()) {
             qq = p.qq();
         }
         if (p.qq() != null && !p.qq().isBlank() && !p.qq().equals(qq)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "只能绑定管理员预置的 QQ"));
+            throw ApiException.badRequest("只能绑定管理员预置的 QQ");
         }
         try {
             users.bindQq(p.id(), qq);
@@ -313,24 +315,24 @@ public class AdminController {
             return ResponseEntity.ok(Map.of("ok", true,
                     "challengeId", issued.challengeId(), "qq", issued.qqMasked()));
         } catch (IllegalArgumentException | AdminQqCodeService.CodeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @PostMapping("/me/qq/verify")
-    public ResponseEntity<Map<String, Object>> verifyQqBind(@RequestBody Map<String, Object> body,
+    public ResponseEntity<Map<String, Object>> verifyQqBind(@RequestBody QqCodeRequest body,
                                                             HttpServletRequest request) {
         AdminPrincipal p = AdminAuthFilter.current(request);
         if (p == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+            throw ApiException.unauthorized("未登录");
         }
-        String challengeId = body == null ? null : String.valueOf(body.get("challengeId"));
-        String code = body == null ? null : String.valueOf(body.get("code"));
+        String challengeId = body == null ? null : body.challengeId();
+        String code = body == null ? null : body.code();
         try {
             AdminQqCodeService.Consumed consumed = qqCodes.consume(
                     challengeId, code, AdminQqCodeService.PURPOSE_BIND);
             if (consumed.userId() != p.id()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "验证码不属于当前账号"));
+                throw ApiException.badRequest("验证码不属于当前账号");
             }
             users.markQqVerified(p.id());
             auth.refreshUser(p.id());
@@ -339,7 +341,7 @@ public class AdminController {
                     "/admin/api/me/qq/verify", "qq=" + AdminQqCodeService.mask(consumed.qq()), "");
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (AdminQqCodeService.CodeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
@@ -434,19 +436,20 @@ public class AdminController {
      * verdict 取值：§good§ / §bad§ / §no_source§ / §hallucination§ / §follow_up§ / §unknown§
      */
     @PostMapping("/annotate")
-    public ResponseEntity<Map<String, Object>> annotate(@RequestBody Map<String, Object> body) {
-        long id = asLong(body.get("id"));
-        String verdict = asString(body.get("verdict"));
+    public ResponseEntity<Map<String, Object>> annotate(@RequestBody AnnotateRequest body) {
+        long id = body.id() == null ? 0L : body.id();
+        String verdict = body.verdict() == null ? null : body.verdict().trim();
         if (id <= 0 || verdict == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 id 和 verdict"));
+            throw ApiException.badRequest("需要 id 和 verdict");
         }
         if (!VALID_VERDICTS.contains(verdict)) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "verdict 只能是 " + VALID_VERDICTS));
+            throw ApiException.badRequest("verdict 只能是 " + VALID_VERDICTS);
         }
-        boolean ok = store.annotate(id, verdict, asString(body.get("note")), "human");
-        return ok ? ResponseEntity.ok(Map.of("ok", true))
-                : ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这条记录"));
+        boolean ok = store.annotate(id, verdict, body.note(), "human");
+        if (!ok) {
+            throw ApiException.notFound("没有这条记录");
+        }
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 
     private static final java.util.Set<String> VALID_VERDICTS =
@@ -468,4 +471,30 @@ public class AdminController {
         return s == null || s.isBlank() ? null : s.trim();
     }
 
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+
+    public record LoginRequest(String username, String identifier, String password) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record QqCodeRequest(String challengeId, String code, Boolean trustDevice) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record PasswordRequest(String oldPassword, String newPassword) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record BindCodeRequest(String qq) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record AnnotateRequest(Long id, String verdict, String note) {
+    }
 }

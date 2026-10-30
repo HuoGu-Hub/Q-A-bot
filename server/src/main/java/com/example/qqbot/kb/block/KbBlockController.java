@@ -1,12 +1,22 @@
 package com.example.qqbot.kb.block;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import com.example.qqbot.kb.doc.ChunkImportPlan;
 import com.example.qqbot.kb.doc.ChunkMarkup;
+import com.example.qqbot.web.ApiException;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +35,12 @@ import java.util.Map;
  * <p>路径前缀选 {@code /kb/blocks} 而不是并进旧的 {@code /kb/terms}：
  * 旧接口是按行号操作 {@code chunks.jsonl} 的，新接口按 id 操作数据库 ——
  * 语义完全不同，混在一个前缀下最容易让人点错。切过去之后旧的一整块会删掉。
+ *
+ * <p>块 id 可能含斜杠，不能安全地放进路径变量，所以单块操作用查询参数传 id，
+ * 写操作用 HTTP 方法表达意图。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/kb/blocks")
 public class KbBlockController {
@@ -68,94 +83,91 @@ public class KbBlockController {
     public ResponseEntity<Map<String, Object>> item(@RequestParam("id") String id) {
         KbBlockAdminService.BlockView view = service.get(id);
         if (view == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个块：" + id));
+            throw ApiException.notFound("没有这个块：" + id);
         }
         return ResponseEntity.ok(Map.of("ok", true, "block", view));
     }
 
-    /** 改一块的正文（会重算向量） */
-    @PostMapping("/update")
-    public ResponseEntity<Map<String, Object>> update(@RequestBody Map<String, Object> body) {
-        String id = str(body.get("id"));
-        if (id == null) {
-            return bad("需要 id");
-        }
-        try {
-            KbBlockAdminService.BlockView view = service.updateText(id, str(body.get("text")));
-            if (view == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个块：" + id));
-            }
-            return ResponseEntity.ok(Map.of("ok", true, "block", view));
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return bad(e.getMessage());
-        }
-    }
-
     /** 新增一块（id 建议显式给，见服务层说明） */
-    @PostMapping("/add")
-    public ResponseEntity<Map<String, Object>> add(@RequestBody Map<String, Object> body) {
+    @PostMapping("")
+    public ResponseEntity<Map<String, Object>> add(@Valid @RequestBody AddBlockRequest body) {
         try {
             KbBlockAdminService.BlockView view = service.add(
-                    str(body.get("docId")), str(body.get("id")), str(body.get("title")),
-                    str(body.get("text")), str(body.get("url")), tags(body.get("tags")));
+                    trim(body.docId()), trim(body.id()), trim(body.title()),
+                    body.text(), trim(body.url()), body.tags());
             return ResponseEntity.ok(Map.of("ok", true, "block", view));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
     /**
      * 管理端「新增词条」—— 人只填标题 / 别名 / 正文 / 分类，id 与 docId 由服务层兜住。
      *
-     * <p>与 {@code /add} 的区别：那条路要调用方自己给英文 id（脚本与导入用）；
+     * <p>与 {@code POST /kb/blocks} 的区别：那条路要调用方自己给英文 id（脚本与导入用）；
      * 这一条是给人在后台手写一条用的。
      */
     @PostMapping("/manual")
-    public ResponseEntity<Map<String, Object>> addManual(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> addManual(@Valid @RequestBody AddManualBlockRequest body) {
         try {
             KbBlockAdminService.BlockView view = service.addManual(
-                    str(body.get("title")), str(body.get("text")), str(body.get("alias")),
-                    tags(body.get("tags")));
+                    trim(body.title()), body.text(), trim(body.alias()), body.tags());
             return ResponseEntity.ok(Map.of("ok", true, "block", view));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
+        }
+    }
+
+    /** 改一块的正文（会重算向量） */
+    @PatchMapping("")
+    public ResponseEntity<Map<String, Object>> update(@Valid @RequestBody UpdateBlockRequest body) {
+        if (body.id() == null || body.id().isBlank()) {
+            throw ApiException.badRequest("需要 id");
+        }
+        try {
+            KbBlockAdminService.BlockView view = service.updateText(body.id(), body.text());
+            if (view == null) {
+                throw ApiException.notFound("没有这个块：" + body.id());
+            }
+            return ResponseEntity.ok(Map.of("ok", true, "block", view));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
     /** 下架 / 恢复一块（保留数据） */
-    @PostMapping("/retire")
-    public ResponseEntity<Map<String, Object>> retire(@RequestBody Map<String, Object> body) {
-        String id = str(body.get("id"));
-        boolean retired = !Boolean.FALSE.equals(body.get("retired"));
-        if (id == null) {
-            return bad("需要 id");
+    @PatchMapping("/retire")
+    public ResponseEntity<Map<String, Object>> retire(@Valid @RequestBody RetireBlockRequest body) {
+        if (body.id() == null || body.id().isBlank()) {
+            throw ApiException.badRequest("需要 id");
         }
-        return service.setRetired(id, retired)
-                ? ResponseEntity.ok(Map.of("ok", true, "retired", retired))
-                : ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个块：" + id));
+        boolean retired = body.retired() == null || body.retired();
+        if (!service.setRetired(body.id(), retired)) {
+            throw ApiException.notFound("没有这个块：" + body.id());
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "retired", retired));
     }
 
     /** **真删除**一块（不可恢复；旧设计只能打墓碑） */
-    @PostMapping("/delete")
-    public ResponseEntity<Map<String, Object>> delete(@RequestBody Map<String, Object> body) {
-        String id = str(body.get("id"));
-        if (id == null) {
-            return bad("需要 id");
+    @DeleteMapping("")
+    public ResponseEntity<Map<String, Object>> delete(@RequestParam("id") String id) {
+        if (id == null || id.isBlank()) {
+            throw ApiException.badRequest("需要 id");
         }
-        return service.delete(id)
-                ? ResponseEntity.ok(Map.of("ok", true))
-                : ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这个块：" + id));
+        if (!service.delete(id)) {
+            throw ApiException.notFound("没有这个块：" + id);
+        }
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 
     /** 整份文档下架 / 恢复 */
-    @PostMapping("/retire-doc")
-    public ResponseEntity<Map<String, Object>> retireDoc(@RequestBody Map<String, Object> body) {
-        String doc = str(body.get("doc"));
-        boolean retired = !Boolean.FALSE.equals(body.get("retired"));
-        if (doc == null) {
-            return bad("需要 doc");
+    @PatchMapping("/doc")
+    public ResponseEntity<Map<String, Object>> retireDoc(@Valid @RequestBody RetireDocRequest body) {
+        if (body.doc() == null || body.doc().isBlank()) {
+            throw ApiException.badRequest("需要 doc");
         }
-        int n = service.setDocRetired(doc, retired);
+        boolean retired = body.retired() == null || body.retired();
+        int n = service.setDocRetired(body.doc(), retired);
         return ResponseEntity.ok(Map.of("ok", true, "affected", n,
                 "message", (retired ? "已下架 " : "已恢复 ") + n + " 个文本块"));
     }
@@ -166,10 +178,10 @@ public class KbBlockController {
      * <p>这是用户明确要的能力：文件里出现的 id 存在就覆盖、不存在就新增；
      * 没出现的块一个都不动。
      */
-    @PostMapping("/preview")
-    public ResponseEntity<Map<String, Object>> preview(@RequestBody Map<String, Object> body) {
+    @PostMapping("/imports/preview")
+    public ResponseEntity<Map<String, Object>> preview(@Valid @RequestBody PreviewImportRequest body) {
         try {
-            ChunkImportPlan<ChunkMarkup.Block> plan = service.preview(str(body.get("text")));
+            ChunkImportPlan<ChunkMarkup.Block> plan = service.preview(body.text());
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("ok", true);
             out.put("added", plan.added().size());
@@ -181,7 +193,7 @@ public class KbBlockController {
             out.put("warnings", plan.warnings());
             return ResponseEntity.ok(out);
         } catch (IllegalArgumentException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
@@ -198,8 +210,8 @@ public class KbBlockController {
      */
     @PostMapping("/title-vectors/backfill")
     public ResponseEntity<Map<String, Object>> backfillTitleVectors(
-            @RequestBody(required = false) Map<String, Object> body) {
-        boolean dryRun = body != null && Boolean.TRUE.equals(body.get("dryRun"));
+            @RequestBody(required = false) BackfillRequest body) {
+        boolean dryRun = body != null && Boolean.TRUE.equals(body.dryRun());
         try {
             KbBlockAdminService.TitleBackfill r = service.backfillTitleVectors(dryRun);
             Map<String, Object> out = new LinkedHashMap<>();
@@ -215,43 +227,65 @@ public class KbBlockController {
                     : "已补 " + r.embedded() + " 条标题向量，索引已重载");
             return ResponseEntity.ok(out);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
     /** 清空全部块 —— 首次导入中文语料前用。**不可逆** */
-    @PostMapping("/clear")
+    @DeleteMapping("/all")
     public ResponseEntity<Map<String, Object>> clear() {
         try {
             service.clearAll();
             return ResponseEntity.ok(Map.of("ok", true, "message", "已清空全部块与向量"));
         } catch (Exception e) {
             log.warn("[KB-BLOCK] 清空失败：{}", e.getMessage());
-            return bad(e.getMessage());
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    // ==================== 内部 ====================
+    // ==================== 入参 ====================
 
-    private static ResponseEntity<Map<String, Object>> bad(String msg) {
-        return ResponseEntity.badRequest().body(Map.of("error", msg == null ? "请求有误" : msg));
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record AddBlockRequest(String docId, String id, String title, String text,
+                                  String url, List<String> tags) {
     }
 
-    private static String str(Object o) {
-        if (o == null) {
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record AddManualBlockRequest(String title, String text, String alias, List<String> tags) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record UpdateBlockRequest(@NotBlank String id, String text) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record RetireBlockRequest(@NotBlank String id, Boolean retired) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record RetireDocRequest(@NotBlank String doc, Boolean retired) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record PreviewImportRequest(String text) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record BackfillRequest(Boolean dryRun) {
+    }
+
+    private static String trim(String value) {
+        if (value == null) {
             return null;
         }
-        String s = String.valueOf(o).trim();
+        String s = value.trim();
         return s.isEmpty() ? null : s;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> tags(Object o) {
-        if (o instanceof List<?> list) {
-            return list.stream().filter(x -> x != null && !String.valueOf(x).isBlank())
-                    .map(x -> String.valueOf(x).trim()).toList();
-        }
-        String s = str(o);
-        return s == null ? List.of() : ChunkMarkup.splitTags(s);
     }
 }

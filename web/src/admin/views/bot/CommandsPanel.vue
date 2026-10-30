@@ -311,7 +311,7 @@ function patch(p: Partial<BotCommand>) {
 async function updatePreview() {
   if (!editing.value) return
   try {
-    const r = await adminApi.post<{ rendered: string }>('/commands/preview', {
+    const r = await adminApi.post<{ rendered: string }>('/commands/actions/preview', {
       template: editing.value.reply ?? '',
       args: sampleArgs.value,
       params: editing.value.params ?? [],
@@ -362,14 +362,14 @@ async function save() {
 async function remove(c: BotCommand) {
   if (!window.confirm('确定删除 /' + c.trigger + ' ？')) return
   try {
-    await adminApi.post('/commands/delete', { trigger: c.trigger })
+    await adminApi.del('/commands/' + c.id)
     await load()
   } catch (e) { error.value = describeError(e) }
 }
 
 async function toggle(c: BotCommand) {
   try {
-    await adminApi.post('/commands/toggle', { trigger: c.trigger, enabled: !c.enabled })
+    await adminApi.patch('/commands/' + c.id, { enabled: !c.enabled })
     await load()
   } catch (e) { error.value = describeError(e) }
 }
@@ -453,14 +453,14 @@ async function saveBoard(draft: BoardDraft, acl: AclBody) {
 async function removeBoard(b: AdminBoard) {
   if (!window.confirm('确定删除命令 /' + b.path + ' ？板块记录不会被删除。')) return
   try {
-    await adminApi.post('/boards/delete', { path: b.path })
+    await adminApi.del('/boards/' + b.id)
     await load()
   } catch (e) { error.value = describeError(e) }
 }
 
 async function toggleBoard(b: AdminBoard) {
   try {
-    await adminApi.post('/boards/toggle', { path: b.path, enabled: !b.enabled })
+    await adminApi.patch('/boards/' + b.id, { enabled: !b.enabled })
     await load()
   } catch (e) { error.value = describeError(e) }
 }

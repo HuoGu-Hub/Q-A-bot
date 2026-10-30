@@ -330,7 +330,7 @@ async function loadCatalog() {
 async function refreshStatus() {
   const wasRunning = running.value
   try {
-    status.value = await adminApi.get<ImportStatus>('/kb/wiki/import/status')
+    status.value = await adminApi.get<ImportStatus>('/kb/wiki/imports/status')
   } catch (e) {
     error.value = describeError(e)
     return
@@ -406,7 +406,7 @@ async function save() {
     const items = allRows.value
       .filter(r => r.checked || r.kind === 'prefix')
       .map(r => ({ name: r.name, kind: r.kind, enabled: r.checked }))
-    await adminApi.post('/kb/wiki/sources', { items })
+    await adminApi.put('/kb/wiki/sources', { items })
     savedSnapshot.value = JSON.stringify(checkedKeys.value)
   } catch (e) {
     error.value = describeError(e)
@@ -509,7 +509,7 @@ async function start(mode: string) {
   error.value = ''
   okMsg.value = ''
   try {
-    await adminApi.post('/kb/wiki/import', { mode })
+    await adminApi.post('/kb/wiki/imports', { mode })
     okMsg.value = mode === 'dry-run' ? '空跑已开始（不写库）' : '已开始，可以关掉页面'
     await refreshStatus()
     poll()

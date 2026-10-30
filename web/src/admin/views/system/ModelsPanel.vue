@@ -62,7 +62,7 @@ function onEdit(m: ModelProvider, v: string) {
 async function fetchModels(m: ModelProvider) {
   loadingModels.value = { ...loadingModels.value, [m.name]: true }
   try {
-    const r = await adminApi.get<AvailableModels>('/models/available?provider=' + encodeURIComponent(m.name))
+    const r = await adminApi.get<AvailableModels>('/models/' + encodeURIComponent(m.name) + '/available')
     if (r.ok) {
       available.value = { ...available.value, [m.name]: r.models }
     } else {
@@ -88,8 +88,7 @@ async function test(m: ModelProvider) {
   probing.value = { ...probing.value, [m.name]: true }
   ok.value = ''
   try {
-    const r = await adminApi.post<ProbeResult>('/models/test', {
-      provider: m.name,
+    const r = await adminApi.post<ProbeResult>('/models/' + encodeURIComponent(m.name) + '/actions/test', {
       modelName: current(m),
     })
     probes.value = { ...probes.value, [m.name]: r }
@@ -104,8 +103,7 @@ async function test(m: ModelProvider) {
 async function save(m: ModelProvider) {
   ok.value = ''
   try {
-    await adminApi.post('/models', {
-      provider: m.name,
+    await adminApi.put('/models/' + encodeURIComponent(m.name), {
       modelName: current(m),
       verify: true,
     })

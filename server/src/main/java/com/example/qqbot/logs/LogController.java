@@ -1,10 +1,17 @@
 package com.example.qqbot.logs;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.example.qqbot.web.ApiException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,6 +45,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>认证由 {@link com.example.qqbot.admin.AdminAuthFilter} 统一拦在前面。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/logs")
 public class LogController {
@@ -165,7 +174,7 @@ public class LogController {
         }
     }
 
-    @PostMapping("/clear")
+    @DeleteMapping("")
     public Map<String, Object> clear() {
         buffer.clear();
         return Map.of("ok", true);
@@ -187,7 +196,6 @@ public class LogController {
 
     /** 供过滤器等判断用 */
     public static ResponseEntity<?> notEnabled() {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Map.of("error", "日志界面未启用（app.logs.enabled=false）"));
+        throw ApiException.serviceUnavailable("SERVICE_UNAVAILABLE", "日志界面未启用（app.logs.enabled=false）");
     }
 }

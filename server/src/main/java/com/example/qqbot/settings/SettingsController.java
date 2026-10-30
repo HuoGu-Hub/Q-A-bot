@@ -1,5 +1,13 @@
 package com.example.qqbot.settings;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,6 +23,8 @@ import java.util.Map;
  * <p>只暴露 SettingsWhitelist 里允许改的项 —— 其余**根本不显示**，
  * 接口也拒绝写入。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/settings")
 public class SettingsController {
@@ -37,13 +47,17 @@ public class SettingsController {
 
     /** 保存（热生效 + 持久化） */
     @PostMapping("")
-    public Map<String, Object> save(@RequestBody Map<String, Object> body) {
-        Object changes = body.get("changes");
-        if (!(changes instanceof Map<?, ?> map)) {
-            return Map.of("ok", false, "error", "需要 changes 字段");
+    public Map<String, Object> save(@RequestBody SaveSettingsRequest body) {
+        if (body.changes() == null) {
+            throw ApiException.badRequest("需要 changes 字段");
         }
         Map<String, Object> normalized = new LinkedHashMap<>();
-        map.forEach((k, v) -> normalized.put(String.valueOf(k), v));
+        body.changes().forEach((k, v) -> normalized.put(String.valueOf(k), v));
         return service.apply(normalized);
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record SaveSettingsRequest(Map<String, Object> changes) {
     }
 }

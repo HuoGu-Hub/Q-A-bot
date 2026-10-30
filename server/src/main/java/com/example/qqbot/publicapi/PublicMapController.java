@@ -1,6 +1,9 @@
 package com.example.qqbot.publicapi;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import com.example.qqbot.kb.MapOptions;
+import com.example.qqbot.web.ApiException;
 import com.example.qqbot.kb.PlaceDirectory;
 import com.example.qqbot.kb.PlacePoint;
 import com.example.qqbot.kb.PlaceAnswer;
@@ -41,6 +44,7 @@ import java.util.Optional;
  * <p><b>为什么单独一个控制器</b>：地图这条线有自己的缓存、图片、坐标语义，
  * 塞进 400 多行的 {@code PublicController} 只会让两边都更难找。
  */
+@Tag(name = "Public")
 @RestController
 @RequestMapping("/api/public/map")
 public class PublicMapController {
@@ -395,14 +399,12 @@ public class PublicMapController {
     }
 
     private ResponseEntity<?> badRequest(String message) {
-        return ResponseEntity.badRequest().body(Map.of("error", message));
+        throw ApiException.badRequest(message);
     }
 
     private ResponseEntity<?> rateLimit(HttpServletRequest request) {
         if (!limiter.allow(clientIp(request))) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .header("Retry-After", "60")
-                    .body(Map.of("error", "请求太频繁，请稍后再试"));
+            throw ApiException.tooManyRequests("请求太频繁，请稍后再试");
         }
         return null;
     }

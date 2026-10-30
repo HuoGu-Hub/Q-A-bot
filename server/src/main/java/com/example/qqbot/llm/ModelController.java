@@ -1,14 +1,23 @@
 package com.example.qqbot.llm;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -31,6 +40,8 @@ import java.util.Map;
  *
  * <p><b>API Key 绝不回显</b>：只返回前 6 后 4 的掩码。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/models")
 public class ModelController {
@@ -82,21 +93,18 @@ public class ModelController {
      * <p><b>不改动任何现有状态</b> —— 建个临时客户端发一个最小请求。
      * 这是"改错就哑"的第一道防线：先测通了再替换。
      */
-    @PostMapping("/test")
-    public ResponseEntity<Map<String, Object>> test(@RequestBody Map<String, Object> body) {
-        String provider = str(body.get("provider"));
-        String modelName = str(body.get("modelName"));
-        String prompt = str(body.get("prompt"));
+    @PostMapping("/{provider}/actions/test")
+    public ResponseEntity<Map<String, Object>> test(@PathVariable String provider,
+                                                    @RequestBody TestModelRequest body) {
+        String modelName = body.modelName();
+        String prompt = body.prompt();
 
-        if (provider == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 provider"));
-        }
         if (modelName == null) {
             // 没传就用当前的
             modelName = router.currentModelName(provider);
         }
         if (modelName == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 modelName"));
+            throw ApiException.badRequest("需要 modelName");
         }
 
         log.info("[LLM] 连通性测试：{} / {}", provider, modelName);
@@ -110,18 +118,17 @@ public class ModelController {
      * <p>建议先调 §/test§ 测通再保存。若直接保存，也建议传 §verify=true§
      * —— 那样会先测再换，测不通就拒绝，避免"改错就哑"。
      */
-    @PostMapping("")
-    public ResponseEntity<Map<String, Object>> save(@RequestBody Map<String, Object> body) {
-        String provider = str(body.get("provider"));
-        String modelName = str(body.get("modelName"));
-        boolean verify = Boolean.TRUE.equals(body.get("verify"));
+    @PutMapping("/{provider}")
+    public ResponseEntity<Map<String, Object>> save(@PathVariable String provider,
+                                                    @RequestBody SaveModelRequest body) {
+        String modelName = body.modelName();
+        boolean verify = Boolean.TRUE.equals(body.verify());
 
-        if (provider == null || modelName == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 provider 和 modelName"));
+        if (modelName == null) {
+            throw ApiException.badRequest("需要 modelName");
         }
         if (!props.getProviders().containsKey(provider)) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "没有这个厂商：" + provider));
+            throw ApiException.notFound("没有这个厂商：" + provider);
         }
 
         String oldName = router.currentModelName(provider);
@@ -130,17 +137,14 @@ public class ModelController {
         if (verify) {
             Map<String, Object> probeResult = router.probe(provider, modelName, null);
             if (!Boolean.TRUE.equals(probeResult.get("ok"))) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "error", "测试未通过，已拒绝保存：" + probeResult.get("error"),
-                        "detail", probeResult));
+                throw ApiException.badRequest("测试未通过，已拒绝保存：" + probeResult.get("error"));
             }
         }
 
         try {
             router.swapModelName(provider, modelName);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+            throw ApiException.internal(e.getMessage());
         }
 
         // 持久化到覆盖层，重启后仍是新值
@@ -163,14 +167,14 @@ public class ModelController {
      *
      * <p>不是所有厂商都提供这个接口，拉不到就返回空列表，前端自动退化成纯手输。
      */
-    @GetMapping("/available")
-    public Map<String, Object> available(@RequestParam String provider) {
+    @GetMapping("/{provider}/available")
+    public Map<String, Object> available(@PathVariable String provider) {
         Provider cfg = props.getProviders().get(provider);
         if (cfg == null) {
-            return Map.of("ok", false, "error", "没有这个厂商", "models", List.of());
+            throw ApiException.badRequest("没有这个厂商");
         }
         if (cfg.getApiKey() == null || cfg.getApiKey().isBlank()) {
-            return Map.of("ok", false, "error", "未配置 api-key", "models", List.of());
+            throw ApiException.badRequest("未配置 api-key");
         }
 
         String url = cfg.getBaseUrl().replaceAll("/+$", "") + "/models";
@@ -237,5 +241,15 @@ public class ModelController {
         }
         String s = String.valueOf(o).trim();
         return s.isEmpty() ? null : s;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record TestModelRequest(String modelName, String prompt) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record SaveModelRequest(String modelName, Boolean verify) {
     }
 }

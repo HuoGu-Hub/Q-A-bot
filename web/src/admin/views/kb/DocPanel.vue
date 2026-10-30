@@ -204,7 +204,7 @@ async function addFiles(found: { file: File; path: string }[]) {
     batch.value.push(row)
     try {
       row.text = await files[i].file.text()
-      row.preview = await adminApi.post<KbImportPreview>('/kb/blocks/preview', { text: row.text })
+      row.preview = await adminApi.post<KbImportPreview>('/kb/blocks/imports/preview', { text: row.text })
       row.status = 'ready'
     } catch (e) {
       row.status = 'error'
@@ -231,7 +231,7 @@ async function importBatch() {
     row.status = 'importing'
     batch.value = batch.value.slice()
     try {
-      row.result = await adminApi.post<KbImportResult>('/kb/blocks/import', { text: row.text })
+      row.result = await adminApi.post<KbImportResult>('/kb/blocks/imports', { text: row.text })
       row.status = 'done'
       ok++
     } catch (e) {
@@ -311,7 +311,7 @@ async function doPreview() {
   okMsg.value = ''
   importResult.value = null
   try {
-    preview.value = await adminApi.post<KbImportPreview>('/kb/blocks/preview', { text: docText.value })
+    preview.value = await adminApi.post<KbImportPreview>('/kb/blocks/imports/preview', { text: docText.value })
   } catch (e) {
     preview.value = null
     fail(e)
@@ -325,7 +325,7 @@ async function doImport() {
   error.value = ''
   okMsg.value = ''
   try {
-    const r = await adminApi.post<KbImportResult>('/kb/blocks/import', { text: docText.value })
+    const r = await adminApi.post<KbImportResult>('/kb/blocks/imports', { text: docText.value })
     importResult.value = r
     preview.value = null
     okMsg.value = '导入完成：新增 ' + r.added + ' 条、覆盖 ' + r.updated
@@ -344,7 +344,7 @@ async function clearAll() {
   if (!window.confirm('确定清空知识库里的**全部块与向量**？\n\n这是给「首次导入中文语料前」用的，不可逆。')) return
   busy.value = 'clear'
   try {
-    await adminApi.post('/kb/blocks/clear')
+    await adminApi.del('/kb/blocks/all')
     okMsg.value = '已清空全部块与向量'
     openDoc.value = ''
     blocks.value = []
@@ -399,7 +399,7 @@ async function saveEdit() {
   if (!editing.value) return
   busy.value = 'save'
   try {
-    await adminApi.post('/kb/blocks/update', { id: editing.value.id, text: editing.value.text })
+    await adminApi.patch('/kb/blocks', { id: editing.value.id, text: editing.value.text })
     okMsg.value = '已保存「' + editing.value.id + '」（向量已重算）'
     editing.value = null
     await load()
@@ -412,7 +412,7 @@ async function saveEdit() {
 
 async function retireBlock(b: KbBlockView) {
   try {
-    await adminApi.post('/kb/blocks/retire', { id: b.id, retired: !b.retired })
+    await adminApi.patch('/kb/blocks/retire', { id: b.id, retired: !b.retired })
     okMsg.value = (b.retired ? '已恢复 ' : '已下架 ') + b.id
     await load()
   } catch (e) {
@@ -423,7 +423,7 @@ async function retireBlock(b: KbBlockView) {
 async function deleteBlock(b: KbBlockView) {
   if (!window.confirm('真删除块「' + b.id + '」？\n\n这是物理删除，不能恢复（想保留请用「下架」）。')) return
   try {
-    await adminApi.post('/kb/blocks/delete', { id: b.id })
+    await adminApi.del('/kb/blocks?id=' + encodeURIComponent(b.id))
     okMsg.value = '已删除 ' + b.id
     await load()
   } catch (e) {
@@ -433,7 +433,7 @@ async function deleteBlock(b: KbBlockView) {
 
 async function retireDoc(doc: string, retired: boolean) {
   try {
-    const r = await adminApi.post<{ affected: number }>('/kb/blocks/retire-doc', { doc, retired })
+    const r = await adminApi.patch<{ affected: number }>('/kb/blocks/doc', { doc, retired })
     okMsg.value = (retired ? '已下架 ' : '已恢复 ') + (r?.affected ?? 0) + ' 块'
     await load()
   } catch (e) {

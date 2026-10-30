@@ -360,7 +360,7 @@ async function runReset() {
     return
   }
   try {
-    await adminApi.post('/map/reset?tiles=true')
+    await adminApi.del('/map/cache?tiles=true')
     toast('清空已开始 —— 删了多少看「地图数据」那一行')
     await pollStatus()
   } catch (e) {

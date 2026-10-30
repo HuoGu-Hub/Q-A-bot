@@ -106,9 +106,9 @@ class KbWikiControllerTest {
     @Test
     @DisplayName("★ 保存是整表替换：页面上勾选的结果就是完整范围")
     void saveReplacesWholeScope() {
-        controller.saveSources(Map.of("items", List.of(
-                Map.of("name", "Crafting Materials", "kind", "category", "enabled", true),
-                Map.of("name", "Music", "kind", "category", "enabled", false))));
+        controller.saveSources(new KbWikiController.SourcesRequest(List.of(
+                new KbWikiController.SourceItem("Crafting Materials", "category", true),
+                new KbWikiController.SourceItem("Music", "category", false))));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<KbWikiSourceRepository.Source>> cap = ArgumentCaptor.forClass(List.class);
@@ -121,16 +121,16 @@ class KbWikiControllerTest {
     @Test
     @DisplayName("★ 三种触发模式解析正确，purge 也走同一条路")
     void startParsesModes() {
-        controller.start(Map.of("mode", "dry-run"));
+        controller.start(new KbWikiController.StartImportRequest("dry-run"));
         verify(service).start(WikiImportService.Mode.DRY_RUN);
 
-        controller.start(Map.of("mode", "force"));
+        controller.start(new KbWikiController.StartImportRequest("force"));
         verify(service).start(WikiImportService.Mode.FORCE);
 
-        controller.start(Map.of("mode", "purge"));
+        controller.start(new KbWikiController.StartImportRequest("purge"));
         verify(service).start(WikiImportService.Mode.PURGE);
 
-        controller.start(Map.of());
+        controller.start(new KbWikiController.StartImportRequest(null));
         verify(service).start(WikiImportService.Mode.INCREMENTAL);
     }
 

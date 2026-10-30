@@ -75,6 +75,18 @@ spring:
     name: qqbot-server
   jackson:
     default-property-inclusion: non_null
+
+# OpenAPI 规范默认关闭，只在生成/联调时用 -DSPRINGDOC_ENABLED=true 打开。
+# 不在生产暴露 /v3/api-docs，避免把管理接口的字段结构直接给公网。
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
+    path: /v3/api-docs
+  packages-to-scan: com.example.qqbot
+  paths-to-match:
+    - /api/public/**
+    - /admin/api/**
+    - /onebot/**
   config:
     # 从 .env 文件读配置，省得在 IDEA 里维护一长串环境变量。
     #

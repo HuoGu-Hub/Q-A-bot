@@ -261,7 +261,7 @@ function replaceItem(item: CarouselItem) {
 async function move(it: CarouselItem, delta: number) {
   busy.value = true
   try {
-    applyItems(await adminApi.post<CarouselItemsResponse>('/carousel/' + it.id + '/move', { delta }))
+    applyItems(await adminApi.post<CarouselItemsResponse>('/carousel/' + it.id + '/actions/move', { delta }))
   } catch (e) {
     toast(describeError(e), 'error')
   } finally {
@@ -272,7 +272,7 @@ async function move(it: CarouselItem, delta: number) {
 async function toggleEnabled(it: CarouselItem) {
   busy.value = true
   try {
-    const r = await adminApi.post<CarouselItemResponse>('/carousel/' + it.id, { enabled: !it.enabled })
+    const r = await adminApi.patch<CarouselItemResponse>('/carousel/' + it.id, { enabled: !it.enabled })
     replaceItem(r.item)
     toast(r.item.enabled ? '已启用，公开站刷新即出现' : '已停用，公开站不再显示')
   } catch (e) {
@@ -287,7 +287,7 @@ async function remove(it: CarouselItem) {
   if (!window.confirm('删除 ' + name + '？\n\n首页立刻不再显示它，删掉后要重新上传才能回来。')) return
   busy.value = true
   try {
-    applyItems(await adminApi.post<CarouselItemsResponse>('/carousel/' + it.id + '/delete'))
+    applyItems(await adminApi.del<CarouselItemsResponse>('/carousel/' + it.id))
     toast('已删除')
   } catch (e) {
     toast(describeError(e), 'error')
@@ -307,7 +307,7 @@ async function saveEdit() {
   if (!it) return
   savingEdit.value = true
   try {
-    const r = await adminApi.post<CarouselItemResponse>('/carousel/' + it.id, {
+    const r = await adminApi.patch<CarouselItemResponse>('/carousel/' + it.id, {
       link: editLink.value.trim(),
       caption: editCaption.value.trim(),
     })

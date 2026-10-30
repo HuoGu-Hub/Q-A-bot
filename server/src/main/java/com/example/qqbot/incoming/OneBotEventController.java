@@ -1,5 +1,9 @@
 package com.example.qqbot.incoming;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import com.example.qqbot.distill.ChatCaptureService;
 import com.example.qqbot.guard.MessageDeduplicator;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -20,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>注意：这里必须「先返回 204，再异步处理」。因为接入大模型之后一次处理要好几秒，
  * 而 NapCat 会一直等这个响应。
  */
+@Tag(name = "OneBot")
+@SecurityRequirement(name = "oneBotSignature")
 @RestController
 @RequestMapping("/onebot")
 public class OneBotEventController {

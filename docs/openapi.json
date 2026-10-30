@@ -1,0 +1,7300 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Q-A-bot API",
+    "description" : "公开站只读接口与管理后台接口。\n\n公开接口按 IP 限流，触发时返回 429 与 Retry-After。\n管理接口使用 admin_token 会话 Cookie；未配置后台账号时整体返回 503。\nOneBot 事件入口使用 x-signature 或 Bearer Token。\n",
+    "version" : "1.0.0"
+  },
+  "servers" : [ {
+    "url" : "/"
+  } ],
+  "tags" : [ {
+    "name" : "Public",
+    "description" : "公开站只读接口"
+  }, {
+    "name" : "Admin",
+    "description" : "管理后台接口，需要 admin_token"
+  }, {
+    "name" : "OneBot",
+    "description" : "NapCat 事件上报"
+  } ],
+  "paths" : {
+    "/admin/api/users/{id}" : {
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "update",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/models/{provider}" : {
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "save",
+        "parameters" : [ {
+          "name" : "provider",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveModelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/places/{id}" : {
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "updatePlace",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlaceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "deletePlace",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/maps/active" : {
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "setActive",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ActiveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/layers" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "layers",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveLayers",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LayerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/wiki/sources" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "sources",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveSources",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SourcesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/settings" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "settings",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveSettings",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DistillSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/notes/{id}" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "note",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "updateNote",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "deleteNote",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/onebot/event" : {
+      "post" : {
+        "tags" : [ "OneBot" ],
+        "operationId" : "onEvent",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OneBotEvent"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "oneBotSignature" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "upload",
+        "parameters" : [ {
+          "name" : "title",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "aliases",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "tags",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  }
+                },
+                "required" : [ "file" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/{id}/actions/send" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "send",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SendVoiceRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/tts/previews" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "ttsPreview",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TtsRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/tts/actions/send" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "ttsSend",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TtsSendRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/triggers" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "listTriggers",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "addTrigger",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTriggerRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/users/{id}/password" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "resetPassword",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/users/request" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "requestCreate",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/users/confirm" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "confirmCreate",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConfirmUserRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/system-replies" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "get",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "save_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SystemReplyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/system-aliases" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "save_2",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveAliasesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/settings" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "current",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "save_3",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/password" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "changeMyPassword",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/pages" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_2",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "save_4",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveTextRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/pages/actions/reset" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "reset",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResetTextRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/models/{provider}/actions/test" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "test",
+        "parameters" : [ {
+          "name" : "provider",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TestModelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/me/qq/verify" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "verifyQqBind",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/QqCodeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/me/qq/send-code" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "sendQqBindCode",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BindCodeRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/warm" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "warm",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/warm-full" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "warmFull",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/sync" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "sync",
+        "parameters" : [ {
+          "name" : "dryRun",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/resources/import" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "importResources",
+        "parameters" : [ {
+          "name" : "force",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/places" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "listPlaces",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "visibleOnly",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "createPlace",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlaceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/places/{id}/confirm-anchor" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "confirmAnchor",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/notes" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "listNotes",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "upsertNote",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "deleteNote_1",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "markerId",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/corpus" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "corpus",
+        "parameters" : [ {
+          "name" : "purge",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "dryRun",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/anchor/apply-offset" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "applyOffset",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OffsetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/logout" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "logout",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/logout-all" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "logoutAll",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/login" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "login",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/login/qq-code" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "loginWithQqCode",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/QqCodeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/wiki/imports" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "start",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StartImportRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/terms/imports" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "importTable",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportTableRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/categories" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_3",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "add",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CategoryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "blocks",
+        "parameters" : [ {
+          "name" : "doc",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "add_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddBlockRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "update_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateBlockRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/title-vectors/backfill" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "backfillTitleVectors",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BackfillRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/manual" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "addManual",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddManualBlockRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/imports" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "importDoc",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/imports/preview" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "preview",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PreviewImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/settings/run-now" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "runNow",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/notes/{id}/unpublish" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "unpublish",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/notes/{id}/publish" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "publish",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/notes/actions/batch-delete" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "deleteNotes",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BatchDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/jobs" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "jobs",
+        "parameters" : [ {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "createJob",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/jobs/{id}/start" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "start_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/jobs/{id}/retry" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "retry",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/jobs/{id}/pause" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "pause",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/jobs/preview" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "previewJob",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/import" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "importFile",
+        "parameters" : [ {
+          "name" : "filename",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "chat.txt"
+          }
+        }, {
+          "name" : "groupId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "text/plain" : {
+              "schema" : {
+                "type" : "string"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/import/preview" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "previewImport",
+        "parameters" : [ {
+          "name" : "filename",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "chat.txt"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "text/plain" : {
+              "schema" : {
+                "type" : "string"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/blocklist" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "blocklist",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "block",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BlockSenderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/blocklist/qq" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "blockQq",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BlockQqRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_4",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "upsert",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpsertCommandRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/{id}/texts" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "texts",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TextsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/{id}/policy" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "policy",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "savePolicy",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/{id}/acl" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "commandAcl",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveCommandAcl",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AclRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/{id}/access" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "access",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AccessRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/actions/preview" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "preview_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/carousel" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_5",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "upload_1",
+        "parameters" : [ {
+          "name" : "link",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "caption",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  }
+                },
+                "required" : [ "file" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/carousel/{id}/actions/move" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "move",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MoveRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/boards" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_6",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "save_5",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BoardInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/boards/{id}/acl" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "boardAcl",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveBoardAcl",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AclRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/board-records/{id}/restore" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "restore",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/annotate" : {
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "annotate",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AnnotateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/acl/global" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "globalAcl",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveGlobalAcl",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AclRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_2",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "update_2",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateVoiceRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/triggers/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "deleteTrigger",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "updateTrigger",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateTriggerRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/terms/aliases" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "clear",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "saveAlias",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AliasRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/categories/{name}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_3",
+        "parameters" : [ {
+          "name" : "name",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "update_3",
+        "parameters" : [ {
+          "name" : "name",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CategoryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/retire" : {
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "retire",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetireBlockRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/doc" : {
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "retireDoc",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetireDocRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_4",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "toggle",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ToggleCommandRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/carousel/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_5",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "update_4",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCarouselRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/boards/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_6",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "toggle_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ToggleBoardRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/api/public/stats" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "stats",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/site" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "siteInfo",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/tile" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "tile",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "name",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "w",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/search" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "search",
+        "parameters" : [ {
+          "name" : "q",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/resources" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "resources",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "layer",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/resource-icon" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "resourceIcon",
+        "parameters" : [ {
+          "name" : "name",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/resource-groups" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "resourceGroups",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/resource-areas" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "resourceAreas",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "layer",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/markers" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "markers",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/locate" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "locate",
+        "parameters" : [ {
+          "name" : "q",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 5
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/map/catalog" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "catalog",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/kb/search" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "search_1",
+        "parameters" : [ {
+          "name" : "q",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/kb/page" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "page",
+        "parameters" : [ {
+          "name" : "title",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/kb/groups" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "groups",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/kb/browse" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "browse",
+        "parameters" : [ {
+          "name" : "group",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "tag",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/carousel" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "list_7",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/carousel/image/{id}" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "operationId" : "image",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "w",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/voice/{id}/audio" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "audio",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/tts/voices" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "ttsVoices",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/visits" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "visits",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VisitSummary"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/users" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_8",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "object",
+                    "additionalProperties" : { }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/users/audit" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "audit",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 100
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Entry"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/traffic" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "recent",
+        "parameters" : [ {
+          "name" : "minutes",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 180
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/sources" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "sources_1",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/session" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "session",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/records" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "records",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        }, {
+          "name" : "offset",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "scope",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "questions"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/prompts" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_9",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/overview" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "overview",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Overview"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/models" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_10",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/models/{provider}/available" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "available",
+        "parameters" : [ {
+          "name" : "provider",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/misses" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "misses",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/status" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "status",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/resources/status" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "resourceStatus",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/markers" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "markers_1",
+        "parameters" : [ {
+          "name" : "map",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/maps" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "maps",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/icons" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "icons",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/catalog" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "catalog_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/anchor" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "anchor",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/logs/stream" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "stream",
+        "parameters" : [ {
+          "name" : "level",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "afterSeq",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SseEmitter"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/logs/status" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "status_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/logs/history" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "history",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 500
+          }
+        }, {
+          "name" : "level",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "afterSeq",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/llm" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "recent_1",
+        "parameters" : [ {
+          "name" : "minutes",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 60
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/keywords" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "keywords",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/KeywordStat"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/wiki/imports/status" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "status_2",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/wiki/catalog" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "catalog_2",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/terms" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_11",
+        "parameters" : [ {
+          "name" : "q",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "view",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "category",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 100
+          }
+        }, {
+          "name" : "offset",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/terms/export" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "export",
+        "parameters" : [ {
+          "name" : "q",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "view",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "category",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "name" : "format",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "xlsx"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/categories/entries" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "entries",
+        "parameters" : [ {
+          "name" : "category",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "q",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 200
+          }
+        }, {
+          "name" : "offset",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/stats" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "stats_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/item" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "item",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/docs" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "docs",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/guard/metrics" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "snapshot",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/stats" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "stats_2",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/notes" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "notes",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "jobId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 100
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/messages" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "messages",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/messages/{id}" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "message",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/jobs/{id}" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "job",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/imports" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "imports",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/images/{id}" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "image_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/cosine" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "cosine",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Bucket"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/variables" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "variables",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/stats" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "stats_3",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/policies" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "policies",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/catalog" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "catalog_3",
+        "parameters" : [ {
+          "name" : "includeDisabled",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : true
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/commands/actions" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "actions",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/board-records" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "list_12",
+        "parameters" : [ {
+          "name" : "board",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "groupId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        }, {
+          "name" : "withDeleted",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 100
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/prompts/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_7",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/map/cache" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "reset_1",
+        "parameters" : [ {
+          "name" : "tiles",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : true
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/logs" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "clear_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/terms/aliases/all" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "clearAll",
+        "parameters" : [ {
+          "name" : "confirm",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/kb/blocks/all" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "clear_2",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/blocklist/{hash}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "unblock",
+        "parameters" : [ {
+          "name" : "hash",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/distill/blocklist/qq/{qq}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "unblockQq",
+        "parameters" : [ {
+          "name" : "qq",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/board-records/{id}" : {
+      "delete" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "delete_8",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "UpdateUserRequest" : {
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "SaveModelRequest" : {
+        "type" : "object",
+        "properties" : {
+          "modelName" : {
+            "type" : "string"
+          },
+          "verify" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PlaceRequest" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "page" : {
+            "type" : "string"
+          },
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "color" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "boolean"
+          },
+          "priority" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "visible" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ActiveRequest" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "LayerRequest" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "SourceItem" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "SourcesRequest" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SourceItem"
+            }
+          }
+        }
+      },
+      "DistillSettingsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "autoEnabled" : {
+            "type" : "boolean"
+          },
+          "triggerMessages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "triggerImages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batchMessages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "batchChars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "overlap" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxGapMinutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "autoPublish" : {
+            "type" : "boolean"
+          },
+          "minConfidence" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "focus" : {
+            "type" : "string"
+          },
+          "modelProvider" : {
+            "type" : "string"
+          },
+          "captureGroups" : {
+            "type" : "string"
+          },
+          "captureAllGroups" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "UpdateNoteRequest" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "confidence" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "JsonNode" : { },
+      "OneBotEvent" : {
+        "type" : "object",
+        "properties" : {
+          "post_type" : {
+            "type" : "string"
+          },
+          "message_type" : {
+            "type" : "string"
+          },
+          "sub_type" : {
+            "type" : "string"
+          },
+          "message_id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "user_id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "group_id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "self_id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "time" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "raw_message" : {
+            "type" : "string"
+          },
+          "message" : {
+            "$ref" : "#/components/schemas/JsonNode"
+          },
+          "sender" : {
+            "$ref" : "#/components/schemas/JsonNode"
+          },
+          "notice_type" : {
+            "type" : "string"
+          },
+          "request_type" : {
+            "type" : "string"
+          },
+          "meta_event_type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SendVoiceRequest" : {
+        "type" : "object",
+        "properties" : {
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "TtsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "voice" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TtsSendRequest" : {
+        "type" : "object",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "groupId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "voice" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateTriggerRequest" : {
+        "type" : "object",
+        "properties" : {
+          "keyword" : {
+            "type" : "string"
+          },
+          "cooldownSeconds" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "groupScope" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResetPasswordRequest" : {
+        "type" : "object",
+        "properties" : {
+          "password" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateUserRequest" : {
+        "type" : "object",
+        "properties" : {
+          "username" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "password" : {
+            "type" : "string"
+          },
+          "qq" : {
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ConfirmUserRequest" : {
+        "type" : "object",
+        "properties" : {
+          "challengeId" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SystemReplyRequest" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "content" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AliasEntry" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "target" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "SaveAliasesRequest" : {
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AliasEntry"
+            }
+          }
+        }
+      },
+      "SaveSettingsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "changes" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          }
+        }
+      },
+      "PasswordRequest" : {
+        "type" : "object",
+        "properties" : {
+          "oldPassword" : {
+            "type" : "string"
+          },
+          "newPassword" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SaveTextRequest" : {
+        "type" : "object",
+        "properties" : {
+          "page" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ResetTextRequest" : {
+        "type" : "object",
+        "properties" : {
+          "page" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TestModelRequest" : {
+        "type" : "object",
+        "properties" : {
+          "modelName" : {
+            "type" : "string"
+          },
+          "prompt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "QqCodeRequest" : {
+        "type" : "object",
+        "properties" : {
+          "challengeId" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "trustDevice" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "BindCodeRequest" : {
+        "type" : "object",
+        "properties" : {
+          "qq" : {
+            "type" : "string"
+          }
+        }
+      },
+      "NoteRequest" : {
+        "type" : "object",
+        "properties" : {
+          "map" : {
+            "type" : "string"
+          },
+          "page" : {
+            "type" : "string"
+          },
+          "markerId" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "boolean"
+          },
+          "priority" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hidden" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "OffsetRequest" : {
+        "type" : "object",
+        "properties" : {
+          "referenceId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dx" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "dy" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "LoginRequest" : {
+        "type" : "object",
+        "properties" : {
+          "username" : {
+            "type" : "string"
+          },
+          "identifier" : {
+            "type" : "string"
+          },
+          "password" : {
+            "type" : "string"
+          }
+        }
+      },
+      "StartImportRequest" : {
+        "type" : "object",
+        "properties" : {
+          "mode" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportTableRequest" : {
+        "type" : "object",
+        "properties" : {
+          "tsv" : {
+            "type" : "string"
+          },
+          "csv" : {
+            "type" : "string"
+          },
+          "xlsxBase64" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CategoryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AddBlockRequest" : {
+        "type" : "object",
+        "properties" : {
+          "docId" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "BackfillRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "AddManualBlockRequest" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ImportRequest" : {
+        "type" : "object",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PreviewImportRequest" : {
+        "type" : "object",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BatchDeleteRequest" : {
+        "type" : "object",
+        "properties" : {
+          "ids" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          }
+        }
+      },
+      "JobRequest" : {
+        "type" : "object",
+        "properties" : {
+          "source" : {
+            "type" : "string"
+          },
+          "groupIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "timeFrom" : {
+            "type" : "string"
+          },
+          "timeTo" : {
+            "type" : "string"
+          },
+          "importId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batchMode" : {
+            "type" : "string"
+          },
+          "batchSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "overlap" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxGapMinutes" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "BlockSenderRequest" : {
+        "type" : "object",
+        "properties" : {
+          "senderHash" : {
+            "type" : "string"
+          },
+          "senderName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BlockQqRequest" : {
+        "type" : "object",
+        "properties" : {
+          "qq" : {
+            "type" : "string"
+          },
+          "senderName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ParamSpec" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "text", "int", "moment", "date", "enum", "repeat" ]
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "default" : {
+            "type" : "string"
+          },
+          "maxChars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "example" : {
+            "type" : "string"
+          },
+          "options" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "multiple" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "UpsertCommandRequest" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "trigger" : {
+            "type" : "string"
+          },
+          "reply" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamSpec"
+            }
+          },
+          "action" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "groupIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "minRole" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "help" : {
+            "type" : "string"
+          },
+          "listReply" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TextsRequest" : {
+        "type" : "object",
+        "properties" : {
+          "help" : {
+            "type" : "string"
+          },
+          "listReply" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PolicyRequest" : {
+        "type" : "object",
+        "properties" : {
+          "scope" : {
+            "type" : "string"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "showGroup" : {
+            "type" : "boolean"
+          },
+          "showUser" : {
+            "type" : "boolean"
+          },
+          "allowPrivate" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "AclItemRequest" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "AclRequest" : {
+        "type" : "object",
+        "properties" : {
+          "white" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AclItemRequest"
+            }
+          },
+          "black" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AclItemRequest"
+            }
+          }
+        }
+      },
+      "AccessRequest" : {
+        "type" : "object",
+        "properties" : {
+          "access" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PreviewRequest" : {
+        "type" : "object",
+        "properties" : {
+          "template" : {
+            "type" : "string"
+          },
+          "real" : {
+            "type" : "boolean"
+          },
+          "args" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamSpec"
+            }
+          }
+        }
+      },
+      "MoveRequest" : {
+        "type" : "object",
+        "properties" : {
+          "delta" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "BoardInput" : {
+        "type" : "object",
+        "properties" : {
+          "path" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamSpec"
+            }
+          },
+          "delivery" : {
+            "type" : "string"
+          },
+          "access" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "showGroup" : {
+            "type" : "boolean"
+          },
+          "showUser" : {
+            "type" : "boolean"
+          },
+          "allowPrivate" : {
+            "type" : "boolean"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "originalPath" : {
+            "type" : "string"
+          },
+          "listHeader" : {
+            "type" : "string"
+          },
+          "listItem" : {
+            "type" : "string"
+          },
+          "listEmpty" : {
+            "type" : "string"
+          },
+          "listLimit" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "listReply" : {
+            "type" : "string"
+          },
+          "helpReply" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AnnotateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "verdict" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateVoiceRequest" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "UpdateTriggerRequest" : {
+        "type" : "object",
+        "properties" : {
+          "cooldownSeconds" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "groupScope" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "AliasRequest" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateBlockRequest" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "text" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "id" ]
+      },
+      "RetireBlockRequest" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "retired" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "id" ]
+      },
+      "RetireDocRequest" : {
+        "type" : "object",
+        "properties" : {
+          "doc" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "retired" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "doc" ]
+      },
+      "ToggleCommandRequest" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "UpdateCarouselRequest" : {
+        "type" : "object",
+        "properties" : {
+          "link" : {
+            "type" : "string"
+          },
+          "caption" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "ToggleBoardRequest" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "SourceStat" : {
+        "type" : "object",
+        "properties" : {
+          "source" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hits" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hitRate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "VisitDay" : {
+        "type" : "object",
+        "properties" : {
+          "day" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "VisitSummary" : {
+        "type" : "object",
+        "properties" : {
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "visitors" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "daily" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VisitDay"
+            }
+          },
+          "paths" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SourceStat"
+            }
+          }
+        }
+      },
+      "Entry" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ts" : {
+            "type" : "string"
+          },
+          "userId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "username" : {
+            "type" : "string"
+          },
+          "action" : {
+            "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "type" : "string"
+          },
+          "ipHash" : {
+            "type" : "string"
+          }
+        }
+      },
+      "DayCount" : {
+        "type" : "object",
+        "properties" : {
+          "day" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Overview" : {
+        "type" : "object",
+        "properties" : {
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "questions" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hits" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hitRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "users" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "groups" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dropped" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "fixedReplies" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "commands" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p50RetrieveMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p95RetrieveMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p50TotalMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p95TotalMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "guardActions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "daily" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DayCount"
+            }
+          }
+        }
+      },
+      "SseEmitter" : {
+        "type" : "object",
+        "properties" : {
+          "timeout" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          }
+        }
+      },
+      "KeywordStat" : {
+        "type" : "object",
+        "properties" : {
+          "zh" : {
+            "type" : "string"
+          },
+          "en" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "missCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Bucket" : {
+        "type" : "object",
+        "properties" : {
+          "range" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "adminSession" : {
+        "type" : "apiKey",
+        "name" : "admin_token",
+        "in" : "cookie"
+      },
+      "oneBotSignature" : {
+        "type" : "apiKey",
+        "name" : "x-signature",
+        "in" : "header"
+      }
+    }
+  }
+}

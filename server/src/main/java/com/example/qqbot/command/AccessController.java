@@ -1,5 +1,13 @@
 package com.example.qqbot.command;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +31,8 @@ import java.util.Map;
  * 所以它们的读与写都做成独立的、整份覆盖的接口 —— 每次保存就是把这一份策略完整地换掉，
  * 不留半截状态。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api")
 public class AccessController {
@@ -46,9 +56,9 @@ public class AccessController {
     /** 整份替换某条命令的名单 */
     @PostMapping("/commands/{id}/acl")
     public ResponseEntity<Map<String, Object>> saveCommandAcl(@PathVariable long id,
-                                                              @RequestBody Map<String, Object> body) {
+                                                              @RequestBody AclRequest body) {
         if (id <= 0) {
-            return bad("命令编号不对");
+            throw ApiException.badRequest("命令编号不对");
         }
         aclStore.replaceCommand(id, parse(body));
         return ResponseEntity.ok(view(aclStore.ofCommand(id)));
@@ -63,9 +73,9 @@ public class AccessController {
     /** 整份替换某个板块的名单 */
     @PostMapping("/boards/{id}/acl")
     public ResponseEntity<Map<String, Object>> saveBoardAcl(@PathVariable long id,
-                                                            @RequestBody Map<String, Object> body) {
+                                                            @RequestBody AclRequest body) {
         if (id <= 0) {
-            return bad("板块编号不对");
+            throw ApiException.badRequest("板块编号不对");
         }
         aclStore.replaceBoard(id, parse(body));
         return ResponseEntity.ok(view(aclStore.ofBoard(id)));
@@ -78,7 +88,7 @@ public class AccessController {
     }
 
     @PostMapping("/acl/global")
-    public ResponseEntity<Map<String, Object>> saveGlobalAcl(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> saveGlobalAcl(@RequestBody AclRequest body) {
         aclStore.replaceGlobal(parse(body));
         return ResponseEntity.ok(view(aclStore.global()));
     }
@@ -92,20 +102,22 @@ public class AccessController {
 
     @PostMapping("/commands/{id}/policy")
     public ResponseEntity<Map<String, Object>> savePolicy(@PathVariable long id,
-                                                          @RequestBody Map<String, Object> body) {
+                                                          @RequestBody PolicyRequest body) {
         if (id <= 0) {
-            return bad("命令编号不对");
+            throw ApiException.badRequest("命令编号不对");
         }
         DataPolicy.DataScope scope;
         try {
-            scope = DataPolicy.DataScope.valueOf(String.valueOf(body.getOrDefault("scope", "GROUP"))
-                    .trim().toUpperCase());
+            scope = DataPolicy.DataScope.valueOf(
+                    body.scope() == null ? "GROUP" : body.scope().trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            return bad("数据范围只能是 GROUP / SOME / ALL");
+            throw ApiException.badRequest("数据范围只能是 GROUP / SOME / ALL");
         }
-        policyStore.save(id, new DataPolicy(scope, longs(body.get("groups")),
-                bool(body.get("showGroup")), bool(body.get("showUser")),
-                bool(body.get("allowPrivate"))));
+        policyStore.save(id, new DataPolicy(scope,
+                body.groups() == null ? List.of() : body.groups(),
+                Boolean.TRUE.equals(body.showGroup()),
+                Boolean.TRUE.equals(body.showUser()),
+                Boolean.TRUE.equals(body.allowPrivate())));
         return ResponseEntity.ok(viewOf(policyStore.of(id)));
     }
 
@@ -138,67 +150,44 @@ public class AccessController {
 
     // ==================== 入参解析 ====================
 
-    /**
-     * 把 {white:[{type,value}], black:[...]} 解析成条目。
-     *
-     * <p>只认 {@code uid} 与 {@code gid} 两种类型，其余一律丢掉 ——
-     * 名单的"类型"只有这两种含义，多一个值就意味着有人写错了。
-     */
-    private static List<AclEntry> parse(Map<String, Object> body) {
+    private static List<AclEntry> parse(AclRequest body) {
         List<AclEntry> out = new ArrayList<>();
-        collect(body.get("white"), AclEntry.WHITE, out);
-        collect(body.get("black"), AclEntry.BLACK, out);
+        collect(body.white(), AclEntry.WHITE, out);
+        collect(body.black(), AclEntry.BLACK, out);
         return out;
     }
 
-    private static void collect(Object raw, String scope, List<AclEntry> out) {
-        if (!(raw instanceof List<?> list)) {
+    private static void collect(List<AclItemRequest> items, String scope, List<AclEntry> out) {
+        if (items == null) {
             return;
         }
-        for (Object item : list) {
-            if (!(item instanceof Map<?, ?> map)) {
+        for (AclItemRequest item : items) {
+            if (item == null) {
                 continue;
             }
-            String type = String.valueOf(map.get("type") == null ? AclEntry.UID : map.get("type"));
+            String type = item.type() == null ? AclEntry.UID : item.type();
             if (!AclEntry.UID.equals(type) && !AclEntry.GID.equals(type)) {
                 continue;
             }
-            long value = toLong(map.get("value"));
-            if (value > 0) {
-                out.add(new AclEntry(scope, type, value));
+            if (item.value() != null && item.value() > 0) {
+                out.add(new AclEntry(scope, type, item.value()));
             }
         }
     }
 
-    private static List<Long> longs(Object raw) {
-        List<Long> out = new ArrayList<>();
-        if (raw instanceof List<?> list) {
-            for (Object item : list) {
-                long v = toLong(item);
-                if (v > 0) {
-                    out.add(v);
-                }
-            }
-        }
-        return out;
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record AclItemRequest(String type, Long value) {
     }
 
-    private static boolean bool(Object raw) {
-        return raw instanceof Boolean b ? b : Boolean.parseBoolean(String.valueOf(raw));
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record AclRequest(List<AclItemRequest> white, List<AclItemRequest> black) {
     }
 
-    private static long toLong(Object o) {
-        if (o instanceof Number n) {
-            return n.longValue();
-        }
-        try {
-            return o == null ? 0L : Long.parseLong(String.valueOf(o).trim());
-        } catch (NumberFormatException e) {
-            return 0L;
-        }
-    }
+    @JsonIgnoreProperties(ignoreUnknown = false)
 
-    private static ResponseEntity<Map<String, Object>> bad(String msg) {
-        return ResponseEntity.badRequest().body(Map.of("error", msg));
+    public record PolicyRequest(String scope, List<Long> groups, Boolean showGroup,
+                                Boolean showUser, Boolean allowPrivate) {
     }
 }

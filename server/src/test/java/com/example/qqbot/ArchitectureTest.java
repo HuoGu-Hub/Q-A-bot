@@ -7,6 +7,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
@@ -158,6 +159,19 @@ class ArchitectureTest {
                 .that().resideInAPackage("..kb")
                 .should().dependOnClassesThat()
                 .resideInAnyPackage("..kb.block..", "..kb.catalog..", "..kb.category..");
+        rule.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("★ 控制器不得再收裸 Map 请求体 —— 请求体必须是 record")
+    void controllersDoNotAcceptRawMapBodies() {
+        // 2026-10-31：51 个 @RequestBody Map 全部换成 record。
+        // 这条规则防的是"图省事又传一个 Map 进来"—— Map 没有 schema，
+        // 也不会出现在 OpenAPI 里，前端只能靠猜。
+        ArchRule rule = methods()
+                .that().arePublic()
+                .and().areDeclaredInClassesThat().haveSimpleNameEndingWith("Controller")
+                .should().notHaveRawParameterTypes(java.util.Map.class);
         rule.check(CLASSES);
     }
 

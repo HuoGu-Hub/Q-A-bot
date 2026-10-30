@@ -1,5 +1,13 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.site.SitePolicy;
 import com.example.qqbot.site.Carousel;
 import com.example.qqbot.site.CarouselService;
@@ -10,7 +18,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.unit.DataSize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,6 +44,8 @@ import java.util.Map;
  *
  * <p>认证由 {@link AdminAuthFilter} 统一拦在 {@code /admin/api/**} 前面。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/carousel")
 public class CarouselController {
@@ -82,8 +94,7 @@ public class CarouselController {
         try {
             CarouselStore.Item saved = service.add(file, link, caption);
             if (saved == null) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(Map.of("error", "保存失败"));
+                throw ApiException.internal("保存失败");
             }
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("ok", true);
@@ -91,26 +102,24 @@ public class CarouselController {
             return ResponseEntity.ok(out);
         } catch (CarouselService.CarouselException e) {
             // 超张数 / 太大 / 不是图片 —— 都是用户能自己修的问题，400 + 原话
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         } catch (IOException e) {
             log.warn("[SITE] 轮播图落盘失败：{}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "写入图片失败：" + e.getMessage()));
+            throw ApiException.internal("写入图片失败：" + e.getMessage());
         }
     }
 
     /** 改说明 / 链接 / 启停 */
-    @PostMapping("/{id}")
+    @PatchMapping("/{id}")
     public ResponseEntity<Map<String, Object>> update(@PathVariable long id,
-                                                      @RequestBody(required = false) Map<String, Object> body) {
-        Map<String, Object> b = body == null ? Map.of() : body;
-        String link = b.containsKey("link") ? str(b.get("link")) : null;
-        String caption = b.containsKey("caption") ? str(b.get("caption")) : null;
-        Boolean enabled = b.containsKey("enabled") ? Boolean.valueOf(String.valueOf(b.get("enabled"))) : null;
+                                                      @RequestBody(required = false) UpdateCarouselRequest body) {
+        String link = body == null ? null : body.link();
+        String caption = body == null ? null : body.caption();
+        Boolean enabled = body == null ? null : body.enabled();
 
         CarouselStore.Item updated = store.update(id, link, caption, enabled);
         if (updated == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这张图"));
+            throw ApiException.notFound("没有这张图");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
@@ -119,19 +128,16 @@ public class CarouselController {
     }
 
     /** 上移 / 下移一位 */
-    @PostMapping("/{id}/move")
+    @PostMapping("/{id}/actions/move")
     public ResponseEntity<Map<String, Object>> move(@PathVariable long id,
-                                                    @RequestBody(required = false) Map<String, Object> body) {
-        int delta = 0;
-        if (body != null && body.get("delta") instanceof Number n) {
-            delta = n.intValue();
-        }
+                                                    @RequestBody(required = false) MoveRequest body) {
+        int delta = body == null || body.delta() == null ? 0 : body.delta();
         if (delta == 0) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要 delta = -1（上移）或 1（下移）"));
+            throw ApiException.badRequest("需要 delta = -1（上移）或 1（下移）");
         }
         if (!store.move(id, delta)) {
             // 已经在头/尾了：不是错误，前端按钮本来就该是禁用的，这里只是兜底
-            return ResponseEntity.badRequest().body(Map.of("error", "已经到头了"));
+            throw ApiException.badRequest("已经到头了");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
@@ -140,11 +146,11 @@ public class CarouselController {
     }
 
     /** 删除（连磁盘文件一起） */
-    @PostMapping("/{id}/delete")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
         CarouselStore.Item gone = service.delete(id);
         if (gone == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "没有这张图"));
+            throw ApiException.notFound("没有这张图");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
@@ -185,5 +191,15 @@ public class CarouselController {
 
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o).trim();
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record UpdateCarouselRequest(String link, String caption, Boolean enabled) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record MoveRequest(Integer delta) {
     }
 }

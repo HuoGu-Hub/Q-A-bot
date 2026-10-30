@@ -18,16 +18,23 @@ public class ApiException extends RuntimeException {
     private final HttpStatus status;
     private final String code;
     private final List<FieldProblem> errors;
+    private final Long retryAfterSeconds;
 
     public ApiException(HttpStatus status, String code, String message) {
-        this(status, code, message, List.of());
+        this(status, code, message, List.of(), null);
     }
 
     public ApiException(HttpStatus status, String code, String message, List<FieldProblem> errors) {
+        this(status, code, message, errors, null);
+    }
+
+    public ApiException(HttpStatus status, String code, String message,
+                        List<FieldProblem> errors, Long retryAfterSeconds) {
         super(message);
         this.status = status;
         this.code = code;
         this.errors = errors == null ? List.of() : List.copyOf(errors);
+        this.retryAfterSeconds = retryAfterSeconds;
     }
 
     public HttpStatus status() {
@@ -40,6 +47,10 @@ public class ApiException extends RuntimeException {
 
     public List<FieldProblem> errors() {
         return errors;
+    }
+
+    public Long retryAfterSeconds() {
+        return retryAfterSeconds;
     }
 
     public static ApiException badRequest(String message) {
@@ -75,7 +86,12 @@ public class ApiException extends RuntimeException {
     }
 
     public static ApiException tooManyRequests(String message) {
-        return new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", message);
+        return tooManyRequests(message, 60);
+    }
+
+    public static ApiException tooManyRequests(String message, long retryAfterSeconds) {
+        return new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", message,
+                List.of(), retryAfterSeconds);
     }
 
     public static ApiException internal(String message) {

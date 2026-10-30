@@ -1,9 +1,15 @@
 package com.example.qqbot.prompt;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,6 +23,8 @@ import java.util.Map;
  * <p>只给「编辑 /prompt」弹窗用：列出全部群提示与个人提示，并按编号删除。
  * 新增提示仍然走群里的 /prompt /create，不在这里重复一套表单。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/prompts")
 public class PromptAdminController {
@@ -43,17 +51,11 @@ public class PromptAdminController {
         return out;
     }
 
-    @PostMapping("/delete")
-    public ResponseEntity<Map<String, Object>> delete(@RequestBody Map<String, Object> body) {
-        Object raw = body.get("id");
-        long id;
-        try {
-            id = raw instanceof Number n ? n.longValue() : Long.parseLong(String.valueOf(raw));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "需要提示编号"));
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id) {
+        if (!store.delete(id)) {
+            throw ApiException.notFound("没有这条提示");
         }
-        return store.delete(id)
-                ? ResponseEntity.ok(Map.of("ok", true))
-                : ResponseEntity.status(404).body(Map.of("error", "没有这条提示"));
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 }

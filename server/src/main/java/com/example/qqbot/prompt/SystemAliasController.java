@@ -1,5 +1,13 @@
 package com.example.qqbot.prompt;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import com.example.qqbot.command.Board;
 import com.example.qqbot.command.BoardStore;
 import com.example.qqbot.command.BotCommand;
@@ -23,6 +31,8 @@ import java.util.Set;
  * <p>别名分两层：命令名声明一次，动作词声明一次。
  * create 只配一次“新建”，所有含 /create 的命令都会自动共用，不需要按模块重复。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/system-aliases")
 public class SystemAliasController {
@@ -57,19 +67,17 @@ public class SystemAliasController {
     }
 
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> save(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> save(@RequestBody SaveAliasesRequest body) {
         List<SystemAliasStore.Alias> entries = new ArrayList<>();
-        if (body.get("entries") instanceof List<?> list) {
-            for (Object raw : list) {
-                if (!(raw instanceof Map<?, ?> map)) {
+        if (body.entries() != null) {
+            for (AliasEntry entry : body.entries()) {
+                if (entry == null || entry.kind() == null || entry.target() == null
+                        || entry.aliases() == null) {
                     continue;
                 }
-                String kind = String.valueOf(map.get("kind"));
-                String target = String.valueOf(map.get("target"));
-                if (map.get("aliases") instanceof List<?> values) {
-                    for (Object value : values) {
-                        entries.add(new SystemAliasStore.Alias(kind, target, String.valueOf(value)));
-                    }
+                for (String alias : entry.aliases()) {
+                    entries.add(new SystemAliasStore.Alias(entry.kind(), entry.target(),
+                            String.valueOf(alias)));
                 }
             }
         }
@@ -91,18 +99,16 @@ public class SystemAliasController {
                     continue;
                 }
                 if (RESERVED.contains(name.toLowerCase())) {
-                    return ResponseEntity.badRequest().body(Map.of("error",
-                            "别名「" + name + "」是系统保留名"));
+                    throw ApiException.badRequest("别名「" + name + "」是系统保留名");
                 }
                 if (commands.findByTrigger(name) != null || boards.find(name) != null) {
-                    return ResponseEntity.badRequest().body(Map.of("error",
-                            "别名「" + name + "」和已有命令或板块重名"));
+                    throw ApiException.badRequest("别名「" + name + "」和已有命令或板块重名");
                 }
             }
             store.replace(valid);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (SystemAliasStore.AliasException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
@@ -140,5 +146,13 @@ public class SystemAliasController {
 
     private static String key(String kind, String target) {
         return kind + ":" + target;
+    }
+
+    public record AliasEntry(String kind, String target, List<String> aliases) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record SaveAliasesRequest(List<AliasEntry> entries) {
     }
 }

@@ -12,6 +12,7 @@ import com.example.qqbot.persistence.Jdbc;
 import com.example.qqbot.persistence.KbBlockRepository;
 import com.example.qqbot.persistence.KbCategoryRepository;
 import com.example.qqbot.persistence.SqliteDatabase;
+import com.example.qqbot.web.ApiException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -210,11 +212,13 @@ class KbImportTest {
     @Test
     @DisplayName("★ /blocks/import 按 id 覆盖 / 新增，没出现的块一个都不动")
     void importShape() {
-        controller.importDoc(body("text", single("d", "d-0", "甲", "甲正文")));
-        controller.importDoc(body("text", single("d", "d-1", "乙", "乙正文")));
+        controller.importDoc(new KbImportController.ImportRequest(
+                single("d", "d-0", "甲", "甲正文")));
+        controller.importDoc(new KbImportController.ImportRequest(
+                single("d", "d-1", "乙", "乙正文")));
 
         ResponseEntity<Map<String, Object>> res = controller.importDoc(
-                body("text", single("d", "d-1", "乙", "乙新正文")));
+                new KbImportController.ImportRequest(single("d", "d-1", "乙", "乙新正文")));
 
         Map<String, Object> out = res.getBody();
         assertThat(out).containsEntry("added", 0).containsEntry("updated", 1).containsEntry("untouched", 1);
@@ -225,11 +229,10 @@ class KbImportTest {
     @Test
     @DisplayName("格式坏的文档 → 400 并把逐条原因带回去（界面直接显示）")
     void badDocumentGives400() {
-        ResponseEntity<Map<String, Object>> res = controller.importDoc(
-                body("text", single("d", "中文id", "甲", "正文")));
-
-        assertThat(res.getStatusCode().value()).isEqualTo(400);
-        assertThat(String.valueOf(res.getBody().get("error"))).contains("id 只能由英文字母、数字和 - 组成");
+        assertThatThrownBy(() -> controller.importDoc(
+                new KbImportController.ImportRequest(single("d", "中文id", "甲", "正文"))))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("id 只能由英文字母、数字和 - 组成");
         assertThat(blocks.count()).isZero();
     }
 
@@ -241,7 +244,8 @@ class KbImportTest {
                 new com.example.qqbot.kb.block.KbBlockAdminService(blocks, mock(EmbeddingClient.class),
                         new KbDocImporter(blocks, mock(EmbeddingClient.class))));
 
-        termController.saveAlias(body("id", "flame-altar", "alias", "灵火圣坛、Flame Altar"));
+        termController.saveAlias(new KbCatalogController.AliasRequest(
+                "flame-altar", "灵火圣坛、Flame Altar"));
 
         KbBlock b = blocks.get(EntryId.of("flame-altar"));
         assertThat(b.alias()).isEqualTo("灵火圣坛、Flame Altar");

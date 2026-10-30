@@ -1,5 +1,9 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import com.example.qqbot.persistence.TrafficRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +27,8 @@ import java.util.Map;
  * 一行是一分钟，QPS 就是 {@code requests / 60}，是个显示层的换算。
  * 后端只给"这一分钟多少次"，前端要显示成 QPS、每分钟次数还是每小时次数都行。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/traffic")
 public class AdminTrafficController {

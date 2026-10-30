@@ -1,5 +1,13 @@
 package com.example.qqbot.command;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import com.example.qqbot.web.ApiException;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** 全局 /list、/help 的回复编辑。空 content = 使用自动生成版本。 */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/system-replies")
 public class SystemReplyController {
@@ -32,13 +42,15 @@ public class SystemReplyController {
     }
 
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> save(@RequestBody Map<String, Object> body) {
-        String key = String.valueOf(body.get("key"));
+    public ResponseEntity<Map<String, Object>> save(@RequestBody SystemReplyRequest body) {
+        if (body.key() == null || body.key().isBlank()) {
+            throw ApiException.badRequest("需要 key");
+        }
         try {
-            store.save(key, String.valueOf(body.getOrDefault("content", "")));
+            store.save(body.key(), body.content() == null ? "" : body.content());
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            throw ApiException.badRequest(e.getMessage());
         }
     }
 
@@ -48,5 +60,10 @@ public class SystemReplyController {
         item.put("content", content);
         item.put("defaultContent", defaultContent);
         return item;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record SystemReplyRequest(String key, String content) {
     }
 }

@@ -3,12 +3,14 @@ package com.example.qqbot.publicapi;
 import com.example.qqbot.site.CarouselService;
 import com.example.qqbot.site.CarouselStore;
 import com.example.qqbot.site.SitePolicy;
+import com.example.qqbot.web.ApiException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +69,8 @@ class PublicCarouselControllerTest {
     void missingImageIsNotFound() throws Exception {
         when(service.read(9L, 0)).thenReturn(null);
 
-        assertThat(controller.image(9L, null).getStatusCode().value()).isEqualTo(404);
+        assertThatThrownBy(() -> controller.image(9L, null))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.status().value()).isEqualTo(404));
     }
 }

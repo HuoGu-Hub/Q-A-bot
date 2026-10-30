@@ -195,7 +195,7 @@ async function toggleRetire(e: KbEntryItem) {
   error.value = ''
   ok.value = ''
   try {
-    await adminApi.post('/kb/blocks/retire', { id: e.id, retired: retire })
+    await adminApi.patch('/kb/blocks/retire', { id: e.id, retired: retire })
     if (editId.value === e.id) closeEditorSilently()
     ok.value = (retire ? '已下架：' : '已恢复：') + (e.title || '词条')
     await load()
@@ -214,10 +214,10 @@ async function saveEditor(e: KbEntryItem) {
   editError.value = ''
   try {
     if (editAlias.value !== e.alias) {
-      await adminApi.post('/kb/terms', { id: e.id, alias: editAlias.value })
+      await adminApi.patch('/kb/terms/aliases', { id: e.id, alias: editAlias.value })
     }
     if (saveBody) {
-      await adminApi.post('/kb/blocks/update', { id: e.id, text: editBody.value })
+      await adminApi.patch('/kb/blocks', { id: e.id, text: editBody.value })
     }
     ok.value = '已保存：' + (e.title || '词条') + (saveBody ? '（正文向量已重算）' : '')
     closeEditorSilently()
@@ -292,8 +292,8 @@ async function onFile(ev: Event) {
   ok.value = ''
   try {
     const r = /\.xlsx$/i.test(f.name)
-      ? await adminApi.post<KbEntryImportResponse>('/kb/terms/import', { xlsxBase64: toBase64(await f.arrayBuffer()) })
-      : await adminApi.post<KbEntryImportResponse>('/kb/terms/import', { tsv: await f.text() })
+      ? await adminApi.post<KbEntryImportResponse>('/kb/terms/imports', { xlsxBase64: toBase64(await f.arrayBuffer()) })
+      : await adminApi.post<KbEntryImportResponse>('/kb/terms/imports', { tsv: await f.text() })
     ok.value = '导入完成：更新 ' + (r.updated ?? 0) + ' 条，跳过 ' + (r.skipped ?? 0) + ' 条'
     await load()
   } catch (e) {
@@ -308,7 +308,7 @@ async function clearAllAliases() {
   error.value = ''
   ok.value = ''
   try {
-    const r = await adminApi.post<{ cleared: number }>('/kb/terms/clear-all', { confirm: true })
+    const r = await adminApi.del<{ cleared: number }>('/kb/terms/aliases/all?confirm=true')
     ok.value = '已清空 ' + (r.cleared ?? 0) + ' 条别名'
     await load()
   } catch (e) {

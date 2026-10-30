@@ -1,5 +1,9 @@
 package com.example.qqbot.admin;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.guard.GuardMetrics;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +22,8 @@ import java.util.Map;
  * <p>路径在 {@code /admin/api/**} 之下，所以照样被 {@code AdminAuthFilter} 挡住 ——
  * 「谁在被限流」这种信息不该裸奔。
  */
+@Tag(name = "Admin")
+@SecurityRequirement(name = "adminSession")
 @RestController
 @RequestMapping("/admin/api/guard")
 public class GuardMetricsController {

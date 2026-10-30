@@ -10,7 +10,12 @@
  */
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public requestId?: string,
+  ) {
     super(message)
     this.name = 'ApiError'
   }
@@ -30,11 +35,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`
+    let code: string | undefined
+    let requestId = res.headers.get('X-Request-Id') ?? undefined
     try {
       const body = await res.json()
-      if (body?.error) message = body.error
+      message = body?.detail ?? body?.message ?? body?.error ?? message
+      code = body?.code ?? undefined
+      requestId = body?.requestId ?? requestId
     } catch { /* 非 JSON 响应，用默认消息 */ }
-    throw new ApiError(res.status, message)
+    throw new ApiError(res.status, message, code, requestId)
   }
 
   if (res.status === 204) return undefined as T
@@ -65,6 +74,8 @@ export const adminApi = {
     request<T>(`/admin/api${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(`/admin/api${path}`, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(`/admin/api${path}`, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   del: <T>(path: string) => request<T>(`/admin/api${path}`, { method: 'DELETE' }),
   /** 聊天文件导入走 text/plain，不能套 JSON 的 content-type */
   postText: <T>(path: string, text: string) =>
