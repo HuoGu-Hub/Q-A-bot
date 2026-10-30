@@ -29,6 +29,11 @@ public interface ResourceDirectory {
      */
     Answer answer(String term);
 
+    /** 图片标记里的身份：{@code 地图/图层/第几片}，与 {@link #answer} 的热点顺序一致 */
+    static String imageKey(Layer layer, int index) {
+        return layer.map() + "/" + layer.key() + "/" + index;
+    }
+
     /**
      * 一个资源层。
      *

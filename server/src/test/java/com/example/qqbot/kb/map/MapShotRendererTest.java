@@ -73,6 +73,28 @@ class MapShotRendererTest {
     }
 
     @Test
+    @DisplayName("★ 资源点云：点画在该在的位置，热点套圈，不写名字")
+    void rendersDots() throws IOException {
+        Color copper = new Color(201, 123, 60);
+        byte[] shot = renderer.renderDots(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Dot(1280, 1280, copper),
+                        new MapShotRenderer.Dot(1400, 1280, copper)),
+                List.of(new MapProjection.Point(1280, 1280),
+                        new MapProjection.Point(1400, 1280)),
+                new MapProjection.Point(1340, 1280), 40,
+                whiteFetcher(), System.currentTimeMillis() + 5000).orElseThrow();
+
+        BufferedImage img = ImageIO.read(new ByteArrayInputStream(shot));
+        assertThat(img.getWidth()).isEqualTo(200);
+        assertThat(img.getHeight()).isEqualTo(125);
+        // 视口 1200×750 居中于 (1340,1280)，k = 200/1200：两个点落在 (90,63) 与 (110,63)
+        assertThat(hasColorNear(img, 90, 63, 3, 201, 123, 60)).as("左边的铜点").isTrue();
+        assertThat(hasColorNear(img, 110, 63, 3, 201, 123, 60)).as("右边的铜点").isTrue();
+        // 热点半径 40 → 屏幕约 7 像素，圈在 x≈107
+        assertThat(hasRedNear(img, 107, 63, 4)).as("热点圈").isTrue();
+    }
+
+    @Test
     @DisplayName("★ 缺一张瓦片就整张不出 —— 半张图比没有图更糟")
     void missingTileGivesUp() {
         MapShotRenderer.TileFetcher partial = (image, width) -> image.equals("t01.png")
@@ -235,6 +257,11 @@ class MapShotRendererTest {
     }
 
     /* ==================== 断言工具 ==================== */
+
+    private static boolean hasColorNear(BufferedImage img, int cx, int cy, int radius, int r, int g, int b) {
+        return anyPixel(img, cx, cy, radius, (rr, gg, bb) ->
+                Math.abs(rr - r) < 90 && Math.abs(gg - g) < 90 && Math.abs(bb - b) < 90);
+    }
 
     private static boolean hasRedNear(BufferedImage img, int cx, int cy, int radius) {
         return anyPixel(img, cx, cy, radius, (r, g, b) -> r > 140 && r - g > 50 && r - b > 50);

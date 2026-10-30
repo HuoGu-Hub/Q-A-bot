@@ -53,7 +53,7 @@ class KbLookupToolResourceTest {
     }
 
     @Test
-    @DisplayName("★ 地点没命中、资源层命中：返回热点文字，不带 map 截图标记")
+    @DisplayName("★ 地点没命中、资源层命中：返回热点文字，并附第一片的点云取图凭据")
     void fallsBackToResourceDistribution() {
         ResourceDirectory resources = mock(ResourceDirectory.class);
         when(resources.answer("铜矿")).thenReturn(copper());
@@ -61,7 +61,24 @@ class KbLookupToolResourceTest {
         String out = tool(places(), resources).locate("铜矿", null);
 
         assertThat(out).contains("747").contains("点位最密").contains("半径 250 内 32 个点")
-                .contains("火焰神龛·雾水盆地").contains("坐标 (5250, 2350)");
+                .contains("火焰神龛·雾水盆地").contains("坐标 (5250, 2350)")
+                .contains("配图：[[img:oreshot:Embervale/ore:copper/1]]");
+        assertThat(out).doesNotContain("[[img:map:");
+    }
+
+    @Test
+    @DisplayName("截图总开关关掉：只回文字，不附取图凭据")
+    void noMarkerWhenShotDisabled() {
+        ResourceDirectory resources = mock(ResourceDirectory.class);
+        when(resources.answer("铜矿")).thenReturn(copper());
+        MapOptions options = new MapOptions();
+        options.getShot().setEnabled(false);
+        KbLookupTool tool = new KbLookupTool(mock(KbRetriever.class), mock(KbCorpus.class),
+                places(), options, resources);
+
+        String out = tool.locate("铜矿", null);
+
+        assertThat(out).contains("747");
         assertThat(out).doesNotContain("[[img:");
     }
 

@@ -170,12 +170,69 @@ public class MapShotRenderer {
         if (!cfg.isEnabled() || marks == null || marks.isEmpty()) {
             return Optional.empty();
         }
-        int outW = cfg.getWidth();
-        double aspect = (double) outW / cfg.getHeight();
         List<MapProjection.Point> points = marks.stream()
                 .map(m -> new MapProjection.Point(m.x(), m.y()))
                 .toList();
-        MapProjection.Viewport vp = MapProjection.viewport(canvas, points, aspect,
+        Optional<Base> painted = paintBase(canvas, tiles, background, points, cfg, fetcher, deadlineAtMillis);
+        if (painted.isEmpty()) {
+            return Optional.empty();
+        }
+        Base b = painted.get();
+        try {
+            // 图标要解码一次就够：一张图里同一个分组可能有十几个点
+            Map<String, BufferedImage> iconCache = new HashMap<>();
+            drawPoints(b.g(), context, marks, b.viewport(), b.k(), b.width(), b.height(), fetcher, iconCache);
+        } finally {
+            b.g().dispose();
+        }
+        Optional<byte[]> out = encode(b.img(), cfg);
+        out.ifPresent(bytes -> log.info("[MAP-SHOT] 出图 {}×{}，底图 {} 张（{} 档），{} KB",
+                b.width(), b.height(), b.used(), b.tileWidth(), bytes.length / 1024));
+        return out;
+    }
+
+    /**
+     * 资源层截图：底图 + 一层点云 + 一个热点圈。
+     *
+     * <p>与地点截图分开：地点是"一个目标点套红圈 + 邻近地标名"，资源是"一片点云"。
+     * 底图取用同一套预算与缺图语义，但画法完全不同，所以不塞进 {@link Mark}。
+     *
+     * @param dots       要画的点（画布坐标）
+     * @param focus      取景框要框住的点（热点包围盒 + 中心）
+     * @param ringCenter 热点中心（画布坐标）；null 表示不画圈
+     * @param ringRadius 热点半径（坐标单位）
+     */
+    public Optional<byte[]> renderDots(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                       String background, List<Dot> dots, List<MapProjection.Point> focus,
+                                       MapProjection.Point ringCenter, double ringRadius,
+                                       TileFetcher fetcher, long deadlineAtMillis) {
+        MapOptions.Shot cfg = options.getShot();
+        if (!cfg.isEnabled() || focus == null || focus.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Base> painted = paintBase(canvas, tiles, background, focus, cfg, fetcher, deadlineAtMillis);
+        if (painted.isEmpty()) {
+            return Optional.empty();
+        }
+        Base b = painted.get();
+        try {
+            drawDots(b.g(), dots, b.viewport(), b.k(), b.width(), b.height(), ringCenter, ringRadius);
+        } finally {
+            b.g().dispose();
+        }
+        Optional<byte[]> out = encode(b.img(), cfg);
+        out.ifPresent(bytes -> log.info("[MAP-SHOT] 资源出图 {}×{}，点 {} 个，{} KB",
+                b.width(), b.height(), dots == null ? 0 : dots.size(), bytes.length / 1024));
+        return out;
+    }
+
+    /** 底图那一段：取景、取瓦片、铺底。地点图与资源图共用，差别只在之后画什么 */
+    private Optional<Base> paintBase(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                     String background, List<MapProjection.Point> focus,
+                                     MapOptions.Shot cfg, TileFetcher fetcher, long deadlineAtMillis) {
+        int outW = cfg.getWidth();
+        double aspect = (double) outW / cfg.getHeight();
+        MapProjection.Viewport vp = MapProjection.viewport(canvas, focus, aspect,
                 cfg.getMinSpan(), cfg.getMaxSpan(), cfg.getPadding());
         // 输出高度由输出宽度与长宽比算 —— 别拿视口宽度去除，那是坐标单位不是像素
         int outH = Math.max(1, (int) Math.round(outW / aspect));
@@ -184,7 +241,7 @@ public class MapShotRenderer {
 
         BufferedImage img = new BufferedImage(outW, outH, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
-        int used = 0;
+        boolean ok = false;
         try {
             g.setColor(BACKGROUND);
             g.fillRect(0, 0, outW, outH);
@@ -256,21 +313,52 @@ public class MapShotRenderer {
             }
             for (int i = 0; i < base.size(); i++) {
                 drawTile(g, base.get(i), baseBoxes.get(i), vp, k);
-                used++;
             }
-            // 图标要解码一次就够：一张图里同一个分组可能有十几个点
-            Map<String, BufferedImage> iconCache = new HashMap<>();
-            drawPoints(g, context, marks, vp, k, outW, outH, fetcher, iconCache);
+            ok = true;
+            return Optional.of(new Base(img, g, vp, k, outW, outH, tileWidth, base.size()));
         } finally {
-            g.dispose();
+            if (!ok) {
+                g.dispose();
+            }
         }
+    }
 
-        // 计数要拷成 final 才能进 lambda —— 下面那句日志读的是最终值
-        final int usedTiles = used;
-        Optional<byte[]> out = encode(img, cfg);
-        out.ifPresent(bytes -> log.info("[MAP-SHOT] 出图 {}×{}，底图 {} 张（{} 档），{} KB",
-                outW, outH, usedTiles, tileWidth, bytes.length / 1024));
-        return out;
+    /** 资源点：小圆点 + 热点圈。不写名字 —— 点太多，名字只会互相压住 */
+    private static void drawDots(Graphics2D g, List<Dot> dots, MapProjection.Viewport vp, double k,
+                                 int outW, int outH, MapProjection.Point ringCenter, double ringRadius) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        int r = Math.max(2, Math.round(outW / 400f));
+        if (dots != null) {
+            for (Dot d : dots) {
+                double sx = (d.x() - vp.left()) * k;
+                double sy = (d.y() - vp.top()) * k;
+                if (sx < -r || sy < -r || sx > outW + r || sy > outH + r) {
+                    continue;
+                }
+                int x = (int) Math.round(sx);
+                int y = (int) Math.round(sy);
+                g.setColor(new Color(0, 0, 0, 90));
+                g.fillOval(x - r - 1, y - r - 1, r * 2 + 3, r * 2 + 3);
+                g.setColor(d.color());
+                g.fillOval(x - r, y - r, r * 2, r * 2);
+            }
+        }
+        if (ringCenter != null && ringRadius > 0) {
+            double sx = (ringCenter.x() - vp.left()) * k;
+            double sy = (ringCenter.y() - vp.top()) * k;
+            int rr = (int) Math.max(10, Math.round(ringRadius * k));
+            ring(g, sx, sy, rr, PRIMARY_HALO, 5f);
+            ring(g, sx, sy, rr, PRIMARY, 2.5f);
+        }
+    }
+
+    /** 底图 + 画布参数，交给调用方继续画点 */
+    private record Base(BufferedImage img, Graphics2D g, MapProjection.Viewport viewport, double k,
+                        int width, int height, int tileWidth, int used) {
+    }
+
+    /** 一个资源点（画布坐标）与颜色 */
+    public record Dot(double x, double y, Color color) {
     }
 
     /** 瓦片矩形与视口有没有交集 —— 不相交的瓦片连取都不取 */

@@ -195,7 +195,7 @@ public class KbLookupTool {
         if (!places.isAvailable()) {
             ResourceDirectory.Answer resource = resourceAnswer(place);
             if (resource != null) {
-                return PromptText.escapeDelimiters(resource.text());
+                return resourceText(resource);
             }
             return "地图点位数据暂时不可用。";
         }
@@ -214,9 +214,19 @@ public class KbLookupTool {
         // 具名地点没有命中：再看是不是在问某层资源的分布（铜矿、铁矿……）
         ResourceDirectory.Answer resource = resourceAnswer(place);
         if (resource != null) {
-            return PromptText.escapeDelimiters(resource.text());
+            return resourceText(resource);
         }
         return PromptText.escapeDelimiters(answer.text(options.getUnitsPerMeter()));
+    }
+
+    /** 资源文字 + 第一片热点的取图凭据；截图关闭时只回文字 */
+    private String resourceText(ResourceDirectory.Answer resource) {
+        String text = PromptText.escapeDelimiters(resource.text());
+        if (!options.getShot().isEnabled()) {
+            return text;
+        }
+        return text + "\n配图：[[img:oreshot:" + PromptText.escapeDelimiters(
+                ResourceDirectory.imageKey(resource.layer(), 1)) + "]]";
     }
 
     /**
