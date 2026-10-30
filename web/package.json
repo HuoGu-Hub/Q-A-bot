@@ -10,7 +10,10 @@
     "build:only": "vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "gen:api": "openapi-typescript ../docs/openapi.json -o src/shared/api/schema.d.ts"
+    "gen:api": "openapi-typescript ../docs/openapi.json -o src/shared/api/schema.d.ts",
+    "predev": "pnpm gen:api",
+    "prebuild": "pnpm gen:api",
+    "pretypecheck": "pnpm gen:api"
   },
   "dependencies": {
     "vue": "^3.5.13",

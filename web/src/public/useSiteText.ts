@@ -17,21 +17,13 @@
 import { ref } from 'vue'
 import { publicApi } from '@shared/api/client'
 import { botName, setBotName } from '@shared/identity/botName'
+import type { Schemas } from '@shared/api/generated'
 
 /** /api/public/v1/site 的返回：群信息（关于页用）+ 文案覆盖值 */
-export interface SiteInfo {
-  groupName: string
-  groupNumber: string
-  groupDesc: string
-  joinHint: string
-  botName: string
-  /** 运营方 / 组织名（「关于」页展示；可为空） */
-  org: string
-  /** 技术支持署名（「关于」页展示；可为空） */
-  author: string
-  /** 页面文案的**覆盖值**，键是 `page.block`；没被改过的键不存在 */
-  texts?: Record<string, string>
-}
+export type SiteInfo =
+  Required<Pick<Schemas['SiteInfo'],
+    'groupName' | 'groupNumber' | 'groupDesc' | 'joinHint' | 'botName' | 'org' | 'author'>>
+  & Pick<Schemas['SiteInfo'], 'texts'>
 
 /** 站点信息单例（模块级）。整站只请求一次，所有页面共享同一个 ref。 */
 export const site = ref<SiteInfo | null>(null)

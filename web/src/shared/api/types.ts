@@ -5,17 +5,19 @@
  * schema.d.ts，不再往这里加；已有类型按模块迁移，迁完一个删一个。
  */
 
+import type { Schemas } from './generated'
+
+/** 从生成的 schema 取字段，但保留手写类型里“一定存在”的字段 */
+type RequiredFields<T, K extends keyof T> = Required<Pick<T, K>> & Omit<T, K>
+
 /* ==================== 知识库 ==================== */
 
 /** 一条知识库分块（公开站只暴露 title/url/text，不暴露内部分数） */
-export interface KbEntry {
-  title: string
-  url: string
-  text: string
-  cats?: string[]
-}
+export type KbEntry =
+  RequiredFields<Schemas['KbEntry'], 'title' | 'url' | 'text'>
+  & Pick<Schemas['KbEntry'], 'cats'>
 
-export interface KbSearchResult {
+export type KbSearchResult = {
   query: string
   count: number
   /** semantic = 走了向量语义检索（认中文口语）；keyword = 只走了本地术语表关键词 */
@@ -31,19 +33,7 @@ export interface KbCategory {
 /* ==================== 公开统计 ==================== */
 
 /** 公开统计：刻意不含用户数/群数等内部指标 */
-export interface PublicStats {
-  /**
-   * 提问量。
-   * ⚠️ 原来这个字段叫 totalQuestions，但后端取的是「全部群消息」——
-   * 含群里没 @ 机器人的闲聊，对外宣称的提问数因此错了约 17 倍。
-   * 现在的定义：@ 了机器人 + 机器人有效回应且未被拦截。
-   */
-  questions: number
-  hitRate: number
-  kbEntries: number
-  glossaryTerms: number
-  since: string
-}
+export type PublicStats = Required<Schemas['PublicStats']>
 
 /* ==================== 管理后台 ==================== */
 
@@ -721,8 +711,12 @@ export interface KbGroup {
   tags: KbGroupTag[]
 }
 
-export interface KbBrowseResult {
-  entries: { title: string; url: string; text: string; tags: string[] }[]
+export type BrowseEntry = Required<Pick<
+  Schemas['BrowseEntry'], 'title' | 'url' | 'text' | 'tags'
+>>
+
+export type KbBrowseResult = {
+  entries: BrowseEntry[]
   total: number
   page: number
   pageSize: number
@@ -771,8 +765,13 @@ export interface CarouselListResponse {
 }
 
 /** GET /api/public/v1/carousel —— 只含启用的，已按 sort 升序 */
-export interface CarouselPublicResponse {
-  items: CarouselItem[]
+export type CarouselPublicItem = Required<Pick<
+  Schemas['CarouselItemView'],
+  'id' | 'imageUrl' | 'link' | 'caption' | 'width' | 'height'
+>>
+
+export type CarouselPublicResponse = {
+  items: CarouselPublicItem[]
   /**
    * 切换间隔（毫秒）。
    *

@@ -52,11 +52,11 @@
  *      过渡直接不创建）。所以方向必须**早一帧**落定，详见 setIndex 的注释。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { CarouselItem } from '@shared/api/types'
+import type { CarouselPublicItem } from '@shared/api/types'
 import Icon from '@shared/ui/Icon.vue'
 
 const props = withDefaults(defineProps<{
-  items: CarouselItem[]
+  items: CarouselPublicItem[]
   /** 自动切换间隔（毫秒）。<= 0 = 不自动播放 */
   intervalMs?: number
   /** 画面高度上限（CSS 长度）。默认按"标题区 + 这一块刚好一屏"留（见文件头 ⑦） */
@@ -112,7 +112,7 @@ const frameRatio = computed(() => {
   return it.width / it.height
 })
 
-const altOf = (it: CarouselItem) => it.caption || '站点配图'
+const altOf = (it: CarouselPublicItem) => it.caption || '站点配图'
 
 /**
  * 向服务端要哪几档宽度。
@@ -135,13 +135,13 @@ const IMAGE_WIDTHS = [640, 1280, 1920]
 const AMBIENT_WIDTH = 320
 
 /** 在 imageUrl 上追加 ?w=。省不省带宽就取决于这里有没有传 */
-function sized(it: CarouselItem, w: number) {
+function sized(it: CarouselPublicItem, w: number) {
   const url = it.imageUrl
   return url + (url.includes('?') ? '&' : '?') + 'w=' + w
 }
 
 /** srcset 候选串 */
-function srcsetOf(it: CarouselItem) {
+function srcsetOf(it: CarouselPublicItem) {
   return IMAGE_WIDTHS.map((w) => sized(it, w) + ' ' + w + 'w').join(', ')
 }
 
@@ -185,7 +185,7 @@ const reduceMotion = ref(false)
 const loaded = ref<Set<string>>(new Set())
 
 /** 图片的唯一身份。用 id 而不是下标，见 loaded 的注释 */
-function idOf(it: CarouselItem): string {
+function idOf(it: CarouselPublicItem): string {
   return String(it.id)
 }
 
@@ -212,7 +212,7 @@ const wanted = computed(() => {
  */
 const arrived = ref<Set<string>>(new Set())
 
-function markArrived(it: CarouselItem) {
+function markArrived(it: CarouselPublicItem) {
   const id = idOf(it)
   if (arrived.value.has(id)) return
   arrived.value = new Set(arrived.value).add(id)

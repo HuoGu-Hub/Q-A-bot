@@ -15,7 +15,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { renderInline } from '../renderInline'
 import { publicApi, describeError } from '@shared/api/client'
-import type { CarouselItem, CarouselPublicResponse, PublicStats } from '@shared/api/types'
+import type { CarouselPublicItem, CarouselPublicResponse, PublicStats } from '@shared/api/types'
 import { num, pct } from '@shared/utils/format'
 import { t } from '../useSiteText'
 import Icon from '@shared/ui/Icon.vue'
@@ -27,7 +27,7 @@ const loading = ref(true)
 const error = ref('')
 
 /** 首页轮播图。空数组 = 后台还没配图，这一块整个不渲染 */
-const slides = ref<CarouselItem[]>([])
+const slides = ref<CarouselPublicItem[]>([])
 /** 切换间隔；后端公开接口给了就以后端为准 */
 const slideIntervalMs = ref(4000)
 
