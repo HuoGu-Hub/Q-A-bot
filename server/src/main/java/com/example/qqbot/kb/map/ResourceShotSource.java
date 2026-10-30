@@ -1,7 +1,6 @@
 package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
-import com.example.qqbot.kb.ResourceDirectory;
 import com.example.qqbot.kb.ResourceHotspots;
 import com.example.qqbot.media.ImageSource;
 import com.example.qqbot.onebot.model.OutboundImage;
@@ -11,20 +10,30 @@ import org.springframework.stereotype.Component;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 资源层截图 —— 标记 {@code [[img:oreshot:地图/图层/第几片]]} 由它解析。
  *
+ * <h2>图上为什么还要画 wiki 地点</h2>
+ * 资源点只有坐标，没有名字。只画一片橙色圆点，读图的人只看到地形纹理，
+ * 认不出这是地图的哪一块 —— 所以要把同一张画布上的 wiki 地点（图标 + 名字）
+ * 一起画进去，用玩家认得的地方来定位。这也正是不画大圈的原因：
+ * 圈只说明"看这里"，地点名才说明"这里是哪"。
+ *
  * <h2>与地点截图的分工</h2>
- * {@link MapShotSource} 画的是"一个目标点 + 邻近地标图标"；资源层要画的是
- * <b>一层点云</b>，所以用单独一个来源，不复用 {@code map:} 前缀。
+ * {@link MapShotSource} 画的是"一个目标点 + 邻近地标"；资源层要画的是
+ * <b>一层点云 + 参照地点</b>，所以用单独一个来源，不复用 {@code map:} 前缀。
  * 底图取用同一套 {@link MapShotRenderer} 与同一套缺图/预算语义。
  *
  * <h2>取哪一片</h2>
  * 第几片就是 {@link ResourceHotspots#find} 排出来的顺序，与 {@code locate} 文字里的
- * 第一、第二、第三片一一对应。图和文字因此不会各说各的。
+ * 第一、第二、第三片一一对应。文字与图因此不会各说各的。
  *
  * <h2>任何一步失败都返回 empty</h2>
  * 图层不存在、热点不够、画布不可渲染、缺瓦片、超预算 —— 都只表现为"这次没有图"，
@@ -37,6 +46,12 @@ public class ResourceShotSource implements ImageSource {
 
     /** 图上的点用什么颜色 —— 与网页资源层的默认色一致 */
     private static final Color DEFAULT_DOT = new Color(201, 123, 60);
+
+    /** 参照地点最多画几个：视口里通常十几个，上限只是防异常数据 */
+    private static final int MAX_CONTEXT = 40;
+
+    /** 其中最多给几个写名字：再多会互相压住，一个都读不成 */
+    private static final int LABEL_MAX = 8;
 
     private final MapViewService view;
     private final MapResourceService resources;
@@ -107,18 +122,19 @@ public class ResourceShotSource implements ImageSource {
         MapProjection.Canvas geometry = MapProjection.Canvas.of(
                 canvas.topLeft(), canvas.bottomRight(), canvas.tileAt(), canvas.tileSize());
 
-        // 取景只框热点那一小片；整层的点都画，但视口外的会被裁掉
+        // 取景只框热点那一小片；整层的点都画，视口外的会被裁掉
         MapProjection.Point topLeft = MapProjection.worldOf(geometry, hotspot.minX(), hotspot.maxY());
         MapProjection.Point bottomRight = MapProjection.worldOf(geometry, hotspot.maxX(), hotspot.minY());
         MapProjection.Point center = MapProjection.worldOf(geometry, hotspot.x(), hotspot.y());
         List<MapProjection.Point> focus = List.of(topLeft, bottomRight, center);
 
-        Color color = colorOf(map, layerKey);
+        LayerStyle style = styleOf(map, layerKey);
         List<MapShotRenderer.Dot> dots = new ArrayList<>(rows.size());
         for (MapResourceService.PointView p : rows) {
             MapProjection.Point at = MapProjection.worldOf(geometry, p.x(), p.z());
-            dots.add(new MapShotRenderer.Dot(at.x(), at.y(), color));
+            dots.add(new MapShotRenderer.Dot(at.x(), at.y(), style.color()));
         }
+        List<MapShotRenderer.Mark> context = contextMarks(map, canvas.page(), geometry, hotspot);
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
         List<String> missing = new ArrayList<>();
@@ -139,10 +155,17 @@ public class ResourceShotSource implements ImageSource {
                 usedWidth[0] = width;
                 missing.add(image);
             }
+
+            @Override
+            public Optional<MapImageCache.Image> icon(String image) {
+                // 图标只读缓存：回复路径上不能等上游
+                return images.cached(map, null, image, 0);
+            }
         };
 
+        String caption = style.name() + " · " + rows.size() + " 个点";
         Optional<byte[]> shot = renderer.renderDots(geometry, canvas.tiles(), canvas.background(),
-                dots, focus, center, ResourceHotspots.HOT_RADIUS, fetcher, deadline);
+                dots, focus, context, caption, fetcher, deadline);
         if (shot.isEmpty() && !missing.isEmpty()) {
             warmer.warmAsync(map, canvas.page(), missing, usedWidth[0]);
         }
@@ -176,20 +199,107 @@ public class ResourceShotSource implements ImageSource {
         return best;
     }
 
-    /** 图层颜色来自资源目录；取不到就用默认色，绝不因为配色失败不出图 */
-    private Color colorOf(String map, String layerKey) {
+    /**
+     * 同一张画布上的 wiki 地点，按离热点的距离取最近的若干个。
+     *
+     * <p>只画公开可见、默认显示的分组——与网页地图同一条规则。
+     * 名字只给最近的 {@link #LABEL_MAX} 个：再多会互相压住。
+     */
+    private List<MapShotRenderer.Mark> contextMarks(String map, String canvasPage,
+                                                    MapProjection.Canvas geometry,
+                                                    ResourceHotspots.Hotspot hotspot) {
+        MapViewService.MapView mapView = null;
         try {
-            for (MapResourceService.CategoryView category : resources.catalog(map).categories()) {
-                for (MapResourceService.LayerView layer : category.layers()) {
-                    if (layer.key().equals(layerKey) && layer.color() != null
-                            && !layer.color().isBlank()) {
-                        return Color.decode(layer.color());
-                    }
+            for (MapViewService.MapView m : view.catalog()) {
+                if (map.equals(m.map())) {
+                    mapView = m;
+                    break;
                 }
             }
         } catch (Exception e) {
-            log.debug("[RES-SHOT] 取图层颜色失败，用默认色：{}", e.getMessage());
+            log.debug("[RES-SHOT] 读地图目录失败，参照地点不做分组过滤：{}", e.getMessage());
         }
-        return DEFAULT_DOT;
+        Set<String> shown = mapView == null ? null : mapView.shownGroups();
+        Map<String, String> icons = new HashMap<>();
+        if (mapView != null) {
+            for (MapViewService.GroupView g : mapView.groups()) {
+                if (g.icon() != null && !g.icon().isBlank()) {
+                    icons.put(g.key(), g.icon());
+                }
+            }
+        }
+
+        List<MapViewService.MarkerView> visible;
+        try {
+            visible = view.markers(map, true);
+        } catch (Exception e) {
+            log.debug("[RES-SHOT] 读 wiki 点位失败，本张图不画参照地点：{}", e.getMessage());
+            return List.of();
+        }
+        if (visible == null || visible.isEmpty()) {
+            return List.of();
+        }
+
+        record Candidate(double distance, MapViewService.MarkerView marker) {
+        }
+        List<Candidate> found = new ArrayList<>();
+        for (MapViewService.MarkerView m : visible) {
+            if (!nz(canvasPage).equals(nz(m.canvas()))) {
+                continue;
+            }
+            if (shown != null && !shown.contains(nz(m.group()))) {
+                continue;
+            }
+            if (m.name() == null || m.name().isBlank()) {
+                continue;
+            }
+            double dx = m.x() - hotspot.x();
+            double dy = m.y() - hotspot.y();
+            found.add(new Candidate(dx * dx + dy * dy, m));
+        }
+        found.sort(Comparator.comparingDouble(Candidate::distance));
+
+        int limit = Math.min(found.size(), MAX_CONTEXT);
+        List<MapShotRenderer.Mark> out = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            MapViewService.MarkerView m = found.get(i).marker();
+            MapProjection.Point at = MapProjection.worldOf(geometry, m.x(), m.y());
+            String label = i < LABEL_MAX ? m.name() : "";
+            out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), label,
+                    icons.getOrDefault(nz(m.group()), "")));
+        }
+        return out;
+    }
+
+    /** 图层颜色与说明文字；取不到就用默认色，绝不因为配色失败不出图 */
+    private LayerStyle styleOf(String map, String layerKey) {
+        try {
+            for (MapResourceService.CategoryView category : resources.catalog(map).categories()) {
+                for (MapResourceService.LayerView layer : category.layers()) {
+                    if (!layer.key().equals(layerKey)) {
+                        continue;
+                    }
+                    Color color = DEFAULT_DOT;
+                    if (layer.color() != null && !layer.color().isBlank()) {
+                        color = Color.decode(layer.color());
+                    }
+                    String name = layer.name() == null ? "" : layer.name().strip();
+                    if (name.length() == 1) {
+                        name = name + "矿";
+                    }
+                    return new LayerStyle(color, name.isBlank() ? layerKey : name);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[RES-SHOT] 取图层样式失败，用默认值：{}", e.getMessage());
+        }
+        return new LayerStyle(DEFAULT_DOT, layerKey);
+    }
+
+    private record LayerStyle(Color color, String name) {
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
     }
 }

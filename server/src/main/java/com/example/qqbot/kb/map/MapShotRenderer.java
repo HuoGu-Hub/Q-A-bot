@@ -197,14 +197,14 @@ public class MapShotRenderer {
      * <p>与地点截图分开：地点是"一个目标点套红圈 + 邻近地标名"，资源是"一片点云"。
      * 底图取用同一套预算与缺图语义，但画法完全不同，所以不塞进 {@link Mark}。
      *
-     * @param dots       要画的点（画布坐标）
-     * @param focus      取景框要框住的点（热点包围盒 + 中心）
-     * @param ringCenter 热点中心（画布坐标）；null 表示不画圈
-     * @param ringRadius 热点半径（坐标单位）
+     * @param dots    要画的点（画布坐标）
+     * @param focus   取景框要框住的点（热点包围盒 + 中心）
+     * @param context wiki 地点（图标 + 名字），用来声明这张图是哪一块
+     * @param caption 左上角的一行说明，如「铜矿 · 747 个点」；空表示不写
      */
     public Optional<byte[]> renderDots(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
                                        String background, List<Dot> dots, List<MapProjection.Point> focus,
-                                       MapProjection.Point ringCenter, double ringRadius,
+                                       List<Mark> context, String caption,
                                        TileFetcher fetcher, long deadlineAtMillis) {
         MapOptions.Shot cfg = options.getShot();
         if (!cfg.isEnabled() || focus == null || focus.isEmpty()) {
@@ -216,7 +216,12 @@ public class MapShotRenderer {
         }
         Base b = painted.get();
         try {
-            drawDots(b.g(), dots, b.viewport(), b.k(), b.width(), b.height(), ringCenter, ringRadius);
+            drawDots(b.g(), dots, b.viewport(), b.k(), b.width(), b.height());
+            // wiki 地点压在点云上面：图标与名字是读图人唯一认得出"这是哪"的东西
+            Map<String, BufferedImage> iconCache = new HashMap<>();
+            drawPoints(b.g(), context, List.of(), b.viewport(), b.k(), b.width(), b.height(),
+                    fetcher, iconCache);
+            drawCaption(b.g(), caption, b.width());
         } finally {
             b.g().dispose();
         }
@@ -323,33 +328,52 @@ public class MapShotRenderer {
         }
     }
 
-    /** 资源点：小圆点 + 热点圈。不写名字 —— 点太多，名字只会互相压住 */
+    /** 资源点：小圆点。不写名字 —— 点太多，名字只会互相压住；定位交给 wiki 地点 */
     private static void drawDots(Graphics2D g, List<Dot> dots, MapProjection.Viewport vp, double k,
-                                 int outW, int outH, MapProjection.Point ringCenter, double ringRadius) {
+                                 int outW, int outH) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         int r = Math.max(2, Math.round(outW / 400f));
-        if (dots != null) {
-            for (Dot d : dots) {
-                double sx = (d.x() - vp.left()) * k;
-                double sy = (d.y() - vp.top()) * k;
-                if (sx < -r || sy < -r || sx > outW + r || sy > outH + r) {
-                    continue;
-                }
-                int x = (int) Math.round(sx);
-                int y = (int) Math.round(sy);
-                g.setColor(new Color(0, 0, 0, 90));
-                g.fillOval(x - r - 1, y - r - 1, r * 2 + 3, r * 2 + 3);
-                g.setColor(d.color());
-                g.fillOval(x - r, y - r, r * 2, r * 2);
+        if (dots == null) {
+            return;
+        }
+        for (Dot d : dots) {
+            double sx = (d.x() - vp.left()) * k;
+            double sy = (d.y() - vp.top()) * k;
+            if (sx < -r || sy < -r || sx > outW + r || sy > outH + r) {
+                continue;
             }
+            int x = (int) Math.round(sx);
+            int y = (int) Math.round(sy);
+            g.setColor(new Color(0, 0, 0, 90));
+            g.fillOval(x - r - 1, y - r - 1, r * 2 + 3, r * 2 + 3);
+            g.setColor(d.color());
+            g.fillOval(x - r, y - r, r * 2, r * 2);
         }
-        if (ringCenter != null && ringRadius > 0) {
-            double sx = (ringCenter.x() - vp.left()) * k;
-            double sy = (ringCenter.y() - vp.top()) * k;
-            int rr = (int) Math.max(10, Math.round(ringRadius * k));
-            ring(g, sx, sy, rr, PRIMARY_HALO, 5f);
-            ring(g, sx, sy, rr, PRIMARY, 2.5f);
+    }
+
+    /** 左上角一行说明。字体与地图标签同一套回退，装不上中文字体就不写 */
+    private static void drawCaption(Graphics2D g, String caption, int outW) {
+        String text = caption == null ? "" : caption.strip();
+        if (text.isEmpty()) {
+            return;
         }
+        Font fontBase = labelFont(text);
+        if (fontBase == null) {
+            return;
+        }
+        Font font = fontBase.deriveFont(Font.PLAIN, Math.max(16f, outW / 55f));
+        FontMetrics fm = g.getFontMetrics(font);
+        int padX = 12;
+        int padY = 7;
+        int w = fm.stringWidth(text) + padX * 2;
+        int h = fm.getHeight() + padY * 2;
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setColor(new Color(0, 0, 0, 170));
+        g.fillRoundRect(10, 10, w, h, h, h);
+        g.setFont(font);
+        g.setColor(Color.WHITE);
+        g.drawString(text, 10 + padX, 10 + padY + fm.getAscent());
     }
 
     /** 底图 + 画布参数，交给调用方继续画点 */

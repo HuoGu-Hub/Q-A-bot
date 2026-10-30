@@ -73,7 +73,7 @@ class MapShotRendererTest {
     }
 
     @Test
-    @DisplayName("★ 资源点云：点画在该在的位置，热点套圈，不写名字")
+    @DisplayName("★ 资源点云：点画在该在的位置，不再套热点圈")
     void rendersDots() throws IOException {
         Color copper = new Color(201, 123, 60);
         byte[] shot = renderer.renderDots(CANVAS, TILES, "",
@@ -81,7 +81,7 @@ class MapShotRendererTest {
                         new MapShotRenderer.Dot(1400, 1280, copper)),
                 List.of(new MapProjection.Point(1280, 1280),
                         new MapProjection.Point(1400, 1280)),
-                new MapProjection.Point(1340, 1280), 40,
+                List.of(), "铜矿 · 2 个点",
                 whiteFetcher(), System.currentTimeMillis() + 5000).orElseThrow();
 
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(shot));
@@ -90,8 +90,7 @@ class MapShotRendererTest {
         // 视口 1200×750 居中于 (1340,1280)，k = 200/1200：两个点落在 (90,63) 与 (110,63)
         assertThat(hasColorNear(img, 90, 63, 3, 201, 123, 60)).as("左边的铜点").isTrue();
         assertThat(hasColorNear(img, 110, 63, 3, 201, 123, 60)).as("右边的铜点").isTrue();
-        // 热点半径 40 → 屏幕约 7 像素，圈在 x≈107
-        assertThat(hasRedNear(img, 107, 63, 4)).as("热点圈").isTrue();
+        assertThat(hasPureRedNear(img, 100, 63, 12)).as("不该再有热点红圈").isFalse();
     }
 
     @Test
@@ -261,6 +260,10 @@ class MapShotRendererTest {
     private static boolean hasColorNear(BufferedImage img, int cx, int cy, int radius, int r, int g, int b) {
         return anyPixel(img, cx, cy, radius, (rr, gg, bb) ->
                 Math.abs(rr - r) < 90 && Math.abs(gg - g) < 90 && Math.abs(bb - b) < 90);
+    }
+
+    private static boolean hasPureRedNear(BufferedImage img, int cx, int cy, int radius) {
+        return anyPixel(img, cx, cy, radius, (r, g, b) -> r > 180 && g < 90 && b < 90);
     }
 
     private static boolean hasRedNear(BufferedImage img, int cx, int cy, int radius) {

@@ -34,6 +34,8 @@ class ResourceShotSourceTest {
     private MapResourceService resources;
     private MapImageCache images;
     private MapShotWarmer warmer;
+    private MapViewService view;
+    private MapViewService.CanvasView canvasView;
     private ResourceShotSource source;
 
     @BeforeEach
@@ -42,7 +44,7 @@ class ResourceShotSourceTest {
         options.getShot().setWidth(200);
         options.getShot().setHeight(125);
 
-        MapViewService.CanvasView canvas = new MapViewService.CanvasView(CANVAS_PAGE, "余烬谷",
+        canvasView = new MapViewService.CanvasView(CANVAS_PAGE, "余烬谷",
                 new double[]{0, 2560}, new double[]{2560, 0}, new double[]{0, 0},
                 new double[]{1280, 1280},
                 List.of(new MapViewService.TileView("t00.png", 0, 0),
@@ -50,8 +52,8 @@ class ResourceShotSourceTest {
                         new MapViewService.TileView("t01.png", 0, 1),
                         new MapViewService.TileView("t11.png", 1, 1)),
                 "", "", 0.1, 2.0);
-        MapViewService view = mock(MapViewService.class);
-        when(view.canvasesOf(MAP)).thenReturn(List.of(canvas));
+        view = mock(MapViewService.class);
+        when(view.canvasesOf(MAP)).thenReturn(List.of(canvasView));
 
         MapResourceService.LayerView layer = new MapResourceService.LayerView(
                 LAYER, "铜", "ore", "copper", 5, "#c97b3c", "point");
@@ -98,6 +100,29 @@ class ResourceShotSourceTest {
     }
 
     @Test
+    @DisplayName("★ 图上带 wiki 地点：图标 + 名字，左上角有资源说明")
+    void drawsWikiPlacesAsReference() {
+        MapViewService.GroupView village = new MapViewService.GroupView(
+                "Village", "村庄", "Village.png", false, true, "landmark", 1);
+        when(view.catalog()).thenReturn(List.of(new MapViewService.MapView(
+                MAP, "余烬谷", 1, 0, List.of(canvasView), List.of(village), null)));
+        when(view.markers(MAP, true)).thenReturn(List.of(new MapViewService.MarkerView(
+                "Map:Embervale/Main#TestVillage", MAP, "Map:Embervale/Main", CANVAS_PAGE,
+                "Village", "测试村", "Test Village", "", "Village",
+                1200, 1200, "", true, "landmark", 0, "", "wiki")));
+
+        CapturingDotsRenderer capturing = new CapturingDotsRenderer(options);
+        ResourceShotSource shot = new ResourceShotSource(view, resources, images, capturing, warmer, options);
+
+        assertThat(shot.resolve(MAP + "/" + LAYER + "/1")).isEmpty();
+        assertThat(capturing.context).singleElement().satisfies(m -> {
+            assertThat(m.label()).isEqualTo("测试村");
+            assertThat(m.icon()).isEqualTo("Village.png");
+        });
+        assertThat(capturing.caption).isEqualTo("铜矿 · 5 个点");
+    }
+
+    @Test
     @DisplayName("没有第 2 片、图层不存在、身份形状不对：都不出图，也不抛异常")
     void unknownKeysAreEmpty() {
         assertThat(source.resolve(MAP + "/" + LAYER + "/2")).isEmpty();
@@ -111,6 +136,28 @@ class ResourceShotSourceTest {
         options.getShot().setEnabled(false);
 
         assertThat(source.resolve(MAP + "/" + LAYER + "/1")).isEmpty();
+    }
+
+    /** 只记录"传进来什么"的渲染器，用来验收参照地点与说明文字 */
+    private static final class CapturingDotsRenderer extends MapShotRenderer {
+
+        List<MapShotRenderer.Mark> context = List.of();
+        String caption = "";
+
+        CapturingDotsRenderer(MapOptions options) {
+            super(options);
+        }
+
+        @Override
+        public Optional<byte[]> renderDots(MapProjection.Canvas canvas, List<MapViewService.TileView> tiles,
+                                           String background, List<MapShotRenderer.Dot> dots,
+                                           List<MapProjection.Point> focus,
+                                           List<MapShotRenderer.Mark> context, String caption,
+                                           TileFetcher fetcher, long deadlineAtMillis) {
+            this.context = List.copyOf(context);
+            this.caption = caption;
+            return Optional.empty();
+        }
     }
 
     private static byte[] solidPng() throws IOException {
