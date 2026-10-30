@@ -12,6 +12,9 @@
 -->
 <configuration>
 
+    <conversionRule conversionWord="maskedMsg"
+                    converterClass="com.example.qqbot.logs.MaskingConverter"/>
+
     <springProperty scope="context" name="LOG_FILE" source="logging.file.name"
                     defaultValue="./data/logs/qqbot.log"/>
     <springProperty scope="context" name="LOG_LEVEL" source="logging.level.com.example.qqbot"
@@ -20,7 +23,7 @@
     <!-- ① 控制台 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %maskedMsg%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
@@ -35,7 +38,7 @@
             <totalSizeCap>200MB</totalSizeCap>
         </rollingPolicy>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{40} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{40} - %maskedMsg%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>

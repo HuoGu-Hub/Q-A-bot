@@ -220,12 +220,13 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     /** 后台未启用：API 回 JSON，页面直接渲染一句话。**不重定向**，避免死循环。 */
     private void disabled(HttpServletResponse response, String path) throws IOException {
         response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-        String diagnosis = com.example.qqbot.files.ProjectFiles.describe();
+        // 诊断只进日志：503 页面会暴露绝对路径与部署目录，不值得给匿名请求看
+        log.warn("[ADMIN] 后台未启用：{}", com.example.qqbot.files.ProjectFiles.describe());
         if (path.startsWith("/admin/api/")) {
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("""
-                    {"error":"管理后台未启用：还没有任何后台账号。在 .env 里设置 ADMIN_PASSWORD 后重启即可自动创建 admin 账号（%s）"}
-                    """.formatted(diagnosis));
+                    {"error":"管理后台未启用：还没有任何后台账号。在 .env 里设置 ADMIN_PASSWORD 后重启即可自动创建 admin 账号"}
+                    """);
         } else {
             response.setContentType("text/html;charset=UTF-8");
             response.getWriter().write("""
@@ -234,9 +235,9 @@ public class AdminAuthFilter extends OncePerRequestFilter {
                     <h3>管理后台未启用</h3>
                     <p>系统里还没有任何后台账号。在 <code>.env</code> 里设置
                     <code>ADMIN_PASSWORD</code> 后重启机器人，会自动创建 <code>admin</code> 账号。</p>
-                    <p style="color:#888;font-size:13px">诊断：%s</p>
+                    <p style="color:#888;font-size:13px">详细原因已写入服务器日志。</p>
                     </div>
-                    """.formatted(diagnosis));
+                    """);
         }
     }
 

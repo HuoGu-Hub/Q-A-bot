@@ -41,9 +41,12 @@ public class ImageFetcher {
 
     private static final int MAX_BYTES = 5 * 1024 * 1024;
 
+    private static final int MAX_REDIRECTS = 3;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            // 不自动跟随：每一跳都要重新做公网校验，否则公网 URL 可以 302 到内网
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     private final ImageCache imageCache;
@@ -121,6 +124,10 @@ public class ImageFetcher {
     }
 
     private Optional<Downloaded> download(String url) {
+        return download(url, 0);
+    }
+
+    private Optional<Downloaded> download(String url, int redirects) {
         if (!StringUtils.hasText(url)) {
             return Optional.empty();
         }
@@ -129,15 +136,36 @@ public class ImageFetcher {
             return Optional.empty();
         }
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+            URI uri = URI.create(url);
+            HttpRequest request = HttpRequest.newBuilder(uri)
                     .timeout(Duration.ofSeconds(10))
                     .header("User-Agent", "qqbot-personal/0.1")
                     .GET()
                     .build();
 
             HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() != 200) {
-                log.warn("[MEDIA] 图片下载失败 HTTP {}：{}", response.statusCode(), mask(url));
+            int status = response.statusCode();
+            if (status >= 300 && status < 400) {
+                Optional<String> location = response.headers().firstValue("location");
+                if (location.isEmpty() || redirects >= MAX_REDIRECTS) {
+                    log.warn("[MEDIA] 图片重定向次数过多或缺少 Location：{}", mask(url));
+                    return Optional.empty();
+                }
+                URI next = uri.resolve(location.get());
+                if ("https".equalsIgnoreCase(uri.getScheme())
+                        && "http".equalsIgnoreCase(next.getScheme())) {
+                    log.warn("[MEDIA] 拒绝 HTTPS 降级重定向：{}", mask(next.toString()));
+                    return Optional.empty();
+                }
+                if (!isPublicHttpUrl(next.toString())) {
+                    log.warn("[MEDIA] 图片重定向到非公网地址，已拒绝：{}", mask(next.toString()));
+                    return Optional.empty();
+                }
+                log.info("[MEDIA] 图片重定向 {} -> {}", mask(url), mask(next.toString()));
+                return download(next.toString(), redirects + 1);
+            }
+            if (status != 200) {
+                log.warn("[MEDIA] 图片下载失败 HTTP {}：{}", status, mask(url));
                 return Optional.empty();
             }
 

@@ -19,8 +19,12 @@ public class LogMasker {
 
     /** key=value / "key":"value" 形式的密钥 */
     private static final Pattern SECRET = Pattern.compile(
-            "(?i)((?:token|password|passwd|secret|api[_-]?key|access[_-]?token|authorization)"
+            "(?i)((?:token|password|passwd|secret|api[_-]?key|access[_-]?token)"
                     + "[\"']?\\s*[:=]\\s*[\"']?)([A-Za-z0-9_\\-+/=.]{6,})");
+
+    /** Authorization: <token>，但不能把后面的 Bearer 当成 token */
+    private static final Pattern AUTH = Pattern.compile(
+            "(?i)(authorization\\s*[:=]\\s*)(?!bearer\\b)([A-Za-z0-9_\\-+/=.]{6,})");
 
     /** Bearer xxx */
     private static final Pattern BEARER = Pattern.compile(
@@ -33,22 +37,36 @@ public class LogMasker {
     private static final Pattern SIGNED_URL = Pattern.compile(
             "(https?://[^\\s\"']*?)([?&](?:rkey|fileid|token|sig)=[^\\s\"'&]+)");
 
+    /** 静态开关给 logback converter 用：logback 比 Spring 先初始化 */
+    private static volatile boolean enabled = true;
+
     private final LogPolicy props;
 
     public LogMasker(LogPolicy props) {
         this.props = props;
+        enabled = props.isMaskSensitive();
+    }
+
+    /** logback converter / MemoryLogAppender 用，不依赖 Spring bean */
+    public static String maskStatic(String text) {
+        return mask(text, enabled);
     }
 
     /** 脱敏。开关关掉时原样返回 */
     public String mask(String text) {
-        if (text == null || !props.isMaskSensitive()) {
+        return mask(text, props.isMaskSensitive());
+    }
+
+    static String mask(String text, boolean on) {
+        if (text == null || !on) {
             return text;
         }
         String out = text;
 
         // 1) 密钥：保留前 3 后 3，中间打码
-        out = replace(SECRET, out, m -> m.group(1) + abbrev(m.group(2)));
+        out = replace(AUTH, out, m -> m.group(1) + abbrev(m.group(2)));
         out = replace(BEARER, out, m -> m.group(1) + abbrev(m.group(2)));
+        out = replace(SECRET, out, m -> m.group(1) + abbrev(m.group(2)));
 
         // 2) 带签名的 URL：砍掉查询串
         out = replace(SIGNED_URL, out, m -> m.group(1) + "?…（签名已隐去）");

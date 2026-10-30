@@ -30,10 +30,12 @@ public class AdminUsersController {
 
     private final AdminUserService users;
     private final AdminAuditRepository audit;
+    private final AdminAuth auth;
 
-    public AdminUsersController(AdminUserService users, AdminAuditRepository audit) {
+    public AdminUsersController(AdminUserService users, AdminAuditRepository audit, AdminAuth auth) {
         this.users = users;
         this.audit = audit;
+        this.auth = auth;
     }
 
     @GetMapping
@@ -72,6 +74,7 @@ public class AdminUsersController {
             AdminUser u = users.update(id, str(body, "displayName"),
                     role == null ? current.role() : role,
                     enabled == null || enabled);
+            auth.invalidateUser(id);
             return ResponseEntity.ok(dto(u));
         } catch (IllegalArgumentException e) {
             return bad(e);
@@ -83,6 +86,7 @@ public class AdminUsersController {
                                                              @RequestBody Map<String, Object> body) {
         try {
             users.changePassword(id, str(body, "password"));
+            auth.invalidateUser(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
             return bad(e);
@@ -96,6 +100,7 @@ public class AdminUsersController {
         long actorId = me == null ? -1 : me.id();
         try {
             users.delete(id, actorId);
+            auth.invalidateUser(id);
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
             return bad(e);

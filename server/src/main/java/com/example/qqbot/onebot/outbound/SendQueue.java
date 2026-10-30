@@ -25,7 +25,7 @@ public class SendQueue {
     private static final Logger log = LoggerFactory.getLogger(SendQueue.class);
 
     private final BlockingQueue<PreparedSend> queue;
-    private final AtomicLong dropped = new AtomicLong();
+    private final AtomicLong overflow = new AtomicLong();
 
     public SendQueue(Outbound config) {
         int capacity = Math.max(1, config.getSendQueueCapacity());
@@ -41,8 +41,8 @@ public class SendQueue {
         if (queue.offer(send)) {
             return true;
         }
-        long total = dropped.incrementAndGet();
-        log.warn("[OUT] 发送队列已满（容量 {}），本条实时回复被丢弃。累计丢弃 {} 条。"
+        long total = overflow.incrementAndGet();
+        log.warn("[OUT] 发送队列已满（容量 {}），交给调用方同步发送。累计溢出 {} 次。"
                         + "定时任务不受影响，它们排在数据库里。", queue.size(), total);
         return false;
     }
@@ -57,7 +57,8 @@ public class SendQueue {
         return queue.size();
     }
 
-    public long droppedTotal() {
-        return dropped.get();
+    /** 队列满、改为同步发送的累计次数；不是丢弃数 */
+    public long overflowTotal() {
+        return overflow.get();
     }
 }

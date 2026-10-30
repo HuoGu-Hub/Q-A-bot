@@ -125,6 +125,20 @@ class AdminAuthTest {
     }
 
     @Test
+    @DisplayName("★ 改密或降权后，这个账号的旧会话立即失效")
+    void invalidateUserKillsAllSessions() {
+        AdminAuth a = auth();
+        String first = a.login("admin", "bootstrap-pw", "t1").token();
+        String second = a.login("admin", "bootstrap-pw", "t2").token();
+        long id = a.principal(first).orElseThrow().id();
+
+        assertThat(a.invalidateUser(id)).isEqualTo(2);
+        assertThat(a.validate(first)).isFalse();
+        assertThat(a.validate(second)).isFalse();
+        assertThat(a.sessionCount()).isZero();
+    }
+
+    @Test
     @DisplayName("伪造的 token 一律不通过")
     void forgedTokensRejected() {
         AdminAuth a = auth();

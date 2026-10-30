@@ -244,8 +244,12 @@ public class OutboundSender {
             return "";
         }
         if (config.isAsyncSend()) {
-            // 处理线程把活交出去就走，不再陪着等发车位
-            queue.offer(prepared);
+            // 处理线程把活交出去就走，不再陪着等发车位。
+            // 队列满时不能用"丢掉"换吞吐：群友看到的是机器人没回话。
+            if (!queue.offer(prepared)) {
+                log.warn("[OUT] 发送队列已满，改为同步发送，不丢这条回复");
+                deliver(prepared);
+            }
         } else {
             deliver(prepared);
         }

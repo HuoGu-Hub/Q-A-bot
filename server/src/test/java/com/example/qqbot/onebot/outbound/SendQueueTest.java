@@ -35,15 +35,15 @@ class SendQueueTest {
     }
 
     @Test
-    @DisplayName("★ 队列满了返回 false，只降级这一条，不抛异常")
-    void fullQueueDegrades() {
+    @DisplayName("★ 队列满了返回 false，由调用方同步发送，不抛异常")
+    void fullQueueOverflows() {
         SendQueue queue = new SendQueue(config(2));
 
         assertThat(queue.offer(item("第一条"))).isTrue();
         assertThat(queue.offer(item("第二条"))).isTrue();
         assertThat(queue.offer(item("第三条"))).as("超容量").isFalse();
         assertThat(queue.backlog()).isEqualTo(2);
-        assertThat(queue.droppedTotal()).isEqualTo(1);
+        assertThat(queue.overflowTotal()).isEqualTo(1);
     }
 
     @Test

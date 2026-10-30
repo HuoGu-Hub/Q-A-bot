@@ -48,8 +48,8 @@ public class MemoryLogAppender extends AppenderBase<ILoggingEvent> {
             }
             b.append(
                     event.getLevel().toString(),
-                    event.getFormattedMessage(),
-                    briefThrowable(event.getThrowableProxy()));
+                    LogMasker.maskStatic(event.getFormattedMessage()),
+                    LogMasker.maskStatic(briefThrowable(event.getThrowableProxy())));
         } catch (Exception ignored) {
             // appender 绝不能因为自身问题影响业务
         }

@@ -76,22 +76,26 @@ class PromptCommandTest {
     @Test
     @DisplayName("★ 传 #user_id-...# 才按 QQ 号保存")
     void userScopeOnlyWithUserId() {
-        String created = run("/prompt /create #user_id-1002# 只对 1002 生效", "member");
+        String created = run("/prompt /create #user_id-1002# 只对 1002 生效", "admin");
         assertThat(created).contains("个人提示", "只对 1002 生效");
 
         assertThat(store.listFor(2002L, 1001L)).isEmpty();
         assertThat(store.listFor(2002L, 1002L)).anyMatch(p ->
                 p.scope() == PromptStore.Scope.USER && p.content().equals("只对 1002 生效"));
+
+        assertThat(run("/prompt /create #user_id-1001# 我的提示", "member"))
+                .contains("个人提示");
+        assertThat(store.listFor(2002L, 1001L)).hasSize(1);
     }
 
     @Test
-    @DisplayName("普通成员也能设置本群提示")
-    void memberCanSetGroupPrompt() {
-        assertThat(run("/prompt /create 群提示", "member")).contains("本群提示");
-        assertThat(store.listFor(2002L, 1001L)).hasSize(1);
+    @DisplayName("普通成员不能设置本群提示，只能设置自己的")
+    void memberCannotSetGroupPrompt() {
+        assertThat(run("/prompt /create 群提示", "member")).contains("群主或管理员");
+        assertThat(store.listFor(2002L, 1001L)).isEmpty();
 
         assertThat(run("/prompt /create #user_id-1001# 我的提示", "member")).contains("个人提示");
-        assertThat(store.listFor(2002L, 1001L)).hasSize(2);
+        assertThat(store.listFor(2002L, 1001L)).hasSize(1);
     }
 
     @Test
@@ -159,8 +163,9 @@ class PromptCommandTest {
         long id = store.listFor(2002L, 1001L).get(0).id();
         assertThat(created).contains("#" + id);
 
-        assertThat(run("/prompt /delete " + id, "member")).contains("已删除");
-        assertThat(run("/prompt /delete " + id, "member")).contains("没有");
+        assertThat(run("/prompt /delete " + id, "member")).contains("群主或管理员");
+        assertThat(run("/prompt /delete " + id, "admin")).contains("已删除");
+        assertThat(run("/prompt /delete " + id, "admin")).contains("没有");
     }
 
     @Test

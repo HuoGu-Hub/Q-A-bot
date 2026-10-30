@@ -191,6 +191,13 @@ public class AdminAuth {
         }
     }
 
+    /** 改密、改角色、停用或删除账号后，清掉这个账号的全部旧会话 */
+    public int invalidateUser(long userId) {
+        int before = sessions.size();
+        sessions.entrySet().removeIf(e -> e.getValue().principal().id() == userId);
+        return before - sessions.size();
+    }
+
     public int sessionCount() {
         return sessions.size();
     }

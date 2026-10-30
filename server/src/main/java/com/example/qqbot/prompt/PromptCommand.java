@@ -130,9 +130,15 @@ public class PromptCommand {
         long ownerGroup = 0L;
 
         if (targetUserId != null) {
+            if (targetUserId != userId && !canManageGroup(event)) {
+                return "只有群主或管理员才能给别人设置提示";
+            }
             scope = PromptStore.Scope.USER;
             ownerUser = targetUserId;
         } else if (event.isGroupMessage() && groupId > 0) {
+            if (!canManageGroup(event)) {
+                return "本群提示只有群主或管理员能设置";
+            }
             scope = PromptStore.Scope.GROUP;
             ownerGroup = groupId;
         } else {
@@ -189,6 +195,9 @@ public class PromptCommand {
             return "没有 #" + id + " 这一条";
         }
         if (prompt.scope() == PromptStore.Scope.GROUP) {
+            if (!canManageGroup(event)) {
+                return "本群提示只有群主或管理员能删除";
+            }
             if (prompt.groupId() != groupId) {
                 return "这条提示不属于当前群";
             }
@@ -199,12 +208,23 @@ public class PromptCommand {
     }
 
     private String clear(OneBotEvent event, long userId, long groupId) {
+        boolean group = event.isGroupMessage() && groupId > 0;
+        if (group && !canManageGroup(event)) {
+            int n = prompts.clearUser(userId);
+            return n == 0
+                    ? "本群提示只有群主或管理员能清空"
+                    : "已清空 " + n + " 条个人提示；本群提示只有群主或管理员能清空";
+        }
         int n = 0;
-        if (event.isGroupMessage() && groupId > 0) {
+        if (group) {
             n += prompts.clearGroup(groupId);
         }
         n += prompts.clearUser(userId);
         return n == 0 ? "没有可清空的提示" : "已清空 " + n + " 条补充提示";
+    }
+
+    private static boolean canManageGroup(OneBotEvent event) {
+        return CommandRole.ofSender(event).atLeast(CommandRole.ADMIN);
     }
 
     private static long firstNumber(String arg) {
