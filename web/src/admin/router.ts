@@ -12,6 +12,7 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: { path: '/stats', query: { tab: 'overview' } } },
     { path: '/login', name: 'login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
+    { path: '/bind-qq', name: 'bind-qq', component: () => import('./views/BindQqView.vue'), meta: { bind: true } },
     // 「看板」与「记录」合并成「统计」页，页内用二级目录切换。
     // 更早的「大屏」也已并入这里。旧路径全部保留重定向 ——
     // 书签、肌肉记忆和挂在墙上的那个地址都不该因为一次合并失效。
@@ -52,6 +53,10 @@ router.beforeEach(async (to) => {
   const auth = useAuth()
   if (!auth.checked.value) await auth.check()
   if (!auth.ok.value) return { name: 'login', query: { r: to.fullPath } }
+
+  const bind = Boolean(to.meta.bind)
+  if (!auth.me.value?.qqVerified && !bind) return { name: 'bind-qq' }
+  if (bind && auth.me.value?.qqVerified) return { path: '/stats', query: { tab: 'overview' } }
 
   // 角色不够就回统计页：留在原地只会看到一屏 403
   const need = to.meta.role as AdminRoleId | undefined

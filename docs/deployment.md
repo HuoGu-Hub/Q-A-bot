@@ -154,6 +154,7 @@ chmod 600 .env
 | `SILICONFLOW_API_KEY` | 是 | 向量与重排 |
 | `DASHSCOPE_API_KEY` | 否 | 备用向量，默认关闭 |
 | `ADMIN_PASSWORD` | 是 | 首次启动用它创建 admin 账号；之后登录以账号表为准 |
+| `ADMIN_QQ` | 否 | 第一个管理员的 QQ；首次登录收验证码。已有账号时改它不会改数据库，需在后台绑定 |
 
 其余配置在 `server/src/main/resources/application.yml`，可被环境变量、`config/overrides.yml` 与命令行参数覆盖。后台「设置」页只修改白名单内的键。
 
@@ -193,7 +194,7 @@ APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 
 没有身份层时，至少做到：每人独立账号，不共用 `admin`；密码 12 位以上；只给需要的人 EDITOR 或 ADMIN；定期看 `admin_audit`。
 
-Cloudflare Access 的完整步骤见 [cloudflare-access.md](cloudflare-access.md)。
+后台主认证现在是 QQ 私聊验证码，见 [admin-qq-auth.md](admin-qq-auth.md)。Cloudflare Access 只作为额外层，完整步骤见 [cloudflare-access.md](cloudflare-access.md)。
 
 ## 5. 构建
 

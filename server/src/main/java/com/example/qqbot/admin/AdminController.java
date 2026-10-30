@@ -41,15 +41,22 @@ public class AdminController {
     private final QaStore store;
     private final AdminUserService users;
     private final AdminAuditRepository audit;
+    private final AdminQqCodeService qqCodes;
+    private final AdminTrustedDeviceService devices;
+
+    static final String DEVICE_COOKIE = "qqbot_admin_device";
 
     public AdminController(QaAnalytics analytics, AdminAuth auth, AdminPolicy props,
-                           QaStore store, AdminUserService users, AdminAuditRepository audit) {
+                           QaStore store, AdminUserService users, AdminAuditRepository audit,
+                           AdminQqCodeService qqCodes, AdminTrustedDeviceService devices) {
         this.analytics = analytics;
         this.auth = auth;
         this.props = props;
         this.store = store;
         this.users = users;
         this.audit = audit;
+        this.qqCodes = qqCodes;
+        this.devices = devices;
     }
 
     // ==================== 登录 ====================
@@ -69,13 +76,16 @@ public class AdminController {
                                                      HttpServletRequest request,
                                                      HttpServletResponse response) {
         String username = body == null ? null : body.get("username");
+        if (username == null && body != null) {
+            username = body.get("identifier");
+        }
         String password = body == null ? null : body.get("password");
         String source = request == null ? null : AdminClientIp.of(request);
         String ipHash = AdminAuthFilter.hashIp(source);
-        AdminAuth.LoginAttempt attempt = auth.login(username, password, source);
+        AdminAuth.PasswordResult result = auth.authenticate(username, password, source);
 
-        if (attempt.outcome() == AdminAuth.LoginOutcome.LOCKED) {
-            long wait = Math.max(1, attempt.retryAfterSeconds());
+        if (result.outcome() == AdminAuth.LoginOutcome.LOCKED) {
+            long wait = Math.max(1, result.retryAfterSeconds());
             audit.record(null, username, "login-locked", "POST", "/admin/api/login",
                     "retryAfterSeconds=" + wait, ipHash);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -84,17 +94,84 @@ public class AdminController {
                             "error", "尝试次数过多，请 " + Math.max(1, wait / 60) + " 分钟后再试（剩 " + wait + " 秒）",
                             "retryAfterSeconds", wait));
         }
-        if (attempt.outcome() == AdminAuth.LoginOutcome.DISABLED) {
+        if (result.outcome() == AdminAuth.LoginOutcome.DISABLED) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of("error", "后台未启用或还没有账号"));
         }
-        if (attempt.outcome() != AdminAuth.LoginOutcome.OK || attempt.token() == null) {
+        if (result.outcome() != AdminAuth.LoginOutcome.OK || result.user() == null) {
             audit.record(null, username, "login-failed", "POST", "/admin/api/login", null, ipHash);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "账号或密码不对"));
         }
 
-        Cookie cookie = new Cookie(AdminAuthFilter.COOKIE_NAME, attempt.token());
+        AdminUser user = result.user();
+
+        // 信任设备：密码对了就免验证码
+        String deviceToken = readCookie(request, DEVICE_COOKIE);
+        if (user.qqVerified() && devices.isValid(deviceToken, user.id())) {
+            return sessionResponse(user, request, response, ipHash, false);
+        }
+
+        // 已经绑定 QQ：密码之后必须再验一次 QQ 码
+        if (user.qq() != null && !user.qq().isBlank()) {
+            try {
+                AdminQqCodeService.Issued issued = qqCodes.issue(
+                        user.id(), user.qq(), AdminQqCodeService.PURPOSE_LOGIN, null);
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("ok", true);
+                out.put("needCode", true);
+                out.put("challengeId", issued.challengeId());
+                out.put("qq", issued.qqMasked());
+                return ResponseEntity.ok(out);
+            } catch (AdminQqCodeService.CodeException e) {
+                audit.record(user.id(), user.username(), "qq-code-send-failed",
+                        "POST", "/admin/api/login", e.getMessage(), ipHash);
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", e.getMessage()));
+            }
+        }
+
+        // 还没绑 QQ：先发会话，但 AdminAuthFilter 会把它锁在“绑定 QQ”页
+        return sessionResponse(user, request, response, ipHash, false);
+    }
+
+    /** 登录第二步：QQ 验证码。成功后才发正式会话 */
+    @PostMapping("/login/qq-code")
+    public ResponseEntity<Map<String, Object>> loginWithQqCode(@RequestBody Map<String, Object> body,
+                                                               HttpServletRequest request,
+                                                               HttpServletResponse response) {
+        String challengeId = body == null ? null : String.valueOf(body.get("challengeId"));
+        String code = body == null ? null : String.valueOf(body.get("code"));
+        boolean trust = body != null && Boolean.parseBoolean(String.valueOf(body.get("trustDevice")));
+        String source = request == null ? null : AdminClientIp.of(request);
+        String ipHash = AdminAuthFilter.hashIp(source);
+        try {
+            AdminQqCodeService.Consumed consumed = qqCodes.consume(
+                    challengeId, code, AdminQqCodeService.PURPOSE_LOGIN);
+            AdminUser user = users.find(consumed.userId()).orElseThrow(
+                    () -> new AdminQqCodeService.CodeException("账号不存在"));
+            if (!user.qqVerified()) {
+                users.markQqVerified(user.id());
+                user = users.find(user.id()).orElse(user);
+            }
+            audit.record(user.id(), user.username(), "login-qq-ok", "POST",
+                    "/admin/api/login/qq-code", null, ipHash);
+            return sessionResponse(user, request, response, ipHash, trust);
+        } catch (AdminQqCodeService.CodeException e) {
+            audit.record(null, null, "login-qq-failed", "POST",
+                    "/admin/api/login/qq-code", e.getMessage(), ipHash);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> sessionResponse(AdminUser user,
+                                                                HttpServletRequest request,
+                                                                HttpServletResponse response,
+                                                                String ipHash,
+                                                                boolean trustDevice) {
+        String token = auth.issueSession(user);
+        Cookie cookie = new Cookie(AdminAuthFilter.COOKIE_NAME, token);
         cookie.setHttpOnly(true);
         cookie.setPath("/admin");
         cookie.setMaxAge(props.getSessionHours() * 3600);
@@ -102,13 +179,21 @@ public class AdminController {
         cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
 
-        AdminPrincipal p = attempt.principal();
-        if (p != null) {
-            audit.record(p.id(), p.username(), "login-ok", "POST", "/admin/api/login", null, ipHash);
+        if (trustDevice) {
+            String raw = devices.issue(user.id(), request == null ? null : request.getHeader("User-Agent"));
+            Cookie device = new Cookie(DEVICE_COOKIE, raw);
+            device.setHttpOnly(true);
+            device.setPath("/admin");
+            device.setMaxAge(30 * 24 * 3600);
+            device.setSecure(request != null && AdminClientIp.isHttps(request));
+            device.setAttribute("SameSite", "Lax");
+            response.addCookie(device);
         }
+
+        audit.record(user.id(), user.username(), "login-ok", "POST", "/admin/api/login", null, ipHash);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
-        out.put("user", userDto(p));
+        out.put("user", userDto(AdminPrincipal.of(user)));
         return ResponseEntity.ok(out);
     }
 
@@ -123,7 +208,22 @@ public class AdminController {
         m.put("displayName", p.display());
         m.put("role", p.role().id());
         m.put("roleLabel", p.role().label());
+        m.put("qq", p.qq());
+        m.put("qqVerified", p.qqVerified());
         return m;
+    }
+
+    private static String readCookie(HttpServletRequest request, String name) {
+        Cookie[] cookies = request == null ? null : request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie c : cookies) {
+            if (name.equals(c.getName())) {
+                return c.getValue();
+            }
+        }
+        return null;
     }
 
     @PostMapping("/logout")
@@ -183,6 +283,84 @@ public class AdminController {
         }
         audit.record(p.id(), p.username(), "password-self", "POST", "/admin/api/password", null, "");
         return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    /** 绑定 QQ：先发码到目标 QQ，验证通过后才标记 verified */
+    @PostMapping("/me/qq/send-code")
+    public ResponseEntity<Map<String, Object>> sendQqBindCode(@RequestBody Map<String, String> body,
+                                                              HttpServletRequest request) {
+        AdminPrincipal p = AdminAuthFilter.current(request);
+        if (p == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+        }
+        if (p.qqVerified()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "这个账号已经绑定 QQ"));
+        }
+        String qq = body == null ? null : body.get("qq");
+        if (qq == null || qq.isBlank()) {
+            qq = p.qq();
+        }
+        if (p.qq() != null && !p.qq().isBlank() && !p.qq().equals(qq)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "只能绑定管理员预置的 QQ"));
+        }
+        try {
+            users.bindQq(p.id(), qq);
+            AdminQqCodeService.Issued issued = qqCodes.issue(
+                    p.id(), qq, AdminQqCodeService.PURPOSE_BIND, null);
+            audit.record(p.id(), p.username(), "qq-bind-code", "POST",
+                    "/admin/api/me/qq/send-code", "qq=" + issued.qqMasked(), "");
+            return ResponseEntity.ok(Map.of("ok", true,
+                    "challengeId", issued.challengeId(), "qq", issued.qqMasked()));
+        } catch (IllegalArgumentException | AdminQqCodeService.CodeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/me/qq/verify")
+    public ResponseEntity<Map<String, Object>> verifyQqBind(@RequestBody Map<String, Object> body,
+                                                            HttpServletRequest request) {
+        AdminPrincipal p = AdminAuthFilter.current(request);
+        if (p == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "未登录"));
+        }
+        String challengeId = body == null ? null : String.valueOf(body.get("challengeId"));
+        String code = body == null ? null : String.valueOf(body.get("code"));
+        try {
+            AdminQqCodeService.Consumed consumed = qqCodes.consume(
+                    challengeId, code, AdminQqCodeService.PURPOSE_BIND);
+            if (consumed.userId() != p.id()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "验证码不属于当前账号"));
+            }
+            users.markQqVerified(p.id());
+            auth.refreshUser(p.id());
+            devices.revokeAll(p.id());
+            audit.record(p.id(), p.username(), "qq-bind-ok", "POST",
+                    "/admin/api/me/qq/verify", "qq=" + AdminQqCodeService.mask(consumed.qq()), "");
+            return ResponseEntity.ok(Map.of("ok", true));
+        } catch (AdminQqCodeService.CodeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** 退出所有设备：撤销所有会话和信任设备 */
+    @PostMapping("/logout-all")
+    public Map<String, Object> logoutAll(HttpServletRequest request, HttpServletResponse response) {
+        AdminPrincipal p = AdminAuthFilter.current(request);
+        if (p != null) {
+            auth.invalidateUser(p.id());
+            devices.revokeAll(p.id());
+            audit.record(p.id(), p.username(), "logout-all", "POST",
+                    "/admin/api/logout-all", null, "");
+        }
+        Cookie clear = new Cookie(AdminAuthFilter.COOKIE_NAME, "");
+        clear.setPath("/admin");
+        clear.setMaxAge(0);
+        response.addCookie(clear);
+        Cookie device = new Cookie(DEVICE_COOKIE, "");
+        device.setPath("/admin");
+        device.setMaxAge(0);
+        response.addCookie(device);
+        return Map.of("ok", true);
     }
 
     // ==================== 统计 ====================

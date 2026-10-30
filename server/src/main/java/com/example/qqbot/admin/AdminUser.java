@@ -12,6 +12,8 @@ public record AdminUser(
         String displayName,
         AdminRole role,
         boolean enabled,
+        String qq,
+        boolean qqVerified,
         String createdAt,
         String lastLoginAt) {
 

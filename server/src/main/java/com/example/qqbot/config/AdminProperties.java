@@ -23,7 +23,10 @@ public class AdminProperties implements AdminPolicy {
     private String password = "";
 
     /** 登录会话有效期（小时） */
-    private int sessionHours = 24;
+    private int sessionHours = 168;
+
+    /** 第一个管理员的 QQ，来自 ADMIN_QQ；为空则首次登录后强制绑定 */
+    private String qq = "";
 
     /** 记录后台访问 */
     private boolean recordVisits = true;
@@ -59,6 +62,15 @@ public class AdminProperties implements AdminPolicy {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    @Override
+    public String getAdminQq() {
+        return qq;
+    }
+
+    public void setQq(String qq) {
+        this.qq = qq;
     }
 
     @Override

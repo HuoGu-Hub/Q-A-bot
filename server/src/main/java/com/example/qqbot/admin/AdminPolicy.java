@@ -28,6 +28,9 @@ public interface AdminPolicy {
     /** 后台登录密码 */
     String getPassword();
 
+    /** 第一个管理员的 QQ，来自 ADMIN_QQ；为空则首次登录后强制绑定 */
+    String getAdminQq();
+
     /** 会话有效期（小时） */
     int getSessionHours();
 

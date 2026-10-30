@@ -117,7 +117,14 @@ public class AdminAuth {
         return s + "|" + u;
     }
 
-    public LoginAttempt login(String username, String password, String sourceKey) {
+    public record PasswordResult(LoginOutcome outcome, long retryAfterSeconds, AdminUser user) {
+        public static PasswordResult fail(LoginOutcome outcome, long retryAfterSeconds) {
+            return new PasswordResult(outcome, retryAfterSeconds, null);
+        }
+    }
+
+    /** 只验密码，不发会话；第二步 QQ 验证码通过后再调用 {@link #issueSession} */
+    public PasswordResult authenticate(String username, String password, String sourceKey) {
         String key = key(sourceKey, username);
         Instant now = Instant.now();
         cleanupIfCrowded(now);
@@ -127,12 +134,12 @@ public class AdminAuth {
         long locked = state.lockedForSeconds(now);
         if (locked > 0) {
             log.warn("[ADMIN] 登录被拒：{} 仍在锁定中（剩 {} 秒）", key, locked);
-            return LoginAttempt.fail(LoginOutcome.LOCKED, locked);
+            return PasswordResult.fail(LoginOutcome.LOCKED, locked);
         }
 
         if (!isConfigured()) {
             log.warn("[ADMIN] 登录被拒：后台未启用或还没有任何账号");
-            return LoginAttempt.fail(LoginOutcome.DISABLED, 0);
+            return PasswordResult.fail(LoginOutcome.DISABLED, 0);
         }
 
         Optional<AdminUser> user = users.authenticate(username, password);
@@ -142,19 +149,34 @@ public class AdminAuth {
             if (lockSeconds > 0) {
                 log.warn("[ADMIN] ⚠️ {} 连续失败 {} 次，已锁定 {} 秒",
                         key, props.getLoginMaxFailures(), lockSeconds);
-                return LoginAttempt.fail(LoginOutcome.LOCKED, lockSeconds);
+                return PasswordResult.fail(LoginOutcome.LOCKED, lockSeconds);
             }
             log.warn("[ADMIN] 登录失败：账号或密码不对（{}）", key);
-            return LoginAttempt.fail(LoginOutcome.BAD_CREDENTIALS, 0);
+            return PasswordResult.fail(LoginOutcome.BAD_CREDENTIALS, 0);
         }
 
         state.clear();
-        AdminPrincipal principal = AdminPrincipal.of(user.get());
+        return new PasswordResult(LoginOutcome.OK, 0, user.get());
+    }
+
+    /** 密码通过后发正式会话 */
+    public String issueSession(AdminUser user) {
+        AdminPrincipal principal = AdminPrincipal.of(user);
         String token = UUID.randomUUID().toString().replace("-", "");
-        sessions.put(token, new Session(principal, now.plus(props.getSessionHours(), ChronoUnit.HOURS)));
+        sessions.put(token, new Session(principal,
+                Instant.now().plus(props.getSessionHours(), ChronoUnit.HOURS)));
         log.info("[ADMIN] 登录成功：{}（{}），会话 {} 小时",
                 principal.username(), principal.role().id(), props.getSessionHours());
-        return LoginAttempt.ok(token, principal);
+        return token;
+    }
+
+    /** 兼容测试与单步登录：密码通过后直接发会话 */
+    public LoginAttempt login(String username, String password, String sourceKey) {
+        PasswordResult result = authenticate(username, password, sourceKey);
+        if (result.outcome() != LoginOutcome.OK || result.user() == null) {
+            return LoginAttempt.fail(result.outcome(), result.retryAfterSeconds());
+        }
+        return LoginAttempt.ok(issueSession(result.user()), AdminPrincipal.of(result.user()));
     }
 
     private void cleanupIfCrowded(Instant now) {
@@ -189,6 +211,15 @@ public class AdminAuth {
         if (token != null) {
             sessions.remove(token);
         }
+    }
+
+    /** 绑定 QQ 或改角色后，刷新这个账号的会话身份快照 */
+    public void refreshUser(long userId) {
+        users.find(userId).ifPresent(u -> {
+            AdminPrincipal p = AdminPrincipal.of(u);
+            sessions.replaceAll((token, s) ->
+                    s.principal().id() == userId ? new Session(p, s.expiresAt()) : s);
+        });
     }
 
     /** 改密、改角色、停用或删除账号后，清掉这个账号的全部旧会话 */

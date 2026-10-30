@@ -67,6 +67,23 @@ class AdminUserServiceTest {
     }
 
     @Test
+    @DisplayName("QQ 号可作为登录名，且不能重复绑定")
+    void qqIsLoginAliasAndUnique() {
+        AdminUser u = service.create("quser", null, "password123", AdminRole.VIEWER, "10001");
+        assertThat(u.qq()).isEqualTo("10001");
+        assertThat(u.qqVerified()).isFalse();
+        assertThat(service.authenticate("10001", "password123")).isPresent();
+
+        assertThatThrownBy(() -> service.create("quser2", null, "password123",
+                AdminRole.VIEWER, "10001"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("QQ");
+
+        service.markQqVerified(u.id());
+        assertThat(service.find(u.id()).orElseThrow().qqVerified()).isTrue();
+    }
+
+    @Test
     @DisplayName("账号名不区分大小写，重复建会被拒")
     void usernameIsCaseInsensitive() {
         service.create("Editor01", null, "password123", AdminRole.EDITOR);

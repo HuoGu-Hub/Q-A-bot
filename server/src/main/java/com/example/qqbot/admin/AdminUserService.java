@@ -30,6 +30,7 @@ public class AdminUserService {
     private static final Logger log = LoggerFactory.getLogger(AdminUserService.class);
 
     private static final Pattern USERNAME = Pattern.compile("^[A-Za-z0-9_.-]{3,32}$");
+    private static final Pattern QQ = Pattern.compile("^[1-9]\\d{4,11}$");
     private static final int MIN_PASSWORD = 8;
 
     private final AdminUserRepository users;
@@ -76,7 +77,13 @@ public class AdminUserService {
             // 老密码可能很短，这里不拒绝，只在日志里提示一次
             log.warn("[ADMIN] ADMIN_PASSWORD 少于 {} 位，建议登录后改成更强的密码", MIN_PASSWORD);
         }
-        long id = users.create("admin", "初始管理员", AdminPasswords.hash(seed), AdminRole.ADMIN.id());
+        String adminQq = policy.getAdminQq() == null ? "" : policy.getAdminQq().trim();
+        long id = adminQq.matches("^[1-9]\\d{4,11}$")
+                ? users.create("admin", "初始管理员", AdminPasswords.hash(seed), AdminRole.ADMIN.id(), adminQq)
+                : users.create("admin", "初始管理员", AdminPasswords.hash(seed), AdminRole.ADMIN.id());
+        if (adminQq.isBlank()) {
+            log.warn("[ADMIN] 未配置 ADMIN_QQ，首次登录后必须绑定 QQ 才能进行其他操作");
+        }
         audit.record(id, "admin", "bootstrap", "-", "-", "由 ADMIN_PASSWORD 创建初始管理员", "");
         log.warn("[ADMIN] 已创建初始管理员账号 admin（密码取自 ADMIN_PASSWORD）。"
                 + "请尽快登录后台建个人账号，并把 admin 的密码换掉");
@@ -104,6 +111,9 @@ public class AdminUserService {
             return Optional.empty();
         }
         AdminUserRepository.Row row = users.findByUsername(username);
+        if (row == null) {
+            row = users.findByQq(username);
+        }
         if (row == null || !row.enabled()) {
             // 账号不存在时也跑一次哈希，避免用响应时间判断账号是否存在
             AdminPasswords.verify(rawPassword, AdminPasswords.hash("dummy-password"));
@@ -117,6 +127,20 @@ public class AdminUserService {
     }
 
     public AdminUser create(String username, String displayName, String rawPassword, AdminRole role) {
+        return createInternal(username, displayName, rawPassword, role, "");
+    }
+
+    public AdminUser create(String username, String displayName, String rawPassword, AdminRole role,
+                            String qq) {
+        String q = qq == null ? "" : qq.trim();
+        if (!QQ.matcher(q).matches()) {
+            throw new IllegalArgumentException("QQ 号格式不对，应为 5–12 位数字");
+        }
+        return createInternal(username, displayName, rawPassword, role, q);
+    }
+
+    private AdminUser createInternal(String username, String displayName, String rawPassword,
+                                     AdminRole role, String qq) {
         String name = username == null ? "" : username.trim();
         if (!USERNAME.matcher(name).matches()) {
             throw new IllegalArgumentException("账号名只能包含字母、数字、下划线、点和横线，长度 3–32");
@@ -126,9 +150,83 @@ public class AdminUserService {
         if (users.findByUsername(name) != null) {
             throw new IllegalArgumentException("账号名已存在：" + name);
         }
-        long id = users.create(name, trimToNull(displayName), AdminPasswords.hash(rawPassword), r.id());
+        if (!qq.isBlank()) {
+            if (users.findByQq(qq) != null) {
+                throw new IllegalArgumentException("这个 QQ 已经绑了其他账号");
+            }
+            if (users.findByUsername(qq) != null) {
+                throw new IllegalArgumentException("QQ 号和一个已有账号名冲突");
+            }
+        }
+        if (users.findByQq(name) != null) {
+            throw new IllegalArgumentException("账号名不能和已有账号的 QQ 号相同");
+        }
+        long id = users.create(name, trimToNull(displayName), AdminPasswords.hash(rawPassword),
+                r.id(), qq);
         hasUsers = true;
         log.info("[ADMIN] 新建账号 {}（{}）", name, r.id());
+        return toUser(users.findById(id));
+    }
+
+    /** 首次绑定或换绑 QQ：只允许写未验证状态，验证码通过后再标记 verified */
+    public void bindQq(long id, String qq) {
+        AdminUserRepository.Row row = require(id);
+        String q = qq == null ? "" : qq.trim();
+        if (!QQ.matcher(q).matches()) {
+            throw new IllegalArgumentException("QQ 号格式不对，应为 5–12 位数字");
+        }
+        AdminUserRepository.Row other = users.findByQq(q);
+        if (other != null && other.id() != id) {
+            throw new IllegalArgumentException("这个 QQ 已经绑了其他账号");
+        }
+        if (users.findByUsername(q) != null) {
+            throw new IllegalArgumentException("QQ 号和一个已有账号名冲突");
+        }
+        users.updateQq(id, q, false);
+    }
+
+    public void markQqVerified(long id) {
+        require(id);
+        users.markQqVerified(id);
+    }
+
+    public boolean usernameExists(String username) {
+        return username != null && users.findByUsername(username) != null;
+    }
+
+    public boolean qqExists(String qq) {
+        return qq != null && users.findByQq(qq) != null;
+    }
+
+    public String hashPassword(String raw) {
+        requirePassword(raw);
+        return AdminPasswords.hash(raw);
+    }
+
+    /** 账号创建走两步：先算好哈希，验证码通过后再落库 */
+    public AdminUser createWithHash(String username, String displayName, String passwordHash,
+                                    AdminRole role, String qq) {
+        String name = username == null ? "" : username.trim();
+        if (!USERNAME.matcher(name).matches()) {
+            throw new IllegalArgumentException("账号名只能包含字母、数字、下划线、点和横线，长度 3–32");
+        }
+        String q = qq == null ? "" : qq.trim();
+        if (!QQ.matcher(q).matches()) {
+            throw new IllegalArgumentException("QQ 号格式不对，应为 5–12 位数字");
+        }
+        if (users.findByUsername(name) != null) {
+            throw new IllegalArgumentException("账号名已存在：" + name);
+        }
+        if (users.findByQq(q) != null) {
+            throw new IllegalArgumentException("这个 QQ 已经绑了其他账号");
+        }
+        if (users.findByUsername(q) != null || users.findByQq(name) != null) {
+            throw new IllegalArgumentException("账号名和 QQ 号冲突");
+        }
+        long id = users.create(name, trimToNull(displayName), passwordHash,
+                (role == null ? AdminRole.VIEWER : role).id(), q);
+        hasUsers = true;
+        log.info("[ADMIN] 新建账号 {}（{}）", name, role == null ? "viewer" : role.id());
         return toUser(users.findById(id));
     }
 
@@ -187,7 +285,8 @@ public class AdminUserService {
 
     private static AdminUser toUser(AdminUserRepository.Row r) {
         return new AdminUser(r.id(), r.username(), r.displayName(),
-                AdminRole.parse(r.role()), r.enabled(), r.createdAt(), r.lastLoginAt());
+                AdminRole.parse(r.role()), r.enabled(), r.qq(), r.qqVerified(),
+                r.createdAt(), r.lastLoginAt());
     }
 
     /** 给登录失败日志用：账号是否存在的统一脱敏写法 */

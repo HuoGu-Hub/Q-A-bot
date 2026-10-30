@@ -34,6 +34,8 @@ public class AdminUserRepository {
             String passwordHash,
             String role,
             boolean enabled,
+            String qq,
+            boolean qqVerified,
             String createdAt,
             String lastLoginAt) {
     }
@@ -66,10 +68,22 @@ public class AdminUserRepository {
                 + " created_at    TEXT NOT NULL,"
                 + " last_login_at TEXT"
                 + " )");
+        addColumnIfMissing("qq", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing("qq_verified", "INTEGER NOT NULL DEFAULT 0");
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_qq"
+                + " ON admin_user(qq) WHERE qq <> ''");
+    }
+
+    /** SQLite 没有 IF NOT EXISTS 的 ADD COLUMN，升级老库时逐列检查 */
+    private void addColumnIfMissing(String name, String definition) {
+        long exists = jdbc.count("SELECT COUNT(*) FROM pragma_table_info('admin_user') WHERE name = ?", name);
+        if (exists == 0) {
+            jdbc.execute("ALTER TABLE admin_user ADD COLUMN " + name + " " + definition);
+        }
     }
 
     private static final String SELECT = "SELECT id, username, display_name, password_hash, role,"
-            + " enabled, created_at, last_login_at FROM admin_user";
+            + " enabled, qq, qq_verified, created_at, last_login_at FROM admin_user";
 
     private static Row map(Jdbc.Row r) {
         return new Row(
@@ -79,6 +93,8 @@ public class AdminUserRepository {
                 r.str("password_hash"),
                 r.str("role"),
                 r.bool("enabled"),
+                r.str("qq"),
+                r.bool("qq_verified"),
                 r.str("created_at"),
                 r.str("last_login_at"));
     }
@@ -108,10 +124,31 @@ public class AdminUserRepository {
     }
 
     public long create(String username, String displayName, String passwordHash, String role) {
+        return create(username, displayName, passwordHash, role, "");
+    }
+
+    public long create(String username, String displayName, String passwordHash, String role, String qq) {
         return jdbc.insert("INSERT INTO admin_user"
-                        + " (username, display_name, password_hash, role, enabled, created_at)"
-                        + " VALUES (?, ?, ?, ?, 1, ?)",
-                username.trim(), displayName, passwordHash, role, LocalDateTime.now().format(TS));
+                        + " (username, display_name, password_hash, role, enabled, qq, qq_verified, created_at)"
+                        + " VALUES (?, ?, ?, ?, 1, ?, 0, ?)",
+                username.trim(), displayName, passwordHash, role,
+                qq == null ? "" : qq.trim(), LocalDateTime.now().format(TS));
+    }
+
+    public Row findByQq(String qq) {
+        if (qq == null || qq.isBlank()) {
+            return null;
+        }
+        return jdbc.queryOne(SELECT + " WHERE qq = ?", AdminUserRepository::map, qq.trim());
+    }
+
+    public void updateQq(long id, String qq, boolean verified) {
+        jdbc.update("UPDATE admin_user SET qq = ?, qq_verified = ? WHERE id = ?",
+                qq == null ? "" : qq.trim(), verified ? 1 : 0, id);
+    }
+
+    public void markQqVerified(long id) {
+        jdbc.update("UPDATE admin_user SET qq_verified = 1 WHERE id = ?", id);
     }
 
     public void updateProfile(long id, String displayName, String role, boolean enabled) {

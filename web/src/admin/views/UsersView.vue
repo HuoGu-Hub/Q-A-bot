@@ -31,6 +31,8 @@ interface AccountRow {
   role: AdminRoleId
   roleLabel: string
   enabled: boolean
+  qq: string
+  qqVerified: boolean
   createdAt: string
   lastLoginAt: string | null
 }
@@ -61,11 +63,18 @@ const adminCount = computed(() => rows.value.filter(r => r.role === 'admin' && r
 /* ==================== 新建 ==================== */
 
 const createOpen = ref(false)
-const form = ref({ username: '', displayName: '', password: '', role: 'viewer' as AdminRoleId })
+const form = ref({ username: '', displayName: '', password: '', role: 'viewer' as AdminRoleId, qq: '' })
 const creating = ref(false)
+const createStep = ref<'form' | 'code'>('form')
+const createChallenge = ref('')
+const createAdminQq = ref('')
+const createCode = ref('')
 
 function openCreate() {
-  form.value = { username: '', displayName: '', password: '', role: 'viewer' }
+  form.value = { username: '', displayName: '', password: '', role: 'viewer', qq: '' }
+  createStep.value = 'form'
+  createChallenge.value = ''
+  createCode.value = ''
   createOpen.value = true
 }
 
@@ -136,15 +145,34 @@ async function load() {
 
 /* ==================== 写操作 ==================== */
 
-async function create() {
+async function requestCreate() {
   if (creating.value) return
   creating.value = true
   try {
-    await adminApi.post('/users', {
+    const r = await adminApi.post<{ challengeId: string; adminQq: string }>('/users/request', {
       username: form.value.username.trim(),
       displayName: form.value.displayName.trim() || null,
       password: form.value.password,
       role: form.value.role,
+      qq: form.value.qq.trim(),
+    })
+    createChallenge.value = r.challengeId
+    createAdminQq.value = r.adminQq
+    createStep.value = 'code'
+  } catch (e) {
+    toast(describeError(e), 'error', 6000)
+  } finally {
+    creating.value = false
+  }
+}
+
+async function confirmCreate() {
+  if (creating.value) return
+  creating.value = true
+  try {
+    await adminApi.post('/users/confirm', {
+      challengeId: createChallenge.value,
+      code: createCode.value.trim(),
     })
     createOpen.value = false
     toast('已创建账号 ' + form.value.username.trim())
@@ -299,6 +327,7 @@ onMounted(load)
               <Tag v-if="r.id === meId" tone="flame">我</Tag>
             </span>
             <span class="display" :class="{ unfilled: !r.displayName }">{{ r.displayName || '未设昵称' }}</span>
+            <span class="qq">{{ r.qq ? 'QQ ' + r.qq + (r.qqVerified ? '' : ' · 待验证') : '未绑定 QQ' }}</span>
             <span class="sr-only">{{ r.enabled ? '启用中' : '已停用' }}</span>
           </span>
           <span class="rank">{{ roleName(r.role) }}</span>
@@ -331,12 +360,15 @@ onMounted(load)
 
     <!-- ==================== 新增 ==================== -->
     <Modal :open="createOpen" title="新增账号" width="560px" @close="createOpen = false">
-      <form class="form" @submit.prevent="create">
+      <form v-if="createStep === 'form'" class="form" @submit.prevent="requestCreate">
         <Field label="账号" hint="字母、数字、下划线，3–32 位" control-width="240px">
           <Input v-model="form.username" placeholder="例如 xiaoxue" autocomplete="off" name="username" />
         </Field>
         <Field label="昵称" control-width="240px">
           <Input v-model="form.displayName" placeholder="例如 小雪" autocomplete="off" name="displayName" />
+        </Field>
+        <Field label="QQ 号" hint="对方必须先添加 bot 为好友" control-width="240px">
+          <Input v-model="form.qq" placeholder="例如 10001" inputmode="numeric" autocomplete="off" name="qq" />
         </Field>
         <Field label="初始密码" hint="至少 8 位" control-width="240px">
           <Input v-model="form.password" type="password" placeholder="至少 8 位" autocomplete="new-password" name="password" />
@@ -362,7 +394,20 @@ onMounted(load)
         <div class="form-actions">
           <Button type="button" @click="createOpen = false">取消</Button>
           <Button variant="primary" type="submit" :disabled="creating">
-            {{ creating ? '创建中…' : '创建账号' }}
+            {{ creating ? '发送中…' : '发送验证码' }}
+          </Button>
+        </div>
+      </form>
+
+      <form v-else class="form" @submit.prevent="confirmCreate">
+        <p class="code-hint">验证码已发送到管理员 QQ {{ createAdminQq }}</p>
+        <Field label="验证码" control-width="200px">
+          <Input v-model="createCode" placeholder="6 位验证码" inputmode="numeric" maxlength="6" autocomplete="one-time-code" name="code" />
+        </Field>
+        <div class="form-actions">
+          <Button type="button" @click="createStep = 'form'; createCode = ''">上一步</Button>
+          <Button variant="primary" type="submit" :disabled="creating">
+            {{ creating ? '创建中…' : '确认创建' }}
           </Button>
         </div>
       </form>
@@ -507,6 +552,7 @@ onMounted(load)
   letter-spacing: .02em;
 }
 .display { font-size: var(--fs-xs); color: var(--ink-3); }
+.qq { font-size: var(--fs-xs); color: var(--ink-4); }
 /* 占位不是昵称：压到装饰级，别让人以为他叫「未设昵称」 */
 .display.unfilled { color: var(--ink-4); }
 .person.out .name { color: var(--ink-3); }
@@ -586,6 +632,7 @@ onMounted(load)
 
 /* ==================== 弹窗 ==================== */
 .form { display: flex; flex-direction: column; gap: var(--sp-3); }
+.code-hint { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 .facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -54,7 +54,16 @@ public class AdminAuthFilter extends OncePerRequestFilter {
      */
     private static final Set<String> PUBLIC_PATHS = Set.of(
             "/admin.html",
-            "/admin/api/login");
+            "/admin/api/login",
+            "/admin/api/login/qq-code");
+
+    /** 未绑定 QQ 时唯一允许的后台 API */
+    private static final Set<String> QQ_BIND_PATHS = Set.of(
+            "/admin/api/session",
+            "/admin/api/logout",
+            "/admin/api/logout-all",
+            "/admin/api/me/qq/send-code",
+            "/admin/api/me/qq/verify");
 
     private static final String[] PUBLIC_PREFIXES = {"/admin/assets/", "/admin/login"};
 
@@ -117,6 +126,10 @@ public class AdminAuthFilter extends OncePerRequestFilter {
                 forbiddenOrigin(response);
                 return;
             }
+            if (!principal.get().qqVerified() && !QQ_BIND_PATHS.contains(path)) {
+                qqBindRequired(response);
+                return;
+            }
         }
 
         request.setAttribute(ATTR_PRINCIPAL, principal.get());
@@ -166,8 +179,10 @@ public class AdminAuthFilter extends OncePerRequestFilter {
 
     /** 用户管理与审计 → ADMIN；只读 → VIEWER；其余写操作 → EDITOR。 */
     static AdminRole requiredRole(String path, String method) {
-        if (path.equals("/admin/api/logout") || path.equals("/admin/api/password")
-                || path.equals("/admin/api/session")) {
+        if (path.equals("/admin/api/logout") || path.equals("/admin/api/logout-all")
+                || path.equals("/admin/api/password") || path.equals("/admin/api/session")
+                || path.equals("/admin/api/me/qq/send-code")
+                || path.equals("/admin/api/me/qq/verify")) {
             return AdminRole.VIEWER;
         }
         if (path.startsWith("/admin/api/users")) {
@@ -257,6 +272,12 @@ public class AdminAuthFilter extends OncePerRequestFilter {
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"error\":\"权限不足：这个操作需要「"
                 + required.label() + "」及以上权限\"}");
+    }
+
+    private void qqBindRequired(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"error\":\"请先绑定 QQ\",\"code\":\"QQ_BIND_REQUIRED\"}");
     }
 
     private void forbiddenOrigin(HttpServletResponse response) throws IOException {

@@ -22,6 +22,8 @@ withDefaults(
     /** 输入法/浏览器的自动大写与自动纠错。键名、代码、配置值都要关掉 */
     autocapitalize?: string
     spellcheck?: boolean
+    maxlength?: number | string
+    inputmode?: 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url'
   }>(),
   { multiline: false, rows: 3, mono: false, disabled: false, name: '', autocomplete: '',
     type: 'text', autocapitalize: undefined, spellcheck: undefined }
@@ -50,6 +52,8 @@ defineEmits<{ 'update:modelValue': [string] }>()
     :autocomplete="autocomplete || undefined"
     :autocapitalize="autocapitalize"
     :spellcheck="spellcheck === undefined ? (mono ? false : undefined) : spellcheck"
+    :maxlength="maxlength"
+    :inputmode="inputmode"
     :value="modelValue"
     :placeholder="placeholder"
     :disabled="disabled"

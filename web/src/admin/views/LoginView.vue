@@ -15,6 +15,11 @@ const router = useRouter()
 
 const username = ref('')
 const password = ref('')
+const code = ref('')
+const challengeId = ref('')
+const qqMasked = ref('')
+const trustDevice = ref(true)
+const step = ref<'password' | 'code'>('password')
 const busy = ref(false)
 const error = ref('')
 
@@ -31,14 +36,38 @@ onMounted(() => {
   }
 })
 
+function nextRoute() {
+  const r = String(route.query.r ?? '/stats')
+  return r.startsWith('/') ? r : '/stats'
+}
+
 async function submit() {
   if (!username.value.trim() || !password.value || busy.value) return
   busy.value = true
   error.value = ''
   try {
-    await auth.login(username.value.trim(), password.value)
-    const r = String(route.query.r ?? '/stats')
-    router.replace(r.startsWith('/') ? r : '/stats')
+    const r = await auth.login(username.value.trim(), password.value)
+    if (r.needCode) {
+      challengeId.value = r.challengeId ?? ''
+      qqMasked.value = r.qq ?? ''
+      step.value = 'code'
+      return
+    }
+    router.replace(auth.me.value?.qqVerified ? nextRoute() : '/bind-qq')
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function verify() {
+  if (!code.value.trim() || !challengeId.value || busy.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    await auth.verifyLogin(challengeId.value, code.value.trim(), trustDevice.value)
+    router.replace(auth.me.value?.qqVerified ? nextRoute() : '/bind-qq')
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -59,13 +88,13 @@ async function submit() {
         <ThemeToggle />
       </div>
       <h1 class="t">管理员登录</h1>
-      <form ref="formEl" @submit.prevent="submit">
+      <form v-if="step === 'password'" ref="formEl" @submit.prevent="submit">
         <Input
           v-model="username"
           name="username"
-          placeholder="账号"
+          placeholder="账号或 QQ 号"
           autocomplete="username"
-          aria-label="账号"
+          aria-label="账号或 QQ 号"
         />
         <Input
           v-model="password"
@@ -77,6 +106,29 @@ async function submit() {
         />
         <Button variant="primary" type="submit" block :disabled="busy">
           {{ busy ? '登录中…' : '登录' }}
+        </Button>
+      </form>
+
+      <form v-else @submit.prevent="verify">
+        <p class="code-hint">验证码已发送到 QQ {{ qqMasked }}</p>
+        <Input
+          v-model="code"
+          name="code"
+          placeholder="6 位验证码"
+          autocomplete="one-time-code"
+          inputmode="numeric"
+          maxlength="6"
+          aria-label="6 位验证码"
+        />
+        <label class="trust">
+          <input v-model="trustDevice" type="checkbox" />
+          <span>信任此设备 30 天，期间登录不再收验证码</span>
+        </label>
+        <Button variant="primary" type="submit" block :disabled="busy">
+          {{ busy ? '验证中…' : '验证并登录' }}
+        </Button>
+        <Button type="button" block :disabled="busy" @click="step = 'password'; code = ''">
+          返回重输密码
         </Button>
       </form>
       <div v-if="error" class="err-slot">
@@ -116,6 +168,9 @@ async function submit() {
 .t { font-size: var(--fs-2xl); letter-spacing: var(--tracking-ink); margin: 0 0 var(--sp-4); }
 form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .err-slot { margin-top: var(--sp-3); }
+.code-hint { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
+.trust { display: flex; align-items: flex-start; gap: var(--sp-2); color: var(--ink-2); font-size: var(--fs-sm); cursor: pointer; }
+.trust input { margin-top: 2px; accent-color: var(--ember); }
 
 @media (max-width: 760px) {
   .card { padding: var(--sp-4); }

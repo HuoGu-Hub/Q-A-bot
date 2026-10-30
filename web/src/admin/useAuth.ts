@@ -8,6 +8,15 @@ export interface AdminMe {
   displayName: string
   role: AdminRoleId
   roleLabel: string
+  qq: string
+  qqVerified: boolean
+}
+
+export interface LoginResult {
+  needCode?: boolean
+  challengeId?: string
+  qq?: string
+  user?: AdminMe
 }
 
 export type AdminRoleId = 'viewer' | 'editor' | 'admin'
@@ -48,8 +57,27 @@ export function useAuth() {
         checked.value = true
       }
     },
-    async login(username: string, password: string) {
-      const r = await adminApi.post<{ user: AdminMe }>('/login', { username, password })
+    async login(username: string, password: string): Promise<LoginResult> {
+      const r = await adminApi.post<LoginResult>('/login', { username, password })
+      if (r.needCode) {
+        ok.value = false
+        me.value = null
+        checked.value = true
+        return r
+      }
+      if (r.user) {
+        me.value = r.user
+        ok.value = true
+        checked.value = true
+      }
+      return r
+    },
+    async verifyLogin(challengeId: string, code: string, trustDevice: boolean) {
+      const r = await adminApi.post<{ user: AdminMe }>('/login/qq-code', {
+        challengeId,
+        code,
+        trustDevice,
+      })
       me.value = r.user
       ok.value = true
       checked.value = true
