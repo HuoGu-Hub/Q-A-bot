@@ -58,6 +58,22 @@ const loadingResources = ref<Set<string>>(new Set())
 /** 展开的资源分类；deep link 落到某一层时自动展开它所在的分区 */
 const openCategories = ref<Set<string>>(new Set())
 
+/** 当前打开的图层一共会画多少个点/林地块 —— 用来一眼核对"是不是多开了" */
+const shownResource = computed(() => {
+  let layers = 0
+  let points = 0
+  let areas = 0
+  for (const cat of resourceCategories.value) {
+    for (const l of cat.layers) {
+      if (!visibleGroups.value.has(l.key)) continue
+      layers += 1
+      if (l.shape === 'area') areas += l.count
+      else points += l.count
+    }
+  }
+  return { layers, points, areas }
+})
+
 const visibleGroups = ref<Set<string>>(new Set())
 const visibleCategories = ref<Set<string>>(new Set())
 /**
@@ -162,7 +178,20 @@ async function boot() {
   }
 }
 
+/** 同一张地图只跑一次加载：boot、watch 与深链可能同时触发，重复跑会把刚打开的层又关掉 */
+let loadingMap = ''
+let loadingPromise: Promise<void> | null = null
+
 async function loadMarkers(map: string) {
+  if (loadingMap === map && loadingPromise) return loadingPromise
+  loadingMap = map
+  loadingPromise = doLoadMarkers(map).finally(() => {
+    if (loadingMap === map) loadingPromise = null
+  })
+  return loadingPromise
+}
+
+async function doLoadMarkers(map: string) {
   markersLoading.value = true
   try {
     const r = await publicApi.get<{ markers: Marker[] }>('/map/markers?map=' + encodeURIComponent(map))
@@ -529,6 +558,9 @@ function fmt(n: number): string {
             <h2 class="block-title">资源点位</h2>
             <span v-if="resourceVersion" class="res-version">数据 {{ resourceVersion }}</span>
           </div>
+          <p v-if="shownResource.layers" class="res-summary">
+            已显示 {{ shownResource.layers }} 层 · {{ shownResource.points }} 个点<template v-if="shownResource.areas"> · {{ shownResource.areas }} 块林地</template>
+          </p>
           <p v-if="!resourceCategories.length" class="hint">{{ resourceMessage }}</p>
           <details
             v-for="cat in resourceCategories"
@@ -976,6 +1008,7 @@ function fmt(n: number): string {
 .stand-alone { margin-top: var(--sp-2); border-top: 1px solid var(--edge-soft); padding-top: var(--sp-2); }
 
 .res-version { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.res-summary { margin: 2px 0 var(--sp-1); color: var(--ink-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .res-cat { border-top: 1px solid var(--edge-soft); }
 .res-cat:first-of-type { border-top: 0; }
 .res-cat summary {
