@@ -175,7 +175,7 @@ function tileUrl(name: string, w: number, withPage = true, bust?: number): strin
   if (w > 0) q.set('w', String(w))
   const v = bust ?? retryVersion.value[retryKey(name, w, withPage)]
   if (v) q.set('v', String(v))
-  return '/api/public/map/tile?' + q.toString()
+  return '/api/public/v1/map/tile?' + q.toString()
 }
 
 /**
@@ -285,7 +285,7 @@ function iconFor(m: Marker): HTMLImageElement | null {
 }
 
 function resourceIconUrl(file: string, attempt: number): string {
-  const base = '/api/public/map/resource-icon?name=' + encodeURIComponent(file)
+  const base = '/api/public/v1/map/resource-icon?name=' + encodeURIComponent(file)
   return attempt > 0 ? base + '&r=' + attempt : base
 }
 

@@ -45,7 +45,7 @@ import java.util.TreeMap;
  */
 @Tag(name = "Public")
 @RestController
-@RequestMapping("/api/public")
+@RequestMapping("/api/public/v1")
 public class PublicController {
 
     private static final Logger log = LoggerFactory.getLogger(PublicController.class);

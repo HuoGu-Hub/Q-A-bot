@@ -2,7 +2,7 @@
  * 机器人显示名 —— 全站唯一来源。
  *
  * <p>值来自后端 {@code app.bot.name}（管理后台「Bot 配置 → 机器人身份」），
- * 由 {@code GET /api/public/site} 发布。公开站已经在 useSiteText 里请求该接口，
+ * 由 {@code GET /api/public/v1/site} 发布。公开站已经在 useSiteText 里请求该接口，
  * 管理端由本模块单独请求一次；两边共用同一个 ref，改名后刷新页面即同步。
  *
  * <p>后端不可用时保留兜底名，页面不能因为拿不到配置就出现空标题或空品牌。

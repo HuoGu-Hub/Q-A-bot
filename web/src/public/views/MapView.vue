@@ -60,7 +60,7 @@ const openCategories = ref<Set<string>>(new Set())
 
 /** 当前打开的图层一共会画多少个点/林地块 —— 用来一眼核对"是不是多开了" */
 function sidebarIcon(icon: string): string {
-  return '/api/public/map/resource-icon?name=' + encodeURIComponent(icon)
+  return '/api/public/v1/map/resource-icon?name=' + encodeURIComponent(icon)
 }
 
 const shownResource = computed(() => {
@@ -620,7 +620,7 @@ function fmt(n: number): string {
                 <img
                   v-if="g.icon"
                   class="layer-icon"
-                  :src="'/api/public/map/tile?map=' + encodeURIComponent(mapName) + '&name=' + encodeURIComponent(g.icon) + '&w=48'"
+                  :src="'/api/public/v1/map/tile?map=' + encodeURIComponent(mapName) + '&name=' + encodeURIComponent(g.icon) + '&w=48'"
                   alt=""
                   loading="lazy"
                 />

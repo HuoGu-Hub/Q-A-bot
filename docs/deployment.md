@@ -11,7 +11,7 @@
         Nginx
           │
    Spring Boot :8080
-     ├── /api/public/**   公开只读
+     ├── /api/public/v1/** 公开只读
      ├── /admin/api/**    会话鉴权
      └── /onebot/event    NapCat 上报
           │

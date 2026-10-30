@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 公开站地图接口（{@code /api/public/map/**}）。
+ * 公开站地图接口（{@code /api/public/v1/map/**}）。
  *
  * <p><b>三条约束与 {@link PublicController} 一致</b>：只读、只吐公开字段、按 IP 限流。
  * 唯一的例外是图片接口 —— 一次打开就是几十个请求，走限流会让地图直接打不开。
@@ -46,7 +46,7 @@ import java.util.Optional;
  */
 @Tag(name = "Public")
 @RestController
-@RequestMapping("/api/public/map")
+@RequestMapping("/api/public/v1/map")
 public class PublicMapController {
 
     private static final Logger log = LoggerFactory.getLogger(PublicMapController.class);

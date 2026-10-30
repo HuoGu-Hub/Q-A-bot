@@ -67,7 +67,7 @@ class OpenApiSpecTest {
         JsonNode root = mapper.readTree(json);
         assertThat(root.path("openapi").asText()).startsWith("3.");
         assertThat(root.path("paths").size()).isGreaterThan(50);
-        assertThat(root.path("paths").has("/api/public/kb/search")).isTrue();
+        assertThat(root.path("paths").has("/api/public/v1/kb/search")).isTrue();
         assertThat(root.path("paths").has("/admin/api/kb/blocks")).isTrue();
 
         ObjectNode doc = (ObjectNode) root;

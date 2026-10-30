@@ -160,7 +160,7 @@ node tests/ui/verify-theme.mjs
 | 错误响应 | `application/problem+json`，字段 `type / title / status / code / detail / requestId` |
 | 请求标识 | 响应头 `X-Request-Id`，错误体里同名字段，日志 MDC 可直接检索 |
 | 写操作 | 创建 POST、整体替换 PUT、局部更新 PATCH、删除 DELETE；动作走 `/actions/{verb}` |
-| 公开路径 | `/api/public/**`；管理路径 `/admin/api/**`，不版本化 |
+| 公开路径 | `/api/public/v1/**`；旧 `/api/public/**` 兼容转发；管理路径 `/admin/api/**`，不版本化 |
 
 ## 8. 常见问题
 

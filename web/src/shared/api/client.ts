@@ -2,7 +2,7 @@
  * API 客户端。
  *
  * 两端共用，但**严格分开**：
- *   publicApi  → /api/public/**   （公开只读，不带凭据）
+ *   publicApi  → /api/public/v1/**   （公开只读，不带凭据）
  *   adminApi   → /admin/api/**    （带 cookie，401 时跳登录）
  *
  * 分开的意义不只是路径好看：公开站**永远不该**碰到管理接口，
@@ -57,9 +57,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
  * 服务端靠 IP 限流 + clientId 防误刷，不依赖会话。
  */
 export const publicApi = {
-  get: <T>(path: string) => request<T>(`/api/public${path}`),
+  get: <T>(path: string) => request<T>(`/api/public/v1/v1${path}`),
   post: <T>(path: string, body?: unknown) =>
-    request<T>(`/api/public${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+    request<T>(`/api/public/v1/v1${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
 }
 
 /**

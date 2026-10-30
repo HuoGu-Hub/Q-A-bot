@@ -970,7 +970,7 @@ function onLayerIconError(name: string) {
 
 /** 当前地图的图标地址。图标挂在 /api/public 下，管理端不需要额外鉴权 */
 function layerIconUrl(name: string): string {
-  return '/api/public/map/tile?map=' + encodeURIComponent(layerMap.value)
+  return '/api/public/v1/v1/map/tile?map=' + encodeURIComponent(layerMap.value)
     + '&name=' + encodeURIComponent(name)
 }
 

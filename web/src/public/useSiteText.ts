@@ -1,7 +1,7 @@
 /**
  * 公开站「页面文案」工具。
  *
- * 后端 `GET /api/public/site` 的 `texts` 里**只有被管理员改过的块** ——
+ * 后端 `GET /api/public/v1/site` 的 `texts` 里**只有被管理员改过的块** ——
  * 没改过的键根本不会出现在 map 里。所以前端一律「保留硬编码原文当默认值」，
  * 用覆盖值兜底：
  *
@@ -12,13 +12,13 @@
  *    不能变成一片空白。默认值就是「站点在没有任何后端文案时该长什么样」。
  *
  * 模块级缓存：`site` 是模块单例，首页/资料库/关于/404/页脚共用
- * **同一次** `/api/public/site` 请求。
+ * **同一次** `/api/public/v1/site` 请求。
  */
 import { ref } from 'vue'
 import { publicApi } from '@shared/api/client'
 import { botName, setBotName } from '@shared/identity/botName'
 
-/** /api/public/site 的返回：群信息（关于页用）+ 文案覆盖值 */
+/** /api/public/v1/site 的返回：群信息（关于页用）+ 文案覆盖值 */
 export interface SiteInfo {
   groupName: string
   groupNumber: string

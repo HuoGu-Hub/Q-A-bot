@@ -3389,7 +3389,7 @@
         } ]
       }
     },
-    "/api/public/stats" : {
+    "/api/public/v1/stats" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "stats",
@@ -3407,7 +3407,7 @@
         }
       }
     },
-    "/api/public/site" : {
+    "/api/public/v1/site" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "siteInfo",
@@ -3425,7 +3425,7 @@
         }
       }
     },
-    "/api/public/map/tile" : {
+    "/api/public/v1/map/tile" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "tile",
@@ -3473,7 +3473,7 @@
         }
       }
     },
-    "/api/public/map/search" : {
+    "/api/public/v1/map/search" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "search",
@@ -3508,7 +3508,7 @@
         }
       }
     },
-    "/api/public/map/resources" : {
+    "/api/public/v1/map/resources" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "resources",
@@ -3541,7 +3541,7 @@
         }
       }
     },
-    "/api/public/map/resource-icon" : {
+    "/api/public/v1/map/resource-icon" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "resourceIcon",
@@ -3568,7 +3568,7 @@
         }
       }
     },
-    "/api/public/map/resource-groups" : {
+    "/api/public/v1/map/resource-groups" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "resourceGroups",
@@ -3594,7 +3594,7 @@
         }
       }
     },
-    "/api/public/map/resource-areas" : {
+    "/api/public/v1/map/resource-areas" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "resourceAreas",
@@ -3627,7 +3627,7 @@
         }
       }
     },
-    "/api/public/map/markers" : {
+    "/api/public/v1/map/markers" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "markers",
@@ -3653,7 +3653,7 @@
         }
       }
     },
-    "/api/public/map/locate" : {
+    "/api/public/v1/map/locate" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "locate",
@@ -3688,7 +3688,7 @@
         }
       }
     },
-    "/api/public/map/catalog" : {
+    "/api/public/v1/map/catalog" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "catalog",
@@ -3706,7 +3706,7 @@
         }
       }
     },
-    "/api/public/kb/search" : {
+    "/api/public/v1/kb/search" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "search_1",
@@ -3741,7 +3741,7 @@
         }
       }
     },
-    "/api/public/kb/page" : {
+    "/api/public/v1/kb/page" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "page",
@@ -3767,7 +3767,7 @@
         }
       }
     },
-    "/api/public/kb/groups" : {
+    "/api/public/v1/kb/groups" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "groups",
@@ -3788,7 +3788,7 @@
         }
       }
     },
-    "/api/public/kb/browse" : {
+    "/api/public/v1/kb/browse" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "browse",
@@ -3830,7 +3830,7 @@
         }
       }
     },
-    "/api/public/carousel" : {
+    "/api/public/v1/carousel" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "list_7",
@@ -3848,7 +3848,7 @@
         }
       }
     },
-    "/api/public/carousel/image/{id}" : {
+    "/api/public/v1/carousel/image/{id}" : {
       "get" : {
         "tags" : [ "Public" ],
         "operationId" : "image",

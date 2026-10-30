@@ -40,7 +40,7 @@ import java.util.Map;
  */
 @Tag(name = "Public")
 @RestController
-@RequestMapping("/api/public/carousel")
+@RequestMapping("/api/public/v1/carousel")
 public class PublicCarouselController {
 
     private static final Logger log = LoggerFactory.getLogger(PublicCarouselController.class);
@@ -69,7 +69,7 @@ public class PublicCarouselController {
             for (CarouselStore.Item it : store.listEnabled()) {
                 items.add(new PublicDtos.CarouselItemView(
                         it.id(),
-                        "/api/public/carousel/image/" + it.id()
+                        "/api/public/v1/carousel/image/" + it.id()
                                 + "?v=" + CarouselService.versionOf(it),
                         it.link(), it.caption(), it.width(), it.height()));
             }

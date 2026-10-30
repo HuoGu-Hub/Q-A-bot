@@ -141,7 +141,7 @@ public class CarouselController {
     private static CarouselItemView view(CarouselStore.Item it) {
         return new CarouselItemView(
                 it.id(),
-                "/api/public/carousel/image/" + it.id() + "?v=" + CarouselService.versionOf(it),
+                "/api/public/v1/carousel/image/" + it.id() + "?v=" + CarouselService.versionOf(it),
                 it.link(), it.caption(), it.width(), it.height(),
                 it.enabled(), it.sort(), it.createdAt());
     }

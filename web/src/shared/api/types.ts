@@ -737,7 +737,7 @@ export interface KbBrowseResult {
  */
 export interface CarouselItem {
   id: number
-  /** 直接能放进 <img src>（形如 /api/public/site/image/3），长缓存 */
+  /** 直接能放进 <img src>（形如 /api/public/v1/site/image/3），长缓存 */
   imageUrl: string
   /** 点击跳转地址，可空 */
   link: string
@@ -770,7 +770,7 @@ export interface CarouselListResponse {
   enabled: boolean
 }
 
-/** GET /api/public/carousel —— 只含启用的，已按 sort 升序 */
+/** GET /api/public/v1/carousel —— 只含启用的，已按 sort 升序 */
 export interface CarouselPublicResponse {
   items: CarouselItem[]
   /**
