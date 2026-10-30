@@ -59,6 +59,10 @@ const loadingResources = ref<Set<string>>(new Set())
 const openCategories = ref<Set<string>>(new Set())
 
 /** 当前打开的图层一共会画多少个点/林地块 —— 用来一眼核对"是不是多开了" */
+function sidebarIcon(icon: string): string {
+  return '/api/public/map/resource-icon?name=' + encodeURIComponent(icon)
+}
+
 const shownResource = computed(() => {
   let layers = 0
   let points = 0
@@ -583,7 +587,8 @@ function fmt(n: number): string {
                     :disabled="loadingResources.has(l.key)"
                     @change="toggleResource(l)"
                   />
-                  <span class="res-dot" :style="{ background: l.color }" />
+                  <img v-if="l.icon" class="res-icon" :src="sidebarIcon(l.icon)" alt="" loading="lazy" decoding="async" />
+                  <span v-else class="res-dot" :style="{ background: l.color }" />
                   <span class="layer-name">{{ l.name }}</span>
                   <span class="layer-n">{{ l.count }}</span>
                 </label>
@@ -1040,6 +1045,13 @@ function fmt(n: number): string {
   border-radius: 50%;
   flex: 0 0 auto;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 25%) inset;
+}
+.res-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  image-rendering: auto;
 }
 
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mist); }
