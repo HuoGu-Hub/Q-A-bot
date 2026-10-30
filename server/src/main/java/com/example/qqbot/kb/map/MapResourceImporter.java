@@ -58,7 +58,7 @@ public class MapResourceImporter {
     }
 
     private record LayerDef(String key, String kind, String subtype, String name, int sort,
-                            String color, int index) {
+                            String color, String icon, int index) {
     }
 
     private final MapResourceRepository repo;
@@ -122,7 +122,7 @@ public class MapResourceImporter {
             String hash = sha256(file);
             MapResourceRepository.MetaRow meta = repo.meta("Embervale");
             if (!force && meta != null && hash.equals(meta.sourceHash()) && meta.points() > 0
-                    && !repo.regionNamesMissing("Embervale")) {
+                    && !repo.regionNamesMissing("Embervale") && hasIcons()) {
                 return new ImportReport(false, true, meta.version(), 0, meta.points(), meta.areas(), "已是最新");
             }
             ImportReport report = parseAndStore(file, hash);
@@ -248,6 +248,7 @@ public class MapResourceImporter {
 
         RegionGrid regions = RegionGrid.of(root.path("regions"));
         WikiIndex wiki = new WikiIndex(mapStore.all());
+        Map<String, String> icons = loadIcons();
 
         Map<Integer, LayerDef> byRow = new HashMap<>();
         Map<Integer, LayerDef> byTreeRow = new HashMap<>();
@@ -267,8 +268,9 @@ public class MapResourceImporter {
             if (color.isBlank()) {
                 color = ResourceColors.of(kind, subtype, index);
             }
-            LayerDef def = new LayerDef(kind + ":" + subtype, kind, subtype, name, index,
-                    color, index);
+            String key = kind + ":" + subtype;
+            LayerDef def = new LayerDef(key, kind, subtype, name, index, color,
+                    icons.getOrDefault(key, ""), index);
             if ("tree".equals(kind)) {
                 byTreeRow.put(index, def);
             } else {
@@ -286,8 +288,9 @@ public class MapResourceImporter {
             }
             String subtype = type.path("key").asText();
             String name = type.path("nameZh").asText(type.path("name").asText());
-            LayerDef def = new LayerDef("chest:" + subtype, "chest", subtype, name,
-                    1000 + index, ResourceColors.of("chest", subtype, index), index);
+            String key = "chest:" + subtype;
+            LayerDef def = new LayerDef(key, "chest", subtype, name, 1000 + index,
+                    ResourceColors.of("chest", subtype, index), icons.getOrDefault(key, ""), index);
             chestByType.put(index, def);
             layers.add(def);
         }
@@ -355,7 +358,7 @@ public class MapResourceImporter {
                 continue;
             }
             layerRows.add(new MapResourceRepository.LayerRow(def.key(), def.kind(), def.subtype(),
-                    def.name(), def.name(), def.color(), n, def.sort()));
+                    def.name(), def.name(), def.color(), def.icon(), n, def.sort()));
         }
         int stored = repo.replaceAll("Embervale", version, hash, canvasFingerprint(),
                 layerRows, out, areaRows, Instant.now().toString());
@@ -382,6 +385,41 @@ public class MapResourceImporter {
             }
         }
         return "";
+    }
+
+    /** 旧库还没有 icon 列时，文件哈希没变也要重导一次，把图标补上 */
+    private boolean hasIcons() {
+        if (loadIcons().isEmpty()) {
+            return true;
+        }
+        try {
+            var layers = repo.layers("Embervale");
+            if (layers == null) {
+                return true;
+            }
+            return layers.stream().anyMatch(l -> !l.icon().isBlank());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 图标映射：key 是 layer key，value 是 classpath:map-icons 下的文件名 */
+    private Map<String, String> loadIcons() {
+        Map<String, String> out = new HashMap<>();
+        try {
+            Resource resource = new PathMatchingResourcePatternResolver()
+                    .getResource("classpath:map-mod/icons.json");
+            if (!resource.exists()) {
+                return out;
+            }
+            try (InputStream in = resource.getInputStream()) {
+                JsonNode node = mapper.readTree(in);
+                node.fields().forEachRemaining(e -> out.put(e.getKey(), e.getValue().asText()));
+            }
+        } catch (Exception e) {
+            log.warn("[MAP-RES] 读图标映射失败：{}", e.getMessage());
+        }
+        return out;
     }
 
     private static double clamp(double v) {

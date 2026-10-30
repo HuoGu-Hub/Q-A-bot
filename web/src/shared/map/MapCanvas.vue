@@ -271,15 +271,22 @@ function iconBox(k: number): number {
 const groupIcons = ref<Map<string, string>>(new Map())
 
 function iconFor(m: Marker): HTMLImageElement | null {
-  const file = groupIcons.value.get(m.group)
+  const resource = !!m.icon
+  const file = m.icon || groupIcons.value.get(m.group)
   if (!file) return null
-  const cached = iconCache.get(file)
+  const key = (resource ? 'r:' : 'w:') + file
+  const cached = iconCache.get(key)
   if (cached) return cached.complete && cached.naturalWidth > 0 ? cached : null
   const img = new Image()
   img.decoding = 'async'
-  loadIcon(img, file, 0)
-  iconCache.set(file, img)
+  loadIcon(img, file, 0, resource)
+  iconCache.set(key, img)
   return null
+}
+
+function resourceIconUrl(file: string, attempt: number): string {
+  const base = '/api/public/map/resource-icon?name=' + encodeURIComponent(file)
+  return attempt > 0 ? base + '&r=' + attempt : base
 }
 
 /**
@@ -290,16 +297,17 @@ function iconFor(m: Marker): HTMLImageElement | null {
  * {@link iconCache} 记下来 —— 不重试就等于"这个分组从此没有图标"，
  * 要等组件重挂才会再试。
  */
-function loadIcon(img: HTMLImageElement, file: string, attempt: number): void {
+function loadIcon(img: HTMLImageElement, file: string, attempt: number,
+                  resource = false): void {
   // 图标原图只有 56px，画到 22~26 CSS 像素本来就是缩小，不需要服务端再缩
   //（48 也不在服务端的宽度白名单里，会被静默退回原图 —— 不如直接要原图）
   // attempt=0 时不带 v，正常路径的 URL 保持干净，浏览器缓存才有意义
-  img.src = tileUrl(file, 0, false, attempt)
+  img.src = resource ? resourceIconUrl(file, attempt) : tileUrl(file, 0, false, attempt)
   // 图标是异步到的：到一张就重绘一次，而不是等全部到齐
   img.onload = () => schedule()
   img.onerror = () => {
     if (attempt >= MAX_RETRY) return
-    window.setTimeout(() => loadIcon(img, file, attempt + 1), 600 * (attempt + 1))
+    window.setTimeout(() => loadIcon(img, file, attempt + 1, resource), 600 * (attempt + 1))
   }
 }
 
@@ -358,18 +366,14 @@ function draw() {
 
     const img = iconFor(m)
     if (!img && m.color) {
-      // 资源点没有图标：彩色圆点 + 暗底。选中时加一圈灵火并标名字
+      // 资源点没有图标：纯色圆点 + 细描边，不铺暗底
       const r = Math.max(3.2, Math.min(6.5, 2.5 + 4 * v.k))
-      ctx.beginPath()
-      ctx.arc(sx, sy, r + 1.5, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(8,10,14,.55)'
-      ctx.fill()
       ctx.beginPath()
       ctx.arc(sx, sy, r, 0, Math.PI * 2)
       ctx.fillStyle = m.color
       ctx.fill()
       ctx.lineWidth = 1
-      ctx.strokeStyle = 'rgba(8,10,14,.55)'
+      ctx.strokeStyle = 'rgba(8,10,14,.5)'
       ctx.stroke()
       if (selected) {
         ctx.beginPath()
@@ -399,13 +403,18 @@ function draw() {
       continue
     }
     if (img) {
-      const s = selected ? box + 4 : box
-      // 图标来自 wiki，深浅底图上都需要一圈暗底才看得清
-      ctx.beginPath()
-      ctx.arc(sx, sy, s / 2 + 1.5, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(8,10,14,.72)'
-      ctx.fill()
+      // 物品图标比 wiki 的线稿稍大，否则缩略图上只是一颗深色小点
+      const s = m.source === 'resource'
+        ? Math.max(18, Math.min(32, 11 + 26 * v.k))
+        : (selected ? box + 4 : box)
+      // 透明底保留，只用阴影勾边：浅色线稿在浅色地图上也能看见
+      ctx.save()
+      ctx.shadowColor = m.source === 'resource'
+        ? 'rgba(255,248,230,.55)'
+        : 'rgba(8,10,14,.65)'
+      ctx.shadowBlur = 2
       ctx.drawImage(img, sx - s / 2, sy - s / 2, s, s)
+      ctx.restore()
       // 自定义点位：外圈一道灵火，不靠换颜色区分来源
       if (m.source === 'admin') {
         ctx.beginPath()

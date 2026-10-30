@@ -41,7 +41,7 @@ public class MapResourceService {
             Map.entry("tree", "林地"));
 
     public record LayerView(String key, String name, String kind, String subtype,
-                            int count, String color, String shape) {
+                            int count, String color, String icon, String shape) {
     }
 
     public record CategoryView(String key, String name, int count, List<LayerView> layers) {
@@ -87,7 +87,7 @@ public class MapResourceService {
             String category = categoryOf(l.kind());
             grouped.computeIfAbsent(category, k -> new ArrayList<>())
                     .add(new LayerView(l.key(), l.nameZh().isBlank() ? l.name() : l.nameZh(),
-                            l.kind(), l.subtype(), l.count(), l.color(),
+                            l.kind(), l.subtype(), l.count(), l.color(), l.icon(),
                             "tree".equals(l.kind()) ? "area" : "point"));
         }
         List<CategoryView> categories = new ArrayList<>();

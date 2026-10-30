@@ -324,6 +324,7 @@ async function toggleResource(layer: ResourceLayer) {
       note: '',
       source: 'resource' as const,
       color: layer.color,
+      icon: layer.icon || '',
     }))
     resourceMarkers.value = resourceMarkers.value.filter((m) => m.group !== layer.key).concat(add)
     const done = new Set(loadedResources.value)

@@ -12,6 +12,7 @@ import com.example.qqbot.kb.map.MapViewService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -199,6 +200,30 @@ public class PublicMapController {
         out.put("layer", layer.strip());
         out.put("areas", areas);
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * 资源图层的小图标。只认 {@code map-icons} 下的小写文件名，不接受路径，
+     * 所以这个接口不需要再走一层资源白名单。
+     */
+    @GetMapping("/resource-icon")
+    public ResponseEntity<byte[]> resourceIcon(@RequestParam("name") String name) {
+        if (name == null || !name.matches("[a-z0-9-]+\\.png")) {
+            return ResponseEntity.badRequest().build();
+        }
+        ClassPathResource resource = new ClassPathResource("map-icons/" + name);
+        if (!resource.exists()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        try (var in = resource.getInputStream()) {
+            return ResponseEntity.ok()
+                    .contentType(MediaType.IMAGE_PNG)
+                    .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePublic())
+                    .body(in.readAllBytes());
+        } catch (Exception e) {
+            log.warn("[MAP-RES] 读图标失败 {}：{}", name, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     /** 按名字 / 别名 / 备注搜点位 */

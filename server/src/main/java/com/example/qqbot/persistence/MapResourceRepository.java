@@ -27,7 +27,7 @@ public class MapResourceRepository {
 
     /** 一行图层定义 */
     public record LayerRow(String key, String kind, String subtype, String name, String nameZh,
-                           String color, int count, int sort) {
+                           String color, String icon, int count, int sort) {
     }
 
     /** 一个资源点 */
@@ -91,6 +91,7 @@ public class MapResourceRepository {
                 + " name     TEXT NOT NULL DEFAULT '',"
                 + " name_zh  TEXT NOT NULL DEFAULT '',"
                 + " color    TEXT NOT NULL DEFAULT '',"
+                + " icon     TEXT NOT NULL DEFAULT '',"
                 + " count    INTEGER NOT NULL DEFAULT 0,"
                 + " sort     INTEGER NOT NULL DEFAULT 0,"
                 + " PRIMARY KEY (map, key))");
@@ -134,6 +135,11 @@ public class MapResourceRepository {
         } catch (Exception ignored) {
             // 列已经存在
         }
+        try {
+            jdbc.update("ALTER TABLE kb_map_resource_layer ADD COLUMN icon TEXT NOT NULL DEFAULT ''");
+        } catch (Exception ignored) {
+            // 列已经存在
+        }
     }
 
     public MetaRow meta(String map) {
@@ -145,10 +151,10 @@ public class MapResourceRepository {
     }
 
     public List<LayerRow> layers(String map) {
-        return jdbc.query("SELECT key, kind, subtype, name, name_zh, color, count, sort"
+        return jdbc.query("SELECT key, kind, subtype, name, name_zh, color, icon, count, sort"
                         + " FROM kb_map_resource_layer WHERE map = ? ORDER BY sort, key",
                 r -> new LayerRow(r.str("key"), r.str("kind"), r.str("subtype"),
-                        r.str("name"), r.str("name_zh"), r.str("color"),
+                        r.str("name"), r.str("name_zh"), r.str("color"), r.str("icon"),
                         r.intOf("count"), r.intOf("sort")), map);
     }
 
@@ -196,11 +202,11 @@ public class MapResourceRepository {
             jdbc.update("DELETE FROM kb_map_resource_layer WHERE map = ?", map);
 
             batch("INSERT INTO kb_map_resource_layer"
-                            + " (map, key, kind, subtype, name, name_zh, color, count, sort)"
-                            + " VALUES (?,?,?,?,?,?,?,?,?)",
+                            + " (map, key, kind, subtype, name, name_zh, color, icon, count, sort)"
+                            + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                     layers.stream().map(l -> new Object[]{map, l.key(), nz(l.kind()),
                             nz(l.subtype()), nz(l.name()), nz(l.nameZh()), nz(l.color()),
-                            l.count(), l.sort()}).toList());
+                            nz(l.icon()), l.count(), l.sort()}).toList());
 
             batch("INSERT INTO kb_map_resource (map, layer, name, region, region_name, x, z, source_id)"
                             + " VALUES (?,?,?,?,?,?,?,?)",

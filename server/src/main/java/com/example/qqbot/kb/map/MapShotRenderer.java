@@ -55,9 +55,6 @@ public class MapShotRenderer {
     /** 底图没盖到的地方露出来的底色 —— 用深灰而不是纯黑，免得看着像"数据缺失" */
     private static final Color BACKGROUND = new Color(24, 28, 34);
 
-    /** 图标底下那圈暗色 —— 图标来自 wiki，深浅底图上都得看得清（与查看器同一套做法） */
-    private static final Color ICON_BACKING = new Color(8, 10, 14, 184);
-
     /** 标签底色：半透明黑。与圈一样要打底 —— 浅色雪原与深色林地都得读得出来 */
     private static final Color LABEL_BG = new Color(0, 0, 0, 165);
     private static final Color LABEL_TEXT = new Color(255, 255, 255);
@@ -524,9 +521,6 @@ public class MapShotRenderer {
         }
         int x = (int) Math.round(sx - size / 2.0);
         int y = (int) Math.round(sy - size / 2.0);
-        // 图标是彩色小图，深浅底图上都得有一圈暗底才看得清（查看器同一套做法）
-        g.setColor(ICON_BACKING);
-        g.fillOval(x - 2, y - 2, size + 4, size + 4);
         g.drawImage(img, x, y, size, size, null);
         return true;
     }

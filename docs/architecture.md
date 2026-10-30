@@ -173,7 +173,7 @@ application.yml
 
 地图数据来自 wiki 的 Map 命名空间，同步为页面、分组、点位三层。查看器与地点问答共用这些数据。
 
-另有一层资源点位，来自 The Worst Map Mod 导出的世界数据快照：36,126 个点、2,120 块林地、112 个图层，存于 `kb_map_resource_meta` / `kb_map_resource_layer` / `kb_map_resource` / `kb_map_resource_area`，与 wiki 同步完全分开。首次请求资源目录时按 `points.json` 导入，文件哈希不变就跳过；点位带 `source_version` 与 `canvas_fp`，游戏更新不自动重导，画布变化时靠指纹发现。接口是 `/api/public/map/resource-groups`、`/api/public/map/resources` 与 `/api/public/map/resource-areas`，前端按层懒加载。
+另有一层资源点位，来自 The Worst Map Mod 导出的世界数据快照：36,126 个点、2,120 块林地、112 个图层，存于 `kb_map_resource_meta` / `kb_map_resource_layer` / `kb_map_resource` / `kb_map_resource_area`，与 wiki 同步完全分开。首次请求资源目录时按 `points.json` 导入，文件哈希不变就跳过；点位带 `source_version` 与 `canvas_fp`，游戏更新不自动重导，画布变化时靠指纹发现。接口是 `/api/public/map/resource-groups`、`/api/public/map/resources`、`/api/public/map/resource-areas` 与 `/api/public/map/resource-icon`，前端按层懒加载。图层带物品图标：图标是透明底 PNG，放在 `classpath:map-icons`，由 `map-mod/icons.json` 按层映射；没有图的层退回颜色圆点。
 
 出图流程：
 

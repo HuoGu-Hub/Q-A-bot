@@ -18,7 +18,7 @@ class MapResourceDirectoryAnswerTest {
 
     private static MapResourceDirectory directory(List<MapResourceService.PointView> points) {
         MapResourceService.LayerView layer = new MapResourceService.LayerView(
-                "ore:copper", "铜", "ore", "copper", points.size(), "#c97b3c", "point");
+                "ore:copper", "铜", "ore", "copper", points.size(), "#c97b3c", "", "point");
         MapResourceService.CategoryView category = new MapResourceService.CategoryView(
                 "ore", "采矿", points.size(), List.of(layer));
         MapResourceService.CatalogView catalog = new MapResourceService.CatalogView(

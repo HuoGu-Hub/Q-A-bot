@@ -67,6 +67,8 @@ export interface ResourceLayer {
   subtype: string
   count: number
   color: string
+  /** 物品图标文件名；空串 = 没有图标，前端退回彩色圆点 */
+  icon: string
   /** point = 点位，area = 矩形面（林地） */
   shape: 'point' | 'area'
 }
@@ -134,6 +136,8 @@ export interface Marker {
   source: 'wiki' | 'admin' | 'resource'
   /** 资源点没有图标，用这个颜色画圆点；wiki / 自定义点不填 */
   color?: string
+  /** 资源点的物品图标文件名；有它就直接画图，没有才退回颜色点 */
+  icon?: string
 }
 
 export interface AnchorRef {

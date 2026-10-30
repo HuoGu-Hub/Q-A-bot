@@ -56,7 +56,7 @@ class ResourceShotSourceTest {
         when(view.canvasesOf(MAP)).thenReturn(List.of(canvasView));
 
         MapResourceService.LayerView layer = new MapResourceService.LayerView(
-                LAYER, "铜", "ore", "copper", 5, "#c97b3c", "point");
+                LAYER, "铜", "ore", "copper", 5, "#c97b3c", "", "point");
         MapResourceService.CategoryView category = new MapResourceService.CategoryView(
                 "ore", "采矿", 5, List.of(layer));
         resources = mock(MapResourceService.class);
