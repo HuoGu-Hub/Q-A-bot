@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
 import com.example.qqbot.guard.BudgetGuard;
+import com.example.qqbot.ops.LlmMetrics;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
@@ -101,6 +102,15 @@ public class LlmRouter {
     /** 记 token 用量给成本预算（D6）。token 只有这一层看得到 */
     private final BudgetGuard budgetGuard;
 
+    /**
+     * 调用次数 / 耗时 / token 的进程内读数。
+     *
+     * <p>为什么不复用 {@link BudgetGuard}：预算记的是"今天花了多少"，
+     * 用于拒绝请求；这里记的是"每分钟花了多少"，用于回答"要不要优化"。
+     * 两者的时间粒度与用途都不同，混在一起会让预算判定跟着采集逻辑漂。
+     */
+    private final LlmMetrics llmMetrics;
+
     /** 构建**前台**客户端 —— 启动时和热替换时共用同一套参数 */
     private static ChatModel buildClient(Provider cfg) {
         return buildClient(cfg, timeoutSeconds(cfg));
@@ -142,9 +152,11 @@ public class LlmRouter {
         return v == null || v <= 0 ? timeoutSeconds(cfg) : Math.max(v, timeoutSeconds(cfg));
     }
 
-    public LlmRouter(LlmPolicy props, ResourceLoader resourceLoader, BudgetGuard budgetGuard) {
+    public LlmRouter(LlmPolicy props, ResourceLoader resourceLoader, BudgetGuard budgetGuard,
+                     LlmMetrics llmMetrics) {
         this.props = props;
         this.budgetGuard = budgetGuard;
+        this.llmMetrics = llmMetrics;
         this.systemPrompt = loadSystemPrompt(props, resourceLoader);
 
         for (Map.Entry<String, Provider> entry : props.getProviders().entrySet()) {
@@ -712,8 +724,8 @@ public class LlmRouter {
                 errors.add(name + " -> 客户端未就绪");
                 continue;
             }
+            long start = System.currentTimeMillis();
             try {
-                long start = System.currentTimeMillis();
                 ChatResponse response = model.chat(request);
                 long cost = System.currentTimeMillis() - start;
                 String text = response.aiMessage().text();
@@ -729,6 +741,9 @@ public class LlmRouter {
                     if (!wantsTools) {
                         log.warn("[LLM] {} ({}) 返回了空内容（推理模型可能把预算花在思考上了），尝试下一个 provider",
                                 name, configs.get(name).getModelName());
+                        // 空回复是一次"调用过但没拿到东西"的往返：算失败，
+                        // 但不算成功调用 —— 否则失败率会永远显示 0
+                        llmMetrics.record(cost, false, 0L, 0L);
                         errors.add(name + " -> 空回复");
                         continue;
                     }
@@ -744,9 +759,18 @@ public class LlmRouter {
                 if (response.tokenUsage() != null) {
                     budgetGuard.recordTokens(response.tokenUsage().totalTokenCount());
                 }
+                // 用量只有这一层看得到：一次群聊回答可能包含多轮工具调用，
+                // 每一轮都是真实的计费请求，所以按"往返"计数而不是按"回答"
+                llmMetrics.record(cost, true,
+                        response.tokenUsage() == null || response.tokenUsage().inputTokenCount() == null
+                                ? 0L : response.tokenUsage().inputTokenCount(),
+                        response.tokenUsage() == null || response.tokenUsage().outputTokenCount() == null
+                                ? 0L : response.tokenUsage().outputTokenCount());
                 lastProvider.set(name);
                 return response;
             } catch (Exception e) {
+                // 失败也算一次调用：超时同样占用了时间，也往往已经计费
+                llmMetrics.record(System.currentTimeMillis() - start, false, 0L, 0L);
                 // 日志与聚合异常都用人话 —— 否则这里会躺一段原始 JSON，
                 // 而它最终会进到 "调用大模型失败：…" 那条日志里
                 String why = ProviderError.readable(e.getMessage());

@@ -838,3 +838,34 @@ export interface TrafficResponse {
   points: TrafficPoint[]
   summary: TrafficSummary
 }
+
+/* ==================== 模型调用（GET /admin/api/llm） ==================== */
+
+/** 一分钟的模型调用读数。一次群聊回答可能包含多轮工具调用，每轮各算一次 */
+export interface LlmPoint {
+  minute: number
+  calls: number
+  failures: number
+  tokensIn: number
+  tokensOut: number
+  p50: number
+  p95: number
+  max: number
+}
+
+export interface LlmSummary {
+  calls: number
+  failures: number
+  tokensIn: number
+  tokensOut: number
+  /** 0~1，分母是调用次数 */
+  failRate: number
+  peakPerMinute: number
+  worstP95: number
+}
+
+export interface LlmResponse {
+  minutes: number
+  points: LlmPoint[]
+  summary: LlmSummary
+}

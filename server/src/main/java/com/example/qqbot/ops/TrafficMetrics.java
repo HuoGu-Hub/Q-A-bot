@@ -71,30 +71,13 @@ public class TrafficMetrics {
             long[] copy = Arrays.copyOf(samples, size);
             Snapshot snapshot = new Snapshot(
                     requests, api, errors,
-                    percentile(copy, 50), percentile(copy, 95), max(copy));
+                    Percentile.of(copy, 50), Percentile.of(copy, 95), Percentile.max(copy));
             size = 0;
             requests = 0;
             api = 0;
             errors = 0;
             return snapshot;
         }
-    }
-
-    private static int percentile(long[] values, int p) {
-        if (values.length == 0) {
-            return 0;
-        }
-        Arrays.sort(values);
-        int idx = (int) Math.ceil(p / 100.0 * values.length) - 1;
-        return (int) values[Math.max(0, Math.min(values.length - 1, idx))];
-    }
-
-    private static int max(long[] values) {
-        long max = 0;
-        for (long v : values) {
-            max = Math.max(max, v);
-        }
-        return (int) max;
     }
 
     /** 一分钟的读数 */

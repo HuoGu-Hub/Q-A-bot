@@ -3,7 +3,7 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, 
 import { adminApi, describeError } from '@shared/api/client'
 import type {
   Overview, KeywordStat, MissResponse, Bucket, SourcesResponse, VisitSummary,
-  TrafficResponse, TrafficPoint,
+  TrafficResponse, TrafficPoint, LlmResponse, LlmPoint,
 } from '@shared/api/types'
 import { cosine as fmtCosine, ms, num, pct, shortTime } from '@shared/utils/format'
 import { sourceLabel } from '@shared/utils/source'
@@ -56,6 +56,9 @@ const visits = ref<VisitSummary | null>(null)
  */
 const traffic = ref<TrafficResponse | null>(null)
 
+/** 模型调用窗口（最近 60 分钟）。和流量同一时间轴，才能对着看 */
+const llm = ref<LlmResponse | null>(null)
+
 /** 「更新于」：只保留时分秒 —— 判断数据新不新用不到日期 */
 const updatedAt = computed(() => {
   const d = lastAt.value
@@ -89,6 +92,31 @@ const apiShare = computed(() => {
 
 /** 一根柱的高度百分比 */
 const barHeight = (requests: number) => (requests === 0 ? '0' : Math.max(4, (requests / trafficPeak.value) * 100) + '%')
+
+/* ==================== 模型调用 ==================== */
+
+const llmPeak = computed(() => Math.max(1, ...(llm.value?.points ?? []).map(p => p.calls)))
+
+/** 窗口内 token 合计：这是成本的直接代理指标 */
+const llmTokens = computed(() => {
+  const s = llm.value?.summary
+  return s ? s.tokensIn + s.tokensOut : 0
+})
+
+/** 最近一分钟的读数，用来回答「现在在烧吗」 */
+const lastLlm = computed<LlmPoint | null>(() => {
+  const pts = llm.value?.points ?? []
+  return pts.length ? pts[pts.length - 1] : null
+})
+
+const llmBarHeight = (calls: number) => (calls === 0 ? '0' : Math.max(4, (calls / llmPeak.value) * 100) + '%')
+
+const llmTip = (p: LlmPoint) => {
+  const d = new Date(p.minute * 60_000)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm} · 调用 ${p.calls}（失败 ${p.failures}）· 入 ${p.tokensIn} / 出 ${p.tokensOut} tokens · P95 ${p.p95}ms`
+}
 
 /** 柱子的悬浮说明：这一分钟发生了什么 */
 const barTip = (p: TrafficPoint) => {
@@ -222,7 +250,7 @@ async function load() {
   error.value = ''
   const q = `?days=${props.days}`
   try {
-    const [o, k, m, c, s, v, t] = await Promise.all([
+    const [o, k, m, c, s, v, t, l] = await Promise.all([
       adminApi.get<Overview>(`/overview${q}`),
       // 只取前 8 —— 后端按次数倒序，多了没人看，还会把面板拉得很长
       adminApi.get<KeywordStat[]>(`/keywords${q}&limit=8`),
@@ -231,6 +259,7 @@ async function load() {
       adminApi.get<SourcesResponse>(`/sources${q}`),
       adminApi.get<VisitSummary>(`/visits${q}`),
       adminApi.get<TrafficResponse>('/traffic?minutes=60'),
+      adminApi.get<LlmResponse>('/llm?minutes=60'),
     ])
     ov.value = o
     keywords.value = k
@@ -239,6 +268,7 @@ async function load() {
     src.value = s
     visits.value = v
     traffic.value = t
+    llm.value = l
     lastAt.value = new Date()
   } catch (e) {
     error.value = describeError(e)
@@ -336,6 +366,63 @@ defineExpose({
               窗口内共 <b class="num">{{ num(traffic.summary.requests) }}</b> 次请求，其中 API
               <b class="num">{{ num(traffic.summary.api) }}</b> 次（{{ apiShare }}）。
               延迟只统计 API 请求。
+            </p>
+          </template>
+        </template>
+        <div v-else class="muted">读取中…</div>
+      </Panel>
+
+      <!-- ==================== 模型调用 ====================
+           和流量共用同一根时间轴，两个面板上下对着看：
+           "请求涨了但调用没涨" 和 "调用涨了但请求没涨" 是两种完全不同的情况。 -->
+      <Panel title="模型调用 · 最近 60 分钟">
+        <template v-if="llm">
+          <Empty v-if="llm.summary.calls === 0" text="这段时间没有调用模型" />
+
+          <template v-else>
+            <div class="tf-kpis">
+              <div class="tf-k">
+                <span class="tf-l">调用（窗口）</span>
+                <b class="tf-v num">{{ num(llm.summary.calls) }}</b>
+              </div>
+              <div class="tf-k">
+                <span class="tf-l">token（窗口）</span>
+                <b class="tf-v num">{{ num(llmTokens) }}</b>
+              </div>
+              <div class="tf-k">
+                <span class="tf-l">失败率</span>
+                <b class="tf-v num">{{ pct(llm.summary.failRate) }}</b>
+              </div>
+              <div class="tf-k">
+                <span class="tf-l">P95（窗口最差）</span>
+                <b class="tf-v num">{{ ms(llm.summary.worstP95) }}</b>
+              </div>
+            </div>
+
+            <div
+              class="tf-plot"
+              role="img"
+              :aria-label="`最近 60 分钟每分钟模型调用次数，峰值 ${llm.summary.peakPerMinute} 次`"
+            >
+              <i
+                v-for="pt in llm.points"
+                :key="pt.minute"
+                class="tf-bar"
+                :class="{ 'tf-bar--err': pt.failures > 0 }"
+                :style="{ height: llmBarHeight(pt.calls) }"
+                :title="llmTip(pt)"
+              />
+            </div>
+            <div class="tf-axis">
+              <span class="faint num">60 分钟前</span>
+              <span class="faint num">现在</span>
+            </div>
+
+            <p class="tf-note">
+              输入 <b class="num">{{ num(llm.summary.tokensIn) }}</b> · 输出
+              <b class="num">{{ num(llm.summary.tokensOut) }}</b> tokens。
+              一次回答可能含多轮工具调用，每轮单独计数。<template v-if="lastLlm">最近一分钟
+              <b class="num">{{ lastLlm.calls }}</b> 次。</template>
             </p>
           </template>
         </template>

@@ -2,6 +2,7 @@ package com.example.qqbot.llm;
 
 import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.guard.BudgetGuard;
+import com.example.qqbot.ops.LlmMetrics;
 import com.sun.net.httpserver.HttpServer;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -114,7 +115,7 @@ class LlmRouterToolForwardingTest {
         props.getTool().setMaxRoundTrips(maxRoundTrips);
         props.getProviders().put("fake", provider);
         props.setDefaultProvider("fake");
-        return new LlmRouter(props, new DefaultResourceLoader(), mock(BudgetGuard.class));
+        return new LlmRouter(props, new DefaultResourceLoader(), mock(BudgetGuard.class), new LlmMetrics());
     }
 
     private static ToolSpecification toolSpec() {
