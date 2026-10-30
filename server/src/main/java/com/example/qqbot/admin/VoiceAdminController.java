@@ -84,7 +84,7 @@ public class VoiceAdminController {
     }
 
     /** 试听：直接把原始音频流回去，浏览器 audio 标签能用 */
-    @GetMapping("/{id}/audio")
+    @GetMapping("/audio/{id}")
     public ResponseEntity<byte[]> audio(@PathVariable long id) {
         VoiceAsset asset = library.get(id);
         if (asset == null) {
@@ -289,7 +289,7 @@ public class VoiceAdminController {
         return new VoiceItem(a.id(), a.title(), a.aliases(), a.tags(), a.mime(),
                 Math.round(a.sizeBytes() / 1024.0), a.durationMs(),
                 String.format(Locale.ROOT, "%.1f 秒", a.durationMs() / 1000.0),
-                a.enabled(), a.createdAt(), "/admin/api/voice/" + a.id() + "/audio");
+                a.enabled(), a.createdAt(), "/admin/api/voice/audio/" + a.id());
     }
 
     private static List<VoiceItem> views(List<VoiceAsset> assets) {

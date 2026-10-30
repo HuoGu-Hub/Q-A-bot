@@ -3883,7 +3883,28 @@
         }
       }
     },
-    "/admin/api/voice/{id}/audio" : {
+    "/admin/api/voice/tts/voices" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "ttsVoices",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TtsVoices"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/voice/audio/{id}" : {
       "get" : {
         "tags" : [ "Admin" ],
         "operationId" : "audio",
@@ -3904,27 +3925,6 @@
                 "schema" : {
                   "type" : "string",
                   "format" : "byte"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
-    "/admin/api/voice/tts/voices" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "ttsVoices",
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TtsVoices"
                 }
               }
             }

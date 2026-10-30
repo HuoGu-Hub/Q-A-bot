@@ -36,6 +36,44 @@ jobs:
         working-directory: server
         run: mvn -B test
 
+  # ---------------------------------------------------------------- API 契约
+  api-contract:
+    name: API 契约
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: server/pom.xml
+
+      # 用真实控制器生成规范，保证 docs/openapi.json 与代码一致
+      - name: 生成 OpenAPI
+        working-directory: server
+        run: mvn -B -Dtest=OpenApiSpecTest test
+
+      - name: 检查规范是否已提交
+        run: git diff --exit-code docs/openapi.json
+
+      - name: 装 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Redocly lint
+        run: npx --yes @redocly/cli@2.72.1 lint docs/openapi.json
+
+      - name: Spectral lint
+        run: npx --yes @stoplight/spectral-cli@6.17.0 lint docs/openapi.json
+
+      # 与基线比较；破坏性变更必须显式更新 docs/openapi.baseline.json
+      - name: OpenAPI diff
+        run: npx --yes @redocly/cli@2.72.1 diff docs/openapi.baseline.json docs/openapi.json --fail-on major
+
   # ---------------------------------------------------------------- 前端
   web:
     name: 前端类型检查与构建

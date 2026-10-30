@@ -1,0 +1,17 @@
+extends:
+  - spectral:oas
+
+rules:
+  info-contact: off
+  info-description: off
+  info-license: off
+  operation-description: off
+  oas3-api-servers: off
+  contact-properties: off
+  license-url: off
+  no-$ref-siblings: off
+  oas3-valid-media-example: off
+  oas3-valid-schema-example: off
+  operation-tags: error
+  operation-operationId: error
+  operation-success-response: error

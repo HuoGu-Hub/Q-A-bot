@@ -1,0 +1,11 @@
+extends:
+  - minimal
+  - diff-recommended
+
+rules:
+  # 控制器靠方法名与 Javadoc 表达用途，不逐条写 @Operation(summary)
+  operation-summary: off
+  # 路径模板不能互相遮蔽，否则客户端无法确定该调哪个
+  no-ambiguous-paths: error
+  # 公开接口就是匿名可访问的，不需要逐个写 security
+  security-defined: off

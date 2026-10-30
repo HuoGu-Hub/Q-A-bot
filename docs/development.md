@@ -154,6 +154,7 @@ node tests/ui/verify-theme.mjs
 | 项 | 约定 |
 |---|---|
 | 契约来源 | `docs/openapi.json`，由 `OpenApiSpecTest` 启动一次 Web 上下文生成 |
+| 规范基线 | 破坏性变更需同步更新 `docs/openapi.baseline.json`；CI 用 Redocly diff 拦截 major 变更 |
 | 生成类型 | `cd web && pnpm gen:api`，输出 `src/shared/api/schema.d.ts`，该文件不提交 |
 | 请求体 | 控制器只收 record，不收 `@RequestBody Map`；`ArchitectureTest` 会拦 |
 | 响应体 | 控制器只返回 record 或 `ResponseEntity<Void>`，不返回 `Map`；后者在规范里记为 204 |
