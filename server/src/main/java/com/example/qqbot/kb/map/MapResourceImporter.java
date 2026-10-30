@@ -54,7 +54,7 @@ public class MapResourceImporter {
             "boss", "unique_weapon", "unique_equipment");
 
     public record ImportReport(boolean imported, boolean found, String version, int layers,
-                               int points, String message) {
+                               int points, int areas, String message) {
     }
 
     private record LayerDef(String key, String kind, String subtype, String name, int sort,
@@ -102,35 +102,35 @@ public class MapResourceImporter {
 
     private ImportReport run(boolean force) {
         if (!options.isModEnabled()) {
-            return new ImportReport(false, false, "", 0, 0, "资源点位已关闭");
+            return new ImportReport(false, false, "", 0, 0, 0, "资源点位已关闭");
         }
         if (!repo.isAvailable()) {
-            return new ImportReport(false, false, "", 0, 0, "问答库不可用");
+            return new ImportReport(false, false, "", 0, 0, 0, "问答库不可用");
         }
         Path file;
         try {
             file = resolveFile();
         } catch (Exception e) {
             log.warn("[MAP-RES] 找点位文件失败：{}", e.getMessage());
-            return new ImportReport(false, false, "", 0, 0, "找不到点位文件");
+            return new ImportReport(false, false, "", 0, 0, 0, "找不到点位文件");
         }
         if (file == null) {
-            return new ImportReport(false, false, "", 0, 0, "没有 points.json");
+            return new ImportReport(false, false, "", 0, 0, 0, "没有 points.json");
         }
 
         try {
             String hash = sha256(file);
             MapResourceRepository.MetaRow meta = repo.meta("Embervale");
             if (!force && meta != null && hash.equals(meta.sourceHash()) && meta.points() > 0) {
-                return new ImportReport(false, true, meta.version(), 0, meta.points(), "已是最新");
+                return new ImportReport(false, true, meta.version(), 0, meta.points(), meta.areas(), "已是最新");
             }
             ImportReport report = parseAndStore(file, hash);
-            log.info("[MAP-RES] 导入完成：{}（{} 个点 / {} 层）", report.message(),
-                    report.points(), report.layers());
+            log.info("[MAP-RES] 导入完成：{} 点 / {} 块林地 / {} 层",
+                    report.points(), report.areas(), report.layers());
             return report;
         } catch (Exception e) {
             log.warn("[MAP-RES] 导入失败：{}", e.getMessage(), e);
-            return new ImportReport(false, true, "", 0, 0, "导入失败：" + e.getMessage());
+            return new ImportReport(false, true, "", 0, 0, 0, "导入失败：" + e.getMessage());
         }
     }
 
@@ -224,8 +224,14 @@ public class MapResourceImporter {
         JsonNode points = root.path("points");
         JsonNode chestTypes = root.path("chestTypes");
         JsonNode chests = root.path("chests");
+        JsonNode trees = root.path("trees");
+        Map<Integer, Integer> treeCounts = new HashMap<>();
+        for (JsonNode tree : trees) {
+            treeCounts.merge(tree.path(0).asInt(), 1, Integer::sum);
+        }
         int expectedPoints = root.path("counts").path("points").asInt(0);
         int expectedChests = root.path("counts").path("chests").asInt(0);
+        int expectedTrees = root.path("counts").path("treeRects").asInt(0);
         if (expectedPoints > 0 && points.size() != expectedPoints) {
             throw new IllegalStateException("点位数量对不上：声明 " + expectedPoints
                     + "，实际 " + points.size());
@@ -234,24 +240,39 @@ public class MapResourceImporter {
             throw new IllegalStateException("箱子数量对不上：声明 " + expectedChests
                     + "，实际 " + chests.size());
         }
+        if (expectedTrees > 0 && trees.size() != expectedTrees) {
+            throw new IllegalStateException("林地数量对不上：声明 " + expectedTrees
+                    + "，实际 " + trees.size());
+        }
 
         RegionGrid regions = RegionGrid.of(root.path("regions"));
         WikiIndex wiki = new WikiIndex(mapStore.all());
 
         Map<Integer, LayerDef> byRow = new HashMap<>();
+        Map<Integer, LayerDef> byTreeRow = new HashMap<>();
         List<LayerDef> layers = new ArrayList<>();
         for (JsonNode row : rows) {
             int index = row.path("index").asInt();
-            int count = row.path("count").asInt();
             String kind = row.path("kind").asText("world");
-            if (count <= 0 || "tree".equals(kind)) {
+            int count = "tree".equals(kind)
+                    ? treeCounts.getOrDefault(index, 0)
+                    : row.path("count").asInt();
+            if (count <= 0) {
                 continue;
             }
             String subtype = row.path("key").asText();
             String name = row.path("nameZh").asText(row.path("name").asText());
+            String color = row.path("areaColor").asText("");
+            if (color.isBlank()) {
+                color = ResourceColors.of(kind, subtype, index);
+            }
             LayerDef def = new LayerDef(kind + ":" + subtype, kind, subtype, name, index,
-                    ResourceColors.of(kind, subtype, index), index);
-            byRow.put(index, def);
+                    color, index);
+            if ("tree".equals(kind)) {
+                byTreeRow.put(index, def);
+            } else {
+                byRow.put(index, def);
+            }
             layers.add(def);
         }
 
@@ -304,6 +325,26 @@ public class MapResourceImporter {
             counts.merge(def.key(), 1, Integer::sum);
         }
 
+        List<MapResourceRepository.AreaRow> areaRows = new ArrayList<>();
+        int treeSeq = 0;
+        for (JsonNode tree : trees) {
+            LayerDef def = byTreeRow.get(tree.path(0).asInt());
+            if (def == null) {
+                continue;
+            }
+            double x0 = clamp(tree.path(3).asInt() * 32.0);
+            double x1 = clamp((tree.path(4).asInt() + 1) * 32.0);
+            double z0 = clamp(tree.path(1).asInt() * 32.0);
+            double z1 = clamp((tree.path(2).asInt() + 1) * 32.0);
+            if (x1 <= x0 || z1 <= z0) {
+                continue;
+            }
+            int region = regions.at((x0 + x1) / 2, (z0 + z1) / 2);
+            areaRows.add(new MapResourceRepository.AreaRow(def.key(), def.name(), region,
+                    x0, z0, x1, z1, "t:" + treeSeq++));
+            counts.merge(def.key(), 1, Integer::sum);
+        }
+
         List<MapResourceRepository.LayerRow> layerRows = new ArrayList<>();
         for (LayerDef def : layers) {
             int n = counts.getOrDefault(def.key(), 0);
@@ -313,10 +354,10 @@ public class MapResourceImporter {
             layerRows.add(new MapResourceRepository.LayerRow(def.key(), def.kind(), def.subtype(),
                     def.name(), def.name(), def.color(), n, def.sort()));
         }
-        int stored = repo.replaceAll("Embervale", version, hash, canvasFingerprint(), 0,
-                layerRows, out, Instant.now().toString());
-        return new ImportReport(true, true, version, layerRows.size(), stored,
-                version + " / " + stored + " 点");
+        int stored = repo.replaceAll("Embervale", version, hash, canvasFingerprint(),
+                layerRows, out, areaRows, Instant.now().toString());
+        return new ImportReport(true, true, version, layerRows.size(), stored, areaRows.size(),
+                version + " / " + stored + " 点 / " + areaRows.size() + " 块林地");
     }
 
     /**
@@ -338,6 +379,10 @@ public class MapResourceImporter {
             }
         }
         return "";
+    }
+
+    private static double clamp(double v) {
+        return Math.max(0, Math.min(10240, v));
     }
 
     private static String nameFor(LayerDef def, double x, double z, int region, String regionName,

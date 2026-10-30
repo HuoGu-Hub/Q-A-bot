@@ -23,7 +23,7 @@
  * </ol>
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import type { CanvasSpec, Marker, Relative } from './types'
+import type { CanvasSpec, MapArea, Marker, Relative } from './types'
 import {
   ICON_MIN_ZOOM, clampView, centerOn, crsOf, extentOf, fitPoints, fitView,
   hitTest, hitTestAll, initialView, screenOf, visibleMarkers, worldAt, worldOf,
@@ -35,6 +35,8 @@ const props = withDefaults(
   defineProps<{
     canvas: CanvasSpec
     markers: Marker[]
+    /** 林地面等矩形层；与 markers 分开，因为它们不是点 */
+    areas?: MapArea[]
     /** 显示的图层 key（wiki 分组） */
     visibleGroups: Set<string>
     /** 可见的分类（管理员点位用分类过滤） */
@@ -51,7 +53,7 @@ const props = withDefaults(
     /** 最大放大倍数，来自服务端配置；缺省时用 2 */
     maxZoom?: number
   }>(),
-  { mode: 'view', selectedId: '', highlight: null, draft: null, maxZoom: 2 },
+  { mode: 'view', selectedId: '', highlight: null, draft: null, maxZoom: 2, areas: () => [] },
 )
 
 const emit = defineEmits<{
@@ -331,6 +333,7 @@ function draw() {
   ctx.clearRect(0, 0, w, h)
 
   const v = view.value
+  drawAreas(ctx, v, w, h)
   // 缩放不够就一个点都不画：那个尺度上图标只会叠成一团，还挡住底图
   const raw = v.k >= ICON_MIN_ZOOM ? visibleMarkers(props.canvas, shown.value, v, w, h) : []
   const list = thinResources(raw)
@@ -420,6 +423,38 @@ function draw() {
 
   drawHighlight(ctx, v, w, h)
   drawDraft(ctx, v)
+}
+
+/** 林地之类的面数据：半透明填充 + 细边，画在所有点下面 */
+function drawAreas(ctx: CanvasRenderingContext2D, v: View, w: number, h: number) {
+  const areas = props.areas ?? []
+  if (!areas.length) return
+  // 同一层的矩形合成一条路径再 fill：相邻格子的接缝不会叠成深色条纹
+  const groups = new Map<string, { color: string; rects: number[][] }>()
+  for (const a of areas) {
+    if (!props.visibleGroups.has(a.group)) continue
+    if (a.canvas && a.canvas !== props.canvas.page) continue
+    const tl = worldOf(props.canvas, a.x0, a.z1)
+    const br = worldOf(props.canvas, a.x1, a.z0)
+    const x = tl[0] * v.k + v.tx
+    const y = tl[1] * v.k + v.ty
+    const ww = (br[0] - tl[0]) * v.k
+    const hh = (br[1] - tl[1]) * v.k
+    if (ww <= 0 || hh <= 0) continue
+    if (x + ww < 0 || y + hh < 0 || x > w || y > h) continue
+    const g = groups.get(a.group) ?? { color: a.color, rects: [] }
+    g.rects.push([x, y, ww, hh])
+    groups.set(a.group, g)
+  }
+  ctx.save()
+  for (const g of groups.values()) {
+    ctx.beginPath()
+    for (const r of g.rects) ctx.rect(r[0], r[1], r[2], r[3])
+    ctx.globalAlpha = 0.28
+    ctx.fillStyle = g.color
+    ctx.fill()
+  }
+  ctx.restore()
 }
 
 /** 选中的点位在头顶画一块名牌，底与描边都跟主题走 */

@@ -147,6 +147,8 @@ def parse_ore_deposits(src: Path) -> dict:
     labels = c_strings(c_array(text, "kOreLabels"))
     chinese = parse_chinese_names(src, len(labels))
     categories = c_ints(c_array(text, "kOreCategory"))
+    # 林地形状色：0xAABBGGRR，只有树木行非零
+    area_colors = c_ints(c_array(text, "kOreAreaColors"))
     deposits = [
         [int(ore), int(x), int(z), int(top), int(amount)]
         for ore, x, z, top, amount in re.findall(
@@ -164,6 +166,9 @@ def parse_ore_deposits(src: Path) -> dict:
     rows = []
     for i, label in enumerate(labels):
         category = categories[i] if i < len(categories) else 0
+        area = area_colors[i] if i < len(area_colors) else 0
+        area_color = "" if area == 0 else "#%02x%02x%02x" % (
+            area & 0xFF, (area >> 8) & 0xFF, (area >> 16) & 0xFF)
         rows.append({
             "index": i,
             "key": re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"),
@@ -172,6 +177,7 @@ def parse_ore_deposits(src: Path) -> dict:
             "kind": ROW_KINDS.get(i, "world"),
             "category": CATEGORY_KEYS.get(category, "world"),
             "count": counts.get(i, 0),
+            "areaColor": area_color,
         })
     return {"rows": rows, "points": deposits}
 

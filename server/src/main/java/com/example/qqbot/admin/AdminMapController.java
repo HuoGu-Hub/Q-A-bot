@@ -116,6 +116,7 @@ public class AdminMapController {
         out.put("version", report.version());
         out.put("layers", report.layers());
         out.put("points", report.points());
+        out.put("areas", report.areas());
         out.put("message", report.message());
         return out;
     }

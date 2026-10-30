@@ -175,6 +175,32 @@ public class PublicMapController {
         return ResponseEntity.ok(out);
     }
 
+    /**
+     * 一层面数据（林地）。坐标是矩形的西南角与东北角，前端直接画成矩形。
+     */
+    @GetMapping("/resource-areas")
+    public ResponseEntity<?> resourceAreas(@RequestParam("map") String map,
+                                           @RequestParam("layer") String layer,
+                                           HttpServletRequest request) {
+        ResponseEntity<?> denied = rateLimit(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (map == null || map.isBlank() || layer == null || layer.isBlank()) {
+            return badRequest("缺少 map 或 layer 参数");
+        }
+        List<Object[]> areas = new ArrayList<>();
+        for (MapResourceService.AreaView a : resources.areas(map.strip(), layer.strip())) {
+            areas.add(new Object[]{a.x0(), a.z0(), a.x1(), a.z1(), a.name()});
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("map", map.strip());
+        out.put("layer", layer.strip());
+        out.put("areas", areas);
+        return ResponseEntity.ok(out);
+    }
+
     /** 按名字 / 别名 / 备注搜点位 */
     @GetMapping("/search")
     public ResponseEntity<?> search(@RequestParam("q") String q,

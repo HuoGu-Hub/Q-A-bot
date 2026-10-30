@@ -26,6 +26,7 @@ import type {
   Catalog,
   LocateHit,
   LocateResult,
+  MapArea,
   MapSpec,
   Marker,
   Relative,
@@ -50,6 +51,7 @@ const resourceCategories = ref<ResourceCategory[]>([])
 const resourceVersion = ref('')
 const resourceMessage = ref('')
 const resourceMarkers = ref<Marker[]>([])
+const resourceAreas = ref<MapArea[]>([])
 /** 已经取过坐标的层；开关关掉再打开不重复请求 */
 const loadedResources = ref<Set<string>>(new Set())
 const loadingResources = ref<Set<string>>(new Set())
@@ -186,6 +188,7 @@ async function loadMarkers(map: string) {
     pickedStack.value = []
     highlight.value = null
     resourceMarkers.value = []
+    resourceAreas.value = []
     loadedResources.value = new Set()
     openCategories.value = new Set()
     await loadResourceCatalog(map)
@@ -245,11 +248,33 @@ async function toggleResource(layer: ResourceLayer) {
   loading.add(layer.key)
   loadingResources.value = loading
   try {
+    const canvasPage = currentCanvas.value?.page ?? ''
+    if (layer.shape === 'area') {
+      const r = await publicApi.get<{ areas: [number, number, number, number, string][] }>(
+        '/map/resource-areas?map=' + encodeURIComponent(mapName.value) +
+          '&layer=' + encodeURIComponent(layer.key),
+      )
+      const add: MapArea[] = r.areas.map(([x0, z0, x1, z1, name], i) => ({
+        id: 'area:' + layer.key + ':' + i,
+        group: layer.key,
+        canvas: canvasPage,
+        x0,
+        z0,
+        x1,
+        z1,
+        color: layer.color,
+        name: name || layer.name,
+      }))
+      resourceAreas.value = [...resourceAreas.value, ...add]
+      const done = new Set(loadedResources.value)
+      done.add(layer.key)
+      loadedResources.value = done
+      return
+    }
     const r = await publicApi.get<{ points: [number, number, string][] }>(
       '/map/resources?map=' + encodeURIComponent(mapName.value) +
         '&layer=' + encodeURIComponent(layer.key),
     )
-    const canvasPage = currentCanvas.value?.page ?? ''
     const add: Marker[] = r.points.map(([x, z, name], i) => ({
       id: 'res:' + layer.key + ':' + i,
       map: mapName.value,
@@ -408,6 +433,7 @@ function fmt(n: number): string {
         ref="mapCanvas"
         :canvas="currentCanvas"
         :markers="markersOnCanvas"
+        :areas="resourceAreas"
         :visible-groups="visibleGroups"
         :visible-categories="visibleCategories"
         :selected-id="selected?.id ?? ''"

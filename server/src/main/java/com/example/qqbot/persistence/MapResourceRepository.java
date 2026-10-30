@@ -35,6 +35,11 @@ public class MapResourceRepository {
                            String sourceId) {
     }
 
+    /** 一块林地矩形（世界坐标，x0/z0 是西南角，x1/z1 是东北角） */
+    public record AreaRow(String layer, String name, int region, double x0, double z0,
+                          double x1, double z1, String sourceId) {
+    }
+
     /** 一次导入的快照信息 */
     public record MetaRow(String map, String version, String sourceHash, String canvasFp,
                           int points, int areas, String importedAt) {
@@ -100,8 +105,22 @@ public class MapResourceRepository {
                 + " source_id TEXT NOT NULL,"
                 + " PRIMARY KEY (map, source_id))");
 
+        jdbc.execute("CREATE TABLE IF NOT EXISTS kb_map_resource_area ("
+                + " map       TEXT NOT NULL,"
+                + " layer     TEXT NOT NULL,"
+                + " name      TEXT NOT NULL DEFAULT '',"
+                + " region    INTEGER NOT NULL DEFAULT -1,"
+                + " x0        REAL NOT NULL DEFAULT 0,"
+                + " z0        REAL NOT NULL DEFAULT 0,"
+                + " x1        REAL NOT NULL DEFAULT 0,"
+                + " z1        REAL NOT NULL DEFAULT 0,"
+                + " source_id TEXT NOT NULL,"
+                + " PRIMARY KEY (map, source_id))");
+
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_resource_layer"
                 + " ON kb_map_resource(map, layer)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_map_resource_area_layer"
+                + " ON kb_map_resource_area(map, layer)");
         // 旧库没有 canvas_fp：加列是 additive DDL，不重建表
         try {
             jdbc.update("ALTER TABLE kb_map_resource_meta ADD COLUMN canvas_fp TEXT NOT NULL DEFAULT ''");
@@ -133,8 +152,21 @@ public class MapResourceRepository {
                         r.dbl("x"), r.dbl("z"), r.str("source_id")), map, layer);
     }
 
+    public List<AreaRow> areas(String map, String layer) {
+        return jdbc.query("SELECT layer, name, region, x0, z0, x1, z1, source_id"
+                        + " FROM kb_map_resource_area WHERE map = ? AND layer = ?"
+                        + " ORDER BY x0, z0",
+                r -> new AreaRow(r.str("layer"), r.str("name"), r.intOf("region"),
+                        r.dbl("x0"), r.dbl("z0"), r.dbl("x1"), r.dbl("z1"),
+                        r.str("source_id")), map, layer);
+    }
+
     public int pointCount(String map) {
         return (int) jdbc.count("SELECT COUNT(*) FROM kb_map_resource WHERE map = ?", map);
+    }
+
+    public int areaCount(String map) {
+        return (int) jdbc.count("SELECT COUNT(*) FROM kb_map_resource_area WHERE map = ?", map);
     }
 
     /**
@@ -142,10 +174,11 @@ public class MapResourceRepository {
      * 导入到一半失败时，旧快照仍然完整可用。
      */
     public int replaceAll(String map, String version, String sourceHash, String canvasFp,
-                          int areas, List<LayerRow> layers, List<PointRow> points,
+                          List<LayerRow> layers, List<PointRow> points, List<AreaRow> areas,
                           String importedAt) {
         return jdbc.transaction(() -> {
             jdbc.update("DELETE FROM kb_map_resource WHERE map = ?", map);
+            jdbc.update("DELETE FROM kb_map_resource_area WHERE map = ?", map);
             jdbc.update("DELETE FROM kb_map_resource_layer WHERE map = ?", map);
 
             batch("INSERT INTO kb_map_resource_layer"
@@ -160,6 +193,12 @@ public class MapResourceRepository {
                     points.stream().map(p -> new Object[]{map, p.layer(), nz(p.name()),
                             p.region(), p.x(), p.z(), p.sourceId()}).toList());
 
+            batch("INSERT INTO kb_map_resource_area"
+                            + " (map, layer, name, region, x0, z0, x1, z1, source_id)"
+                            + " VALUES (?,?,?,?,?,?,?,?,?)",
+                    areas.stream().map(a -> new Object[]{map, a.layer(), nz(a.name()),
+                            a.region(), a.x0(), a.z0(), a.x1(), a.z1(), a.sourceId()}).toList());
+
             jdbc.update("INSERT INTO kb_map_resource_meta"
                             + " (map, version, source_hash, canvas_fp, points, areas, imported_at)"
                             + " VALUES (?,?,?,?,?,?,?)"
@@ -167,7 +206,7 @@ public class MapResourceRepository {
                             + " source_hash=excluded.source_hash, canvas_fp=excluded.canvas_fp,"
                             + " points=excluded.points, areas=excluded.areas,"
                             + " imported_at=excluded.imported_at",
-                    map, nz(version), nz(sourceHash), nz(canvasFp), points.size(), areas,
+                    map, nz(version), nz(sourceHash), nz(canvasFp), points.size(), areas.size(),
                     nz(importedAt));
             return points.size();
         });

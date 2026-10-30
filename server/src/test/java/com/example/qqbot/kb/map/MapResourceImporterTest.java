@@ -38,17 +38,19 @@ class MapResourceImporterTest {
         return """
                 {
                   "source": {"version": "test-1"},
-                  "counts": {"points": 2, "chests": 1},
+                  "counts": {"points": 2, "chests": 1, "treeRects": 1},
                   "regions": {"rowStart": [0, 1], "runs": [[1280, 0]], "names": ["Testland"]},
                   "chestTypes": [
                     {"index": 0, "key": "gold", "name": "Gold Chest", "nameZh": "金箱", "count": 1}
                   ],
                   "rows": [
                     {"index": 0, "key": "iron", "name": "Iron", "nameZh": "铁", "kind": "ore", "count": 1},
-                    {"index": 90, "key": "lore_note", "name": "Lore Note", "nameZh": "笔记", "kind": "lore", "count": 1}
+                    {"index": 90, "key": "lore_note", "name": "Lore Note", "nameZh": "笔记", "kind": "lore", "count": 1},
+                    {"index": 69, "key": "springlands_trees", "name": "Springlands Trees", "nameZh": "春境树木", "kind": "tree", "count": 0, "areaColor": "#7fbf5a"}
                   ],
                   "points": [[0, 100, 4, 0, 0], [90, 200, 4, 0, 0]],
-                  "chests": [[300, 0, 4, 0]]
+                  "chests": [[300, 0, 4, 0]],
+                  "trees": [[69, 0, 0, 0, 0]]
                 }
                 """;
     }
@@ -64,8 +66,8 @@ class MapResourceImporterTest {
         MapResourceRepository repo = mock(MapResourceRepository.class);
         when(repo.isAvailable()).thenReturn(true);
         when(repo.meta(anyString())).thenReturn(null);
-        when(repo.replaceAll(anyString(), anyString(), anyString(), anyString(), anyInt(), anyList(),
-                anyList(), anyString())).thenReturn(3);
+        when(repo.replaceAll(anyString(), anyString(), anyString(), anyString(), anyList(),
+                anyList(), anyList(), anyString())).thenReturn(3);
 
         KbMapStore store = mock(KbMapStore.class);
         when(store.all()).thenReturn(List.of(
@@ -76,17 +78,19 @@ class MapResourceImporterTest {
 
         assertThat(report.imported()).isTrue();
         assertThat(report.points()).isEqualTo(3);
+        assertThat(report.areas()).isEqualTo(1);
         assertThat(report.version()).isEqualTo("test-1");
 
         ArgumentCaptor<List<MapResourceRepository.LayerRow>> layers =
                 ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<MapResourceRepository.PointRow>> points =
                 ArgumentCaptor.forClass(List.class);
-        verify(repo).replaceAll(anyString(), anyString(), anyString(), anyString(), anyInt(),
-                layers.capture(), points.capture(), anyString());
+        verify(repo).replaceAll(anyString(), anyString(), anyString(), anyString(),
+                layers.capture(), points.capture(), anyList(), anyString());
 
         assertThat(layers.getValue()).extracting(MapResourceRepository.LayerRow::key)
-                .containsExactlyInAnyOrder("ore:iron", "lore:lore_note", "chest:gold");
+                .containsExactlyInAnyOrder("ore:iron", "lore:lore_note", "chest:gold",
+                        "tree:springlands_trees");
         assertThat(layers.getValue()).filteredOn(l -> l.key().equals("chest:gold"))
                 .singleElement().extracting(MapResourceRepository.LayerRow::nameZh)
                 .isEqualTo("金箱");
@@ -95,6 +99,18 @@ class MapResourceImporterTest {
                 .singleElement().extracting(MapResourceRepository.PointRow::name)
                 .isEqualTo("The First Note");
         assertThat(points.getValue()).allSatisfy(p -> assertThat(p.region()).isEqualTo(0));
+
+        ArgumentCaptor<List<MapResourceRepository.AreaRow>> areas =
+                ArgumentCaptor.forClass(List.class);
+        verify(repo).replaceAll(anyString(), anyString(), anyString(), anyString(), anyList(),
+                anyList(), areas.capture(), anyString());
+        assertThat(areas.getValue()).singleElement().satisfies(a -> {
+            assertThat(a.layer()).isEqualTo("tree:springlands_trees");
+            assertThat(a.x0()).isEqualTo(0);
+            assertThat(a.x1()).isEqualTo(32);
+            assertThat(a.z0()).isEqualTo(0);
+            assertThat(a.z1()).isEqualTo(32);
+        });
     }
 
     @Test
@@ -114,12 +130,12 @@ class MapResourceImporterTest {
 
         MapResourceImporter importer = importer(repo, store, tmp);
         // 先导入一次，拿到真实哈希
-        when(repo.replaceAll(anyString(), anyString(), anyString(), anyString(), anyInt(), anyList(),
-                anyList(), anyString())).thenReturn(3);
+        when(repo.replaceAll(anyString(), anyString(), anyString(), anyString(), anyList(),
+                anyList(), anyList(), anyString())).thenReturn(3);
         importer.importNow();
         ArgumentCaptor<String> hash = ArgumentCaptor.forClass(String.class);
-        verify(repo).replaceAll(anyString(), anyString(), hash.capture(), anyString(), anyInt(),
-                anyList(), anyList(), anyString());
+        verify(repo).replaceAll(anyString(), anyString(), hash.capture(), anyString(),
+                anyList(), anyList(), anyList(), anyString());
 
         when(repo.meta(anyString())).thenReturn(
                 new MapResourceRepository.MetaRow("Embervale", "test-1", hash.getValue(), "", 3, 0,

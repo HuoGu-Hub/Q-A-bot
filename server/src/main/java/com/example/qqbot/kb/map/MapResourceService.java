@@ -23,7 +23,7 @@ public class MapResourceService {
 
     private static final List<String> CATEGORY_ORDER = List.of(
             "chest", "beacon", "water", "ore", "material", "plant", "bait",
-            "lore", "boss", "unique", "collectible", "summon");
+            "lore", "boss", "unique", "collectible", "summon", "tree");
 
     private static final Map<String, String> CATEGORY_NAMES = Map.ofEntries(
             Map.entry("chest", "宝箱"),
@@ -37,10 +37,11 @@ public class MapResourceService {
             Map.entry("boss", "首领"),
             Map.entry("unique", "独特装备"),
             Map.entry("collectible", "收藏品"),
-            Map.entry("summon", "堕落召唤石"));
+            Map.entry("summon", "堕落召唤石"),
+            Map.entry("tree", "林地"));
 
     public record LayerView(String key, String name, String kind, String subtype,
-                            int count, String color) {
+                            int count, String color, String shape) {
     }
 
     public record CategoryView(String key, String name, int count, List<LayerView> layers) {
@@ -51,6 +52,9 @@ public class MapResourceService {
     }
 
     public record PointView(double x, double z, String name, int region) {
+    }
+
+    public record AreaView(double x0, double z0, double x1, double z1, String name) {
     }
 
     private final MapResourceRepository repo;
@@ -83,7 +87,8 @@ public class MapResourceService {
             String category = categoryOf(l.kind());
             grouped.computeIfAbsent(category, k -> new ArrayList<>())
                     .add(new LayerView(l.key(), l.nameZh().isBlank() ? l.name() : l.nameZh(),
-                            l.kind(), l.subtype(), l.count(), l.color()));
+                            l.kind(), l.subtype(), l.count(), l.color(),
+                            "tree".equals(l.kind()) ? "area" : "point"));
         }
         List<CategoryView> categories = new ArrayList<>();
         for (String key : CATEGORY_ORDER) {
@@ -111,6 +116,23 @@ public class MapResourceService {
             return out;
         } catch (Exception e) {
             log.warn("[MAP-RES] 读点位失败 layer={}：{}", layer, e.getMessage());
+            return List.of();
+        }
+    }
+
+    public List<AreaView> areas(String map, String layer) {
+        if (!repo.isAvailable() || layer == null || layer.isBlank()) {
+            return List.of();
+        }
+        importer.ensureLoaded();
+        try {
+            List<AreaView> out = new ArrayList<>();
+            for (MapResourceRepository.AreaRow a : repo.areas(map, layer)) {
+                out.add(new AreaView(a.x0(), a.z0(), a.x1(), a.z1(), a.name()));
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("[MAP-RES] 读林地面失败 layer={}：{}", layer, e.getMessage());
             return List.of();
         }
     }

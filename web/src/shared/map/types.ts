@@ -67,6 +67,8 @@ export interface ResourceLayer {
   subtype: string
   count: number
   color: string
+  /** point = 点位，area = 矩形面（林地） */
+  shape: 'point' | 'area'
 }
 
 export interface ResourceCategory {
@@ -84,6 +86,19 @@ export interface ResourceCatalog {
   importedAt: string
   message: string
   categories: ResourceCategory[]
+}
+
+/** 一块林地面。x0/z0 是西南角，x1/z1 是东北角 */
+export interface MapArea {
+  id: string
+  group: string
+  canvas: string
+  x0: number
+  z0: number
+  x1: number
+  z1: number
+  color: string
+  name: string
 }
 
 export interface Catalog {
