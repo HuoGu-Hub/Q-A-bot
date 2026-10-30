@@ -242,7 +242,7 @@ async function toggleResource(layer: ResourceLayer) {
   }
   next.add(layer.key)
   visibleGroups.value = next
-  if (loadedResources.value.has(layer.key)) return
+  if (loadedResources.value.has(layer.key) || loadingResources.value.has(layer.key)) return
 
   const loading = new Set(loadingResources.value)
   loading.add(layer.key)
@@ -265,7 +265,8 @@ async function toggleResource(layer: ResourceLayer) {
         color: layer.color,
         name: name || layer.name,
       }))
-      resourceAreas.value = [...resourceAreas.value, ...add]
+      // 同一层重复加载时先替换旧数据，避免深链和手动点击叠加出两倍的点
+      resourceAreas.value = resourceAreas.value.filter((a) => a.group !== layer.key).concat(add)
       const done = new Set(loadedResources.value)
       done.add(layer.key)
       loadedResources.value = done
@@ -295,7 +296,7 @@ async function toggleResource(layer: ResourceLayer) {
       source: 'resource' as const,
       color: layer.color,
     }))
-    resourceMarkers.value = [...resourceMarkers.value, ...add]
+    resourceMarkers.value = resourceMarkers.value.filter((m) => m.group !== layer.key).concat(add)
     const done = new Set(loadedResources.value)
     done.add(layer.key)
     loadedResources.value = done
