@@ -111,19 +111,21 @@ public class MapResourceDirectory implements ResourceDirectory {
             for (MapResourceService.PointView p : rows) {
                 points.add(new ResourceHotspots.Point(p.x(), p.z()));
             }
-            List<ResourceHotspots.Hotspot> found = ResourceHotspots.find(points);
+            MapOptions.Resource cfg = resourceConfig();
+            List<ResourceHotspots.Hotspot> found = ResourceHotspots.find(points,
+                    cfg.getCellSize(), cfg.getNmsRadius(), cfg.getHotRadius(), cfg.getTop());
             if (found.isEmpty()) {
                 return null;
             }
             List<PlacePoint> anchors = landmarks(layer.map());
             List<Hotspot> hotspots = new ArrayList<>(found.size());
             for (ResourceHotspots.Hotspot h : found) {
-                hotspots.add(withAnchor(h, anchors, regionOf(h, rows)));
+                hotspots.add(withAnchor(h, anchors, regionOf(h, rows, cfg.getHotRadius())));
             }
             log.info("[RES] 「{}」→ {}（{} 个点，{} 处热点）", term.strip(), layer.key(),
                     points.size(), hotspots.size());
             return new Answer(displayName(layer), layer, points.size(),
-                    (int) ResourceHotspots.HOT_RADIUS, hotspots);
+                    (int) Math.round(cfg.getHotRadius()), hotspots);
         } catch (Exception e) {
             // 资源分布是加分项，任何一步失败都只表现为"这次没有"，绝不能把 locate 带走
             log.warn("[RES] 资源热点计算失败，本次按没有处理：{} —— {}", term, e.getMessage());
@@ -290,13 +292,14 @@ public class MapResourceDirectory implements ResourceDirectory {
      * 热点落在哪个区域：取热点半径内点数最多的那个区域。
      * 区域只存了英文名（来自 points.json），回答时再由 {@link PlaceNames#regionZh} 转中文。
      */
-    private static String regionOf(ResourceHotspots.Hotspot h, List<MapResourceService.PointView> rows) {
+    private static String regionOf(ResourceHotspots.Hotspot h, List<MapResourceService.PointView> rows,
+                                   double hotRadius) {
         Map<String, Integer> counts = new HashMap<>();
         for (MapResourceService.PointView p : rows) {
             if (p.regionName() == null || p.regionName().isBlank()) {
                 continue;
             }
-            if (Math.hypot(p.x() - h.x(), p.z() - h.y()) > ResourceHotspots.HOT_RADIUS) {
+            if (Math.hypot(p.x() - h.x(), p.z() - h.y()) > hotRadius) {
                 continue;
             }
             counts.merge(p.regionName(), 1, Integer::sum);
@@ -311,6 +314,12 @@ public class MapResourceDirectory implements ResourceDirectory {
             }
         }
         return best;
+    }
+
+    /** 配置缺失时用默认值，测试里 mock 的 MapOptions 不会因此炸掉 */
+    private MapOptions.Resource resourceConfig() {
+        MapOptions.Resource cfg = options.getResource();
+        return cfg == null ? new MapOptions.Resource() : cfg;
     }
 
     private static Hotspot withAnchor(ResourceHotspots.Hotspot h, List<PlacePoint> anchors, String region) {

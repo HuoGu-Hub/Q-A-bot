@@ -48,12 +48,6 @@ public class ResourceShotSource implements ImageSource {
     /** 图上的点用什么颜色 —— 与网页资源层的默认色一致 */
     private static final Color DEFAULT_DOT = new Color(201, 123, 60);
 
-    /** 参照地点最多画几个：视口里通常十几个，上限只是防异常数据 */
-    private static final int MAX_CONTEXT = 40;
-
-    /** 其中最多给几个写名字：再多会互相压住，一个都读不成 */
-    private static final int LABEL_MAX = 8;
-
     private final MapViewService view;
     private final MapResourceService resources;
     private final MapImageCache images;
@@ -108,7 +102,9 @@ public class ResourceShotSource implements ImageSource {
         for (MapResourceService.PointView p : rows) {
             points.add(new ResourceHotspots.Point(p.x(), p.z()));
         }
-        List<ResourceHotspots.Hotspot> hotspots = ResourceHotspots.find(points);
+        MapOptions.Resource cfg = resourceConfig();
+        List<ResourceHotspots.Hotspot> hotspots = ResourceHotspots.find(points,
+                cfg.getCellSize(), cfg.getNmsRadius(), cfg.getHotRadius(), cfg.getTop());
         if (index > hotspots.size()) {
             log.info("[RES-SHOT] 没有第 {} 片热点，本次不出图：{}", index, key);
             return Optional.empty();
@@ -135,7 +131,8 @@ public class ResourceShotSource implements ImageSource {
             MapProjection.Point at = MapProjection.worldOf(geometry, p.x(), p.z());
             dots.add(new MapShotRenderer.Dot(at.x(), at.y(), style.color()));
         }
-        List<MapShotRenderer.Mark> context = contextMarks(map, canvas.page(), geometry, hotspot);
+        List<MapShotRenderer.Mark> context = contextMarks(map, canvas.page(), geometry, hotspot,
+                cfg.getLabelMax(), cfg.getMaxContext());
 
         long deadline = System.currentTimeMillis() + options.getShot().getDeadlineMs();
         List<String> missing = new ArrayList<>();
@@ -204,11 +201,12 @@ public class ResourceShotSource implements ImageSource {
      * 同一张画布上的 wiki 地点，按离热点的距离取最近的若干个。
      *
      * <p>只画公开可见、默认显示的分组——与网页地图同一条规则。
-     * 名字只给最近的 {@link #LABEL_MAX} 个：再多会互相压住。
+     * 名字只给最近的 {@code labelMax} 个：再多会互相压住。
      */
     private List<MapShotRenderer.Mark> contextMarks(String map, String canvasPage,
                                                     MapProjection.Canvas geometry,
-                                                    ResourceHotspots.Hotspot hotspot) {
+                                                    ResourceHotspots.Hotspot hotspot,
+                                                    int labelMax, int maxContext) {
         MapViewService.MapView mapView = null;
         try {
             for (MapViewService.MapView m : view.catalog()) {
@@ -260,12 +258,12 @@ public class ResourceShotSource implements ImageSource {
         }
         found.sort(Comparator.comparingDouble(Candidate::distance));
 
-        int limit = Math.min(found.size(), MAX_CONTEXT);
+        int limit = Math.min(found.size(), Math.max(1, maxContext));
         List<MapShotRenderer.Mark> out = new ArrayList<>(limit);
         for (int i = 0; i < limit; i++) {
             MapViewService.MarkerView m = found.get(i).marker();
             MapProjection.Point at = MapProjection.worldOf(geometry, m.x(), m.y());
-            String label = i < LABEL_MAX ? PlaceNames.zh(m.name()) : "";
+            String label = i < labelMax ? PlaceNames.zh(m.name()) : "";
             out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), label,
                     icons.getOrDefault(nz(m.group()), "")));
         }
@@ -298,6 +296,12 @@ public class ResourceShotSource implements ImageSource {
     }
 
     private record LayerStyle(Color color, String name) {
+    }
+
+    /** 配置缺失时用默认值，无配置的调用方也能正常出图 */
+    private MapOptions.Resource resourceConfig() {
+        MapOptions.Resource cfg = options.getResource();
+        return cfg == null ? new MapOptions.Resource() : cfg;
     }
 
     private static String nz(String s) {

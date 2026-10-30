@@ -63,6 +63,18 @@ class ApplicationYmlTest {
     }
 
     @Test
+    @DisplayName("★ 资源热点参数齐全且合法：格宽/半径为正，top 至少 1")
+    void resourceHotspotConfigIsSane() throws Exception {
+        Map<String, Object> r = at(load(), "app", "kb", "map", "resource");
+        assertThat(((Number) r.get("cell-size")).doubleValue()).isPositive();
+        assertThat(((Number) r.get("nms-radius")).doubleValue()).isNotNegative();
+        assertThat(((Number) r.get("hot-radius")).doubleValue()).isPositive();
+        assertThat(((Number) r.get("top")).intValue()).isPositive();
+        assertThat(((Number) r.get("max-context")).intValue()).isPositive();
+        assertThat(((Number) r.get("label-max")).intValue()).isNotNegative();
+    }
+
+    @Test
     @DisplayName("★ 语料入口的配置合法：来源非空、上限非负")
     void corpusEntryPointsAreSane() throws Exception {
         Map<String, Object> wiki = at(load(), "app", "kb", "wiki-import");

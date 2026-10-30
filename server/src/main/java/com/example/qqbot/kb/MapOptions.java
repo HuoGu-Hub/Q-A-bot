@@ -83,6 +83,9 @@ public class MapOptions {
     /** 一次地点问答最多列几处 */
     private int answerLimit = 5;
 
+    /** 资源热点统计与资源截图的参数 */
+    private Resource resource = new Resource();
+
     /** 地点问答的配图（把地图裁一块发给群友） */
     private Shot shot = new Shot();
 
@@ -250,6 +253,14 @@ public class MapOptions {
         this.rateLimitPauseMs = Math.max(0, rateLimitPauseMs);
     }
 
+    public Resource getResource() {
+        return resource;
+    }
+
+    public void setResource(Resource resource) {
+        this.resource = resource == null ? new Resource() : resource;
+    }
+
     public Shot getShot() {
         return shot;
     }
@@ -385,6 +396,83 @@ public class MapOptions {
 
         public void setJpegQuality(int jpegQuality) {
             this.jpegQuality = Math.min(100, Math.max(10, jpegQuality));
+        }
+    }
+
+    /**
+     * 资源热点与资源截图的参数（{@code app.kb.map.resource.*}）。
+     *
+     * <h2>为什么这些要可配</h2>
+     * 格宽与半径决定"什么叫一片"：100 单位一格能把铜矿分成可读的几片，
+     * 但换一张地图、换一种资源，合适的尺度会变；NMS 半径同理 —— 太小时三片挤在一处，
+     * 太大时整张图只剩一个热点。这些值必须能在不改代码的情况下调。
+     */
+    public static class Resource {
+
+        /** 网格边长（坐标单位） */
+        private double cellSize = ResourceHotspots.CELL;
+
+        /** 候选热点之间的最小距离（坐标单位） */
+        private double nmsRadius = ResourceHotspots.NMS_RADIUS;
+
+        /** 统计"这一片有多少点"的半径（坐标单位） */
+        private double hotRadius = ResourceHotspots.HOT_RADIUS;
+
+        /** 一次回答最多给几片 */
+        private int top = ResourceHotspots.TOP;
+
+        /** 资源截图里最多给几个参照地点写名字 */
+        private int labelMax = 8;
+
+        /** 资源截图里最多画几个参照地点 */
+        private int maxContext = 40;
+
+        public double getCellSize() {
+            return cellSize;
+        }
+
+        public void setCellSize(double cellSize) {
+            this.cellSize = Math.max(1, cellSize);
+        }
+
+        public double getNmsRadius() {
+            return nmsRadius;
+        }
+
+        public void setNmsRadius(double nmsRadius) {
+            this.nmsRadius = Math.max(0, nmsRadius);
+        }
+
+        public double getHotRadius() {
+            return hotRadius;
+        }
+
+        public void setHotRadius(double hotRadius) {
+            this.hotRadius = Math.max(1, hotRadius);
+        }
+
+        public int getTop() {
+            return top;
+        }
+
+        public void setTop(int top) {
+            this.top = Math.max(1, top);
+        }
+
+        public int getLabelMax() {
+            return labelMax;
+        }
+
+        public void setLabelMax(int labelMax) {
+            this.labelMax = Math.max(0, labelMax);
+        }
+
+        public int getMaxContext() {
+            return maxContext;
+        }
+
+        public void setMaxContext(int maxContext) {
+            this.maxContext = Math.max(1, maxContext);
         }
     }
 }
