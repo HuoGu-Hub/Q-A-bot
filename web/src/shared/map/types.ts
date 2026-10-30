@@ -59,6 +59,33 @@ export interface MapSpec {
   defaultGroups: string[] | null
 }
 
+/** 资源面板的一行：一种矿 / 一档箱子 / 一种植物…… */
+export interface ResourceLayer {
+  key: string
+  name: string
+  kind: string
+  subtype: string
+  count: number
+  color: string
+}
+
+export interface ResourceCategory {
+  key: string
+  name: string
+  count: number
+  layers: ResourceLayer[]
+}
+
+export interface ResourceCatalog {
+  ok: boolean
+  map: string
+  imported: boolean
+  version: string
+  importedAt: string
+  message: string
+  categories: ResourceCategory[]
+}
+
 export interface Catalog {
   ok: boolean
   enabled: boolean
@@ -89,7 +116,9 @@ export interface Marker {
   category: string
   priority: number
   note: string
-  source: 'wiki' | 'admin'
+  source: 'wiki' | 'admin' | 'resource'
+  /** 资源点没有图标，用这个颜色画圆点；wiki / 自定义点不填 */
+  color?: string
 }
 
 export interface AnchorRef {

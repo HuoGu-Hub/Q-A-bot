@@ -8,6 +8,8 @@ import com.example.qqbot.kb.map.MapJobs;
 import com.example.qqbot.kb.map.MapLayerService;
 import com.example.qqbot.kb.map.MapNoteService;
 import com.example.qqbot.kb.map.MapPlaceService;
+import com.example.qqbot.kb.map.MapResourceImporter;
+import com.example.qqbot.kb.map.MapResourceService;
 import com.example.qqbot.kb.map.MapScope;
 import com.example.qqbot.kb.map.MapViewService;
 import org.slf4j.Logger;
@@ -61,10 +63,14 @@ public class AdminMapController {
      */
     private final LocationCorpusBuilder corpus;
 
+    private final MapResourceImporter resourceImporter;
+    private final MapResourceService resources;
+
     public AdminMapController(MapViewService view, MapPlaceService places, MapNoteService notes,
                               KbMapStore mapStore, MapImageCache images, MapJobs jobs,
                               MapOptions options, MapLayerService layers, MapScope scope,
-                              LocationCorpusBuilder corpus) {
+                              LocationCorpusBuilder corpus, MapResourceImporter resourceImporter,
+                              MapResourceService resources) {
         this.view = view;
         this.places = places;
         this.notes = notes;
@@ -75,6 +81,43 @@ public class AdminMapController {
         this.layers = layers;
         this.scope = scope;
         this.corpus = corpus;
+        this.resourceImporter = resourceImporter;
+        this.resources = resources;
+    }
+
+    /* ==================== 资源点位 ==================== */
+
+    /** 资源点位的快照状态：版本、点数、图层数 */
+    @GetMapping("/resources/status")
+    public Map<String, Object> resourceStatus() {
+        MapResourceService.CatalogView catalog = resources.catalog("Embervale");
+        int layers = catalog.categories().stream().mapToInt(c -> c.layers().size()).sum();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("imported", catalog.imported());
+        out.put("version", catalog.version());
+        out.put("importedAt", catalog.importedAt());
+        out.put("message", catalog.message());
+        out.put("layers", layers);
+        out.put("categories", catalog.categories().size());
+        return out;
+    }
+
+    /** 强制重导资源点位；文件没变时它会跳过，除非 force=true */
+    @PostMapping("/resources/import")
+    public Map<String, Object> importResources(
+            @RequestParam(name = "force", defaultValue = "false") boolean force) {
+        MapResourceImporter.ImportReport report = force
+                ? resourceImporter.importNow() : resourceImporter.ensureLoaded();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("imported", report.imported());
+        out.put("found", report.found());
+        out.put("version", report.version());
+        out.put("layers", report.layers());
+        out.put("points", report.points());
+        out.put("message", report.message());
+        return out;
     }
 
     /* ==================== 状态 ==================== */

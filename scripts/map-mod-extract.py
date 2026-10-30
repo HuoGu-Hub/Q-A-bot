@@ -35,6 +35,38 @@ CATEGORY_KEYS = {
     5: "mining", 6: "materials", 7: "plants", 8: "bait", 9: "trees",
 }
 
+# 顶层过滤类型。点位表里每一行落进哪一类，决定前端资源面板的分区。
+ROW_KINDS = {
+    **{i: "ore" for i in range(0, 21)},
+    **{i: "material" for i in range(21, 33)},
+    **{i: "plant" for i in range(33, 63)},
+    **{i: "bait" for i in range(63, 69)},
+    **{i: "tree" for i in range(69, 87)},
+    87: "beacon",
+    88: "water",
+    89: "water",
+    90: "lore",
+    91: "boss",
+    92: "unique_weapon",
+    93: "unique_equipment",
+    94: "collectible",
+    95: "summon",
+    **{i: "plant" for i in range(96, 103)},
+}
+
+# 宝箱的 9 个变体。作者在 map_key_panel.cpp 里用同一组枚举。
+CHEST_TYPES = [
+    {"index": 0, "key": "gold", "name": "Gold Chest", "nameZh": "金箱"},
+    {"index": 1, "key": "gold_sarcophagus", "name": "Gold Sarcophagus", "nameZh": "金棺"},
+    {"index": 2, "key": "gold_locked", "name": "Gold Chest (Locked)", "nameZh": "上锁的金箱"},
+    {"index": 3, "key": "silver", "name": "Silver Chest", "nameZh": "银箱"},
+    {"index": 4, "key": "silver_sarcophagus", "name": "Silver Sarcophagus", "nameZh": "银棺"},
+    {"index": 5, "key": "silver_locked", "name": "Silver Chest (Locked)", "nameZh": "上锁的银箱"},
+    {"index": 6, "key": "wood", "name": "Wooden Chest", "nameZh": "木箱"},
+    {"index": 7, "key": "wood_sarcophagus", "name": "Wooden Sarcophagus", "nameZh": "木棺"},
+    {"index": 8, "key": "wood_locked", "name": "Wooden Chest (Locked)", "nameZh": "上锁的木箱"},
+]
+
 # Windows 控制台默认不一定是 UTF-8；点位名里有中文，输出别变成乱码
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -67,9 +99,17 @@ def read_text(path: Path) -> str:
 
 
 def c_array(text: str, name: str) -> str:
-    """截出 name[...] = { ... }; 的花括号内容。"""
-    at = text.index(name)
-    start = text.index("{", at)
+    """截出 name[...] = { ... }; 的花括号内容。
+
+    不能用 name 的第一次出现：regions.h 的注释里就写着 kRegionRowStart[z]，
+    从那里往后找 "{" 会落到 struct RegionRun 上。必须匹配完整的声明形式。
+    """
+    match = re.search(re.escape(name) + r"\s*(?:\[[^\]]*\])+\s*=\s*\{", text)
+    if match is None:
+        match = re.search(re.escape(name) + r"\s*=\s*\{", text)
+    if match is None:
+        raise SystemExit(f"找不到 {name} 的数组声明")
+    start = match.end() - 1
     depth = 0
     for i in range(start, len(text)):
         if text[i] == "{":
@@ -89,9 +129,23 @@ def c_ints(chunk: str) -> list[int]:
     return [int(v, 0) for v in re.findall(r"-?(?:0[xX][0-9a-fA-F]+|\d+)", chunk)]
 
 
+def parse_chinese_names(src: Path, expected: int) -> list[str]:
+    """lang.cpp 的 kResourceNames 第 13 列是简体中文，和 kOreLabels 同序。"""
+    text = read_text(src / "src" / "lang.cpp")
+    rows = re.findall(r"\{([^{}]*)\}", c_array(text, "kResourceNames"))
+    names = []
+    for row in rows:
+        values = c_strings(row)
+        names.append(values[12] if len(values) >= 13 else "")
+    if len(names) != expected:
+        raise SystemExit(f"lang.cpp 有 {len(names)} 行资源名，ore_deposits.h 有 {expected} 行")
+    return names
+
+
 def parse_ore_deposits(src: Path) -> dict:
     text = read_text(src / "src" / "ore_deposits.h")
     labels = c_strings(c_array(text, "kOreLabels"))
+    chinese = parse_chinese_names(src, len(labels))
     categories = c_ints(c_array(text, "kOreCategory"))
     deposits = [
         [int(ore), int(x), int(z), int(top), int(amount)]
@@ -114,6 +168,8 @@ def parse_ore_deposits(src: Path) -> dict:
             "index": i,
             "key": re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"),
             "name": label,
+            "nameZh": chinese[i] or label,
+            "kind": ROW_KINDS.get(i, "world"),
             "category": CATEGORY_KEYS.get(category, "world"),
             "count": counts.get(i, 0),
         })
@@ -204,6 +260,13 @@ def main() -> int:
     total_chests = len(chests)
     if version == "1.3.18" and total_points != 33084:
         raise SystemExit(f"1.3.18 应有 33084 个点位，实际 {total_points}")
+    if version == "1.3.18" and total_chests != 3042:
+        raise SystemExit(f"1.3.18 应有 3042 个箱子，实际 {total_chests}")
+
+    chest_counts = {t["index"]: 0 for t in CHEST_TYPES}
+    for chest in chests:
+        chest_counts[chest[3]] = chest_counts.get(chest[3], 0) + 1
+    chest_types = [{**t, "count": chest_counts.get(t["index"], 0)} for t in CHEST_TYPES]
 
     meta = {
         "source": {
@@ -218,8 +281,10 @@ def main() -> int:
             "points": total_points,
             "chests": total_chests,
             "treeRects": len(trees),
+            "all": total_points + total_chests,
         },
         "regions": regions,
+        "chestTypes": chest_types,
         "rows": ore["rows"],
         "points": ore["points"],
         "chests": chests,
@@ -233,11 +298,11 @@ def main() -> int:
 
     with (out / "points.csv").open("w", newline="", encoding="utf-8-sig") as fh:
         w = csv.writer(fh)
-        w.writerow(["category", "row_key", "row_name", "x", "z", "top_y", "amount"])
+        w.writerow(["kind", "row_key", "row_name", "row_name_zh", "x", "z", "top_y", "amount"])
         by_index = {r["index"]: r for r in ore["rows"]}
         for ore_i, x, z, top, amount in ore["points"]:
             row = by_index[ore_i]
-            w.writerow([row["category"], row["key"], row["name"], x, z, top, amount])
+            w.writerow([row["kind"], row["key"], row["name"], row["nameZh"], x, z, top, amount])
 
     print(f"[ok] {src}")
     print(f"     {out / 'points.json'}")

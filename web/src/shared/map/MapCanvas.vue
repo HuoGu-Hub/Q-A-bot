@@ -332,7 +332,8 @@ function draw() {
 
   const v = view.value
   // 缩放不够就一个点都不画：那个尺度上图标只会叠成一团，还挡住底图
-  const list = v.k >= ICON_MIN_ZOOM ? visibleMarkers(props.canvas, shown.value, v, w, h) : []
+  const raw = v.k >= ICON_MIN_ZOOM ? visibleMarkers(props.canvas, shown.value, v, w, h) : []
+  const list = thinResources(raw)
   const box = iconBox(v.k)
 
   // 普通点先画、地标后画、选中的最后画 —— 保证"重要"和"被选中"的压在最上面
@@ -353,6 +354,30 @@ function draw() {
     }
 
     const img = iconFor(m)
+    if (!img && m.color) {
+      // 资源点没有图标：彩色圆点 + 暗底。选中时加一圈灵火并标名字
+      const r = Math.max(3.2, Math.min(6.5, 2.5 + 4 * v.k))
+      ctx.beginPath()
+      ctx.arc(sx, sy, r + 1.5, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(8,10,14,.55)'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(sx, sy, r, 0, Math.PI * 2)
+      ctx.fillStyle = m.color
+      ctx.fill()
+      ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(8,10,14,.55)'
+      ctx.stroke()
+      if (selected) {
+        ctx.beginPath()
+        ctx.arc(sx, sy, r + 5, 0, Math.PI * 2)
+        ctx.lineWidth = 1.6
+        ctx.strokeStyle = palette.value.emberHot
+        ctx.stroke()
+        drawMarkerLabel(ctx, sx, sy, m.name)
+      }
+      continue
+    }
     if (!img) {
       /*
        * 图标还没到：画一个**空心圈**占位。
@@ -389,23 +414,7 @@ function draw() {
     }
 
     if (selected) {
-      ctx.font = '600 12px system-ui, sans-serif'
-      ctx.textAlign = 'center'
-      const label = m.name
-      const tw = ctx.measureText(label).width
-      const bx = sx - tw / 2 - 6
-      const by = sy - 30
-      const bw = tw + 12
-      const bh = 18
-      // 名牌底与描边都跟主题走：日间纸底、夜间深底
-      ctx.fillStyle = palette.value.labelBg
-      ctx.fillRect(bx, by, bw, bh)
-      ctx.lineWidth = 1
-      ctx.strokeStyle = palette.value.labelEdge
-      // +0.5 让 1px 描边落在像素中心，否则边缘会糊成两像素灰
-      ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1)
-      ctx.fillStyle = palette.value.labelInk
-      ctx.fillText(label, sx, sy - 17)
+      drawMarkerLabel(ctx, sx, sy, m.name)
     }
   }
 
@@ -413,8 +422,49 @@ function draw() {
   drawDraft(ctx, v)
 }
 
+/** 选中的点位在头顶画一块名牌，底与描边都跟主题走 */
+function drawMarkerLabel(ctx: CanvasRenderingContext2D, sx: number, sy: number, label: string) {
+  ctx.font = '600 12px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  const tw = ctx.measureText(label).width
+  const bx = sx - tw / 2 - 6
+  const by = sy - 30
+  const bw = tw + 12
+  const bh = 18
+  ctx.fillStyle = palette.value.labelBg
+  ctx.fillRect(bx, by, bw, bh)
+  ctx.lineWidth = 1
+  ctx.strokeStyle = palette.value.labelEdge
+  // +0.5 让 1px 描边落在像素中心，否则边缘会糊成两像素灰
+  ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1)
+  ctx.fillStyle = palette.value.labelInk
+  ctx.fillText(label, sx, sy - 17)
+}
+
+/**
+ * 资源点太多时按等距抽样。
+ *
+ * <p>36,126 个点全画会拖慢每一帧，而全图尺度上它们本来就是一片麻点。
+ * 抽样只影响"一次画多少"，不影响数据：放大到局部后视口里的点变少，
+ * 抽样自然停止，每个点都会出现。
+ */
+function thinResources(list: Marker[]): Marker[] {
+  const wiki: Marker[] = []
+  const res: Marker[] = []
+  for (const m of list) {
+    if (m.source === 'resource') res.push(m)
+    else wiki.push(m)
+  }
+  if (res.length <= 4000) return wiki.concat(res)
+  const step = Math.ceil(res.length / 4000)
+  const kept: Marker[] = []
+  for (let i = 0; i < res.length; i += step) kept.push(res[i])
+  return wiki.concat(kept)
+}
+
 function rank(m: Marker): number {
   if (m.id === props.selectedId) return 3
+  if (m.source === 'resource') return 0
   if (m.landmark || m.source === 'admin') return 2
   return 1
 }

@@ -649,6 +649,12 @@ app:
       enabled: true
       # 瓦片与底图的磁盘缓存（相对路径以进程工作目录为基准）
       tile-dir: ./data/map-tiles
+      # The Worst Map Mod 导出的点位。目录下按版本分子目录，取版本号最大的 points.json；
+      # 也可以直接指向单个 json。点位是静态快照，不跟游戏更新自动重导。
+      mod-dir: ./data/map-mod
+      mod-enabled: true
+      # 磁盘上没有 points.json 时从 jar 里释放这一份；版本目录要跟文件里的 source.version 一致
+      mod-resource: map-mod/1.3.18/points.json
       # 用 Special:FilePath 而不是 /images/：后者带哈希目录、改名即失效
       image-base: https://enshrouded.wiki.gg/wiki/Special:FilePath/
       user-agent: "qqbot-personal/0.1 (Enshrouded map viewer; contact via group)"

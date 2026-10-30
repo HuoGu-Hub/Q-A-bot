@@ -22,7 +22,17 @@ import Button from '@shared/ui/Button.vue'
 import Input from '@shared/ui/Input.vue'
 import Tag from '@shared/ui/Tag.vue'
 import MapCanvas from '@shared/map/MapCanvas.vue'
-import type { Catalog, LocateHit, LocateResult, MapSpec, Marker, Relative } from '@shared/map/types'
+import type {
+  Catalog,
+  LocateHit,
+  LocateResult,
+  MapSpec,
+  Marker,
+  Relative,
+  ResourceCatalog,
+  ResourceCategory,
+  ResourceLayer,
+} from '@shared/map/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +43,18 @@ const catalog = ref<Catalog | null>(null)
 const mapName = ref('')
 const markers = ref<Marker[]>([])
 const markersLoading = ref(false)
+
+/* ==================== 资源点位 ==================== */
+
+const resourceCategories = ref<ResourceCategory[]>([])
+const resourceVersion = ref('')
+const resourceMessage = ref('')
+const resourceMarkers = ref<Marker[]>([])
+/** 已经取过坐标的层；开关关掉再打开不重复请求 */
+const loadedResources = ref<Set<string>>(new Set())
+const loadingResources = ref<Set<string>>(new Set())
+/** 展开的资源分类；deep link 落到某一层时自动展开它所在的分区 */
+const openCategories = ref<Set<string>>(new Set())
 
 const visibleGroups = ref<Set<string>>(new Set())
 const visibleCategories = ref<Set<string>>(new Set())
@@ -87,7 +109,9 @@ const currentCanvas = computed(() => {
 
 /** 当前画布上的点位 —— 跨画布的点不能一起画（坐标原点不同） */
 const markersOnCanvas = computed(() =>
-  markers.value.filter((m) => !currentCanvas.value || !m.canvas || m.canvas === currentCanvas.value.page),
+  [...markers.value, ...resourceMarkers.value].filter(
+    (m) => !currentCanvas.value || !m.canvas || m.canvas === currentCanvas.value.page,
+  ),
 )
 
 const groupIcons = computed(() => {
@@ -161,8 +185,104 @@ async function loadMarkers(map: string) {
     visibleCategories.value = cats
     pickedStack.value = []
     highlight.value = null
+    resourceMarkers.value = []
+    loadedResources.value = new Set()
+    openCategories.value = new Set()
+    await loadResourceCatalog(map)
+    const wanted = typeof route.query.layer === 'string' ? route.query.layer : ''
+    if (wanted) {
+      const cat = resourceCategories.value.find((c) => c.layers.some((l) => l.key === wanted))
+      const hit = cat?.layers.find((l) => l.key === wanted)
+      if (cat) {
+        const opened = new Set(openCategories.value)
+        opened.add(cat.key)
+        openCategories.value = opened
+      }
+      if (hit) await toggleResource(hit)
+    }
   } finally {
     markersLoading.value = false
+  }
+}
+
+/** 资源目录只有图层与点数，坐标按层懒加载 */
+async function loadResourceCatalog(map: string) {
+  resourceCategories.value = []
+  resourceVersion.value = ''
+  resourceMessage.value = ''
+  try {
+    const r = await publicApi.get<ResourceCatalog>(
+      '/map/resource-groups?map=' + encodeURIComponent(map),
+    )
+    resourceCategories.value = r.categories ?? []
+    resourceVersion.value = r.version || ''
+    resourceMessage.value = r.message || ''
+  } catch (e) {
+    resourceMessage.value = describeError(e)
+  }
+}
+
+function onCategoryToggle(key: string, event: Event) {
+  const open = (event.target as HTMLDetailsElement).open
+  const next = new Set(openCategories.value)
+  if (open) next.add(key)
+  else next.delete(key)
+  openCategories.value = next
+}
+
+async function toggleResource(layer: ResourceLayer) {
+  const next = new Set(visibleGroups.value)
+  if (next.has(layer.key)) {
+    next.delete(layer.key)
+    visibleGroups.value = next
+    return
+  }
+  next.add(layer.key)
+  visibleGroups.value = next
+  if (loadedResources.value.has(layer.key)) return
+
+  const loading = new Set(loadingResources.value)
+  loading.add(layer.key)
+  loadingResources.value = loading
+  try {
+    const r = await publicApi.get<{ points: [number, number, string][] }>(
+      '/map/resources?map=' + encodeURIComponent(mapName.value) +
+        '&layer=' + encodeURIComponent(layer.key),
+    )
+    const canvasPage = currentCanvas.value?.page ?? ''
+    const add: Marker[] = r.points.map(([x, z, name], i) => ({
+      id: 'res:' + layer.key + ':' + i,
+      map: mapName.value,
+      page: '',
+      canvas: canvasPage,
+      group: layer.key,
+      name: name || layer.name,
+      original: '',
+      description: '',
+      article: '',
+      x,
+      y: z,
+      image: '',
+      landmark: false,
+      category: 'resource',
+      priority: 0,
+      note: '',
+      source: 'resource' as const,
+      color: layer.color,
+    }))
+    resourceMarkers.value = [...resourceMarkers.value, ...add]
+    const done = new Set(loadedResources.value)
+    done.add(layer.key)
+    loadedResources.value = done
+  } catch (e) {
+    const rollback = new Set(visibleGroups.value)
+    rollback.delete(layer.key)
+    visibleGroups.value = rollback
+    resourceMessage.value = describeError(e)
+  } finally {
+    const idle = new Set(loadingResources.value)
+    idle.delete(layer.key)
+    loadingResources.value = idle
   }
 }
 
@@ -377,6 +497,41 @@ function fmt(n: number): string {
           </p>
         </div>
 
+        <div v-if="resourceCategories.length || resourceMessage" class="block">
+          <div class="block-head">
+            <h2 class="block-title">资源点位</h2>
+            <span v-if="resourceVersion" class="res-version">数据 {{ resourceVersion }}</span>
+          </div>
+          <p v-if="!resourceCategories.length" class="hint">{{ resourceMessage }}</p>
+          <details
+            v-for="cat in resourceCategories"
+            :key="cat.key"
+            class="res-cat"
+            :open="openCategories.has(cat.key)"
+            @toggle="onCategoryToggle(cat.key, $event)"
+          >
+            <summary>
+              <span class="res-cat-name">{{ cat.name }}</span>
+              <span class="res-cat-n">{{ cat.count }}</span>
+            </summary>
+            <ul class="layers">
+              <li v-for="l in cat.layers" :key="l.key">
+                <label class="layer">
+                  <input
+                    type="checkbox"
+                    :checked="visibleGroups.has(l.key)"
+                    :disabled="loadingResources.has(l.key)"
+                    @change="toggleResource(l)"
+                  />
+                  <span class="res-dot" :style="{ background: l.color }" />
+                  <span class="layer-name">{{ l.name }}</span>
+                  <span class="layer-n">{{ l.count }}</span>
+                </label>
+              </li>
+            </ul>
+          </details>
+        </div>
+
         <div class="block">
           <div class="block-head">
             <h2 class="block-title">图层</h2>
@@ -479,7 +634,7 @@ function fmt(n: number): string {
             </header>
             <p class="detail-tags">
               <Tag :tone="c.m.source === 'admin' ? 'flame' : 'neutral'">
-                {{ c.m.source === 'admin' ? '本地补充' : 'wiki' }}
+                {{ c.m.source === 'admin' ? '本地补充' : c.m.source === 'resource' ? '资源' : 'wiki' }}
               </Tag>
               <Tag tone="neutral">{{ categoryLabel.get(c.m.category) ?? c.m.category }}</Tag>
               <Tag v-if="c.m.landmark" tone="warn">可作方位参照</Tag>
@@ -792,6 +947,39 @@ function fmt(n: number): string {
 .layer-name { flex: 1; color: var(--ink-2); }
 .layer-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .stand-alone { margin-top: var(--sp-2); border-top: 1px solid var(--edge-soft); padding-top: var(--sp-2); }
+
+.res-version { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.res-cat { border-top: 1px solid var(--edge-soft); }
+.res-cat:first-of-type { border-top: 0; }
+.res-cat summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 34px;
+  padding: 4px 6px;
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.res-cat summary::-webkit-details-marker { display: none; }
+.res-cat summary::before {
+  content: '▸';
+  color: var(--ink-4);
+  font-size: 10px;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.res-cat[open] summary::before { transform: rotate(90deg); }
+.res-cat summary:hover { background: var(--surface-hover); border-radius: var(--r-xs); }
+.res-cat-name { flex: 1; }
+.res-cat-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.res-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 25%) inset;
+}
 
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mist); }
 .dot.d-resource { background: var(--vital); }

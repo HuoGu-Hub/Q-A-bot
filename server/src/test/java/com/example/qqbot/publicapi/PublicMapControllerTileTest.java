@@ -5,6 +5,7 @@ import com.example.qqbot.kb.PlaceDirectory;
 import com.example.qqbot.kb.map.MapImageCache;
 import com.example.qqbot.kb.map.MapImageSource;
 import com.example.qqbot.kb.map.MapImageWorker;
+import com.example.qqbot.kb.map.MapResourceService;
 import com.example.qqbot.kb.map.MapViewService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -76,7 +77,8 @@ class PublicMapControllerTileTest {
     }
 
     private PublicMapController controller(MapImageCache cache, MapImageWorker worker) {
-        return new PublicMapController(view, cache, new MapOptions(), directory, limiter, worker);
+        return new PublicMapController(view, cache, new MapOptions(), directory, limiter, worker,
+                mock(MapResourceService.class));
     }
 
     /** DeferredResult 没有阻塞的 get，只能轮询 —— 顺便证明它确实是"稍后才有结果" */

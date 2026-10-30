@@ -7,6 +7,7 @@ import com.example.qqbot.kb.PlaceAnswer;
 import com.example.qqbot.kb.RelativeLocation;
 import com.example.qqbot.kb.map.MapImageCache;
 import com.example.qqbot.kb.map.MapImageWorker;
+import com.example.qqbot.kb.map.MapResourceService;
 import com.example.qqbot.kb.map.MapViewService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -66,16 +67,18 @@ public class PublicMapController {
     private final PlaceDirectory directory;
     private final PublicRateLimiter limiter;
     private final MapImageWorker imageWorker;
+    private final MapResourceService resources;
 
     public PublicMapController(MapViewService view, MapImageCache images, MapOptions options,
                                PlaceDirectory directory, PublicRateLimiter limiter,
-                               MapImageWorker imageWorker) {
+                               MapImageWorker imageWorker, MapResourceService resources) {
         this.view = view;
         this.images = images;
         this.options = options;
         this.directory = directory;
         this.limiter = limiter;
         this.imageWorker = imageWorker;
+        this.resources = resources;
     }
 
     /**
@@ -114,6 +117,61 @@ public class PublicMapController {
         out.put("ok", true);
         out.put("map", map.strip());
         out.put("markers", view.markers(map.strip()));
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * 资源图层的目录：94 个图层，按宝箱 / 采矿 / 植物等分区。
+     *
+     * <p>只回图层定义与点数，不回坐标。点位走 {@link #resources} 按层取 ——
+     * 36k 个点一次下发，首屏就白屏了。
+     */
+    @GetMapping("/resource-groups")
+    public ResponseEntity<?> resourceGroups(@RequestParam("map") String map,
+                                            HttpServletRequest request) {
+        ResponseEntity<?> denied = rateLimit(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (map == null || map.isBlank()) {
+            return badRequest("缺少 map 参数");
+        }
+        MapResourceService.CatalogView catalog = resources.catalog(map.strip());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("map", map.strip());
+        out.put("imported", catalog.imported());
+        out.put("version", catalog.version());
+        out.put("importedAt", catalog.importedAt());
+        out.put("message", catalog.message());
+        out.put("categories", catalog.categories());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * 一层资源点。坐标用 {@code [x, z, name, region]} 的紧凑数组，
+     * 13,000 个点的层也不会因为重复的字段名膨胀。
+     */
+    @GetMapping("/resources")
+    public ResponseEntity<?> resources(@RequestParam("map") String map,
+                                       @RequestParam("layer") String layer,
+                                       HttpServletRequest request) {
+        ResponseEntity<?> denied = rateLimit(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (map == null || map.isBlank() || layer == null || layer.isBlank()) {
+            return badRequest("缺少 map 或 layer 参数");
+        }
+        List<Object[]> points = new ArrayList<>();
+        for (MapResourceService.PointView p : resources.points(map.strip(), layer.strip())) {
+            points.add(new Object[]{p.x(), p.z(), p.name(), p.region()});
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("map", map.strip());
+        out.put("layer", layer.strip());
+        out.put("points", points);
         return ResponseEntity.ok(out);
     }
 

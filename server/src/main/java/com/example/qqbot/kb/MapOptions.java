@@ -22,6 +22,18 @@ public class MapOptions {
     private String tileDir = "./data/map-tiles";
 
     /**
+     * The Worst Map Mod 导出的点位目录。目录下按版本分子目录，每个子目录一个 points.json。
+     * 空串或不存在时资源图层不可用，wiki 地图不受影响。
+     */
+    private String modDir = "./data/map-mod";
+
+    /** 资源点位的总开关。关掉后接口返回空目录，不碰库里的数据 */
+    private boolean modEnabled = true;
+
+    /** 磁盘上没有 points.json 时从 classpath 取这一份（随 jar 发布） */
+    private String modResource = "map-mod/1.3.18/points.json";
+
+    /**
      * wiki 的图片直链前缀。
      *
      * <p>用 {@code Special:FilePath/} 而不是 {@code /images/}：
@@ -115,6 +127,30 @@ public class MapOptions {
 
     public void setTileDir(String tileDir) {
         this.tileDir = tileDir;
+    }
+
+    public String getModDir() {
+        return modDir;
+    }
+
+    public void setModDir(String modDir) {
+        this.modDir = modDir;
+    }
+
+    public boolean isModEnabled() {
+        return modEnabled;
+    }
+
+    public void setModEnabled(boolean modEnabled) {
+        this.modEnabled = modEnabled;
+    }
+
+    public String getModResource() {
+        return modResource;
+    }
+
+    public void setModResource(String modResource) {
+        this.modResource = modResource;
     }
 
     public String getImageBase() {
