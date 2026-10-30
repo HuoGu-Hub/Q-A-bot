@@ -72,17 +72,10 @@ public class LogController {
 
     /** 当前状态：缓冲里多少条、容量多少、丢了多少 */
     @GetMapping("/status")
-    public Map<String, Object> status() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("enabled", props.isEnabled());
-        out.put("bufferSize", buffer.size());
-        out.put("capacity", buffer.capacity());
-        out.put("totalWritten", buffer.totalWritten());
-        out.put("dropped", buffer.dropped());
-        out.put("maskSensitive", props.isMaskSensitive());
-        out.put("currentSeq", buffer.currentSeq());
-        out.put("activeStreams", activeStreams.get());
-        return out;
+    public LogStatus status() {
+        return new LogStatus(props.isEnabled(), buffer.size(), buffer.capacity(),
+                buffer.totalWritten(), buffer.dropped(), props.isMaskSensitive(),
+                buffer.currentSeq(), activeStreams.get());
     }
 
     /**
@@ -93,18 +86,16 @@ public class LogController {
      * @param afterSeq 只要 seq 大于它的（断点续传用）
      */
     @GetMapping("/history")
-    public Map<String, Object> history(@RequestParam(defaultValue = "500") int limit,
-                                       @RequestParam(required = false) String level,
-                                       @RequestParam(defaultValue = "0") long afterSeq) {
-        List<LogBuffer.LogEntry> entries = buffer.recent(Math.min(limit, buffer.capacity()), level, afterSeq);
-        List<Map<String, Object>> items = new ArrayList<>();
+    public LogHistory history(@RequestParam(defaultValue = "500") int limit,
+                              @RequestParam(required = false) String level,
+                              @RequestParam(defaultValue = "0") long afterSeq) {
+        List<LogBuffer.LogEntry> entries = buffer.recent(
+                Math.min(limit, buffer.capacity()), level, afterSeq);
+        List<LogEntryView> items = new ArrayList<>();
         for (LogBuffer.LogEntry e : entries) {
-            items.add(toMap(e));
+            items.add(toView(e));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("entries", items);
-        out.put("currentSeq", buffer.currentSeq());
-        return out;
+        return new LogHistory(items, buffer.currentSeq());
     }
 
     /**
@@ -146,7 +137,7 @@ public class LogController {
             // 先补一批最近的，避免刚打开是空白
             List<LogBuffer.LogEntry> initial = buffer.recent(200, level, 0);
             for (LogBuffer.LogEntry e : initial) {
-                emitter.send(SseEmitter.event().name("log").data(toMap(e)));
+                emitter.send(SseEmitter.event().name("log").data(toView(e)));
             }
             cursor = buffer.currentSeq();
 
@@ -154,7 +145,7 @@ public class LogController {
                 Thread.sleep(PUSH_INTERVAL_MS);
                 List<LogBuffer.LogEntry> fresh = buffer.recent(0, level, cursor);
                 for (LogBuffer.LogEntry e : fresh) {
-                    emitter.send(SseEmitter.event().name("log").data(toMap(e)));
+                    emitter.send(SseEmitter.event().name("log").data(toView(e)));
                     cursor = Math.max(cursor, e.seq());
                 }
                 // 心跳：防止中间代理把空闲连接掐掉
@@ -175,27 +166,28 @@ public class LogController {
     }
 
     @DeleteMapping("")
-    public Map<String, Object> clear() {
+    public ResponseEntity<Void> clear() {
         buffer.clear();
-        return Map.of("ok", true);
+        return ResponseEntity.noContent().build();
     }
 
     // ==================== 内部 ====================
 
-    private Map<String, Object> toMap(LogBuffer.LogEntry e) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("seq", e.seq());
-        m.put("ts", e.ts());
-        m.put("level", e.level());
-        m.put("message", masker.mask(e.message()));
-        if (e.throwable() != null) {
-            m.put("throwable", masker.mask(e.throwable()));
-        }
-        return m;
+    private LogEntryView toView(LogBuffer.LogEntry e) {
+        return new LogEntryView(e.seq(), e.ts(), e.level(),
+                masker.mask(e.message()),
+                e.throwable() == null ? null : masker.mask(e.throwable()));
     }
 
-    /** 供过滤器等判断用 */
-    public static ResponseEntity<?> notEnabled() {
-        throw ApiException.serviceUnavailable("SERVICE_UNAVAILABLE", "日志界面未启用（app.logs.enabled=false）");
+    public record LogStatus(boolean enabled, int bufferSize, int capacity, long totalWritten,
+                            long dropped, boolean maskSensitive, long currentSeq,
+                            int activeStreams) {
+    }
+
+    public record LogEntryView(long seq, String ts, String level, String message,
+                               String throwable) {
+    }
+
+    public record LogHistory(List<LogEntryView> entries, long currentSeq) {
     }
 }

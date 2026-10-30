@@ -94,7 +94,7 @@ public class SettingsService {
     }
 
     /** 应用一批改动 */
-    public Map<String, Object> apply(Map<String, Object> changes) {
+    public ApplyResult apply(Map<String, Object> changes) {
         List<String> applied = new ArrayList<>();
         List<String> rejected = new ArrayList<>();
         Map<String, String> errors = new LinkedHashMap<>();
@@ -128,13 +128,12 @@ public class SettingsService {
             log.info("[SETTINGS] 已热生效 {} 项配置：{}", applied.size(), applied);
         }
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", errors.isEmpty() && rejected.isEmpty());
-        out.put("applied", applied);
-        out.put("rejected", rejected);
-        out.put("errors", errors);
-        out.put("note", "已立即生效（无需重启）");
-        return out;
+        return new ApplyResult(errors.isEmpty() && rejected.isEmpty(), applied, rejected,
+                errors, "已立即生效（无需重启）");
+    }
+
+    public record ApplyResult(boolean ok, List<String> applied, List<String> rejected,
+                              Map<String, String> errors, String note) {
     }
 
     public int applyCount() {

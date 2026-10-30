@@ -58,7 +58,7 @@ public class KbCatalogController {
      * @param category 只看某个分类（或「未分类」）
      */
     @GetMapping("")
-    public ResponseEntity<?> list(@RequestParam(defaultValue = "") String q,
+    public ResponseEntity<KbCatalog.Page> list(@RequestParam(defaultValue = "") String q,
                                   @RequestParam(defaultValue = "") String view,
                                   @RequestParam(defaultValue = "") String category,
                                   @RequestParam(defaultValue = "100") int limit,
@@ -78,7 +78,7 @@ public class KbCatalogController {
      * 写完**立即生效**，不需要重启机器人。
      */
     @PatchMapping("/aliases")
-    public ResponseEntity<?> saveAlias(@RequestBody AliasRequest body) {
+    public ResponseEntity<AliasResult> saveAlias(@RequestBody AliasRequest body) {
         String id = body.id() == null ? null : body.id().trim();
         if (id == null || id.isBlank()) {
             throw ApiException.badRequest("id 不能为空");
@@ -88,24 +88,24 @@ public class KbCatalogController {
         if (view == null) {
             throw ApiException.notFound("没有这个块：" + id);
         }
-        return ResponseEntity.ok(Map.of("ok", true, "block", view));
+        return ResponseEntity.ok(new AliasResult(view));
     }
 
     /** 清掉一条的别名（回到标题派生） */
     @DeleteMapping("/aliases")
-    public ResponseEntity<?> clear(@RequestParam("id") String id) {
+    public ResponseEntity<Void> clear(@RequestParam("id") String id) {
         if (id == null || id.isBlank()) {
             throw ApiException.badRequest("需要 id");
         }
         if (blockAdmin.updateAlias(id, "") == null) {
             throw ApiException.notFound("没有这个块：" + id);
         }
-        return ResponseEntity.ok(Map.of("ok", true));
+        return ResponseEntity.noContent().build();
     }
 
     /** 清空**全部**别名 —— 不可逆，删的是纯人工成果 */
     @DeleteMapping("/aliases/all")
-    public ResponseEntity<?> clearAll(@RequestParam(name = "confirm", defaultValue = "false") boolean confirm) {
+    public ResponseEntity<Cleared> clearAll(@RequestParam(name = "confirm", defaultValue = "false") boolean confirm) {
         if (!confirm) {
             throw ApiException.badRequest("危险操作：请带 confirm=true");
         }
@@ -116,7 +116,7 @@ public class KbCatalogController {
             }
         }
         log.warn("[KB-TERM] 已清空全部别名：{} 条（不可逆）", n);
-        return ResponseEntity.ok(Map.of("ok", true, "cleared", n));
+        return ResponseEntity.ok(new Cleared(n));
     }
 
     // ==================== 导出 / 导入（Excel 旁路）====================
@@ -128,7 +128,7 @@ public class KbCatalogController {
      *               —— CSV 已弃用：中文 Windows 上 GBK 会静默乱码
      */
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(defaultValue = "") String q,
+    public ExportResult export(@RequestParam(defaultValue = "") String q,
                                       @RequestParam(defaultValue = "") String view,
                                       @RequestParam(defaultValue = "") String category,
                                       @RequestParam(defaultValue = "xlsx") String format) {
@@ -140,23 +140,16 @@ public class KbCatalogController {
         String tsv = stripBom(catalog.exportTsv(q, view, category));
         long count = tsv.lines().filter(l -> !l.isBlank() && l.charAt(0) != '#').count();
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("count", count);
         if ("tsv".equals(fmt)) {
-            out.put("tsv", tsv);
-            out.put("text", tsv);
-            out.put("format", "tsv");
-        } else {
-            out.put("xlsxBase64", java.util.Base64.getEncoder().encodeToString(catalog.exportXlsx(q, view, category)));
-            out.put("format", "xlsx");
+            return new ExportResult(count, tsv, tsv, "tsv", null);
         }
-        return out;
+        return new ExportResult(count, null, null, "xlsx",
+                java.util.Base64.getEncoder().encodeToString(catalog.exportXlsx(q, view, category)));
     }
 
     /** 从 TSV / CSV / xlsx 导入别名表（只按 id 覆盖别名） */
     @PostMapping("/imports")
-    public ResponseEntity<?> importTable(@RequestBody ImportTableRequest body) {
+    public ResponseEntity<ImportTableResult> importTable(@RequestBody ImportTableRequest body) {
         String tsv = body.tsv();
         if (tsv == null || tsv.isBlank()) {
             tsv = body.csv();
@@ -177,11 +170,7 @@ public class KbCatalogController {
             throw ApiException.badRequest("文件编码不对：中文变成了乱码（U+FFFD）。请另存为「CSV UTF-8」，或直接用后台导出的 xlsx。");
         }
         KbCatalog.ImportResult r = catalog.importTable(tsv);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("updated", r.updated());
-        out.put("skipped", r.skipped());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ImportTableResult(r.updated(), r.skipped()));
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
@@ -198,4 +187,17 @@ public class KbCatalogController {
         return s != null && !s.isEmpty() && s.charAt(0) == '\uFEFF' ? s.substring(1) : s;
     }
 
+
+    public record AliasResult(KbBlockAdminService.BlockView block) {
+    }
+
+    public record Cleared(int cleared) {
+    }
+
+    public record ExportResult(long count, String tsv, String text, String format,
+                               String xlsxBase64) {
+    }
+
+    public record ImportTableResult(int updated, int skipped) {
+    }
 }

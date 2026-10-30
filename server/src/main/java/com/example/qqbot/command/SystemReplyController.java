@@ -34,32 +34,33 @@ public class SystemReplyController {
     }
 
     @GetMapping("")
-    public Map<String, Object> get() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put(SystemReplyStore.LIST, view(SystemReplyStore.LIST, catalog.listText()));
-        out.put(SystemReplyStore.HELP, view(SystemReplyStore.HELP, catalog.helpText()));
-        return out;
+    public SystemReplyList get() {
+        return new SystemReplyList(
+                view(SystemReplyStore.LIST, catalog.listText()),
+                view(SystemReplyStore.HELP, catalog.helpText()));
     }
 
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> save(@RequestBody SystemReplyRequest body) {
+    public ResponseEntity<Void> save(@RequestBody SystemReplyRequest body) {
         if (body.key() == null || body.key().isBlank()) {
             throw ApiException.badRequest("需要 key");
         }
         try {
             store.save(body.key(), body.content() == null ? "" : body.content());
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    private Map<String, Object> view(String key, String defaultContent) {
-        Map<String, Object> item = new LinkedHashMap<>();
-        String content = store.get(key);
-        item.put("content", content);
-        item.put("defaultContent", defaultContent);
-        return item;
+    private SystemReplyItem view(String key, String defaultContent) {
+        return new SystemReplyItem(store.get(key), defaultContent);
+    }
+
+    public record SystemReplyItem(String content, String defaultContent) {
+    }
+
+    public record SystemReplyList(SystemReplyItem list, SystemReplyItem help) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

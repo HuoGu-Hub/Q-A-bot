@@ -44,11 +44,8 @@ public class SiteTextController {
 
     /** 按页面分组的全部文案块（含当前生效值与默认值） */
     @GetMapping("")
-    public Map<String, Object> list() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("pages", service.grouped());
-        out.put("pageLabels", service.pageLabels());
-        return out;
+    public SiteTextList list() {
+        return new SiteTextList(service.grouped(), service.pageLabels());
     }
 
     /**
@@ -57,7 +54,7 @@ public class SiteTextController {
      * <p>body：{@code {page, key, text}}。{@code text} 传空串 = 恢复默认。
      */
     @PostMapping("")
-    public ResponseEntity<?> save(@RequestBody SaveTextRequest body) {
+    public ResponseEntity<Void> save(@RequestBody SaveTextRequest body) {
         String page = trim(body.page());
         String key = trim(body.key());
         if (page == null || key == null) {
@@ -73,15 +70,12 @@ public class SiteTextController {
         if (!ok) {
             throw ApiException.badRequest("没有这个文案块：" + page + "." + key);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("pages", service.grouped());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.noContent().build();
     }
 
     /** 恢复一块文案的默认值 */
     @PostMapping("/actions/reset")
-    public ResponseEntity<?> reset(@RequestBody ResetTextRequest body) {
+    public ResponseEntity<Void> reset(@RequestBody ResetTextRequest body) {
         String page = trim(body.page());
         String key = trim(body.key());
         if (page == null || key == null) {
@@ -96,10 +90,11 @@ public class SiteTextController {
         if (!ok) {
             throw ApiException.badRequest("没有这个文案块：" + page + "." + key);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("pages", service.grouped());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.noContent().build();
+    }
+
+    public record SiteTextList(Map<String, List<SiteTextService.BlockView>> pages,
+                               Map<String, String> pageLabels) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

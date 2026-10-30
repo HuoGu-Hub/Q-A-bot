@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,17 +38,14 @@ public class SettingsController {
 
     /** 当前可写配置（按分组） */
     @GetMapping("")
-    public Map<String, Object> current() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("groups", service.current());
-        out.put("applyCount", service.applyCount());
-        out.put("note", "这些都是 Bot 行为配置，保存后立即生效，不用重启");
-        return out;
+    public SettingsView current() {
+        return new SettingsView(service.current(), service.applyCount(),
+                "这些都是 Bot 行为配置，保存后立即生效，不用重启");
     }
 
     /** 保存（热生效 + 持久化） */
     @PostMapping("")
-    public Map<String, Object> save(@RequestBody SaveSettingsRequest body) {
+    public SettingsService.ApplyResult save(@RequestBody SaveSettingsRequest body) {
         if (body.changes() == null) {
             throw ApiException.badRequest("需要 changes 字段");
         }
@@ -59,5 +57,9 @@ public class SettingsController {
     @JsonIgnoreProperties(ignoreUnknown = false)
 
     public record SaveSettingsRequest(Map<String, Object> changes) {
+    }
+
+    public record SettingsView(Map<String, List<SettingsService.ItemView>> groups,
+                               int applyCount, String note) {
     }
 }

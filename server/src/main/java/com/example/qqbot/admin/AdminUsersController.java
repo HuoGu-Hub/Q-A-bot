@@ -58,7 +58,7 @@ public class AdminUsersController {
     }
 
     @GetMapping
-    public List<Map<String, Object>> list() {
+    public List<AdminUserView> list() {
         return users.list().stream().map(AdminUsersController::dto).toList();
     }
 
@@ -74,7 +74,7 @@ public class AdminUsersController {
      * <p>待创建数据只存密码哈希，不存明文；验证码通过后才落库。
      */
     @PostMapping("/request")
-    public ResponseEntity<Map<String, Object>> requestCreate(@RequestBody CreateUserRequest body,
+    public ResponseEntity<CreateCodeResult> requestCreate(@RequestBody CreateUserRequest body,
                                                              HttpServletRequest request) {
         AdminPrincipal me = AdminAuthFilter.current(request);
         if (me == null) {
@@ -105,8 +105,8 @@ public class AdminUsersController {
                     me.id(), me.qq(), AdminQqCodeService.PURPOSE_CREATE_USER, payload);
             audit.record(me.id(), me.username(), "user-create-code", "POST",
                     "/admin/api/users/request", "qq=" + issued.qqMasked(), "");
-            return ResponseEntity.ok(Map.of("ok", true,
-                    "challengeId", issued.challengeId(), "adminQq", issued.qqMasked()));
+            return ResponseEntity.ok(new CreateCodeResult(
+                    issued.challengeId(), issued.qqMasked()));
         } catch (IllegalArgumentException | AdminQqCodeService.CodeException e) {
             throw ApiException.badRequest(e.getMessage());
         } catch (Exception e) {
@@ -115,7 +115,7 @@ public class AdminUsersController {
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<Map<String, Object>> confirmCreate(@RequestBody ConfirmUserRequest body,
+    public ResponseEntity<AdminUserView> confirmCreate(@RequestBody ConfirmUserRequest body,
                                                              HttpServletRequest request) {
         AdminPrincipal me = AdminAuthFilter.current(request);
         if (me == null) {
@@ -149,7 +149,7 @@ public class AdminUsersController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable long id,
+    public ResponseEntity<AdminUserView> update(@PathVariable long id,
                                                       @RequestBody UpdateUserRequest body) {
         try {
             AdminRole role = AdminRole.parseStrict(body.role());
@@ -168,20 +168,20 @@ public class AdminUsersController {
     }
 
     @PostMapping("/{id}/password")
-    public ResponseEntity<Map<String, Object>> resetPassword(@PathVariable long id,
+    public ResponseEntity<Void> resetPassword(@PathVariable long id,
                                                              @RequestBody ResetPasswordRequest body) {
         try {
             users.changePassword(id, body.password());
             auth.invalidateUser(id);
             devices.revokeAll(id);
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable long id,
+    public ResponseEntity<Void> delete(@PathVariable long id,
                                                       HttpServletRequest request) {
         AdminPrincipal me = AdminAuthFilter.current(request);
         long actorId = me == null ? -1 : me.id();
@@ -189,25 +189,24 @@ public class AdminUsersController {
             users.delete(id, actorId);
             auth.invalidateUser(id);
             devices.revokeAll(id);
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest(e.getMessage());
         }
     }
 
-    private static Map<String, Object> dto(AdminUser u) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", u.id());
-        m.put("username", u.username());
-        m.put("displayName", u.display());
-        m.put("role", u.role().id());
-        m.put("roleLabel", u.role().label());
-        m.put("enabled", u.enabled());
-        m.put("qq", u.qq());
-        m.put("qqVerified", u.qqVerified());
-        m.put("createdAt", u.createdAt());
-        m.put("lastLoginAt", u.lastLoginAt());
-        return m;
+    private static AdminUserView dto(AdminUser u) {
+        return new AdminUserView(u.id(), u.username(), u.display(), u.role().id(),
+                u.role().label(), u.enabled(), u.qq(), u.qqVerified(),
+                u.createdAt(), u.lastLoginAt());
+    }
+
+    public record AdminUserView(long id, String username, String displayName, String role,
+                                String roleLabel, boolean enabled, String qq,
+                                boolean qqVerified, String createdAt, String lastLoginAt) {
+    }
+
+    public record CreateCodeResult(String challengeId, String adminQq) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

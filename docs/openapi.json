@@ -48,8 +48,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AdminUserView"
                 }
               }
             }
@@ -73,15 +72,7 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -117,8 +108,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ModelSaved"
                 }
               }
             }
@@ -754,15 +744,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -790,8 +772,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/CreateCodeResult"
                 }
               }
             }
@@ -822,8 +803,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AdminUserView"
                 }
               }
             }
@@ -844,8 +824,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SystemReplyList"
                 }
               }
             }
@@ -870,15 +849,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -896,8 +867,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SystemAliasList"
                 }
               }
             }
@@ -922,15 +892,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -948,8 +910,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SettingsView"
                 }
               }
             }
@@ -978,8 +939,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ApplyResult"
                 }
               }
             }
@@ -1032,8 +992,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/SiteTextList"
                 }
               }
             }
@@ -1058,14 +1017,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -1089,14 +1041,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -1132,8 +1077,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ProbeResult"
                 }
               }
             }
@@ -1735,7 +1679,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/ImportTableResult"
                 }
               }
             }
@@ -3272,14 +3216,7 @@
         } ],
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -3305,7 +3242,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/AliasResult"
                 }
               }
             }
@@ -4194,8 +4131,7 @@
                 "schema" : {
                   "type" : "array",
                   "items" : {
-                    "type" : "object",
-                    "additionalProperties" : { }
+                    "$ref" : "#/components/schemas/AdminUserView"
                   }
                 }
               }
@@ -4448,8 +4384,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ModelList"
                 }
               }
             }
@@ -4478,8 +4413,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/AvailableModels"
                 }
               }
             }
@@ -4740,8 +4674,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LogStatus"
                 }
               }
             }
@@ -4788,8 +4721,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/LogHistory"
                 }
               }
             }
@@ -4972,7 +4904,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Page"
                 }
               }
             }
@@ -5026,8 +4958,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
+                  "$ref" : "#/components/schemas/ExportResult"
                 }
               }
             }
@@ -5692,15 +5623,7 @@
         "operationId" : "clear_1",
         "responses" : {
           "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "type" : "object",
-                  "additionalProperties" : { }
-                }
-              }
-            }
+            "description" : "OK"
           }
         },
         "security" : [ {
@@ -5727,7 +5650,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/Cleared"
                 }
               }
             }
@@ -5858,6 +5781,42 @@
           }
         }
       },
+      "AdminUserView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "username" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "role" : {
+            "type" : "string"
+          },
+          "roleLabel" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "qq" : {
+            "type" : "string"
+          },
+          "qqVerified" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "lastLoginAt" : {
+            "type" : "string"
+          }
+        }
+      },
       "SaveModelRequest" : {
         "type" : "object",
         "properties" : {
@@ -5866,6 +5825,23 @@
           },
           "verify" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "ModelSaved" : {
+        "type" : "object",
+        "properties" : {
+          "provider" : {
+            "type" : "string"
+          },
+          "oldModelName" : {
+            "type" : "string"
+          },
+          "newModelName" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
           }
         }
       },
@@ -6273,6 +6249,17 @@
           }
         }
       },
+      "CreateCodeResult" : {
+        "type" : "object",
+        "properties" : {
+          "challengeId" : {
+            "type" : "string"
+          },
+          "adminQq" : {
+            "type" : "string"
+          }
+        }
+      },
       "ConfirmUserRequest" : {
         "type" : "object",
         "properties" : {
@@ -6332,6 +6319,35 @@
           }
         }
       },
+      "ApplyResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "applied" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "rejected" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "errors" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
       "PasswordRequest" : {
         "type" : "object",
         "properties" : {
@@ -6375,6 +6391,24 @@
             "type" : "string"
           },
           "prompt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ProbeResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "elapsedMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "reply" : {
+            "type" : "string"
+          },
+          "error" : {
             "type" : "string"
           }
         }
@@ -6484,6 +6518,19 @@
           },
           "xlsxBase64" : {
             "type" : "string"
+          }
+        }
+      },
+      "ImportTableResult" : {
+        "type" : "object",
+        "properties" : {
+          "updated" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skipped" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -7285,6 +7332,14 @@
           },
           "alias" : {
             "type" : "string"
+          }
+        }
+      },
+      "AliasResult" : {
+        "type" : "object",
+        "properties" : {
+          "block" : {
+            "$ref" : "#/components/schemas/BlockView"
           }
         }
       },
@@ -8230,6 +8285,135 @@
           }
         }
       },
+      "SystemReplyItem" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "string"
+          },
+          "defaultContent" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SystemReplyList" : {
+        "type" : "object",
+        "properties" : {
+          "list" : {
+            "$ref" : "#/components/schemas/SystemReplyItem"
+          },
+          "help" : {
+            "$ref" : "#/components/schemas/SystemReplyItem"
+          }
+        }
+      },
+      "Group" : {
+        "type" : "object",
+        "properties" : {
+          "label" : {
+            "type" : "string"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Item"
+            }
+          }
+        }
+      },
+      "Item" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "target" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "SystemAliasList" : {
+        "type" : "object",
+        "properties" : {
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Group"
+            }
+          }
+        }
+      },
+      "ItemView" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "group" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "hint" : {
+            "type" : "string"
+          },
+          "value" : { }
+        }
+      },
+      "SettingsView" : {
+        "type" : "object",
+        "properties" : {
+          "groups" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ItemView"
+              }
+            }
+          },
+          "applyCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SiteTextList" : {
+        "type" : "object",
+        "properties" : {
+          "pages" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/BlockView"
+              }
+            }
+          },
+          "pageLabels" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
       "DayCount" : {
         "type" : "object",
         "properties" : {
@@ -8312,11 +8496,146 @@
           }
         }
       },
+      "ModelList" : {
+        "type" : "object",
+        "properties" : {
+          "providers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelProviderView"
+            }
+          },
+          "defaultProvider" : {
+            "type" : "string"
+          },
+          "fallbackChain" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ModelProviderView" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "ready" : {
+            "type" : "boolean"
+          },
+          "modelName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AvailableModels" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "models" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "authError" : {
+            "type" : "boolean"
+          },
+          "error" : {
+            "type" : "string"
+          }
+        }
+      },
       "SseEmitter" : {
         "type" : "object",
         "properties" : {
           "timeout" : {
             "type" : [ "integer", "null" ],
+            "format" : "int64"
+          }
+        }
+      },
+      "LogStatus" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "bufferSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "capacity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalWritten" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dropped" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "maskSensitive" : {
+            "type" : "boolean"
+          },
+          "currentSeq" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "activeStreams" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "LogEntryView" : {
+        "type" : "object",
+        "properties" : {
+          "seq" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ts" : {
+            "type" : "string"
+          },
+          "level" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "throwable" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LogHistory" : {
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LogEntryView"
+            }
+          },
+          "currentSeq" : {
+            "type" : "integer",
             "format" : "int64"
           }
         }
@@ -8337,6 +8656,98 @@
           "missCount" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "Counts" : {
+        "type" : "object",
+        "properties" : {
+          "all" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "aliased" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "unaliased" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "uncategorized" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "retired" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Page" : {
+        "type" : "object",
+        "properties" : {
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            }
+          },
+          "counts" : {
+            "$ref" : "#/components/schemas/Counts"
+          },
+          "categories" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Stat"
+            }
+          },
+          "uncategorizedCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "available" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "Stat" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ExportResult" : {
+        "type" : "object",
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tsv" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "format" : {
+            "type" : "string"
+          },
+          "xlsxBase64" : {
+            "type" : "string"
           }
         }
       },
@@ -8362,21 +8773,6 @@
           },
           "available" : {
             "type" : "boolean"
-          }
-        }
-      },
-      "Stat" : {
-        "type" : "object",
-        "properties" : {
-          "name" : {
-            "type" : "string"
-          },
-          "label" : {
-            "type" : "string"
-          },
-          "count" : {
-            "type" : "integer",
-            "format" : "int32"
           }
         }
       },
@@ -8771,6 +9167,15 @@
             "items" : {
               "$ref" : "#/components/schemas/BoardView"
             }
+          }
+        }
+      },
+      "Cleared" : {
+        "type" : "object",
+        "properties" : {
+          "cleared" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       }

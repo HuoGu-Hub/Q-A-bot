@@ -224,9 +224,8 @@ export interface KbEntryListResponse {
 
 /** Excel/WPS 旁路：导出拿到的是 JSON 包着的表格文本（client 永远走 res.json()） */
 export interface KbEntryExportResponse {
-  ok: boolean
   /** tsv 文本（format=tsv 时） */
-  tsv: string
+  tsv?: string
   text?: string
   /** format=xlsx 时的文件字节（base64） */
   xlsxBase64?: string
@@ -235,7 +234,6 @@ export interface KbEntryExportResponse {
 }
 
 export interface KbEntryImportResponse {
-  ok: boolean
   updated: number
   skipped: number
 }

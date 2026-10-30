@@ -65,11 +65,11 @@ class ModelControllerAvailableTest {
         body = "{\"error\":{\"type\":\"authentication_error\",\"code\":\"api_key_expired\","
                 + "\"message\":\"This API key has expired.\"}}";
 
-        Map<String, Object> out = controller().available("opencode-go");
+        var out = controller().available("opencode-go");
 
-        assertThat(out.get("ok")).isEqualTo(false);
-        assertThat(out.get("authError")).isEqualTo(true);
-        assertThat(String.valueOf(out.get("error")))
+        assertThat(out.ok()).isFalse();
+        assertThat(out.authError()).isTrue();
+        assertThat(out.error())
                 .contains("API Key")
                 .contains("401")
                 .contains("This API key has expired.")
@@ -82,7 +82,7 @@ class ModelControllerAvailableTest {
         status = 404;
         body = "no such endpoint";
 
-        String error = String.valueOf(controller().available("opencode-go").get("error"));
+        String error = controller().available("opencode-go").error();
 
         assertThat(error).contains("404").contains("不提供模型列表接口");
     }
@@ -93,10 +93,10 @@ class ModelControllerAvailableTest {
         status = 200;
         body = "{\"data\":[{\"id\":\"deepseek-v4-pro\"},{\"id\":\"deepseek-v4.1-flash\"}]}";
 
-        Map<String, Object> out = controller().available("opencode-go");
+        var out = controller().available("opencode-go");
 
-        assertThat(out.get("ok")).isEqualTo(true);
-        assertThat(out.get("models")).isEqualTo(List.of("deepseek-v4-pro", "deepseek-v4.1-flash"));
-        assertThat(out.get("count")).isEqualTo(2);
+        assertThat(out.ok()).isTrue();
+        assertThat(out.models()).isEqualTo(List.of("deepseek-v4-pro", "deepseek-v4.1-flash"));
+        assertThat(out.count()).isEqualTo(2);
     }
 }

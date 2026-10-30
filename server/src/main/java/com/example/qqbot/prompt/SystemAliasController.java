@@ -56,18 +56,21 @@ public class SystemAliasController {
     public record Group(String label, List<Item> items) {
     }
 
+    public record SystemAliasList(List<Group> groups) {
+    }
+
     @GetMapping("")
-    public Map<String, Object> list() {
+    public SystemAliasList list() {
         Map<String, List<String>> aliases = new LinkedHashMap<>();
         for (SystemAliasStore.Alias item : store.list()) {
             aliases.computeIfAbsent(key(item.kind(), item.target()), k -> new ArrayList<>())
                     .add(item.alias());
         }
-        return Map.of("groups", catalog(aliases));
+        return new SystemAliasList(catalog(aliases));
     }
 
     @PostMapping("")
-    public ResponseEntity<Map<String, Object>> save(@RequestBody SaveAliasesRequest body) {
+    public ResponseEntity<Void> save(@RequestBody SaveAliasesRequest body) {
         List<SystemAliasStore.Alias> entries = new ArrayList<>();
         if (body.entries() != null) {
             for (AliasEntry entry : body.entries()) {
@@ -106,7 +109,7 @@ public class SystemAliasController {
                 }
             }
             store.replace(valid);
-            return ResponseEntity.ok(Map.of("ok", true));
+            return ResponseEntity.noContent().build();
         } catch (SystemAliasStore.AliasException e) {
             throw ApiException.badRequest(e.getMessage());
         }

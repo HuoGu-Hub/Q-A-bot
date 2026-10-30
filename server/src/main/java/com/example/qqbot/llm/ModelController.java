@@ -62,29 +62,19 @@ public class ModelController {
 
     /** 全部厂商的当前配置（key 已脱敏） */
     @GetMapping("")
-    public Map<String, Object> list() {
-        List<Map<String, Object>> providers = new ArrayList<>();
+    public ModelList list() {
+        List<ModelProviderView> providers = new ArrayList<>();
         for (Map.Entry<String, Provider> e : props.getProviders().entrySet()) {
             String name = e.getKey();
             Provider cfg = e.getValue();
             boolean configured = cfg.getApiKey() != null && !cfg.getApiKey().isBlank();
             boolean ready = router.readyProviders().contains(name);
-
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("name", name);
-            m.put("configured", configured);
-            m.put("ready", ready);
-            m.put("modelName", router.currentModelName(name) != null
-                    ? router.currentModelName(name) : cfg.getModelName());
-            providers.add(m);
+            String current = router.currentModelName(name);
+            providers.add(new ModelProviderView(name, configured, ready,
+                    current != null ? current : cfg.getModelName()));
         }
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("providers", providers);
-        out.put("defaultProvider", props.getDefaultProvider());
-        out.put("fallbackChain", router.fallbackChain());
-        out.put("note", "只有模型 ID 可以修改，改完立即生效（不用重启）");
-        return out;
+        return new ModelList(providers, props.getDefaultProvider(), router.fallbackChain(),
+                "只有模型 ID 可以修改，改完立即生效（不用重启）");
     }
 
     /**
@@ -94,7 +84,7 @@ public class ModelController {
      * 这是"改错就哑"的第一道防线：先测通了再替换。
      */
     @PostMapping("/{provider}/actions/test")
-    public ResponseEntity<Map<String, Object>> test(@PathVariable String provider,
+    public ResponseEntity<ProbeResult> test(@PathVariable String provider,
                                                     @RequestBody TestModelRequest body) {
         String modelName = body.modelName();
         String prompt = body.prompt();
@@ -108,8 +98,12 @@ public class ModelController {
         }
 
         log.info("[LLM] 连通性测试：{} / {}", provider, modelName);
-        Map<String, Object> result = router.probe(provider, modelName, prompt);
-        return ResponseEntity.ok(result);
+        Map<String, Object> raw = router.probe(provider, modelName, prompt);
+        return ResponseEntity.ok(new ProbeResult(
+                Boolean.TRUE.equals(raw.get("ok")),
+                raw.get("elapsedMs") instanceof Number n ? n.longValue() : null,
+                raw.get("reply") == null ? null : String.valueOf(raw.get("reply")),
+                raw.get("error") == null ? null : String.valueOf(raw.get("error"))));
     }
 
     /**
@@ -119,7 +113,7 @@ public class ModelController {
      * —— 那样会先测再换，测不通就拒绝，避免"改错就哑"。
      */
     @PutMapping("/{provider}")
-    public ResponseEntity<Map<String, Object>> save(@PathVariable String provider,
+    public ResponseEntity<ModelSaved> save(@PathVariable String provider,
                                                     @RequestBody SaveModelRequest body) {
         String modelName = body.modelName();
         boolean verify = Boolean.TRUE.equals(body.verify());
@@ -150,13 +144,8 @@ public class ModelController {
         // 持久化到覆盖层，重启后仍是新值
         persist(provider, modelName);
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        out.put("provider", provider);
-        out.put("oldModelName", oldName);
-        out.put("newModelName", modelName);
-        out.put("note", "已立即生效（无需重启）");
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ModelSaved(provider, oldName, modelName,
+                "已立即生效（无需重启）"));
     }
 
     /**
@@ -168,7 +157,7 @@ public class ModelController {
      * <p>不是所有厂商都提供这个接口，拉不到就返回空列表，前端自动退化成纯手输。
      */
     @GetMapping("/{provider}/available")
-    public Map<String, Object> available(@PathVariable String provider) {
+    public AvailableModels available(@PathVariable String provider) {
         Provider cfg = props.getProviders().get(provider);
         if (cfg == null) {
             throw ApiException.badRequest("没有这个厂商");
@@ -197,14 +186,14 @@ public class ModelController {
                 String detail = ProviderError.readable(resp.body());
                 String suffix = detail.isEmpty() ? "" : "：" + detail;
                 if (ProviderError.isAuthError(resp.statusCode())) {
-                    return Map.of("ok", false, "models", List.of(), "authError", true,
-                            "error", "API Key 无效或已过期（HTTP " + resp.statusCode() + "）" + suffix);
+                    return new AvailableModels(false, List.of(), null, true,
+                            "API Key 无效或已过期（HTTP " + resp.statusCode() + "）" + suffix);
                 }
                 // 404/405 才是"这家没有这个接口"的合理猜测
                 String hint = resp.statusCode() == 404 || resp.statusCode() == 405
                         ? "（该厂商可能不提供模型列表接口，请手动输入）" : "";
-                return Map.of("ok", false, "models", List.of(),
-                        "error", "HTTP " + resp.statusCode() + suffix + hint);
+                return new AvailableModels(false, List.of(), null, null,
+                        "HTTP " + resp.statusCode() + suffix + hint);
             }
 
             List<String> ids = new ArrayList<>();
@@ -216,10 +205,10 @@ public class ModelController {
                 }
             }
             ids.sort(String::compareTo);
-            return Map.of("ok", true, "models", ids, "count", ids.size());
+            return new AvailableModels(true, ids, ids.size(), null, null);
         } catch (Exception e) {
-            return Map.of("ok", false, "models", List.of(),
-                    "error", "拉取失败：" + ProviderError.readable(e.getMessage()));
+            return new AvailableModels(false, List.of(), null, null,
+                    "拉取失败：" + ProviderError.readable(e.getMessage()));
         }
     }
 
@@ -251,5 +240,22 @@ public class ModelController {
     @JsonIgnoreProperties(ignoreUnknown = false)
 
     public record SaveModelRequest(String modelName, Boolean verify) {
+    }
+
+    public record ModelProviderView(String name, boolean configured, boolean ready, String modelName) {
+    }
+
+    public record ModelList(List<ModelProviderView> providers, String defaultProvider,
+                            List<String> fallbackChain, String note) {
+    }
+
+    public record ProbeResult(boolean ok, Long elapsedMs, String reply, String error) {
+    }
+
+    public record ModelSaved(String provider, String oldModelName, String newModelName, String note) {
+    }
+
+    public record AvailableModels(boolean ok, List<String> models, Integer count,
+                                  Boolean authError, String error) {
     }
 }
