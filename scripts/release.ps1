@@ -10,6 +10,8 @@
   IDEA 跑的是 server/target/classes，对着 server/pom.xml 跑 clean 会把正在运行的
   classpath 抽走，报 NoClassDefFoundError。
 
+  加 -WebOnly 只发前端，加 -ServerOnly 只发后端，都不带就是完整发版。
+
 .PARAMETER Server
   目标，形如 root@1.2.3.4 或 qqbot@1.2.3.4。省略时只构建和打包。
 
@@ -18,6 +20,7 @@
   .\scripts\release.ps1 -SkipBuild -Server root@1.2.3.4
   .\scripts\release.ps1 -SkipUpload
   .\scripts\release.ps1 -WebOnly -Server root@1.2.3.4
+  .\scripts\release.ps1 -ServerOnly -Server root@1.2.3.4
 #>
 [CmdletBinding()]
 param(
@@ -31,12 +34,15 @@ param(
   [switch]$WithConfig,
   # 只发前端：构建 web-dist、上传替换，不动 jar、不重启服务
   [switch]$WebOnly,
+  # 只发后端：跳过前端构建，包里不带 web-dist，其余与完整发版一致
+  [switch]$ServerOnly,
   [string]$RemoteDir = "/opt/qqbot",
   [string]$ServiceUser = "qqbot",
   [string]$ServiceName = "qqbot"
 )
 
 $ErrorActionPreference = "Stop"
+if ($WebOnly -and $ServerOnly) { throw "-WebOnly 与 -ServerOnly 不能同时用" }
 
 $Root     = Split-Path -Parent $PSScriptRoot
 $BuildDir = Join-Path $Root ".toolchain\release"
@@ -69,7 +75,10 @@ function Invoke-Native([string]$File, [string[]]$Arguments, [string]$WorkDir) {
 New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
 
 # ---------------------------------------------------------------- 1. 前端
-if (-not $SkipBuild) {
+# -ServerOnly 一律不碰前端：不重建、不同步，包里也不带，服务器上现有那份保持原样
+if ($ServerOnly) {
+  Step "跳过前端（只发后端）"
+} elseif (-not $SkipBuild) {
   Step "构建前端 web/dist"
   Invoke-Native "pnpm.cmd" @("build") (Join-Path $Root "web")
 
@@ -185,7 +194,9 @@ $pkgServer = Join-Path $pkg "server"
 New-Item -ItemType Directory -Path $pkgServer -Force | Out-Null
 
 Copy-Item $jarPath (Join-Path $pkgServer $JarName)
-Copy-Item (Join-Path $Root "server\web-dist") (Join-Path $pkgServer "web-dist") -Recurse
+if (-not $ServerOnly) {
+  Copy-Item (Join-Path $Root "server\web-dist") (Join-Path $pkgServer "web-dist") -Recurse
+}
 Copy-Item (Join-Path $Root "system.md") $pkg
 
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\nginx") -Force | Out-Null
