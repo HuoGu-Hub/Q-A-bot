@@ -56,6 +56,20 @@ class MapResourceDirectoryTest {
     }
 
     @Test
+    @DisplayName("植物、宝箱这类非矿图层也能按层名命中（不再只开矿类）")
+    void matchesNonOreLayers() {
+        ResourceDirectory.Layer aloe = new ResourceDirectory.Layer(
+                "Embervale", "plant:aloe", "芦荟", "plant", "aloe", 2011, "#6f8f4a");
+        ResourceDirectory.Layer chest = new ResourceDirectory.Layer(
+                "Embervale", "chest:wood", "木箱", "chest", "wood", 1101, "#8a6b3c");
+
+        assertThat(MapResourceDirectory.match("芦荟在哪", List.of(copper(), aloe))).isEqualTo(aloe);
+        assertThat(MapResourceDirectory.match("木箱在哪", List.of(copper(), chest))).isEqualTo(chest);
+        // 没有「宝箱」这个层名/别名，不硬猜成某一个箱子层
+        assertThat(MapResourceDirectory.match("宝箱在哪", List.of(copper(), chest))).isNull();
+    }
+
+    @Test
     @DisplayName("「铁矿在哪」命中铁层")
     void matchesIron() {
         assertThat(MapResourceDirectory.match("铁矿在哪", List.of(copper(), iron(), coal())))

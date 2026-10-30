@@ -42,11 +42,11 @@ class MapResourceDirectoryAnswerTest {
     @DisplayName("★ 「哪里有密集的铜矿」→ 命中铜层，文字里有总数、热点与坐标")
     void answersDenseCopper() {
         List<MapResourceService.PointView> points = List.of(
-                new MapResourceService.PointView(100, 100, "铜", 1),
-                new MapResourceService.PointView(110, 100, "铜", 1),
-                new MapResourceService.PointView(120, 100, "铜", 1),
-                new MapResourceService.PointView(105, 115, "铜", 1),
-                new MapResourceService.PointView(115, 115, "铜", 1));
+                new MapResourceService.PointView(100, 100, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(110, 100, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(120, 100, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(105, 115, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(115, 115, "铜", 1, "Nomad Highlands"));
 
         ResourceDirectory.Answer answer = directory(points).answer("哪里有密集的铜矿");
 
@@ -58,13 +58,14 @@ class MapResourceDirectoryAnswerTest {
         assertThat(answer.text())
                 .contains("「铜矿」在地图上有 5 个点位")
                 .contains("半径 250 内 5 个点")
+                .contains("在游牧高地")
                 .contains("坐标 (110, 106)");
     }
 
     @Test
     @DisplayName("问物品不命中资源层，直接返回 null，交给地点/资料链路")
     void itemQuestionDoesNotMatch() {
-        assertThat(directory(List.of(new MapResourceService.PointView(1, 1, "铜", 1)))
+        assertThat(directory(List.of(new MapResourceService.PointView(1, 1, "铜", 1, "Springlands")))
                 .answer("青铜锭怎么获得")).isNull();
     }
 

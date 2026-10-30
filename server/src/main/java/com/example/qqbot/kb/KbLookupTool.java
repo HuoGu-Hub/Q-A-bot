@@ -61,7 +61,9 @@ public class KbLookupTool {
             + "另外：命中资料里若出现了对回答有帮助的材料、地点、技能（例如配方里的铁、布料），"
             + "可以再查它们怎么获得，这样能给出更完整的答案；但要克制，只在明显有用时才查。"
             + "还有：命中资料的正文末尾若出现 [[img:...]] 这样的图片标记，那说明这一块有配图，"
-            + "把它原样抄进回答里就会变成一张图；没有标记就不要自己拼。")
+            + "把它原样抄进回答里就会变成一张图；没有标记就不要自己拼。"
+            + "如果问的是某资源的获取方式，结果末尾可能附带【地图分布】与配图，"
+            + "把它一起用上，不要再重复调用 locate。")
     public String lookup(@P("要查的词或问题") String query, InvocationContext ctx) {
         if (query == null || query.isBlank()) {
             return "没有提供要查的内容。";
@@ -105,9 +107,50 @@ public class KbLookupTool {
             sb.append("**这批结果的标题与你的关键词没有一处对上，可能不可靠**：")
                     .append("如果关键词是中文，请换成资料中的原文再查一次；也可以用 search_titles 先确认原文名。");
         }
+        appendResourceDistribution(sb, query);
         log.info("[TOOL] lookup「{}」→ {} 条，最高分 {}，标题命中 {} 条", query, n,
                 String.format("%.3f", best), titleHits);
         return sb.toString().strip();
+    }
+
+    /**
+     * 「怎么获得 / 在哪里」这类问题，如果问的是可采集资源，把地图分布一并给出来。
+     *
+     * <p>为什么不靠模型再调一次 {@code locate}：那要多吃一轮工具预算，而且模型不一定想得起来。
+     * 这里直接附在 {@code lookup} 结果后面，模型一次就能同时回答"怎么获得"和"去哪挖"。
+     * 只在问法确实带位置/获取意图时附，避免问"铜矿石有什么用"也塞一堆地图数据。
+     */
+    private void appendResourceDistribution(StringBuilder sb, String query) {
+        if (resources == null || !wantsLocation(query)) {
+            return;
+        }
+        try {
+            ResourceDirectory.Answer a = resources.answer(query);
+            if (a == null || a.hotspots() == null || a.hotspots().isEmpty()) {
+                return;
+            }
+            sb.append("\n\n【地图分布】").append(PromptText.escapeDelimiters(a.text()));
+            if (options.getShot().isEnabled()) {
+                sb.append("\n配图：[[img:oreshot:").append(PromptText.escapeDelimiters(
+                        ResourceDirectory.imageKey(a.layer(), 1))).append("]]");
+            }
+            log.info("[TOOL] lookup「{}」附带资源分布：{}", query, a.layer().key());
+        } catch (Exception e) {
+            log.warn("[TOOL] lookup 附带资源分布失败：{} —— {}", query, e.getMessage());
+        }
+    }
+
+    /** 问法里有没有"在哪 / 怎么获得"的意思 */
+    private static boolean wantsLocation(String query) {
+        if (query == null) {
+            return false;
+        }
+        for (String word : new String[]{"在哪", "哪里", "位置", "分布", "获得", "获取", "怎么得", "怎么拿", "如何得", "挖"}) {
+            if (query.contains(word)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

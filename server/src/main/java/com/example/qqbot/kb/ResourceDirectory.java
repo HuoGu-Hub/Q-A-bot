@@ -57,7 +57,7 @@ public interface ResourceDirectory {
      * @param anchorDx       热点相对地标的 x 差（向东为正）
      * @param anchorDy       热点相对地标的 y 差（向北为正）
      */
-    record Hotspot(double x, double y, int count,
+    record Hotspot(double x, double y, int count, String region,
                    double minX, double minY, double maxX, double maxY,
                    String anchor, double anchorDistance, double anchorDx, double anchorDy) {
     }
@@ -83,11 +83,15 @@ public interface ResourceDirectory {
             sb.append("点位最密的 ").append(hotspots.size()).append(" 处：\n");
             for (Hotspot h : hotspots) {
                 sb.append("· 半径 ").append(radius).append(" 内 ").append(h.count()).append(" 个点");
+                boolean hasRegion = h.region() != null && !h.region().isBlank();
+                if (hasRegion) {
+                    sb.append("，在").append(PlaceNames.regionZh(h.region()));
+                }
                 if (h.anchor() != null && !h.anchor().isBlank()) {
                     if (h.anchorDistance() < 1) {
                         sb.append("，就在「").append(h.anchor()).append("」旁边");
                     } else {
-                        sb.append("，在「").append(h.anchor()).append("」")
+                        sb.append(hasRegion ? "，最近地标「" : "，在「").append(h.anchor()).append("」")
                                 .append(RelativeLocation.direction(h.anchorDx(), h.anchorDy()))
                                 .append("方向约 ").append(Math.round(h.anchorDistance()))
                                 .append(" 坐标单位");

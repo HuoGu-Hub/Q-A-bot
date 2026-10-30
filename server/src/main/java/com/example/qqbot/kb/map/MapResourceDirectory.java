@@ -2,6 +2,7 @@ package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.kb.PlaceDirectory;
+import com.example.qqbot.kb.PlaceNames;
 import com.example.qqbot.kb.PlacePoint;
 import com.example.qqbot.kb.ResourceDirectory;
 import com.example.qqbot.kb.ResourceHotspots;
@@ -10,11 +11,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 
 /**
@@ -25,11 +26,11 @@ import java.util.TreeSet;
  * 给层做匹配才能回答"铜矿在哪"。层名、颜色、点数在 {@code kb_map_resource_layer} 里都是现成的。
  *
  * <h2>为什么不用向量</h2>
- * 可问的资源名是闭集（矿种 + 常见叫法），确定性匹配更准、可解释、零成本；
+ * 可问的资源名是闭集（层名 + 常见叫法），确定性匹配更准、可解释、零成本；
  * 向量留给物品、配方、机制这些真正有文本的资料。
  *
  * <h2>别名规则</h2>
- * 只认"层名（至少 2 字）+ 矿 / 矿石 / 矿脉"和英文别名，按最长命中。
+ * 层名（至少 2 字）直接命中；矿类再补「X矿 / X矿石 / X矿脉」与英文别名，按最长命中。
  * 单字「铜 / 铁 / 金 / 银」不单独参与匹配 —— 否则「青铜锭」会被误判成铜矿。
  */
 @Component
@@ -37,8 +38,7 @@ public class MapResourceDirectory implements ResourceDirectory {
 
     private static final Logger log = LoggerFactory.getLogger(MapResourceDirectory.class);
 
-    /** 先只开矿类。植物、宝箱这些层的"哪里"语义不同，等有明确问法再加 */
-    private static final Set<String> KINDS = Set.of("ore");
+    /* 有坐标的图层都能问；林地面这类没有逐点的层，points() 为空，自然返回 null */
 
     /**
      * 人工核对的英文名与常见叫法。中文的「X矿 / X矿石 / X矿脉」由 {@link #aliasesFor} 自动生成，
@@ -118,7 +118,7 @@ public class MapResourceDirectory implements ResourceDirectory {
             List<PlacePoint> anchors = landmarks(layer.map());
             List<Hotspot> hotspots = new ArrayList<>(found.size());
             for (ResourceHotspots.Hotspot h : found) {
-                hotspots.add(withAnchor(h, anchors));
+                hotspots.add(withAnchor(h, anchors, regionOf(h, rows)));
             }
             log.info("[RES] 「{}」→ {}（{} 个点，{} 处热点）", term.strip(), layer.key(),
                     points.size(), hotspots.size());
@@ -156,7 +156,7 @@ public class MapResourceDirectory implements ResourceDirectory {
             }
             for (MapResourceService.CategoryView category : catalog.categories()) {
                 for (MapResourceService.LayerView l : category.layers()) {
-                    if (!KINDS.contains(l.kind()) || l.count() <= 0) {
+                    if (l.count() <= 0) {
                         continue;
                     }
                     out.add(new Layer(map, l.key(), l.name(), l.kind(), l.subtype(),
@@ -286,7 +286,34 @@ public class MapResourceDirectory implements ResourceDirectory {
         return out;
     }
 
-    private static Hotspot withAnchor(ResourceHotspots.Hotspot h, List<PlacePoint> anchors) {
+    /**
+     * 热点落在哪个区域：取热点半径内点数最多的那个区域。
+     * 区域只存了英文名（来自 points.json），回答时再由 {@link PlaceNames#regionZh} 转中文。
+     */
+    private static String regionOf(ResourceHotspots.Hotspot h, List<MapResourceService.PointView> rows) {
+        Map<String, Integer> counts = new HashMap<>();
+        for (MapResourceService.PointView p : rows) {
+            if (p.regionName() == null || p.regionName().isBlank()) {
+                continue;
+            }
+            if (Math.hypot(p.x() - h.x(), p.z() - h.y()) > ResourceHotspots.HOT_RADIUS) {
+                continue;
+            }
+            counts.merge(p.regionName(), 1, Integer::sum);
+        }
+        String best = "";
+        int bestCount = 0;
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (e.getValue() > bestCount
+                    || (e.getValue() == bestCount && e.getKey().compareTo(best) < 0)) {
+                best = e.getKey();
+                bestCount = e.getValue();
+            }
+        }
+        return best;
+    }
+
+    private static Hotspot withAnchor(ResourceHotspots.Hotspot h, List<PlacePoint> anchors, String region) {
         PlacePoint best = null;
         double bestDistance = Double.MAX_VALUE;
         for (PlacePoint p : anchors) {
@@ -297,12 +324,13 @@ public class MapResourceDirectory implements ResourceDirectory {
             }
         }
         if (best == null) {
-            return new Hotspot(h.x(), h.y(), h.count(), h.minX(), h.minY(), h.maxX(), h.maxY(),
-                    "", 0, 0, 0);
+            return new Hotspot(h.x(), h.y(), h.count(), region,
+                    h.minX(), h.minY(), h.maxX(), h.maxY(), "", 0, 0, 0);
         }
         double dx = h.x() - best.x();
         double dy = h.y() - best.y();
-        return new Hotspot(h.x(), h.y(), h.count(), h.minX(), h.minY(), h.maxX(), h.maxY(),
-                best.name(), Math.hypot(dx, dy), dx, dy);
+        return new Hotspot(h.x(), h.y(), h.count(), region,
+                h.minX(), h.minY(), h.maxX(), h.maxY(),
+                PlaceNames.zh(best.name()), Math.hypot(dx, dy), dx, dy);
     }
 }

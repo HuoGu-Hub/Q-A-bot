@@ -121,7 +121,8 @@ public class MapResourceImporter {
         try {
             String hash = sha256(file);
             MapResourceRepository.MetaRow meta = repo.meta("Embervale");
-            if (!force && meta != null && hash.equals(meta.sourceHash()) && meta.points() > 0) {
+            if (!force && meta != null && hash.equals(meta.sourceHash()) && meta.points() > 0
+                    && !repo.regionNamesMissing("Embervale")) {
                 return new ImportReport(false, true, meta.version(), 0, meta.points(), meta.areas(), "已是最新");
             }
             ImportReport report = parseAndStore(file, hash);
@@ -305,8 +306,9 @@ public class MapResourceImporter {
             double x = point.path(1).asDouble();
             double z = point.path(2).asDouble();
             int region = regions.at(x, z);
+            String regionName = region >= 0 ? regions.name(region) : "";
             String name = nameFor(def, x, z, region, regions.name(region), wiki, namedSeq);
-            out.add(new MapResourceRepository.PointRow(def.key(), name, region, x, z,
+            out.add(new MapResourceRepository.PointRow(def.key(), name, region, regionName, x, z,
                     "p:" + seq++));
             counts.merge(def.key(), 1, Integer::sum);
         }
@@ -320,7 +322,8 @@ public class MapResourceImporter {
             double x = chest.path(0).asDouble();
             double z = chest.path(2).asDouble();
             int region = regions.at(x, z);
-            out.add(new MapResourceRepository.PointRow(def.key(), def.name(), region, x, z,
+            String regionName = region >= 0 ? regions.name(region) : "";
+            out.add(new MapResourceRepository.PointRow(def.key(), def.name(), region, regionName, x, z,
                     "c:" + chestSeq++));
             counts.merge(def.key(), 1, Integer::sum);
         }

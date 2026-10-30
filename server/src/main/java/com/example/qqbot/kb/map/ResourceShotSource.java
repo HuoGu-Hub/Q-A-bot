@@ -1,6 +1,7 @@
 package com.example.qqbot.kb.map;
 
 import com.example.qqbot.kb.MapOptions;
+import com.example.qqbot.kb.PlaceNames;
 import com.example.qqbot.kb.ResourceHotspots;
 import com.example.qqbot.media.ImageSource;
 import com.example.qqbot.onebot.model.OutboundImage;
@@ -264,7 +265,7 @@ public class ResourceShotSource implements ImageSource {
         for (int i = 0; i < limit; i++) {
             MapViewService.MarkerView m = found.get(i).marker();
             MapProjection.Point at = MapProjection.worldOf(geometry, m.x(), m.y());
-            String label = i < LABEL_MAX ? m.name() : "";
+            String label = i < LABEL_MAX ? PlaceNames.zh(m.name()) : "";
             out.add(MapShotRenderer.Mark.icon(at.x(), at.y(), label,
                     icons.getOrDefault(nz(m.group()), "")));
         }

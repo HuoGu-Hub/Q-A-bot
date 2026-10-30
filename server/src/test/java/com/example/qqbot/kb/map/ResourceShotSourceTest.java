@@ -63,11 +63,11 @@ class ResourceShotSourceTest {
         when(resources.catalog(MAP)).thenReturn(new MapResourceService.CatalogView(
                 true, "1.3.18", "2026-10-30", "", List.of(category)));
         when(resources.points(MAP, LAYER)).thenReturn(List.of(
-                new MapResourceService.PointView(1200, 1200, "铜", 1),
-                new MapResourceService.PointView(1210, 1200, "铜", 1),
-                new MapResourceService.PointView(1220, 1200, "铜", 1),
-                new MapResourceService.PointView(1205, 1215, "铜", 1),
-                new MapResourceService.PointView(1215, 1215, "铜", 1)));
+                new MapResourceService.PointView(1200, 1200, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(1210, 1200, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(1220, 1200, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(1205, 1215, "铜", 1, "Nomad Highlands"),
+                new MapResourceService.PointView(1215, 1215, "铜", 1, "Nomad Highlands")));
 
         byte[] tile = solidPng();
         images = mock(MapImageCache.class);

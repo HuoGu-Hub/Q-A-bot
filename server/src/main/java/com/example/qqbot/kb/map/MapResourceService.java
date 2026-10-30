@@ -51,7 +51,7 @@ public class MapResourceService {
                               List<CategoryView> categories) {
     }
 
-    public record PointView(double x, double z, String name, int region) {
+    public record PointView(double x, double z, String name, int region, String regionName) {
     }
 
     public record AreaView(double x0, double z0, double x1, double z1, String name) {
@@ -111,7 +111,7 @@ public class MapResourceService {
         try {
             List<PointView> out = new ArrayList<>();
             for (MapResourceRepository.PointRow p : repo.points(map, layer)) {
-                out.add(new PointView(p.x(), p.z(), p.name(), p.region()));
+                out.add(new PointView(p.x(), p.z(), p.name(), p.region(), p.regionName()));
             }
             return out;
         } catch (Exception e) {

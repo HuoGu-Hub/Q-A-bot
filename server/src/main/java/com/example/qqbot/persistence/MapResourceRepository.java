@@ -31,8 +31,8 @@ public class MapResourceRepository {
     }
 
     /** 一个资源点 */
-    public record PointRow(String layer, String name, int region, double x, double z,
-                           String sourceId) {
+    public record PointRow(String layer, String name, int region, String regionName,
+                           double x, double z, String sourceId) {
     }
 
     /** 一块林地矩形（世界坐标，x0/z0 是西南角，x1/z1 是东北角） */
@@ -100,6 +100,7 @@ public class MapResourceRepository {
                 + " layer     TEXT NOT NULL,"
                 + " name      TEXT NOT NULL DEFAULT '',"
                 + " region    INTEGER NOT NULL DEFAULT -1,"
+                + " region_name TEXT NOT NULL DEFAULT '',"
                 + " x         REAL NOT NULL DEFAULT 0,"
                 + " z         REAL NOT NULL DEFAULT 0,"
                 + " source_id TEXT NOT NULL,"
@@ -127,6 +128,12 @@ public class MapResourceRepository {
         } catch (Exception ignored) {
             // 列已经存在
         }
+        // 旧库没有 region_name：先加空列，导入器会在下一次启动时补一次快照
+        try {
+            jdbc.update("ALTER TABLE kb_map_resource ADD COLUMN region_name TEXT NOT NULL DEFAULT ''");
+        } catch (Exception ignored) {
+            // 列已经存在
+        }
     }
 
     public MetaRow meta(String map) {
@@ -146,10 +153,17 @@ public class MapResourceRepository {
     }
 
     public List<PointRow> points(String map, String layer) {
-        return jdbc.query("SELECT layer, name, region, x, z, source_id"
+        return jdbc.query("SELECT layer, name, region, region_name, x, z, source_id"
                         + " FROM kb_map_resource WHERE map = ? AND layer = ? ORDER BY x, z",
                 r -> new PointRow(r.str("layer"), r.str("name"), r.intOf("region"),
-                        r.dbl("x"), r.dbl("z"), r.str("source_id")), map, layer);
+                        r.str("region_name"), r.dbl("x"), r.dbl("z"), r.str("source_id")),
+                map, layer);
+    }
+
+    /** 旧库刚加列时 region_name 还是空的：导入器据此补一次快照 */
+    public boolean regionNamesMissing(String map) {
+        return jdbc.count("SELECT COUNT(*) FROM kb_map_resource"
+                + " WHERE map = ? AND region >= 0 AND (region_name IS NULL OR region_name = '')", map) > 0;
     }
 
     public List<AreaRow> areas(String map, String layer) {
@@ -188,10 +202,10 @@ public class MapResourceRepository {
                             nz(l.subtype()), nz(l.name()), nz(l.nameZh()), nz(l.color()),
                             l.count(), l.sort()}).toList());
 
-            batch("INSERT INTO kb_map_resource (map, layer, name, region, x, z, source_id)"
-                            + " VALUES (?,?,?,?,?,?,?)",
+            batch("INSERT INTO kb_map_resource (map, layer, name, region, region_name, x, z, source_id)"
+                            + " VALUES (?,?,?,?,?,?,?,?)",
                     points.stream().map(p -> new Object[]{map, p.layer(), nz(p.name()),
-                            p.region(), p.x(), p.z(), p.sourceId()}).toList());
+                            p.region(), nz(p.regionName()), p.x(), p.z(), p.sourceId()}).toList());
 
             batch("INSERT INTO kb_map_resource_area"
                             + " (map, layer, name, region, x0, z0, x1, z1, source_id)"

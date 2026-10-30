@@ -47,7 +47,7 @@ class KbLookupToolResourceTest {
     private static ResourceDirectory.Answer copper() {
         ResourceDirectory.Layer layer = new ResourceDirectory.Layer("Embervale", "ore:copper",
                 "铜", "ore", "copper", 747, "#c97b3c");
-        ResourceDirectory.Hotspot hotspot = new ResourceDirectory.Hotspot(5250, 2350, 32,
+        ResourceDirectory.Hotspot hotspot = new ResourceDirectory.Hotspot(5250, 2350, 32, "Nomad Highlands",
                 5000, 2200, 5500, 2500, "火焰神龛·雾水盆地", 680, 100, 100);
         return new ResourceDirectory.Answer("铜矿", layer, 747, 250, List.of(hotspot));
     }
@@ -105,6 +105,43 @@ class KbLookupToolResourceTest {
         String out = tool(places(), resources).locate("不存在的东西", null);
 
         assertThat(out).contains("地图上没有标记过");
+    }
+
+    @Test
+    @DisplayName("★ 「铜矿怎么获得」：lookup 结果附带地图分布与取图凭据")
+    void lookupAppendsDistributionForAcquisition() {
+        KbRetriever retriever = mock(KbRetriever.class);
+        KbRetriever.Hit hit = new KbRetriever.Hit(new KbCorpus.Entry("copper-ore", "copper-ore",
+                "铜矿石（Copper Ore）", "一种常见的矿石，用于制作铜锭。", "", List.of("材料"),
+                false, "2026-01-01", new float[]{1f}), 0.9, "vector");
+        when(retriever.retrieve(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new KbRetriever.Retrieval(List.of(hit), 0.9, 0.9, 1, 1, List.of()));
+        ResourceDirectory resources = mock(ResourceDirectory.class);
+        when(resources.answer("铜矿怎么获得")).thenReturn(copper());
+        KbLookupTool tool = new KbLookupTool(retriever, mock(KbCorpus.class), places(),
+                new MapOptions(), resources);
+
+        String out = tool.lookup("铜矿怎么获得", null);
+
+        assertThat(out).contains("铜矿石").contains("【地图分布】").contains("747")
+                .contains("[[img:oreshot:Embervale/ore:copper/1]]");
+    }
+
+    @Test
+    @DisplayName("问用途时不附带地图分布；青铜锭也不会误命中资源层")
+    void lookupDoesNotAttachForNonAcquisition() {
+        KbRetriever retriever = mock(KbRetriever.class);
+        KbRetriever.Hit hit = new KbRetriever.Hit(new KbCorpus.Entry("copper-ore", "copper-ore",
+                "铜矿石（Copper Ore）", "一种常见的矿石。", "", List.of("材料"),
+                false, "2026-01-01", new float[]{1f}), 0.9, "vector");
+        when(retriever.retrieve(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new KbRetriever.Retrieval(List.of(hit), 0.9, 0.9, 1, 1, List.of()));
+        ResourceDirectory resources = mock(ResourceDirectory.class);
+        KbLookupTool tool = new KbLookupTool(retriever, mock(KbCorpus.class), places(),
+                new MapOptions(), resources);
+
+        assertThat(tool.lookup("铜矿有什么用", null)).doesNotContain("【地图分布】");
+        assertThat(tool.lookup("青铜锭怎么获得", null)).doesNotContain("【地图分布】");
     }
 
     @Test
