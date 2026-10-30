@@ -1,5 +1,6 @@
 package com.example.qqbot.incoming;
 
+import com.example.qqbot.web.ProblemWriter;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -11,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -48,9 +50,11 @@ public class OneBotAuthFilter extends OncePerRequestFilter {
     private static final String SIGNATURE_HEADER = "x-signature";
 
     private final InboundTokenPolicy policy;
+    private final ProblemWriter problems;
 
-    public OneBotAuthFilter(InboundTokenPolicy policy) {
+    public OneBotAuthFilter(InboundTokenPolicy policy, ProblemWriter problems) {
         this.policy = policy;
+        this.problems = problems;
     }
 
     @PostConstruct
@@ -74,11 +78,11 @@ public class OneBotAuthFilter extends OncePerRequestFilter {
 
         String token = policy.getInboundToken();
         if (!StringUtils.hasText(token)) {
-            reject(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "事件入口未配置 Token");
+            reject(response, HttpStatus.SERVICE_UNAVAILABLE, "ONEBOT_DISABLED", "事件入口未配置 Token");
             return;
         }
         if (request.getContentLengthLong() > MAX_BODY_BYTES) {
-            reject(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, "事件体过大");
+            reject(response, HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE", "事件体过大");
             return;
         }
 
@@ -94,7 +98,7 @@ public class OneBotAuthFilter extends OncePerRequestFilter {
             try {
                 body = readBody(request);
             } catch (BodyTooLarge e) {
-                reject(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, "事件体过大");
+                reject(response, HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE", "事件体过大");
                 return;
             }
             String expected = "sha1=" + hmacSha1(token, body);
@@ -105,7 +109,7 @@ public class OneBotAuthFilter extends OncePerRequestFilter {
         }
 
         log.warn("[ONEBOT] 事件入口鉴权失败，来源 {}", request.getRemoteAddr());
-        reject(response, HttpServletResponse.SC_UNAUTHORIZED, "未授权");
+        reject(response, HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "未授权");
     }
 
     private static boolean constantEquals(String expected, String actual) {
@@ -138,11 +142,9 @@ public class OneBotAuthFilter extends OncePerRequestFilter {
         return out.toByteArray();
     }
 
-    private static void reject(HttpServletResponse response, int status, String message) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write("{\"error\":\"" + message + "\"}");
+    private void reject(HttpServletResponse response, HttpStatus status, String code, String message)
+            throws IOException {
+        problems.write(response, status, code, message);
     }
 
     private static final class BodyTooLarge extends IOException {

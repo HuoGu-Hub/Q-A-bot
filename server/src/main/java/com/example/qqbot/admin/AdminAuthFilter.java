@@ -1,6 +1,7 @@
 package com.example.qqbot.admin;
 
 import com.example.qqbot.persistence.AdminAuditRepository;
+import com.example.qqbot.web.ProblemWriter;
 import com.example.qqbot.qa.QaStore;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -71,13 +72,15 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     private final AdminAuth auth;
     private final QaStore store;
     private final AdminAuditRepository audit;
+    private final ProblemWriter problems;
 
     public AdminAuthFilter(AdminPolicy props, AdminAuth auth, QaStore store,
-                           AdminAuditRepository audit) {
+                           AdminAuditRepository audit, ProblemWriter problems) {
         this.props = props;
         this.auth = auth;
         this.store = store;
         this.audit = audit;
+        this.problems = problems;
     }
 
     /** 当前请求的登录身份；未登录返回 {@code null} */
@@ -171,10 +174,14 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     }
 
     private void badRequest(HttpServletResponse response, boolean api) throws IOException {
+        if (api) {
+            problems.write(response, org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "BAD_REQUEST", "请求路径不合法");
+            return;
+        }
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        response.setContentType(api
-                ? "application/json;charset=UTF-8" : "text/plain;charset=UTF-8");
-        response.getWriter().write(api ? "{\"error\":\"请求路径不合法\"}" : "请求路径不合法");
+        response.setContentType("text/plain;charset=UTF-8");
+        response.getWriter().write("请求路径不合法");
     }
 
     /** 用户管理与审计 → ADMIN；只读 → VIEWER；其余写操作 → EDITOR。 */
@@ -238,10 +245,9 @@ public class AdminAuthFilter extends OncePerRequestFilter {
         // 诊断只进日志：503 页面会暴露绝对路径与部署目录，不值得给匿名请求看
         log.warn("[ADMIN] 后台未启用：{}", com.example.qqbot.files.ProjectFiles.describe());
         if (path.startsWith("/admin/api/")) {
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("""
-                    {"error":"管理后台未启用：还没有任何后台账号。在 .env 里设置 ADMIN_PASSWORD 后重启即可自动创建 admin 账号"}
-                    """);
+            problems.write(response, org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "ADMIN_DISABLED",
+                    "管理后台未启用：还没有任何后台账号。在 .env 里设置 ADMIN_PASSWORD 后重启即可自动创建 admin 账号");
         } else {
             response.setContentType("text/html;charset=UTF-8");
             response.getWriter().write("""
@@ -259,31 +265,26 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     private void unauthorized(HttpServletResponse response, String path, String message)
             throws IOException {
         if (path.startsWith("/admin/api/")) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"error\":\"" + message + "\"}");
+            problems.write(response, org.springframework.http.HttpStatus.UNAUTHORIZED,
+                    "UNAUTHENTICATED", message);
         } else {
             response.sendRedirect("/admin/login");
         }
     }
 
     private void forbidden(HttpServletResponse response, AdminRole required) throws IOException {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"error\":\"权限不足：这个操作需要「"
-                + required.label() + "」及以上权限\"}");
+        problems.write(response, org.springframework.http.HttpStatus.FORBIDDEN,
+                "FORBIDDEN", "权限不足：这个操作需要「" + required.label() + "」及以上权限");
     }
 
     private void qqBindRequired(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"error\":\"请先绑定 QQ\",\"code\":\"QQ_BIND_REQUIRED\"}");
+        problems.write(response, org.springframework.http.HttpStatus.FORBIDDEN,
+                "QQ_BIND_REQUIRED", "请先绑定 QQ");
     }
 
     private void forbiddenOrigin(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"error\":\"请求来源不合法\"}");
+        problems.write(response, org.springframework.http.HttpStatus.FORBIDDEN,
+                "ORIGIN_REJECTED", "请求来源不合法");
     }
 
     private String readCookie(HttpServletRequest request) {
