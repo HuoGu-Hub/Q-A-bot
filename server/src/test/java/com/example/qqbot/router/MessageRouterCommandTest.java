@@ -214,7 +214,7 @@ class MessageRouterCommandTest {
         when(guardPipeline.check(any())).thenReturn(GuardResult.pass());
         when(budgetGuard.check(anyLong(), anyLong()))
                 .thenReturn(new BudgetGuard.Decision(BudgetGuard.Verdict.OK, null));
-        when(chatService.reply(any(), anyString(), any(), any(), any(ReplyMode.class)))
+        when(chatService.reply(any(), anyString(), any(), any(), any(ReplyMode.class), anyBoolean(), any()))
                 .thenReturn(new ChatService.ReplyResult("模型回答", 12L, KbTrace.disabled()));
 
         // 真的 OutboundSender（而不是 mock）：这个测试要断言"到底发出去了什么"，
@@ -353,7 +353,8 @@ class MessageRouterCommandTest {
         verify(guardPipeline, times(1)).check(any());
         verify(budgetGuard, times(1)).check(eq(USER), eq(GROUP));
         // 关键：传给模型的是**参数**（问题），模式是命令配的 none
-        verify(chatService).reply(any(), eq("今天什么版本"), any(), any(), eq(ReplyMode.NONE));
+        verify(chatService).reply(any(), eq("今天什么版本"), any(), any(), eq(ReplyMode.NONE),
+                anyBoolean(), any());
         assertThat(sentText()).isEqualTo("模型回答");
     }
 

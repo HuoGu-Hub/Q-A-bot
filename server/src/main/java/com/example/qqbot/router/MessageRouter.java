@@ -386,8 +386,8 @@ public class MessageRouter {
                 && voiceTrigger.requiresVoice(event.getGroupId(), question);
 
         ChatService.ReplyResult result = voiceRequired
-                ? chatService.reply(event, question, quote.text(), allImages, replyMode, true)
-                : chatService.reply(event, question, quote.text(), allImages, replyMode);
+                ? chatService.reply(event, question, quote.text(), allImages, replyMode, true, plan)
+                : chatService.reply(event, question, quote.text(), allImages, replyMode, false, plan);
 
         // 语音与文字谁先冒出来：一次随机，避免每条回复都像模板。
         // 有语音时必须同步发文字 —— 走异步队列的话，文字可能被发送线程推到语音后面。

@@ -210,7 +210,9 @@ public class QaAnalyticsRepository {
     public List<MissRow> misses(String cutoff, int topN) {
         String sql = "SELECT k.keyword, k.term_en, COUNT(*) c, MAX(s.best_cosine_raw) raw"
                 + " FROM qa_keyword k JOIN qa_stat s ON s.id = k.stat_id"
-                + " WHERE s.hit_count = 0 AND s.guard_action = " + ACTION_PASS + andTs(cutoff)
+                + " WHERE s.hit_count = 0 AND s.guard_action = " + ACTION_PASS
+                // 跳过检索的那几类（社交整活等）不算"没命中"：它们本来就不该有资料
+                + " AND s.kb_enabled = 1" + andTs(cutoff)
                 + " GROUP BY k.keyword, k.term_en ORDER BY c DESC, k.keyword LIMIT ?";
         return jdbc.query(sql,
                 r -> new MissRow(r.str("keyword"), r.str("term_en"),
@@ -224,7 +226,7 @@ public class QaAnalyticsRepository {
                 + " JOIN qa_raw r ON r.id = s.id"
                 + " JOIN qa_keyword k ON k.stat_id = s.id"
                 + " WHERE s.hit_count = 0 AND k.keyword = ? AND s.guard_action = " + ACTION_PASS
-                + andTs(cutoff)
+                + " AND s.kb_enabled = 1" + andTs(cutoff)
                 + " LIMIT ?";
         // ⚠️ 参数顺序跟着 SQL 走：keyword 在 ts 之前
         Object[] params = cutoff == null
@@ -246,6 +248,7 @@ public class QaAnalyticsRepository {
         String sql = "SELECT s.ts, r.question, s.best_cosine_raw FROM qa_stat s"
                 + " LEFT JOIN qa_raw r ON r.id = s.id"
                 + " WHERE s.hit_count = 0 AND s.guard_action = " + ACTION_PASS
+                + " AND s.kb_enabled = 1"
                 + " AND NOT EXISTS (SELECT 1 FROM qa_keyword k WHERE k.stat_id = s.id)"
                 + andTs(cutoff) + " ORDER BY s.ts DESC LIMIT ?";
         return jdbc.query(sql, r -> {

@@ -3,6 +3,7 @@ package com.example.qqbot.agent;
 import com.example.qqbot.media.MediaPolicy;
 import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.guard.ContentGate;
+import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.ResourceDirectory;
@@ -121,7 +122,23 @@ public class ChatService {
      */
     public ReplyResult reply(OneBotEvent event, String text, String quoteText, List<ImageRef> imageRefs,
                              ReplyMode mode, boolean voiceRequired) {
+        return reply(event, text, quoteText, imageRefs, mode, voiceRequired, TurnPlan.standard());
+    }
+
+    /**
+     * 生成回复（**带上意图判定**）。
+     *
+     * <p>{@code plan.retrieve()} 为 false 时不检索：不调 embedding、不查关键词、不注入资料块。
+     * 用在社交整活、关于 bot 自己、"帮我上班"这类请求上 —— 资料只会把一句该短的回答撑长，
+     * 而且检索本身要花时间。
+     *
+     * <p>⚠️ 它**只关自动检索**，工具仍然注册着：模型要是真想查，还能自己调 lookup。
+     * 判定错了的代价因此只是"少一段自动送来的资料"，不是答不出来。
+     */
+    public ReplyResult reply(OneBotEvent event, String text, String quoteText, List<ImageRef> imageRefs,
+                             ReplyMode mode, boolean voiceRequired, TurnPlan plan) {
         ReplyMode useMode = mode == null ? ReplyMode.KB : mode;
+        TurnPlan turn = plan == null ? TurnPlan.standard() : plan;
         long t0 = System.currentTimeMillis();
 
         if (!llmRouter.isAvailable()) {
@@ -156,6 +173,7 @@ public class ChatService {
             if (!llmRouter.hasVision()) {
                 return done(contentGate.getNoVisionReply(), t0, KbTrace.disabled());
             }
+            boolean visionRetrieve = useMode != ReplyMode.NONE && turn.retrieve();
             List<VisionImage> images = downloadImages(limitImages(event, imageRefs));
             if (images.isEmpty()) {
                 return done("图片我这边下载不下来，你重新发一次试试？", t0, KbTrace.disabled());
@@ -168,9 +186,10 @@ public class ChatService {
             KbRetrievalDiagnostics visionSink = new KbRetrievalDiagnostics();
             try {
                 String reply = toolAssistant.chatWithImages(envelope, images, visionQuery, visionSink,
-                        useMode != ReplyMode.NONE, visionCaller, extraPrompt, outbox);
+                        visionRetrieve, visionCaller, extraPrompt, outbox);
                 return done(attachResourceShot(sanitize(reply), visionQuery), t0,
-                        kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs()),
+                        visionRetrieve ? kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs())
+                                : KbTrace.disabled(),
                         outbox, voiceRequired);
             } catch (Exception e) {
                 log.error("视觉模型调用失败：{}", e.getMessage());
@@ -187,13 +206,18 @@ public class ChatService {
         // ★ 检索用的问题与给模型的消息是两件事：消息是信封（发言者 / 引用 / 用户内容），
         //   问题才是正文加引用。拿信封去检索会稀释查询向量、污染术语匹配，而且不报错。
         String query = ((text == null ? "" : text) + " " + (quoteText == null ? "" : quoteText)).trim();
+        boolean retrieve = useMode != ReplyMode.NONE && turn.retrieve();
+        if (!retrieve) {
+            log.info("[INTENT] 本轮不检索：move={} | {}", turn.move(), query);
+        }
         KbRetrievalDiagnostics sink = new KbRetrievalDiagnostics();
         try {
             String userMessage = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired);
-            String reply = toolAssistant.chat(userMessage, query, sink, useMode != ReplyMode.NONE,
+            String reply = toolAssistant.chat(userMessage, query, sink, retrieve,
                     callerOf(event), extraPrompt, outbox);
             return done(attachResourceShot(sanitize(reply), query), t0,
-                    kbRetriever.traceOf(sink, query, sink.elapsedMs()), outbox, voiceRequired);
+                    retrieve ? kbRetriever.traceOf(sink, query, sink.elapsedMs()) : KbTrace.disabled(),
+                    outbox, voiceRequired);
         } catch (Exception e) {
             log.error("调用大模型失败：{}", e.getMessage());
             return done("抱歉，我刚才走神了，稍后再问我一次吧～", t0,
