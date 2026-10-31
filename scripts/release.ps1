@@ -290,6 +290,17 @@ if [ -n "__NGINX__" ]; then
   if [ ! -f __DIR__/deploy/nginx/qqbot-domain.conf ]; then
     echo "包里没有 deploy/nginx/qqbot-domain.conf，跳过 Nginx" >&2
   else
+    # OCSP 需要独立的中间证书链；每次从现有证书里重拆，续期后不会用旧链
+    if [ -f /etc/nginx/certs/qqbot.crt ]; then
+      awk '/BEGIN CERTIFICATE/{n++} n>=2{print}' /etc/nginx/certs/qqbot.crt > /tmp/qqbot-chain.pem
+      if [ -s /tmp/qqbot-chain.pem ]; then
+        $S cp /tmp/qqbot-chain.pem /etc/nginx/certs/qqbot-chain.pem
+        $S chmod 644 /etc/nginx/certs/qqbot-chain.pem
+      else
+        echo "证书文件里没有中间证书，OCSP 会失败" >&2
+      fi
+    fi
+
     # 先备份：nginx -t 失败时不能把坏配置留在线上
     if [ -f "__NGINX__" ]; then
       $S cp "__NGINX__" /tmp/qqbot-nginx.conf.bak
