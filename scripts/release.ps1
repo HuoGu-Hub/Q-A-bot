@@ -176,15 +176,20 @@ if (-not $SkipBuild) {
   Copy-Item (Join-Path $Root "system.md") $BuildDir
 
   Invoke-Native "mvn" @("-q", "-B", "-f", (Join-Path $src "pom.xml"), "-DskipTests", "package") $src
-}
 
-if (-not (Test-Path $jarPath)) {
+  # ⚠️ 必须覆盖 $jarPath：它可能是上一次发版留下的旧包。
+  # 之前只在文件不存在时复制，导致“构建成功、VERSION 是新的、jar 却是旧的”。
   $found = Get-ChildItem (Join-Path $BuildDir "build\target") -Filter "qqbot-server-*.jar" -ErrorAction SilentlyContinue |
            Where-Object { $_.Name -notlike "*.original" } | Select-Object -First 1
   if (-not $found) { throw "找不到构建产物；先去掉 -SkipBuild 跑一次，或者检查 mvn 输出" }
   Copy-Item $found.FullName $jarPath -Force
 }
-Write-Host ("    jar: {0:N1} MB" -f ((Get-Item $jarPath).Length / 1MB))
+
+if (-not (Test-Path $jarPath)) {
+  throw "找不到构建产物；先去掉 -SkipBuild 跑一次，或者检查 mvn 输出"
+}
+$jar = Get-Item $jarPath
+Write-Host ("    jar: {0:N1} MB / {1}" -f ($jar.Length / 1MB), $jar.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"))
 
 # ---------------------------------------------------------------- 3. 打包
 Step "打包"
