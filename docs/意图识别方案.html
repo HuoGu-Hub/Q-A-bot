@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>意图识别：让 bot 先弄清你要什么</title>
+<style>
+  :root{
+    --ink:#17181a; --muted:#6b6f76; --faint:#8d9199;
+    --rule:#e6e2da; --paper:#fdfcfa; --panel:#f6f4ef;
+    --accent:#0f6b5c; --warn:#a4471f; --code:#f3f1ec;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:16px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    text-rendering:optimizeLegibility;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:212px minmax(0,1fr);gap:48px}
+  nav{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:56px 0 40px;font-size:13px;line-height:1.5}
+  nav ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--rule)}
+  nav li{margin:0}
+  nav a{display:block;padding:5px 0 5px 14px;color:var(--muted);text-decoration:none;border-left:1px solid transparent;margin-left:-1px}
+  nav a:hover{color:var(--ink);border-left-color:var(--ink)}
+  nav .k{display:block;color:var(--faint);font-size:11px;letter-spacing:.06em;margin-bottom:10px;padding-left:14px}
+  main{padding:56px 0 96px;min-width:0}
+  h1{font-size:31px;line-height:1.3;letter-spacing:-.01em;margin:0 0 14px;font-weight:650}
+  .lede{font-size:17px;color:#3c4046;margin:0 0 8px;max-width:56ch}
+  .meta{color:var(--faint);font-size:13px;margin:18px 0 0;padding-top:16px;border-top:1px solid var(--rule)}
+  h2{font-size:21px;letter-spacing:-.005em;margin:64px 0 16px;padding-top:22px;border-top:1px solid var(--rule);font-weight:620;scroll-margin-top:24px}
+  h3{font-size:16.5px;margin:32px 0 10px;font-weight:640;scroll-margin-top:24px}
+  p{margin:0 0 14px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:6px 0}
+  strong{font-weight:640}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(15,107,92,.28)}
+  a:hover{border-bottom-color:var(--accent)}
+  code{font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;background:var(--code);padding:1px 5px;border-radius:4px}
+  pre{margin:0 0 18px;background:var(--code);border:1px solid var(--rule);border-radius:8px;padding:16px 18px;overflow:auto}
+  pre code{background:none;padding:0;font-size:12.5px;line-height:1.7}
+  table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px;line-height:1.6}
+  th{text-align:left;font-weight:620;color:#40454b;border-bottom:1.5px solid #d8d3c9;padding:8px 10px 8px 0;vertical-align:bottom}
+  td{border-bottom:1px solid var(--rule);padding:9px 10px 9px 0;vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  tbody tr:hover{background:#faf8f4}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin:0 0 24px}
+  .stat{background:var(--paper);padding:16px 14px}
+  .stat b{display:block;font-size:26px;line-height:1.15;font-weight:640;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat span{display:block;color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.45}
+  .stat em{font-style:normal;color:var(--faint)}
+  .note{border-left:3px solid var(--accent);background:#f6f7f4;padding:14px 18px;margin:0 0 20px;font-size:15px}
+  .note p:last-child{margin-bottom:0}
+  .warn{border-left-color:var(--warn);background:#fbf5f0}
+  .tag{display:inline-block;font-size:11.5px;letter-spacing:.04em;padding:1px 7px;border-radius:3px;background:#eceae4;color:#565b62;vertical-align:2px}
+  .tag.now{background:#e7f0ed;color:#0f6b5c}
+  .tag.no{background:#f6e8e2;color:#a4471f}
+  .muted{color:var(--muted)}
+  hr{border:0;border-top:1px solid var(--rule);margin:36px 0}
+  figure{margin:0 0 22px}
+  figcaption{font-size:13px;color:var(--faint);margin-top:8px}
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr;gap:0;padding:0 20px}
+    nav{display:none}
+    main{padding:36px 0 72px}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    h2{margin-top:48px}
+  }
+  @media print{
+    body{background:#fff}
+    nav{display:none}
+    .wrap{display:block;max-width:none;padding:0}
+    h2{page-break-after:avoid}
+    table,pre,.note{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <span class="k">目录</span>
+  <ol>
+    <li><a href="#conclusion">结论</a></li>
+    <li><a href="#now">现在的链路</a></li>
+    <li><a href="#data">30 天真实提问</a></li>
+    <li><a href="#root">四个根因</a></li>
+    <li><a href="#options">四个方案的适配</a></li>
+    <li><a href="#plan">建议方案</a></li>
+    <li><a href="#rollout">落地顺序</a></li>
+    <li><a href="#measure">怎么量</a></li>
+    <li><a href="#avoid">不要做的</a></li>
+    <li><a href="#talk">面试怎么讲</a></li>
+    <li><a href="#appendix">附录</a></li>
+  </ol>
+</nav>
+<main>
+
+<h1>意图识别：让 bot 先弄清你要什么</h1>
+<p class="lede">基于 qqbot 现有代码与 30 天 553 条真实提问的分析，以及对四种常见方案的取舍判断。</p>
+<p class="meta">数据来源：server/data/qa/qqbot.sqlite，2026-09-25 至 2026-10-28；代码：server/src/main/java/com/example/qqbot</p>
+
+<h2 id="conclusion">结论</h2>
+<p>先给三句话，后面都是展开。</p>
+<div class="note">
+<p><strong>一、你们的问题不是"分类不准"，是"只允许一种答案"。</strong>所有非斜杠消息都走同一条链：检索 → 注入资料 → 按"以资料为准"作答。产物形态只有一种。于是"给我推荐一套毕业装"和"珍珠在哪"得到同一个形状的回答，前者注定落在"资料里没查到"。</p>
+</div>
+<div class="note">
+<p><strong>二、该补的不是分类器，是三个缺口。</strong>一个"可以先问一句"的出口、一段三轮的会话记忆、一份把"建议类"当合法产物的契约。三样都比分类器便宜，而且直接对应日志里能看到的失败。</p>
+</div>
+<div class="note">
+<p><strong>三、视频里那四种方案是阶梯，不是并列选项。</strong>按你们 17 问/天、0 条人工标注的量级，微调和 RAG 分类都还在山脚以下；结构化工具调用你们已经有了，缺的是提示词契约和规则层。</p>
+</div>
+
+<h2 id="now">现在的链路</h2>
+<p>一条消息进来之后发生的事，决定了"意图"这件事在代码里有没有位置。</p>
+<table>
+<thead><tr><th style="width:22%">环节</th><th style="width:34%">实现</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>分流</td><td><code>EventDispatcher</code></td><td><code>/</code> 开头进命令池，其余进问答池</td></tr>
+<tr><td>准入</td><td><code>GuardPipeline</code></td><td>access → mention → rate-limit → content-gate → inbound-words</td></tr>
+<tr><td>生成</td><td><code>ChatService</code> → <code>KbToolAssistant</code></td><td>组装信封，交给 AiServices 驱动的带工具助手</td></tr>
+<tr><td>检索</td><td><code>KbRetriever</code></td><td>正文向量 + 术语关键词 + 标题向量，RRF 融合，交叉编码器重排，取前 5</td></tr>
+<tr><td>工具</td><td><code>lookup</code> <code>search_titles</code> <code>locate</code> <code>play_voice</code> <code>say</code></td><td>白名单五个，全部是"查"和"说"，没有"判断"</td></tr>
+<tr><td>提示词</td><td><code>system.md</code></td><td>74 行，同时承担安全边界、资料规则、说话方式、工具用法</td></tr>
+</tbody>
+</table>
+
+<p>三条代码事实值得单独点出来，它们直接决定了后面方案怎么选。</p>
+
+<h3>意图判定散在四处，词表已经开始漂移</h3>
+<p>同一个"这句话是不是在问位置"的判断，现在有四份实现：</p>
+<table>
+<thead><tr><th style="width:38%">位置</th><th style="width:22%">用途</th><th>关键词表</th></tr></thead>
+<tbody>
+<tr><td><code>kb/PlaceIntent</code></td><td>「X 有什么」聚合提问</td><td>有什么 / 里面有什么 / 都有什么…</td></tr>
+<tr><td><code>KbLookupTool.wantsLocation</code></td><td>决定要不要附带地图分布</td><td>在哪 / 哪里 / 分布 / 获得 / <strong>挖</strong></td></tr>
+<tr><td><code>ChatService.wantsResourceShot</code></td><td>决定要不要补一张资源图</td><td>在哪 / 哪里 / 位置 / <strong>采 / 找 / 比较多</strong></td></tr>
+<tr><td><code>VoiceTriggerService</code></td><td>关键词触发语音</td><td>各自一套</td></tr>
+</tbody>
+</table>
+<p>两份"位置意图"词表已经不一致：「挖」只在 <code>KbLookupTool</code>，「采」「找」「比较多」只在 <code>ChatService</code>。所以"这玩意在哪挖"和"这玩意哪里比较多"会走不同的附带逻辑。这不是靠调提示词能修的，得先把判定收成一处。</p>
+
+<h3>没有会话状态，引用是唯一的上下文</h3>
+<p><code>ChatService.buildUserMessage</code> 拼进信封的只有：场景、群号、发言者、引用内容、资料块、本轮正文。上一轮问了什么、你答了什么，模型看不到。群里 41% 的提问是三分钟内的追问，这类问题（"那你说的这个她""不是 185 吗"）在结构上就接不住。</p>
+
+<h3>工具里没有"问一句"这个动作</h3>
+<p>五个工具全是"查"和"说"。遇到指代不明，模型只有两条路：硬猜一个具体答案，或者答"资料里没查到"。它没有第三条路——先问一句"你说的是哪个"。这不是模型笨，是动作空间里没这个动作。</p>
+
+<h2 id="data">30 天真实提问</h2>
+<p>把 qa_stat 和 qa_raw 两个表连起来看：30 天里通过准入的 569 条，其中 553 条带文字，集中在两个群（423 / 144）。下面是按关键词规则分桶的粗分布，用来定位问题，不是精确标注。</p>
+
+<div class="stats">
+  <div class="stat"><b>40.7%</b><span>同一个人三分钟内追问</span></div>
+  <div class="stat"><b>20.4%</b><span>回答里出现「没查到」</span></div>
+  <div class="stat"><b>27%</b><span>整句只有一个名词</span></div>
+  <div class="stat"><b>0</b><span>人工标注过的 verdict</span></div>
+</div>
+
+<table>
+<thead><tr><th style="width:34%">观察</th><th style="width:16%">数量</th><th>意味着什么</th></tr></thead>
+<tbody>
+<tr><td>三分钟内同人追问</td><td>225 / 553</td><td>将近一半的对话是连续回合，而系统按单轮处理</td></tr>
+<tr><td>回答含「没查到」</td><td>113 / 553</td><td>其中 89 条其实检索到了 3 块以上资料，是模型判断不相关</td></tr>
+<tr><td>「建议 / 推荐 / 评价」类</td><td>29 条，其中 11 条以"没查到"收场</td><td>这类问题资料里天然没有答案，是契约问题不是检索问题</td></tr>
+<tr><td>「在哪 / 位置」类</td><td>65 条，其中 18 条"没查到"</td><td>最该走 locate 的一类，仍有四分之一落空</td></tr>
+<tr><td>点名群主「碧潭飘雪」</td><td>40 条，4 条答成了茉莉花茶</td><td>本地实体和现实同名物撞车，模型用通用知识补了</td></tr>
+<tr><td>回答长度</td><td>中位 158 字，p90 477，最长 1330</td><td>群聊里 400 字以上的回答有 89 条</td></tr>
+</tbody>
+</table>
+
+<h3>六个能说明问题的真实回合</h3>
+<table>
+<thead><tr><th style="width:26%">用户问</th><th style="width:30%">现在怎么答</th><th>用户实际想要的</th></tr></thead>
+<tbody>
+<tr><td>近战双手武器推荐</td><td>检索 5 块后答"资料里没查到推荐配置"；同一问题前后被问了 3 次</td><td>一个排序和理由，哪怕只是"这三把里选 X"</td></tr>
+<tr><td>不是 185 吗</td><td>当成新问题重新检索一遍</td><td>修正上一轮的数字</td></tr>
+<tr><td>你说说碧潭飘雪是谁</td><td>"最常见的是指一种茉莉花茶，产自四川"</td><td>问的是群主，不是茶</td></tr>
+<tr><td>你是废物！</td><td>检索 5 块资料，回 96 字</td><td>一句带过，或者干脆不接</td></tr>
+<tr><td>帮我上班</td><td>走完整检索链路</td><td>一句"干不了"+ 一个替代</td></tr>
+<tr><td>香菇在哪刷新</td><td>答得不错</td><td>——</td></tr>
+</tbody>
+</table>
+<p class="muted">第六行是故意留的：现有链路在"实体明确 + 事实类"这一格上是好用的，改方案时不要把它改坏。</p>
+
+<h2 id="root">四个根因</h2>
+<table>
+<thead><tr><th style="width:22%">根因</th><th style="width:34%">表现</th><th>为什么光调提示词不够</th></tr></thead>
+<tbody>
+<tr><td>回答契约只有一种产物</td><td>建议类、闲聊类、边界外请求都被塞进"查资料"这个模具</td><td>模型只能在"资料里有什么"里组织语言，没有"给结论"的授权</td></tr>
+<tr><td>没有会话状态</td><td>追问、纠正、省略主语全部按新问题处理</td><td>提示词里没有可用的历史，写多少遍"注意上下文"都没用</td></tr>
+<tr><td>没有澄清动作</td><td>歧义被硬压成一个具体答案，且答得很自信</td><td>动作空间里没有这个动作，只能靠"请不要乱猜"这种软约束</td></tr>
+<tr><td>本地实体没有身份</td><td>群友昵称撞上现实同名物，模型用通用知识补</td><td>知识库里没有"碧潭飘雪=本群群主"这条事实，模型只能猜</td></tr>
+</tbody>
+</table>
+
+<h2 id="options">四个方案的适配</h2>
+<p>视频里那四种做法本身没错，错在把它们当成并列选项。它们其实是一条按"标注量 → 意图空间 → 时延预算"递增的阶梯，你们现在站在最低一级。</p>
+
+<table style="table-layout:fixed">
+<thead><tr><th style="width:17%">方案</th><th style="width:24%">它真正解决的问题</th><th style="width:27%">在你们项目里的成本</th><th style="width:32%">判断</th></tr></thead>
+<tbody>
+<tr>
+<td>结构化 Function Call</td>
+<td>让模型在动作空间明确时选动作、填参数</td>
+<td>AiServices 工具链现成，加一个工具约一百行</td>
+<td><span class="tag now">现在做</span><br>要加的是"判"的工具，不是"查"的工具</td>
+</tr>
+<tr>
+<td>提示词分类</td>
+<td>让模型读一份清单再决定走哪条路</td>
+<td><code>system.md</code> 已 74 行，且承载安全底座</td>
+<td><span class="tag">改造后使用</span><br>不列意图清单，只写三条决策准则</td>
+</tr>
+<tr>
+<td>RAG 分类</td>
+<td>意图空间很大时，用检索压缩上下文</td>
+<td>你们真正的分类维度只有五六类；术语表和标题向量已经在做类似的事</td>
+<td><span class="tag no">不做</span><br>重复建设，且没有标注集可喂</td>
+</tr>
+<tr>
+<td>微调小模型</td>
+<td>高 QPS、分布稳定、迭代不频繁</td>
+<td>17 问/天，0 条标注，游戏版本按月变</td>
+<td><span class="tag no">不做</span><br>现在做等于先给自己造一个维护负担</td>
+</tr>
+</tbody>
+</table>
+
+<h3>为什么"加分类器"在这个项目里不是第一步</h3>
+<p>分类器解决的是"在多个已有分支里选一个"。你们现在只有一个分支。就算分类准确率 95%，产出仍然是"一段基于资料的回答"或"资料里没查到"——因为下游没有第二种产物可路由。先把产物扩成三种，再谈选得准不准，顺序不能反。</p>
+<p>另一个细节：<code>ReplyMode</code> 的注释里已经写下了正确的哲学——"由指令显式指定，不让模型自己猜"。这个判断用在"要不要用知识库"上是对的，只是它只用到了一个维度。把它扩成"这次要哪种产物"，是同一套思路走第二步，不是推翻重来。</p>
+
+<h2 id="plan">建议方案</h2>
+<p>三层，按投入产出排序，每层都能独立上线、独立回滚。<a href="diagrams/意图处理链.html">处理链示意图</a>。</p>
+
+<h3>L0 规则层：零 token，先吃掉 40% 的确定性情况</h3>
+<p>新建 <code>com.example.qqbot.intent</code>，一个 <code>IntentSignals</code> 组件，把散在四处的关键词判定收进来，并在进 <code>ChatService</code> 之前给出一个信号。</p>
+<table>
+<thead><tr><th style="width:18%">信号</th><th style="width:30%">判据</th><th>动作</th></tr></thead>
+<tbody>
+<tr><td>裸名词</td><td>整句 ≤10 字、无疑问词、无动词</td><td>实体卡：是什么 + 怎么获得 + 在哪，一次说完。<strong>不反问</strong></td></tr>
+<tr><td>纠错</td><td>不是…吗 / 又说错 / 明明 / 我说的是 / 不对</td><td>读上一轮答案，只改被指出的那一点，不重新全量检索</td></tr>
+<tr><td>社交整活</td><td>卖萌 / 叫我 / 唱 / 女装 / 亲亲 / 抱抱</td><td>不检索，≤40 字</td></tr>
+<tr><td>元问题</td><td>你是谁 / 有什么能力 / 什么模型 / 你是机器人吗</td><td>固定事实，不检索</td></tr>
+<tr><td>边界外</td><td>帮我上班 / 生成视频 / 发照片 / 下单</td><td>一句拒绝 + 一条替代，不解释规则</td></tr>
+<tr><td>命令误用</td><td><code>/stats 啥时候1.0</code> 这类命令带尾巴</td><td>命令成功就执行，剩下半句当追问</td></tr>
+</tbody>
+</table>
+<p class="muted">裸名词为什么不反问：群里问"香菇"的人，想要的就是三句话。反问在群聊里成本极高，能用一个默认答案补齐就不要问。这条也解释了为什么"澄清"只能作为最后手段。</p>
+
+<h3>L1 契约层：改一段提示词，不增加调用</h3>
+<p>核心是把"资料里有什么"从<em>唯一产物</em>降级为<em>三种产物之一</em>。下面这段可以直接接在 <code>system.md</code> 的"资料怎么用"之后。</p>
+<pre><code>## 先判断这次要什么
+
+回答之前在心里分一次类，不要把这个判断说出来。
+
+**事实类**：某个东西是什么、在哪、怎么获得、多少级、掉什么。
+只用资料里的事实。资料没有就说没查到。
+
+**建议类**：推荐、搭配、评价、哪个强、怎么选、值不值得。
+可以给结论和排序，这是你的判断，不是资料：
+- 先把资料里能支撑的事实说清楚，比如等级、属性、获取难度
+- 再给结论，一句话说清为什么这么选
+- 资料不够支撑判断时，写"资料里能确定的是 X，剩下的这是我的看法"
+- 不要用"资料里没查到"给建议类问题收尾
+
+**社交类**：卖萌、吐槽、开玩笑、问你是谁、让你做做不到的事。
+一句话，不超过 30 字，不查资料，不长篇解释。
+
+## 什么时候可以先问一句
+
+只有一种情况：不知道对方在说哪个东西，而且猜错的代价比多问一句大。
+比如"那个怎么获得""它在哪里"，而上一轮没有对应的东西。
+
+问的时候只问一句，给两三个候选，别问"你是什么意思"。
+同一轮只问一次。对方没回话，就按最可能的那个直接答。</code></pre>
+<p>这两段加起来 24 行。它替代的是现在"没查到就说没查到"这条万能兜底——那条兜底对事实类是对的，对另外两类是全错。</p>
+
+<h3>L2 会话层：数据已经在了，只差一张表</h3>
+<p><code>chat_message</code> 表已经在存群消息，缺的是"bot 上次答了什么"。加一张小表，只保留最近几轮，按群 + 人隔离。</p>
+<pre><code class="language-sql">CREATE TABLE qa_turn (
+  id            INTEGER PRIMARY KEY,
+  group_id      INTEGER NOT NULL,
+  user_id       INTEGER NOT NULL,
+  ts            TEXT    NOT NULL,
+  question      TEXT    NOT NULL,
+  answer_digest TEXT    NOT NULL,   -- 一句话要点，≤60 字
+  subject       TEXT,               -- 本轮主体：香菇 / 渔夫 / 技能点
+  corrected     INTEGER DEFAULT 0
+);
+CREATE INDEX qa_turn_scope ON qa_turn(group_id, user_id, ts DESC);</code></pre>
+<p>信封里加一段，最多三轮：</p>
+<pre><code>&lt;&lt;&lt;RECENT
+上一轮
+  你问：现在技能点上限是多少
+  我答：目前是 10 点，满级……
+  备注：对方说「不是185吗」，这可能是纠正
+RECENT&gt;&gt;&gt;</code></pre>
+<p><strong>关键约束：最近三轮只进信封，不进检索 query。</strong><code>ChatService</code> 已经把"给模型的消息"和"用于检索的问题"分开了，这个边界刚好用来隔离——否则历史会稀释查询向量，还会污染术语匹配，而且不报错。</p>
+
+<h3>L3 预判：可选，只在两层都不确定时才出场</h3>
+<p>不做成前置路由，做成"低置信时的第二意见"。触发条件三选一：规则层未命中、检索最高余弦低于 0.45、术语表一个都没命中。</p>
+<pre><code class="language-json">{"move": "fact|advise|social|meta|clarify|out_of_scope",
+ "subject": "香菇",
+ "subject_state": "explicit|context|missing|ambiguous",
+ "why": "只打了物品名，没有动词和疑问词"}</code></pre>
+<p>温度 0，限 120 token，结果按"群 + 归一化问题"缓存 5 分钟。一次约 200 token，只覆盖低置信的那部分。这一层不实现也不影响前两层成立。</p>
+
+<h2 id="rollout">落地顺序</h2>
+<table style="table-layout:fixed">
+<thead><tr><th style="width:11%">迭代</th><th style="width:10%">工作量</th><th style="width:41%">改哪里</th><th style="width:38%">验收</th></tr></thead>
+<tbody>
+<tr>
+<td>0 埋点</td><td>半天</td>
+<td><code>qa_stat</code> 加四列：判定来源、是否澄清、是否纠正、是否检索；跑一遍自动打标得到基线</td>
+<td>历史 553 条能回放，基线指标落表</td>
+</tr>
+<tr>
+<td>1 规则层</td><td>1–2 天</td>
+<td>新建 <code>intent</code> 包；合并四处关键词；裸名词走实体卡</td>
+<td>裸名词类回答 ≤120 字，检索调用下降；<code>wantsLocation</code> 两份合并成一份</td>
+</tr>
+<tr>
+<td>2 契约层</td><td>1 天</td>
+<td><code>system.md</code> 加两段；问答记录里区分三类产物</td>
+<td>建议类不再出现"没查到"；社交类平均长度 ≤40 字</td>
+</tr>
+<tr>
+<td>3 会话层</td><td>2–3 天</td>
+<td><code>qa_turn</code> 表；<code>buildUserMessage</code> 加 RECENT 段；纠错通道</td>
+<td>三分钟追问率从 41% 降到 30% 以下</td>
+</tr>
+<tr>
+<td>4 预判</td><td>按需</td>
+<td><code>IntentSignals</code> 低置信分支接一次小调用</td>
+<td>低置信样本上人工抽检准确率 &gt;80%</td>
+</tr>
+</tbody>
+</table>
+<p>迭代 0 和 1 加起来两天，能覆盖掉裸名词、社交、元问题、边界外这四类——按分桶占全部提问的 40% 左右，而且这四类今天都在消耗完整的检索 + 模型预算。</p>
+
+<h2 id="measure">怎么量</h2>
+<p><code>QaAnalytics</code> 已经有 overview、keywords、misses、余弦分布、verdicts 五个视角，唯独 <code>verdicts()</code> 一直在空转：59,639 行全是 <code>unknown</code>。标注这件事不必等人，先从日志里自动推。</p>
+<table>
+<thead><tr><th style="width:26%">信号</th><th style="width:34%">规则</th><th>落到哪</th></tr></thead>
+<tbody>
+<tr><td>疑似答非所问</td><td>3 分钟内同人再问，且含"不是 / 错 / 没答 / 我说的是"</td><td><code>verdict=bad</code></td></tr>
+<tr><td>疑似不满意</td><td>3 分钟内同人再问，且换了主体</td><td><code>verdict=retry</code></td></tr>
+<tr><td>疑似满意</td><td>3 分钟内出现"谢谢 / 懂了 / 好 / 牛"</td><td><code>verdict=good</code></td></tr>
+<tr><td>其余</td><td>不做推断</td><td><code>verdict=unknown</code>，不进正样本</td></tr>
+</tbody>
+</table>
+<p>自动标噪声不小，估计两三成，但足够做<em>相对</em>比较：改了提示词之后 bad 的比例是升是降。绝对准确率靠每周人工抽检 30 条补。</p>
+<p>四个主指标，改之前先记下来：</p>
+<table>
+<thead><tr><th style="width:32%">指标</th><th style="width:16%">现在</th><th>目标</th></tr></thead>
+<tbody>
+<tr><td>三分钟内追问率</td><td>40.7%</td><td>&lt; 30%</td></tr>
+<tr><td>回答含"没查到"占比</td><td>20.4%</td><td>&lt; 12%，建议类 &lt; 5%</td></tr>
+<tr><td>社交类平均回答长度</td><td>108 字</td><td>&lt; 40 字</td></tr>
+<tr><td>每千问的检索次数</td><td>1000</td><td>&lt; 750</td></tr>
+</tbody>
+</table>
+
+<h2 id="avoid">不要做的</h2>
+<ol>
+<li><strong>不要做成"分类 → 路由到不同 sub-agent"。</strong>你们只有一个回答者。多一层路由就多一处出错点，而且每个 sub-agent 都得重新接一遍安全底座、工具白名单和预算。</li>
+<li><strong>不要把意图标签写给用户看。</strong>"我理解您想问……""为您匹配到意图：事实查询"，在群里非常掉分。判断留在内部。</li>
+<li><strong>不要用一次模型调用来决定"要不要检索"。</strong>术语命中 + 检索最高分已经能挡掉大部分，剩下的才交给模型。两次调用的时延和成本都比一次高，而 41% 的对话本来就是追问，时延敏感。</li>
+<li><strong>不要为了分类继续加长 <code>system.md</code>。</strong>它现在是安全底座 + 资料规则 + 说话方式，74 行已经到边。分类逻辑要么写在代码里，要么压缩成三条准则。</li>
+</ol>
+
+<h2 id="talk">面试怎么讲</h2>
+<p>这段分析比背四个方案的对比表有用得多，因为它有数据、有取舍、有放弃。</p>
+<ul>
+<li><strong>现象</strong>：30 天 553 条提问，20% 以"资料里没查到"收场，41% 的对话是三分钟内的追问。</li>
+<li><strong>归因</strong>：不是分类器不准。是回答契约只允许一种产物，加上没有会话状态接不住追问，加上动作空间里没有"问一句"。</li>
+<li><strong>方案</strong>：规则层吃掉名词裸问和纠错，契约层把产物分成事实 / 建议 / 社交，会话层补三轮窗口，分类模型只在低置信时作为第二意见。</li>
+<li><strong>取舍</strong>：为什么不做微调——0 条标注、17 问/天、游戏版本月更，训出来的模型三个月就过时。为什么不做 RAG 分类——真正的分类维度只有五六类，术语表和标题向量已经在干类似的事。</li>
+</ul>
+
+<h2 id="appendix">附录</h2>
+
+<h3>A. 样本对照</h3>
+<table>
+<thead><tr><th style="width:24%">提问</th><th style="width:22%">现在</th><th style="width:16%">建议判定</th><th>建议产物</th></tr></thead>
+<tbody>
+<tr><td>近战双手武器推荐</td><td>没查到</td><td>建议</td><td>三把 + 各自适用场景 + 结论</td></tr>
+<tr><td>香菇</td><td>走完整检索</td><td>裸名词</td><td>实体卡三句</td></tr>
+<tr><td>不是 185 吗</td><td>重新检索</td><td>纠正</td><td>只改数字，一句</td></tr>
+<tr><td>你说说碧潭飘雪是谁</td><td>答成茉莉花茶</td><td>实体歧义</td><td>群主 / 茶 二选一，或直接按群内语境答</td></tr>
+<tr><td>你是废物！</td><td>检索 + 96 字</td><td>社交</td><td>一句，或沉默</td></tr>
+<tr><td>帮我上班</td><td>走完整检索</td><td>边界外</td><td>一句拒绝 + 替代</td></tr>
+</tbody>
+</table>
+
+<h3>B. 需要先修的两处</h3>
+<ul>
+<li><code>wantsLocation</code> 与 <code>wantsResourceShot</code> 合并成 <code>IntentSignals</code> 里的一个方法，词表只留一份。</li>
+<li><code>PlaceIntent</code> 的 <code>AGGREGATE_MARKERS</code> 交给同一个组件，由它一起提供。</li>
+</ul>
+<p class="muted">这两处不合并，后面每加一条规则都要改两个地方，漂移只会更快。</p>
+
+</main>
+</div>
+</body>
+</html>
