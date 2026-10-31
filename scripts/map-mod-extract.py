@@ -10,8 +10,8 @@ mod 自己把游戏世界文件编译进了 DLL，压缩包里没有点位表。
 
 用法（源码目录可以换成任意一次 git clone / 官方 zip 解压目录）：
 
-  python scripts/map-mod-extract.py --zip "server/data/...1.3.18.zip" \
-      --src ".tmp-pw/worst-map-1.3.18/worst-map-mod-enshrouded-1.3.18" \
+  python scripts/map-mod-extract.py --zip "server/data/...1.3.26.zip" \
+      --src ".tmp-pw/worst-map-1.3.26/worst-map-mod-enshrouded-1.3.26" \
       --out "server/data/map-mod"
 
 只给 --zip 时按 mod.json 的版本去 GitHub 拉同版本的源码，要求能联网。
@@ -33,6 +33,7 @@ REPO = "Greeneye0/worst-map-mod-enshrouded"
 CATEGORY_KEYS = {
     0: "quests", 1: "fast-travel", 2: "shroud", 3: "world",
     5: "mining", 6: "materials", 7: "plants", 8: "bait", 9: "trees",
+    10: "creature",
 }
 
 # 顶层过滤类型。点位表里每一行落进哪一类，决定前端资源面板的分区。
@@ -52,6 +53,8 @@ ROW_KINDS = {
     94: "collectible",
     95: "summon",
     **{i: "plant" for i in range(96, 103)},
+    # 1.3.26 起 kOreDeposits 里增加了生物刷新点；行号 103-238 是生物
+    **{i: "creature" for i in range(103, 239)},
 }
 
 # 宝箱的 9 个变体。作者在 map_key_panel.cpp 里用同一组枚举。
@@ -137,9 +140,10 @@ def parse_chinese_names(src: Path, expected: int) -> list[str]:
     for row in rows:
         values = c_strings(row)
         names.append(values[12] if len(values) >= 13 else "")
-    if len(names) != expected:
-        raise SystemExit(f"lang.cpp 有 {len(names)} 行资源名，ore_deposits.h 有 {expected} 行")
-    return names
+    if len(names) > expected:
+        raise SystemExit(f"lang.cpp 有 {len(names)} 行资源名，ore_deposits.h 只有 {expected} 行")
+    # 1.3.26 的生物行没有本地化名；用英文名兜底
+    return names + [""] * (expected - len(names))
 
 
 def parse_ore_deposits(src: Path) -> dict:
@@ -169,12 +173,14 @@ def parse_ore_deposits(src: Path) -> dict:
         area = area_colors[i] if i < len(area_colors) else 0
         area_color = "" if area == 0 else "#%02x%02x%02x" % (
             area & 0xFF, (area >> 8) & 0xFF, (area >> 16) & 0xFF)
+        kind = ROW_KINDS.get(i, "world")
         rows.append({
             "index": i,
             "key": re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"),
             "name": label,
-            "nameZh": chinese[i] or label,
-            "kind": ROW_KINDS.get(i, "world"),
+            # 生物行的中文名表和 kOreLabels 顺序对不上，统一用英文名，避免张冠李戴
+            "nameZh": "" if kind == "creature" else (chinese[i] or label),
+            "kind": kind,
             "category": CATEGORY_KEYS.get(category, "world"),
             "count": counts.get(i, 0),
             "areaColor": area_color,
@@ -264,10 +270,13 @@ def main() -> int:
     regions = parse_regions(src)
     total_points = len(ore["points"])
     total_chests = len(chests)
-    if version == "1.3.18" and total_points != 33084:
-        raise SystemExit(f"1.3.18 应有 33084 个点位，实际 {total_points}")
-    if version == "1.3.18" and total_chests != 3042:
-        raise SystemExit(f"1.3.18 应有 3042 个箱子，实际 {total_chests}")
+    expected = {"1.3.18": (33084, 3042), "1.3.26": (61423, 3042)}
+    if version in expected:
+        want_points, want_chests = expected[version]
+        if total_points != want_points:
+            raise SystemExit(f"{version} 应有 {want_points} 个点位，实际 {total_points}")
+        if total_chests != want_chests:
+            raise SystemExit(f"{version} 应有 {want_chests} 个箱子，实际 {total_chests}")
 
     chest_counts = {t["index"]: 0 for t in CHEST_TYPES}
     for chest in chests:

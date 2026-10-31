@@ -42,6 +42,7 @@ final class ResourceColors {
             case "unique_equipment" -> "#ff8ad0";
             case "collectible" -> "#6fe0c8";
             case "summon" -> "#b08cff";
+            case "creature" -> CYCLE[index % CYCLE.length];
             default -> "#9aa4b2";
         };
     }

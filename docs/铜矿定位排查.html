@@ -62,11 +62,11 @@
 <table>
   <tr><th></th><th>wiki 点位</th><th>mod 资源点</th></tr>
   <tr><td>表</td><td><code>kb_map_marker</code></td><td><code>kb_map_resource</code></td></tr>
-  <tr><td>数量</td><td>1703</td><td>36126（112 层；铜 747、铁 1398）</td></tr>
+  <tr><td>数量</td><td>1703</td><td>64465（248 层；铜 747、铁 1398、生物 28307）</td></tr>
   <tr><td>身份</td><td><code>page#markerId</code></td><td><code>source_id</code>，如 <code>p:874</code>，没有 page</td></tr>
   <tr><td>名字</td><td>每个点有独立名字，可配中文</td><td>只有层名「铜」，747 个点同名</td></tr>
   <tr><td>词条</td><td><code>article</code> → 中文名、分类</td><td>没有 article</td></tr>
-  <tr><td>图标</td><td><code>grp</code> → Mine.png</td><td>没有图标，网页按颜色画圆点</td></tr>
+  <tr><td>图标</td><td><code>grp</code> → Mine.png</td><td>87 层用物品图标，其余退回颜色圆点</td></tr>
   <tr><td>消费方</td><td><code>locate</code>、截图、地点语料</td><td>只有公开站/管理端地图接口</td></tr>
 </table>
 <p>接线只存在于网页这一侧：<code>MapResourceService</code> 被 <code>PublicMapController</code> 和 <code>AdminMapController</code> 注入，

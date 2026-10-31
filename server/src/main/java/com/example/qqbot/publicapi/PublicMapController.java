@@ -115,10 +115,10 @@ public class PublicMapController {
     }
 
     /**
-     * 资源图层的目录：94 个图层，按宝箱 / 采矿 / 植物等分区。
+     * 资源图层的目录：248 个图层，按宝箱 / 采矿 / 植物 / 生物等分区。
      *
      * <p>只回图层定义与点数，不回坐标。点位走 {@link #resources} 按层取 ——
-     * 36k 个点一次下发，首屏就白屏了。
+     * 64k 个点一次下发，首屏就白屏了。
      */
     @GetMapping("/resource-groups")
     public ResponseEntity<PublicDtos.ResourceCatalog> resourceGroups(

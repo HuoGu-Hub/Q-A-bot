@@ -670,7 +670,7 @@ app:
       mod-dir: ./data/map-mod
       mod-enabled: true
       # 磁盘上没有 points.json 时从 jar 里释放这一份；版本目录要跟文件里的 source.version 一致
-      mod-resource: map-mod/1.3.18/points.json
+      mod-resource: map-mod/1.3.26/points.json
       # 用 Special:FilePath 而不是 /images/：后者带哈希目录、改名即失效
       image-base: https://enshrouded.wiki.gg/wiki/Special:FilePath/
       user-agent: "qqbot-personal/0.1 (Enshrouded map viewer; contact via group)"

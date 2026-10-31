@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * 资源图层的只读视图。
  *
- * <p>目录和点位分开取：94 个图层、36,126 个点，一次全下发会让首屏多出几百 KB。
+ * <p>目录和点位分开取：248 个图层、64,465 个点，一次全下发会让首屏多出几 MB。
  * 前端先拿目录画开关，用户打开哪一层再取哪一层的坐标。
  */
 @Service
@@ -23,7 +23,7 @@ public class MapResourceService {
 
     private static final List<String> CATEGORY_ORDER = List.of(
             "chest", "beacon", "water", "ore", "material", "plant", "bait",
-            "lore", "boss", "unique", "collectible", "summon", "tree");
+            "lore", "boss", "unique", "collectible", "summon", "tree", "creature");
 
     private static final Map<String, String> CATEGORY_NAMES = Map.ofEntries(
             Map.entry("chest", "宝箱"),
@@ -38,7 +38,8 @@ public class MapResourceService {
             Map.entry("unique", "独特装备"),
             Map.entry("collectible", "收藏品"),
             Map.entry("summon", "堕落召唤石"),
-            Map.entry("tree", "林地"));
+            Map.entry("tree", "林地"),
+            Map.entry("creature", "生物"));
 
     public record LayerView(String key, String name, String kind, String subtype,
                             int count, String color, String icon, String shape) {

@@ -31,7 +31,7 @@ public class MapOptions {
     private boolean modEnabled = true;
 
     /** 磁盘上没有 points.json 时从 classpath 取这一份（随 jar 发布） */
-    private String modResource = "map-mod/1.3.18/points.json";
+    private String modResource = "map-mod/1.3.26/points.json";
 
     /**
      * wiki 的图片直链前缀。

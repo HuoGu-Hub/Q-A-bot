@@ -263,7 +263,10 @@ public class MapResourceImporter {
                 continue;
             }
             String subtype = row.path("key").asText();
-            String name = row.path("nameZh").asText(row.path("name").asText());
+            String name = row.path("nameZh").asText("");
+            if (name.isBlank()) {
+                name = row.path("name").asText();
+            }
             String color = row.path("areaColor").asText("");
             if (color.isBlank()) {
                 color = ResourceColors.of(kind, subtype, index);
@@ -287,7 +290,10 @@ public class MapResourceImporter {
                 continue;
             }
             String subtype = type.path("key").asText();
-            String name = type.path("nameZh").asText(type.path("name").asText());
+            String name = type.path("nameZh").asText("");
+            if (name.isBlank()) {
+                name = type.path("name").asText();
+            }
             String key = "chest:" + subtype;
             LayerDef def = new LayerDef(key, "chest", subtype, name, 1000 + index,
                     ResourceColors.of("chest", subtype, index), icons.getOrDefault(key, ""), index);
