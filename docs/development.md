@@ -173,7 +173,7 @@ node tests/ui/verify-theme.mjs
 | 写操作 | Origin 同源校验；浏览器带 Sec-Fetch-Site 时只接受 same-origin / none |
 | CSP | Nginx 对 HTML 下发 CSP；首帧主题必须走 /theme-init.js，不要再写内联 script |
 | 安全头 | Nginx 统一 HSTS（含 includeSubDomains）、nosniff、X-Frame-Options、Referrer-Policy、Permissions-Policy |
-| TLS | TLS 1.2/1.3，只留 AEAD 与前向保密套件，开启 OCSP stapling |
+| TLS | TLS 1.2/1.3，只留 AEAD 与前向保密套件；开启 OCSP stapling，服务端验签关闭，由客户端校验证书状态 |
 | 依赖与密钥 | Dependabot 每周检查；CI 跑 pnpm audit 与 scripts/secret-scan.sh |
 | Nginx 配置 | 发版加 -WithNginx 才会安装并 reload；默认不碰线上 Nginx |
 

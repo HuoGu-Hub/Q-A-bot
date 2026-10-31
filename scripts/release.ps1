@@ -293,6 +293,10 @@ if [ -n "__NGINX__" ]; then
     # OCSP 需要独立的中间证书链；每次从现有证书里重拆，续期后不会用旧链
     if [ -f /etc/nginx/certs/qqbot.crt ]; then
       awk '/BEGIN CERTIFICATE/{n++} n>=2{print}' /etc/nginx/certs/qqbot.crt > /tmp/qqbot-chain.pem
+      # TrustAsia 根证书是 cross-signed，OCSP 验签还需要 Certum 根作为锚点
+      if [ -f /etc/ssl/certs/Certum_Trusted_Network_CA.pem ]; then
+        cat /etc/ssl/certs/Certum_Trusted_Network_CA.pem >> /tmp/qqbot-chain.pem
+      fi
       if [ -s /tmp/qqbot-chain.pem ]; then
         $S cp /tmp/qqbot-chain.pem /etc/nginx/certs/qqbot-chain.pem
         $S chmod 644 /etc/nginx/certs/qqbot-chain.pem
