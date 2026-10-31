@@ -4,6 +4,7 @@ import com.example.qqbot.media.MediaPolicy;
 import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.guard.ContentGate;
 import com.example.qqbot.intent.TurnPlan;
+import com.example.qqbot.intent.TurnStore;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.ResourceDirectory;
@@ -48,6 +49,8 @@ public class ChatService {
     private final KbPolicy kbProperties;
     private final PromptStore promptStore;
     private final ResourceDirectory resources;
+    /** 最近几轮的记忆。测试构造时可以为 null（当作没有历史） */
+    private final TurnStore turnStore;
 
     /**
      * 带工具的助手 —— <b>文本与图片两条路径共同的模型入口</b>。
@@ -60,7 +63,7 @@ public class ChatService {
     public ChatService(LlmRouter llmRouter, ImageFetcher imageFetcher, ContentGate contentGate,
                        MediaPolicy mediaProperties, KbRetriever kbRetriever, KbPolicy kbProperties,
                        KbToolAssistant toolAssistant, PromptStore promptStore,
-                       ResourceDirectory resources) {
+                       ResourceDirectory resources, TurnStore turnStore) {
         this.llmRouter = llmRouter;
         this.imageFetcher = imageFetcher;
         this.contentGate = contentGate;
@@ -70,6 +73,7 @@ public class ChatService {
         this.toolAssistant = toolAssistant;
         this.promptStore = promptStore;
         this.resources = resources;
+        this.turnStore = turnStore;
     }
 
     /**
@@ -162,6 +166,14 @@ public class ChatService {
             extraPrompt = "";
         }
 
+        // 最近几轮：只有"纠正"会把它们放进信封。普通提问不带历史 ——
+        // 带错了比不带更糟，而且会让每条消息都变长
+        long turnGroupId = event.getGroupId() == null ? 0L : event.getGroupId();
+        long turnUserId = event.getUserId() == null ? 0L : event.getUserId();
+        List<TurnStore.Turn> recentTurns = turnStore == null ? List.of() : turnStore.recent(turnGroupId, turnUserId);
+        boolean correcting = turn.correcting() && !recentTurns.isEmpty();
+        String memory = memoryNote(correcting, recentTurns);
+
         // 本次请求的待发语音清单：工具往里记，回复生成完再由路由决定发送时机
         MediaOutbox outbox = new MediaOutbox();
 
@@ -179,7 +191,7 @@ public class ChatService {
                 return done("图片我这边下载不下来，你重新发一次试试？", t0, KbTrace.disabled());
             }
             // 与文本路径同一套：资料由管线注入（所以信封的资料参数传 null）
-            String envelope = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired);
+            String envelope = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired, memory);
             String visionQuery = ((text == null ? "" : text) + " "
                     + (quoteText == null ? "" : quoteText)).trim();
             String visionCaller = callerOf(event);
@@ -187,10 +199,11 @@ public class ChatService {
             try {
                 String reply = toolAssistant.chatWithImages(envelope, images, visionQuery, visionSink,
                         visionRetrieve, visionCaller, extraPrompt, outbox);
-                return done(attachResourceShot(sanitize(reply), visionQuery), t0,
-                        visionRetrieve ? kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs())
-                                : KbTrace.disabled(),
-                        outbox, voiceRequired);
+                return remember(done(attachResourceShot(sanitize(reply), visionQuery), t0,
+                                visionRetrieve ? kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs())
+                                        : KbTrace.disabled(),
+                                outbox, voiceRequired),
+                        turnGroupId, turnUserId, text, correcting);
             } catch (Exception e) {
                 log.error("视觉模型调用失败：{}", e.getMessage());
                 return done("图片我看了，但一时没想明白，你直接说说想问什么吧～", t0,
@@ -212,12 +225,13 @@ public class ChatService {
         }
         KbRetrievalDiagnostics sink = new KbRetrievalDiagnostics();
         try {
-            String userMessage = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired);
+            String userMessage = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired, memory);
             String reply = toolAssistant.chat(userMessage, query, sink, retrieve,
                     callerOf(event), extraPrompt, outbox);
-            return done(attachResourceShot(sanitize(reply), query), t0,
-                    retrieve ? kbRetriever.traceOf(sink, query, sink.elapsedMs()) : KbTrace.disabled(),
-                    outbox, voiceRequired);
+            return remember(done(attachResourceShot(sanitize(reply), query), t0,
+                            retrieve ? kbRetriever.traceOf(sink, query, sink.elapsedMs()) : KbTrace.disabled(),
+                            outbox, voiceRequired),
+                    turnGroupId, turnUserId, text, correcting);
         } catch (Exception e) {
             log.error("调用大模型失败：{}", e.getMessage());
             return done("抱歉，我刚才走神了，稍后再问我一次吧～", t0,
@@ -313,6 +327,50 @@ public class ChatService {
     }
 
     /**
+     * 纠正时摆给模型看的那一段：上一轮问了什么、答了什么。
+     *
+     * <p>普通提问返回空串 —— 历史带错了比不带更糟，而且每条消息都变长。
+     */
+    private static String memoryNote(boolean correcting, List<TurnStore.Turn> turns) {
+        if (!correcting || turns == null || turns.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("本次是**对上一轮的纠正**：只改对方指出的那一点，其余保持原样，不要整段重答。\n\n");
+        sb.append("<<<RECENT\n");
+        for (int i = 0; i < turns.size(); i++) {
+            TurnStore.Turn t = turns.get(i);
+            sb.append(i == 0 ? "上一轮" : "更早一轮").append('\n');
+            sb.append("  群友问：").append(PromptText.oneLine(t.question(), 120)).append('\n');
+            sb.append("  你答：").append(PromptText.oneLine(t.answerDigest(), 120)).append('\n');
+        }
+        sb.append("RECENT>>>");
+        return sb.toString();
+    }
+
+    /**
+     * 记一轮之后原样返回。
+     *
+     * <p>顺序有意义：纠正时**先标旧的再记新的**，否则标记会落在本轮自己身上。
+     * 记忆写失败只记日志 —— "记不住"不该变成"答不了"。
+     */
+    private ReplyResult remember(ReplyResult result, long groupId, long userId, String question,
+                                 boolean correcting) {
+        if (turnStore == null || result == null) {
+            return result;
+        }
+        try {
+            if (correcting) {
+                turnStore.markCorrected(groupId, userId);
+            }
+            turnStore.append(groupId, userId, question, result.text());
+        } catch (Exception e) {
+            log.warn("[TURN] 记录本轮失败（不影响回答）：{}", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
      * 单条消息最多处理 N 张图（{@code app.media.max-images-per-message}，默认 3）。
      *
      * <p>这是**内存安全的闸门**：图片是同时读进内存再转 Base64 的，单张峰值约文件大小的 2.33 倍，
@@ -352,12 +410,16 @@ public class ChatService {
     }
 
     private String buildUserMessage(OneBotEvent event, String text, String quoteText, String knowledge,
-                                    ReplyMode mode, boolean voiceRequired) {
+                                    ReplyMode mode, boolean voiceRequired, String memory) {
         StringBuilder sb = new StringBuilder();
         // 模式说明放在最前：模型先知道"这次按什么规矩答"，再看到问题
         String modeNote = mode == null ? "" : mode.promptNote();
         if (!modeNote.isEmpty()) {
             sb.append(modeNote).append("\n\n");
+        }
+        // 纠正时把上一轮摆出来：模型要先知道"刚才说的是什么"，才谈得上只改那一点
+        if (memory != null && !memory.isEmpty()) {
+            sb.append(memory).append("\n\n");
         }
         // 关键词要求语音：这是硬约束，写在信封最前面，别让它被长回答冲淡
         if (voiceRequired) {

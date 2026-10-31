@@ -41,7 +41,10 @@ public class IntentPlanner {
             }
             TurnMove move = IntentSignals.classify(question);
             boolean skip = policy.isSkipRetrieval() && NO_RETRIEVAL.contains(move);
-            return new TurnPlan(move, !skip, false, skip ? "这类问题不用资料" : "默认");
+            // 是不是真的能纠正，还要看有没有上一轮 —— 那件事只有 ChatService 知道
+            boolean correcting = policy.isCorrection() && move == TurnMove.CORRECT;
+            String reason = skip ? "这类问题不用资料" : correcting ? "对上一轮的纠正" : "默认";
+            return new TurnPlan(move, !skip, correcting, reason);
         } catch (Exception e) {
             log.warn("[INTENT] 判定失败，按默认处理：{}", e.getMessage());
             return TurnPlan.standard();

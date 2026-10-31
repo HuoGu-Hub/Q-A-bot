@@ -52,7 +52,7 @@ class ChatServiceSkipRetrievalTest {
 
         chatService = new ChatService(llmRouter, mock(ImageFetcher.class), mock(ContentGate.class),
                 mock(MediaProperties.class), mock(KbRetriever.class), mock(KbProperties.class),
-                toolAssistant, null, mock(ResourceDirectory.class));
+                toolAssistant, null, mock(ResourceDirectory.class), null);
     }
 
     private boolean retrieveFlagOf(String question, TurnPlan plan) {

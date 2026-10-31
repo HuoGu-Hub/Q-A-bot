@@ -52,7 +52,7 @@ class ChatServiceToolMarkupTest {
         resources = mock(ResourceDirectory.class);
         chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new ContentGate(),
                 new MediaProperties(), mock(KbRetriever.class), new KbProperties(), assistant, promptStore,
-                resources);
+                resources, null);
     }
 
     private OneBotEvent groupEvent() {

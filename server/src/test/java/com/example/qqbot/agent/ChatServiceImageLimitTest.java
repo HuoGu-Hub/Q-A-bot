@@ -55,7 +55,7 @@ class ChatServiceImageLimitTest {
                 mock(KbRetriever.class), new KbProperties(),
                 // 本测试只关心下载了几张图，模型那一段用替身即可
                 mock(com.example.qqbot.llm.KbToolAssistant.class), mock(PromptStore.class),
-                mock(com.example.qqbot.kb.ResourceDirectory.class));
+                mock(com.example.qqbot.kb.ResourceDirectory.class), null);
     }
 
     @Test
