@@ -164,6 +164,18 @@ node tests/ui/verify-theme.mjs
 | 写操作 | 创建 POST、整体替换 PUT、局部更新 PATCH、删除 DELETE；动作走 `/actions/{verb}` |
 | 公开路径 | `/api/public/v1/**`；旧 `/api/public/**` 兼容转发；管理路径 `/admin/api/**`，不版本化 |
 
+### 7.2 安全默认
+
+| 项 | 约定 |
+|---|---|
+| 管理会话 | Cookie 带 HttpOnly、Secure、Path=/admin、SameSite=Strict；默认 24 小时，可用 ADMIN_SESSION_HOURS 调整 |
+| 管理密码 | 新建与改密至少 12 位；ADMIN_PASSWORD 引导的老密码只告警不拒绝，登录后应尽快改强 |
+| 写操作 | Origin 同源校验；浏览器带 Sec-Fetch-Site 时只接受 same-origin / none |
+| CSP | Nginx 对 HTML 下发 CSP；首帧主题必须走 /theme-init.js，不要再写内联 script |
+| 安全头 | Nginx 统一 HSTS、nosniff、X-Frame-Options、Referrer-Policy、Permissions-Policy |
+| 依赖与密钥 | Dependabot 每周检查；CI 跑 pnpm audit 与 scripts/secret-scan.sh |
+| Nginx 配置 | 发版加 -WithNginx 才会安装并 reload；默认不碰线上 Nginx |
+
 ## 8. 常见问题
 
 | 现象 | 原因 | 处理 |

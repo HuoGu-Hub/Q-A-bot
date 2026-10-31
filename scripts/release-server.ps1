@@ -9,6 +9,9 @@
   服务会停一下再起来，中断约数秒。只改了页面、样式、前端逻辑请用
   release-web.ps1，前端后端都要发请用 release.ps1。
 
+.PARAMETER WithNginx
+  同时安装 deploy/nginx/qqbot-domain.conf 并 reload nginx。默认不碰线上 Nginx。
+
 .PARAMETER Server
   目标，形如 root@1.2.3.4。省略时只构建和打包。
 
@@ -32,7 +35,9 @@ param(
   [string]$IdentityFile,
   [switch]$SkipBuild,
   [switch]$SkipUpload,
-  [switch]$NoRestart
+  [switch]$NoRestart,
+  [switch]$WithNginx,
+  [string]$NginxConf = "/etc/nginx/sites-available/qqbot.conf"
 )
 
 # 参数透传给 release.ps1，行为只有一处实现，几个入口不会各自漂移
@@ -42,6 +47,7 @@ if ($IdentityFile) { $forward.IdentityFile = $IdentityFile }
 if ($SkipBuild)    { $forward.SkipBuild = $true }
 if ($SkipUpload)   { $forward.SkipUpload = $true }
 if ($NoRestart)    { $forward.NoRestart = $true }
+if ($WithNginx)    { $forward.WithNginx = $true; $forward.NginxConf = $NginxConf }
 
 & (Join-Path $PSScriptRoot 'release.ps1') @forward
 exit $LASTEXITCODE

@@ -11,18 +11,7 @@
     CSS 由 JS 模块引入，等它加载完再切主题，用户会先看到一帧夜间再翻成日间。
     存储键与 shared/theme/useTheme.ts 保持一致。
   -->
-  <script>
-    (function () {
-      try {
-        var t = localStorage.getItem('qqbot.theme')
-        if (t !== 'day' && t !== 'night') {
-          t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'day' : 'night'
-        }
-        document.documentElement.dataset.theme = t
-        document.documentElement.style.colorScheme = t === 'day' ? 'light' : 'dark'
-      } catch (e) { /* 隐私模式下读不到存储，交给 CSS 默认的夜间 */ }
-    })()
-  </script>
+  <script src="/theme-init.js"></script>
   <title>知识库问答机器人</title>
 </head>
 <body>

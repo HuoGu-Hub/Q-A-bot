@@ -69,12 +69,12 @@ class AdminUserServiceTest {
     @Test
     @DisplayName("QQ 号可作为登录名，且不能重复绑定")
     void qqIsLoginAliasAndUnique() {
-        AdminUser u = service.create("quser", null, "password123", AdminRole.VIEWER, "10001");
+        AdminUser u = service.create("quser", null, "password1234", AdminRole.VIEWER, "10001");
         assertThat(u.qq()).isEqualTo("10001");
         assertThat(u.qqVerified()).isFalse();
-        assertThat(service.authenticate("10001", "password123")).isPresent();
+        assertThat(service.authenticate("10001", "password1234")).isPresent();
 
-        assertThatThrownBy(() -> service.create("quser2", null, "password123",
+        assertThatThrownBy(() -> service.create("quser2", null, "password1234",
                 AdminRole.VIEWER, "10001"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("QQ");
@@ -86,20 +86,20 @@ class AdminUserServiceTest {
     @Test
     @DisplayName("账号名不区分大小写，重复建会被拒")
     void usernameIsCaseInsensitive() {
-        service.create("Editor01", null, "password123", AdminRole.EDITOR);
+        service.create("Editor01", null, "password1234", AdminRole.EDITOR);
 
-        assertThatThrownBy(() -> service.create("editor01", null, "password123", AdminRole.VIEWER))
+        assertThatThrownBy(() -> service.create("editor01", null, "password1234", AdminRole.VIEWER))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("已存在");
-        assertThat(service.authenticate("EDITOR01", "password123")).isPresent();
+        assertThat(service.authenticate("EDITOR01", "password1234")).isPresent();
     }
 
     @Test
     @DisplayName("账号名与密码的格式校验")
     void validatesInput() {
-        assertThatThrownBy(() -> service.create("a b", null, "password123", AdminRole.VIEWER))
+        assertThatThrownBy(() -> service.create("a b", null, "password1234", AdminRole.VIEWER))
                 .hasMessageContaining("账号名");
-        assertThatThrownBy(() -> service.create("ab", null, "password123", AdminRole.VIEWER))
+        assertThatThrownBy(() -> service.create("ab", null, "password1234", AdminRole.VIEWER))
                 .hasMessageContaining("账号名");
         assertThatThrownBy(() -> service.create("okname", null, "short", AdminRole.VIEWER))
                 .hasMessageContaining("至少");
@@ -129,7 +129,7 @@ class AdminUserServiceTest {
     @Test
     @DisplayName("有第二个管理员之后，第一个就可以降级了")
     void allowsDemoteWhenAnotherAdminExists() {
-        service.create("second", null, "password123", AdminRole.ADMIN);
+        service.create("second", null, "password1234", AdminRole.ADMIN);
         long adminId = service.list().get(0).id();
 
         AdminUser u = service.update(adminId, null, AdminRole.EDITOR, true);
@@ -149,19 +149,19 @@ class AdminUserServiceTest {
     @Test
     @DisplayName("停用的账号登不进来，也验不过原密码")
     void disabledUserCannotLogin() {
-        AdminUser u = service.create("temp", null, "password123", AdminRole.VIEWER);
+        AdminUser u = service.create("temp", null, "password1234", AdminRole.VIEWER);
         service.update(u.id(), null, AdminRole.VIEWER, false);
 
-        assertThat(service.authenticate("temp", "password123")).isEmpty();
+        assertThat(service.authenticate("temp", "password1234")).isEmpty();
     }
 
     @Test
     @DisplayName("改密码之后旧密码失效")
     void changePassword() {
-        AdminUser u = service.create("temp", null, "password123", AdminRole.VIEWER);
-        service.changePassword(u.id(), "newpassword");
+        AdminUser u = service.create("temp", null, "password1234", AdminRole.VIEWER);
+        service.changePassword(u.id(), "newpassword12");
 
-        assertThat(service.authenticate("temp", "password123")).isEmpty();
-        assertThat(service.authenticate("temp", "newpassword")).isPresent();
+        assertThat(service.authenticate("temp", "password1234")).isEmpty();
+        assertThat(service.authenticate("temp", "newpassword12")).isPresent();
     }
 }

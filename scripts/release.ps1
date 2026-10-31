@@ -12,11 +12,16 @@
 
   加 -WebOnly 只发前端，加 -ServerOnly 只发后端，都不带就是完整发版。
 
+.PARAMETER WithNginx
+  同时把 deploy/nginx/qqbot-domain.conf 安装到 /etc/nginx/sites-available/qqbot.conf
+  并执行 nginx -t + reload。默认不碰线上 Nginx。
+
 .PARAMETER Server
   目标，形如 root@1.2.3.4 或 qqbot@1.2.3.4。省略时只构建和打包。
 
 .EXAMPLE
   .\scripts\release.ps1 -Server root@1.2.3.4
+  .\scripts\release.ps1 -WithNginx -Server root@1.2.3.4
   .\scripts\release.ps1 -SkipBuild -Server root@1.2.3.4
   .\scripts\release.ps1 -SkipUpload
   .\scripts\release.ps1 -WebOnly -Server root@1.2.3.4
@@ -32,6 +37,9 @@ param(
   [switch]$SkipUpload,
   [switch]$NoRestart,
   [switch]$WithConfig,
+  # 同时安装 deploy/nginx/qqbot-domain.conf 并 reload nginx（默认不碰线上 Nginx）
+  [switch]$WithNginx,
+  [string]$NginxConf = "/etc/nginx/sites-available/qqbot.conf",
   # 只发前端：构建 web-dist、上传替换，不动 jar、不重启服务
   [switch]$WebOnly,
   # 只发后端：跳过前端构建，包里不带 web-dist，其余与完整发版一致
@@ -274,8 +282,31 @@ if [ -f __DIR__/deploy/systemd/__SERVICE__.service ]; then
 fi
 $S systemctl daemon-reload
 $S systemctl enable __SERVICE__ >/dev/null 2>&1 || true
+
 __RESTART__
 sleep 3
+
+if [ -n "__NGINX__" ]; then
+  if [ ! -f __DIR__/deploy/nginx/qqbot-domain.conf ]; then
+    echo "包里没有 deploy/nginx/qqbot-domain.conf，跳过 Nginx" >&2
+  else
+    # 先备份：nginx -t 失败时不能把坏配置留在线上
+    if [ -f "__NGINX__" ]; then
+      $S cp "__NGINX__" /tmp/qqbot-nginx.conf.bak
+    fi
+    $S cp __DIR__/deploy/nginx/qqbot-domain.conf "__NGINX__"
+    if $S nginx -t; then
+      $S systemctl reload nginx
+      echo "已更新 Nginx 配置：__NGINX__"
+    else
+      echo "Nginx 配置校验失败，恢复旧配置" >&2
+      if [ -f /tmp/qqbot-nginx.conf.bak ]; then
+        $S cp /tmp/qqbot-nginx.conf.bak "__NGINX__"
+      fi
+      exit 1
+    fi
+  fi
+fi
 # 首次部署时单元还没装，这里必然非零：只当作诊断，不要让整次上传判失败
 $S systemctl is-active __SERVICE__ || $S journalctl -u __SERVICE__ -n 40 --no-pager || true
 '@
@@ -286,6 +317,7 @@ $remote = $remote.Replace("__DIR__", $RemoteDir)
 $remote = $remote.Replace("__USER__", $ServiceUser)
 $remote = $remote.Replace("__RESTART__", $restart)
 $remote = $remote.Replace("__SERVICE__", $ServiceName)
+$remote = $remote.Replace("__NGINX__", $(if ($WithNginx) { $NginxConf } else { "" }))
 
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
 $sshArgs = @("-t", "-p", $SshPort)

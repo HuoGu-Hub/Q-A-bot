@@ -209,6 +209,14 @@ public class AdminAuthFilter extends OncePerRequestFilter {
      * 只比 host，比整个 Origin 更宽容端口变化。
      */
     static boolean originAllowed(HttpServletRequest request) {
+        // 浏览器会带 Sec-Fetch-Site；跨站写直接拒绝。
+        // 没有这个头的是 curl / 老浏览器，继续走下面的 Origin 校验。
+        String fetchSite = request.getHeader("Sec-Fetch-Site");
+        if (fetchSite != null && !fetchSite.isBlank()
+                && !"same-origin".equalsIgnoreCase(fetchSite)
+                && !"none".equalsIgnoreCase(fetchSite)) {
+            return false;
+        }
         String origin = request.getHeader("Origin");
         if (origin == null || origin.isBlank()) {
             return true;

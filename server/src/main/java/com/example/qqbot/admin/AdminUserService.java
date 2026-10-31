@@ -31,7 +31,7 @@ public class AdminUserService {
 
     private static final Pattern USERNAME = Pattern.compile("^[A-Za-z0-9_.-]{3,32}$");
     private static final Pattern QQ = Pattern.compile("^[1-9]\\d{4,11}$");
-    private static final int MIN_PASSWORD = 8;
+    private static final int MIN_PASSWORD = 12;
 
     private final AdminUserRepository users;
     private final AdminAuditRepository audit;

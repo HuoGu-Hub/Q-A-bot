@@ -509,8 +509,8 @@ app:
     password: ${ADMIN_PASSWORD:}
     # 第一个管理员的 QQ，首次登录用它收验证码；留空则登录后强制绑定
     qq: ${ADMIN_QQ:}
-    # 登录会话有效期（小时）
-    session-hours: 168
+    # 登录会话有效期（小时）。默认 24 小时；需要更长可设 ADMIN_SESSION_HOURS
+    session-hours: ${ADMIN_SESSION_HOURS:24}
     # 记录后台访问（"访问次数"统计的数据来源）
     record-visits: true
     # 登录失败保护：同一来源在 window 秒内失败这么多次 → 锁定 lock 秒（0 = 关闭）

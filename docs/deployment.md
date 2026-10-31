@@ -249,6 +249,7 @@ sudo systemctl status qqbot
 
 ```bash
 # 只有一张证书：公开站和后台共用 firefire.online
+# 也可以用发版脚本自动安装：./scripts/release.ps1 -WithNginx -Server root@...
 sudo cp deploy/nginx/qqbot-domain.conf /etc/nginx/sites-available/qqbot.conf
 # 或者：两个域名，后台走独立域名
 # sudo cp deploy/nginx/qqbot.conf /etc/nginx/sites-available/qqbot.conf

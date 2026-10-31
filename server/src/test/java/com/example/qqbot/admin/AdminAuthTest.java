@@ -188,14 +188,14 @@ class AdminAuthTest {
     @Test
     @DisplayName("★ 锁定按「来源 + 账号」隔离：别人被锁不影响我")
     void lockoutIsPerUser() {
-        users.create("other", null, "password123", AdminRole.EDITOR);
+        users.create("other", null, "password1234", AdminRole.EDITOR);
         AdminAuth a = auth();
 
         for (int i = 0; i < 3; i++) {
             a.login("other", "nope", "10.0.0.1");
         }
 
-        assertThat(a.login("other", "password123", "10.0.0.1").outcome())
+        assertThat(a.login("other", "password1234", "10.0.0.1").outcome())
                 .isEqualTo(AdminAuth.LoginOutcome.LOCKED);
         assertThat(a.login("admin", "bootstrap-pw", "10.0.0.1").outcome())
                 .as("同一个来源、不同账号，不该被连坐")

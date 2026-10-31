@@ -175,7 +175,7 @@ public class AdminController {
         cookie.setPath("/admin");
         cookie.setMaxAge(props.getSessionHours() * 3600);
         cookie.setSecure(request != null && AdminClientIp.isHttps(request));
-        cookie.setAttribute("SameSite", "Lax");
+        cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
 
         if (trustDevice) {
@@ -185,7 +185,7 @@ public class AdminController {
             device.setPath("/admin");
             device.setMaxAge(30 * 24 * 3600);
             device.setSecure(request != null && AdminClientIp.isHttps(request));
-            device.setAttribute("SameSite", "Lax");
+            device.setAttribute("SameSite", "Strict");
             response.addCookie(device);
         }
 

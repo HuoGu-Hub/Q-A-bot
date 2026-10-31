@@ -56,5 +56,20 @@ class AdminClientIpTest {
         MockHttpServletRequest absent = new MockHttpServletRequest();
         absent.addHeader("Host", "admin.example.com");
         assertThat(AdminAuthFilter.originAllowed(absent)).isTrue();
+
+        MockHttpServletRequest sameOrigin = new MockHttpServletRequest();
+        sameOrigin.addHeader("Host", "admin.example.com");
+        sameOrigin.addHeader("Sec-Fetch-Site", "same-origin");
+        assertThat(AdminAuthFilter.originAllowed(sameOrigin)).isTrue();
+
+        MockHttpServletRequest crossSite = new MockHttpServletRequest();
+        crossSite.addHeader("Host", "admin.example.com");
+        crossSite.addHeader("Sec-Fetch-Site", "cross-site");
+        assertThat(AdminAuthFilter.originAllowed(crossSite)).isFalse();
+
+        MockHttpServletRequest sameSite = new MockHttpServletRequest();
+        sameSite.addHeader("Host", "admin.example.com");
+        sameSite.addHeader("Sec-Fetch-Site", "same-site");
+        assertThat(AdminAuthFilter.originAllowed(sameSite)).isFalse();
     }
 }
