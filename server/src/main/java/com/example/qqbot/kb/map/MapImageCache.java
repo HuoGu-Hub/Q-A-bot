@@ -128,10 +128,42 @@ public class MapImageCache {
             // 汇总那一句在 WikiMapImageSource 里，五分钟一条。
             log.debug("[MAP-IMG] 上游限流，本次跳过：{} —— {}", file, e.getMessage());
             return Optional.empty();
+        } catch (WikiMapImageSource.Forbidden e) {
+            // 403 的具体建议已经在 WikiMapImageSource 里报过，这里不再重复
+            log.debug("[MAP-IMG] 上游 403，本次跳过：{} —— {}", file, e.getMessage());
+            return Optional.empty();
         } catch (Exception e) {
             log.warn("[MAP-IMG] 取图失败：{} —— {}", file, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * 给截图路径用：同一张图任意档位的缓存，优先请求档位，其次更高清，最后更低清。
+     *
+     * <p>只读磁盘、不发上游。上游 403 或限流时，这是还能出图的唯一路径；
+     * 网页的 {@code /tile} 不调用它 —— 那里宽度是接口契约，必须精确。
+     */
+    public Optional<Image> cachedAnyWidth(String map, String page, String name, int width) {
+        String file;
+        try {
+            file = safeName(name);
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        int wanted = normalizeWidth(width);
+        for (int alt : new int[]{wanted, 1280, 640, 320, 160, 0}) {
+            Path candidate = pathOf(map, page, file, alt);
+            if (!Files.isRegularFile(candidate)) {
+                continue;
+            }
+            try {
+                return Optional.of(new Image(Files.readAllBytes(candidate), mimeOf(file), true));
+            } catch (IOException e) {
+                log.debug("[MAP-IMG] 缓存读取失败：{} —— {}", candidate, e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     /**

@@ -673,6 +673,8 @@ app:
       mod-resource: map-mod/1.3.26/points.json
       # 用 Special:FilePath 而不是 /images/：后者带哈希目录、改名即失效
       image-base: https://enshrouded.wiki.gg/wiki/Special:FilePath/
+      # Special:FilePath 被 Cloudflare 403 时的直链兜底
+      image-direct-base: https://enshrouded.wiki.gg/images/
       user-agent: "qqbot-personal/0.1 (Enshrouded map viewer; contact via group)"
       timeout-seconds: 30
       max-bytes: 12582912

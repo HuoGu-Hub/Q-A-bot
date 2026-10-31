@@ -111,7 +111,10 @@ public class MapShotSource implements ImageSource {
             @Override
             public Optional<MapImageCache.Image> get(String image, int width) {
                 usedWidth[0] = width;
-                Optional<MapImageCache.Image> got = images.get(map, canvas.page(), image, width);
+                Optional<MapImageCache.Image> got = images.cachedAnyWidth(map, canvas.page(), image, width);
+                if (got == null || got.isEmpty()) {
+                    got = images.get(map, canvas.page(), image, width);
+                }
                 if (got.isEmpty()) {
                     missing.add(image);
                 }

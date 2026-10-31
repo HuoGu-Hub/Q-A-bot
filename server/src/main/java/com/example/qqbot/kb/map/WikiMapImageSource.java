@@ -72,6 +72,13 @@ public class WikiMapImageSource implements MapImageSource {
         }
     }
 
+    /** 403：Cloudflare/WAF 拒绝，重试没有意义，改用直链兜底 */
+    static final class Forbidden extends IOException {
+        Forbidden(String message) {
+            super(message);
+        }
+    }
+
     /**
      * 取图，失败按 {@link #RETRY_BACKOFF_MS} 退避重试。
      *
@@ -95,6 +102,11 @@ public class WikiMapImageSource implements MapImageSource {
                 return bytes;
             } catch (MapImageSource.NotFound e) {
                 // 文件不存在，重试一百次也还是不存在 —— 直接往上抛，一次都不多问
+                throw e;
+            } catch (Forbidden e) {
+                // 403 不是抖动：直链已经试过一次，再重试只会继续敲 Cloudflare
+                log.warn("[MAP-IMG] 上游拒绝访问（403），直链也没取到：{} —— "
+                        + "检查服务器 IP/代理，或把已缓存的瓦片同步过来", e.getMessage());
                 throw e;
             } catch (IOException e) {
                 last = e;
@@ -140,9 +152,20 @@ public class WikiMapImageSource implements MapImageSource {
     }
 
     private byte[] fetchOnce(String fileName, int width) throws IOException {
+        try {
+            return request(url(fileName, width));
+        } catch (Forbidden e) {
+            // Special:FilePath 被 WAF 拦时，/images/ 往往还通；两条路都走同一条出站闸门
+            byte[] bytes = request(directUrl(fileName, width));
+            log.info("[MAP-IMG] Special:FilePath 被拒（403），改用直链成功：{}", fileName);
+            return bytes;
+        }
+    }
+
+    private byte[] request(String url) throws IOException {
         gate.enter();
         try {
-            return send(url(fileName, width));
+            return send(url);
         } finally {
             gate.leave();
         }
@@ -162,6 +185,9 @@ public class WikiMapImageSource implements MapImageSource {
             if (response.statusCode() == 404) {
                 throw new MapImageSource.NotFound("上游没有这个文件（404）：" + url);
             }
+            if (response.statusCode() == 403) {
+                throw new Forbidden("上游返回 403：" + url);
+            }
             if (response.statusCode() != 200) {
                 throw new IOException("上游返回 " + response.statusCode() + "：" + url);
             }
@@ -179,7 +205,7 @@ public class WikiMapImageSource implements MapImageSource {
         } catch (IOException e) {
             // 429 不在这里报：它是节流信号，由 fetch 汇总成"每五分钟一句"。
             // 这里只留真正的故障（超时、5xx、内容异常）。
-            if (!(e instanceof RateLimited)) {
+            if (!(e instanceof RateLimited || e instanceof Forbidden)) {
                 log.warn("[MAP-IMG] 取图失败：{} —— {}", url, e.getMessage());
             }
             throw e;
@@ -200,5 +226,20 @@ public class WikiMapImageSource implements MapImageSource {
         String encoded = URLEncoder.encode(fileName.replace(' ', '_'), StandardCharsets.UTF_8)
                 .replace("+", "%20");
         return width > 0 ? base + encoded + "?width=" + width : base + encoded;
+    }
+
+    /**
+     * 直链：绕过 {@code Special:FilePath} 的 302 与 WAF。
+     * 实测 {@code /images/thumb/2_7.jpg/640px-2_7.jpg} 可直取；宽度 0 走原图。
+     */
+    String directUrl(String fileName, int width) {
+        String base = options.getImageDirectBase();
+        if (!base.endsWith("/")) {
+            base = base + "/";
+        }
+        String encoded = URLEncoder.encode(fileName.replace(' ', '_'), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        return width > 0 ? base + "thumb/" + encoded + "/" + width + "px-" + encoded
+                : base + encoded;
     }
 }

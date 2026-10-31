@@ -42,6 +42,12 @@ public class MapOptions {
      */
     private String imageBase = "https://enshrouded.wiki.gg/wiki/Special:FilePath/";
 
+    /**
+     * 图片直链前缀。{@code Special:FilePath} 被 Cloudflare 403 时的兜底：
+     * 直接走 {@code /images/}，不经过那个会被拦截的重定向入口。
+     */
+    private String imageDirectBase = "https://enshrouded.wiki.gg/images/";
+
     /** 遵守对方的使用礼仪：没有自定义 UA 的请求实测会被直接限流 */
     private String userAgent = "qqbot-personal/0.1 (Enshrouded map viewer; contact via group)";
 
@@ -162,6 +168,14 @@ public class MapOptions {
 
     public void setImageBase(String imageBase) {
         this.imageBase = imageBase;
+    }
+
+    public String getImageDirectBase() {
+        return imageDirectBase;
+    }
+
+    public void setImageDirectBase(String imageDirectBase) {
+        this.imageDirectBase = imageDirectBase;
     }
 
     public String getUserAgent() {
