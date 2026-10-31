@@ -7,9 +7,12 @@ import com.example.qqbot.media.ImageSource;
 import com.example.qqbot.onebot.model.OutboundImage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.awt.Color;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -129,7 +132,7 @@ public class ResourceShotSource implements ImageSource {
         List<MapShotRenderer.Dot> dots = new ArrayList<>(rows.size());
         for (MapResourceService.PointView p : rows) {
             MapProjection.Point at = MapProjection.worldOf(geometry, p.x(), p.z());
-            dots.add(new MapShotRenderer.Dot(at.x(), at.y(), style.color()));
+            dots.add(new MapShotRenderer.Dot(at.x(), at.y(), style.color(), style.icon()));
         }
         List<MapShotRenderer.Mark> context = contextMarks(map, canvas.page(), geometry, hotspot,
                 cfg.getLabelMax(), cfg.getMaxContext());
@@ -160,7 +163,19 @@ public class ResourceShotSource implements ImageSource {
             @Override
             public Optional<MapImageCache.Image> icon(String image) {
                 // 图标只读缓存：回复路径上不能等上游
-                return images.cached(map, null, image, 0);
+                Optional<MapImageCache.Image> cached = images.cached(map, null, image, 0);
+                if (cached != null && cached.isPresent()) {
+                    return cached;
+                }
+                // 资源图标随 jar 发布在 map-icons，不依赖 wiki 预热
+                if (image == null || !image.matches("[A-Za-z0-9._-]+")) {
+                    return Optional.empty();
+                }
+                try (InputStream in = new ClassPathResource("map-icons/" + image).getInputStream()) {
+                    return Optional.of(new MapImageCache.Image(in.readAllBytes(), "image/png", true));
+                } catch (IOException e) {
+                    return Optional.empty();
+                }
             }
         };
 
@@ -289,16 +304,16 @@ public class ResourceShotSource implements ImageSource {
                     if (name.length() == 1) {
                         name = name + "矿";
                     }
-                    return new LayerStyle(color, name.isBlank() ? layerKey : name);
+                    return new LayerStyle(color, name.isBlank() ? layerKey : name, nz(layer.icon()));
                 }
             }
         } catch (Exception e) {
             log.debug("[RES-SHOT] 取图层样式失败，用默认值：{}", e.getMessage());
         }
-        return new LayerStyle(DEFAULT_DOT, layerKey);
+        return new LayerStyle(DEFAULT_DOT, layerKey, "");
     }
 
-    private record LayerStyle(Color color, String name) {
+    private record LayerStyle(Color color, String name, String icon) {
     }
 
     /** 配置缺失时用默认值，无配置的调用方也能正常出图 */

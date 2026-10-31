@@ -213,9 +213,9 @@ public class MapShotRenderer {
         }
         Base b = painted.get();
         try {
-            drawDots(b.g(), dots, b.viewport(), b.k(), b.width(), b.height());
-            // wiki 地点压在点云上面：图标与名字是读图人唯一认得出"这是哪"的东西
             Map<String, BufferedImage> iconCache = new HashMap<>();
+            drawDots(b.g(), dots, b.viewport(), b.k(), b.width(), b.height(), fetcher, iconCache);
+            // wiki 地点压在点云上面：图标与名字是读图人唯一认得出"这是哪"的东西
             drawPoints(b.g(), context, List.of(), b.viewport(), b.k(), b.width(), b.height(),
                     fetcher, iconCache);
             drawCaption(b.g(), caption, b.width());
@@ -325,18 +325,27 @@ public class MapShotRenderer {
         }
     }
 
-    /** 资源点：小圆点。不写名字 —— 点太多，名字只会互相压住；定位交给 wiki 地点 */
+    /**
+     * 资源点：有物品图标就画图标，没有才退回小圆点。不写名字 ——
+     * 点太多，名字只会互相压住；定位交给 wiki 地点。
+     */
     private static void drawDots(Graphics2D g, List<Dot> dots, MapProjection.Viewport vp, double k,
-                                 int outW, int outH) {
+                                 int outW, int outH, TileFetcher fetcher,
+                                 Map<String, BufferedImage> iconCache) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         int r = Math.max(2, Math.round(outW / 400f));
+        // 物品图标比地标小一号：金黄花 296 个点，26px 会糊成一片；14–20px 还能看出是什么
+        int iconSize = Math.max(14, Math.min(20, iconBox(k)));
         if (dots == null) {
             return;
         }
         for (Dot d : dots) {
             double sx = (d.x() - vp.left()) * k;
             double sy = (d.y() - vp.top()) * k;
-            if (sx < -r || sy < -r || sx > outW + r || sy > outH + r) {
+            if (sx < -iconSize || sy < -iconSize || sx > outW + iconSize || sy > outH + iconSize) {
+                continue;
+            }
+            if (drawIcon(g, fetcher, iconCache, d.icon(), sx, sy, iconSize, outW, outH)) {
                 continue;
             }
             int x = (int) Math.round(sx);
@@ -378,8 +387,12 @@ public class MapShotRenderer {
                         int width, int height, int tileWidth, int used) {
     }
 
-    /** 一个资源点（画布坐标）与颜色 */
-    public record Dot(double x, double y, Color color) {
+    /** 一个资源点（画布坐标）、颜色与物品图标；icon 为空时退回圆点 */
+    public record Dot(double x, double y, Color color, String icon) {
+
+        public Dot(double x, double y, Color color) {
+            this(x, y, color, "");
+        }
     }
 
     /** 瓦片矩形与视口有没有交集 —— 不相交的瓦片连取都不取 */

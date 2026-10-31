@@ -73,6 +73,32 @@ class MapShotRendererTest {
     }
 
     @Test
+    @DisplayName("★ 资源点有物品图标时画图标，不再画纯色圆点")
+    void rendersItemIconInsteadOfDot() throws IOException {
+        byte[] red = solidPng(255, 0, 0);
+        MapShotRenderer.TileFetcher withIcon = new MapShotRenderer.TileFetcher() {
+            @Override
+            public Optional<MapImageCache.Image> get(String image, int width) {
+                return Optional.of(new MapImageCache.Image(whiteTile, "image/png", true));
+            }
+
+            @Override
+            public Optional<MapImageCache.Image> icon(String image) {
+                return Optional.of(new MapImageCache.Image(red, "image/png", true));
+            }
+        };
+
+        byte[] shot = renderer.renderDots(CANVAS, TILES, "",
+                List.of(new MapShotRenderer.Dot(1280, 1280, new Color(201, 123, 60), "item.png")),
+                List.of(new MapProjection.Point(1280, 1280)),
+                List.of(), "",
+                withIcon, System.currentTimeMillis() + 5000).orElseThrow();
+
+        BufferedImage img = ImageIO.read(new ByteArrayInputStream(shot));
+        assertThat(hasPureRedNear(img, 100, 63, 12)).as("物品图标应画在点上").isTrue();
+    }
+
+    @Test
     @DisplayName("★ 资源点云：点画在该在的位置，不再套热点圈")
     void rendersDots() throws IOException {
         Color copper = new Color(201, 123, 60);
