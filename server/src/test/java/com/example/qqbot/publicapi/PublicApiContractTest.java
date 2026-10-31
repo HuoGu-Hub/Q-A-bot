@@ -72,6 +72,17 @@ class PublicApiContractTest {
     }
 
     @Test
+    @DisplayName("GET /api/public/v1/site：If-None-Match 命中时返回 304")
+    void siteRevalidates() throws Exception {
+        MvcResult first = mvc.perform(get("/api/public/v1/site"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String etag = first.getResponse().getHeader("ETag");
+        mvc.perform(get("/api/public/v1/site").header("If-None-Match", etag))
+                .andExpect(status().isNotModified());
+    }
+
+    @Test
     @DisplayName("GET /api/public/v1/stats：公开统计字段固定")
     void stats() throws Exception {
         mvc.perform(get("/api/public/v1/stats"))
