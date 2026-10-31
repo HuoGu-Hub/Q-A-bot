@@ -105,6 +105,26 @@ class SystemPromptTest {
     }
 
     @Test
+    @DisplayName("★ 三类产物必须在提示词里：建议类不能再用「没查到」收尾")
+    void keepsThreeAnswerShapes() throws IOException {
+        String p = prompt();
+
+        assertThat(p).as("事实类：只说资料里有的事实").contains("事实类");
+        assertThat(p).as("建议类：允许给结论，但必须与资料事实分开").contains("建议类");
+        assertThat(p).as("社交类：一句话，不查资料").contains("社交类");
+        assertThat(p).as("★ 这条是整段契约的落点：建议类问题不许以「没查到」收尾")
+                .contains("给建议类问题收尾");
+    }
+
+    @Test
+    @DisplayName("★ 最近几轮的记忆标记也要在提示词里声明，否则模型分不清它是内容还是指令")
+    void declaresRecentMarker() throws IOException {
+        String p = prompt();
+
+        assertThat(p).as("ChatService.memoryNote 拼的就是这个标记").contains("<<<RECENT>>>");
+    }
+
+    @Test
     @DisplayName("没有资料块时要按自己的知识答，且不得声称查过资料")
     void handlesMissingKnowledgeBlock() throws IOException {
         String p = prompt();
