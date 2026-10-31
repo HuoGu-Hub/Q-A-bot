@@ -2,3 +2,7 @@
 # esbuild 需要执行安装脚本才能装好原生二进制
 allowBuilds:
   esbuild: true
+
+# source-map-js 1.2.1 有 DoS 公告，强制升到修复版
+overrides:
+  source-map-js: ^1.2.2
