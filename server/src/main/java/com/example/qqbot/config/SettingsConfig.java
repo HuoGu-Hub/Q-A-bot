@@ -36,19 +36,21 @@ public class SettingsConfig {
                                        MediaProperties media, QaProperties qa,
                                        LogProperties logs, CommandProperties commands,
                                        SiteProperties site, LlmProperties llm,
-                                       BotProperties bot) {
-        return new SettingsRoots(Map.of(
-                "guard", guard,
-                "kb", kb,
+                                       BotProperties bot, IntentProperties intent) {
+        // ⚠️ 超过 10 对就不能再用 Map.of：它会落到 Map.of(K,V,...) 的重载上编译失败
+        return new SettingsRoots(Map.ofEntries(
+                Map.entry("guard", guard),
+                Map.entry("kb", kb),
                 // 地图是**独立一份**配置对象（app.kb.map.*），不在 KbProperties 里 ——
                 // 它管的是在线路径（取图速率、配图），与"从 wiki 拉数据"的批处理不是一回事
-                "kb.map", map,
-                "media", media,
-                "qa", qa,
-                "logs", logs,
-                "commands", commands,
-                "site", site,
-                "llm", llm,
-                "bot", bot));
+                Map.entry("kb.map", map),
+                Map.entry("media", media),
+                Map.entry("qa", qa),
+                Map.entry("logs", logs),
+                Map.entry("commands", commands),
+                Map.entry("site", site),
+                Map.entry("llm", llm),
+                Map.entry("bot", bot),
+                Map.entry("intent", intent)));
     }
 }

@@ -295,8 +295,23 @@ class ArchitectureTest {
                         "..voice..", "..site..", "..publicapi..", "..admin..", "..logs..", "..guard..",
                         "..llm..", "..onebot..", "..settings..", "..router..", "..persistence..",
                         // 2026-10-29 新增 ops（证书等运维观测）：同样只能依赖自己声明的只读接口
-                        "..ops..")
+                        "..ops..",
+                        // 2026-10-31 新增 intent：配置走 IntentPolicy 只读接口
+                        "..intent..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
+        rule.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("★ 意图判定不得依赖检索与模型实现 —— 它只该认识关键词（2026-10-31）")
+    // 判定的价值在于"零成本、永远能跑"：一旦它依赖 kb 或 llm，判定就会跟着检索、
+    // 跟着模型一起变慢、一起失败，那就退化成又一个昂贵的前置环节。
+    // 需要用到检索结果时，由上层把结果传进来，判定自己不伸手。
+    void intentStaysCheap() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..intent..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("..kb..", "..llm..", "com.example.qqbot.onebot.client..");
         rule.check(CLASSES);
     }
 }

@@ -6,6 +6,7 @@ import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.DistillProperties;
 import com.example.qqbot.config.AsyncProperties;
 import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.IntentProperties;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.config.LogProperties;
@@ -48,7 +49,7 @@ import org.springframework.util.StringUtils;
         AsyncProperties.class, MediaProperties.class, KbProperties.class, QaProperties.class,
         AdminProperties.class, LogProperties.class, CommandProperties.class, ScheduleProperties.class,
         BotProperties.class, SiteProperties.class, PersistenceProperties.class,
-        DistillProperties.class, MapOptions.class, VoiceProperties.class})
+        DistillProperties.class, MapOptions.class, VoiceProperties.class, IntentProperties.class})
 public class QqbotServerApplication {
 
     private static final Logger log = LoggerFactory.getLogger(QqbotServerApplication.class);

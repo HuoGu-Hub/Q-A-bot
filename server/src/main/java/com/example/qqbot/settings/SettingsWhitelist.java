@@ -210,6 +210,14 @@ public class SettingsWhitelist {
             new Item("app.site.join-hint", "加群提示", "站点信息",
                     "text", "如「群号搜索」或「扫码」", ""),
 
+            // ---------- 意图 ----------
+            new Item("app.intent.enabled", "意图判定", "意图",
+                    "bool", "关掉即回到「所有消息都走检索」", true),
+            new Item("app.intent.skip-retrieval", "这类消息不查资料", "意图",
+                    "bool", "社交整活、关于机器人自己、做不到的请求", true),
+            new Item("app.intent.correction", "识别纠正", "意图",
+                    "bool", "「不是…吗」这类追问只改被指出的部分", true),
+
             // ---------- 统计 ----------
             new Item("app.qa.retention-days", "原文保留天数", "统计",
                     "int", "0 = 永不删除", 180)

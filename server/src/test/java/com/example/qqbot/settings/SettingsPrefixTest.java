@@ -3,6 +3,7 @@ package com.example.qqbot.settings;
 import com.example.qqbot.config.BotProperties;
 import com.example.qqbot.config.CommandProperties;
 import com.example.qqbot.config.GuardProperties;
+import com.example.qqbot.config.IntentProperties;
 import com.example.qqbot.config.KbProperties;
 import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.config.LogProperties;
@@ -47,7 +48,7 @@ class SettingsPrefixTest {
                 mock(MediaProperties.class), mock(QaProperties.class),
                 mock(LogProperties.class), mock(CommandProperties.class),
                 mock(SiteProperties.class), mock(LlmProperties.class),
-                mock(BotProperties.class));
+                mock(BotProperties.class), mock(IntentProperties.class));
         SettingsService service = new SettingsService(
                 new SettingsWhitelist(), mock(OverridesFile.class), roots);
 
@@ -83,7 +84,7 @@ class SettingsPrefixTest {
                         new GuardProperties(), new KbProperties(), new MapOptions(),
                         new MediaProperties(), new QaProperties(), new LogProperties(),
                         new CommandProperties(), new SiteProperties(), new LlmProperties(),
-                        new BotProperties()));
+                        new BotProperties(), new IntentProperties()));
 
         List<String> broken = new ArrayList<>();
         for (SettingsWhitelist.Item item : SettingsWhitelist.ITEMS) {

@@ -17,6 +17,8 @@ import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.trace.KbTrace;
+import com.example.qqbot.intent.IntentPlanner;
+import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.qa.QaCollector;
@@ -65,6 +67,8 @@ public class MessageRouter {
     private final VoiceDelivery voiceDelivery;
     /** 关键词触发。测试构造时可以为 null（不触发） */
     private final VoiceTriggerService voiceTrigger;
+    /** 意图判定。测试构造时可以为 null（一律按默认处理） */
+    private final IntentPlanner intentPlanner;
 
     /** 不带语音投递的构造 —— 现有测试与老调用方用 */
     public MessageRouter(OneBotApiClient apiClient,
@@ -82,7 +86,7 @@ public class MessageRouter {
                          CommandHandler commandHandler) {
         this(apiClient, codec, identity, chatService, guardPipeline, outboundSender, budgetGuard,
                 asyncProperties, guardRateLimit, guardAccess, blockNotifier, qaCollector,
-                commandHandler, null, null);
+                commandHandler, null, null, null);
     }
 
     /** Spring 用这个：语音投递也接进来 */
@@ -101,7 +105,8 @@ public class MessageRouter {
                          QaCollector qaCollector,
                          CommandHandler commandHandler,
                          VoiceDelivery voiceDelivery,
-                         VoiceTriggerService voiceTrigger) {
+                         VoiceTriggerService voiceTrigger,
+                         IntentPlanner intentPlanner) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.identity = identity;
@@ -117,6 +122,7 @@ public class MessageRouter {
         this.commandHandler = commandHandler;
         this.voiceDelivery = voiceDelivery;
         this.voiceTrigger = voiceTrigger;
+        this.intentPlanner = intentPlanner;
     }
 
     /**
@@ -362,6 +368,11 @@ public class MessageRouter {
      */
     private void reply(RoutedRequest req, String question, ReplyMode replyMode) {
         OneBotEvent event = req.event();
+
+        // 意图判定：第一次提交只记账，不改变行为 —— 用真实流量校准规则精度
+        TurnPlan plan = intentPlanner == null ? TurnPlan.standard() : intentPlanner.plan(question);
+        log.info("[INTENT] move={} retrieve={} reason={} | {}", plan.move(), plan.retrieve(),
+                plan.reason(), question == null ? "" : question.strip());
 
         // 解析引用（QQ 的引用段只有 ID，正文和图片都要另外调 get_msg 取）
         QuotedContent quote = resolveQuote(event);
