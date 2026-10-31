@@ -5,6 +5,7 @@ import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.guard.ContentGate;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.kb.ResourceDirectory;
 import com.example.qqbot.llm.KbToolAssistant;
 import com.example.qqbot.prompt.PromptStore;
 import com.example.qqbot.llm.LlmRouter;
@@ -38,6 +39,7 @@ class ChatServiceToolMarkupTest {
     private LlmRouter llmRouter;
     private KbToolAssistant assistant;
     private PromptStore promptStore;
+    private ResourceDirectory resources;
     private ChatService chatService;
 
     @BeforeEach
@@ -47,8 +49,10 @@ class ChatServiceToolMarkupTest {
         assistant = mock(KbToolAssistant.class);
         promptStore = mock(PromptStore.class);
         when(promptStore.appendixFor(anyLong(), anyLong())).thenReturn("");
+        resources = mock(ResourceDirectory.class);
         chatService = new ChatService(llmRouter, mock(ImageFetcher.class), new ContentGate(),
-                new MediaProperties(), mock(KbRetriever.class), new KbProperties(), assistant, promptStore);
+                new MediaProperties(), mock(KbRetriever.class), new KbProperties(), assistant, promptStore,
+                resources);
     }
 
     private OneBotEvent groupEvent() {
@@ -77,6 +81,23 @@ class ChatServiceToolMarkupTest {
 
         verify(assistant).chat(anyString(), anyString(), any(KbRetrievalDiagnostics.class), anyBoolean(),
                 anyString(), contains("请叫我老板"), any(MediaOutbox.class));
+    }
+
+    @Test
+    @DisplayName("★ 资源问题模型漏了配图：ChatService 兜底补 oreshot 标记")
+    void attachesResourceShotWhenModelOmitsIt() {
+        modelReplies("金黄花主要在春之原野，最密的一片在火焰神龛附近。");
+        ResourceDirectory.Layer layer = new ResourceDirectory.Layer("Embervale",
+                "plant:aureolin_flower", "金黄花", "plant", "aureolin_flower", 296, "#d6a21e");
+        ResourceDirectory.Hotspot hotspot = new ResourceDirectory.Hotspot(4926, 1316, 15,
+                "Springlands", 4800, 1200, 5000, 1400, "火焰神龛·春之原野", 129, 100, 10);
+        when(resources.answer(contains("金黄花"))).thenReturn(
+                new ResourceDirectory.Answer("金黄花", layer, 296, 250, List.of(hotspot)));
+
+        ChatService.ReplyResult result = chatService.reply(groupEvent(),
+                "金黄花在哪里比较多？", null, List.of());
+
+        assertThat(result.text()).contains("[[img:oreshot:Embervale/plant:aureolin_flower/1]]");
     }
 
     @Test

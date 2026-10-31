@@ -97,8 +97,7 @@ public interface ResourceDirectory {
                                 .append(" 坐标单位");
                     }
                 }
-                sb.append("，坐标 (").append(Math.round(h.x())).append(", ")
-                        .append(Math.round(h.y())).append(")\n");
+                sb.append('\n');
             }
             return sb.toString().strip();
         }

@@ -59,7 +59,7 @@ class MapResourceDirectoryAnswerTest {
                 .contains("「铜矿」在地图上有 5 个点位")
                 .contains("半径 250 内 5 个点")
                 .contains("在游牧高地")
-                .contains("坐标 (110, 106)");
+                .doesNotContain("坐标 (");
     }
 
     @Test

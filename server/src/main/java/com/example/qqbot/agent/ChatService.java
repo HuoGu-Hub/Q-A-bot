@@ -5,11 +5,13 @@ import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.guard.ContentGate;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
+import com.example.qqbot.kb.ResourceDirectory;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.llm.KbToolAssistant;
 import com.example.qqbot.llm.LlmRouter;
 import com.example.qqbot.llm.ToolCallMarkup;
 import com.example.qqbot.media.ImageFetcher;
+import com.example.qqbot.media.ImageMarkers;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.prompt.PromptStore;
@@ -44,6 +46,7 @@ public class ChatService {
     private final KbRetriever kbRetriever;
     private final KbPolicy kbProperties;
     private final PromptStore promptStore;
+    private final ResourceDirectory resources;
 
     /**
      * 带工具的助手 —— <b>文本与图片两条路径共同的模型入口</b>。
@@ -55,7 +58,8 @@ public class ChatService {
 
     public ChatService(LlmRouter llmRouter, ImageFetcher imageFetcher, ContentGate contentGate,
                        MediaPolicy mediaProperties, KbRetriever kbRetriever, KbPolicy kbProperties,
-                       KbToolAssistant toolAssistant, PromptStore promptStore) {
+                       KbToolAssistant toolAssistant, PromptStore promptStore,
+                       ResourceDirectory resources) {
         this.llmRouter = llmRouter;
         this.imageFetcher = imageFetcher;
         this.contentGate = contentGate;
@@ -64,6 +68,7 @@ public class ChatService {
         this.kbProperties = kbProperties;
         this.toolAssistant = toolAssistant;
         this.promptStore = promptStore;
+        this.resources = resources;
     }
 
     /**
@@ -164,7 +169,7 @@ public class ChatService {
             try {
                 String reply = toolAssistant.chatWithImages(envelope, images, visionQuery, visionSink,
                         useMode != ReplyMode.NONE, visionCaller, extraPrompt, outbox);
-                return done(sanitize(reply), t0,
+                return done(attachResourceShot(sanitize(reply), visionQuery), t0,
                         kbRetriever.traceOf(visionSink, visionQuery, visionSink.elapsedMs()),
                         outbox, voiceRequired);
             } catch (Exception e) {
@@ -187,13 +192,58 @@ public class ChatService {
             String userMessage = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired);
             String reply = toolAssistant.chat(userMessage, query, sink, useMode != ReplyMode.NONE,
                     callerOf(event), extraPrompt, outbox);
-            return done(sanitize(reply), t0, kbRetriever.traceOf(sink, query, sink.elapsedMs()),
-                    outbox, voiceRequired);
+            return done(attachResourceShot(sanitize(reply), query), t0,
+                    kbRetriever.traceOf(sink, query, sink.elapsedMs()), outbox, voiceRequired);
         } catch (Exception e) {
             log.error("调用大模型失败：{}", e.getMessage());
             return done("抱歉，我刚才走神了，稍后再问我一次吧～", t0,
                     kbRetriever.traceOf(sink, query, sink.elapsedMs()));
         }
+    }
+
+    /**
+     * 资源类问题**强制配图** —— 模型可能只抄文字、把工具结果里的配图标记丢掉
+     * （线上实测「金黄花在哪里比较多」只回了坐标）。
+     *
+     * <p>只要问法带位置/获取意图、且资源层能匹配，就在回复末尾补一张第一片热点的图；
+     * 模型自己已经带了 {@code oreshot} 标记时不重复。图能不能画出来仍由
+     * {@code ResourceShotSource} 决定，缺瓦片时只损失图，不拖住文字。
+     */
+    private String attachResourceShot(String reply, String query) {
+        if (resources == null || reply == null || reply.isBlank() || !wantsResourceShot(query)) {
+            return reply;
+        }
+        try {
+            boolean already = ImageMarkers.parse(reply).keys().stream()
+                    .anyMatch(key -> key.startsWith("oreshot:"));
+            if (already) {
+                return reply;
+            }
+            ResourceDirectory.Answer answer = resources.answer(query);
+            if (answer == null || answer.hotspots() == null || answer.hotspots().isEmpty()) {
+                return reply;
+            }
+            log.info("[CHAT] 资源问题补配图：{} → {}", query, answer.layer().key());
+            return reply + "\n\n配图：[[img:oreshot:"
+                    + ResourceDirectory.imageKey(answer.layer(), 1) + "]]";
+        } catch (Exception e) {
+            log.warn("[CHAT] 资源问题补配图失败：{} —— {}", query, e.getMessage());
+            return reply;
+        }
+    }
+
+    /** 问法里有没有"在哪 / 哪里多 / 怎么获得"的意思 */
+    private static boolean wantsResourceShot(String query) {
+        if (query == null) {
+            return false;
+        }
+        for (String word : new String[]{"在哪", "哪里", "位置", "分布", "密集", "比较多", "找", "采",
+                "获得", "获取", "怎么得", "怎么拿", "如何得"}) {
+            if (query.contains(word)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

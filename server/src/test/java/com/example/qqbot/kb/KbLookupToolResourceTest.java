@@ -61,9 +61,9 @@ class KbLookupToolResourceTest {
         String out = tool(places(), resources).locate("铜矿", null);
 
         assertThat(out).contains("747").contains("点位最密").contains("半径 250 内 32 个点")
-                .contains("火焰神龛·雾水盆地").contains("坐标 (5250, 2350)")
+                .contains("火焰神龛·雾水盆地")
                 .contains("配图：[[img:oreshot:Embervale/ore:copper/1]]");
-        assertThat(out).doesNotContain("[[img:map:");
+        assertThat(out).doesNotContain("[[img:map:").doesNotContain("坐标 (");
     }
 
     @Test
