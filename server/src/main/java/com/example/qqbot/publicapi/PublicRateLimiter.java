@@ -79,4 +79,20 @@ public class PublicRateLimiter {
     public int limit() {
         return LIMIT_PER_MINUTE;
     }
+
+    /** 最早一次请求滑出窗口还要多少秒；用来填 429 的 Retry-After */
+    public long retryAfterSeconds(String ip) {
+        Deque<Long> window = hits.get(ip == null ? "unknown" : ip);
+        if (window == null) {
+            return 1;
+        }
+        synchronized (window) {
+            Long oldest = window.peekFirst();
+            if (oldest == null) {
+                return 1;
+            }
+            long waitMs = WINDOW_MS - (System.currentTimeMillis() - oldest);
+            return Math.max(1, (waitMs + 999) / 1000);
+        }
+    }
 }

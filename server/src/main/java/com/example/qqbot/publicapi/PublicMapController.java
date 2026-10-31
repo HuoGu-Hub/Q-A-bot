@@ -342,8 +342,10 @@ public class PublicMapController {
     }
 
     private void rateLimit(HttpServletRequest request) {
-        if (!limiter.allow(clientIp(request))) {
-            throw ApiException.tooManyRequests("请求太频繁，请稍后再试");
+        String ip = clientIp(request);
+        if (!limiter.allow(ip)) {
+            throw ApiException.tooManyRequests("请求太频繁，请稍后再试",
+                    limiter.retryAfterSeconds(ip));
         }
     }
 

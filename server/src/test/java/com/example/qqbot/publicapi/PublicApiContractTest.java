@@ -204,6 +204,59 @@ class PublicApiContractTest {
                 .andExpect(jsonPath("$.status").value(400));
     }
 
+
+    @Test
+    @DisplayName("GET /api/public/v1/map/resource-groups：资源目录形状固定")
+    void resourceGroups() throws Exception {
+        mvc.perform(get("/api/public/v1/map/resource-groups").param("map", "Embervale"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("max-age=300")))
+                .andExpect(jsonPath("$.map").value("Embervale"))
+                .andExpect(jsonPath("$.imported").isBoolean())
+                .andExpect(jsonPath("$.version").isString())
+                .andExpect(jsonPath("$.categories").isArray());
+    }
+
+    @Test
+    @DisplayName("GET /api/public/v1/map/resources：按层取点，未知层返回空数组")
+    void resources() throws Exception {
+        mvc.perform(get("/api/public/v1/map/resources")
+                        .param("map", "Embervale")
+                        .param("layer", "不存在的层"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("max-age=300")))
+                .andExpect(jsonPath("$.map").value("Embervale"))
+                .andExpect(jsonPath("$.layer").value("不存在的层"))
+                .andExpect(jsonPath("$.points", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/public/v1/map/resource-areas：按层取面，未知层返回空数组")
+    void resourceAreas() throws Exception {
+        mvc.perform(get("/api/public/v1/map/resource-areas")
+                        .param("map", "Embervale")
+                        .param("layer", "不存在的层"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("max-age=300")))
+                .andExpect(jsonPath("$.areas", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /api/public/v1/map/resource-icon：合法图标直接返回 PNG 与长缓存")
+    void resourceIcon() throws Exception {
+        mvc.perform(get("/api/public/v1/map/resource-icon").param("name", "ore-iron.png"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(header().string("Cache-Control", containsString("max-age=2592000")));
+    }
+
+    @Test
+    @DisplayName("GET /api/public/v1/map/resource-icon：非法文件名回 400")
+    void resourceIconRejectsPath() throws Exception {
+        mvc.perform(get("/api/public/v1/map/resource-icon").param("name", "../secret.png"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     @DisplayName("GET /api/public/v1/map/search：空词返回空结果")
     void mapSearch() throws Exception {

@@ -293,7 +293,8 @@ public class PublicController {
         String ip = clientIp(request);
         if (!limiter.allow(ip)) {
             log.warn("[PUBLIC] 限流触发：ip={}", ip);
-            throw ApiException.tooManyRequests("请求太频繁，请稍后再试");
+            throw ApiException.tooManyRequests("请求太频繁，请稍后再试",
+                    limiter.retryAfterSeconds(ip));
         }
     }
 
