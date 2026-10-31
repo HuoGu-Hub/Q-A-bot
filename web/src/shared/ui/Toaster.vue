@@ -12,17 +12,23 @@ const { items } = useToasts()
 </script>
 
 <template>
-  <div class="toaster" aria-live="polite">
-    <TransitionGroup name="toast">
-      <div v-for="t in items" :key="t.id" class="toast" :class="'t-' + t.tone" role="status">
-        <span class="mark" aria-hidden="true" />
-        <span class="body">{{ t.text }}</span>
-        <button type="button" class="x" aria-label="关闭" @click="dismiss(t.id)">
-          <Icon name="close" :size="14" />
-        </button>
-      </div>
-    </TransitionGroup>
-  </div>
+  <!--
+    Teleport 到 body：.admin 自己是一个 z-index: 2 的 stacking context，
+    toast 留在里面时 z-index 再高也只能压过页面，压不过同样挂到 body 的 Modal。
+  -->
+  <Teleport to="body">
+    <div class="toaster" aria-live="polite">
+      <TransitionGroup name="toast">
+        <div v-for="t in items" :key="t.id" class="toast" :class="'t-' + t.tone" role="status">
+          <span class="mark" aria-hidden="true" />
+          <span class="body">{{ t.text }}</span>
+          <button type="button" class="x" aria-label="关闭" @click="dismiss(t.id)">
+            <Icon name="close" :size="14" />
+          </button>
+        </div>
+      </TransitionGroup>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>

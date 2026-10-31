@@ -7,7 +7,7 @@
  * 时间说成「3 天前」而不是时间戳 —— 人关心的是「多久没人来了」，不是「几号几点」。
  *
  * <p>后端有三条硬规则会在这里体现：不能删自己、不能删/停用最后一个管理员、
- * 密码至少 8 位。前端只做**前置提示**（禁用按钮并说明原因），真正的判定仍在后端，
+ * 密码至少 12 位。前端只做**前置提示**（禁用按钮并说明原因），真正的判定仍在后端，
  * 失败时把后端的话原样弹出来，不重复实现规则。
  */
 import { computed, onMounted, ref } from 'vue'
@@ -84,7 +84,8 @@ const editTarget = ref<AccountRow | null>(null)
 const roleDraft = ref<AdminRoleId>('viewer')
 const savingRole = ref(false)
 const newPassword = ref('')
-const resetting = ref(false)
+const passwordError = ref('')
+const savingPassword = ref(false)
 const confirmingDelete = ref(false)
 const working = ref(false)
 
@@ -92,6 +93,7 @@ function openEdit(r: AccountRow) {
   editTarget.value = r
   roleDraft.value = r.role
   newPassword.value = ''
+  passwordError.value = ''
   confirmingDelete.value = false
 }
 
@@ -220,18 +222,24 @@ async function toggleEnabled() {
   }
 }
 
-async function doReset() {
+async function saveNewPassword() {
   const t = editTarget.value
-  if (!t || resetting.value) return
-  resetting.value = true
+  if (!t || savingPassword.value) return
+  if (newPassword.value.length < 12) {
+    passwordError.value = '新密码至少 12 位'
+    return
+  }
+  passwordError.value = ''
+  savingPassword.value = true
   try {
     await adminApi.post('/users/' + t.id + '/password', { password: newPassword.value })
     newPassword.value = ''
-    toast('密码已重置，请把新密码发给 ' + t.username)
+    toast('新密码已保存，请把它发给 ' + t.username)
   } catch (e) {
-    toast(describeError(e), 'error', 6000)
+    // 留在弹窗里：toast 会消失，而密码校验失败需要一直看见
+    passwordError.value = describeError(e)
   } finally {
-    resetting.value = false
+    savingPassword.value = false
   }
 }
 
@@ -370,8 +378,8 @@ onMounted(load)
         <Field label="QQ 号" hint="对方必须先添加 bot 为好友" control-width="240px">
           <Input v-model="form.qq" placeholder="例如 10001" inputmode="numeric" autocomplete="off" name="qq" />
         </Field>
-        <Field label="初始密码" hint="至少 8 位" control-width="240px">
-          <Input v-model="form.password" type="password" placeholder="至少 8 位" autocomplete="new-password" name="password" />
+        <Field label="初始密码" hint="至少 12 位" control-width="240px">
+          <Input v-model="form.password" type="password" placeholder="至少 12 位" autocomplete="new-password" name="password" />
         </Field>
 
         <fieldset class="roles">
@@ -432,45 +440,49 @@ onMounted(load)
           <span>这是最后一个可用管理员，不能降级、停用或删除。先加一个管理员，再回来改它。</span>
         </p>
 
-        <fieldset class="roles">
-          <legend class="legend">更改身份</legend>
-          <div class="role-grid">
-            <button
-              v-for="r in ADMIN_ROLES"
-              :key="r.value"
-              type="button"
-              class="role-card"
-              :class="{ on: roleDraft === r.value }"
-              :aria-pressed="roleDraft === r.value"
-              :disabled="roleLocked(r.value)"
-              @click="roleDraft = r.value"
-            >
-              <span class="role-name">{{ r.label }}</span>
-            </button>
+        <div class="role-save-row">
+          <fieldset class="roles">
+            <legend class="legend">更改身份</legend>
+            <div class="role-grid">
+              <button
+                v-for="r in ADMIN_ROLES"
+                :key="r.value"
+                type="button"
+                class="role-card"
+                :class="{ on: roleDraft === r.value }"
+                :aria-pressed="roleDraft === r.value"
+                :disabled="roleLocked(r.value)"
+                @click="roleDraft = r.value"
+              >
+                <span class="role-name">{{ r.label }}</span>
+              </button>
+            </div>
+          </fieldset>
+          <div class="form-actions role-actions">
+            <Button
+              variant="primary"
+              :disabled="savingRole || roleDraft === editTarget.role"
+              @click="saveRole"
+            >{{ savingRole ? '保存中…' : '保存身份' }}</Button>
           </div>
-        </fieldset>
-        <div class="form-actions">
-          <Button
-            variant="primary"
-            :disabled="savingRole || roleDraft === editTarget.role"
-            @click="saveRole"
-          >{{ savingRole ? '保存中…' : '保存身份' }}</Button>
         </div>
 
         <hr class="rule">
 
-        <Field label="重置密码" control-width="200px">
+        <Field label="设置新密码" hint="至少 12 位；系统没有默认密码" control-width="240px">
           <Input
             v-model="newPassword"
             type="password"
-            placeholder="新的密码"
+            placeholder="输入新密码"
             autocomplete="new-password"
             aria-label="新的密码"
+            @update:model-value="passwordError = ''"
           />
+          <span v-if="passwordError" class="field-error" role="alert">{{ passwordError }}</span>
         </Field>
         <div class="form-actions">
-          <Button :disabled="resetting || !newPassword" @click="doReset">
-            {{ resetting ? '重置中…' : '重置密码' }}
+          <Button :disabled="savingPassword || !newPassword" @click="saveNewPassword">
+            {{ savingPassword ? '保存中…' : '保存新密码' }}
           </Button>
         </div>
 
@@ -644,13 +656,14 @@ onMounted(load)
 
 .roles { border: 0; margin: 0; padding: 0; min-width: 0; }
 .legend { padding: 0; margin: 0 0 6px; font-size: var(--fs-xs); color: var(--ink-3); }
-.role-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.role-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .role-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  text-align: left;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 76px;
+  justify-content: center;
+  padding: 8px 14px;
+  text-align: center;
   border: 1px solid var(--edge);
   border-radius: var(--r-sm);
   background: var(--stone-400);
@@ -671,6 +684,22 @@ onMounted(load)
 .role-card.on .role-name { color: var(--ember-hot); }
 
 .form-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+.role-save-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.role-save-row .roles { flex: 1 1 300px; }
+.role-actions { flex: 0 0 auto; }
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--blight-lift);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
 /* 弹窗里的分隔线收紧：.rule 默认上下各 24px，叠上 form 的 12px 间距会空出一大片 */
 .form .rule { margin: var(--sp-1) 0; }
 
@@ -699,7 +728,11 @@ onMounted(load)
   /* 手机上名字与昵称并成一行：三行一条会让人名册变得很长 */
   .who { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2); }
   .display { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .role-grid { grid-template-columns: 1fr; }
+  .role-grid { gap: 4px; }
+  .role-card { min-width: 68px; padding: 8px 10px; }
+  .role-save-row { align-items: stretch; }
+  .role-save-row .roles { flex: 1 1 100%; }
+  .role-actions { flex: 1 1 100%; }
   .facts { grid-template-columns: 1fr 1fr; }
   /* 路径是开发细节，手机上先让位给「谁做了什么」 */
   .event { grid-template-columns: 44px 84px minmax(0, 1fr); }

@@ -168,7 +168,7 @@ public class AdminUsersController {
     }
 
     @PostMapping("/{id}/password")
-    public ResponseEntity<Void> resetPassword(@PathVariable long id,
+    public ResponseEntity<Void> setPassword(@PathVariable long id,
                                                              @RequestBody ResetPasswordRequest body) {
         try {
             users.changePassword(id, body.password());
