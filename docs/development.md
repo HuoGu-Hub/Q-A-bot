@@ -159,7 +159,7 @@ node tests/ui/verify-theme.mjs
 | 前端类型 | 公开站类型与 30 个后台同名类型已改为引用生成 schema；其余 UI 专用类型保留 |
 | 请求体 | 控制器只收 record，不收 `@RequestBody Map`；`ArchitectureTest` 会拦 |
 | 响应体 | 控制器只返回 record 或 `ResponseEntity<Void>`，不返回 `Map`；后者在规范里记为 204 |
-| 错误响应 | `application/problem+json`，字段 `type / title / status / code / detail / requestId` |
+| 错误响应 | `application/problem+json`，字段 `type / title / status / code / detail / requestId`；192 个操作都声明 400/404/429/500，管理接口与 OneBot 额外声明 401/403/503 |
 | 请求标识 | 响应头 `X-Request-Id`，错误体里同名字段，日志 MDC 可直接检索 |
 | 写操作 | 创建 POST、整体替换 PUT、局部更新 PATCH、删除 DELETE；动作走 `/actions/{verb}` |
 | 公开路径 | `/api/public/v1/**`；旧 `/api/public/**` 兼容转发；管理路径 `/admin/api/**`，不版本化 |
@@ -172,7 +172,8 @@ node tests/ui/verify-theme.mjs
 | 管理密码 | 新建与改密至少 12 位；ADMIN_PASSWORD 引导的老密码只告警不拒绝，登录后应尽快改强 |
 | 写操作 | Origin 同源校验；浏览器带 Sec-Fetch-Site 时只接受 same-origin / none |
 | CSP | Nginx 对 HTML 下发 CSP；首帧主题必须走 /theme-init.js，不要再写内联 script |
-| 安全头 | Nginx 统一 HSTS、nosniff、X-Frame-Options、Referrer-Policy、Permissions-Policy |
+| 安全头 | Nginx 统一 HSTS（含 includeSubDomains）、nosniff、X-Frame-Options、Referrer-Policy、Permissions-Policy |
+| TLS | TLS 1.2/1.3，只留 AEAD 与前向保密套件，开启 OCSP stapling |
 | 依赖与密钥 | Dependabot 每周检查；CI 跑 pnpm audit 与 scripts/secret-scan.sh |
 | Nginx 配置 | 发版加 -WithNginx 才会安装并 reload；默认不碰线上 Nginx |
 

@@ -70,6 +70,24 @@ class OpenApiSpecTest {
         assertThat(root.path("paths").has("/api/public/v1/kb/search")).isTrue();
         assertThat(root.path("paths").has("/admin/api/kb/blocks")).isTrue();
 
+        JsonNode publicResponses = root.path("paths").path("/api/public/v1/kb/search")
+                .path("get").path("responses");
+        assertThat(publicResponses.has("400")).isTrue();
+        assertThat(publicResponses.has("404")).isTrue();
+        assertThat(publicResponses.has("429")).isTrue();
+        assertThat(publicResponses.has("500")).isTrue();
+        assertThat(publicResponses.path("429").path("headers").has("Retry-After")).isTrue();
+
+        JsonNode adminResponses = root.path("paths").path("/admin/api/kb/blocks")
+                .path("get").path("responses");
+        assertThat(adminResponses.has("401")).isTrue();
+        assertThat(adminResponses.has("403")).isTrue();
+        assertThat(adminResponses.has("503")).isTrue();
+
+        JsonNode problemSchema = root.path("components").path("schemas").path("ProblemDetail");
+        assertThat(problemSchema.path("properties").has("requestId")).isTrue();
+        assertThat(problemSchema.path("properties").has("errors")).isTrue();
+
         ObjectNode doc = (ObjectNode) root;
         doc.set("servers", mapper.createArrayNode().add(
                 mapper.createObjectNode().put("url", "/")));
