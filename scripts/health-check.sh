@@ -23,8 +23,14 @@ C=$(code "$B/robots.txt")
 
 echo
 echo "=== 2. 后端接口 ==="
-C=$(code "$B/api/public/stats")
-[ "$C" = "200" ] && ok "公开接口正常" || bad "公开接口异常（HTTP $C）"
+C=$(code "$B/api/public/v1/stats")
+if [ "$C" = "200" ]; then
+  ok "公开接口正常（/v1）"
+elif [ "$C" = "404" ]; then
+  bad "公开接口 /v1 不存在（404）—— 运行中的后端是旧版本，重新部署 jar 后重启"
+else
+  bad "公开接口异常（HTTP $C）"
+fi
 
 echo
 echo "=== 3. 前端页面（最容易漏的一项）==="
@@ -78,13 +84,15 @@ elif [ "$C" = "503" ]; then
   bad "事件入口未配置 ONEBOT_TOKEN（503）—— 配好并同步到 NapCat"
 elif [ "$C" = "404" ]; then
   ok "公网 Nginx 已拒绝事件入口（404）"
+elif [ "$C" = "204" ]; then
+  bad "事件入口未鉴权（204）—— 运行中的后端是旧版本，重新部署 jar 后重启"
 else
   bad "事件入口状态异常（$C），期望 401"
 fi
 
 echo
 echo "=== 7. 公开接口不含隐私字段 ==="
-LEAK=$(curl -s -m 8 "$B/api/public/stats" 2>/dev/null | grep -oE '"(userId|groupId|user_id|group_id|bestCosine)"' | head -1)
+LEAK=$(curl -s -m 8 "$B/api/public/v1/stats" 2>/dev/null | grep -oE '"(userId|groupId|user_id|group_id|bestCosine)"' | head -1)
 [ -z "$LEAK" ] && ok "无隐私字段泄露" || bad "发现隐私字段：$LEAK"
 
 echo
