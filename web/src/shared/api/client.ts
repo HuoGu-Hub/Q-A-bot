@@ -57,9 +57,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
  * 服务端靠 IP 限流 + clientId 防误刷，不依赖会话。
  */
 export const publicApi = {
-  get: <T>(path: string) => request<T>(`/api/public/v1/v1${path}`),
+  get: <T>(path: string) => request<T>(`/api/public/v1${path}`),
   post: <T>(path: string, body?: unknown) =>
-    request<T>(`/api/public/v1/v1${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+    request<T>(`/api/public/v1${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
 }
 
 /**
