@@ -154,7 +154,7 @@ node tests/ui/verify-theme.mjs
 | 项 | 约定 |
 |---|---|
 | 契约来源 | `docs/openapi.json`，由 `OpenApiSpecTest` 启动一次 Web 上下文生成 |
-| 规范基线 | 破坏性变更需同步更新 `docs/openapi.baseline.json`；CI 用 Redocly diff 拦截 major 变更 |
+| 规范基线 | 破坏性变更需同步更新 `docs/openapi.baseline.json`；CI 用 openapi-diff 拦截 breaking 变更 |
 | 生成类型 | `cd web && pnpm gen:api`，输出 `src/shared/api/schema.d.ts`，该文件不提交；`predev/prebuild/pretypecheck` 会自动生成 |
 | 前端类型 | 公开站类型与 30 个后台同名类型已改为引用生成 schema；其余 UI 专用类型保留 |
 | 请求体 | 控制器只收 record，不收 `@RequestBody Map`；`ArchitectureTest` 会拦 |

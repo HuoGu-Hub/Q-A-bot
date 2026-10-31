@@ -548,7 +548,11 @@ export interface SettingItem {
   value: unknown
 }
 
-export type SettingsView = DeepRequired<Schemas['SettingsView']>
+export type SettingsView = {
+  groups: Record<string, SettingItem[]>
+  applyCount: number
+  note: string
+}
 
 /* ==================== 模型配置 ==================== */
 

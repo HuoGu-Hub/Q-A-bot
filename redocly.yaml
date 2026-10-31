@@ -1,6 +1,5 @@
 extends:
   - minimal
-  - diff-recommended
 
 rules:
   # 控制器靠方法名与 Javadoc 表达用途，不逐条写 @Operation(summary)

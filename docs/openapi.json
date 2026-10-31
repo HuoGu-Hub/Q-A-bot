@@ -1,5 +1,5 @@
 {
-  "openapi" : "3.1.0",
+  "openapi" : "3.0.1",
   "info" : {
     "title" : "Q-A-bot API",
     "description" : "公开站只读接口与管理后台接口。\n\n公开接口按 IP 限流，触发时返回 429 与 Retry-After。\n管理接口使用 admin_token 会话 Cookie；未配置后台账号时整体返回 503。\nOneBot 事件入口使用 x-signature 或 Bearer Token。\n",
@@ -509,14 +509,14 @@
           "content" : {
             "application/json" : {
               "schema" : {
+                "required" : [ "file" ],
                 "type" : "object",
                 "properties" : {
                   "file" : {
                     "type" : "string",
                     "format" : "binary"
                   }
-                },
-                "required" : [ "file" ]
+                }
               }
             }
           }
@@ -2632,14 +2632,14 @@
           "content" : {
             "application/json" : {
               "schema" : {
+                "required" : [ "file" ],
                 "type" : "object",
                 "properties" : {
                   "file" : {
                     "type" : "string",
                     "format" : "binary"
                   }
-                },
-                "required" : [ "file" ]
+                }
               }
             }
           }
@@ -6029,7 +6029,9 @@
           }
         }
       },
-      "JsonNode" : { },
+      "JsonNode" : {
+        "type" : "object"
+      },
       "OneBotEvent" : {
         "type" : "object",
         "properties" : {
@@ -6327,7 +6329,9 @@
         "properties" : {
           "changes" : {
             "type" : "object",
-            "additionalProperties" : { }
+            "additionalProperties" : {
+              "type" : "object"
+            }
           }
         }
       },
@@ -6646,7 +6650,9 @@
           },
           "report" : {
             "type" : "object",
-            "additionalProperties" : { }
+            "additionalProperties" : {
+              "type" : "object"
+            }
           },
           "errors" : {
             "type" : "array",
@@ -7676,30 +7682,30 @@
         }
       },
       "UpdateBlockRequest" : {
+        "required" : [ "id" ],
         "type" : "object",
         "properties" : {
           "id" : {
-            "type" : "string",
-            "minLength" : 1
+            "minLength" : 1,
+            "type" : "string"
           },
           "text" : {
             "type" : "string"
           }
-        },
-        "required" : [ "id" ]
+        }
       },
       "RetireBlockRequest" : {
+        "required" : [ "id" ],
         "type" : "object",
         "properties" : {
           "id" : {
-            "type" : "string",
-            "minLength" : 1
+            "minLength" : 1,
+            "type" : "string"
           },
           "retired" : {
             "type" : "boolean"
           }
-        },
-        "required" : [ "id" ]
+        }
       },
       "RetireResult" : {
         "type" : "object",
@@ -7710,17 +7716,17 @@
         }
       },
       "RetireDocRequest" : {
+        "required" : [ "doc" ],
         "type" : "object",
         "properties" : {
           "doc" : {
-            "type" : "string",
-            "minLength" : 1
+            "minLength" : 1,
+            "type" : "string"
           },
           "retired" : {
             "type" : "boolean"
           }
-        },
-        "required" : [ "doc" ]
+        }
       },
       "RetireDocResult" : {
         "type" : "object",
@@ -8815,7 +8821,9 @@
           "hint" : {
             "type" : "string"
           },
-          "value" : { }
+          "value" : {
+            "type" : "object"
+          }
         }
       },
       "SettingsView" : {
@@ -9666,8 +9674,9 @@
         "type" : "object",
         "properties" : {
           "timeout" : {
-            "type" : [ "integer", "null" ],
-            "format" : "int64"
+            "type" : "integer",
+            "format" : "int64",
+            "nullable" : true
           }
         }
       },

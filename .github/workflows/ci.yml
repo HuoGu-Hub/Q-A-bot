@@ -70,9 +70,17 @@ jobs:
       - name: Spectral lint
         run: npx --yes @stoplight/spectral-cli@6.17.0 lint docs/openapi.json
 
-      # 与基线比较；破坏性变更必须显式更新 docs/openapi.baseline.json
+      # 与基线比较；破坏性变更必须显式更新 docs/openapi.baseline.json。
+      # openapi-diff 的 CLI 对 breaking 变更仍返回 0，所以这里读输出再决定是否失败。
       - name: OpenAPI diff
-        run: npx --yes @redocly/cli@2.72.1 diff docs/openapi.baseline.json docs/openapi.json --fail-on major
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes openapi-diff@0.24.1 docs/openapi.baseline.json docs/openapi.json | tee /tmp/openapi-diff.log
+          if grep -q "Breaking changes found" /tmp/openapi-diff.log; then
+            echo "::error::OpenAPI breaking changes detected"
+            exit 1
+          fi
 
   # ---------------------------------------------------------------- 前端
   web:
