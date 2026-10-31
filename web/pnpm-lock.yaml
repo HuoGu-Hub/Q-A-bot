@@ -19,11 +19,11 @@ importers:
         version: 4.6.4(vue@3.5.43(typescript@5.9.3))
     devDependencies:
       '@types/node':
-        specifier: ^26.6.2
-        version: 26.6.2
+        specifier: ^26.6.5
+        version: 26.6.5
       '@vitejs/plugin-vue':
         specifier: ^5.2.1
-        version: 5.2.4(vite@6.4.3(@types/node@26.6.2))(vue@3.5.43(typescript@5.9.3))
+        version: 5.2.4(vite@6.4.3(@types/node@26.6.5))(vue@3.5.43(typescript@5.9.3))
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
@@ -32,7 +32,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.0.7
-        version: 6.4.3(@types/node@26.6.2)
+        version: 6.4.3(@types/node@26.6.5)
       vue-tsc:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
@@ -377,8 +377,8 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/node@26.6.2':
-    resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
+  '@types/node@26.6.5':
+    resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
 
   '@vitejs/plugin-vue@5.2.4':
     resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
@@ -892,13 +892,13 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/node@26.6.2':
+  '@types/node@26.6.5':
     dependencies:
       undici-types: 8.9.0
 
-  '@vitejs/plugin-vue@5.2.4(vite@6.4.3(@types/node@26.6.2))(vue@3.5.43(typescript@5.9.3))':
+  '@vitejs/plugin-vue@5.2.4(vite@6.4.3(@types/node@26.6.5))(vue@3.5.43(typescript@5.9.3))':
     dependencies:
-      vite: 6.4.3(@types/node@26.6.2)
+      vite: 6.4.3(@types/node@26.6.5)
       vue: 3.5.43(typescript@5.9.3)
 
   '@volar/language-core@2.4.15':
@@ -1181,7 +1181,7 @@ snapshots:
 
   uri-js-replace@1.0.2: {}
 
-  vite@6.4.3(@types/node@26.6.2):
+  vite@6.4.3(@types/node@26.6.5):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.7)
@@ -1190,7 +1190,7 @@ snapshots:
       rollup: 4.63.4
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.6.2
+      '@types/node': 26.6.5
       fsevents: 2.3.3
 
   vscode-uri@3.2.0: {}
