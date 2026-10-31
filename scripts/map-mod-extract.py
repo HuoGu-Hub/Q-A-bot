@@ -132,24 +132,30 @@ def c_ints(chunk: str) -> list[int]:
     return [int(v, 0) for v in re.findall(r"-?(?:0[xX][0-9a-fA-F]+|\d+)", chunk)]
 
 
-def parse_chinese_names(src: Path, expected: int) -> list[str]:
-    """lang.cpp 的 kResourceNames 第 13 列是简体中文，和 kOreLabels 同序。"""
+def parse_chinese_names(src: Path, expected: int) -> tuple[list[str], dict[str, str]]:
+    """lang.cpp 的 kResourceNames 第 13 列是简体中文。
+
+    1.3.26 起生物行也在这张表里，但只有少数几条，而且尾部两条的顺序和
+    kOreLabels 对不上；因此除按索引取旧行外，再按英文名建一张精确映射。
+    """
     text = read_text(src / "src" / "lang.cpp")
     rows = re.findall(r"\{([^{}]*)\}", c_array(text, "kResourceNames"))
     names = []
+    by_label: dict[str, str] = {}
     for row in rows:
         values = c_strings(row)
         names.append(values[12] if len(values) >= 13 else "")
+        if len(values) >= 13 and values[0] and values[12]:
+            by_label[values[0]] = values[12]
     if len(names) > expected:
         raise SystemExit(f"lang.cpp 有 {len(names)} 行资源名，ore_deposits.h 只有 {expected} 行")
-    # 1.3.26 的生物行没有本地化名；用英文名兜底
-    return names + [""] * (expected - len(names))
+    return names + [""] * (expected - len(names)), by_label
 
 
 def parse_ore_deposits(src: Path) -> dict:
     text = read_text(src / "src" / "ore_deposits.h")
     labels = c_strings(c_array(text, "kOreLabels"))
-    chinese = parse_chinese_names(src, len(labels))
+    chinese, chinese_by_label = parse_chinese_names(src, len(labels))
     categories = c_ints(c_array(text, "kOreCategory"))
     # 林地形状色：0xAABBGGRR，只有树木行非零
     area_colors = c_ints(c_array(text, "kOreAreaColors"))
@@ -174,12 +180,16 @@ def parse_ore_deposits(src: Path) -> dict:
         area_color = "" if area == 0 else "#%02x%02x%02x" % (
             area & 0xFF, (area >> 8) & 0xFF, (area >> 16) & 0xFF)
         kind = ROW_KINDS.get(i, "world")
+        if kind == "creature":
+            # 生物行按英文名精确匹配；表里没有的保持英文，绝不按索引硬套
+            name_zh = chinese_by_label.get(label, "")
+        else:
+            name_zh = chinese[i] or label
         rows.append({
             "index": i,
             "key": re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"),
             "name": label,
-            # 生物行的中文名表和 kOreLabels 顺序对不上，统一用英文名，避免张冠李戴
-            "nameZh": "" if kind == "creature" else (chinese[i] or label),
+            "nameZh": name_zh,
             "kind": kind,
             "category": CATEGORY_KEYS.get(category, "world"),
             "count": counts.get(i, 0),
