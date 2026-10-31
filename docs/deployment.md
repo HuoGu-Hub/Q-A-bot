@@ -257,7 +257,7 @@ sudo ln -s /etc/nginx/sites-available/qqbot.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-`qqbot-domain.conf` 是单域名配置，`server_name` 写 `firefire.online` 与 `www`。`qqbot.conf` 是双域名模板，里面的 `admin.example.com` 只是占位符；没有对应 DNS 与证书时不要启用它。
+`qqbot-domain.conf` 是单域名配置，`server_name` 写 `firefire.online` 与 `www`，并开启 OCSP stapling；证书续期后确认 `qqbot.crt` 仍包含完整中间证书链。`qqbot.conf` 是双域名模板，里面的 `admin.example.com` 只是占位符；没有对应 DNS 与证书时不要启用它。
 
 需要修改两处：
 
