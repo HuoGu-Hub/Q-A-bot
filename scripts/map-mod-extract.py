@@ -8,13 +8,14 @@ mod 自己把游戏世界文件编译进了 DLL，压缩包里没有点位表。
   src/chest_spawns.h   金/银/木箱与石棺
   src/regions.h        八块区域的网格
 
-用法（源码目录可以换成任意一次 git clone / 官方 zip 解压目录）：
+用法：把 GitHub 上的 Download ZIP 直接喂进来就行，源码在压缩包里，脚本自己解：
 
-  python scripts/map-mod-extract.py --zip "server/data/...1.3.26.zip" \
-      --src ".tmp-pw/worst-map-1.3.26/worst-map-mod-enshrouded-1.3.26" \
-      --out "server/data/map-mod"
+  python scripts/map-mod-extract.py --zip "最坏地图1.3.27.zip"
 
-只给 --zip 时按 mod.json 的版本去 GitHub 拉同版本的源码，要求能联网。
+想指定产物目录就加 --out（默认 server/data/map-mod，正好是服务端读的那个）。
+已经有源码目录时用 --src 跳过解压；压缩包里没有源码时按 mod.json 的版本
+去 GitHub 拉同版本的源码包，要求能联网。
+
 版本对不上会直接退出：点位表和游戏版本是一一对应的，拿错版本坐标就会错。
 """
 from __future__ import annotations
@@ -23,6 +24,7 @@ import argparse
 import csv
 import json
 import re
+import shutil
 import sys
 import tempfile
 import urllib.request
@@ -84,6 +86,25 @@ def mod_version_from_zip(path: Path) -> str:
             if name.endswith("/mod.json") or name == "mod.json":
                 return json.loads(z.read(name).decode("utf-8"))["version"]
     raise SystemExit(f"{path} 里没有 mod.json")
+
+
+def has_source(zip_path: Path) -> bool:
+    """压缩包里是否直接带源码。GitHub 的 Download ZIP 就是这种。"""
+    with zipfile.ZipFile(zip_path) as z:
+        return any(n.endswith("src/ore_deposits.h") for n in z.namelist())
+
+
+def extract_source(zip_path: Path, workdir: Path) -> Path:
+    """解开压缩包，返回含 src/ 的那一层。
+
+    解压后经常多套一层同名目录，这里按 ore_deposits.h 的实际位置倒推，
+    省掉人工判断该指哪一层。
+    """
+    with zipfile.ZipFile(zip_path) as z:
+        z.extractall(workdir)
+    for header in workdir.rglob("src/ore_deposits.h"):
+        return header.parent.parent
+    raise SystemExit(f"{zip_path} 里没有 src/ore_deposits.h")
 
 
 def fetch_source(version: str, workdir: Path) -> Path:
@@ -252,8 +273,8 @@ def parse_regions(src: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="把 The Worst Map Mod 的点位导出成 JSON/CSV")
-    parser.add_argument("--zip", help="mod 压缩包，用来读版本与校验")
-    parser.add_argument("--src", help="与压缩包版本对应的 mod 源码目录")
+    parser.add_argument("--zip", help="GitHub 的 Download ZIP；带源码时脚本自己解，也用来读版本")
+    parser.add_argument("--src", help="已有的源码目录，给了就跳过解压，压缩包只取版本号")
     parser.add_argument("--out", default="server/data/map-mod", help="输出目录")
     args = parser.parse_args()
 
@@ -261,11 +282,17 @@ def main() -> int:
         parser.error("--zip 与 --src 至少要给一个")
 
     version = mod_version_from_zip(Path(args.zip)) if args.zip else "unknown"
+    workdir = None
     if args.src:
         src = Path(args.src)
     else:
         workdir = Path(tempfile.mkdtemp(prefix="map-mod-"))
-        src = fetch_source(version, workdir)
+        if args.zip and has_source(Path(args.zip)):
+            # 源码就在压缩包里，自己解，不用人工解压再判断该指哪一层
+            src = extract_source(Path(args.zip), workdir)
+            print(f"[unzip] {args.zip}")
+        else:
+            src = fetch_source(version, workdir)
     if not (src / "src" / "ore_deposits.h").exists():
         raise SystemExit(f"{src} 不是 mod 源码目录：找不到 src/ore_deposits.h")
     mod_json = src / "mod.json"
@@ -278,6 +305,14 @@ def main() -> int:
     chests = parse_chests(src)
     trees = parse_trees(src)
     regions = parse_regions(src)
+    if workdir is not None:
+        shutil.rmtree(workdir, ignore_errors=True)
+    stranded = [r for r in ore["rows"] if r["kind"] == "world" and r["count"]]
+    if stranded:
+        print("[warn] 下面这些行没被 ROW_KINDS 覆盖，导入后不会显示：")
+        for r in stranded[:10]:
+            print(f"       index={r['index']}  {r['name']}  {r['count']} 个")
+        print("       在 scripts/map-mod-extract.py 的 ROW_KINDS 里补上对应区间再重跑")
     total_points = len(ore["points"])
     total_chests = len(chests)
     expected = {"1.3.18": (33084, 3042), "1.3.26": (61423, 3042)}
@@ -329,7 +364,7 @@ def main() -> int:
             row = by_index[ore_i]
             w.writerow([row["kind"], row["key"], row["name"], row["nameZh"], x, z, top, amount])
 
-    print(f"[ok] {src}")
+    print(f"[ok] {args.zip if workdir is not None else src}")
     print(f"     {out / 'points.json'}")
     print(f"     {out / 'points.csv'}")
     print(f"     点位 {total_points} / 箱子 {total_chests} / 林地矩形 {len(trees)}")
