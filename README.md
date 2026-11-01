@@ -111,7 +111,7 @@ cp .env.example .env
 
 配置优先级从低到高为 `application.yml`、环境变量与 `.env`、`config/overrides.yml`、命令行参数。数据库、知识库、图片、瓦片与日志路径均相对进程工作目录；从 `server/` 启动时位于 `server/data/`。系统提示词为仓库根目录的 `system.md`，模板为 `system.md.example`。
 
-公开站品牌、浏览器标题、页脚署名与管理后台品牌统一读取 `app.bot.name`，在「Bot 配置 → 机器人身份 → 机器人昵称」修改即可全站生效。
+公开站品牌、浏览器标题与管理后台品牌统一读取 `app.bot.name`，在「Bot 配置 → 机器人身份 → 机器人昵称」修改即可全站生效。
 
 完整变量与运行参数见 [.env.example](.env.example) 与[部署指南](docs/deployment.md)。
 
@@ -155,6 +155,12 @@ tests/        黄金集、可移植 UI 测试、手工探针、清理 SQL
 | 语料与地图 | 公开站文案默认不绑定游戏；地图与 wiki 导入默认指向《雾锁王国》wiki，更换游戏需调整抓取源与地图数据 |
 | 模型 | 需要外部 OpenAI 兼容 API，向量与重排需要独立的 embedding 服务 |
 | 管理后台 | 仅单管理员，无多用户与角色体系 |
+
+## 版权与致谢
+
+地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，作者 Greeneye0，以 MIT 许可证发布，版权归原作者所有。`scripts/map-mod-extract.py` 从其源码提取点位表，生成 `server/src/main/resources/map-mod/points.json`；许可证全文见 [map-mod/LICENSE](server/src/main/resources/map-mod/LICENSE)。
+
+公开站的版权标注集中在「关于」页，页脚只留备案等合规信息。
 
 ## 许可
 

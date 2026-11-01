@@ -16,7 +16,7 @@ import java.util.Map;
  * 公开站的固定文案。
  *
  * <p><b>为什么要这个东西</b>：公开站上「首页标语」「怎么用三条」「关于页正文」
- * 「页脚版权」「404 文案」这类**固定文本**原先全部硬编码在 .vue 里（清点出 40+ 处），
+ * 「版权声明」「404 文案」这类**固定文本**原先全部硬编码在 .vue 里（清点出 40+ 处），
  * 改一个字都要重新构建前端。这里把它们变成可编辑的内容。
  *
  * <p><b>只存覆盖值，默认值放在代码里</b>（{@link #REGISTRY}）。这样：
@@ -53,13 +53,9 @@ public class SiteTextService {
     //    渲染 —— 它先整体转义再替换标记，所以既能让链接可点，又不会开 XSS 口子。
     //    只支持这两种，每多一种就多一处要论证安全性的地方。
     private static final List<Block> REGISTRY = List.of(
-            // ---- 全站 ----
-            new Block("layout", "全站", "footer_note", "页脚 · 来源声明",
-                    "", true,
-                    "内容来自本项目的知识库 · 版权归各自来源所有"),
-            new Block("layout", "全站", "footer_copy", "页脚 · 版权行",
-                    "{year} 与 {bot} 会自动替换", false,
-                    "© {year} {bot}"),
+            // 页脚的两块文案（footer_note / footer_copy）已于 2026-11-01 下线：
+            // 版权声明统一收到「关于」页，页脚留给备案等合规信息。
+            // 库里若还留着覆盖行，publicOverrides() 会打 WARN 提示清掉。
 
             // ---- 首页 ----
             new Block("home", "首页", "tagline", "副标语",
@@ -92,6 +88,11 @@ public class SiteTextService {
             new Block("about", "关于", "source_body", "正文", "", true,
                     "资料来自本项目导入的知识库文档。内容与素材的版权归各自来源所有，"
                             + "本站仅用于非商业问答。"),
+            new Block("about", "关于", "credit_title", "标题", "", false, "版权与致谢"),
+            new Block("about", "关于", "credit_body", "正文", "", true,
+                    "地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，"
+                            + "作者 Greeneye0，以 [MIT 许可证](https://github.com/Greeneye0/worst-map-mod-enshrouded/blob/main/LICENSE) 发布，"
+                            + "版权归原作者所有。本站只使用从其中提取的点位数据，不含该 mod 的代码。"),
             new Block("about", "关于", "how_title", "标题", "", false, "回答是怎么产生的"),
             new Block("about", "关于", "how_body", "正文", "", true,
                     "把问题变成向量，在本地资料库里找最相关的几段\n同时用中英术语表做一次关键词匹配\n两路结果按排名融合，取前几条\n把资料交给大模型，让它依据资料作答"),

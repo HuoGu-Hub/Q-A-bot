@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watchEffect } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { renderInline } from './renderInline'
-import { t } from './useSiteText'
+// 站点信息（机器人昵称）由这个模块在加载时拉一次；显式引入，保证地图这类不读文案的页面也拿到昵称
+import './useSiteText'
 import { botName } from '@shared/identity/botName'
 import Icon from '@shared/ui/Icon.vue'
 import ThemeToggle from '@shared/ui/ThemeToggle.vue'
@@ -111,13 +111,10 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
       </RouterView>
     </main>
 
+    <!-- 页脚：版权声明集中在「关于」页，这里只留一条收尾线，等备案信息下来再填 -->
     <footer class="ftr">
       <div class="page">
         <hr class="rule">
-        <p class="faint">
-          <span v-html="renderInline(t('layout.footer_note', '内容来自本项目的知识库 · 版权归各自来源所有'))" />
-        </p>
-        <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '© {year} {bot}'))" /></p>
       </div>
     </footer>
 
@@ -281,8 +278,10 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
 }
 .shell.is-full .ftr { display: none; }
 
-/* ==================== 页脚 ==================== */
-.ftr { padding-top: var(--sp-7); padding-bottom: var(--sp-6); }
+/* ==================== 页脚 ====================
+   现在只有一条收尾线，留白按「空页脚」收窄 —— 按原来两行文案的高度留，
+   首页会凭空多出 4px 的竖向滚动。等备案信息填进来再加回去。 */
+.ftr { padding-top: var(--sp-6); padding-bottom: var(--sp-5); }
 .ftr p { font-size: var(--fs-xs); color: var(--ink-3); margin: 0 0 4px; }
 .ftr .rule { margin-top: 0; margin-bottom: var(--sp-4); }
 

@@ -111,7 +111,7 @@ The scripts are bash; on Windows use WSL or Git Bash. See [deployment](docs/depl
 
 Configuration precedence, lowest to highest: `application.yml`, environment variables and `.env`, `config/overrides.yml`, command-line arguments. Database, corpus, image, tile and log paths are relative to the process working directory; starting from `server/` places them under `server/data/`. The system prompt is `system.md` at the repository root; `system.md.example` is the template.
 
-The public brand, browser title, footer credit and admin console brand all read `app.bot.name`; change it under Bot settings → Bot identity to update the whole site.
+The public brand, browser title and admin console brand all read `app.bot.name`; change it under Bot settings → Bot identity to update the whole site.
 
 See [.env.example](.env.example) and [deployment](docs/deployment.md) for the full set.
 
@@ -155,6 +155,12 @@ See [development](docs/development.md) for details.
 | Corpus and map | Public copy is game-neutral by default; map and wiki import default to the Enshrouded wiki. Other games require their own source and map data |
 | Models | Requires external OpenAI-compatible APIs plus a separate embedding and rerank service |
 | Admin | Single administrator. No multi-user or role model |
+
+## Credits
+
+Map marker data comes from [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded) by Greeneye0, released under the MIT license; copyright remains with the original author. `scripts/map-mod-extract.py` extracts the marker tables from its source into `server/src/main/resources/map-mod/points.json`; the full license text is in [map-mod/LICENSE](server/src/main/resources/map-mod/LICENSE).
+
+Copyright notices on the public site live on the About page; the footer is reserved for filing information.
 
 ## License
 
