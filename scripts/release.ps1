@@ -197,7 +197,8 @@ if (-not (Test-Path $jarPath)) {
   throw "找不到构建产物；先去掉 -SkipBuild 跑一次，或者检查 mvn 输出"
 }
 $jar = Get-Item $jarPath
-Write-Host ("    jar: {0:N1} MB / {1}" -f ($jar.Length / 1MB), $jar.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"))
+$jarHash = (Get-FileHash $jarPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Write-Host ("    jar: {0:N1} MB / {1} / sha256 {2}" -f ($jar.Length / 1MB), $jar.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"), $jarHash.Substring(0, 12))
 
 # ---------------------------------------------------------------- 3. 打包
 Step "打包"
@@ -241,7 +242,8 @@ if (-not $commit) { $commit = "unknown" }
 @(
   "built:  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
   "commit: $commit",
-  "jar:    $JarName"
+  "jar:    $JarName",
+  "sha256: $jarHash"
 ) | Set-Content (Join-Path $pkg "VERSION.txt") -Encoding UTF8
 
 if (Test-Path $Bundle) { Remove-Item $Bundle -Force }
