@@ -56,7 +56,7 @@ $Root     = Split-Path -Parent $PSScriptRoot
 $BuildDir = Join-Path $Root ".toolchain\release"
 $StageDir = Join-Path $BuildDir "stage"
 $Bundle   = Join-Path $BuildDir "qqbot-release.tar.gz"
-$JarName  = "qqbot-server-0.0.1-SNAPSHOT.jar"
+$JarName  = "qqbot-server-0.5.0.jar"
 
 function Step([string]$Text) {
   Write-Host ""

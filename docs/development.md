@@ -45,10 +45,10 @@ cp .env.example .env
 
 ```bash
 # scripts/build-server.sh 的产物
-java -jar .toolchain/server-ci/target/qqbot-server-0.0.1-SNAPSHOT.jar
+java -jar .toolchain/server-ci/target/qqbot-server-0.5.0.jar
 
 # 直接在 server/ 中 mvn package 的产物
-java -jar server/target/qqbot-server-0.0.1-SNAPSHOT.jar
+java -jar server/target/qqbot-server-0.5.0.jar
 ```
 
 前端开发模式：

@@ -221,7 +221,7 @@ Type=simple
 User=qqbot
 WorkingDirectory=/opt/qqbot/server
 EnvironmentFile=/opt/qqbot/.env
-ExecStart=/usr/bin/java -Xmx512m -Dfile.encoding=UTF-8 -jar /opt/qqbot/server/target/qqbot-server-0.0.1-SNAPSHOT.jar
+ExecStart=/usr/bin/java -Xmx512m -Dfile.encoding=UTF-8 -jar /opt/qqbot/server/target/qqbot-server-0.5.0.jar
 Restart=always
 RestartSec=10
 

@@ -13,7 +13,7 @@
 
   <groupId>com.example</groupId>
   <artifactId>qqbot-server</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.5.0</version>
   <name>Q-A-bot server</name>
   <description>Q-A-bot 业务层（协议端：NapCat / OneBot 11）</description>
 
