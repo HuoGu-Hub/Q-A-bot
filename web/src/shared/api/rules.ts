@@ -64,6 +64,11 @@ const ADMIN: Array<[RegExp, CacheRule]> = [
   [/^\/voice\/triggers$/, { ttl: 60 }],
   [/^\/voice\/tts\/voices$/, { ttl: 600 }],
 
+  // 地图状态栏：瓦片缓存与后台任务的读数。进页面补一次就够，晚十秒不影响判断。
+  // 点操作按钮时先发的写请求会整端失效，所以轮询与操作后的刷新都还是新数据
+  [/^\/map\/status$/, { ttl: 10 }],
+  [/^\/map\/anchor$/, { ttl: 30 }],
+
   // 清单类
   [/^\/models$/, { ttl: 60 }],
   [/^\/map\/(catalog|maps|layers|markers)$/, { ttl: 60 }],

@@ -97,6 +97,7 @@ tbody tr:last-child td { border-bottom:0; }
     <li><a href="#evidence">证据</a></li>
     <li><a href="#cost">一次切页的代价</a></li>
     <li><a href="#why">为什么体感是一直加载中</a></li>
+    <li><a href="#map">地图页为什么单独还在请求</a></li>
     <li><a href="#plan">方案</a></li>
     <li><a href="#policy">缓存策略</a></li>
     <li><a href="#code">实现</a></li>
@@ -111,6 +112,7 @@ tbody tr:last-child td { border-bottom:0; }
       <li><a href="#evidence">证据</a></li>
       <li><a href="#cost">一次切页的代价</a></li>
       <li><a href="#why">为什么体感是一直加载中</a></li>
+      <li><a href="#map">地图页为什么单独还在请求</a></li>
       <li><a href="#plan">方案</a></li>
       <li><a href="#policy">缓存策略</a></li>
       <li><a href="#code">实现</a></li>
@@ -215,6 +217,28 @@ tbody tr:last-child td { border-bottom:0; }
 </table>
 </div>
 
+<h2 id="map">地图页为什么单独还在请求</h2>
+
+<p>第一轮改完之后，后台其余页面切来切去已经不发请求了，只有地图页还在发。原因有两个，一个是设计如此，一个是 bug。</p>
+
+<h3>点位被拉了两遍</h3>
+
+<p>地图页有两条装载路径：<code>boot()</code> 和 <code>watch(mapName)</code>。boot 把 <code>mapName</code> 设好之后自己 <code>await loadMarkers()</code> 一次，赋值又触发了 watcher，watcher 再拉一次。公开站与后台的地图页都是这个写法。</p>
+
+<p>没有缓存时这两次调用被同一个在途请求挡住了，看不出问题。加了缓存之后，第一次调用把缓存「用掉」并把本次访问标记为已读，第二次就被当成「用户手动刷新」，于是真的打到网络 —— 每次进地图页固定多一次 <code>/map/markers</code>。</p>
+
+<p>改法：换图只留一个入口。boot 与跳转都改走 <code>selectMap()</code>，它只改 <code>mapName</code>，点位交给 watcher 去拉，然后等 watcher 的任务结束。后台的「重新载入」按钮传 <code>force</code>，值没变也能重拉。</p>
+
+<h3>状态栏没进缓存</h3>
+
+<p><code>/map/status</code> 是瓦片缓存与后台任务的读数，<code>/map/anchor</code> 是待复核点位。上一轮把它们当成「实时状态」排除在缓存之外，于是每次进页面固定两个请求。</p>
+
+<p>它们其实是「补信息」：不挡首屏，晚十秒也不影响判断。现在按 10 秒与 30 秒缓存；点任何操作按钮时先发的写请求会整端失效，所以轮询与操作后的刷新仍然拿新数据。</p>
+
+<blockquote class="ok">
+<p>这两处改完，地图页与别的页面之间来回切，十秒内应当一条 JSON 请求都不发。</p>
+</blockquote>
+
 <h2 id="plan">方案</h2>
 
 <p>三件事，前两件解决“重复请求”，第三件解决“撞了限流就卡死”。已经按这个方案改完。</p>
@@ -290,7 +314,9 @@ tbody tr:last-child td { border-bottom:0; }
 <tr><td><code>/voice</code> <code>/voice/triggers</code></td><td>60 秒</td><td>素材与触发词</td></tr>
 <tr><td><code>/voice/tts/voices</code></td><td>600 秒</td><td>音色清单，几乎不变</td></tr>
 <tr><td><code>/models</code> <code>/map/catalog</code> <code>/map/maps</code> <code>/map/layers</code> <code>/map/markers</code></td><td>60 秒</td><td>清单类</td></tr>
-<tr><td><code>/session</code> <code>/logs/*</code> <code>/users*</code> <code>/map/status</code> <code>/map/anchor</code> <code>/distill/jobs*</code> <code>/distill/notes*</code> <code>/board-records</code></td><td>不缓存</td><td>身份、日志、轮询、进度与分页明细</td></tr>
+<tr><td><code>/map/status</code></td><td>10 秒</td><td>瓦片缓存与后台任务的读数，进页面补一次就够</td></tr>
+<tr><td><code>/map/anchor</code></td><td>30 秒</td><td>待复核点位，写操作会整端失效</td></tr>
+<tr><td><code>/session</code> <code>/logs/*</code> <code>/users*</code> <code>/distill/jobs*</code> <code>/distill/notes*</code> <code>/board-records</code></td><td>不缓存</td><td>身份、日志、进度与分页明细</td></tr>
 </tbody>
 </table>
 </div>
@@ -342,6 +368,7 @@ async function write&lt;T&gt;(scope: Scope, path: string, init: RequestInit): Pr
 <tr><td><code>web/src/shared/api/rules.ts</code></td><td>新增：两端 TTL 白名单</td></tr>
 <tr><td><code>web/src/shared/api/client.ts</code></td><td>读走缓存、写后失效、429 退避</td></tr>
 <tr><td><code>web/src/public/router.ts</code> <code>web/src/admin/router.ts</code></td><td><code>afterEach</code> 调 <code>beginVisit()</code></td></tr>
+<tr><td><code>web/src/public/views/MapView.vue</code> <code>web/src/admin/views/MapAdminView.vue</code></td><td>换图收敛到 <code>selectMap()</code>，点位只由一个入口加载</td></tr>
 </tbody>
 </table>
 </div>
@@ -350,7 +377,7 @@ async function write&lt;T&gt;(scope: Scope, path: string, init: RequestInit): Pr
 
 <ul>
 <li><code>pnpm typecheck</code> 通过。</li>
-<li><code>pnpm build:only</code> 通过，产物正常。</li>
+<li><code>pnpm build:only</code> 通过，产物正常。第二轮改动后重跑，同样通过。</li>
 <li>14 条行为断言全部通过，覆盖：TTL 命中、切回不请求、同页刷新重取、并发只发一次、写后失效、两端同名路径不串。</li>
 </ul>
 

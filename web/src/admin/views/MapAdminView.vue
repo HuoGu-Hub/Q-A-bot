@@ -498,8 +498,7 @@ async function boot() {
     // 让它们挡在地图的 loading 后面，等于每次打开都要多等一次 status 的往返。
     catalog.value = await adminApi.get<Catalog>('/map/catalog')
     const first = catalog.value.maps[0]
-    mapName.value = first ? first.map : ''
-    if (mapName.value) await loadMarkers()
+    await selectMap(first ? first.map : '', true)
     /*
      * 数据齐了**直接灌一次**图标表，不等 watcher。
      *
@@ -534,6 +533,29 @@ async function loadMarkers() {
   markers.value = r.markers
   syncVisibleGroups()
   selected.value = null
+}
+
+/** 换图任务。由 watcher 发起，boot 与跳转都等它 */
+let mapTask: Promise<void> | null = null
+
+/**
+ * 换图：只改 mapName，点位交给 watcher 去拉。
+ *
+ * <p>⚠️ 为什么不能在这里顺便再拉一次：boot 与 watcher 各拉一次的话，同一张图
+ * 会请求两遍。没有缓存时只是白跑一趟；有了缓存之后，第二遍会被当成
+ * 「用户手动刷新」真的打到网络上 —— 表现就是来回切页时只有地图页还在发请求。
+ *
+ * @param force 值没变也要重新拉。给「重新载入」用：那时 watcher 不会触发
+ */
+async function selectMap(name: string, force = false): Promise<void> {
+  if (!name) return
+  if (name === mapName.value) {
+    if (force) await loadMarkers()
+    return
+  }
+  mapName.value = name
+  await nextTick()
+  await mapTask
 }
 
 async function loadStatus() {
@@ -576,8 +598,7 @@ async function loadAnchor() {
 /** 跳到某条待复核的点位：换地图 → 换画布 → 选中它，面板自己会展开 */
 async function jumpToAnchor(a: AnchorReview) {
   if (a.map !== mapName.value) {
-    mapName.value = a.map
-    await loadMarkers()
+    await selectMap(a.map)
   }
   const idx = (currentMap.value?.canvases ?? []).findIndex((c) => c.page === a.page)
   if (idx >= 0) canvasIndex.value = idx
@@ -599,10 +620,11 @@ async function confirmAnchor(id: number) {
 
 onMounted(boot)
 
-watch(mapName, async (next, prev) => {
+// 换图**唯一**的加载入口，见 selectMap 的注释
+watch(mapName, (next, prev) => {
   if (!next || next === prev) return
   canvasIndex.value = 0
-  await loadMarkers()
+  mapTask = loadMarkers()
 })
 
 // 图标表与画布实例都可能在数据之后才就绪，两个都盯着才不会漏掉其中一次。

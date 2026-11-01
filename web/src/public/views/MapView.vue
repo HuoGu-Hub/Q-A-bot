@@ -14,7 +14,7 @@
  * 那需要全量点位算最近地标 —— 前端只拿得到当前地图的点，而且会算重。
  * 放后端算还有一个好处：机器人在群里回答用的是同一段代码，网页上看到什么、群里就说什么。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi, describeError } from '@shared/api/client'
 import Icon from '@shared/ui/Icon.vue'
@@ -168,8 +168,7 @@ async function boot() {
     catalog.value = c
     const wanted = typeof route.query.map === 'string' ? route.query.map : ''
     const first = c.maps.find((m) => m.map === wanted) ?? c.maps[0]
-    mapName.value = first ? first.map : ''
-    if (mapName.value) await loadMarkers(mapName.value)
+    await selectMap(first ? first.map : '')
     const q = typeof route.query.q === 'string' ? route.query.q : ''
     if (q) {
       query.value = q
@@ -182,7 +181,24 @@ async function boot() {
   }
 }
 
-/** 同一张地图只跑一次加载：boot、watch 与深链可能同时触发，重复跑会把刚打开的层又关掉 */
+/** 换图任务。由 watcher 发起，boot 与命中跳转都等它 */
+let mapTask: Promise<void> | null = null
+
+/**
+ * 换图：只改 mapName，点位交给 watcher 去拉。
+ *
+ * <p>⚠️ 为什么不能在这里顺便再拉一次：boot、命中跳转、watcher 三处各拉一次的话，
+ * 同一张图会请求两遍。没有缓存时只是白跑一趟；有了缓存之后，第二遍会被
+ * 当成「用户手动刷新」真的打到网络上 —— 表现就是来回切页时只有地图页还在发请求。
+ */
+async function selectMap(name: string): Promise<void> {
+  if (!name || name === mapName.value) return
+  mapName.value = name
+  await nextTick()
+  await mapTask
+}
+
+/** 同一张地图只跑一次加载：重复跑会把刚打开的层又关掉 */
 let loadingMap = ''
 let loadingPromise: Promise<void> | null = null
 
@@ -352,11 +368,13 @@ async function toggleResource(layer: ResourceLayer) {
 
 onMounted(boot)
 
-watch(mapName, async (next, prev) => {
+// 换图**唯一**的加载入口。地址栏里的 ?map= 也从这里写回去，可分享、刷新不回退
+watch(mapName, (next, prev) => {
   if (!next || next === prev) return
   canvasIndex.value = 0
-  await loadMarkers(next)
-  router.replace({ query: { ...route.query, map: next } })
+  mapTask = loadMarkers(next).then(() => {
+    router.replace({ query: { ...route.query, map: next } })
+  })
 })
 
 watch(canvasIndex, () => {
@@ -394,8 +412,7 @@ async function locate() {
  */
 async function focusHit(hit: LocateHit) {
   if (hit.map && hit.map !== mapName.value) {
-    mapName.value = hit.map
-    await loadMarkers(hit.map)
+    await selectMap(hit.map)
   }
   const list = currentMap.value?.canvases ?? []
   const idx = list.findIndex((c) => c.page === hit.canvas)
