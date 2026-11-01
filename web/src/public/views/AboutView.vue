@@ -40,7 +40,7 @@ const howSteps = computed(() =>
     <section class="sec">
       <h2 class="h"><span v-html="renderInline(t('about.credit_title', '版权与致谢'))" /></h2>
       <p class="muted">
-        <span v-html="renderInline(t('about.credit_body', '地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，作者 Greeneye0，以 [MIT 许可证](https://github.com/Greeneye0/worst-map-mod-enshrouded/blob/main/LICENSE) 发布，版权归原作者所有。本站只使用从其中提取的点位数据，不含该 mod 的代码。'))" />
+        <span v-html="renderInline(t('about.credit_body', '© {year} {bot}。地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，作者 Greeneye0，以 [MIT 许可证](https://github.com/Greeneye0/worst-map-mod-enshrouded/blob/main/LICENSE) 发布，版权归原作者所有。本站只使用从其中提取的点位数据，不含该 mod 的代码。'))" />
       </p>
     </section>
 

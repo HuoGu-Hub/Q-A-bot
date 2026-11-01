@@ -160,7 +160,7 @@ tests/        黄金集、可移植 UI 测试、手工探针、清理 SQL
 
 地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，作者 Greeneye0，以 MIT 许可证发布，版权归原作者所有。`scripts/map-mod-extract.py` 从其源码提取点位表，生成 `server/src/main/resources/map-mod/points.json`；许可证全文见 [map-mod/LICENSE](server/src/main/resources/map-mod/LICENSE)。
 
-公开站的版权标注集中在「关于」页，页脚只留备案等合规信息。
+公开站的版权标注集中在「关于」页；页脚只放署名与备案信息。
 
 ## 许可
 

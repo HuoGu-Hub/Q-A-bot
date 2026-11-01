@@ -15,7 +15,7 @@
 import { renderInline } from '@/public/renderInline'
 
 const props = defineProps<{
-  /** page key：home / about / library / notfound */
+  /** page key：layout / home / about / library / notfound */
   page: string
   /** block key → 当前生效文案（含未保存的改动） */
   texts: Record<string, string>
@@ -96,8 +96,13 @@ const TITLE_TAIL = '问答'
     </div>
 
     <div class="stage">
+      <!-- ==================== 全站页脚 ==================== -->
+      <div v-if="page === 'layout'" class="m-foot">
+        <div v-if="has('footer_copy')" class="m-faint m-html" v-html="html('footer_copy')" />
+      </div>
+
       <!-- ==================== 首页 ==================== -->
-      <div v-if="page === 'home'" class="m-home">
+      <div v-else-if="page === 'home'" class="m-home">
         <div class="m-brand">
           <span class="m-spark" aria-hidden="true">✦</span>
           <span class="m-brand-name">{{ props.botName }}</span>

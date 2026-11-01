@@ -53,9 +53,14 @@ public class SiteTextService {
     //    渲染 —— 它先整体转义再替换标记，所以既能让链接可点，又不会开 XSS 口子。
     //    只支持这两种，每多一种就多一处要论证安全性的地方。
     private static final List<Block> REGISTRY = List.of(
-            // 页脚的两块文案（footer_note / footer_copy）已于 2026-11-01 下线：
-            // 版权声明统一收到「关于」页，页脚留给备案等合规信息。
-            // 库里若还留着覆盖行，publicOverrides() 会打 WARN 提示清掉。
+            // ---- 全站 ----
+            // 页脚原来有两块：来源与版权声明（footer_note）、© 版权行（footer_copy）。
+            // 2026-11-01 起版权标注统一收到「关于」页，页脚只留署名，备案号以后再加 ——
+            // 于是 footer_note 下线，footer_copy 留下但角色改成「署名」。
+            // 库里若还留着 footer_note 的覆盖行，publicOverrides() 会打 WARN 提示清掉。
+            new Block("layout", "全站", "footer_copy", "页脚 · 署名",
+                    "{year} 与 {bot} 会自动替换", false,
+                    "{bot}"),
 
             // ---- 首页 ----
             new Block("home", "首页", "tagline", "副标语",
@@ -90,7 +95,7 @@ public class SiteTextService {
                             + "本站仅用于非商业问答。"),
             new Block("about", "关于", "credit_title", "标题", "", false, "版权与致谢"),
             new Block("about", "关于", "credit_body", "正文", "", true,
-                    "地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，"
+                    "© {year} {bot}。地图点位数据来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded)，"
                             + "作者 Greeneye0，以 [MIT 许可证](https://github.com/Greeneye0/worst-map-mod-enshrouded/blob/main/LICENSE) 发布，"
                             + "版权归原作者所有。本站只使用从其中提取的点位数据，不含该 mod 的代码。"),
             new Block("about", "关于", "how_title", "标题", "", false, "回答是怎么产生的"),

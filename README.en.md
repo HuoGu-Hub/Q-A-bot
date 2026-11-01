@@ -160,7 +160,7 @@ See [development](docs/development.md) for details.
 
 Map marker data comes from [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded) by Greeneye0, released under the MIT license; copyright remains with the original author. `scripts/map-mod-extract.py` extracts the marker tables from its source into `server/src/main/resources/map-mod/points.json`; the full license text is in [map-mod/LICENSE](server/src/main/resources/map-mod/LICENSE).
 
-Copyright notices on the public site live on the About page; the footer is reserved for filing information.
+Copyright notices on the public site live on the About page; the footer carries the byline and filing information only.
 
 ## License
 
