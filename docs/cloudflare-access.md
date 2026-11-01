@@ -7,7 +7,7 @@
 | 名字 | 作用 | 你现在的情况 |
 |---|---|---|
 | 域名注册商 | 域名在哪买的，改 NS 要去这里 | 腾讯云或其他注册商 |
-| DNS 托管商 | 谁在回答“firefire.online 指向哪个 IP” | DNSPod |
+| DNS 托管商 | 谁在回答“example.com 指向哪个 IP” | DNSPod |
 | Cloudflare | 新的 DNS 托管商，同时提供 Access 登录门 | 还没接 |
 
 NS 就是域名的“地址簿”。现在地址簿在 DNSPod，所以要先把地址簿交给 Cloudflare，Cloudflare 才能在你的后台前面加一道登录门。
@@ -18,7 +18,7 @@ NS 就是域名的“地址簿”。现在地址簿在 DNSPod，所以要先把�
 
 你需要有：
 
-- DNSPod 账号，能看 <code>firefire.online</code> 的记录。
+- DNSPod 账号，能看 <code>example.com</code> 的记录。
 - 域名注册商账号，能改 NS。
 - Cloudflare 账号，免费注册。
 - 一个能收邮件的邮箱，Access 用它发验证码。
@@ -27,11 +27,11 @@ NS 就是域名的“地址簿”。现在地址簿在 DNSPod，所以要先把�
 
 ## 1. 从 DNSPod 导出记录
 
-登录 DNSPod 控制台，进入 <code>firefire.online</code> 的“记录管理”。
+登录 DNSPod 控制台，进入 <code>example.com</code> 的“记录管理”。
 
 先把现有记录抄下来，至少包括：
 
-- A 记录：<code>@</code> 和 <code>www</code>，现在应该都指向 <code>193.112.199.24</code>
+- A 记录：<code>@</code> 和 <code>www</code>，现在应该都指向 <code>203.0.113.10</code>
 - MX 记录：邮件服务
 - TXT 记录：SPF、DKIM、域名验证
 - CNAME 记录：其他子域
@@ -43,17 +43,17 @@ DNSPod 如果有“导出记录”，直接导出。没有就截图或逐条复�
 ## 2. 在 Cloudflare 添加站点
 
 1. 登录 Cloudflare，点“Add a site”。
-2. 输入 <code>firefire.online</code>，选 Free 计划。
+2. 输入 <code>example.com</code>，选 Free 计划。
 3. Cloudflare 会自动扫描现有 DNS 记录。
 4. 对照第 1 步抄下来的记录，缺的补上，多的删掉。
-5. 确认 <code>@</code> 和 <code>www</code> 的 A 记录都指向 <code>193.112.199.24</code>，并且云朵是橙色，表示走 Cloudflare 代理。
+5. 确认 <code>@</code> 和 <code>www</code> 的 A 记录都指向 <code>203.0.113.10</code>，并且云朵是橙色，表示走 Cloudflare 代理。
 6. 点继续，Cloudflare 会给你两条 NS，类似 <code>xxx.ns.cloudflare.com</code>。
 
 这两条 NS 是后面要填到注册商的，不是填到 DNSPod。
 
 ## 3. 到注册商改 NS
 
-去你买域名的平台，找到 <code>firefire.online</code> 的“DNS 服务器”或“Nameservers”设置。
+去你买域名的平台，找到 <code>example.com</code> 的“DNS 服务器”或“Nameservers”设置。
 
 把原来的：
 
@@ -69,7 +69,7 @@ modify.dnspod.net
 验证：
 
 ~~~bash
-nslookup -type=ns firefire.online
+nslookup -type=ns example.com
 ~~~
 
 看到 <code>*.ns.cloudflare.com</code> 就对了。
@@ -79,8 +79,8 @@ nslookup -type=ns firefire.online
 NS 生效后，先不要急着建 Access。先打开：
 
 ~~~text
-https://firefire.online/
-https://firefire.online/admin/
+https://example.com/
+https://example.com/admin/
 ~~~
 
 两个都应该正常。
@@ -89,7 +89,7 @@ https://firefire.online/admin/
 
 - 选“Full (strict)”。
 - 不要选“Flexible”，那会让 Cloudflare 到源站走 HTTP。
-- 源站证书还是 <code>/etc/nginx/certs/qqbot.crt</code>，它要覆盖 <code>firefire.online</code>。
+- 源站证书还是 <code>/etc/nginx/certs/qqbot.crt</code>，它要覆盖 <code>example.com</code>。
 
 如果出现 522，说明 Cloudflare 连不到源站 443；检查 UFW 是否还放行 443，以及 Nginx 是否正常。
 
@@ -105,7 +105,7 @@ https://firefire.online/admin/
 |---|---|
 | Application name | qqbot admin |
 | Session duration | 24 hours |
-| Application domain | <code>firefire.online</code> |
+| Application domain | <code>example.com</code> |
 | Path | <code>admin*</code> |
 
 Path 用 <code>admin*</code>，这样 <code>/admin</code>、<code>/admin/</code>、<code>/admin.html</code>、<code>/admin/api/...</code> 都被拦住。公开站不受影响。
@@ -128,14 +128,14 @@ Free 计划最多 50 个用户，小团队够用。
 用无痕窗口打开：
 
 ~~~text
-https://firefire.online/admin/
+https://example.com/admin/
 ~~~
 
 期望顺序：
 
 1. 先跳到 <code>https://&lt;你的团队名&gt;.cloudflareaccess.com/...</code>
 2. 输入邮箱，收验证码
-3. 验证通过后跳回 <code>https://firefire.online/admin/</code>
+3. 验证通过后跳回 <code>https://example.com/admin/</code>
 4. 再看到 qqbot 自己的登录页
 5. 输入后台账号密码
 

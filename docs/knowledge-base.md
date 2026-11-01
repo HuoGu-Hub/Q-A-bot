@@ -137,10 +137,28 @@ tags: 基础, 据点
 | 管理端手写 | 管理端「知识库 → 文档」新增 | `source=manual` 块 | 删除块 |
 | wiki 文章 | 管理端「知识库 → 抓取」 | `source=wiki` 块 | 强制重洗，或在同一页面回滚 |
 | 地图点位 | 地图同步后派生地点语料 | 地点与 NPC 块 | `location-corpus.purge` |
+| 资源点位 | The Worst Map Mod 的 `points.json` | 资源图层、点位与区域快照 | 文件哈希变化后重导 |
 
 wiki 抓取有三种模式：空跑只统计数量，增量只处理 revid 变化的页面，强制重洗忽略 revid。清洗规则变更后使用强制重洗，因为增量判据是页面版本而不是本地规则版本。
 
 地图同步拉取 Map 命名空间中的全部页面，启用哪几张由 `kb_map_active` 决定。同步完成后可派生地点语料；派生只读取已入库的点位，不再访问 wiki。
+
+### 4.1 资源点位
+
+资源层来自 [The Worst Map Mod](https://github.com/Greeneye0/worst-map-mod-enshrouded) 导出的世界数据快照，作者 Greeneye0，MIT 许可证。`scripts/map-mod-extract.py` 从源码提取 `server/src/main/resources/map-mod/points.json`，当前快照约 64,000 个点、2,120 块区域、248 个图层。
+
+| 项 | 说明 |
+|---|---|
+| 导入时机 | 第一次请求资源目录时懒加载；导入约一两秒 |
+| 幂等 | 文件哈希不变就复用库中快照，变了才整批替换 |
+| 表 | `kb_map_resource_meta`、`kb_map_resource_layer`、`kb_map_resource`、`kb_map_resource_area` |
+| 版本 | 点位带 `source_version` 与 `canvas_fp`；游戏更新不自动重导，画布变化靠指纹发现 |
+| 管理入口 | 地图页「资源导入」，支持普通导入与强制重导 |
+| 公开接口 | `/api/public/v1/map/resource-groups`、`/resources`、`/resource-areas`、`/resource-icon` |
+
+资源问答不走向量召回。`locate` 在地图资源目录中查图层、区域与点位，`ResourceHotspots` 按格宽与半径聚出热点，`ResourceShotSource` 从本地瓦片裁图并标注目标点与最近地标。热点统计参数在 `app.kb.map.resource` 下，格宽、半径与截图跨度都按地图实测调整。
+
+资源数据是快照，不是实时数据。游戏更新后旧快照仍然可用，只是不含新增内容；需要重导时替换 `points.json` 并在管理端强制导入。资源图标的映射在 `map-mod/icons.json`，图标文件放在 `classpath:map-icons`。
 
 ## 5. 词条与分类
 

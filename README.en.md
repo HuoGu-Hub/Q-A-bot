@@ -31,13 +31,14 @@ The same process provides commands and scheduled posts, an interactive map, voic
 | Capability | Implementation |
 |---|---|
 | Knowledge base Q&A | Body-vector, glossary-keyword and title-vector recall; RRF fusion followed by cross-encoder rerank, top 5 passages as evidence. See [retrieval](docs/retrieval.md) |
-| Tool calls | Read-only `lookup`, `search_titles` and `locate`, limited to 3 calls, 3 round trips and 30 seconds per request |
+| Intent routing | Rule-based detection of social, meta and out-of-scope requests; retrieval is skipped for those, while corrections include the previous turn. See [intent routing](docs/intent.md) |
+| Tool calls | `lookup`, `search_titles`, `locate`, `play_voice` and `say`, limited to 3 calls, 3 round trips and 30 seconds per request |
 | Commands and boards | Template, action and agent commands; boards support daily, weekly, every N days and N-occurrence delivery with retries |
-| Place questions and map | Relative bearing and distance to the nearest landmark, plus an annotated map image |
-| Voice replies | edge-tts synthesis, an audio asset library, keyword triggers and the `play_voice` model tool |
+| Place and resource questions | Relative bearing and distance to the nearest landmark; resource hotspots rendered as an annotated distribution map |
+| Voice replies | edge-tts synthesis, an audio asset library, keyword triggers, and the `play_voice` and `say` model tools. See [voice](docs/voice.md) |
 | Chat distillation | Capture selected groups, distill batches into knowledge notes, review them and import into the knowledge base |
 | Safety and cost | Five zero-token local checks, per-user/group/global daily budgets, outbound filtering and pacing |
-| Public site and console | Public read-only search and map; console for knowledge base, commands, map, page copy and system settings |
+| Public site and console | Public read-only search and map; console for knowledge base, commands, map, page copy and settings, with VIEWER, EDITOR and ADMIN roles |
 
 ## Architecture
 
@@ -65,14 +66,14 @@ flowchart LR
 | Retrieval and answer | Three recall paths and rerank; passages injected as `<<<KNOWLEDGE>>>`, with read-only tools available to the model |
 | Outbound and recording | `OutboundSender` filters, splits, sends long replies as merged forwards and paces every message; QA metrics are recorded in parallel |
 
-Module boundaries are enforced by 14 ArchUnit rules covering protocol, sending, models, SQL, knowledge-base layering and configuration dependencies. Data model, directory layout and configuration precedence are documented in [architecture](docs/architecture.md).
+Module boundaries are enforced by 17 ArchUnit rules covering protocol, sending, models, SQL, knowledge-base, intent and voice boundaries. Data model, directory layout and configuration precedence are documented in [architecture](docs/architecture.md).
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
 | Backend | Java 17, Spring Boot 3.5.16, LangChain4j 1.20.0 |
-| Storage | SQLite, sqlite-jdbc 3.53.4.0, WAL, single serialized connection, about 40 tables |
+| Storage | SQLite, sqlite-jdbc 3.53.4.0, WAL, single serialized connection, about 50 tables |
 | Retrieval | bge-m3 embeddings, glossary keywords, title-vector gate, bge-reranker-v2-m3 |
 | Frontend | Vue 3.5, Vue Router 4, Vite 6, TypeScript 5.7, in-house components |
 | Protocol and hosting | NapCat, OneBot 11, Docker, Nginx, systemd |
@@ -128,7 +129,7 @@ tests/        Golden set, portable UI tests, manual probes, cleanup SQL
 
 ## Quality
 
-Quality is covered at three levels: backend unit and integration tests, 14 ArchUnit architecture rules and a retrieval golden-set gate. The frontend adds a Playwright audit for horizontal overflow, hit-target size, console errors and theme consistency. Run before release:
+Quality is covered at three levels: backend unit and integration tests, 17 ArchUnit architecture rules and a retrieval golden-set gate. The frontend adds a Playwright audit for horizontal overflow, hit-target size, console errors and theme consistency. Run before release:
 
 ```bash
 ./scripts/preflight.sh      # secrets, tests, packaging, frontend build, database and retrieval gate
@@ -141,7 +142,10 @@ See [development](docs/development.md) for details.
 
 - [Architecture](docs/architecture.md): process topology, message pipeline, module boundaries, data model, configuration
 - [Retrieval](docs/retrieval.md): three recall paths, RRF, rerank, tool calls, public search
+- [Intent routing](docs/intent.md): rule signals, retrieval skipping, conversation correction and answer contracts
 - [Knowledge Base](docs/knowledge-base.md): block model, document format, import semantics, ingestion and operations
+- [Voice](docs/voice.md): voice reply pipeline, asset library, TTS and triggers
+- [Security](docs/security.md): trust boundaries, identity, data protection and launch checks
 - [Deployment](docs/deployment.md): NapCat, systemd, Nginx, backup, upgrade and troubleshooting
 - [Development](docs/development.md): local setup, build, test layers, pre-commit checks
 - [Documentation index](docs/README.md): reading order
@@ -154,7 +158,7 @@ See [development](docs/development.md) for details.
 | QQ protocol | Depends on NapCat and a dedicated account. Risk control and session loss remain possible |
 | Corpus and map | Public copy is game-neutral by default; map and wiki import default to the Enshrouded wiki. Other games require their own source and map data |
 | Models | Requires external OpenAI-compatible APIs plus a separate embedding and rerank service |
-| Admin | Single administrator. No multi-user or role model |
+| Admin | Multiple VIEWER, EDITOR and ADMIN accounts; no TOTP or WebAuthn, so public deployments should add Cloudflare Access or a VPN |
 
 ## Credits
 

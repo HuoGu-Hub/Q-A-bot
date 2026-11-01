@@ -6,7 +6,7 @@
 公网
   │
   ├── www.example.com    公开站
-  └── admin.example.com  管理后台，IP 白名单
+  └── admin.example.com  管理后台，QQ 验证码登录
           │
         Nginx
           │
@@ -38,7 +38,7 @@ NapCat 只绑定 `127.0.0.1`，不暴露到公网。业务层监听 `0.0.0.0`，
 sudo apt update
 # 运行时只要 JRE；中文字体装不上会让地图出图的中文变成方块
 sudo apt install -y openjdk-21-jre-headless nginx sqlite3 curl git fonts-noto-cjk
-# 下面三行只在构建机上需要，产物上传到服务器的做法见 plans/html/本地上传部署操作手册.html
+# 下面三行只在构建机上需要；本机构建、打包与上传见 scripts/release.ps1
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 sudo corepack enable
@@ -184,7 +184,7 @@ APP_SITE_CAROUSEL_DIR=/opt/qqbot/data/site-images
 
 ### 4.3 多人后台的身份层
 
-后台账号是应用自己的密码体系，没有 MFA。多人公网使用时，建议在 Nginx 前再加一层：
+后台自带密码与新设备 QQ 验证码，没有 TOTP 或 WebAuthn。多人公网使用时，建议在 Nginx 前再加一层：
 
 | 方式 | 用户怎么进 | 代价 |
 |---|---|---|
@@ -248,7 +248,7 @@ sudo systemctl status qqbot
 按域名形态选一份配置，不要同时启用多份：
 
 ```bash
-# 只有一张证书：公开站和后台共用 firefire.online
+# 只有一张证书：公开站和后台共用 example.com
 # 也可以用发版脚本自动安装：./scripts/release.ps1 -WithNginx -Server root@...
 sudo cp deploy/nginx/qqbot-domain.conf /etc/nginx/sites-available/qqbot.conf
 # 或者：两个域名，后台走独立域名
@@ -257,7 +257,7 @@ sudo ln -s /etc/nginx/sites-available/qqbot.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-`qqbot-domain.conf` 是单域名配置，`server_name` 写 `firefire.online` 与 `www`，并开启 OCSP stapling；`-WithNginx` 会从 `qqbot.crt` 自动拆出 `qqbot-chain.pem`，证书续期后确认 `qqbot.crt` 仍包含完整中间证书链。`qqbot.conf` 是双域名模板，里面的 `admin.example.com` 只是占位符；没有对应 DNS 与证书时不要启用它。
+`qqbot-domain.conf` 是单域名配置，`server_name` 写 `example.com` 与 `www`，并开启 OCSP stapling；`-WithNginx` 会从 `qqbot.crt` 自动拆出 `qqbot-chain.pem`，证书续期后确认 `qqbot.crt` 仍包含完整中间证书链。`qqbot.conf` 是双域名模板，里面的 `admin.example.com` 只是占位符；没有对应 DNS 与证书时不要启用它。
 
 需要修改两处：
 
@@ -286,7 +286,7 @@ ssh -L 8080:127.0.0.1:8080 user@服务器
 | 公开站 `/admin/` | `return 404` | 公网域名下不暴露后台入口 |
 | 公开站 `/admin.html` | `return 404` | 后台前端壳子也不放行 |
 | 公网 `/onebot/` | `return 404` | 事件入口只给 NapCat 直连 8080 |
-| 管理后台 | 账号密码 + 登录限流 | 多人公网访问；单管理员可改用 IP 白名单 |
+| 管理后台 | 密码 + 新设备 QQ 验证码 + 角色分权 | 多人公网访问；可再加 IP 白名单或身份代理 |
 | 公开 API 限流 | 60 次/分钟 | 与应用层限流形成双层 |
 | 登录接口限流 | 5 次/分钟 | 防密码爆破 |
 | `client_max_body_size` | 16m | 与 Spring 上传上限对齐，否则只看到 413 |
@@ -318,7 +318,7 @@ sudo certbot --nginx -d www.example.com -d admin.example.com
 | 13 | 编辑账号访问 `/admin/api;x/users` | 400 或 403，审计有记录 |
 | 14 | 登录响应 Cookie | 含 `Secure; HttpOnly; SameSite` |
 
-启用单管理员 `allow` 白名单时，非白名单 IP 访问后台应为 403。
+启用 IP `allow` 白名单时，非白名单 IP 访问后台应为 403。
 
 ```bash
 ./scripts/health-check.sh https://www.example.com
@@ -374,6 +374,8 @@ sudo systemctl restart qqbot
 | 导入后无变化 | 导入是否成功；块数与语料版本是否变化 |
 
 ## 12. 安全清单
+
+完整边界与验收项见 [security.md](security.md)。
 
 | 项 | 要求 |
 |---|---|

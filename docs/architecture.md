@@ -66,10 +66,13 @@ flowchart TD
     K --> L[Guard 五层]
     L --> M{通过?}
     M -->|拒绝| N[固定话术或静默]
-    M -->|通过| O[检索]
-    O --> P[模型作答与工具调用]
-    P --> Q[出站过滤与发送]
-    Q --> R[问答记录]
+    M -->|通过| INT[意图路由]
+    INT -->|跳过检索| CHAT[模型作答与工具调用]
+    INT -->|需要资料| RET[检索]
+    RET --> CHAT
+    CHAT --> MEDIA[语音与图片编排]
+    MEDIA --> OUT[出站过滤与发送]
+    OUT --> REC[问答记录]
 ```
 
 各阶段对应的组件：
@@ -82,7 +85,9 @@ flowchart TD
 | 命令 | `CommandHandler` | 话术、动作、智能问答三类分流 |
 | 安全 | `GuardPipeline` | access → mention → rate-limit → content-gate → inbound-words |
 | 预算 | `BudgetGuard` | 用户、群、全局每日额度与 token 上限 |
+| 意图 | `IntentPlanner` | 社交、元问题、边界外跳过检索；纠正标记；失败回默认 |
 | 问答 | `ChatService` + `KbToolAssistant` | 组装消息、驱动官方检索管线、调用模型 |
+| 语音 | `VoiceTool` + `MediaOutbox` + `VoiceSender` | 模型选素材或合成；关键词触发兜底；最多两段 |
 | 出站 | `OutboundSender` | 过滤、分片、合并转发、发送节奏 |
 | 记录 | `QaCollector` | 问题、回答、检索指标、耗时、关键词 |
 
@@ -90,7 +95,7 @@ flowchart TD
 
 ## 4. 模块边界
 
-`ArchitectureTest` 用 ArchUnit 强制 14 条依赖规则，违反即构建失败。
+`ArchitectureTest` 用 ArchUnit 强制 17 条架构规则，违反即构建失败。
 
 | 包 | 职责 | 约束 |
 |---|---|---|
@@ -99,8 +104,12 @@ flowchart TD
 | `guard` | 零成本准入、限流、内容闸门、出站过滤 | 不得依赖 `kb`、`qa`、`llm` |
 | `router` | 事件编排、排队、出站调度 | 不包含检索与模型实现 |
 | `agent` | 组装对话消息、调用助手 | 不直接接触协议客户端 |
+| `intent` | 规则意图、最近轮次、纠正标记 | 纯规则，不调用模型 |
 | `command` | 命令定义、解析、权限、板块与投递 | 通过 `OutboundSender` 发送 |
 | `kb` | 语料、检索、聚合、知识库管理 | 不得依赖 `qa`、`publicapi`、`admin`、`settings` |
+| `voice` | 素材库、TTS、触发规则、语音发送 | 只通过 `OutboundSender` 发送 |
+| `distill` | 群聊采集、蒸馏任务、笔记审核 | 采集默认关闭 |
+| `media` | 外链图片下载、临时图、出站媒体 | 唯一外链图片下载入口 |
 | `kb.wiki` / `kb.map` | 摄入生产者 | 核心不得反向依赖生产者，生产者不得持有索引 |
 | `llm` | 模型路由、降级链、系统提示词、工具装配 | 唯一允许依赖模型 SDK 的包 |
 | `qa` | 问答记录、统计、清理 | 不得依赖 `kb` |
@@ -108,7 +117,7 @@ flowchart TD
 | `settings` / `config` | 配置中心与装配 | 业务包不得依赖 `config` |
 | `publicapi` / `admin` / `site` | HTTP 接口与站点内容 | 公开接口使用独立 DTO，不复用管理接口 |
 
-14 条规则覆盖协议细节收敛、发送出口唯一、模型 SDK 收敛、SQL 收敛、知识库分层与配置依赖。新增包时需要同步更新 `ArchitectureTest` 里的包名单。
+17 条规则覆盖协议细节收敛、发送出口唯一、模型 SDK 收敛、SQL 收敛、知识库分层、意图与语音边界及配置依赖。新增包时需要同步更新 `ArchitectureTest` 里的包名单。
 
 ## 5. 数据模型
 
@@ -117,12 +126,15 @@ flowchart TD
 | 前缀 | 表数 | 内容 |
 |---|---|---|
 | `bot_` | 10 | 命令、板块、定时记录、权限、提示词、系统回复、元数据 |
-| `kb_` | 14 | 块、正文向量、标题向量、分类、wiki 页面与来源、地图页面、点位、图层、备注 |
+| `kb_` | 18 | 块、正文向量、标题向量、分类、wiki、地图、资源点位与区域 |
 | `chat_` / `distill_` | 10 | 群聊采集、蒸馏任务、笔记、来源与导入记录 |
-| `qa_` | 3 | 问答原文、派生指标、关键词 |
+| `qa_` | 4 | 问答原文、派生指标、关键词、最近轮次 |
+| `admin_` | 5 | 账号、验证码、信任设备、审计、访问 |
 | `site_` | 2 | 页面文案、首页轮播 |
 | `voice_` | 2 | 语音素材与触发规则 |
-| `admin_visit` | 1 | 后台访问记录 |
+| `llm_minute` / `traffic_minute` | 2 | 模型调用与流量分钟指标 |
+
+合计 53 张表。
 
 几个关键约定：
 
@@ -132,6 +144,8 @@ flowchart TD
 | 向量分离 | 正文向量存 `kb_block_vec`，标题向量存 `kb_block_title_vec`，避免列出块时读出大 BLOB |
 | 语料版本 | 每次写入块表版本加一，检索缓存与下游快照据此失效 |
 | 原文保留 | `qa_raw` 按保留天数清理，`qa_stat` 与 `qa_keyword` 长期保留 |
+| 会话记忆 | `qa_turn` 只存最近 3 轮、30 分钟内的问答摘要，7 天后清理 |
+| 后台账号 | `admin_user` 分 VIEWER、EDITOR、ADMIN 三级，审计写入 `admin_audit` |
 | 下架 | `retired = 1` 的块不参与检索，但数据保留，可恢复 |
 
 ## 6. 配置体系
@@ -152,6 +166,8 @@ application.yml
 系统提示词放在仓库根目录的 `system.md`，加载顺序为外部文件、classpath 副本、兜底话术。修改后重启生效，不需要重新打包。
 
 对外展示身份由 `app.bot.name` 统一驱动：公开站品牌、浏览器标题与管理后台品牌都读同一个值。`org` 与 `author` 为空时，关于页自动隐藏对应行。
+
+意图与语音开关在管理后台「设置」中维护，热生效。语音总开关关闭后不调用 ffmpeg，也不触碰协议端。
 
 ## 7. 并发与成本
 
