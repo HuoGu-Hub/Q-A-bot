@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { beginVisit } from '@shared/api/cache'
 
 /**
  * 公开站路由。
@@ -21,3 +22,11 @@ export const router = createRouter({
     return saved ?? { top: 0 }
   },
 })
+
+/**
+ * 每次换页标记一次「新的页面访问」。
+ *
+ * 缓存层据此区分「切回这一页」和「在这一页里又点了一次刷新」：
+ * 前者吃缓存，后者照常请求。没有这一句，手动刷新会在 TTL 内拿到旧值。
+ */
+router.afterEach(() => { beginVisit() })

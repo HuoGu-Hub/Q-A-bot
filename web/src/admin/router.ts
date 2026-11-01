@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { beginVisit } from '@shared/api/cache'
 import { useAuth, type AdminRoleId } from './useAuth'
 
 /**
@@ -63,3 +64,9 @@ router.beforeEach(async (to) => {
   if (need && !auth.can(need)) return { path: '/stats', query: { tab: 'overview' } }
   return true
 })
+
+/**
+ * 每次换页标记一次「新的页面访问」，见 public/router.ts 的同一句。
+ * 后台的 tab 切换也走 router.replace，因此同样算一次访问 —— 切回来仍然吃缓存。
+ */
+router.afterEach(() => { beginVisit() })

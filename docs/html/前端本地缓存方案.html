@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前端本地缓存方案</title>
+<style>
+:root {
+  --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#f4f6f8;
+  --fg:#1f2328; --fg-soft:#57606a; --fg-faint:#8b949e;
+  --border:#d8dee4; --border-soft:#e6eaef;
+  --accent:#2563eb; --accent-soft:#eff4ff;
+  --warn:#b45309; --warn-bg:#fffbeb; --danger:#b91c1c; --danger-bg:#fef2f2;
+  --ok:#15803d; --ok-bg:#f0fdf4;
+  --radius:10px; --content:900px; --sidebar:250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0d1117; --bg-soft:#161b22; --bg-code:#161b22;
+    --fg:#e6edf3; --fg-soft:#9198a1; --fg-faint:#6e7681;
+    --border:#30363d; --border-soft:#21262d;
+    --accent:#6ea8fe; --accent-soft:#16233a;
+    --warn:#f0b429; --warn-bg:#2a2109; --danger:#f87171; --danger-bg:#2a1214;
+    --ok:#4ade80; --ok-bg:#0f2417;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16.5px; line-height:1.85; -webkit-font-smoothing:antialiased;
+}
+.layout { display:flex; align-items:flex-start; gap:40px; max-width:1240px; margin:0 auto; padding:40px 28px 96px; }
+.toc { position:sticky; top:28px; flex:0 0 var(--sidebar); width:var(--sidebar); max-height:calc(100vh - 56px); overflow-y:auto; font-size:13.5px; line-height:1.6; border-right:1px solid var(--border-soft); padding-right:18px; }
+.toc-title { font-weight:700; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-faint); margin:0 0 12px; }
+.toc ol { list-style:none; margin:0; padding:0; }
+.toc a { display:block; padding:5px 10px; border-radius:6px; color:var(--fg-soft); text-decoration:none; border-left:2px solid transparent; }
+.toc a:hover { background:var(--accent-soft); color:var(--accent); }
+.toc details { display:none; }
+main { flex:1 1 auto; min-width:0; max-width:var(--content); }
+h1,h2,h3 { line-height:1.4; font-weight:700; scroll-margin-top:20px; }
+h1 { font-size:1.85em; margin:0 0 .8em; letter-spacing:-.015em; padding-bottom:.4em; border-bottom:2px solid var(--border); }
+h2 { font-size:1.34em; margin:2.3em 0 .75em; padding-left:.55em; border-left:4px solid var(--accent); }
+h3 { font-size:1.04em; margin:1.7em 0 .5em; }
+p { margin:0 0 1em; }
+a { color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color:var(--accent); }
+ul,ol { margin:0 0 1em; padding-left:1.5em; }
+li { margin:.3em 0; }
+blockquote { margin:1.3em 0; padding:.8em 1.1em; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; }
+blockquote > :last-child { margin-bottom:0; }
+blockquote p { margin:.3em 0; }
+.warn { background:var(--warn-bg); border-left-color:var(--warn); }
+.danger { background:var(--danger-bg); border-left-color:var(--danger); }
+.ok { background:var(--ok-bg); border-left-color:var(--ok); }
+code { font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; font-size:.875em; background:var(--bg-code); border:1px solid var(--border-soft); border-radius:5px; padding:.14em .38em; word-break:break-word; }
+pre { margin:1.2em 0; padding:1em 1.15em; background:var(--bg-code); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; line-height:1.65; }
+pre code { background:none; border:0; padding:0; font-size:.85em; }
+.table-wrap { margin:1.3em 0; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:.9em; margin:0; }
+thead th { background:var(--bg-soft); text-align:left; font-weight:700; padding:.6em .8em; border-bottom:2px solid var(--border); white-space:nowrap; }
+tbody td { padding:.6em .8em; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom:0; }
+.pill { display:inline-block; font-size:.78em; font-weight:700; padding:.1em .5em; border-radius:999px; border:1px solid var(--border); background:var(--bg-soft); color:var(--fg-soft); white-space:nowrap; }
+.pill.hi { color:var(--danger); border-color:color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.pill.mid { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.pill.lo { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.footer { margin-top:3.6em; padding-top:1.1em; border-top:1px solid var(--border-soft); font-size:.85em; color:var(--fg-faint); }
+@media (max-width:1000px) {
+  .layout { flex-direction:column; gap:0; padding:22px 18px 72px; }
+  .toc { position:static; flex:none; width:auto; max-height:none; border-right:0; border-bottom:1px solid var(--border); padding:0 0 14px; margin-bottom:26px; }
+  .toc > ol, .toc > .toc-title { display:none; }
+  .toc details { display:block; }
+  .toc summary { cursor:pointer; font-weight:700; color:var(--accent); padding:6px 0; }
+  body { font-size:16px; line-height:1.8; }
+}
+@media print {
+  .toc { display:none; }
+  .layout { display:block; max-width:none; padding:0; }
+  main { max-width:none; }
+  body { font-size:11.5pt; line-height:1.6; background:#fff; color:#000; }
+  h2 { page-break-after:avoid; }
+  pre, table, blockquote { page-break-inside:avoid; }
+  a { color:#000; border:0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <p class="toc-title">目录</p>
+  <ol>
+    <li><a href="#now">结论</a></li>
+    <li><a href="#evidence">证据</a></li>
+    <li><a href="#cost">一次切页的代价</a></li>
+    <li><a href="#why">为什么体感是一直加载中</a></li>
+    <li><a href="#plan">方案</a></li>
+    <li><a href="#policy">缓存策略</a></li>
+    <li><a href="#code">实现</a></li>
+    <li><a href="#verify">验证</a></li>
+    <li><a href="#no">不做的做法</a></li>
+    <li><a href="#next">后续可调</a></li>
+  </ol>
+  <details>
+    <summary>目录</summary>
+    <ol>
+      <li><a href="#now">结论</a></li>
+      <li><a href="#evidence">证据</a></li>
+      <li><a href="#cost">一次切页的代价</a></li>
+      <li><a href="#why">为什么体感是一直加载中</a></li>
+      <li><a href="#plan">方案</a></li>
+      <li><a href="#policy">缓存策略</a></li>
+      <li><a href="#code">实现</a></li>
+      <li><a href="#verify">验证</a></li>
+      <li><a href="#no">不做的做法</a></li>
+      <li><a href="#next">后续可调</a></li>
+    </ol>
+  </details>
+</nav>
+
+<main>
+
+<h1>前端本地缓存方案</h1>
+
+<h2 id="now">结论</h2>
+
+<p>没做。两端都没有应用级缓存：每次进入一个页面，组件从零挂载，数据全部重新请求一次。现在补上了，写在 API 客户端那一层，视图一行没改。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>层</th><th>排查时的状态</th><th>证据</th></tr></thead>
+<tbody>
+<tr><td>应用级数据缓存</td><td><span class="pill hi">没有</span> 没有 store、没有 TTL、没有请求去重</td><td><code>web/src/shared/api/client.ts:24</code> 的 <code>request()</code> 直通 <code>fetch</code>；各视图 <code>onMounted</code> 里直接调</td></tr>
+<tr><td>路由级保活</td><td><span class="pill hi">没有</span> 只有合并页内部的 tab 用了 <code>KeepAlive</code></td><td><code>web/src/public/App.vue:109</code>、<code>web/src/admin/App.vue:134</code> 都是裸 <code>&lt;component :is&gt;</code></td></tr>
+<tr><td>浏览器 HTTP 缓存</td><td><span class="pill mid">公开站有，后台没有</span></td><td>公开 JSON 30–300 秒，见 <code>PublicCacheAdvice.java:27-79</code>；后台被 Nginx 显式 <code>no-store</code>，见 <code>deploy/nginx/qqbot-domain.conf:220</code></td></tr>
+<tr><td>Service Worker / IndexedDB</td><td><span class="pill hi">没有</span></td><td>全仓无 <code>serviceWorker</code>、<code>indexedDB</code>；<code>localStorage</code> 只存主题与语音群号</td></tr>
+<tr><td>模块级单例</td><td><span class="pill lo">只有三处</span></td><td><code>useSiteText.ts:29</code> 的 <code>site</code>、<code>botName.ts:15</code>、<code>useAuth.ts:33</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<blockquote class="warn">
+<p>公开接口那层 60 秒 HTTP 缓存是唯一在起作用的缓存，但它救不了切页：组件照样重建、照样从骨架开始、过期后照样全量重取。后台接口则是连这层都没有。</p>
+</blockquote>
+
+<h2 id="evidence">证据</h2>
+
+<p>每个页面都是同一个模子：<code>onMounted</code> 里发请求、写 <code>loading</code>、组件卸载时状态一起丢掉。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>位置</th><th>看到了什么</th></tr></thead>
+<tbody>
+<tr><td><code>web/src/public/views/HomeView.vue:90</code></td><td>进首页就并行拉 <code>/stats</code> 与 <code>/carousel</code></td></tr>
+<tr><td><code>web/src/public/views/LibraryView.vue:147</code></td><td>拉分类，再按查询参数拉检索或浏览</td></tr>
+<tr><td><code>web/src/public/views/MapView.vue:163</code></td><td><code>boot()</code> 依次拉目录、点位、资源目录</td></tr>
+<tr><td><code>web/src/admin/views/stats/OverviewPanel.vue:248</code></td><td>一次 <code>Promise.all</code> 发 8 个 GET</td></tr>
+<tr><td><code>web/src/admin/views/bot/CommandsPanel.vue:199-205</code></td><td>一次进入发 6 个 GET</td></tr>
+<tr><td><code>web/src/admin/views/kb/DocPanel.vue:269</code></td><td>统计 + 文档列表 + 块列表</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>唯一做过请求复用的是 <code>useSiteText.ts:40</code>：模块加载时发一次 <code>/site</code>，之后所有页面共享同一个 <code>ref</code>。这个思路是对的，只是全站只有这一处。</p>
+
+<h2 id="cost">一次切页的代价</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>页面</th><th>每次进入的请求数</th><th>接口</th></tr></thead>
+<tbody>
+<tr><td>公开 · 首页</td><td>2</td><td><code>/stats</code> <code>/carousel</code></td></tr>
+<tr><td>公开 · 资料库</td><td>2–3</td><td><code>/kb/groups</code> 加 <code>/kb/search</code> 或 <code>/kb/browse</code></td></tr>
+<tr><td>公开 · 词条详情</td><td>1</td><td><code>/kb/page</code></td></tr>
+<tr><td>公开 · 地图</td><td>3 起</td><td><code>/map/catalog</code> <code>/map/markers</code> <code>/map/resource-groups</code>，每展开一个图层再加 1</td></tr>
+<tr><td>公开 · 关于</td><td>0</td><td>复用 <code>/site</code> 单例</td></tr>
+<tr><td>后台 · 统计</td><td>8</td><td>overview、keywords、misses、cosine、sources、visits、traffic、llm</td></tr>
+<tr><td>后台 · 知识库</td><td>1–3</td><td>按当前 tab 定</td></tr>
+<tr><td>后台 · Bot 配置</td><td>1–6</td><td>设置 1，命令 6，变量 1，语音 3</td></tr>
+<tr><td>后台 · 页面信息</td><td>1–3</td><td>页面文案、站点信息、轮播</td></tr>
+<tr><td>后台 · 系统</td><td>1–2</td><td>模型 1，日志 2 加一条 SSE</td></tr>
+<tr><td>后台 · 地图</td><td>6 起</td><td>目录、点位、状态、地图列表、锚点、图层</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>公开站的配额是每分钟 60 次。按首页 2 次算，来回切 30 次就见底；地图页 3 次起，切 20 次见底。后台不受 Nginx 限流，但统计页那 8 个并发查询打在 SQLite 上，每次切页都要重新等一遍。</p>
+
+<h2 id="why">为什么体感是“一直加载中”</h2>
+
+<ol>
+<li>进入页面：组件全新挂载，<code>loading = true</code>，先渲染骨架。</li>
+<li>发请求：没有任何缓存可查，全部走网络。公网或内网穿透下单次 200–500 ms。</li>
+<li>撞限流：Nginx <code>public_api</code> 60r/m 加 burst 20，超了直接 429；应用内 <code>PublicRateLimiter</code> 还有一层 60/min。</li>
+<li>429 之后：不会自动重试。<code>HomeView</code> 显示一行错误，<code>LibraryView.loadGroups</code> 直接 <code>catch</code> 吞掉，<code>MapView</code> 停在半屏空态。</li>
+<li>再切一次：又从第 1 步开始，而且配额更少了。</li>
+</ol>
+
+<blockquote class="danger">
+<p>真正的问题不是某一页慢，而是每次都要重新证明一次“我拿得到数据”。用户越急着来回看，越容易把配额打穿，于是越切越慢、最后整屏报错。</p>
+</blockquote>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>限流</th><th>位置</th><th>额度</th><th>影响范围</th></tr></thead>
+<tbody>
+<tr><td>Nginx <code>public_api</code></td><td><code>deploy/nginx/qqbot-domain.conf:18</code> 与 <code>:190</code></td><td>60 次/分，burst 20</td><td><code>/api/public/</code> 全部 JSON</td></tr>
+<tr><td>Nginx <code>public_map</code></td><td><code>deploy/nginx/qqbot-domain.conf:20</code> 与 <code>:177</code></td><td>600 次/分，burst 200</td><td>地图瓦片与图标，够用</td></tr>
+<tr><td>应用内 <code>PublicRateLimiter</code></td><td><code>server/src/main/java/com/example/qqbot/publicapi/PublicRateLimiter.java:31</code></td><td>60 次/分</td><td>公开统计、检索、地图目录与点位</td></tr>
+<tr><td>Nginx <code>admin_login</code></td><td><code>deploy/nginx/qqbot-domain.conf:200</code></td><td>5 次/分</td><td>只有登录接口，与切页无关</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="plan">方案</h2>
+
+<p>三件事，前两件解决“重复请求”，第三件解决“撞了限流就卡死”。已经按这个方案改完。</p>
+
+<h3>A. 缓存建在 API 客户端这一层</h3>
+
+<p>视图是“进页面 → <code>onMounted</code> → <code>load()</code>”的模子，把缓存写进三十个视图既改不完也说不清策略；写在 <code>client.ts</code> 里，所有页面同时受益，TTL 表也只有一个文件可审。</p>
+
+<p>只缓存白名单。默认不缓存，新增接口忘了登记，行为就是“跟以前一样每次都请求”，不会出现改了不生效。</p>
+
+<h3>B. 同一次停留只吃一次缓存</h3>
+
+<p>这条是这一版最关键的一处：光有 TTL 会让“手动刷新”在有效期内拿到旧值，用户点了刷新却什么都没变，比慢更难解释。</p>
+
+<p>所以缓存条目记一个“最近一次被读取时所在的页面访问序号”。切页会让序号加一，于是：</p>
+
+<ul>
+<li>切走再切回来 → 序号变了 → 命中缓存，不请求。</li>
+<li>停在同一页点刷新 → 序号没变 → 条目本次已经用过 → 照常请求。</li>
+</ul>
+
+<p>页面访问的边界由两个路由的 <code>afterEach</code> 各调一次 <code>beginVisit()</code> 标记。不需要给十二个面板各加一个 <code>fresh</code> 参数。</p>
+
+<h3>C. 429 按 Retry-After 退避一次</h3>
+
+<p><code>request()</code> 里：响应 429 且 <code>Retry-After</code> 不超过 3 秒时等这么久重试一次；仍失败就抛 <code>ApiError</code>，消息统一成“请求过于频繁，N 秒后再试”。错误一律不进缓存。</p>
+
+<p>这一条比调大限流更该做：它保证一次抖动不会变成一整页红字。</p>
+
+<h3>失效规则</h3>
+
+<p>写请求成功后清空该端的全部读取缓存，后台写清后台，公开投票清公开。粒度做得再细也不划算：一次保存后多取一次数据的代价，远小于“改了没生效”带来的困惑。登录与退出也会清一遍，换账号看不到上一个人的数据。</p>
+
+<h2 id="policy">缓存策略</h2>
+
+<p>策略表在 <code>web/src/shared/api/rules.ts</code>。依据只有一条：<b>这个数据晚给用户几十秒，会不会让人做出错误判断</b>。</p>
+
+<h3>公开站</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>路径</th><th>TTL</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td><code>/site</code></td><td>300 秒</td><td>文案与群信息，管理员改完刷新即可</td></tr>
+<tr><td><code>/stats</code></td><td>60 秒</td><td>首页四个数字，本来就按分钟变</td></tr>
+<tr><td><code>/carousel</code></td><td>120 秒</td><td>图片列表</td></tr>
+<tr><td><code>/kb/groups</code></td><td>300 秒</td><td>分类目录，极少变</td></tr>
+<tr><td><code>/kb/page</code></td><td>300 秒</td><td>词条正文，回看同一词条不重复拉</td></tr>
+<tr><td><code>/kb/browse</code></td><td>60 秒</td><td>按分组与页码，回退一页直接命中</td></tr>
+<tr><td><code>/kb/search</code></td><td>30 秒</td><td>同词重复搜不该再花一次配额</td></tr>
+<tr><td><code>/map/catalog</code></td><td>300 秒</td><td>地图与分组定义</td></tr>
+<tr><td><code>/map/markers</code></td><td>120 秒</td><td>点位，进图就要用</td></tr>
+<tr><td><code>/map/resource-groups</code> <code>/map/resources</code> <code>/map/resource-areas</code></td><td>300 秒</td><td>资源图层，静态数据</td></tr>
+<tr><td><code>/map/locate</code> <code>/map/search</code></td><td>不缓存</td><td>用户输入的即时查询</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>后台</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>路径</th><th>TTL</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td><code>/overview</code> <code>/keywords</code> <code>/misses</code> <code>/cosine</code> <code>/sources</code> <code>/visits</code></td><td>10 秒</td><td>统计页一次 8 个请求，短 TTL 就能削掉大部分重复访问</td></tr>
+<tr><td><code>/traffic</code> <code>/llm</code></td><td>5 秒</td><td>实时读数，只防连点</td></tr>
+<tr><td><code>/settings</code> <code>/pages</code> <code>/commands</code> <code>/commands/variables</code> <code>/commands/actions</code> <code>/commands/policies</code> <code>/boards</code> <code>/prompts</code> <code>/system-aliases</code> <code>/system-replies</code></td><td>60 秒</td><td>配置与命令，回看频率最高的几页</td></tr>
+<tr><td><code>/carousel</code></td><td>30 秒</td><td>配置类，改动后整端失效</td></tr>
+<tr><td><code>/acl/global</code> <code>/commands/{id}/acl</code> <code>/boards/{id}/acl</code></td><td>30 秒</td><td>权限，保存后整端失效</td></tr>
+<tr><td><code>/kb/terms</code> <code>/kb/categories</code> <code>/kb/categories/entries</code> <code>/kb/blocks</code> <code>/kb/blocks/docs</code> <code>/kb/blocks/stats</code></td><td>30 秒</td><td>词条、分类、块列表，翻页与回看</td></tr>
+<tr><td><code>/kb/wiki/sources</code> <code>/kb/wiki/catalog</code></td><td>60 秒</td><td>抓取范围</td></tr>
+<tr><td><code>/distill/settings</code> <code>/distill/stats</code> <code>/distill/blocklist</code></td><td>30 秒</td><td>蒸馏配置</td></tr>
+<tr><td><code>/voice</code> <code>/voice/triggers</code></td><td>60 秒</td><td>素材与触发词</td></tr>
+<tr><td><code>/voice/tts/voices</code></td><td>600 秒</td><td>音色清单，几乎不变</td></tr>
+<tr><td><code>/models</code> <code>/map/catalog</code> <code>/map/maps</code> <code>/map/layers</code> <code>/map/markers</code></td><td>60 秒</td><td>清单类</td></tr>
+<tr><td><code>/session</code> <code>/logs/*</code> <code>/users*</code> <code>/map/status</code> <code>/map/anchor</code> <code>/distill/jobs*</code> <code>/distill/notes*</code> <code>/board-records</code></td><td>不缓存</td><td>身份、日志、轮询、进度与分页明细</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="code">实现</h2>
+
+<p>新增两个文件，客户端接一层分支，两个路由各加一句。视图零改动。</p>
+
+<pre><code>// web/src/shared/api/cache.ts
+export function cachedGet&lt;T&gt;(key: string, rule: CacheRule, fetcher: () =&gt; Promise&lt;T&gt;): Promise&lt;T&gt; {
+  const hit = store.get(key)
+  // 新鲜 + 本次停留还没读过 → 直接给
+  if (hit &amp;&amp; hit.servedAt !== visit &amp;&amp; Date.now() - hit.at &lt; rule.ttl * 1000) {
+    hit.servedAt = visit
+    return Promise.resolve(hit.data as T)
+  }
+  // 同一路径正在飞：复用，不重复发
+  const running = inflight.get(key)
+  if (running) return running as Promise&lt;T&gt;
+
+  const task = fetcher()
+    .then((data) =&gt; { store.set(key, { data, at: Date.now(), servedAt: visit }); return data })
+    .finally(() =&gt; { inflight.delete(key) })
+  inflight.set(key, task)
+  return task
+}</code></pre>
+
+<p>再加一条上限：条目超过 120 条就丢掉最旧的一条。地图点位单个就有几百 KB，长时间浏览不该把它们全堆在内存里；这一层要的是“切回来还在”，不是“永久保留”。</p>
+
+<pre><code>// web/src/shared/api/client.ts
+function read&lt;T&gt;(scope: Scope, path: string): Promise&lt;T&gt; {
+  const rule = ruleFor(scope, path)
+  const url = urlOf(scope, path)
+  if (!rule) return request&lt;T&gt;(url)
+  return cachedGet&lt;T&gt;(`${scope}:${path}`, rule, () =&gt; request&lt;T&gt;(url))
+}
+
+async function write&lt;T&gt;(scope: Scope, path: string, init: RequestInit): Promise&lt;T&gt; {
+  const result = await request&lt;T&gt;(urlOf(scope, path), init)
+  invalidate(scope)
+  return result
+}</code></pre>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>文件</th><th>改动</th></tr></thead>
+<tbody>
+<tr><td><code>web/src/shared/api/cache.ts</code></td><td>新增：存储、并发合并、访问序号、失效</td></tr>
+<tr><td><code>web/src/shared/api/rules.ts</code></td><td>新增：两端 TTL 白名单</td></tr>
+<tr><td><code>web/src/shared/api/client.ts</code></td><td>读走缓存、写后失效、429 退避</td></tr>
+<tr><td><code>web/src/public/router.ts</code> <code>web/src/admin/router.ts</code></td><td><code>afterEach</code> 调 <code>beginVisit()</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="verify">验证</h2>
+
+<ul>
+<li><code>pnpm typecheck</code> 通过。</li>
+<li><code>pnpm build:only</code> 通过，产物正常。</li>
+<li>14 条行为断言全部通过，覆盖：TTL 命中、切回不请求、同页刷新重取、并发只发一次、写后失效、两端同名路径不串。</li>
+</ul>
+
+<p>没有在真实后端上跑端到端：本地没有可用的服务端会话。第一次部署后用浏览器 Network 面板走一遍“首页到资料库到地图来回切十次”，JSON 请求应当只剩首轮。</p>
+
+<h2 id="no">不做的做法</h2>
+
+<ul>
+<li><strong>不用 localStorage 持久化接口数据。</strong> 后台数据涉及权限，登出后残留在磁盘上是事故；公开站用 HTTP 缓存已经够了。</li>
+<li><strong>不引 pinia 或 TanStack Query。</strong> 现有视图是一段 <code>load()</code> 加几个 <code>ref</code>，加一整套 store 只会让改动面翻几倍。</li>
+<li><strong>不拿 KeepAlive 当缓存。</strong> 组件活着不等于数据新鲜，而且地图页与日志页的定时器会被一直留着。</li>
+<li><strong>不把 TTL 调成无限，也不设成 0。</strong> 前者会让后台改了不生效，后者等于没做。</li>
+<li><strong>不靠调大限流解决。</strong> 配额是防刷的保护，问题在于前端在浪费配额。</li>
+</ul>
+
+<h2 id="next">后续可调</h2>
+
+<ol>
+<li><strong>首屏预填。</strong> 命中缓存时仍要过一个微任务才回填，理论上骨架可能闪一帧。实测这一帧通常落在同一帧内，真觉得闪就加 <code>peek()</code> 预填初值，改动只在四个公开页。</li>
+<li><strong>后台 TTL 是否再短一些。</strong> 现在是 30–60 秒，两个人同时改配置时，另一个人最多看到一分钟前的值；保存会清空缓存，所以不会读到改前的。</li>
+<li><strong>路由级 KeepAlive。</strong> 能做，但它和缓存叠在一起会让“数据新鲜”更难推理，暂时不加。</li>
+<li><strong>公开站的点位与瓦片。</strong> 它们走的是 Nginx 600r/m 的另一条配额，这次没有动。</li>
+</ol>
+
+<p class="footer">排查范围：web/src 全部视图与 api 客户端、server 公开接口缓存与限流、deploy/nginx 三个站点配置。文档生成于 2026-11-01。</p>
+
+</main>
+</div>
+</body>
+</html>
