@@ -514,8 +514,9 @@ async function boot() {
   } finally {
     loading.value = false
   }
-  // 地图已经能看了，剩下的状态栏在后台补 —— 不 await，慢的只有它自己
-  void loadExtras()
+  // 地图已经能看了，剩下的状态栏在后台补 —— 不 await，慢的只有它自己。
+  // 标注页用不到这三份数据，所以按当前 tab 决定要不要拉，见 ensureExtras
+  if (tab.value !== 'mark') void loadExtras()
 }
 
 /**
@@ -527,6 +528,25 @@ async function boot() {
 async function loadExtras() {
   await Promise.allSettled([loadStatus(), loadAnchor(), loadMaps()])
 }
+
+/**
+ * 三份数据只在「点位列表」（待复核）与「同步与状态」（读数、候选地图）里出现，
+ * 标注页一样都不显示。所以按 tab 懒加载：进来只看一眼点位再切走，这三条请求一条都不发。
+ *
+ * <p>只加载一次。之后再进这两个 tab 用的是缓存层，十秒内不会重新请求；
+ * 点「重新载入」会走 boot()，那里按 tab 重新拉一遍。
+ */
+let extrasLoaded = false
+
+function ensureExtras(): void {
+  if (extrasLoaded) return
+  extrasLoaded = true
+  void loadExtras()
+}
+
+watch(tab, (next) => {
+  if (next !== 'mark') ensureExtras()
+})
 
 async function loadMarkers() {
   const r = await adminApi.get<{ markers: Marker[] }>('/map/markers?map=' + encodeURIComponent(mapName.value))

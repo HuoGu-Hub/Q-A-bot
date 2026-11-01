@@ -235,8 +235,14 @@ tbody tr:last-child td { border-bottom:0; }
 
 <p>它们其实是「补信息」：不挡首屏，晚十秒也不影响判断。现在按 10 秒与 30 秒缓存；点任何操作按钮时先发的写请求会整端失效，所以轮询与操作后的刷新仍然拿新数据。</p>
 
+<h3>状态栏按 tab 懒加载</h3>
+
+<p>再往前一步：这三份数据只在「点位列表」与「同步与状态」两个 tab 里出现，标注页一样都不显示。而它们原本是在 <code>boot()</code> 末尾无条件拉一遍的。</p>
+
+<p>现在改成切到这两个 tab 时才拉一次。打开地图只看一眼点位再走，这三条请求一条都不会发；「重新载入」仍按当前 tab 刷新。</p>
+
 <blockquote class="ok">
-<p>这两处改完，地图页与别的页面之间来回切，十秒内应当一条 JSON 请求都不发。</p>
+<p>三处改完，停留在标注页时，地图与别的页面之间来回切不会产生任何 JSON 请求。</p>
 </blockquote>
 
 <h2 id="plan">方案</h2>
@@ -369,6 +375,7 @@ async function write&lt;T&gt;(scope: Scope, path: string, init: RequestInit): Pr
 <tr><td><code>web/src/shared/api/client.ts</code></td><td>读走缓存、写后失效、429 退避</td></tr>
 <tr><td><code>web/src/public/router.ts</code> <code>web/src/admin/router.ts</code></td><td><code>afterEach</code> 调 <code>beginVisit()</code></td></tr>
 <tr><td><code>web/src/public/views/MapView.vue</code> <code>web/src/admin/views/MapAdminView.vue</code></td><td>换图收敛到 <code>selectMap()</code>，点位只由一个入口加载</td></tr>
+<tr><td><code>web/src/admin/views/MapAdminView.vue</code></td><td>状态栏按 tab 懒加载，标注页不拉</td></tr>
 </tbody>
 </table>
 </div>
