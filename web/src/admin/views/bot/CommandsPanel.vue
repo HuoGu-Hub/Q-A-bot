@@ -33,9 +33,8 @@ import SystemReplyEditor from './SystemReplyEditor.vue'
 import VariablePanel from './VariablePanel.vue'
 import { useVariableInsert } from './useVariableInsert'
 import type { AclBody } from './aclForm'
-import {
-  KIND_OPTIONS, ACCESS_OPTIONS, MODE_OPTIONS, ACCESS_LABEL, SCOPE_LABEL,
-} from './commandOptions'
+import { KIND_OPTIONS, MODE_OPTIONS, SCOPE_LABEL } from './commandOptions'
+import { accessLabel, accessOptions, accessUsesAcl, loadAccessModes } from './accessModes'
 
 const loading = ref(false)
 const error = ref('')
@@ -135,7 +134,7 @@ const rows = computed<CommandRow[]>(() => [
   }),
 ])
 
-/** 指令类型与准入选项在 commandOptions.ts —— 板块编辑器也要用同一份 */
+/** 指令类型的选项在 commandOptions.ts；准入档位由服务端下发，见 accessModes.ts */
 
 const FILTERS = [
   { value: 'all', label: '全部' },
@@ -196,6 +195,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
+    // 档位清单先到：列表标签与编辑器的下拉都读它，晚到会闪一下原始 code
+    await loadAccessModes()
     data.value = await adminApi.get<CommandList>('/commands')
     try { boards.value = (await adminApi.get<AdminBoardList>('/boards')).boards }
     catch { boards.value = [] }
@@ -265,7 +266,7 @@ function sampleArgsOf(params: AdminParamSpec[]) {
 function rowRuleText(row: CommandRow): string {
   if (row.source === 'system') return '所有人'
   if (row.source === 'board' && row.board) {
-    const parts = [ACCESS_LABEL[row.board.access] ?? row.board.access]
+    const parts = [accessLabel(row.board.access)]
     if (row.board.scope !== 'GROUP') parts.push(SCOPE_LABEL[row.board.scope] ?? row.board.scope)
     if (row.board.allowPrivate) parts.push('私聊')
     return parts.join(' · ')
@@ -491,7 +492,7 @@ function policyOf(id: number): CommandPolicy {
 function deviations(c: BotCommand): string[] {
   const p = policyOf(c.id)
   const out: string[] = []
-  if (c.access !== 'all') out.push(ACCESS_LABEL[c.access] ?? c.access)
+  if (c.access !== 'all') out.push(accessLabel(c.access))
   if (p.scope !== 'GROUP') {
     out.push(p.scope === 'ALL' ? '跨群' : '指定群')
     if (p.showUser) out.push('露 QQ 号')
@@ -534,10 +535,8 @@ async function addParamRow() {
   }
 }
 
-/** 只有"白名单/黑名单"两档才需要录名单，其余档位下这一块根本不该出现 */
-const needsList = computed(() =>
-  ['whitelist', 'blacklist', 'admin_whitelist'].includes(editing.value?.access ?? 'all')
-)
+/** 要不要露名单由档位自己说了算 —— 服务端下发的 usesAcl，不在前端写死那三个 code */
+const needsList = computed(() => accessUsesAcl(editing.value?.access ?? 'all'))
 
 function toggleBlock(key: 'params' | 'acl' | 'list' | 'help') {
   openBlocks.value[key] = !openBlocks.value[key]
@@ -822,7 +821,7 @@ onMounted(load)
             <span class="row-label">权限</span>
             <Select
               :model-value="editing.access ?? 'all'"
-              :options="ACCESS_OPTIONS"
+              :options="accessOptions"
               aria-label="谁能用"
               @update:model-value="patch({ access: $event })"
             />

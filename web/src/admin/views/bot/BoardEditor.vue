@@ -18,7 +18,8 @@ import ParamTable from './ParamTable.vue'
 import VariablePanel from './VariablePanel.vue'
 import AclEditor from './AclEditor.vue'
 import { useVariableInsert } from './useVariableInsert'
-import { ACCESS_OPTIONS, DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
+import { DATA_SCOPES, DELIVERY_OPTIONS } from './commandOptions'
+import { accessOptions, accessUsesAcl, loadAccessModes } from './accessModes'
 import { aclBody, aclCount, emptyAclForm, fillAcl } from './aclForm'
 import type { AclBody, AclForm } from './aclForm'
 
@@ -134,14 +135,15 @@ const hasRepeat = computed(() => repeatParam.value !== null)
 const hasTime = computed(() => timeParam.value !== null)
 const scheduled = computed(() => form.delivery === 'scheduled')
 
-/** 名单只在看名单的档位下才有意义；和指令编辑器同一份规则 */
-const needsAcl = computed(() =>
-  ['whitelist', 'blacklist', 'admin_whitelist'].includes(form.access))
+/** 名单只在看名单的档位下才有意义 —— 判据来自服务端下发的档位，与指令编辑器同一份 */
+const needsAcl = computed(() => accessUsesAcl(form.access))
 const acl = ref<AclForm>(emptyAclForm())
 const openAcl = ref(false)
 const aclSummary = computed(() => aclCount(acl.value))
 
 function reset() {
+  // 档位清单是异步的；父面板一般已经拉过，这里只是幂等兜底
+  void loadAccessModes()
   const b = props.board
   form.path = b?.path ?? ''
   form.description = b?.description ?? ''
@@ -494,7 +496,7 @@ function submit() {
 
         <label class="row">
           <span class="row-label">权限</span>
-          <Select v-model="form.access" :options="ACCESS_OPTIONS" aria-label="谁能新增或删除" />
+          <Select v-model="form.access" :options="accessOptions" aria-label="谁能新增或删除" />
         </label>
 
         <label class="row">

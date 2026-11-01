@@ -69,6 +69,8 @@ class OpenApiSpecTest {
         assertThat(root.path("paths").size()).isGreaterThan(50);
         assertThat(root.path("paths").has("/api/public/v1/kb/search")).isTrue();
         assertThat(root.path("paths").has("/admin/api/kb/blocks")).isTrue();
+        // 后台三处编辑器的档位下拉都读这一条，路径没了等于三个编辑器一起空
+        assertThat(root.path("paths").has("/admin/api/commands/access-modes")).isTrue();
 
         JsonNode publicResponses = root.path("paths").path("/api/public/v1/kb/search")
                 .path("get").path("responses");

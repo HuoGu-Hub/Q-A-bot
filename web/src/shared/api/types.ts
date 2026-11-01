@@ -193,6 +193,23 @@ export interface AdminParamSpec {
   multiple?: boolean
 }
 
+/**
+ * 一条准入档位。
+ *
+ * <p><b>这份清单由服务端下发</b>（{@code GET /admin/api/commands/access-modes}），
+ * 前端不自己维护：中文名与"要不要露名单"都长在后端 {@code CommandAccess} 枚举上。
+ * 以前命令编辑器、板块编辑器、/prompt 弹窗各写一份，于是 /prompt 那份漏了
+ * 「管理员与白名单」，文案也和别处不一样。
+ */
+export interface AccessMode {
+  /** 存库的值，如 all / admin / admin_whitelist */
+  code: string
+  /** 下拉里显示的中文名 */
+  label: string
+  /** 这一档下名单是判定依据之一 —— 编辑器要露出名单区 */
+  usesAcl: boolean
+}
+
 export interface BotCommand {
   id: number
   /** 命令路径，用 / 分层：set/output */
@@ -201,7 +218,7 @@ export interface BotCommand {
   description: string
   scope: string
   groupIds: number[]
-  /** 准入档位：all / admin / owner / whitelist / blacklist */
+  /** 准入档位 code，取值见 AccessMode；清单由服务端下发 */
   access: string
   enabled: boolean
   sortOrder: number
@@ -344,7 +361,7 @@ export interface CommandCatalogEntry {
   params: AdminParamSpec[]
   /** 完整用法，带参数示例 */
   usage: string
-  /** 归一化后的准入档位 all / admin / owner / whitelist / blacklist */
+  /** 归一化后的准入档位 code，取值见 AccessMode */
   access: string
   /** 板块的数据范围 GROUP / SOME / ALL；指令为 null */
   scope?: string | null

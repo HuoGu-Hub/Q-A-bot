@@ -1,7 +1,7 @@
 package com.example.qqbot.command;
 
 /**
- * 一条命令的准入档位，五选一。
+ * 一条命令的准入档位，六选一。
  *
  * <p>前三个按角色判，后两个按名单判：
  * <ul>
@@ -14,25 +14,52 @@ package com.example.qqbot.command;
  * </ul>
  *
  * <p>名单的优先级高于档位，见 {@link AccessRules}。
+ *
+ * <h2>这里是档位清单的唯一出处</h2>
+ * 中文名与"要不要露名单"都长在枚举上，由 {@code GET /admin/api/commands/access-modes}
+ * 下发给后台 —— 前端三处编辑器（命令、板块、/prompt）都从那份数据渲染。
+ * <b>加一档只改这里</b>：界面自动多一个选项，判法由 {@link AccessRules} 的 switch 补齐，
+ * 漏写那个 switch 会编译不过。
  */
 public enum CommandAccess {
 
-    ALL("all"),
-    ADMIN("admin"),
+    ALL("all", "全体", false),
+    ADMIN("admin", "管理员", false),
     /** 管理员与白名单：管理员照常，另外白名单里的人也能用（不在名单里的普通成员不行） */
-    ADMIN_WHITELIST("admin_whitelist"),
-    OWNER("owner"),
-    WHITELIST("whitelist"),
-    BLACKLIST("blacklist");
+    ADMIN_WHITELIST("admin_whitelist", "管理员与白名单", true),
+    OWNER("owner", "群主", false),
+    WHITELIST("whitelist", "白名单", true),
+    BLACKLIST("blacklist", "黑名单", true);
 
     private final String code;
+    /** 后台下拉里显示的中文名 */
+    private final String label;
+    /** 名单是不是这一档的判定依据 */
+    private final boolean usesAcl;
 
-    CommandAccess(String code) {
+    CommandAccess(String code, String label, boolean usesAcl) {
         this.code = code;
+        this.label = label;
+        this.usesAcl = usesAcl;
     }
 
     public String code() {
         return code;
+    }
+
+    public String label() {
+        return label;
+    }
+
+    /**
+     * 这一档下，名单是判定的主依据 —— 后台要露出名单编辑区。
+     *
+     * <p>名单对<b>所有</b>档位都生效（黑名单永远拦、白名单永远放，见 {@link AccessRules}），
+     * 但只有这三档"谁能用"由名单里的人决定：不给它们录名单，等于把命令锁死或形同虚设。
+     * 其余档位按角色判，名单区收起来不占地方。
+     */
+    public boolean usesAcl() {
+        return usesAcl;
     }
 
     /** 给群友看的说法，拒绝时回这句 */

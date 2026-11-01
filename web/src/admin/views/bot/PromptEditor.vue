@@ -9,6 +9,7 @@ import { computed, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { AdminPrompt, AdminPromptList, BotCommand, CommandAcl } from '@shared/api/types'
 import CommandEditorShell from './CommandEditorShell.vue'
+import { accessOptions, accessUsesAcl, loadAccessModes } from './accessModes'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Button from '@shared/ui/Button.vue'
@@ -35,12 +36,11 @@ const helpReply = ref('')
 const textsSaving = ref(false)
 const textsSaved = ref('')
 const acl = ref({ whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' })
+/**
+ * 名单模式 —— 与命令、板块编辑器同一个来源（服务端下发的档位清单）。
+ * 这里以前自带一份三档清单，漏了「管理员与白名单」，文案也与别处不同。
+ */
 const accessMode = ref('all')
-const ACCESS_OPTIONS = [
-  { value: 'all', label: '全体成员' },
-  { value: 'whitelist', label: '仅白名单' },
-  { value: 'blacklist', label: '黑名单拦截' },
-]
 
 const visiblePrompts = computed(() => {
   const q = keyword.value.trim().toLowerCase()
@@ -90,6 +90,7 @@ async function load() {
     const [list, aclData] = await Promise.all([
       adminApi.get<AdminPromptList>('/prompts'),
       adminApi.get<CommandAcl>('/commands/' + props.command.id + '/acl'),
+      loadAccessModes(),
     ])
     prompts.value = list.prompts
     fillAcl(aclData)
@@ -202,10 +203,10 @@ function scopeText(prompt: AdminPrompt) {
 
         <label class="access-row">
           <span>名单模式</span>
-          <Select v-model="accessMode" :options="ACCESS_OPTIONS" aria-label="名单模式" />
+          <Select v-model="accessMode" :options="accessOptions" aria-label="名单模式" />
         </label>
 
-        <div class="acl-grid">
+        <div v-if="accessUsesAcl(accessMode)" class="acl-grid">
           <div>
             <div class="acl-k good">白名单 · QQ</div>
             <Input :model-value="acl.whiteUsers" multiline :rows="2" placeholder="一行一个"

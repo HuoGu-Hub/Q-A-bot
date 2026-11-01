@@ -1,8 +1,12 @@
 /**
  * 指令与板块共用的下拉选项。
  *
- * <p>抽出来的原因很直接：同一个「谁能用」在指令编辑器、板块编辑器、列表标签里
- * 出现三次。三处各写一份选项，迟早会出现「编辑器里有、列表里没有」的漂移。
+ * <p>抽出来的原因很直接：同一个选项会在编辑器、列表标签里出现多次，
+ * 各写一份迟早出现「编辑器里有、列表里没有」的漂移。
+ *
+ * <p><b>准入档位不在这里</b>：它是后端的枚举（{@code CommandAccess}），
+ * 由 {@code GET /admin/api/commands/access-modes} 下发，见 {@code ./accessModes.ts}。
+ * 前端只保留"自己决定"的那几份词汇表。
  */
 
 export const KIND_OPTIONS: Array<{ value: string; label: string }> = [
@@ -10,20 +14,6 @@ export const KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'agent', label: '问答' },
   { value: 'action', label: '动作' },
 ]
-
-export const ACCESS_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: '全体' },
-  { value: 'admin', label: '管理员' },
-  { value: 'admin_whitelist', label: '管理员与白名单' },
-  { value: 'owner', label: '群主' },
-  { value: 'whitelist', label: '白名单' },
-  { value: 'blacklist', label: '黑名单' },
-]
-
-export const ACCESS_LABEL: Record<string, string> = {
-  all: '全体', admin: '管理员', admin_whitelist: '管理员与白名单',
-  owner: '群主', whitelist: '白名单', blacklist: '黑名单',
-}
 
 export const PARAM_TYPES: Array<{ value: string; label: string }> = [
   { value: 'text', label: '文本' },

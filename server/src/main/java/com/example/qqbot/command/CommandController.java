@@ -127,6 +127,22 @@ public class CommandController {
         return new Actions(out);
     }
 
+    /**
+     * 准入档位清单。
+     *
+     * <p>后台的三处编辑器（命令、板块、/prompt）都从这里取档位 —— 档位的中文名与
+     * "要不要露名单"长在 {@link CommandAccess} 上，前端不再自带一份。
+     * 以前每个编辑器各写一份，于是 /prompt 那份漏了「管理员与白名单」，文案也不一样。
+     */
+    @GetMapping("/access-modes")
+    public AccessModes accessModes() {
+        List<AccessModeView> out = new ArrayList<>();
+        for (CommandAccess mode : CommandAccess.values()) {
+            out.add(new AccessModeView(mode.code(), mode.label(), mode.usesAcl()));
+        }
+        return new AccessModes(out);
+    }
+
     /** 新增或更新 */
     @PostMapping("")
     public ResponseEntity<SavedCommand> upsert(@Valid @RequestBody UpsertCommandRequest body) {
@@ -186,7 +202,8 @@ public class CommandController {
                 body.description() == null ? "" : body.description(),
                 body.scope() == null ? "all" : body.scope(),
                 body.groupIds() == null ? List.of() : body.groupIds(),
-                body.minRole() == null ? "member" : body.minRole(),
+                // 归一化后入库：空值、旧值 member、认不出来的值都落成 all（见 CommandAccess.of）
+                CommandAccess.of(body.access()).code(),
                 body.enabled() == null || body.enabled(),
                 body.sortOrder() == null ? 0 : body.sortOrder(),
                 false,
@@ -439,7 +456,7 @@ public class CommandController {
             String description,
             String scope,
             List<Long> groupIds,
-            String minRole,
+            String access,
             Boolean enabled,
             Integer sortOrder,
             String help,
@@ -490,6 +507,12 @@ public class CommandController {
     }
 
     public record Actions(List<ActionView> actions) {
+    }
+
+    public record AccessModeView(String code, String label, boolean usesAcl) {
+    }
+
+    public record AccessModes(List<AccessModeView> modes) {
     }
 
     public record SavedCommand(long id) {
