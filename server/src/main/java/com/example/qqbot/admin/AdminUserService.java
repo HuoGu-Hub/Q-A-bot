@@ -211,22 +211,29 @@ public class AdminUserService {
             throw new IllegalArgumentException("账号名只能包含字母、数字、下划线、点和横线，长度 3–32");
         }
         String q = qq == null ? "" : qq.trim();
-        if (!QQ.matcher(q).matches()) {
+        AdminRole target = role == null ? AdminRole.VIEWER : role;
+        if (!q.isBlank() && !QQ.matcher(q).matches()) {
             throw new IllegalArgumentException("QQ 号格式不对，应为 5–12 位数字");
+        }
+        // 只读账号可以没有 QQ：这类账号登录时不需要验证码，硬要求一个 QQ
+        // 只会把"没有 QQ 的来访者"挡在开户这一步。
+        if (q.isBlank() && target.requiresQq()) {
+            throw new IllegalArgumentException("「" + target.label() + "」账号必须填 QQ，登录时要用它收验证码");
         }
         if (users.findByUsername(name) != null) {
             throw new IllegalArgumentException("账号名已存在：" + name);
         }
-        if (users.findByQq(q) != null) {
+        // 空串不能拿去查 QQ：库里所有未绑定的账号 qq 都是空串，
+        // 查出来会误报"这个 QQ 已经绑了其他账号"
+        if (!q.isBlank() && users.findByQq(q) != null) {
             throw new IllegalArgumentException("这个 QQ 已经绑了其他账号");
         }
         if (users.findByUsername(q) != null || users.findByQq(name) != null) {
             throw new IllegalArgumentException("账号名和 QQ 号冲突");
         }
-        long id = users.create(name, trimToNull(displayName), passwordHash,
-                (role == null ? AdminRole.VIEWER : role).id(), q);
+        long id = users.create(name, trimToNull(displayName), passwordHash, target.id(), q);
         hasUsers = true;
-        log.info("[ADMIN] 新建账号 {}（{}）", name, role == null ? "viewer" : role.id());
+        log.info("[ADMIN] 新建账号 {}（{}）", name, target.id());
         return toUser(users.findById(id));
     }
 

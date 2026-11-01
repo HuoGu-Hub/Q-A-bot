@@ -114,6 +114,11 @@ public class AdminController {
 
         AdminUser user = result.user();
 
+        // 只读账号不发码：密码通过就直接发会话。规则见 AdminRole#requiresQq
+        if (!user.role().requiresQq()) {
+            return sessionResponse(user, request, response, ipHash, false);
+        }
+
         // 信任设备：密码对了就免验证码
         String deviceToken = readCookie(request, DEVICE_COOKIE);
         if (user.qqVerified() && devices.isValid(deviceToken, user.id())) {
@@ -209,7 +214,7 @@ public class AdminController {
         }
         return new AdminUserView(p.id(), p.username(), p.display(), p.role().id(),
                 p.role().label(), p.qq(), p.qqVerified(),
-                areasOf(p.role()));
+                p.role().requiresQq(), areasOf(p.role()));
     }
 
     private List<String> areasOf(AdminRole role) {
@@ -490,7 +495,7 @@ public class AdminController {
 
     public record AdminUserView(long id, String username, String displayName, String role,
                                 String roleLabel, String qq, boolean qqVerified,
-                                List<String> areas) {
+                                boolean qqRequired, List<String> areas) {
     }
 
     public record LoginResponse(AdminUserView user, Boolean needCode, String challengeId,

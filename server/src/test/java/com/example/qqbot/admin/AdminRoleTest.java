@@ -26,6 +26,14 @@ class AdminRoleTest {
     }
 
     @Test
+    @DisplayName("只有只读账号免 QQ 验证")
+    void onlyViewerSkipsQq() {
+        assertThat(AdminRole.VIEWER.requiresQq()).isFalse();
+        assertThat(AdminRole.EDITOR.requiresQq()).isTrue();
+        assertThat(AdminRole.ADMIN.requiresQq()).isTrue();
+    }
+
+    @Test
     @DisplayName("解析不区分大小写与首尾空格")
     void parseIsForgiving() {
         assertThat(AdminRole.parse(" ADMIN ")).isEqualTo(AdminRole.ADMIN);

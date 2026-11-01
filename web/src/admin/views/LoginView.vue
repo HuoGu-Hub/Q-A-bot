@@ -53,12 +53,23 @@ async function submit() {
       step.value = 'code'
       return
     }
-    router.replace(auth.me.value?.qqVerified ? nextRoute() : '/bind-qq')
+    router.replace(needsBind() ? '/bind-qq' : nextRoute())
   } catch (e) {
     error.value = describeError(e)
   } finally {
     busy.value = false
   }
+}
+
+/**
+ * 登录后该不该先去绑 QQ。
+ *
+ * 判断依据是后端给的 qqRequired，不是"还没验证" —— 只读账号本来就不需要验证，
+ * 再用 qqVerified 判断会把它永远送进绑定页。
+ */
+function needsBind() {
+  const me = auth.me.value
+  return !!me?.qqRequired && !me.qqVerified
 }
 
 async function verify() {
@@ -67,7 +78,7 @@ async function verify() {
   error.value = ''
   try {
     await auth.verifyLogin(challengeId.value, code.value.trim(), trustDevice.value)
-    router.replace(auth.me.value?.qqVerified ? nextRoute() : '/bind-qq')
+    router.replace(needsBind() ? '/bind-qq' : nextRoute())
   } catch (e) {
     error.value = describeError(e)
   } finally {

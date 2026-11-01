@@ -141,7 +141,9 @@ public class AdminAuthFilter extends OncePerRequestFilter {
                 forbiddenOrigin(response);
                 return;
             }
-            if (!principal.get().qqVerified() && !QQ_BIND_PATHS.contains(path)) {
+            // 只读账号不走二次验证，见 AdminRole#requiresQq
+            if (principal.get().role().requiresQq() && !principal.get().qqVerified()
+                    && !QQ_BIND_PATHS.contains(path)) {
                 qqBindRequired(response);
                 return;
             }

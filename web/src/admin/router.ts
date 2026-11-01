@@ -78,9 +78,11 @@ router.beforeEach(async (to) => {
   if (!auth.checked.value) await auth.check()
   if (!auth.ok.value) return { name: 'login', query: { r: to.fullPath } }
 
+  // 需不需要绑 QQ 由身份决定：只读账号不做二次验证，不能被送进绑定页
   const bind = Boolean(to.meta.bind)
-  if (!auth.me.value?.qqVerified && !bind) return { name: 'bind-qq' }
-  if (bind && auth.me.value?.qqVerified) return homePath()
+  const needBind = !!auth.me.value?.qqRequired && !auth.me.value.qqVerified
+  if (needBind && !bind) return { name: 'bind-qq' }
+  if (bind && !needBind) return homePath()
 
   // 区域没开放就送去第一个能进的页：留在原地只会看到一屏 403
   const need = to.meta.area as string | undefined

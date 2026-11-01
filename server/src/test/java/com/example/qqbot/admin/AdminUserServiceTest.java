@@ -84,6 +84,30 @@ class AdminUserServiceTest {
     }
 
     @Test
+    @DisplayName("★ 只读账号可以不填 QQ，编辑与管理必须填")
+    void qqRequiredOnlyForWriters() {
+        String hash = service.hashPassword("password1234");
+        AdminUser guest = service.createWithHash("guest01", "参观者", hash, AdminRole.VIEWER, "");
+        assertThat(guest.qq()).isEmpty();
+        assertThat(guest.role()).isEqualTo(AdminRole.VIEWER);
+        assertThat(service.authenticate("guest01", "password1234")).isPresent();
+
+        assertThatThrownBy(() -> service.createWithHash(
+                "editor01", null, hash, AdminRole.EDITOR, ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("必须填 QQ");
+    }
+
+    @Test
+    @DisplayName("两个未绑定 QQ 的账号可以共存")
+    void blankQqIsNotACollision() {
+        String hash = service.hashPassword("password1234");
+        service.createWithHash("guest01", null, hash, AdminRole.VIEWER, "");
+        AdminUser second = service.createWithHash("guest02", null, hash, AdminRole.VIEWER, "");
+        assertThat(second.username()).isEqualTo("guest02");
+    }
+
+    @Test
     @DisplayName("账号名不区分大小写，重复建会被拒")
     void usernameIsCaseInsensitive() {
         service.create("Editor01", null, "password1234", AdminRole.EDITOR);

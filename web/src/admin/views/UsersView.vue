@@ -118,6 +118,12 @@ const isLastAdmin = computed(() =>
   && editTarget.value.enabled
   && adminCount.value <= 1)
 
+/** 只读账号本来就不需要 QQ，写"未绑定"会让人以为这个账号还不能用 */
+function qqLabel(r: AccountRow) {
+  if (r.qq) return 'QQ ' + r.qq + (r.qqVerified ? '' : ' · 待验证')
+  return r.role === 'viewer' ? '免绑 QQ' : '未绑定 QQ'
+}
+
 function roleName(r: AdminRoleId) {
   return ADMIN_ROLES.find(x => x.value === r)?.label ?? r
 }
@@ -336,7 +342,7 @@ onMounted(load)
               <Tag v-if="r.id === meId" tone="flame">我</Tag>
             </span>
             <span class="display" :class="{ unfilled: !r.displayName }">{{ r.displayName || '未设昵称' }}</span>
-            <span class="qq">{{ r.qq ? 'QQ ' + r.qq + (r.qqVerified ? '' : ' · 待验证') : '未绑定 QQ' }}</span>
+            <span class="qq">{{ qqLabel(r) }}</span>
             <span class="sr-only">{{ r.enabled ? '启用中' : '已停用' }}</span>
           </span>
           <span class="rank">{{ roleName(r.role) }}</span>
@@ -381,7 +387,7 @@ onMounted(load)
         <Field label="昵称" control-width="240px">
           <Input v-model="form.displayName" placeholder="例如 小雪" autocomplete="off" name="displayName" />
         </Field>
-        <Field label="QQ 号" hint="对方必须先添加 bot 为好友" control-width="240px">
+        <Field label="QQ 号" hint="编辑与管理必填；只读可留空" control-width="240px">
           <Input v-model="form.qq" placeholder="例如 10001" inputmode="numeric" autocomplete="off" name="qq" />
         </Field>
         <Field label="初始密码" hint="至少 12 位" control-width="240px">

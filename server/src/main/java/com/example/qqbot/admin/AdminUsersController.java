@@ -126,21 +126,30 @@ public class AdminUsersController {
             String password = body.password();
             String qq = body.qq();
             AdminRole role = AdminRole.parseStrict(body.role());
+            AdminRole target = role == null ? AdminRole.VIEWER : role;
+            String q = qq == null ? "" : qq.trim();
             if (users.usernameExists(username)) {
                 throw new IllegalArgumentException("账号名已存在：" + username);
             }
-            if (users.qqExists(qq)) {
+            if (!q.isBlank() && users.qqExists(q)) {
                 throw new IllegalArgumentException("这个 QQ 已经绑了其他账号");
             }
+            if (q.isBlank() && target.requiresQq()) {
+                throw new IllegalArgumentException("「" + target.label() + "」账号必须填 QQ");
+            }
             String hash = users.hashPassword(password);
-            qqCodes.sendNotice(qq, "qqbot 后台正在为你创建账号，账号名：" + username
-                    + "。如果不是你本人申请，请忽略这条消息。");
+            // 只读账号可以没有 QQ —— 没有 QQ 就没有"告知对象"，
+            // 这一步只是通知，不该因此挡住开户
+            if (!q.isBlank()) {
+                qqCodes.sendNotice(q, "qqbot 后台正在为你创建账号，账号名：" + username
+                        + "。如果不是你本人申请，请忽略这条消息。");
+            }
             String payload = mapper.writeValueAsString(Map.of(
                     "username", username,
                     "displayName", displayName == null ? "" : displayName,
                     "passwordHash", hash,
-                    "role", role == null ? AdminRole.VIEWER.id() : role.id(),
-                    "qq", qq));
+                    "role", target.id(),
+                    "qq", q));
             AdminQqCodeService.Issued issued = qqCodes.issue(
                     me.id(), me.qq(), AdminQqCodeService.PURPOSE_CREATE_USER, payload);
             audit.record(me.id(), me.username(), "user-create-code", "POST",
@@ -176,8 +185,10 @@ public class AdminUsersController {
                     String.valueOf(payload.get("passwordHash")),
                     AdminRole.parseStrict(String.valueOf(payload.get("role"))),
                     String.valueOf(payload.get("qq")));
-            qqCodes.sendNotice(u.qq(), "qqbot 后台账号已创建，账号名：" + u.username()
-                    + "。请用管理员给你的初始密码登录，并立即修改密码。");
+            if (!u.qq().isBlank()) {
+                qqCodes.sendNotice(u.qq(), "qqbot 后台账号已创建，账号名：" + u.username()
+                        + "。请用管理员给你的初始密码登录，并立即修改密码。");
+            }
             audit.record(me.id(), me.username(), "user-create", "POST",
                     "/admin/api/users/confirm", "target=" + u.username(), "");
             return ResponseEntity.ok(dto(u));

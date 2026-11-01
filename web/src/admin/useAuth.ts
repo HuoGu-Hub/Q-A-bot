@@ -10,6 +10,8 @@ export interface AdminMe {
   roleLabel: string
   qq: string
   qqVerified: boolean
+  /** 这个身份登录要不要 QQ 验证码 —— 只读账号不要 */
+  qqRequired: boolean
   /** 当前角色被允许进入的区域，见后端的 AdminArea */
   areas: string[]
 }
