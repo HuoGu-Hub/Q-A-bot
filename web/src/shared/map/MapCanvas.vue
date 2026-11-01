@@ -27,7 +27,7 @@ import type { CanvasSpec, MapArea, Marker, Relative } from './types'
 import {
   ICON_MIN_ZOOM, clampView, centerOn, crsOf, extentOf, fitPoints, fitView,
   hitTest, hitTestAll, initialView, screenOf, visibleMarkers, worldAt, worldOf,
-  worldOfMarker, zoomAt,
+  worldOfMarker, zoomAtClamped,
   type View,
 } from './mapMath'
 
@@ -645,8 +645,8 @@ function onPointerMove(e: PointerEvent) {
       const mid = midOfPointers()
       const factor = d / pinchBase
       pinchBase = d
-      view.value = clampView(props.canvas, size.value.w, size.value.h,
-        zoomAt(view.value, mid[0], mid[1], factor), props.maxZoom)
+      view.value = zoomAtClamped(props.canvas, size.value.w, size.value.h,
+        view.value, mid[0], mid[1], factor, props.maxZoom)
       schedule()
     }
     return
@@ -705,15 +705,15 @@ function onPointerUp(e: PointerEvent) {
 function onWheel(e: WheelEvent) {
   const p = localPoint(e)
   const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
-  view.value = clampView(props.canvas, size.value.w, size.value.h,
-    zoomAt(view.value, p[0], p[1], factor), props.maxZoom)
+  view.value = zoomAtClamped(props.canvas, size.value.w, size.value.h,
+    view.value, p[0], p[1], factor, props.maxZoom)
   schedule()
 }
 
 function onDoubleClick(e: MouseEvent) {
   const p = localPoint(e)
-  view.value = clampView(props.canvas, size.value.w, size.value.h,
-    zoomAt(view.value, p[0], p[1], 1.8), props.maxZoom)
+  view.value = zoomAtClamped(props.canvas, size.value.w, size.value.h,
+    view.value, p[0], p[1], 1.8, props.maxZoom)
   schedule()
 }
 
@@ -786,8 +786,8 @@ defineExpose({
     schedule()
   },
   zoomBy(factor: number) {
-    view.value = clampView(props.canvas, size.value.w, size.value.h,
-      zoomAt(view.value, size.value.w / 2, size.value.h / 2, factor), props.maxZoom)
+    view.value = zoomAtClamped(props.canvas, size.value.w, size.value.h,
+      view.value, size.value.w / 2, size.value.h / 2, factor, props.maxZoom)
     schedule()
   },
   /** 把某个 crs 坐标放到视野中心 */

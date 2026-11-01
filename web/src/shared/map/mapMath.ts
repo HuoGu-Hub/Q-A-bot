@@ -143,6 +143,32 @@ export function zoomAt(view: View, sx: number, sy: number, factor: number): View
 }
 
 /**
+ * 以屏幕上的某点为锚做缩放，**先把缩放夹进合法区间，再按实际生效的比例算平移**。
+ *
+ * <p>为什么不能写成 {@code clampView(zoomAt(...))}：缩放到达上限之后，zoomAt 仍然按
+ * "真的放大了 12%" 去推平移，而 clampView 只把 k 夹回来，不会撤销那部分平移。
+ * 于是每一次"已经放不动"的滚轮都变成一次 12% 的平移，视图会一路漂到地图右下角 ——
+ * 用户看到的现象就是"放到最大再滚，地图自己跑掉了"。
+ *
+ * <p>缩放被夹住时比例恰好为 1，锚点下的内容不动，也就不会产生任何平移。
+ */
+export function zoomAtClamped(
+  canvas: CanvasSpec,
+  vw: number,
+  vh: number,
+  view: View,
+  sx: number,
+  sy: number,
+  factor: number,
+  maxZoom: number = DEFAULT_MAX_ZOOM,
+): View {
+  const k = clampScale(canvas, vw, vh, view.k * factor, maxZoom)
+  // 真正生效的比例：缩放被夹住时它恰好是 1，平移也就恰好不变
+  const ratio = view.k > 0 ? k / view.k : 1
+  return clampView(canvas, vw, vh, zoomAt(view, sx, sy, ratio), maxZoom)
+}
+
+/**
  * 首屏视图：**至少放大到看得清图标**，同时不缩过头。
  *
  * <p>取 contain 与 ICON_MIN_ZOOM 的较大者，再留一点余量（1.15 倍）。
