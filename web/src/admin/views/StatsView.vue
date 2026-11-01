@@ -7,14 +7,17 @@
  * 没有二级目录，动作按钮只能自己占一整行；并进来之后，页栏左边是 tab、
  * 右边是本 tab 的动作，和知识库 / 系统 / Bot 配置是同一套结构。
  *
- * 时间窗口**放在这一层**：两个 tab 看的是同一个窗口，切 tab 不该把范围重置，
+ * 时间窗口**放在这一层**：三个 tab 看的是同一个窗口，切 tab 不该把范围重置，
  * 也不该出现"总览说最近 7 天、记录却是最近 30 天"这种对不上的读数。
  * 默认 0 = 全部：先回答"到现在一共多少"，要看趋势再切 7/30/90 天。
  *
  * tab 状态同步到 URL 查询串（`?tab=records`），旧地址 /dashboard、/records、
  * /screen 全部重定向到这里（见 router.ts），书签和肌肉记忆不会失效。
  *
- * ⚠️ **两个面板各用一个 ref，不能共用一个**。Vue 3.5 把模板 ref 的写入推迟到
+ * 第三个 tab「检索」是从总览里拆出来的：未命中与检索来源回答的是检索质量，
+ * 和总览那屏"用得怎么样"不是同一个问题，混在一起时前者永远被后者的数字压住。
+ *
+ * ⚠️ **每个面板各用一个 ref，不能共用一个**。Vue 3.5 把模板 ref 的写入推迟到
  * post-render 队列，切 tab 的那一次渲染里 ref 还留着上一个面板的实例 ——
  * 共用一个 ref 时会调到类型不对的实例。分开之后每个 ref 只会是自己那个组件或 null。
  */
@@ -27,6 +30,7 @@ import Button from '@shared/ui/Button.vue'
 import Switch from '@shared/ui/Switch.vue'
 import OverviewPanel from './stats/OverviewPanel.vue'
 import RecordsPanel from './stats/RecordsPanel.vue'
+import RetrievalPanel from './stats/RetrievalPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +38,7 @@ const router = useRouter()
 const TABS = [
   { key: 'overview', label: '总览' },
   { key: 'records', label: '记录' },
+  { key: 'retrieval', label: '检索' },
 ]
 
 const valid = (k: unknown) => typeof k === 'string' && TABS.some((t) => t.key === k)
@@ -72,13 +77,16 @@ const SCOPE_OPTIONS = [
 
 const overviewRef = ref<InstanceType<typeof OverviewPanel> | null>(null)
 const recordsRef = ref<InstanceType<typeof RecordsPanel> | null>(null)
+const retrievalRef = ref<InstanceType<typeof RetrievalPanel> | null>(null)
 
 const overview = computed(() => (tab.value === 'overview' ? overviewRef.value : null))
 const records = computed(() => (tab.value === 'records' ? recordsRef.value : null))
+const retrieval = computed(() => (tab.value === 'retrieval' ? retrievalRef.value : null))
 
 /** 读数在这里取好再给模板用，模板里就不用连着一串可选链 */
 const overviewLoading = computed(() => overview.value?.isLoading() ?? false)
 const recordsLoading = computed(() => records.value?.isLoading() ?? false)
+const retrievalLoading = computed(() => retrieval.value?.isLoading() ?? false)
 const autoOn = computed(() => overview.value?.autoValue() ?? false)
 const updatedAt = computed(() => overview.value?.updatedAt() ?? '')
 const scope = computed(() => records.value?.scopeValue() ?? 'questions')
@@ -115,7 +123,7 @@ const scope = computed(() => records.value?.scopeValue() ?? 'questions')
         </Button>
       </template>
 
-      <template v-else>
+      <template v-else-if="tab === 'records'">
         <Select
           class="w-scope"
           :model-value="scope"
@@ -127,6 +135,13 @@ const scope = computed(() => records.value?.scopeValue() ?? 'questions')
           {{ recordsLoading ? '读取中…' : '刷新' }}
         </Button>
       </template>
+
+      <!-- 检索 tab 没有自己的过滤条件：未命中与来源看的是同一个窗口 -->
+      <template v-else>
+        <Button size="sm" :disabled="retrievalLoading" @click="retrieval?.reload()">
+          {{ retrievalLoading ? '读取中…' : '刷新' }}
+        </Button>
+      </template>
     </template>
 
     <!--
@@ -135,7 +150,8 @@ const scope = computed(() => records.value?.scopeValue() ?? 'questions')
     -->
     <KeepAlive>
       <OverviewPanel v-if="tab === 'overview'" ref="overviewRef" :days="days" />
-      <RecordsPanel v-else ref="recordsRef" :days="days" />
+      <RecordsPanel v-else-if="tab === 'records'" ref="recordsRef" :days="days" />
+      <RetrievalPanel v-else ref="retrievalRef" :days="days" />
     </KeepAlive>
   </AdminPage>
 </template>
