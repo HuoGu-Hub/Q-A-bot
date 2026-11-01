@@ -10,6 +10,8 @@ export interface AdminMe {
   roleLabel: string
   qq: string
   qqVerified: boolean
+  /** 当前角色被允许进入的区域，见后端的 AdminArea */
+  areas: string[]
 }
 
 export interface LoginResult {
@@ -43,6 +45,15 @@ export function useAuth() {
     can(role: AdminRoleId) {
       const mine = me.value?.role
       return !!mine && RANK[mine] >= RANK[role]
+    },
+    /**
+     * 当前账号能不能进某个区域。
+     *
+     * <p>级别够、但管理员把这块收窄了，同样进不去 ——
+     * 两个条件都要过。真正的拦截在后端，这里只负责别把入口摆出来。
+     */
+    areaOk(area: string) {
+      return !!me.value?.areas?.includes(area)
     },
     /** 问一次后端"我还登录着吗"，顺便把身份拿回来 */
     async check() {

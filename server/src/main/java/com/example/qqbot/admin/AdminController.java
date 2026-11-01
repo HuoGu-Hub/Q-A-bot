@@ -53,12 +53,14 @@ public class AdminController {
     private final AdminAuditRepository audit;
     private final AdminQqCodeService qqCodes;
     private final AdminTrustedDeviceService devices;
+    private final AdminRoleScopeService scopes;
 
     static final String DEVICE_COOKIE = "qqbot_admin_device";
 
     public AdminController(QaAnalytics analytics, AdminAuth auth, AdminPolicy props,
                            QaStore store, AdminUserService users, AdminAuditRepository audit,
-                           AdminQqCodeService qqCodes, AdminTrustedDeviceService devices) {
+                           AdminQqCodeService qqCodes, AdminTrustedDeviceService devices,
+                           AdminRoleScopeService scopes) {
         this.analytics = analytics;
         this.auth = auth;
         this.props = props;
@@ -67,6 +69,7 @@ public class AdminController {
         this.audit = audit;
         this.qqCodes = qqCodes;
         this.devices = devices;
+        this.scopes = scopes;
     }
 
     // ==================== 登录 ====================
@@ -193,13 +196,24 @@ public class AdminController {
         return ResponseEntity.ok(LoginResponse.session(userDto(AdminPrincipal.of(user)), null));
     }
 
-    /** 账号信息的对外形状：不含任何哈希或盐 */
-    private static AdminUserView userDto(AdminPrincipal p) {
+    /**
+     * 账号信息的对外形状：不含任何哈希或盐。
+     *
+     * <p>带上 {@code areas}：前端靠它决定顶端导航摆哪几项。
+     * 这里给的是**当前生效**的范围，管理员改完范围后，
+     * 已经登录的账号刷新一次页面就能看到导航变化。
+     */
+    private AdminUserView userDto(AdminPrincipal p) {
         if (p == null) {
             return null;
         }
         return new AdminUserView(p.id(), p.username(), p.display(), p.role().id(),
-                p.role().label(), p.qq(), p.qqVerified());
+                p.role().label(), p.qq(), p.qqVerified(),
+                areasOf(p.role()));
+    }
+
+    private List<String> areasOf(AdminRole role) {
+        return scopes.areasOf(role).stream().map(AdminArea::id).toList();
     }
 
     private static String readCookie(HttpServletRequest request, String name) {
@@ -475,7 +489,8 @@ public class AdminController {
     }
 
     public record AdminUserView(long id, String username, String displayName, String role,
-                                String roleLabel, String qq, boolean qqVerified) {
+                                String roleLabel, String qq, boolean qqVerified,
+                                List<String> areas) {
     }
 
     public record LoginResponse(AdminUserView user, Boolean needCode, String challengeId,

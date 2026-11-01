@@ -32,6 +32,7 @@ import java.util.Set;
  *   <li>白名单（登录页、登录接口、前端静态资源）直接放行</li>
  *   <li>校验会话；API 返回 401 JSON，页面重定向到登录页</li>
  *   <li>按角色判权：GET 要只读、写操作要编辑、用户管理要管理员</li>
+ *   <li>按区域判权：这个角色被允许进哪几块，见 {@link AdminArea}</li>
  * </ol>
  *
  * <p>顺便写两类记录：{@code admin_visit} 供"访问次数"统计；
@@ -73,14 +74,17 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     private final QaStore store;
     private final AdminAuditRepository audit;
     private final ProblemWriter problems;
+    private final AdminRoleScopeService scopes;
 
     public AdminAuthFilter(AdminPolicy props, AdminAuth auth, QaStore store,
-                           AdminAuditRepository audit, ProblemWriter problems) {
+                           AdminAuditRepository audit, ProblemWriter problems,
+                           AdminRoleScopeService scopes) {
         this.props = props;
         this.auth = auth;
         this.store = store;
         this.audit = audit;
         this.problems = problems;
+        this.scopes = scopes;
     }
 
     /** 当前请求的登录身份；未登录返回 {@code null} */
@@ -123,6 +127,14 @@ public class AdminAuthFilter extends OncePerRequestFilter {
             AdminRole required = requiredRole(path, request.getMethod());
             if (!principal.get().role().atLeast(required)) {
                 forbidden(response, required);
+                return;
+            }
+            // 级别够了还要看这个角色有没有被允许进这一块。
+            // 顺序放在级别之后：级别是最小门槛，区域是"再收窄一层"，
+            // 反过来先报区域的话，只读账号去点写接口会得到一句"没开放这块"的误导提示。
+            AdminArea area = AdminArea.of(path).orElse(null);
+            if (area != null && !scopes.allows(principal.get().role(), area)) {
+                areaForbidden(response, area);
                 return;
             }
             if (isWrite(request.getMethod()) && !originAllowed(request)) {
@@ -288,6 +300,12 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     private void qqBindRequired(HttpServletResponse response) throws IOException {
         problems.write(response, org.springframework.http.HttpStatus.FORBIDDEN,
                 "QQ_BIND_REQUIRED", "请先绑定 QQ");
+    }
+
+    /** 区域被收窄：说得具体一点，别让人以为是登录失效 */
+    private void areaForbidden(HttpServletResponse response, AdminArea area) throws IOException {
+        problems.write(response, org.springframework.http.HttpStatus.FORBIDDEN,
+                "AREA_DENIED", "「" + area.label() + "」没有对当前身份开放");
     }
 
     private void forbiddenOrigin(HttpServletResponse response) throws IOException {

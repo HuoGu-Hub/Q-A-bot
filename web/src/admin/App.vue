@@ -6,7 +6,7 @@ import Icon from '@shared/ui/Icon.vue'
 import ThemeToggle from '@shared/ui/ThemeToggle.vue'
 import NavDrawer from '@shared/ui/NavDrawer.vue'
 import { botName, loadBotName } from '@shared/identity/botName'
-import { useAuth, type AdminRoleId } from './useAuth'
+import { useAuth } from './useAuth'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,14 +35,14 @@ const drawerOpen = ref(false)
  * 7 个目的地。桌面端平铺，手机端收进抽屉 —— 上一版 7 个 tab 横排，
  * 390px 下「页面信息」和「退出」被挤到屏幕外，等于导航只剩 5 项。
  */
-const nav: { to: string; label: string; icon: string; role: AdminRoleId }[] = [
-  { to: '/stats', label: '统计', icon: 'chart', role: 'viewer' },
-  { to: '/kb', label: '知识库', icon: 'book', role: 'viewer' },
-  { to: '/map', label: '地图', icon: 'map-pin', role: 'viewer' },
-  { to: '/bot', label: 'Bot 配置', icon: 'bot', role: 'editor' },
-  { to: '/pages', label: '页面信息', icon: 'list', role: 'editor' },
-  { to: '/system', label: '系统', icon: 'gear', role: 'admin' },
-  { to: '/users', label: '账号', icon: 'lock', role: 'admin' },
+const nav: { to: string; label: string; icon: string; area: string }[] = [
+  { to: '/stats', label: '统计', icon: 'chart', area: 'stats' },
+  { to: '/kb', label: '知识库', icon: 'book', area: 'kb' },
+  { to: '/map', label: '地图', icon: 'map-pin', area: 'map' },
+  { to: '/bot', label: 'Bot 配置', icon: 'bot', area: 'bot' },
+  { to: '/pages', label: '页面信息', icon: 'list', area: 'pages' },
+  { to: '/system', label: '系统', icon: 'gear', area: 'system' },
+  { to: '/users', label: '账号', icon: 'lock', area: 'users' },
 ]
 
 const isActive = (to: string) => route.path.startsWith(to)
@@ -53,7 +53,7 @@ const isActive = (to: string) => route.path.startsWith(to)
  * <p>不隐藏也可以，但点进去是一屏 403 —— 那比看不到更让人困惑。
  * 真正的拦截在后端，这里只是别把人往墙上引。
  */
-const visibleNav = computed(() => nav.filter(n => auth.can(n.role)))
+const visibleNav = computed(() => nav.filter(n => auth.areaOk(n.area)))
 const drawerItems = computed(() =>
   visibleNav.value.map(n => ({ to: n.to, label: n.label, icon: n.icon, active: isActive(n.to) })))
 

@@ -22,6 +22,7 @@ import Notice from '@shared/ui/Notice.vue'
 import Modal from '@shared/ui/Modal.vue'
 import Field from '@shared/ui/Field.vue'
 import Icon from '@shared/ui/Icon.vue'
+import RoleScopePanel from './users/RoleScopePanel.vue'
 import { toast } from '@shared/ui/toast'
 
 interface AccountRow {
@@ -345,6 +346,11 @@ onMounted(load)
         <li v-if="!rows.length && !loadError" class="empty">还没有账号。</li>
       </ul>
     </Panel>
+
+    <!-- ==================== 可访问范围 ====================
+         放在名册与痕迹之间：先看清"有谁"，再决定"这一级能进哪几块"，
+         最后才是"最近发生了什么"。 -->
+    <RoleScopePanel />
 
     <!-- ==================== 痕迹 ==================== -->
     <Panel title="最近改动" :count="audit.length">

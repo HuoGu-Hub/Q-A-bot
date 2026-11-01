@@ -44,22 +44,62 @@ public class AdminUsersController {
     private final AdminAuth auth;
     private final AdminQqCodeService qqCodes;
     private final AdminTrustedDeviceService devices;
+    private final AdminRoleScopeService scopes;
     private final ObjectMapper mapper;
 
     public AdminUsersController(AdminUserService users, AdminAuditRepository audit, AdminAuth auth,
                                 AdminQqCodeService qqCodes, AdminTrustedDeviceService devices,
-                                ObjectMapper mapper) {
+                                AdminRoleScopeService scopes, ObjectMapper mapper) {
         this.users = users;
         this.audit = audit;
         this.auth = auth;
         this.qqCodes = qqCodes;
         this.devices = devices;
+        this.scopes = scopes;
         this.mapper = mapper;
     }
 
     @GetMapping
     public List<AdminUserView> list() {
         return users.list().stream().map(AdminUsersController::dto).toList();
+    }
+
+    /**
+     * 每个角色当前能进哪几块。
+     *
+     * <p>把区域清单一起返回：前端不该自己维护一份 id 与中文名，否则加一个区域要改两处，
+     * 迟早出现"页面上有个勾选框，后端却不认识它"。
+     */
+    @GetMapping("/scopes")
+    public ScopesView scopes() {
+        return currentScopes();
+    }
+
+    /** 保存一套范围。只影响判定，不动任何账号本身 */
+    @PutMapping("/scopes")
+    public ScopesView saveScopes(@RequestBody ScopesRequest body, HttpServletRequest request) {
+        try {
+            scopes.apply(body == null ? null : body.scopes());
+            AdminPrincipal me = AdminAuthFilter.current(request);
+            if (me != null) {
+                audit.record(me.id(), me.username(), "role-scope", "PUT",
+                        "/admin/api/users/scopes", null, "");
+            }
+            return currentScopes();
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest(e.getMessage());
+        }
+    }
+
+    private ScopesView currentScopes() {
+        List<AreaView> areas = java.util.Arrays.stream(AdminArea.values())
+                .map(a -> new AreaView(a.id(), a.label()))
+                .toList();
+        Map<String, List<String>> byRole = new LinkedHashMap<>();
+        for (AdminRole role : AdminRole.values()) {
+            byRole.put(role.id(), scopes.areasOf(role).stream().map(AdminArea::id).toList());
+        }
+        return new ScopesView(areas, byRole);
     }
 
     /** 最近的后台操作记录，用来回答"这条知识是谁改的" */
@@ -204,6 +244,17 @@ public class AdminUsersController {
     public record AdminUserView(long id, String username, String displayName, String role,
                                 String roleLabel, boolean enabled, String qq,
                                 boolean qqVerified, String createdAt, String lastLoginAt) {
+    }
+
+    public record AreaView(String id, String label) {
+    }
+
+    public record ScopesView(List<AreaView> areas, Map<String, List<String>> scopes) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+
+    public record ScopesRequest(Map<String, List<String>> scopes) {
     }
 
     public record CreateCodeResult(String challengeId, String adminQq) {
