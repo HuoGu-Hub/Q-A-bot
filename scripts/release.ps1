@@ -211,6 +211,28 @@ Copy-Item $jarPath (Join-Path $pkgServer $JarName)
 if (-not $ServerOnly) {
   Copy-Item (Join-Path $Root "server\web-dist") (Join-Path $pkgServer "web-dist") -Recurse
 }
+
+# 地图点位快照：静态数据，运行期不增长，跟着包一起发，省掉每次手工 scp。
+# 只发 points.json 的最大版本 —— CSV 是给人看的，服务器用不上。
+# 落到 server/data/map-mod/<版本>/，正好是导入器启动后优先读的磁盘路径。
+$modRoot = Join-Path $Root "server\data\map-mod"
+$modDir = $null
+if (Test-Path $modRoot) {
+  $cands = Get-ChildItem $modRoot -Directory |
+           Where-Object { $_.Name -match '^\d+(\.\d+)*$' -and (Test-Path (Join-Path $_.FullName "points.json")) } |
+           Sort-Object { [version]$_.Name }
+  if ($cands) { $modDir = $cands | Select-Object -Last 1 }
+}
+if ($modDir) {
+  $modDest = Join-Path $pkgServer "data\map-mod\$($modDir.Name)"
+  New-Item -ItemType Directory -Path $modDest -Force | Out-Null
+  Copy-Item (Join-Path $modDir.FullName "points.json") $modDest
+  $modSize = (Get-Item (Join-Path $modDest "points.json")).Length / 1MB
+  Write-Host ("    地图点位: {0}  {1:N1} MB" -f $modDir.Name, $modSize)
+} else {
+  Write-Host "    地图点位: 没有可发的快照，跳过（先跑 scripts/map-mod-extract.py）" -ForegroundColor Yellow
+}
+
 Copy-Item (Join-Path $Root "system.md") $pkg
 
 New-Item -ItemType Directory -Path (Join-Path $pkg "deploy\nginx") -Force | Out-Null
