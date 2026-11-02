@@ -6,6 +6,9 @@
   快照由本地导入 + wiki-export.py 生成（.sqlite.gz）。流程：
     上传快照 → 停服务 → SQLite 一致性备份 → 事务内替换 wiki 表 → 启服务。
   其他表（问答、命令、设置、地图）一行不动。
+
+  可选的 -ImageDelta 是 wiki-image-delta.py 生成的 tar.gz，会先解包进配图目录，
+  这样新块正文里的 [[img:wiki:...]] 标记有文件可指。
 #>
 [CmdletBinding()]
 param(
@@ -14,7 +17,10 @@ param(
   [int]$SshPort = 22,
   [string]$IdentityFile,
   [string]$ServiceName = "qqbot",
-  [string]$DbPath = "/opt/qqbot/server/data/qa/qqbot.sqlite"
+  [string]$ServiceUser = "qqbot",
+  [string]$DbPath = "/opt/qqbot/server/data/qa/qqbot.sqlite",
+  [string]$WikiImageDir = "/opt/qqbot/server/data/wiki-images",
+  [string]$ImageDelta
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,9 +48,26 @@ Write-Host "==> 上传快照 $((Get-Item $snapshotPath).Length / 1MB) MB" -Foreg
 & scp @scpArgs $snapshotPath "$($Server):/root/wiki-snapshot.sqlite.gz"
 if ($LASTEXITCODE -ne 0) { throw "scp 上传失败" }
 
+if ($ImageDelta) {
+  if (-not (Test-Path $ImageDelta)) { throw "找不到配图增量：$ImageDelta" }
+  $imagePath = (Resolve-Path $ImageDelta).Path
+  if (-not $imagePath.EndsWith(".tar.gz")) { throw "配图增量必须是 .tar.gz：$imagePath" }
+  Write-Host "==> 上传配图增量 $((Get-Item $imagePath).Length / 1MB) MB" -ForegroundColor Cyan
+  & scp @scpArgs $imagePath "$($Server):/root/wiki-image-delta.tar.gz"
+  if ($LASTEXITCODE -ne 0) { throw "scp 配图上传失败" }
+}
+
 $remote = @'
 set -e
 cd /root
+if [ -f /root/wiki-image-delta.tar.gz ]; then
+  echo "==> 解包配图增量"
+  mkdir -p __WIKI_IMG__
+  tar xzf /root/wiki-image-delta.tar.gz -C __WIKI_IMG__
+  chown -R __USER__:__USER__ __WIKI_IMG__
+  rm -f /root/wiki-image-delta.tar.gz
+fi
+
 cat > /root/wiki-merge.sql <<'SQL'
 __MERGE_SQL__
 SQL
@@ -87,6 +110,8 @@ echo "完成；回滚备份：$BACKUP"
 $remote = $remote.Replace("__MERGE_SQL__", $mergeSql)
 $remote = $remote.Replace("__DB__", $DbPath)
 $remote = $remote.Replace("__SERVICE__", $ServiceName)
+$remote = $remote.Replace("__USER__", $ServiceUser)
+$remote = $remote.Replace("__WIKI_IMG__", $WikiImageDir)
 $remote = ConvertTo-Lf $remote
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
 
