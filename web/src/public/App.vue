@@ -88,6 +88,15 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
           >{{ n.label }}</RouterLink>
         </nav>
 
+        <!--
+          管理端入口。故意用裸 <a> 而不是 RouterLink：后台是另一份构建产物
+          （admin.html），不属于公开站的路由表，走 RouterLink 会匹配到 404。
+        -->
+        <a class="admin-link" href="/admin/" title="管理后台" aria-label="管理后台">
+          <Icon name="lock" :size="14" aria-hidden="true" />
+          <span>管理</span>
+        </a>
+
         <ThemeToggle class="theme-slot" />
       </div>
     </header>
@@ -261,6 +270,34 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
 }
 .theme-slot { margin-left: var(--sp-3); }
 
+/*
+  管理端入口：比导航轻一档。
+  它不是一个"内容目的地"，而是一把钥匙 —— 常驻但压低声量，
+  访客不该被它吸引，站点主人又要一眼能找到。
+*/
+.admin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.admin-link:hover {
+  color: var(--ember-hot);
+  background: var(--surface-hover);
+  border-color: var(--edge-soft);
+  text-decoration: none;
+}
+.admin-link:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+
 .main { flex: 1; min-width: 0; }
 
 /* ==================== 全屏页（地图） ====================
@@ -287,8 +324,9 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
 /* ==================== 窄屏 ==================== */
 @media (max-width: 760px) {
   .nav { display: none; }
-  /* 站名 + 主题开关各占一头 */
-  .theme-slot { margin-left: auto; }
+  /* 站名占左边，管理入口与主题开关靠右 */
+  .admin-link { margin-left: auto; min-height: 44px; }
+  .theme-slot { margin-left: var(--sp-1); }
   .hdr-inner { gap: var(--sp-2); }
 
   /* 手机上地图让出底栏高度，否则底部一截永远被压着 */
