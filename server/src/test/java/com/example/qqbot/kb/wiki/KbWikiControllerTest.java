@@ -4,15 +4,18 @@ import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.kb.MapSync;
 import com.example.qqbot.kb.WikiImport;
 import com.example.qqbot.persistence.KbWikiSourceRepository;
+import com.example.qqbot.web.ApiException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -178,5 +181,38 @@ class KbWikiControllerTest {
         verify(client, times(1)).fetchCategoryPages(any());
         // 示例页名只给内容类取：Music 是索引类，页面上没有「选它」，取来没人看
         verify(client, times(1)).listCategoryMembers(anyString(), anyInt());
+    }
+
+    @Test
+    @DisplayName("★ wiki 暂时连不上时回上一次成功的结果，不把整页打成 500")
+    void catalogFallsBackToLastGoodResult() throws Exception {
+        when(client.listAllCategories()).thenReturn(List.of(
+                new WikiApiClient.CategoryInfo("Lore", 264)));
+        when(client.fetchCategoryPages(any())).thenReturn(Map.of("Lore", 264));
+        when(client.listCategoryMembers(anyString(), anyInt()))
+                .thenReturn(new WikiApiClient.Collected(List.of("A"), false, 1));
+
+        var first = controller.catalog();
+        // 让缓存过期：10 分钟在单测里等不起，直接把时间戳拨回去
+        Field at = KbWikiController.class.getDeclaredField("catalogAt");
+        at.setAccessible(true);
+        at.setLong(controller, 0L);
+
+        when(client.listAllCategories()).thenThrow(
+                new WikiApiClient.WikiException("wiki API HTTP 403"));
+        var second = controller.catalog();
+
+        assertThat(second).as("失败时继续用旧目录").isSameAs(first);
+    }
+
+    @Test
+    @DisplayName("★ 连旧缓存都没有时回 503 和一句人话，而不是 500")
+    void catalogWithoutCacheReportsUnavailable() {
+        when(client.listAllCategories()).thenThrow(
+                new WikiApiClient.WikiException("wiki API HTTP 403"));
+
+        assertThatThrownBy(() -> controller.catalog())
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).status().value()).isEqualTo(503));
     }
 }

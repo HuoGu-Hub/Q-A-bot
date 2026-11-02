@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.persistence.KbWikiSourceRepository;
+import com.example.qqbot.web.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +51,23 @@ public class KbWikiController {
     private static final long CATALOG_TTL_MILLIS = 10 * 60 * 1000L;
 
     /**
+     * 刷新失败后的冷却时间。
+     *
+     * <p>wiki 连不上时，后台每点一次刷新都会再发几十个上游请求 —— 既让页面等更久，
+     * 也会把"临时失败"打成"被限流"。冷却期内直接回旧缓存，给上游留出恢复时间。
+     */
+    private static final long CATALOG_RETRY_COOLDOWN_MILLIS = 60 * 1000L;
+
+    /**
+     * 示例页名的总时间预算。
+     *
+     * <p>页数可以批量问，示例页名只能一个分类一次请求。305 个分类里只给内容类取，
+     * 原先最多 24 次串行请求，实测整页要 30 秒以上；wiki 一慢就变成超时。
+     * 到预算就停，宁可少几个示例，也不要让整个分类菜单卡死。
+     */
+    private static final long CATALOG_SAMPLE_BUDGET_MILLIS = 10_000L;
+
+    /**
      * 给多少个分类取"前三个示例页名"。
      *
      * <p>页数不再需要逐个数 —— {@code prop=categoryinfo} 一次能问 50 个分类。
@@ -67,6 +85,21 @@ public class KbWikiController {
 
     private volatile CatalogView catalogCache;
     private volatile long catalogAt;
+    /** 上次刷新失败的时间；用来做冷却，避免刷新按钮把上游打成限流 */
+    private volatile long catalogFailedAt;
+    /** 同一时刻只让一个线程去问 wiki，其余请求吃旧缓存 */
+    private final java.util.concurrent.locks.ReentrantLock catalogRefresh =
+            new java.util.concurrent.locks.ReentrantLock();
+    /** 只排一个后台刷新任务，避免每次请求都往队列里塞 */
+    private final java.util.concurrent.atomic.AtomicBoolean catalogRefreshQueued =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    /** 后台刷新用；daemon 线程，生命周期跟着 JVM */
+    private final java.util.concurrent.ExecutorService catalogRefresher =
+            java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+                Thread t = new Thread(task, "wiki-catalog-refresh");
+                t.setDaemon(true);
+                return t;
+            });
 
     public KbWikiController(KbWikiSourceStore store, WikiApiClient client,
                             WikiImportService service, KbPolicy props,
@@ -171,13 +204,101 @@ public class KbWikiController {
      * 它给的 {@code pages} 已经排除了子分类与文件，正是"选它大约会拉多少篇正文"。
      *
      * <p>仍然逐个请求的只剩"前三个示例页名"，且只给内容类的前若干个。
+     *
+     * <p><b>上游失败不再回 500</b>：分类菜单是只读展示，几分钟前的目录远比一个
+     * 错误页有用。刷新失败时继续用上一次成功的结果；连旧缓存都没有才回 503。
+     * 同一时刻只允许一个线程去问 wiki，连点刷新不会把上游打成限流。
      */
     @GetMapping("/catalog")
     public CatalogView catalog() {
         CatalogView cached = catalogCache;
-        if (cached != null && System.currentTimeMillis() - catalogAt < CATALOG_TTL_MILLIS) {
+        long now = System.currentTimeMillis();
+        if (cached != null) {
+            // 有旧目录就先回，刷新放后台跑 —— wiki 慢的时候页面也不用干等
+            if (now - catalogAt >= CATALOG_TTL_MILLIS && !coolingDown(now)) {
+                refreshInBackground();
+            }
             return cached;
         }
+        // 第一次打开页面没有旧目录，只能同步等一轮
+        if (coolingDown(now)) {
+            throw unavailable();
+        }
+        return refreshNow();
+    }
+
+    private boolean coolingDown(long now) {
+        return catalogFailedAt > 0 && now - catalogFailedAt < CATALOG_RETRY_COOLDOWN_MILLIS;
+    }
+
+    /** 后台刷新：同一时刻只排一个，失败后进入冷却 */
+    private void refreshInBackground() {
+        if (!catalogRefreshQueued.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            catalogRefresher.execute(() -> {
+                try {
+                    if (!catalogRefresh.tryLock()) {
+                        return;
+                    }
+                    try {
+                        CatalogView built = buildCatalog();
+                        catalogCache = built;
+                        catalogAt = System.currentTimeMillis();
+                        catalogFailedAt = 0;
+                    } finally {
+                        catalogRefresh.unlock();
+                    }
+                } catch (RuntimeException e) {
+                    catalogFailedAt = System.currentTimeMillis();
+                    log.warn("[KB-WIKI] 后台刷新 wiki 分类失败：{}", e.getMessage(), e);
+                } finally {
+                    catalogRefreshQueued.set(false);
+                }
+            });
+        } catch (RuntimeException e) {
+            catalogRefreshQueued.set(false);
+            log.warn("[KB-WIKI] 排后台刷新任务失败：{}", e.getMessage(), e);
+        }
+    }
+
+    /** 没有旧目录时的同步刷新：首次打开页面只能等这一轮 */
+    private CatalogView refreshNow() {
+        if (!catalogRefresh.tryLock()) {
+            catalogRefresh.lock();
+            try {
+                CatalogView afterWait = catalogCache;
+                if (afterWait != null) {
+                    return afterWait;
+                }
+            } finally {
+                catalogRefresh.unlock();
+            }
+            throw unavailable();
+        }
+        try {
+            CatalogView built = buildCatalog();
+            catalogCache = built;
+            catalogAt = System.currentTimeMillis();
+            catalogFailedAt = 0;
+            return built;
+        } catch (RuntimeException e) {
+            catalogFailedAt = System.currentTimeMillis();
+            log.warn("[KB-WIKI] 读取 wiki 分类失败：{}", e.getMessage(), e);
+            throw unavailable();
+        } finally {
+            catalogRefresh.unlock();
+        }
+    }
+
+    /** 连旧缓存都没有：回一个前端能直接显示的原因，而不是 500 */
+    private static ApiException unavailable() {
+        return ApiException.serviceUnavailable("WIKI_UNAVAILABLE",
+                "wiki 分类暂时读取失败，稍后再试");
+    }
+
+    private CatalogView buildCatalog() {
         // ⚠️ 先拷一份再排序：别假设上游给的是可变列表（List.of 那种一 sort 就抛）
         List<WikiApiClient.CategoryInfo> all = new ArrayList<>(client.listAllCategories());
 
@@ -204,9 +325,11 @@ public class KbWikiController {
         List<CategoryRow> rows = new ArrayList<>();
         Map<String, List<String>> samples = new java.util.HashMap<>();
         int sampled = 0;
+        long sampleDeadline = System.currentTimeMillis() + CATALOG_SAMPLE_BUDGET_MILLIS;
         for (WikiApiClient.CategoryInfo c : all) {
             String klass = klassOf(c.name());
-            if (sampled < CATALOG_SAMPLE_LIMIT && "content".equals(klass)) {
+            if (sampled < CATALOG_SAMPLE_LIMIT && "content".equals(klass)
+                    && System.currentTimeMillis() < sampleDeadline) {
                 try {
                     // ⚠️ collect 在"没有下一页令牌"时会返回整页（最多 500 条），不认 cap，
                     //    所以这里自己截前三个，别把 500 个页名塞进响应
@@ -220,10 +343,7 @@ public class KbWikiController {
             rows.add(new CategoryRow(c.name(), c.size(), pagesByName.get(c.name()),
                     klass, adviceOf(c.name()), samples.getOrDefault(c.name(), List.of())));
         }
-        CatalogView out = new CatalogView(rows, rows.size(), java.time.Instant.now().toString());
-        catalogCache = out;
-        catalogAt = System.currentTimeMillis();
-        return out;
+        return new CatalogView(rows, rows.size(), java.time.Instant.now().toString());
     }
 
     /** 触发一次导入 */
