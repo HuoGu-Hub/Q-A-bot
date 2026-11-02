@@ -75,7 +75,11 @@ sqlite3 __DB__ "PRAGMA integrity_check;"
 rm -f /root/wiki-snapshot.sqlite
 echo "==> 启动服务 __SERVICE__"
 systemctl start __SERVICE__
-sleep 5
+for _ in $(seq 1 30); do
+  state=$(systemctl is-active __SERVICE__ || true)
+  [ "$state" = "active" ] && break
+  sleep 2
+done
 systemctl is-active __SERVICE__
 echo "完成；回滚备份：$BACKUP"
 '@
