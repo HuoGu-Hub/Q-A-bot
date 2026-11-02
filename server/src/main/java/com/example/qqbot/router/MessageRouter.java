@@ -1,6 +1,7 @@
 package com.example.qqbot.router;
 
 import com.example.qqbot.agent.ChatService;
+import com.example.qqbot.agent.Quote;
 import com.example.qqbot.agent.ReplyMode;
 import com.example.qqbot.guard.Access;
 import com.example.qqbot.guard.RateLimit;
@@ -170,9 +171,12 @@ public class MessageRouter {
      * <p>注意：**引用消息里的图片同样要取出来**。
      * 群里很常见的用法是「引用一张图 + 打字提问」，被引用的消息本身没有任何文字，
      * 如果只提取文字就会得到空值，图片被完全丢掉。
+     *
+     * <p>正文之外还要带上作者（{@link Quote}）：引用里的「我」是作者的自称，
+     * 少了它，模型会把引用作者当成现在提问的人。
      */
-    private record QuotedContent(String text, List<ImageRef> imageRefs) {
-        static final QuotedContent EMPTY = new QuotedContent(null, List.of());
+    private record QuotedContent(Quote quote, List<ImageRef> imageRefs) {
+        static final QuotedContent EMPTY = new QuotedContent(Quote.NONE, List.of());
     }
 
     /**
@@ -374,20 +378,20 @@ public class MessageRouter {
         log.info("[INTENT] move={} retrieve={} reason={} | {}", plan.move(), plan.retrieve(),
                 plan.reason(), question == null ? "" : question.strip());
 
-        // 解析引用（QQ 的引用段只有 ID，正文和图片都要另外调 get_msg 取）
-        QuotedContent quote = resolveQuote(event);
+        // 解析引用（QQ 的引用段只有 ID，正文、作者和图片都要另外调 get_msg 取）
+        QuotedContent quoted = resolveQuote(event);
 
         // 消息自带的图片 + 被引用消息里的图片，一起交给模型
         List<ImageRef> allImages = new ArrayList<>(req.ownImages());
-        allImages.addAll(quote.imageRefs());
+        allImages.addAll(quoted.imageRefs());
 
         // 关键词只决定"这条必须用语音回"，回什么仍交给模型
         boolean voiceRequired = voiceTrigger != null
                 && voiceTrigger.requiresVoice(event.getGroupId(), question);
 
         ChatService.ReplyResult result = voiceRequired
-                ? chatService.reply(event, question, quote.text(), allImages, replyMode, true, plan)
-                : chatService.reply(event, question, quote.text(), allImages, replyMode, false, plan);
+                ? chatService.reply(event, question, quoted.quote(), allImages, replyMode, true, plan)
+                : chatService.reply(event, question, quoted.quote(), allImages, replyMode, false, plan);
 
         // 语音与文字谁先冒出来：一次随机，避免每条回复都像模板。
         // 有语音时必须同步发文字 —— 走异步队列的话，文字可能被发送线程推到语音后面。
@@ -409,7 +413,7 @@ public class MessageRouter {
         // 异步记一笔：不阻塞、不抛异常（记录系统挂了也要照常回答）
         // ⚠️ 记的是 question 不是 text：agent 指令的原始文本是 "/联网 …"，
         //    记进去会让「未命中·该补什么」里全是命令前缀。
-        qaCollector.collect(event, question, quote.text(), req.imageCount(), "pass", safe,
+        qaCollector.collect(event, question, quoted.quote().text(), req.imageCount(), "pass", safe,
                 result.kb(), result.llmMs(), req.elapsedMs());
     }
 
@@ -424,7 +428,7 @@ public class MessageRouter {
                 KbTrace.disabled(), 0, req.elapsedMs());
     }
 
-    /** 取出被引用消息的文字和图片。失败不影响正常回复。 */
+    /** 取出被引用消息的文字、作者和图片。失败不影响正常回复。 */
     private QuotedContent resolveQuote(OneBotEvent event) {
         Optional<String> replyId = codec.extractReplyId(event);
         if (replyId.isEmpty()) {
@@ -440,10 +444,24 @@ public class MessageRouter {
             }
             List<ImageRef> quotedImages = codec.extractImageRefs(message);
 
-            log.debug("引用消息解析完成：文字 {} 字，图片 {} 张（其中 {} 张有缓存键）",
+            // 引用正文里的「我」是这条消息的作者。只给正文时模型分不清是谁的自称，
+            // 会把引用作者当成现在提问的人 —— 2026-11-02 线上「我是你的谁」就答成了引用里的火沽。
+            JsonNode sender = quoted.path("sender");
+            long senderId = sender.path("user_id").asLong(quoted.path("user_id").asLong(0));
+            String senderName = sender.path("card").asText("");
+            if (!StringUtils.hasText(senderName)) {
+                senderName = sender.path("nickname").asText("");
+            }
+            Quote quote = new Quote(
+                    StringUtils.hasText(quotedText) ? quotedText : null,
+                    StringUtils.hasText(senderName) ? senderName : null,
+                    senderId > 0 && identity.isSelf(senderId));
+
+            log.debug("引用消息解析完成：文字 {} 字，图片 {} 张（其中 {} 张有缓存键），作者 {}，自己发的 {}",
                     quotedText.length(), quotedImages.size(),
-                    quotedImages.stream().filter(ImageRef::hasKey).count());
-            return new QuotedContent(StringUtils.hasText(quotedText) ? quotedText : null, quotedImages);
+                    quotedImages.stream().filter(ImageRef::hasKey).count(),
+                    quote.senderName(), quote.fromSelf());
+            return new QuotedContent(quote, quotedImages);
         } catch (Exception e) {
             log.warn("取引用消息失败（不影响正常回复）：{}", e.getMessage());
         }

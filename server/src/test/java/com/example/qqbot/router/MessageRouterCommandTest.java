@@ -1,6 +1,7 @@
 package com.example.qqbot.router;
 
 import com.example.qqbot.agent.ChatService;
+import com.example.qqbot.agent.Quote;
 import com.example.qqbot.agent.ReplyMode;
 import com.example.qqbot.command.ActionContext;
 import com.example.qqbot.command.ActionException;
@@ -46,6 +47,7 @@ import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.qa.QaCollector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -301,6 +303,29 @@ class MessageRouterCommandTest {
         verify(guardPipeline).check(captor.capture());
         assertThat(captor.getValue().mentioned()).isTrue();
         assertThat(captor.getValue().text()).isEqualTo("今天天气怎么样");
+    }
+
+    @Test
+    @DisplayName("★ 引用消息带出作者：机器人自己发的那条要标成 fromSelf")
+    void quoteCarriesSender() {
+        OneBotEvent event = groupEvent("我是你的谁");
+        when(commandMatcher.match(anyString(), anyBoolean(), anyLong())).thenReturn(CommandMatcher.Match.none());
+        when(codec.extractReplyId(event)).thenReturn(Optional.of("42"));
+        when(identity.isSelf(999L)).thenReturn(true);
+        ObjectNode quoted = mapper.createObjectNode().put("raw_message", "");
+        quoted.putObject("sender").put("user_id", 999).put("nickname", "飘雪喵");
+        when(apiClient.getMsg("42")).thenReturn(quoted);
+        when(codec.extractPlainText(any(JsonNode.class))).thenReturn("火沽是我的靠山");
+        when(codec.extractImageRefs(any(JsonNode.class))).thenReturn(List.of());
+
+        router.handle(event);
+
+        ArgumentCaptor<Quote> captor = ArgumentCaptor.forClass(Quote.class);
+        verify(chatService).reply(any(), eq("我是你的谁"), captor.capture(), any(), any(ReplyMode.class),
+                anyBoolean(), any());
+        assertThat(captor.getValue().text()).isEqualTo("火沽是我的靠山");
+        assertThat(captor.getValue().senderName()).isEqualTo("飘雪喵");
+        assertThat(captor.getValue().fromSelf()).isTrue();
     }
 
     // ==================== template：秒回，不碰 Guard / 预算 / 模型 ====================
