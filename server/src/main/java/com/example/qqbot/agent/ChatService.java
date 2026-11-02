@@ -99,17 +99,17 @@ public class ChatService {
      * 一并交给调用方 —— 问答记录系统需要这些信息，才能事后分析答错的原因。
      *
      * @param text      消息里的文字（可能为空）
-     * @param quoteText 被引用消息的文字（可能为 null）
+     * @param quote     被引用消息（正文 + 作者，可能为空）
      * @param imageRefs 消息里的图片（含缓存键，决定要不要重新下载）
      */
-    public ReplyResult reply(OneBotEvent event, String text, String quoteText, List<ImageRef> imageRefs) {
-        return reply(event, text, quoteText, imageRefs, ReplyMode.KB, false);
+    public ReplyResult reply(OneBotEvent event, String text, Quote quote, List<ImageRef> imageRefs) {
+        return reply(event, text, quote, imageRefs, ReplyMode.KB, false);
     }
 
     /** 生成回复，不要求语音 */
-    public ReplyResult reply(OneBotEvent event, String text, String quoteText, List<ImageRef> imageRefs,
+    public ReplyResult reply(OneBotEvent event, String text, Quote quote, List<ImageRef> imageRefs,
                              ReplyMode mode) {
-        return reply(event, text, quoteText, imageRefs, mode, false);
+        return reply(event, text, quote, imageRefs, mode, false);
     }
 
     /**
@@ -124,9 +124,9 @@ public class ChatService {
      * <p>{@code voiceRequired} 为 true 时，如果模型没通过工具安排语音，
      * 就用 TTS 念回答的前 80 字 —— 关键词要的是"用语音回"，不能因为模型忘了就落空。
      */
-    public ReplyResult reply(OneBotEvent event, String text, String quoteText, List<ImageRef> imageRefs,
+    public ReplyResult reply(OneBotEvent event, String text, Quote quote, List<ImageRef> imageRefs,
                              ReplyMode mode, boolean voiceRequired) {
-        return reply(event, text, quoteText, imageRefs, mode, voiceRequired, TurnPlan.standard());
+        return reply(event, text, quote, imageRefs, mode, voiceRequired, TurnPlan.standard());
     }
 
     /**
@@ -139,7 +139,7 @@ public class ChatService {
      * <p>⚠️ 它**只关自动检索**，工具仍然注册着：模型要是真想查，还能自己调 lookup。
      * 判定错了的代价因此只是"少一段自动送来的资料"，不是答不出来。
      */
-    public ReplyResult reply(OneBotEvent event, String text, String quoteText, List<ImageRef> imageRefs,
+    public ReplyResult reply(OneBotEvent event, String text, Quote quote, List<ImageRef> imageRefs,
                              ReplyMode mode, boolean voiceRequired, TurnPlan plan) {
         ReplyMode useMode = mode == null ? ReplyMode.KB : mode;
         TurnPlan turn = plan == null ? TurnPlan.standard() : plan;
@@ -151,7 +151,7 @@ public class ChatService {
 
         // 文字、引用、图片全都没有 —— 不能拿一个空消息去问模型（会得到莫名其妙甚至为空的回复）
         boolean noText = !StringUtils.hasText(text);
-        boolean noQuote = !StringUtils.hasText(quoteText);
+        boolean noQuote = quote == null || !quote.hasText();
         boolean noImage = imageRefs == null || imageRefs.isEmpty();
         if (noText && noQuote && noImage) {
             return done(contentGate.getNoTextReply(), t0, KbTrace.disabled());
@@ -191,9 +191,9 @@ public class ChatService {
                 return done("图片我这边下载不下来，你重新发一次试试？", t0, KbTrace.disabled());
             }
             // 与文本路径同一套：资料由管线注入（所以信封的资料参数传 null）
-            String envelope = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired, memory);
+            String envelope = buildUserMessage(event, text, quote, null, useMode, voiceRequired, memory);
             String visionQuery = ((text == null ? "" : text) + " "
-                    + (quoteText == null ? "" : quoteText)).trim();
+                    + (quote == null || quote.text() == null ? "" : quote.text())).trim();
             String visionCaller = callerOf(event);
             KbRetrievalDiagnostics visionSink = new KbRetrievalDiagnostics();
             try {
@@ -218,14 +218,15 @@ public class ChatService {
         //
         // ★ 检索用的问题与给模型的消息是两件事：消息是信封（发言者 / 引用 / 用户内容），
         //   问题才是正文加引用。拿信封去检索会稀释查询向量、污染术语匹配，而且不报错。
-        String query = ((text == null ? "" : text) + " " + (quoteText == null ? "" : quoteText)).trim();
+        String query = ((text == null ? "" : text) + " "
+                + (quote == null || quote.text() == null ? "" : quote.text())).trim();
         boolean retrieve = useMode != ReplyMode.NONE && turn.retrieve();
         if (!retrieve) {
             log.info("[INTENT] 本轮不检索：move={} | {}", turn.move(), query);
         }
         KbRetrievalDiagnostics sink = new KbRetrievalDiagnostics();
         try {
-            String userMessage = buildUserMessage(event, text, quoteText, null, useMode, voiceRequired, memory);
+            String userMessage = buildUserMessage(event, text, quote, null, useMode, voiceRequired, memory);
             String reply = toolAssistant.chat(userMessage, query, sink, retrieve,
                     callerOf(event), extraPrompt, outbox);
             return remember(done(attachResourceShot(sanitize(reply), query), t0,
@@ -409,7 +410,7 @@ public class ChatService {
                 + "/用户:" + event.getUserId();
     }
 
-    private String buildUserMessage(OneBotEvent event, String text, String quoteText, String knowledge,
+    private String buildUserMessage(OneBotEvent event, String text, Quote quote, String knowledge,
                                     ReplyMode mode, boolean voiceRequired, String memory) {
         StringBuilder sb = new StringBuilder();
         // 模式说明放在最前：模型先知道"这次按什么规矩答"，再看到问题
@@ -444,10 +445,23 @@ public class ChatService {
             }
         }
 
-        if (quoteText != null && !quoteText.isEmpty()) {
-            sb.append("\n他引用了下面这条消息：\n");
-            sb.append("<<<QUOTED_CONTENT\n").append(PromptText.escapeDelimiters(quoteText))
+        if (quote != null && quote.hasText()) {
+            sb.append('\n');
+            if (quote.fromSelf()) {
+                sb.append("发言者引用了你自己之前发的这条消息：\n");
+            } else if (quote.hasSender()) {
+                // 昵称/群名片是用户可改的：压成一行、再挡掉定界符，避免伪造出新的段落
+                String name = PromptText.escapeDelimiters(PromptText.oneLine(quote.senderName(), 40));
+                sb.append("发言者引用了「").append(name).append("」发的这条消息：\n");
+            } else {
+                sb.append("发言者引用了下面这条消息：\n");
+            }
+            sb.append("<<<QUOTED_CONTENT\n").append(PromptText.escapeDelimiters(quote.text()))
                     .append("\nQUOTED_CONTENT>>>\n");
+            // 同一段里有两个「我」：引用里的属于作者，USER_CONTENT 里的才是提问者。
+            // 不写明这一句，模型会把引用作者的身份套到提问者身上（2026-11-02「我是你的谁」）。
+            sb.append("引用只是上下文；要回答的是下面 <<<USER_CONTENT>>> 里的话，")
+                    .append("引用里的「我」「你」指这条消息的说话人。\n");
         }
 
         // 知识库资料。和用户输入一样是**外部不可信内容**，所以用固定标记包起来，

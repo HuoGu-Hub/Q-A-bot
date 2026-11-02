@@ -105,6 +105,17 @@ class SystemPromptTest {
     }
 
     @Test
+    @DisplayName("★ 引用只是上下文：引用里的「我」是作者，不是现在提问的人")
+    void declaresQuotePronounRule() throws IOException {
+        String p = prompt();
+
+        assertThat(p).as("信封会写清引用作者，提示词必须解释怎么读").contains("引用只是上下文");
+        assertThat(p).as("两处「我」的指代必须分开，否则会把引用作者当成提问者")
+                .contains("说话人的口吻");
+        assertThat(p).as("回答以当前这句话为准").contains("<<<USER_CONTENT>>>");
+    }
+
+    @Test
     @DisplayName("★ 三类产物必须在提示词里：建议类不能再用「没查到」收尾")
     void keepsThreeAnswerShapes() throws IOException {
         String p = prompt();
