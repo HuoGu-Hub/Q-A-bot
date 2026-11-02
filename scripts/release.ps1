@@ -72,6 +72,12 @@ function Copy-TextLf([string]$From, [string]$ToDir) {
   [System.IO.File]::WriteAllText($dest, $text, (New-Object System.Text.UTF8Encoding($false)))
 }
 
+# 内联 bash 脚本要 LF 换行。Windows 工作副本是 CRLF，bash 会把行尾的 \r 当成
+# 命令的一部分：set -e\r 直接报 invalid option，整个 if/fi 会在 EOF 处语法错误。
+function ConvertTo-Lf([string]$Text) {
+  return $Text.Replace([string][char]13 + [string][char]10, [string][char]10).Replace([string][char]13, [string][char]10)
+}
+
 function Invoke-Native([string]$File, [string[]]$Arguments, [string]$WorkDir) {
   Push-Location $WorkDir
   try {
@@ -159,6 +165,7 @@ else
 fi
 '@
   $remote = $remote.Replace("__DIR__", $RemoteDir).Replace("__USER__", $ServiceUser)
+  $remote = ConvertTo-Lf $remote
   $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
   $sshArgs = @("-t", "-p", $SshPort)
   if ($IdentityFile) { $sshArgs += @("-i", $IdentityFile) }
@@ -357,6 +364,7 @@ $remote = $remote.Replace("__USER__", $ServiceUser)
 $remote = $remote.Replace("__RESTART__", $restart)
 $remote = $remote.Replace("__SERVICE__", $ServiceName)
 $remote = $remote.Replace("__NGINX__", $(if ($WithNginx) { $NginxConf } else { "" }))
+$remote = ConvertTo-Lf $remote
 
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
 $sshArgs = @("-t", "-p", $SshPort)
