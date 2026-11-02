@@ -58,6 +58,9 @@ target/
 /data/
 server/data/
 
+# MOD 压缩包投放目录（scripts/map-mod-extract.py 的输入，几十 MB 的二进制）
+/mods/
+
 # 截图 / 视觉验收产物：一律不进仓库（公开仓库不带头像与后台截图）
 tests/screenshots/
 *.visual-check.*
