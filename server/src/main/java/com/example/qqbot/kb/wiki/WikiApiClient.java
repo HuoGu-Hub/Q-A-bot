@@ -527,6 +527,7 @@ public class WikiApiClient {
             } else if (response.statusCode() != 200) {
                 last = new WikiException("wiki API HTTP " + response.statusCode() + "：" + url);
             } else if (root != null) {
+                sleepRequestDelay(cfg);
                 return root;
             }
 
@@ -539,6 +540,19 @@ public class WikiApiClient {
             sleepBackoff(cfg, attempt);
         }
         throw last != null ? last : new WikiException("wiki API 请求失败：" + url);
+    }
+
+    /** 每个成功请求之后的固定间隔；默认 0，只有被限流的环境才需要打开 */
+    private static void sleepRequestDelay(MapSync cfg) {
+        long wait = Math.max(0, cfg.getRequestDelayMillis());
+        if (wait <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(wait);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static void sleepBackoff(MapSync cfg, int attempt) {

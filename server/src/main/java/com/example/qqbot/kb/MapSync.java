@@ -65,6 +65,15 @@ public class MapSync {
     /** 每批之间的固定间隔（毫秒）—— 主动放慢，别把对方服务器打疼 */
     private long batchDelayMillis = 200;
 
+    /**
+     * 每次 HTTP 请求之后的额外间隔（毫秒）。
+     *
+     * <p>默认 0：正常导入靠 {@code batchDelayMillis} 控制在批次之间。本地/小带宽环境
+     * 如果被 MediaWiki 的 {@code ratelimited} 拦住，可以把它设成 500~1000，
+     * 让所有请求（包括来源列页）都按这个节奏走。只影响 wiki 客户端，不影响线上默认行为。
+     */
+    private long requestDelayMillis = 0;
+
     /** 启动时自动同步一次。**默认关**：这是运维动作，不该每次重启都跑 */
     private boolean syncOnStart = false;
 
@@ -154,5 +163,13 @@ public class MapSync {
 
     public void setBatchDelayMillis(long batchDelayMillis) {
         this.batchDelayMillis = batchDelayMillis;
+    }
+
+    public long getRequestDelayMillis() {
+        return requestDelayMillis;
+    }
+
+    public void setRequestDelayMillis(long requestDelayMillis) {
+        this.requestDelayMillis = requestDelayMillis;
     }
 }
