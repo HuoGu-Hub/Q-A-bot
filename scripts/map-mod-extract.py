@@ -57,9 +57,12 @@ ROW_KINDS = {
     **{i: "plant" for i in range(96, 103)},
     # 1.3.26 起 kOreDeposits 里增加了生物刷新点；行号 103-238 是生物
     **{i: "creature" for i in range(103, 239)},
+    # 1.3.29 起：239 是外观收集品，240-251 是岩、沙、苔藓这类地形材料
+    239: "collectible",
+    **{i: "material" for i in range(240, 252)},
 }
 
-# 宝箱的 9 个变体。作者在 map_key_panel.cpp 里用同一组枚举。
+# 宝箱的变体。作者在 map_key_panel.cpp 里用同一组枚举；1.3.29 起多出第 10 种。
 CHEST_TYPES = [
     {"index": 0, "key": "gold", "name": "Gold Chest", "nameZh": "金箱"},
     {"index": 1, "key": "gold_sarcophagus", "name": "Gold Sarcophagus", "nameZh": "金棺"},
@@ -70,6 +73,8 @@ CHEST_TYPES = [
     {"index": 6, "key": "wood", "name": "Wooden Chest", "nameZh": "木箱"},
     {"index": 7, "key": "wood_sarcophagus", "name": "Wooden Sarcophagus", "nameZh": "木棺"},
     {"index": 8, "key": "wood_locked", "name": "Wooden Chest (Locked)", "nameZh": "上锁的木箱"},
+    # 1.3.29 起空心大厅末室的石棺，作者按金箱算进筛选
+    {"index": 9, "key": "dungeon_spoils", "name": "Dungeon Spoils", "nameZh": "地牢战利品"},
 ]
 
 # Windows 控制台默认不一定是 UTF-8；点位名里有中文，输出别变成乱码
@@ -86,6 +91,35 @@ def mod_version_from_zip(path: Path) -> str:
             if name.endswith("/mod.json") or name == "mod.json":
                 return json.loads(z.read(name).decode("utf-8"))["version"]
     raise SystemExit(f"{path} 里没有 mod.json")
+
+
+def c_constants(text: str) -> dict[str, int]:
+    """解析 `constexpr <类型> kName = <数字或几个常量相加>;` 成 dict。
+
+    1.3.29 起 kTotalChestCount 写成 kEndChestFirst + kEndChestCount，
+    不再是字面量，只正则抓数字会抓到一半，所以这里递归求值。
+    """
+    expr = dict(re.findall(r"constexpr\s+\w+\s+(\w+)\s*=\s*([^;]+);", text))
+
+    def value(name: str, depth: int = 0) -> int:
+        if depth > 8 or name not in expr:
+            raise KeyError(name)
+        total = 0
+        for part in expr[name].split("+"):
+            part = part.strip()
+            if part.isdigit():
+                total += int(part)
+            else:
+                total += value(part, depth + 1)
+        return total
+
+    out = {}
+    for key in expr:
+        try:
+            out[key] = value(key)
+        except (KeyError, ValueError):
+            continue
+    return out
 
 
 def has_source(zip_path: Path) -> bool:
@@ -234,13 +268,14 @@ def parse_chests(src: Path) -> list[list]:
         y = py1 + py0 / 65536.0
         z = pz1 + pz0 / 65536.0
         chests.append([round(x, 2), round(y, 2), round(z, 2), sub])
-    total = re.search(r"kTotalChestCount\s*=\s*(\d+)", text)
-    if total:
-        declared = int(total.group(1))
-    else:
-        # 1.3.18 起是 kWoodChestFirst + kWoodChestCount，没有字面量
-        first = int(re.search(r"kWoodChestFirst\s*=\s*(\d+)", text).group(1))
-        wood = int(re.search(r"kWoodChestCount\s*=\s*(\d+)", text).group(1))
+    consts = c_constants(text)
+    declared = consts.get("kTotalChestCount")
+    if declared is None:
+        # 更老的版本没有 kTotalChestCount，只有木头段的首尾
+        first = consts.get("kWoodChestFirst")
+        wood = consts.get("kWoodChestCount")
+        if first is None or wood is None:
+            raise SystemExit("chest_spawns.h 里读不到箱子总数")
         declared = first + wood
     if declared != len(chests):
         raise SystemExit(f"chest_spawns.h 声明 {declared} 个箱子，实际解析 {len(chests)} 个")
@@ -326,6 +361,11 @@ def main() -> int:
     chest_counts = {t["index"]: 0 for t in CHEST_TYPES}
     for chest in chests:
         chest_counts[chest[3]] = chest_counts.get(chest[3], 0) + 1
+    stray_chests = sorted({c[3] for c in chests} - {t["index"] for t in CHEST_TYPES})
+    if stray_chests:
+        print("[warn] 这些箱子 subtype 没在 CHEST_TYPES 里定义，导入后不会显示："
+              + ", ".join(str(s) for s in stray_chests))
+        print("       在 scripts/map-mod-extract.py 的 CHEST_TYPES 里补上再重跑")
     chest_types = [{**t, "count": chest_counts.get(t["index"], 0)} for t in CHEST_TYPES]
 
     meta = {
