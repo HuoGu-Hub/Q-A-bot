@@ -8,13 +8,15 @@ mod 自己把游戏世界文件编译进了 DLL，压缩包里没有点位表。
   src/chest_spawns.h   金/银/木箱与石棺
   src/regions.h        八块区域的网格
 
-用法：把 GitHub 上的 Download ZIP 直接喂进来就行，源码在压缩包里，脚本自己解：
+用法：命令永远只有这一条，不带参数。把压缩包改名成 mods/mod.zip 就行：
 
-  python scripts/map-mod-extract.py --zip "最坏地图1.3.27.zip"
+  python scripts/map-mod-extract.py
 
-想指定产物目录就加 --out（默认 server/data/map-mod，正好是服务端读的那个）。
-已经有源码目录时用 --src 跳过解压；压缩包里没有源码时按 mod.json 的版本
-去 GitHub 拉同版本的源码包，要求能联网。
+两个默认值都按脚本自身位置算，跟当前目录无关：
+  读   <仓库>/mods/mod.zip
+  写   <仓库>/server/data/map-mod/<版本>/points.json
+
+需要临时换输入输出时再加 --zip / --src / --out，不带就走上面两个固定位置。
 
 版本对不上会直接退出：点位表和游戏版本是一一对应的，拿错版本坐标就会错。
 """
@@ -32,6 +34,11 @@ import zipfile
 from pathlib import Path
 
 REPO = "Greeneye0/worst-map-mod-enshrouded"
+
+# 固定投放位：命令永远不带参数也能跑，路径按脚本自身位置算，跟当前目录无关
+ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_ZIP = ROOT / "mods" / "mod.zip"
+DEFAULT_OUT = ROOT / "server" / "data" / "map-mod"
 CATEGORY_KEYS = {
     0: "quests", 1: "fast-travel", 2: "shroud", 3: "world",
     5: "mining", 6: "materials", 7: "plants", 8: "bait", 9: "trees",
@@ -308,24 +315,29 @@ def parse_regions(src: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="把 The Worst Map Mod 的点位导出成 JSON/CSV")
-    parser.add_argument("--zip", help="GitHub 的 Download ZIP；带源码时脚本自己解，也用来读版本")
+    parser.add_argument("--zip", help=f"压缩包，默认 {DEFAULT_ZIP}")
     parser.add_argument("--src", help="已有的源码目录，给了就跳过解压，压缩包只取版本号")
-    parser.add_argument("--out", default="server/data/map-mod", help="输出目录")
+    parser.add_argument("--out", help=f"输出目录，默认 {DEFAULT_OUT}")
     args = parser.parse_args()
 
-    if not args.zip and not args.src:
-        parser.error("--zip 与 --src 至少要给一个")
+    zip_path = Path(args.zip) if args.zip else None
+    if zip_path is None and not args.src:
+        # 零参数：只认固定的投放位，命令永远不用改
+        if not DEFAULT_ZIP.exists():
+            parser.error(f"没有 {DEFAULT_ZIP}：把下载的压缩包改名成 mod.zip 放进 mods/")
+        zip_path = DEFAULT_ZIP
+    out_root = Path(args.out) if args.out else DEFAULT_OUT
 
-    version = mod_version_from_zip(Path(args.zip)) if args.zip else "unknown"
+    version = mod_version_from_zip(zip_path) if zip_path else "unknown"
     workdir = None
     if args.src:
         src = Path(args.src)
     else:
         workdir = Path(tempfile.mkdtemp(prefix="map-mod-"))
-        if args.zip and has_source(Path(args.zip)):
+        if zip_path and has_source(zip_path):
             # 源码就在压缩包里，自己解，不用人工解压再判断该指哪一层
-            src = extract_source(Path(args.zip), workdir)
-            print(f"[unzip] {args.zip}")
+            src = extract_source(zip_path, workdir)
+            print(f"[unzip] {zip_path}")
         else:
             src = fetch_source(version, workdir)
     if not (src / "src" / "ore_deposits.h").exists():
@@ -391,7 +403,7 @@ def main() -> int:
         "trees": trees,
     }
 
-    out = Path(args.out) / version
+    out = out_root / version
     out.mkdir(parents=True, exist_ok=True)
     (out / "points.json").write_text(json.dumps(meta, ensure_ascii=False, separators=(",", ":")),
                                      encoding="utf-8")
@@ -404,7 +416,7 @@ def main() -> int:
             row = by_index[ore_i]
             w.writerow([row["kind"], row["key"], row["name"], row["nameZh"], x, z, top, amount])
 
-    print(f"[ok] {args.zip if workdir is not None else src}")
+    print(f"[ok] {zip_path if workdir is not None else src}")
     print(f"     {out / 'points.json'}")
     print(f"     {out / 'points.csv'}")
     print(f"     点位 {total_points} / 箱子 {total_chests} / 林地矩形 {len(trees)}")
