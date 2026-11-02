@@ -197,6 +197,45 @@ class AccessRulesTest {
                 List.of(whiteGroup(GROUP)), List.of())).isFalse();
     }
 
+    // ==================== 白名单放行的识别 ====================
+
+    @Test
+    @DisplayName("★ 白名单放行可单独识别：命令名单、全局名单、群号都算")
+    void grantedByWhitelistRecognizesNamedEntries() {
+        assertThat(AccessRules.grantedByWhitelist(USER, GROUP,
+                List.of(white(USER)), List.of()))
+                .as("命令名单里的 QQ 号")
+                .isTrue();
+        assertThat(AccessRules.grantedByWhitelist(USER, GROUP,
+                List.of(), List.of(white(USER))))
+                .as("全局名单里的 QQ 号")
+                .isTrue();
+        assertThat(AccessRules.grantedByWhitelist(USER, GROUP,
+                List.of(whiteGroup(GROUP)), List.of()))
+                .as("命令名单里的群号")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("★ 没被点名的不算：别人、黑名单、空名单都不授予管理权")
+    void grantedByWhitelistIgnoresEveryoneElse() {
+        assertThat(AccessRules.grantedByWhitelist(USER, GROUP,
+                List.of(white(OTHER)), List.of())).isFalse();
+        assertThat(AccessRules.grantedByWhitelist(USER, GROUP,
+                List.of(black(USER)), List.of(white(USER))))
+                .as("命令黑名单先给出结论，不再看全局白名单")
+                .isFalse();
+        assertThat(AccessRules.grantedByWhitelist(USER, GROUP,
+                List.of(), List.of())).isFalse();
+    }
+
+    @Test
+    @DisplayName("私聊里群号白名单不算点名 —— 没有群号就没有这条依据")
+    void grantedByWhitelistIgnoresGroupEntriesInPrivateChat() {
+        assertThat(AccessRules.grantedByWhitelist(USER, 0L,
+                List.of(whiteGroup(GROUP)), List.of())).isFalse();
+    }
+
     // ==================== 档位解析 ====================
 
     @Test

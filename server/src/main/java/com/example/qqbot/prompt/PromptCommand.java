@@ -1,6 +1,7 @@
 package com.example.qqbot.prompt;
 
 import com.example.qqbot.command.AccessRules;
+import com.example.qqbot.command.AclEntry;
 import com.example.qqbot.command.AclStore;
 import com.example.qqbot.command.BotCommand;
 import com.example.qqbot.command.CommandAccess;
@@ -23,6 +24,11 @@ import java.util.regex.Pattern;
  *
  * <p>默认按当前群保存；显式写 {@code #user_id-QQ号#} 时才按 QQ 号保存。
  * 它不经过命令表，也不走通用参数解析：提示内容里的 # 与空格都要原样保留。
+ *
+ * <p>准入分两层：能不能触发命令由 {@code bot_command} 的档位与名单决定
+ * （与其他命令同一套 {@link AccessRules}）；能不能写<b>本群</b>提示再严一道 ——
+ * 群主、管理员，以及被白名单点名放行的人。档位「全体」只放开"用这条命令"，
+ * 不会让每个群成员都能改全群的提示词。
  */
 @Component
 public class PromptCommand {
@@ -79,10 +85,14 @@ public class PromptCommand {
             return Optional.of(new Reply("补充提示已停用"));
         }
         // 与其他命令同一套判定：单命令名单优先，其次全局名单，最后看档位
+        List<AclEntry> commandAcl = aclStore.ofCommand(cmd.id());
+        List<AclEntry> globalAcl = aclStore.global();
         if (!AccessRules.allows(CommandAccess.of(cmd.access()), CommandRole.ofSender(event),
-                userId, groupId, aclStore.ofCommand(cmd.id()), aclStore.global())) {
+                userId, groupId, commandAcl, globalAcl)) {
             return Optional.of(new Reply("这条命令你暂时用不了"));
         }
+        // 能触发命令 ≠ 能改本群提示：本群提示会进入全群人的系统提示词，是更重的写
+        boolean manager = canManage(event, userId, groupId, commandAcl, globalAcl);
         commandStore.logUsage("prompt", groupId, userId, true);
         if (!prompts.isAvailable()) {
             return Optional.of(new Reply("补充提示暂时用不了"));
@@ -102,10 +112,10 @@ public class PromptCommand {
         String arg = parts.length > 1 ? parts[1].trim() : "";
         try {
             return Optional.of(new Reply(switch (action) {
-                case "/create" -> create(event, userId, groupId, arg);
+                case "/create" -> create(event, userId, groupId, arg, manager);
                 case "/list" -> listCommand(cmd);
-                case "/delete" -> delete(event, userId, groupId, arg);
-                case "/clear" -> clear(event, userId, groupId);
+                case "/delete" -> delete(userId, groupId, arg, manager);
+                case "/clear" -> clear(event, userId, groupId, manager);
                 default -> usage();
             }));
         } catch (PromptStore.PromptException e) {
@@ -116,7 +126,7 @@ public class PromptCommand {
         }
     }
 
-    private String create(OneBotEvent event, long userId, long groupId, String arg) {
+    private String create(OneBotEvent event, long userId, long groupId, String arg, boolean manager) {
         String text = arg == null ? "" : arg;
         Matcher matcher = USER_ID.matcher(text);
         Long targetUserId = null;
@@ -130,14 +140,14 @@ public class PromptCommand {
         long ownerGroup = 0L;
 
         if (targetUserId != null) {
-            if (targetUserId != userId && !canManageGroup(event)) {
-                return "只有群主或管理员才能给别人设置提示";
+            if (targetUserId != userId && !manager) {
+                return "只有群主、管理员或白名单里的人才能给别人设置提示";
             }
             scope = PromptStore.Scope.USER;
             ownerUser = targetUserId;
         } else if (event.isGroupMessage() && groupId > 0) {
-            if (!canManageGroup(event)) {
-                return "本群提示只有群主或管理员能设置";
+            if (!manager) {
+                return "本群提示只有群主、管理员或白名单里的人能设置";
             }
             scope = PromptStore.Scope.GROUP;
             ownerGroup = groupId;
@@ -185,7 +195,7 @@ public class PromptCommand {
         return sb.toString();
     }
 
-    private String delete(OneBotEvent event, long userId, long groupId, String arg) {
+    private String delete(long userId, long groupId, String arg, boolean manager) {
         long id = firstNumber(arg);
         if (id <= 0) {
             return "要删哪一条？例：/prompt /delete 3";
@@ -195,8 +205,8 @@ public class PromptCommand {
             return "没有 #" + id + " 这一条";
         }
         if (prompt.scope() == PromptStore.Scope.GROUP) {
-            if (!canManageGroup(event)) {
-                return "本群提示只有群主或管理员能删除";
+            if (!manager) {
+                return "本群提示只有群主、管理员或白名单里的人能删除";
             }
             if (prompt.groupId() != groupId) {
                 return "这条提示不属于当前群";
@@ -207,13 +217,13 @@ public class PromptCommand {
         return prompts.delete(id) ? "已删除 #" + id : "没有 #" + id + " 这一条";
     }
 
-    private String clear(OneBotEvent event, long userId, long groupId) {
+    private String clear(OneBotEvent event, long userId, long groupId, boolean manager) {
         boolean group = event.isGroupMessage() && groupId > 0;
-        if (group && !canManageGroup(event)) {
+        if (group && !manager) {
             int n = prompts.clearUser(userId);
             return n == 0
-                    ? "本群提示只有群主或管理员能清空"
-                    : "已清空 " + n + " 条个人提示；本群提示只有群主或管理员能清空";
+                    ? "本群提示只有群主、管理员或白名单里的人能清空"
+                    : "已清空 " + n + " 条个人提示；本群提示只有群主、管理员或白名单里的人能清空";
         }
         int n = 0;
         if (group) {
@@ -223,8 +233,18 @@ public class PromptCommand {
         return n == 0 ? "没有可清空的提示" : "已清空 " + n + " 条补充提示";
     }
 
-    private static boolean canManageGroup(OneBotEvent event) {
-        return CommandRole.ofSender(event).atLeast(CommandRole.ADMIN);
+    /**
+     * 能不能管理本群提示：群主、管理员，以及被名单点名放行的人。
+     *
+     * <p>档位只回答"谁能触发 /prompt"。本群提示会让内容进入全群所有人的系统提示词，
+     * 比"用一下命令"重得多，所以这里单独判一道：仅靠档位进来的普通成员
+     * （比如「全体」）只能看提示、设自己的个人提示；白名单是管理员点名的放行，
+     * 被点名的人与管理员同权。
+     */
+    private static boolean canManage(OneBotEvent event, long userId, long groupId,
+                                     List<AclEntry> commandAcl, List<AclEntry> globalAcl) {
+        return CommandRole.ofSender(event).atLeast(CommandRole.ADMIN)
+                || AccessRules.grantedByWhitelist(userId, groupId, commandAcl, globalAcl);
     }
 
     private static long firstNumber(String arg) {

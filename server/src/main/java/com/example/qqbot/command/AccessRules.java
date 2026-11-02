@@ -65,6 +65,27 @@ public final class AccessRules {
         };
     }
 
+    /**
+     * 这次准入是不是<b>名单里的白名单</b>放行的。
+     *
+     * <p>用途只有一个：本群提示这类"会改变全群"的写操作要比"能用这条命令"更严。
+     * 档位只说谁能触发命令（「全体」就是谁都能触发），而白名单是管理员<b>点名</b>
+     * 放进来的人 —— 和管理员一样，视为可以管理这条命令的共享内容。
+     * 所以「全体」下的普通成员只能看提示、设自己的个人提示；被白名单点名的成员
+     * 才能管理本群提示。
+     *
+     * <p>层次与 {@link #allows} 完全一致：单命令名单先于全局名单；
+     * 命令名单给出了结论（放行或拒绝）就不再往下看。黑名单条目永远返回 false。
+     */
+    public static boolean grantedByWhitelist(long userId, long groupId,
+                                             List<AclEntry> commandAcl, List<AclEntry> globalAcl) {
+        Decision decision = decide(commandAcl, userId, groupId);
+        if (decision == Decision.NONE) {
+            decision = decide(globalAcl, userId, groupId);
+        }
+        return decision == Decision.ALLOW;
+    }
+
     /** 只看一层名单：先 QQ 号后群号，先白后黑 */
     static Decision decide(List<AclEntry> acl, long userId, long groupId) {
         if (acl == null || acl.isEmpty()) {

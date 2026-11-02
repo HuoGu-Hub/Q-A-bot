@@ -91,11 +91,64 @@ class PromptCommandTest {
     @Test
     @DisplayName("普通成员不能设置本群提示，只能设置自己的")
     void memberCannotSetGroupPrompt() {
-        assertThat(run("/prompt /create 群提示", "member")).contains("群主或管理员");
+        assertThat(run("/prompt /create 群提示", "member")).contains("群主、管理员或白名单");
         assertThat(store.listFor(2002L, 1001L)).isEmpty();
 
         assertThat(run("/prompt /create #user_id-1001# 我的提示", "member")).contains("个人提示");
         assertThat(store.listFor(2002L, 1001L)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("★ 白名单里的普通成员可以设置本群提示 —— 名单放行等同管理员")
+    void whitelistedMemberCanSetGroupPrompt() {
+        promptAccess("whitelist");
+        when(aclStore.ofCommand(42L)).thenReturn(List.of(
+                new AclEntry(AclEntry.WHITE, AclEntry.UID, 1001L)));
+
+        assertThat(run("/prompt /create 群提示", "member")).contains("已添加本群提示", "群提示");
+        assertThat(store.listFor(2002L, 1002L)).as("本群所有人都看得到").hasSize(1);
+    }
+
+    @Test
+    @DisplayName("★ 管理员与白名单：被点名的普通成员同样能管理本群提示")
+    void adminWhitelistMemberCanSetGroupPrompt() {
+        promptAccess("admin_whitelist");
+        when(aclStore.ofCommand(42L)).thenReturn(List.of(
+                new AclEntry(AclEntry.WHITE, AclEntry.UID, 1001L)));
+
+        assertThat(run("/prompt /create 群提示", "member")).contains("已添加本群提示");
+    }
+
+    @Test
+    @DisplayName("★ 全体档位不会让所有成员都能写本群提示，但白名单点名可以")
+    void allTierStillNeedsNamedWhitelistForGroupWrites() {
+        assertThat(run("/prompt /create 群提示", "member")).contains("群主、管理员或白名单");
+        assertThat(store.listFor(2002L, 1002L)).isEmpty();
+
+        when(aclStore.ofCommand(42L)).thenReturn(List.of(
+                new AclEntry(AclEntry.WHITE, AclEntry.UID, 1001L)));
+        assertThat(run("/prompt /create 群提示", "member")).contains("已添加本群提示");
+    }
+
+    @Test
+    @DisplayName("全局白名单同样授予本群提示的管理权")
+    void globalWhitelistGrantsGroupManagement() {
+        when(aclStore.global()).thenReturn(List.of(
+                new AclEntry(AclEntry.WHITE, AclEntry.UID, 1001L)));
+
+        assertThat(run("/prompt /create 群提示", "member")).contains("已添加本群提示");
+    }
+
+    @Test
+    @DisplayName("白名单成员可以删除本群提示")
+    void whitelistedMemberCanDeleteGroupPrompt() {
+        promptAccess("whitelist");
+        when(aclStore.ofCommand(42L)).thenReturn(List.of(
+                new AclEntry(AclEntry.WHITE, AclEntry.UID, 1001L)));
+        run("/prompt /create 群提示", "member");
+        long id = store.listFor(2002L, 1001L).get(0).id();
+
+        assertThat(run("/prompt /delete " + id, "member")).contains("已删除");
     }
 
     @Test
@@ -163,7 +216,7 @@ class PromptCommandTest {
         long id = store.listFor(2002L, 1001L).get(0).id();
         assertThat(created).contains("#" + id);
 
-        assertThat(run("/prompt /delete " + id, "member")).contains("群主或管理员");
+        assertThat(run("/prompt /delete " + id, "member")).contains("群主、管理员或白名单");
         assertThat(run("/prompt /delete " + id, "admin")).contains("已删除");
         assertThat(run("/prompt /delete " + id, "admin")).contains("没有");
     }
@@ -175,6 +228,13 @@ class PromptCommandTest {
         assertThat(run("/prompt /help", "admin")).contains("/prompt /create");
         assertThat(run("/prompt /wat", "admin")).contains("/prompt /create");
         assertThat(store.listFor(2002L, 1001L)).isEmpty();
+    }
+
+    /** 换掉 /prompt 这条系统命令的准入档位 */
+    private void promptAccess(String access) {
+        BotCommand cmd = new BotCommand(42, "prompt", "", "补充提示", "all", List.of(), access,
+                true, 50, true, "action", "kb", List.of(), "", "prompt.manage");
+        when(commandStore.findByTrigger("prompt")).thenReturn(cmd);
     }
 
     private String run(String text, String role) {
