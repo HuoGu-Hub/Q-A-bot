@@ -419,7 +419,7 @@ public class EvalService {
         List<EvalViews.ToolCall> tools = new ArrayList<>();
         for (EvalRepository.ToolCallRow t : repo.toolCallsOf(runId)) {
             tools.add(new EvalViews.ToolCall(t.callIndex(), t.name(), t.args(), t.status(),
-                    t.latencyMs(), t.resultChars()));
+                    t.latencyMs(), t.resultChars(), t.error()));
         }
         return new EvalViews.RunDetail(run.id(), run.batchId(), run.itemId(), run.attempt(), run.status(),
                 run.answer(), run.latencyMs(), run.hitCount(), run.kbEnabled(), run.createdAt(),

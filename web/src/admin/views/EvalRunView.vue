@@ -181,17 +181,22 @@ function attrText(attrs: Record<string, unknown>): string {
       </Panel>
 
       <Panel v-if="run.toolCalls.length" title="工具调用" :count="run.toolCalls.length"
-             hint="只有执行前钩子：调用与参数可得，返回与耗时未知">
+             hint="执行器包装后记录：结果长度、耗时与失败原因">
         <table class="tbl">
           <thead>
-            <tr><th class="num">#</th><th>工具</th><th>参数</th><th>状态</th></tr>
+            <tr><th class="num">#</th><th>工具</th><th>参数</th><th>状态</th><th class="num">耗时</th><th class="num">返回</th></tr>
           </thead>
           <tbody>
             <tr v-for="c in run.toolCalls" :key="c.callIndex">
               <td class="num">{{ c.callIndex }}</td>
               <td><code>{{ c.name }}</code></td>
               <td class="args">{{ c.args }}</td>
-              <td>{{ c.status === 'unknown' ? '未知' : c.status }}</td>
+              <td>
+                {{ c.status }}
+                <span v-if="c.error" class="err"> · {{ c.error }}</span>
+              </td>
+              <td class="num">{{ c.latencyMs == null ? '—' : `${c.latencyMs} ms` }}</td>
+              <td class="num">{{ c.resultChars == null ? '—' : `${c.resultChars} 字` }}</td>
             </tr>
           </tbody>
         </table>

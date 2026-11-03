@@ -883,6 +883,7 @@ export interface EvalToolCall {
   status: string
   latencyMs: number | null
   resultChars: number | null
+  error: string | null
 }
 
 export interface EvalRunDetail {

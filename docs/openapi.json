@@ -28273,6 +28273,9 @@
           "resultChars" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "error" : {
+            "type" : "string"
           }
         }
       },

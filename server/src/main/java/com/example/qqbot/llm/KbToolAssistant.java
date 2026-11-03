@@ -16,13 +16,21 @@ import dev.langchain4j.service.UserMessage;
 
 import java.util.ArrayList;
 import java.util.List;
+import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.agent.tool.ToolSpecifications;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.service.tool.DefaultToolExecutor;
+import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.service.tool.BeforeToolExecution;
 import dev.langchain4j.service.tool.ToolErrorHandlerResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Method;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -134,13 +142,16 @@ public class KbToolAssistant {
         if (voiceTool != null) {
             toolObjects.add(voiceTool);
         }
+        // 工具以「规范 + 执行器」注册而不是直接给对象：执行器包一层才能拿到返回值与耗时。
+        // 不包的话 Agent 维度只能看到"调了什么"，看不到"拿到了什么"。
+        Map<ToolSpecification, ToolExecutor> tools = toolsOf(toolObjects);
         this.assistant = AiServices.builder(Assistant.class)
                 .chatModel(chatModel)
                 // 安全底座交给我们自己那份，不用官方默认的空提示词
                 .systemMessageProvider(memoryId -> router.systemPromptWithStyle() + extraPromptSuffix())
                 // 检索与资料注入走我们的官方管线：ContentRetriever → ContentAggregator → ContentInjector
                 .retrievalAugmentor(kbRetriever.augmentor())
-                .tools(toolObjects)
+                .tools(tools)
                 // 模型编了一个不存在的工具名：回一句固定话术，别把“工具不存在”变成异常
                 .hallucinatedToolNameStrategy(request -> ToolExecutionResultMessage.from(request,
                         "没有这个工具。可用的只有 lookup、locate、search_titles、play_voice、say；"
@@ -180,9 +191,27 @@ public class KbToolAssistant {
      * 后者能拿到调用方传进来的参数。群聊入口已经按 {@code 群:xx/用户:xx} 把身份传进来
      * （见 {@code ChatService.callerOf}），所以这条判据今天就生效，不是"以后再说"。
      */
+    /** 反射一遍 @Tool 方法，把每个工具包成可观测的执行器 */
+    static Map<ToolSpecification, ToolExecutor> toolsOf(List<Object> objects) {
+        Map<ToolSpecification, ToolExecutor> tools = new LinkedHashMap<>();
+        for (Object object : objects) {
+            for (Method method : object.getClass().getMethods()) {
+                if (!method.isAnnotationPresent(Tool.class)) {
+                    continue;
+                }
+                ToolSpecification spec = ToolSpecifications.toolSpecificationFrom(method);
+                tools.put(spec, new TracingToolExecutor(spec.name(),
+                        new DefaultToolExecutor(object, method)));
+            }
+        }
+        return tools;
+    }
+
     void authorize(BeforeToolExecution execution) {
         String name = execution.request().name();
+        String args = execution.request().arguments();
         if (!isAllowed(name)) {
+            ToolCallTrace.denied(name, args, "工具未授权");
             log.warn("[TOOL] 拒绝未授权工具：{}", name);
             throw new IllegalStateException("工具未授权：" + name);
         }
@@ -193,11 +222,11 @@ public class KbToolAssistant {
         //   但"无身份就拒绝"这条必须现在就立起来 —— 否则将来任何新入口
         //   只要忘了传身份，就能静默地把工具用起来。
         if (callerOf(execution).isBlank()) {
+            ToolCallTrace.denied(name, args, "缺少调用方身份");
             log.warn("[TOOL] 拒绝无身份的调用：{}", name);
             throw new IllegalStateException("工具调用缺少调用方身份");
         }
-        String args = execution.request().arguments();
-        ToolCallTrace.record(name, args);
+        ToolCallTrace.pending(name, args);
         log.info("[TOOL] 放行工具 {}（调用方 {}，参数 {} 字）", name, callerOf(execution),
                 args == null ? 0 : args.length());
     }

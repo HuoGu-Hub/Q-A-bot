@@ -212,7 +212,8 @@ public class EvalCaseExecutor {
     private List<EvalRepository.ToolCallWrite> toolWrites(List<ToolCallTrace.Call> calls) {
         List<EvalRepository.ToolCallWrite> out = new ArrayList<>();
         for (ToolCallTrace.Call c : calls) {
-            out.add(new EvalRepository.ToolCallWrite(c.index(), c.name(), c.args(), "unknown", null, null));
+            out.add(new EvalRepository.ToolCallWrite(c.index(), c.name(), c.args(), c.status(),
+                    c.latencyMs(), c.resultChars(), c.error()));
         }
         return out;
     }
@@ -263,12 +264,15 @@ public class EvalCaseExecutor {
                 row.put("index", c.index());
                 row.put("name", c.name());
                 row.put("args", c.args());
+                row.put("status", c.status());
+                row.put("latencyMs", c.latencyMs());
+                row.put("resultChars", c.resultChars());
                 calls.add(row);
             }
             Map<String, Object> toolAttrs = new LinkedHashMap<>();
             toolAttrs.put("count", toolCalls.size());
             toolAttrs.put("calls", calls);
-            toolAttrs.put("measured", false);
+            toolAttrs.put("measured", true);
             b.add(root, "tool", "calls", "ok", llmStart, 0, toolAttrs);
         }
 

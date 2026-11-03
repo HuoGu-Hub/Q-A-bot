@@ -182,6 +182,7 @@ public class EvalRepository {
                 + " status TEXT NOT NULL DEFAULT 'unknown',"
                 + " latency_ms INTEGER,"
                 + " result_chars INTEGER,"
+                + " error TEXT,"
                 + " created_at TEXT)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_tool_run ON eval_tool_call(run_id, call_index)");
 
@@ -254,6 +255,7 @@ public class EvalRepository {
         ensureColumn("eval_run", "tokens_in", "tokens_in INTEGER DEFAULT 0");
         ensureColumn("eval_run", "tokens_out", "tokens_out INTEGER DEFAULT 0");
         ensureColumn("eval_run", "cost_micro", "cost_micro INTEGER DEFAULT 0");
+        ensureColumn("eval_tool_call", "error", "error TEXT");
     }
 
     /** 幂等补列 —— 与 QaStoreRepository 同一套做法，库要长期保留不能删表重建 */
@@ -657,7 +659,7 @@ public class EvalRepository {
     }
 
     public record ToolCallWrite(int callIndex, String name, String args, String status,
-                                Long latencyMs, Integer resultChars) {
+                                Long latencyMs, Integer resultChars, String error) {
     }
 
     public void insertToolCalls(long runId, List<ToolCallWrite> calls, String now) {
@@ -667,22 +669,23 @@ public class EvalRepository {
         List<Object[]> rows = new ArrayList<>(calls.size());
         for (ToolCallWrite c : calls) {
             rows.add(new Object[]{runId, c.callIndex(), c.name(), c.args(), c.status(),
-                    c.latencyMs(), c.resultChars(), now});
+                    c.latencyMs(), c.resultChars(), c.error(), now});
         }
         jdbc.batch("INSERT INTO eval_tool_call (run_id, call_index, name, args, status, latency_ms,"
-                + " result_chars, created_at) VALUES (?,?,?,?,?,?,?,?)", rows);
+                + " result_chars, error, created_at) VALUES (?,?,?,?,?,?,?,?,?)", rows);
     }
 
     public record ToolCallRow(int callIndex, String name, String args, String status,
-                              Long latencyMs, Integer resultChars) {
+                              Long latencyMs, Integer resultChars, String error) {
     }
 
     public List<ToolCallRow> toolCallsOf(long runId) {
-        return jdbc.query("SELECT call_index, name, args, status, latency_ms, result_chars"
+        return jdbc.query("SELECT call_index, name, args, status, latency_ms, result_chars, error"
                         + " FROM eval_tool_call WHERE run_id=? ORDER BY call_index",
                 rs -> new ToolCallRow(rs.intOf("call_index"), rs.str("name"), rs.str("args"),
                         rs.str("status"), nullableLong(rs, "latency_ms"),
-                        rs.isNull("result_chars") ? null : rs.intOf("result_chars")), runId);
+                        rs.isNull("result_chars") ? null : rs.intOf("result_chars"),
+                        rs.str("error")), runId);
     }
 
     /* ==================== 复核 ==================== */

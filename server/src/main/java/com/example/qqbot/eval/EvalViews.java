@@ -110,7 +110,7 @@ public final class EvalViews {
     }
 
     public record ToolCall(int callIndex, String name, String args, String status,
-                           Long latencyMs, Integer resultChars) {
+                           Long latencyMs, Integer resultChars, String error) {
     }
 
     public record Baseline(long id, String name, long datasetVersionId, long batchId,
