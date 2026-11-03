@@ -84,6 +84,7 @@ public class EvalRepository {
                 + " gate_status TEXT NOT NULL DEFAULT 'pending',"
                 + " gate_reason TEXT,"
                 + " item_total INTEGER NOT NULL DEFAULT 0,"
+                + " case_filter TEXT,"
                 + " stats_json TEXT,"
                 + " created_by TEXT,"
                 + " created_at TEXT NOT NULL,"
@@ -256,6 +257,7 @@ public class EvalRepository {
         ensureColumn("eval_run", "tokens_out", "tokens_out INTEGER DEFAULT 0");
         ensureColumn("eval_run", "cost_micro", "cost_micro INTEGER DEFAULT 0");
         ensureColumn("eval_tool_call", "error", "error TEXT");
+        ensureColumn("eval_batch", "case_filter", "case_filter TEXT");
     }
 
     /** 幂等补列 —— 与 QaStoreRepository 同一套做法，库要长期保留不能删表重建 */
@@ -381,17 +383,18 @@ public class EvalRepository {
     public record BatchRow(long id, String name, long datasetId, long datasetVersionId, String targetJson,
                            String mode, int concurrency, int repeatTimes, double sampleRate,
                            String status, String gateStatus, String gateReason, int itemTotal,
-                           String statsJson, String createdAt, String startedAt, String finishedAt) {
+                           String statsJson, String createdAt, String startedAt, String finishedAt, String caseFilter) {
     }
 
     public long insertBatch(String name, long datasetId, long versionId, String targetJson, String mode,
-                            int concurrency, int repeatTimes, double sampleRate,
+                            int concurrency, int repeatTimes, double sampleRate, String caseFilter,
                             String createdBy, String now) {
         return jdbc.insert("INSERT INTO eval_batch (name, dataset_id, dataset_version_id, target_json, mode,"
                         + " concurrency, repeat_times, sample_rate, status, gate_status, item_total,"
-                        + " created_by, created_at) VALUES (?,?,?,?,?,?,?,?,'draft','pending',0,?,?)",
+                        + " case_filter, created_by, created_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,'draft','pending',0,?,?,?)",
                 name, datasetId, versionId, targetJson, mode, concurrency, repeatTimes, sampleRate,
-                createdBy, now);
+                caseFilter, createdBy, now);
     }
 
     public void markBatchQueued(long batchId, int itemTotal) {
@@ -411,26 +414,26 @@ public class EvalRepository {
     public BatchRow findBatch(long id) {
         return jdbc.queryOne("SELECT id, name, dataset_id, dataset_version_id, target_json, mode, concurrency,"
                 + " repeat_times, sample_rate, status, gate_status, gate_reason, item_total, stats_json,"
-                + " created_at, started_at, finished_at FROM eval_batch WHERE id=?",
+                + " created_at, started_at, finished_at, case_filter FROM eval_batch WHERE id=?",
                 rs -> new BatchRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_id"),
                         rs.longOf("dataset_version_id"), rs.str("target_json"), rs.str("mode"),
                         rs.intOf("concurrency"), rs.intOf("repeat_times"), rs.dbl("sample_rate"),
                         rs.str("status"), rs.str("gate_status"), rs.str("gate_reason"),
                         rs.intOf("item_total"), rs.str("stats_json"), rs.str("created_at"),
-                        rs.str("started_at"), rs.str("finished_at")), id);
+                        rs.str("started_at"), rs.str("finished_at"), rs.str("case_filter")), id);
     }
 
     public List<BatchRow> listBatches(int limit, int offset) {
         return jdbc.query("SELECT id, name, dataset_id, dataset_version_id, target_json, mode, concurrency,"
                 + " repeat_times, sample_rate, status, gate_status, gate_reason, item_total, stats_json,"
-                + " created_at, started_at, finished_at FROM eval_batch"
+                + " created_at, started_at, finished_at, case_filter FROM eval_batch"
                 + " ORDER BY id DESC LIMIT ? OFFSET ?",
                 rs -> new BatchRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_id"),
                         rs.longOf("dataset_version_id"), rs.str("target_json"), rs.str("mode"),
                         rs.intOf("concurrency"), rs.intOf("repeat_times"), rs.dbl("sample_rate"),
                         rs.str("status"), rs.str("gate_status"), rs.str("gate_reason"),
                         rs.intOf("item_total"), rs.str("stats_json"), rs.str("created_at"),
-                        rs.str("started_at"), rs.str("finished_at")), limit, offset);
+                        rs.str("started_at"), rs.str("finished_at"), rs.str("case_filter")), limit, offset);
     }
 
     public record PendingCase(long caseId, String caseKey, String category, String question,
@@ -893,23 +896,23 @@ public class EvalRepository {
     public List<BatchRow> batchesOfDataset(long datasetId, int limit) {
         return jdbc.query("SELECT id, name, dataset_id, dataset_version_id, target_json, mode, concurrency,"
                         + " repeat_times, sample_rate, status, gate_status, gate_reason, item_total,"
-                        + " stats_json, created_at, started_at, finished_at FROM eval_batch"
+                        + " stats_json, created_at, started_at, finished_at, case_filter FROM eval_batch"
                         + " WHERE dataset_id=? AND status='completed' ORDER BY id DESC LIMIT ?",
                 rs -> new BatchRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_id"),
                         rs.longOf("dataset_version_id"), rs.str("target_json"), rs.str("mode"),
                         rs.intOf("concurrency"), rs.intOf("repeat_times"), rs.dbl("sample_rate"),
                         rs.str("status"), rs.str("gate_status"), rs.str("gate_reason"),
                         rs.intOf("item_total"), rs.str("stats_json"), rs.str("created_at"),
-                        rs.str("started_at"), rs.str("finished_at")), datasetId, limit);
+                        rs.str("started_at"), rs.str("finished_at"), rs.str("case_filter")), datasetId, limit);
     }
 
-    public record CaseVerdict(String caseKey, String question, String quality, String rag,
-                              String safety, String tag, long runId) {
+    public record CaseVerdict(long caseId, String caseKey, String question, String quality,
+                              String rag, String safety, String tag, long runId) {
     }
 
     /** 每个用例第一次执行的结论，对比用 */
     public List<CaseVerdict> caseVerdicts(long batchId) {
-        return jdbc.query("SELECT c.case_key, c.question, r.id AS run_id,"
+        return jdbc.query("SELECT c.id AS case_id, c.case_key, c.question, r.id AS run_id,"
                         + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='quality'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS quality,"
                         + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
@@ -920,7 +923,8 @@ public class EvalRepository {
                         + "  ORDER BY j.id DESC LIMIT 1) AS tag"
                         + " FROM eval_run r JOIN eval_case c ON c.id=r.case_id"
                         + " WHERE r.batch_id=? AND r.attempt=1 ORDER BY c.case_key",
-                rs -> new CaseVerdict(rs.str("case_key"), rs.str("question"), rs.str("quality"),
+                rs -> new CaseVerdict(rs.longOf("case_id"), rs.str("case_key"), rs.str("question"),
+                        rs.str("quality"),
                         rs.str("rag"), rs.str("safety"), rs.str("tag"), rs.longOf("run_id")), batchId);
     }
 

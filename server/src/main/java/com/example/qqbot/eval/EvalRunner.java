@@ -53,6 +53,8 @@ public class EvalRunner {
     private final KbBlockStore blockStore;
     private final EvalAlerts alerts;
     private final ExecutorService pool;
+    /** 正在跑或排队的批次取消标记：置位后由执行循环在用例之间退出 */
+    private final java.util.Set<Long> cancelled = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public EvalRunner(EvalRepository repo, EvalCaseExecutor executor, EvalAggregator aggregator,
                       ObjectMapper mapper, KbPolicy kbPolicy, LlmPolicy llmPolicy, KbBlockStore blockStore,
@@ -83,9 +85,20 @@ public class EvalRunner {
         pool.submit(() -> runBatch(batchId));
     }
 
+    /** 取消只置标记；真正停下来发生在用例之间，不会打断进行中的请求 */
+    public boolean cancel(long batchId) {
+        cancelled.add(batchId);
+        return true;
+    }
+
     void runBatch(long batchId) {
         EvalRepository.BatchRow batch = repo.findBatch(batchId);
         if (batch == null) {
+            return;
+        }
+        if (cancelled.remove(batchId)) {
+            repo.finishBatch(batchId, "cancelled", null, "pending", "开始前已取消",
+                    Instant.now().toString());
             return;
         }
         List<EvalRepository.PendingItem> items = repo.itemsOfBatch(batchId);
@@ -99,6 +112,10 @@ public class EvalRunner {
             pool.submit(() -> {
                 boolean acquired = false;
                 try {
+                    if (cancelled.contains(batchId)) {
+                        repo.updateItemStatus(item.id(), "skipped");
+                        return;
+                    }
                     permits.acquire();
                     acquired = true;
                     CaseSpec spec = mapper.readValue(item.snapshot(), CaseSpec.class);
@@ -131,6 +148,7 @@ public class EvalRunner {
         }
 
         try {
+            boolean stopped = cancelled.remove(batchId);
             EvalViews.Summary summary = aggregator.summarise(batchId);
             String gate = aggregator.gateOf(summary);
             String drift = driftOf(batch);
@@ -172,11 +190,16 @@ public class EvalRunner {
                     reason = "安全用例失败 " + safetyFail + " 条";
                 }
             }
-            repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate, reason,
-                    Instant.now().toString());
+            if (stopped) {
+                gate = "pending";
+                reason = "已取消，完成 " + summary.judged() + " 条判定";
+            }
+            repo.finishBatch(batchId, stopped ? "cancelled" : "completed",
+                    mapper.writeValueAsString(summary), gate, reason, Instant.now().toString());
             int hits = alerts.evaluate(batchId, summary);
-            log.info("[EVAL] 批次 {} 完成：判定 {} 条，通过率 {}，门禁 {}（{}），告警 {} 条",
-                    batchId, summary.judged(), summary.passRate(), gate, reason, hits);
+            log.info("[EVAL] 批次 {} {}：判定 {} 条，通过率 {}，门禁 {}（{}），告警 {} 条",
+                    batchId, stopped ? "已取消" : "完成", summary.judged(), summary.passRate(), gate,
+                    reason, hits);
         } catch (Exception e) {
             repo.finishBatch(batchId, "failed", null, "pending", "聚合失败", Instant.now().toString());
             log.warn("[EVAL] 批次 {} 聚合失败：{}（已完成的结果保留）", batchId, e.getMessage());

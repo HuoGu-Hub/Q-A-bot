@@ -48,7 +48,7 @@ class EvalRepositoryTest {
                 "2026-11-03T10:00:00Z");
         long versionId = repo.insertVersion(datasetId, 1, 1, "sum", "tester", "2026-11-03T10:00:00Z");
         long batchId = repo.insertBatch("批次一", datasetId, versionId, "{}", "offline", 2, 1, 1.0,
-                "tester", "2026-11-03T10:00:00Z");
+                null, "tester", "2026-11-03T10:00:00Z");
         long itemId = repo.insertItem(batchId, repo.listCases(datasetId, 10, 0).get(0).id(),
                 "{\"caseId\":1}", "2026-11-03T10:00:00Z");
         return repo.insertRun(itemId, batchId, 1, 1, "succeeded", "trace-1", "答案",

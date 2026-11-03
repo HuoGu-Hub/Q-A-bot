@@ -108,6 +108,30 @@ onBeforeUnmount(() => {
   if (timer !== null) window.clearTimeout(timer)
 })
 
+const canCancel = computed(() =>
+  !!detail.value && ['running', 'queued', 'draft'].includes(detail.value.batch.status))
+const canRetry = computed(() =>
+  !!detail.value && detail.value.batch.status === 'completed' && detail.value.summary.fail > 0)
+
+async function cancel() {
+  if (!window.confirm('取消这一批？已跑完的判定会保留。')) return
+  try {
+    await adminApi.post(`/eval/batches/${batchId}/actions/cancel`)
+    await load()
+  } catch (e) {
+    error.value = describeError(e)
+  }
+}
+
+async function retryFailed() {
+  try {
+    const r = await adminApi.post<{ id: number }>(`/eval/batches/${batchId}/actions/retry-failed`)
+    router.push(`/eval/batches/${r.id}`)
+  } catch (e) {
+    error.value = describeError(e)
+  }
+}
+
 /** 报告是服务端生成的单文件 HTML，直接下走，不在前端拼 */
 function downloadReport() {
   window.location.href = `/admin/api/eval/batches/${batchId}/report`
@@ -174,6 +198,8 @@ const DIM_LABEL: Record<string, string> = {
       <Button size="sm" :disabled="detail?.batch.status !== 'completed'" @click="makeBaseline">
         设为基线
       </Button>
+      <Button v-if="canCancel" size="sm" variant="danger" @click="cancel">取消</Button>
+      <Button v-if="canRetry" size="sm" @click="retryFailed">重跑失败项</Button>
       <Button size="sm" @click="downloadReport">导出报告</Button>
       <Button size="sm" @click="clone">克隆批次</Button>
       <Button size="sm" to="/eval">返回列表</Button>

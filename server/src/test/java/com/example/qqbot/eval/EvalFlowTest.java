@@ -218,6 +218,42 @@ class EvalFlowTest {
     }
 
     @Test
+    @DisplayName("重跑失败项只带失败用例，新批次独立出结论")
+    void retriesFailedCases() throws Exception {
+        // 只让"废料杯"答对，另一条失败，重跑时应该只带失败的那一条
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenAnswer(invocation -> {
+                    // 必须显式取成 Object：String.valueOf 有 char[] 重载，泛型会被推成 char[]
+                    Object raw = invocation.getArgument(1);
+                    String question = raw == null ? "" : raw.toString();
+                    boolean good = question.contains("废料杯");
+                    List<KbTrace.Hit> hits = good
+                            ? List.of(new KbTrace.Hit("block-1", "废料杯", "doc-1", 0.9, "vector"))
+                            : List.of();
+                    return new ChatService.ReplyResult(good ? "废料杯在废料堆旁边。" : "", 300,
+                            new KbTrace(true, hits, 0.9, 0.9, 2, 1, List.of(), 20), List.of());
+                });
+        EvalViews.Dataset dataset = datasets.create("retry-" + Instant.now().toEpochMilli(),
+                "重跑用例集", "", "test");
+        datasets.addCase(dataset.id(), "entity-r1", "entity", "废料杯在哪", "block-1", "");
+        datasets.addCase(dataset.id(), "entity-r2", "entity", "火把在哪", "block-2", "");
+        EvalViews.Version version = datasets.freeze(dataset.id(), "test");
+        long source = service.createBatch("原批次", dataset.id(), version.id(), 1, 1,
+                "offline", 1.0, "test");
+        waitForBatch(source);
+
+        long retried = service.retryFailed(source);
+        EvalRepository.BatchRow row = repo.findBatch(retried);
+        assertThat(row.name()).contains("重跑");
+        assertThat(row.itemTotal()).isEqualTo(1);
+        assertThat(row.caseFilter()).isNotNull();
+
+        waitForBatch(retried);
+        assertThat(service.summary(retried).judged()).isEqualTo(1);
+        assertThat(repo.findBatch(retried).status()).isEqualTo("completed");
+    }
+
+    @Test
     @DisplayName("两次批次对比给出回退用例清单")
     void comparesTwoBatches() throws Exception {
         KbTrace trace = new KbTrace(true,

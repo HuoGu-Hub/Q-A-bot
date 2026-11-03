@@ -56,6 +56,14 @@ public class EvalService {
 
     public long createBatch(String name, long datasetId, Long versionId, int repeatTimes,
                            int concurrency, String mode, double sampleRate, String by) {
+        return createBatch(name, datasetId, versionId, repeatTimes, concurrency, mode, sampleRate,
+                null, by);
+    }
+
+    /** @param caseIds 只跑这些用例；null 表示按版本全量 */
+    public long createBatch(String name, long datasetId, Long versionId, int repeatTimes,
+                           int concurrency, String mode, double sampleRate, List<Long> caseIds,
+                           String by) {
         EvalRepository.DatasetRow dataset = repo.findDataset(datasetId);
         if (dataset == null) {
             throw ApiException.notFound("用例集不存在");
@@ -68,6 +76,9 @@ public class EvalService {
                 : versions.stream().filter(v -> v.id() == versionId).findFirst()
                 .orElseThrow(() -> ApiException.badRequest("版本不存在"));
         List<EvalRepository.PendingCase> cases = repo.pendingCases(datasetId);
+        if (caseIds != null) {
+            cases = cases.stream().filter(c -> caseIds.contains(c.caseId())).toList();
+        }
         if (cases.isEmpty()) {
             throw ApiException.badRequest("用例集里没有启用的用例");
         }
@@ -88,7 +99,7 @@ public class EvalService {
         long batchId = repo.insertBatch(name == null || name.isBlank() ? "批次 " + now : name,
                 datasetId, version.id(), json(targetMap), mode == null ? "offline" : mode,
                 Math.max(1, Math.min(4, concurrency)), Math.max(1, Math.min(5, repeatTimes)),
-                sampleRate, by, now);
+                sampleRate, caseIds == null ? null : json(caseIds), by, now);
         int created = 0;
         for (EvalRepository.PendingCase c : picked) {
             CaseSpec spec = new CaseSpec(c.caseId(), c.caseKey(), c.category(), c.question(),
@@ -367,6 +378,47 @@ public class EvalService {
 
     public boolean ackAlert(long id, String note) {
         return repo.ackAlertEvent(id, note, Instant.now().toString());
+    }
+
+    /* ==================== 重跑与取消 ==================== */
+
+    /**
+     * 只重跑失败项。
+     *
+     * <p>新建批次而不是原地重跑：原地重跑会把同一批次里的两次执行混在一起，
+     * 通过率与耗时都没法解释。新批次只带失败用例，结论可以直接对照。
+     */
+    public long retryFailed(long sourceBatchId) {
+        EvalRepository.BatchRow source = repo.findBatch(sourceBatchId);
+        if (source == null) {
+            throw ApiException.notFound("批次不存在");
+        }
+        List<Long> failed = new ArrayList<>();
+        for (EvalRepository.CaseVerdict c : repo.caseVerdicts(sourceBatchId)) {
+            boolean fail = Judgement.FAIL.equals(c.quality()) || Judgement.FAIL.equals(c.rag())
+                    || Judgement.FAIL.equals(c.safety());
+            if (fail) {
+                failed.add(c.caseId());
+            }
+        }
+        if (failed.isEmpty()) {
+            throw ApiException.badRequest("这一批没有失败的用例");
+        }
+        return createBatch(source.name() + " 重跑", source.datasetId(), source.datasetVersionId(),
+                source.repeatTimes(), source.concurrency(), source.mode(), 1.0, failed, "eval");
+    }
+
+    /** 取消：置标记后由执行器在用例之间退出，已在跑的请求允许跑完 */
+    public boolean cancelBatch(long batchId) {
+        EvalRepository.BatchRow batch = repo.findBatch(batchId);
+        if (batch == null) {
+            throw ApiException.notFound("批次不存在");
+        }
+        if (!"running".equals(batch.status()) && !"queued".equals(batch.status())
+                && !"draft".equals(batch.status())) {
+            return false;
+        }
+        return runner.cancel(batchId);
     }
 
     /* ==================== 用例维护 ==================== */

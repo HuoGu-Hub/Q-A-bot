@@ -195,6 +195,19 @@ public class EvalController {
         if (batch == null) {
             throw ApiException.notFound("批次不存在");
         }
+        if ("cancel".equals(verb)) {
+            if (!service.cancelBatch(id)) {
+                throw ApiException.badRequest("这个批次已经结束，不能取消");
+            }
+            audit(request, "batch.cancel", "batch=" + id);
+            return ResponseEntity.noContent().build();
+        }
+        if ("retry-failed".equals(verb)) {
+            long newId = service.retryFailed(id);
+            audit(request, "batch.retry_failed", "from=" + id + " to=" + newId);
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(new EvalViews.IdResult(newId));
+        }
         if (!"clone".equals(verb)) {
             throw ApiException.badRequest("暂不支持该动作：" + verb);
         }
