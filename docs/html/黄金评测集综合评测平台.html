@@ -1223,6 +1223,24 @@ baseline：candidate ──promote──► active ──retire──► retired
 </table></div>
 <p>关键路径是留痕底座与判定口径：底座不稳，后续所有页面都在展示不可信数据；口径不统一，趋势与对比会给出互相矛盾的结论。因此 W1 与 W2 不允许并行压缩。</p>
 
+<h3>10.4 P0 落地状态</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>能力</th><th>状态</th><th>位置</th></tr></thead>
+<tbody>
+<tr><td>用例集、TSV 导入、冻结版本</td><td>已实现，首次启动自动导入检索黄金集 69 条</td><td><code>EvalDatasetService</code>、<code>eval_dataset*</code>、<code>eval_case</code></td></tr>
+<tr><td>批次建批与异步执行</td><td>已实现，独立线程池默认 2 并发，出站干跑</td><td><code>EvalService</code>、<code>EvalRunner</code>、<code>EvalCaseExecutor</code></td></tr>
+<tr><td>过程留痕</td><td>已实现 request、intent、retrieve、llm、judge、outbound 六个 span</td><td><code>TraceBuilder</code>、<code>eval_span</code>、<code>eval_retrieval</code></td></tr>
+<tr><td>规则判定</td><td>已实现空返回、兜底话术、协议标记、该拒未拒、块命中、噪声、超时</td><td><code>RuleJudge</code>、<code>eval_judge</code>、<code>eval_failure</code></td></tr>
+<tr><td>聚合与门禁</td><td>已实现通过率、维度分布、P50 与 P95、失败标签 Top；门禁按默认阈值 80%</td><td><code>EvalAggregator</code></td></tr>
+<tr><td>页面</td><td>已实现批次与用例集、批次结果、单条时间轴三页</td><td><code>/eval</code>、<code>/eval/batches/:id</code>、<code>/eval/runs/:id</code></td></tr>
+<tr><td>权限</td><td>已实现新增区域 <code>eval</code>，默认对三级角色开放</td><td><code>AdminArea</code></td></tr>
+<tr><td>token、工具调用、逐句引用</td><td>未采集，页面不展示而不是显示 0</td><td>待在 <code>LlmRouter</code> 与 <code>KbToolAssistant</code> 补埋点</td></tr>
+<tr><td>复核、基线、告警、报告、重跑失败项</td><td>未实现，页面不提供假按钮，批次只支持克隆</td><td>P1</td></tr>
+</tbody>
+</table></div>
+
+<p>验证口径：规则判定、仓储落库、建批到出结论的整条链路都有测试；管理区默认范围与导航一致；前端通过类型检查与生产构建。检索黄金集门禁在本机另有失败，属于检索基线问题，与本模块无代码交集。</p>
+
 <h2 id="s11">十一、决策清单与兜底口径</h2>
 
 <p>十三条待定信息已经转成有责任人和截止时点的决策项。未完成决策前，全部按兜底口径执行，批次与报告上标注“兜底口径”，决策落地后优先改配置而不是改代码。</p>

@@ -297,7 +297,9 @@ class ArchitectureTest {
                         // 2026-10-29 新增 ops（证书等运维观测）：同样只能依赖自己声明的只读接口
                         "..ops..",
                         // 2026-10-31 新增 intent：配置走 IntentPolicy 只读接口
-                        "..intent..")
+                        "..intent..",
+                        // 2026-11-03 新增 eval：配置走 KbPolicy / LlmPolicy 只读接口
+                        "..eval..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
         rule.check(CLASSES);
     }

@@ -732,3 +732,158 @@ export type LlmPoint = DeepRequired<Schemas['LlmPoint']>
 export type LlmSummary = DeepRequired<Schemas['LlmSummary']>
 
 export type LlmResponse = DeepRequired<Schemas['LlmResponse']>
+
+/* ==================== 评测 ==================== */
+
+export interface EvalDataset {
+  id: number
+  slug: string
+  name: string
+  description: string
+  status: string
+  createdAt: string
+  caseCount: number
+  versionCount: number
+}
+
+export interface EvalVersion {
+  id: number
+  version: number
+  caseCount: number
+  checksum: string
+  frozenAt: string
+}
+
+export interface EvalCase {
+  id: number
+  caseKey: string
+  category: string
+  question: string
+  expected: string
+  note: string
+  enabled: boolean
+}
+
+export interface EvalDatasetDetail {
+  dataset: EvalDataset
+  versions: EvalVersion[]
+  cases: EvalCase[]
+  totalCases: number
+}
+
+export interface EvalImportResult {
+  total: number
+  accepted: number
+  rejected: number
+  dryRun: boolean
+  errors: string[]
+}
+
+export interface EvalBatch {
+  id: number
+  name: string
+  datasetId: number
+  datasetVersionId: number
+  status: string
+  gateStatus: string
+  mode: string
+  itemTotal: number
+  repeatTimes: number
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+export interface EvalDimStat {
+  dimension: string
+  pass: number
+  fail: number
+  skip: number
+}
+
+export interface EvalTagStat {
+  tag: string
+  count: number
+}
+
+export interface EvalSummary {
+  runs: number
+  judged: number
+  pass: number
+  fail: number
+  skip: number
+  passRate: number
+  p50Ms: number
+  p95Ms: number
+  dimensions: EvalDimStat[]
+  tags: EvalTagStat[]
+}
+
+export interface EvalItem {
+  id: number
+  caseKey: string
+  category: string
+  question: string
+  status: string
+  runId: number | null
+  verdict: string | null
+  tag: string | null
+  latencyMs: number | null
+}
+
+export interface EvalBatchDetail {
+  batch: EvalBatch
+  summary: EvalSummary
+  items: EvalItem[]
+}
+
+export interface EvalSpan {
+  seq: number
+  parentSeq: number
+  kind: string
+  name: string
+  status: string
+  startOffsetMs: number
+  durationMs: number
+  attrs: Record<string, unknown>
+  errorCode: string | null
+}
+
+export interface EvalRetrieval {
+  query: string
+  terms: Array<Record<string, unknown>>
+  vectorCandidates: number
+  keywordCandidates: number
+  bestCosine: number
+  bestCosineRaw: number
+  hits: Array<Record<string, unknown>>
+  sources: string
+  emptyReason: string | null
+  latencyMs: number
+}
+
+export interface EvalJudge {
+  dimension: string
+  verdict: string
+  score: number
+  reason: string
+  tag: string | null
+}
+
+export interface EvalRunDetail {
+  id: number
+  batchId: number
+  itemId: number
+  status: string
+  answer: string
+  latencyMs: number
+  hitCount: number
+  kbEnabled: boolean
+  createdAt: string
+  spans: EvalSpan[]
+  retrieval: EvalRetrieval | null
+  judges: EvalJudge[]
+  caseKey: string
+  category: string
+  question: string
+}

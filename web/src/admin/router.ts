@@ -47,6 +47,9 @@ export const router = createRouter({
     // 「关键词」「术语表」「分类」已合并为知识库页，用二级目录切换。
     // 旧的 /glossary 与 /keywords 都指向同一个 tab —— 后端把术语表收成 kb_term
     // 单表后，这两块本来就是同一批对象，redirect 到同一处正好说明这一点。
+    { path: '/eval', name: 'eval', component: () => import('./views/EvalView.vue'), meta: { area: 'eval' } },
+    { path: '/eval/batches/:id', name: 'eval-batch', component: () => import('./views/EvalBatchView.vue'), meta: { area: 'eval' } },
+    { path: '/eval/runs/:id', name: 'eval-run', component: () => import('./views/EvalRunView.vue'), meta: { area: 'eval' } },
     { path: '/kb', name: 'kb', component: () => import('./views/KbView.vue'), meta: { area: 'kb' } },
     { path: '/glossary', redirect: { path: '/kb', query: { tab: 'terms' } } },
     { path: '/keywords', redirect: { path: '/kb', query: { tab: 'terms' } } },

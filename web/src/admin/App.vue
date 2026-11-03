@@ -38,6 +38,8 @@ const drawerOpen = ref(false)
 const nav: { to: string; label: string; icon: string; area: string }[] = [
   { to: '/stats', label: '统计', icon: 'chart', area: 'stats' },
   { to: '/kb', label: '知识库', icon: 'book', area: 'kb' },
+  { to: '/eval', label: '评测', icon: 'flask', area: 'eval' },
+
   { to: '/map', label: '地图', icon: 'map-pin', area: 'map' },
   { to: '/bot', label: 'Bot 配置', icon: 'bot', area: 'bot' },
   { to: '/pages', label: '页面信息', icon: 'list', area: 'pages' },

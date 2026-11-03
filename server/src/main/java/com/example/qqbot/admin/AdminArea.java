@@ -30,6 +30,10 @@ public enum AdminArea {
             "/admin/api/traffic", "/admin/api/llm", "/admin/api/records",
             "/admin/api/annotate"),
 
+    /** 评测：批次、过程、报告 —— 只读接口对三级角色开放，写操作仍由角色级别决定 */
+    EVAL("eval", "评测", EnumSet.of(AdminRole.VIEWER, AdminRole.EDITOR, AdminRole.ADMIN),
+            "/admin/api/eval"),
+
     /** 知识库：术语、分类、文档、蒸馏、wiki */
     KB("kb", "知识库", EnumSet.of(AdminRole.VIEWER, AdminRole.EDITOR, AdminRole.ADMIN),
             "/admin/api/kb", "/admin/api/distill"),

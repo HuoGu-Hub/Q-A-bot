@@ -52,7 +52,7 @@ class AdminRoleScopeServiceTest {
     @DisplayName("没配过时按默认范围走")
     void defaultsWhenNothingConfigured() {
         assertThat(svc.areasOf(AdminRole.VIEWER)).containsExactlyInAnyOrder(
-                AdminArea.STATS, AdminArea.KB, AdminArea.MAP);
+                AdminArea.STATS, AdminArea.EVAL, AdminArea.KB, AdminArea.MAP);
         assertThat(svc.allows(AdminRole.VIEWER, "/admin/api/logs")).isFalse();
         assertThat(svc.allows(AdminRole.EDITOR, "/admin/api/logs")).isFalse();
         assertThat(svc.allows(AdminRole.ADMIN, "/admin/api/logs")).isTrue();

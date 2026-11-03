@@ -42,9 +42,9 @@ class AdminAreaTest {
     @DisplayName("默认范围与页面上摆出来的入口一致")
     void defaultsMatchNavigation() {
         assertThat(AdminArea.defaultsOf(AdminRole.VIEWER))
-                .containsExactlyInAnyOrder(AdminArea.STATS, AdminArea.KB, AdminArea.MAP);
+                .containsExactlyInAnyOrder(AdminArea.STATS, AdminArea.EVAL, AdminArea.KB, AdminArea.MAP);
         assertThat(AdminArea.defaultsOf(AdminRole.EDITOR))
-                .containsExactlyInAnyOrder(AdminArea.STATS, AdminArea.KB, AdminArea.MAP,
+                .containsExactlyInAnyOrder(AdminArea.STATS, AdminArea.EVAL, AdminArea.KB, AdminArea.MAP,
                         AdminArea.BOT, AdminArea.PAGES);
         assertThat(AdminArea.defaultsOf(AdminRole.ADMIN))
                 .containsExactlyInAnyOrder(AdminArea.values());
