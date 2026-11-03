@@ -22,7 +22,7 @@ import java.util.Map;
 public class EvalAggregator {
 
     /** 默认质量阈值，基线未配置时使用 */
-    static final double PASS_THRESHOLD = 0.80;
+    public static final double PASS_THRESHOLD = 0.80;
 
     private final EvalRepository repo;
 
