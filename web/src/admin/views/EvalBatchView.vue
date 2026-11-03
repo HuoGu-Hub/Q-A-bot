@@ -138,6 +138,7 @@ const DIM_LABEL: Record<string, string> = {
         <div class="meta">
           <span>状态 <Tag :tone="running ? 'warn' : detail.batch.status === 'completed' ? 'good' : 'neutral'">{{ detail.batch.status }}</Tag></span>
           <span>门禁 <Tag :tone="gateTone">{{ gateLabel }}</Tag></span>
+          <span v-if="detail.batch.gateReason" class="reason">{{ detail.batch.gateReason }}</span>
           <span>用例 {{ detail.batch.itemTotal }}</span>
           <span>重复 {{ detail.batch.repeatTimes }}</span>
           <span>开始 {{ when(detail.batch.startedAt) }}</span>
@@ -177,6 +178,7 @@ const DIM_LABEL: Record<string, string> = {
               <th>问题</th>
               <th>结论</th>
               <th>标签</th>
+              <th class="num">次数</th>
               <th class="num">耗时</th>
               <th />
             </tr>
@@ -188,6 +190,7 @@ const DIM_LABEL: Record<string, string> = {
               <td class="q">{{ i.question }}</td>
               <td><Tag :tone="verdictTone(i.verdict)">{{ i.verdict ?? i.status }}</Tag></td>
               <td>{{ i.tag ?? '—' }}</td>
+              <td class="num">{{ i.attempts }}</td>
               <td class="num">{{ i.latencyMs == null ? '—' : `${i.latencyMs} ms` }}</td>
               <td>
                 <Button size="sm" :disabled="i.runId == null" @click="openRun(i)">过程</Button>
@@ -214,6 +217,7 @@ const DIM_LABEL: Record<string, string> = {
   color: var(--ink-2);
 }
 .meta span { display: inline-flex; align-items: center; gap: 6px; }
+.reason { color: var(--warn); }
 .tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .q { max-width: 360px; }
 </style>

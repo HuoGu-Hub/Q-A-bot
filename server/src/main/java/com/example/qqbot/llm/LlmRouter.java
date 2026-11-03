@@ -6,6 +6,7 @@ import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
 import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.ops.LlmMetrics;
+import com.example.qqbot.trace.LlmUsage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
@@ -529,6 +530,7 @@ public class LlmRouter {
         String provider = used == null || used.isBlank()
                 ? (chain.isEmpty() ? "" : chain.get(0)) : used;
         String model = provider.isBlank() ? "" : currentModelName(provider);
+        LlmUsage.record(provider, model, in, out);
         return new Reply(response.aiMessage().text(), model, in, out);
     }
 
@@ -758,6 +760,12 @@ public class LlmRouter {
                 // 交给成本预算累加，供「今日 token 额度」判定用
                 if (response.tokenUsage() != null) {
                     budgetGuard.recordTokens(response.tokenUsage().totalTokenCount());
+                    // 评测执行器打开收集时才记：用量只有这一层拿得到
+                    LlmUsage.record(name, configs.get(name).getModelName(),
+                            response.tokenUsage().inputTokenCount() == null
+                                    ? 0L : response.tokenUsage().inputTokenCount(),
+                            response.tokenUsage().outputTokenCount() == null
+                                    ? 0L : response.tokenUsage().outputTokenCount());
                 }
                 // 用量只有这一层看得到：一次群聊回答可能包含多轮工具调用，
                 // 每一轮都是真实的计费请求，所以按"往返"计数而不是按"回答"

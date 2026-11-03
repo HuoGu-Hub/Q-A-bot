@@ -6,6 +6,7 @@ import com.example.qqbot.kb.KbRetrievalDiagnostics;
 import com.example.qqbot.kb.KbRetriever;
 import com.example.qqbot.kb.ToolBudget;
 import com.example.qqbot.text.PromptText;
+import com.example.qqbot.trace.ToolCallTrace;
 import com.example.qqbot.voice.MediaOutbox;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
@@ -196,6 +197,7 @@ public class KbToolAssistant {
             throw new IllegalStateException("工具调用缺少调用方身份");
         }
         String args = execution.request().arguments();
+        ToolCallTrace.record(name, args);
         log.info("[TOOL] 放行工具 {}（调用方 {}，参数 {} 字）", name, callerOf(execution),
                 args == null ? 0 : args.length());
     }

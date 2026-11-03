@@ -52,7 +52,7 @@ class EvalRepositoryTest {
         long itemId = repo.insertItem(batchId, repo.listCases(datasetId, 10, 0).get(0).id(),
                 "{\"caseId\":1}", "2026-11-03T10:00:00Z");
         return repo.insertRun(itemId, batchId, 1, 1, "succeeded", "trace-1", "答案",
-                800, 2, 0.71, true, "model", null, "2026-11-03T10:00:01Z");
+                800, 2, 0.71, true, "model", 1200, 180, 0, null, "2026-11-03T10:00:01Z");
     }
 
     @Test

@@ -82,6 +82,7 @@ public class EvalRepository {
                 + " sample_rate REAL NOT NULL DEFAULT 1.0,"
                 + " status TEXT NOT NULL DEFAULT 'draft',"
                 + " gate_status TEXT NOT NULL DEFAULT 'pending',"
+                + " gate_reason TEXT,"
                 + " item_total INTEGER NOT NULL DEFAULT 0,"
                 + " stats_json TEXT,"
                 + " created_by TEXT,"
@@ -113,6 +114,9 @@ public class EvalRepository {
                 + " best_cosine_raw REAL DEFAULT 0,"
                 + " kb_enabled INTEGER DEFAULT 1,"
                 + " model TEXT,"
+                + " tokens_in INTEGER DEFAULT 0,"
+                + " tokens_out INTEGER DEFAULT 0,"
+                + " cost_micro INTEGER DEFAULT 0,"
                 + " error_code TEXT,"
                 + " created_at TEXT NOT NULL)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_run_batch ON eval_run(batch_id, status)");
@@ -168,6 +172,37 @@ public class EvalRepository {
                 + " created_at TEXT NOT NULL)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_failure_run ON eval_failure(run_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_failure_tag ON eval_failure(tag_code)");
+
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_tool_call ("
+                + " id INTEGER PRIMARY KEY,"
+                + " run_id INTEGER NOT NULL,"
+                + " call_index INTEGER NOT NULL,"
+                + " name TEXT NOT NULL,"
+                + " args TEXT,"
+                + " status TEXT NOT NULL DEFAULT 'unknown',"
+                + " latency_ms INTEGER,"
+                + " result_chars INTEGER,"
+                + " created_at TEXT)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_tool_run ON eval_tool_call(run_id, call_index)");
+
+        // 老库补列：CREATE TABLE IF NOT EXISTS 对已存在的表什么都不做
+        ensureColumn("eval_batch", "gate_reason", "gate_reason TEXT");
+        ensureColumn("eval_run", "tokens_in", "tokens_in INTEGER DEFAULT 0");
+        ensureColumn("eval_run", "tokens_out", "tokens_out INTEGER DEFAULT 0");
+        ensureColumn("eval_run", "cost_micro", "cost_micro INTEGER DEFAULT 0");
+    }
+
+    /** 幂等补列 —— 与 QaStoreRepository 同一套做法，库要长期保留不能删表重建 */
+    private void ensureColumn(String table, String column, String ddl) {
+        boolean exists;
+        try {
+            exists = jdbc.query("PRAGMA table_info(" + table + ")", rs -> rs.str("name")).contains(column);
+        } catch (RuntimeException e) {
+            return;
+        }
+        if (!exists) {
+            jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + ddl);
+        }
     }
 
     /* ==================== 用例集 ==================== */
@@ -266,8 +301,8 @@ public class EvalRepository {
 
     public record BatchRow(long id, String name, long datasetId, long datasetVersionId, String targetJson,
                            String mode, int concurrency, int repeatTimes, double sampleRate,
-                           String status, String gateStatus, int itemTotal, String statsJson,
-                           String createdAt, String startedAt, String finishedAt) {
+                           String status, String gateStatus, String gateReason, int itemTotal,
+                           String statsJson, String createdAt, String startedAt, String finishedAt) {
     }
 
     public long insertBatch(String name, long datasetId, long versionId, String targetJson, String mode,
@@ -288,33 +323,34 @@ public class EvalRepository {
         jdbc.update("UPDATE eval_batch SET status='running', started_at=? WHERE id=?", now, batchId);
     }
 
-    public void finishBatch(long batchId, String status, String statsJson, String gateStatus, String now) {
-        jdbc.update("UPDATE eval_batch SET status=?, stats_json=?, gate_status=?, finished_at=? WHERE id=?",
-                status, statsJson, gateStatus, now, batchId);
+    public void finishBatch(long batchId, String status, String statsJson, String gateStatus,
+                            String gateReason, String now) {
+        jdbc.update("UPDATE eval_batch SET status=?, stats_json=?, gate_status=?, gate_reason=?,"
+                + " finished_at=? WHERE id=?", status, statsJson, gateStatus, gateReason, now, batchId);
     }
 
     public BatchRow findBatch(long id) {
         return jdbc.queryOne("SELECT id, name, dataset_id, dataset_version_id, target_json, mode, concurrency,"
-                + " repeat_times, sample_rate, status, gate_status, item_total, stats_json,"
+                + " repeat_times, sample_rate, status, gate_status, gate_reason, item_total, stats_json,"
                 + " created_at, started_at, finished_at FROM eval_batch WHERE id=?",
                 rs -> new BatchRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_id"),
                         rs.longOf("dataset_version_id"), rs.str("target_json"), rs.str("mode"),
                         rs.intOf("concurrency"), rs.intOf("repeat_times"), rs.dbl("sample_rate"),
-                        rs.str("status"), rs.str("gate_status"), rs.intOf("item_total"),
-                        rs.str("stats_json"), rs.str("created_at"),
+                        rs.str("status"), rs.str("gate_status"), rs.str("gate_reason"),
+                        rs.intOf("item_total"), rs.str("stats_json"), rs.str("created_at"),
                         rs.str("started_at"), rs.str("finished_at")), id);
     }
 
     public List<BatchRow> listBatches(int limit, int offset) {
         return jdbc.query("SELECT id, name, dataset_id, dataset_version_id, target_json, mode, concurrency,"
-                + " repeat_times, sample_rate, status, gate_status, item_total, stats_json,"
+                + " repeat_times, sample_rate, status, gate_status, gate_reason, item_total, stats_json,"
                 + " created_at, started_at, finished_at FROM eval_batch"
                 + " ORDER BY id DESC LIMIT ? OFFSET ?",
                 rs -> new BatchRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_id"),
                         rs.longOf("dataset_version_id"), rs.str("target_json"), rs.str("mode"),
                         rs.intOf("concurrency"), rs.intOf("repeat_times"), rs.dbl("sample_rate"),
-                        rs.str("status"), rs.str("gate_status"), rs.intOf("item_total"),
-                        rs.str("stats_json"), rs.str("created_at"),
+                        rs.str("status"), rs.str("gate_status"), rs.str("gate_reason"),
+                        rs.intOf("item_total"), rs.str("stats_json"), rs.str("created_at"),
                         rs.str("started_at"), rs.str("finished_at")), limit, offset);
     }
 
@@ -337,14 +373,15 @@ public class EvalRepository {
 
     public record ItemRow(long id, long caseId, String caseKey, String category, String question,
                           String status, Long runId, String runStatus, String verdict, String tag,
-                          Long latencyMs, Integer hitCount) {
+                          Long latencyMs, Integer hitCount, int attempts) {
     }
 
     public List<ItemRow> listItems(long batchId, int limit, int offset) {
         return jdbc.query("SELECT i.id, i.case_id, c.case_key, c.category, c.question, i.status,"
                 + " r.id AS run_id, r.status AS run_status, r.latency_ms, r.hit_count,"
                 + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag') AS verdict,"
-                + " (SELECT j.tag FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag') AS tag"
+                + " (SELECT j.tag FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag') AS tag,"
+                + " (SELECT COUNT(*) FROM eval_run r2 WHERE r2.item_id=i.id) AS attempts"
                 + " FROM eval_item i JOIN eval_case c ON c.id=i.case_id"
                 + " LEFT JOIN eval_run r ON r.item_id=i.id AND r.attempt=1"
                 + " WHERE i.batch_id=? ORDER BY i.id LIMIT ? OFFSET ?",
@@ -352,7 +389,7 @@ public class EvalRepository {
                         rs.str("category"), rs.str("question"), rs.str("status"),
                         nullableLong(rs, "run_id"), rs.str("run_status"), rs.str("verdict"),
                         rs.str("tag"), nullableLong(rs, "latency_ms"),
-                        rs.isNull("hit_count") ? null : rs.intOf("hit_count")),
+                        rs.isNull("hit_count") ? null : rs.intOf("hit_count"), rs.intOf("attempts")),
                 batchId, limit, offset);
     }
 
@@ -378,23 +415,28 @@ public class EvalRepository {
     public record RunRow(long id, long itemId, long batchId, long caseId, int attempt, String status,
                          String traceId, String answer, long latencyMs, int hitCount,
                          double bestCosineRaw, boolean kbEnabled, String createdAt,
+                         long tokensIn, long tokensOut, long costMicro,
                          String caseKey, String category, String question) {
     }
 
     public long insertRun(long itemId, long batchId, long caseId, int attempt, String status,
                           String traceId, String answer, long latencyMs, int hitCount,
-                          double bestCosineRaw, boolean kbEnabled, String model, String errorCode, String now) {
+                          double bestCosineRaw, boolean kbEnabled, String model,
+                          long tokensIn, long tokensOut, long costMicro,
+                          String errorCode, String now) {
         return jdbc.insert("INSERT INTO eval_run (item_id, batch_id, case_id, attempt, status, trace_id,"
-                        + " answer, latency_ms, hit_count, best_cosine_raw, kb_enabled, model, error_code,"
-                        + " created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        + " answer, latency_ms, hit_count, best_cosine_raw, kb_enabled, model,"
+                        + " tokens_in, tokens_out, cost_micro, error_code, created_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 itemId, batchId, caseId, attempt, status, traceId, answer, latencyMs, hitCount,
-                bestCosineRaw, kbEnabled, model, errorCode, now);
+                bestCosineRaw, kbEnabled, model, tokensIn, tokensOut, costMicro, errorCode, now);
     }
 
     public RunRow findRun(long id) {
         return jdbc.queryOne("SELECT r.id, r.item_id, r.batch_id, r.case_id, r.attempt, r.status,"
                 + " r.trace_id, r.answer, r.latency_ms, r.hit_count, r.best_cosine_raw, r.kb_enabled,"
-                + " r.created_at, c.case_key, c.category, c.question"
+                + " r.created_at, r.tokens_in, r.tokens_out, r.cost_micro,"
+                + " c.case_key, c.category, c.question"
                 + " FROM eval_run r LEFT JOIN eval_case c ON c.id=r.case_id WHERE r.id=?",
                 rs -> mapRun(rs), id);
     }
@@ -405,13 +447,15 @@ public class EvalRepository {
                 rs.str("trace_id"), rs.str("answer"), rs.longOf("latency_ms"),
                 rs.intOf("hit_count"), rs.dbl("best_cosine_raw"),
                 rs.bool("kb_enabled"), rs.str("created_at"),
+                rs.longOf("tokens_in"), rs.longOf("tokens_out"), rs.longOf("cost_micro"),
                 rs.str("case_key"), rs.str("category"), rs.str("question"));
     }
 
     public RunRow firstRunOfItem(long itemId) {
         return jdbc.queryOne("SELECT r.id, r.item_id, r.batch_id, r.case_id, r.attempt, r.status,"
                 + " r.trace_id, r.answer, r.latency_ms, r.hit_count, r.best_cosine_raw, r.kb_enabled,"
-                + " r.created_at, c.case_key, c.category, c.question"
+                + " r.created_at, r.tokens_in, r.tokens_out, r.cost_micro,"
+                + " c.case_key, c.category, c.question"
                 + " FROM eval_run r LEFT JOIN eval_case c ON c.id=r.case_id"
                 + " WHERE r.item_id=? ORDER BY r.attempt LIMIT 1",
                 rs -> mapRun(rs), itemId);
@@ -532,6 +576,46 @@ public class EvalRepository {
     }
 
     public record FailureWrite(String dimension, String tagCode, String reason) {
+    }
+
+    /** 单条判定写入 —— 重复运行后补一致性结论时用 */
+    public void upsertJudge(long runId, JudgeWrite j, String now) {
+        jdbc.update("INSERT INTO eval_judge (run_id, dimension, judge_type, judge_key, verdict,"
+                        + " score, reason, tag, evidence, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+                        + " ON CONFLICT(judge_key) DO UPDATE SET verdict=excluded.verdict,"
+                        + " score=excluded.score, reason=excluded.reason, tag=excluded.tag,"
+                        + " evidence=excluded.evidence, created_at=excluded.created_at",
+                runId, j.dimension(), j.judgeType(), j.judgeKey(), j.verdict(), j.score(),
+                j.reason(), j.tag(), j.evidence(), now);
+    }
+
+    public record ToolCallWrite(int callIndex, String name, String args, String status,
+                                Long latencyMs, Integer resultChars) {
+    }
+
+    public void insertToolCalls(long runId, List<ToolCallWrite> calls, String now) {
+        if (calls == null || calls.isEmpty()) {
+            return;
+        }
+        List<Object[]> rows = new ArrayList<>(calls.size());
+        for (ToolCallWrite c : calls) {
+            rows.add(new Object[]{runId, c.callIndex(), c.name(), c.args(), c.status(),
+                    c.latencyMs(), c.resultChars(), now});
+        }
+        jdbc.batch("INSERT INTO eval_tool_call (run_id, call_index, name, args, status, latency_ms,"
+                + " result_chars, created_at) VALUES (?,?,?,?,?,?,?,?)", rows);
+    }
+
+    public record ToolCallRow(int callIndex, String name, String args, String status,
+                              Long latencyMs, Integer resultChars) {
+    }
+
+    public List<ToolCallRow> toolCallsOf(long runId) {
+        return jdbc.query("SELECT call_index, name, args, status, latency_ms, result_chars"
+                        + " FROM eval_tool_call WHERE run_id=? ORDER BY call_index",
+                rs -> new ToolCallRow(rs.intOf("call_index"), rs.str("name"), rs.str("args"),
+                        rs.str("status"), nullableLong(rs, "latency_ms"),
+                        rs.isNull("result_chars") ? null : rs.intOf("result_chars")), runId);
     }
 
     /* ==================== 统计 ==================== */

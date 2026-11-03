@@ -1,6 +1,7 @@
 package com.example.qqbot.eval;
 
 import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.block.KbBlockStore;
 import com.example.qqbot.llm.LlmPolicy;
 import com.example.qqbot.persistence.EvalRepository;
 import com.example.qqbot.web.ApiException;
@@ -33,17 +34,19 @@ public class EvalService {
     private final EvalAggregator aggregator;
     private final KbPolicy kbPolicy;
     private final LlmPolicy llmPolicy;
+    private final KbBlockStore blockStore;
     private final ObjectMapper mapper;
 
     public EvalService(EvalRepository repo, EvalDatasetService datasets, EvalRunner runner,
                        EvalAggregator aggregator, KbPolicy kbPolicy, LlmPolicy llmPolicy,
-                       ObjectMapper mapper) {
+                       KbBlockStore blockStore, ObjectMapper mapper) {
         this.repo = repo;
         this.datasets = datasets;
         this.runner = runner;
         this.aggregator = aggregator;
         this.kbPolicy = kbPolicy;
         this.llmPolicy = llmPolicy;
+        this.blockStore = blockStore;
         this.mapper = mapper;
     }
 
@@ -68,16 +71,26 @@ public class EvalService {
         if (cases.isEmpty()) {
             throw ApiException.badRequest("用例集里没有启用的用例");
         }
+        // 随机抽样要可复现：同一次冻结版本永远抽到同一批，否则两批差异分不清是系统变了还是样本变了
+        long seed = version.id();
+        List<EvalRepository.PendingCase> picked = new ArrayList<>(cases);
+        if (sampleRate < 1.0) {
+            java.util.Collections.shuffle(picked, new java.util.Random(seed));
+        }
         int limit = sampleRate >= 1.0 ? cases.size()
                 : Math.max(1, (int) Math.ceil(cases.size() * sampleRate));
-        EvalTarget target = EvalTarget.of(kbPolicy, llmPolicy);
+        picked = picked.subList(0, Math.min(limit, picked.size()));
+        Map<String, Object> targetMap = EvalTarget.of(kbPolicy, llmPolicy).toMap();
+        targetMap.put("corpusVersion", blockStore.version());
+        targetMap.put("sampleRate", sampleRate);
+        targetMap.put("sampleSeed", seed);
         String now = Instant.now().toString();
         long batchId = repo.insertBatch(name == null || name.isBlank() ? "批次 " + now : name,
-                datasetId, version.id(), json(target.toMap()), mode == null ? "offline" : mode,
+                datasetId, version.id(), json(targetMap), mode == null ? "offline" : mode,
                 Math.max(1, Math.min(4, concurrency)), Math.max(1, Math.min(5, repeatTimes)),
                 sampleRate, by, now);
         int created = 0;
-        for (EvalRepository.PendingCase c : cases.subList(0, limit)) {
+        for (EvalRepository.PendingCase c : picked) {
             CaseSpec spec = new CaseSpec(c.caseId(), c.caseKey(), c.category(), c.question(),
                     expectedIds(c.expected()), "-".equals(c.expected()));
             repo.insertItem(batchId, c.caseId(), json(spec), now);
@@ -105,7 +118,7 @@ public class EvalService {
         List<EvalViews.Item> items = new ArrayList<>();
         for (EvalRepository.ItemRow i : repo.listItems(batchId, Math.max(1, itemLimit), 0)) {
             items.add(new EvalViews.Item(i.id(), i.caseKey(), i.category(), i.question(), i.status(),
-                    i.runId(), i.verdict(), i.tag(), i.latencyMs()));
+                    i.runId(), i.verdict(), i.tag(), i.latencyMs(), i.attempts()));
         }
         return new EvalViews.BatchDetail(toView(b), aggregator.summarise(batchId), items);
     }
@@ -133,9 +146,15 @@ public class EvalService {
         for (EvalRepository.JudgeRow j : repo.judgesOf(runId)) {
             judges.add(new EvalViews.Judge(j.dimension(), j.verdict(), j.score(), j.reason(), j.tag()));
         }
-        return new EvalViews.RunDetail(run.id(), run.batchId(), run.itemId(), run.status(),
+        List<EvalViews.ToolCall> tools = new ArrayList<>();
+        for (EvalRepository.ToolCallRow t : repo.toolCallsOf(runId)) {
+            tools.add(new EvalViews.ToolCall(t.callIndex(), t.name(), t.args(), t.status(),
+                    t.latencyMs(), t.resultChars()));
+        }
+        return new EvalViews.RunDetail(run.id(), run.batchId(), run.itemId(), run.attempt(), run.status(),
                 run.answer(), run.latencyMs(), run.hitCount(), run.kbEnabled(), run.createdAt(),
-                spans, retrieval, judges, run.caseKey(), run.category(), run.question());
+                run.tokensIn(), run.tokensOut(), run.costMicro(),
+                spans, retrieval, judges, run.caseKey(), run.category(), run.question(), tools);
     }
 
     /** 期望列：{@code -} 表示期望空结果，空串表示未标注，其余是分号分隔的块 id */
@@ -154,8 +173,8 @@ public class EvalService {
 
     private static EvalViews.Batch toView(EvalRepository.BatchRow b) {
         return new EvalViews.Batch(b.id(), b.name(), b.datasetId(), b.datasetVersionId(), b.status(),
-                b.gateStatus(), b.mode(), b.itemTotal(), b.repeatTimes(), b.createdAt(),
-                b.startedAt(), b.finishedAt());
+                b.gateStatus(), b.gateReason(), b.mode(), b.itemTotal(), b.repeatTimes(),
+                b.createdAt(), b.startedAt(), b.finishedAt());
     }
 
     private String json(Object value) {

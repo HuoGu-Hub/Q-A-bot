@@ -100,7 +100,7 @@ function attrText(attrs: Record<string, unknown>): string {
 </script>
 
 <template>
-  <AdminPage width="wide" :title="run ? run.caseKey : '执行记录'" :count="run?.category ?? ''">
+  <AdminPage width="wide" :title="run ? run.caseKey : '执行记录'" :count="run ? `${run.category} · 第 ${run.attempt} 次` : ''">
     <template #actions>
       <Button size="sm" :disabled="loading" @click="load">刷新</Button>
       <Button v-if="run" size="sm" :to="`/eval/batches/${run.batchId}`">回到批次</Button>
@@ -124,6 +124,8 @@ function attrText(attrs: Record<string, unknown>): string {
       <div class="kpis">
         <Stat label="总耗时" :value="`${run.latencyMs} ms`" tone="flame" />
         <Stat label="命中块" :value="run.hitCount" tone="mist" />
+        <Stat label="token 入" :value="run.tokensIn || '未计量'" tone="mist" />
+        <Stat label="token 出" :value="run.tokensOut || '未计量'" tone="mist" />
         <Stat label="spans" :value="run.spans.length" tone="mist" />
       </div>
 
@@ -159,6 +161,23 @@ function attrText(attrs: Record<string, unknown>): string {
               <td class="num">{{ j.score.toFixed(2) }}</td>
               <td>{{ j.reason }}</td>
               <td>{{ j.tag ?? '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </Panel>
+
+      <Panel v-if="run.toolCalls.length" title="工具调用" :count="run.toolCalls.length"
+             hint="只有执行前钩子：调用与参数可得，返回与耗时未知">
+        <table class="tbl">
+          <thead>
+            <tr><th class="num">#</th><th>工具</th><th>参数</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in run.toolCalls" :key="c.callIndex">
+              <td class="num">{{ c.callIndex }}</td>
+              <td><code>{{ c.name }}</code></td>
+              <td class="args">{{ c.args }}</td>
+              <td>{{ c.status === 'unknown' ? '未知' : c.status }}</td>
             </tr>
           </tbody>
         </table>
@@ -260,6 +279,7 @@ function attrText(attrs: Record<string, unknown>): string {
 
 .empty-reason { margin: var(--sp-2) 0; font-size: var(--fs-sm); color: var(--ink-2); }
 .terms { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0; }
+.args { max-width: 360px; word-break: break-all; font-family: var(--font-mono); font-size: var(--fs-xs); }
 .answer {
   margin: 0;
   white-space: pre-wrap;

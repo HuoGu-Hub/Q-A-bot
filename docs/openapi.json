@@ -26433,6 +26433,10 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "status" : {
             "type" : "string"
           },
@@ -26452,6 +26456,18 @@
           },
           "createdAt" : {
             "type" : "string"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "costMicro" : {
+            "type" : "integer",
+            "format" : "int64"
           },
           "spans" : {
             "type" : "array",
@@ -26476,6 +26492,12 @@
           },
           "question" : {
             "type" : "string"
+          },
+          "toolCalls" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolCall"
+            }
           }
         }
       },
@@ -26515,6 +26537,32 @@
           },
           "errorCode" : {
             "type" : "string"
+          }
+        }
+      },
+      "ToolCall" : {
+        "type" : "object",
+        "properties" : {
+          "callIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "args" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "latencyMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "resultChars" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -26596,6 +26644,9 @@
             "type" : "string"
           },
           "gateStatus" : {
+            "type" : "string"
+          },
+          "gateReason" : {
             "type" : "string"
           },
           "mode" : {

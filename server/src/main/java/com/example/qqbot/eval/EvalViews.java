@@ -34,7 +34,7 @@ public final class EvalViews {
     }
 
     public record Batch(long id, String name, long datasetId, long datasetVersionId, String status,
-                        String gateStatus, String mode, int itemTotal, int repeatTimes,
+                        String gateStatus, String gateReason, String mode, int itemTotal, int repeatTimes,
                         String createdAt, String startedAt, String finishedAt) {
     }
 
@@ -53,7 +53,7 @@ public final class EvalViews {
     }
 
     public record Item(long id, String caseKey, String category, String question, String status,
-                       Long runId, String verdict, String tag, Long latencyMs) {
+                       Long runId, String verdict, String tag, Long latencyMs, int attempts) {
     }
 
     public record BatchDetail(Batch batch, Summary summary, List<Item> items) {
@@ -73,9 +73,15 @@ public final class EvalViews {
     public record Judge(String dimension, String verdict, double score, String reason, String tag) {
     }
 
-    public record RunDetail(long id, long batchId, long itemId, String status, String answer,
+    public record ToolCall(int callIndex, String name, String args, String status,
+                           Long latencyMs, Integer resultChars) {
+    }
+
+    public record RunDetail(long id, long batchId, long itemId, int attempt, String status, String answer,
                             long latencyMs, int hitCount, boolean kbEnabled, String createdAt,
+                            long tokensIn, long tokensOut, long costMicro,
                             List<Span> spans, Retrieval retrieval, List<Judge> judges,
-                            String caseKey, String category, String question) {
+                            String caseKey, String category, String question,
+                            List<ToolCall> toolCalls) {
     }
 }

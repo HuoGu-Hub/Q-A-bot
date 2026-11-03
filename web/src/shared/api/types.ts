@@ -786,6 +786,7 @@ export interface EvalBatch {
   datasetVersionId: number
   status: string
   gateStatus: string
+  gateReason: string | null
   mode: string
   itemTotal: number
   repeatTimes: number
@@ -829,6 +830,7 @@ export interface EvalItem {
   verdict: string | null
   tag: string | null
   latencyMs: number | null
+  attempts: number
 }
 
 export interface EvalBatchDetail {
@@ -870,16 +872,30 @@ export interface EvalJudge {
   tag: string | null
 }
 
+export interface EvalToolCall {
+  callIndex: number
+  name: string
+  args: string
+  status: string
+  latencyMs: number | null
+  resultChars: number | null
+}
+
 export interface EvalRunDetail {
   id: number
   batchId: number
   itemId: number
+  attempt: number
   status: string
   answer: string
   latencyMs: number
   hitCount: number
   kbEnabled: boolean
   createdAt: string
+  tokensIn: number
+  tokensOut: number
+  costMicro: number
+  toolCalls: EvalToolCall[]
   spans: EvalSpan[]
   retrieval: EvalRetrieval | null
   judges: EvalJudge[]

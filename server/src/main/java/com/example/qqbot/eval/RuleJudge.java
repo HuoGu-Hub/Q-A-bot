@@ -34,8 +34,19 @@ public class RuleJudge {
     private static final List<String> PROTOCOL_MARKERS = List.of("<tool_call", "DSML", "</tool_call>");
 
     public List<Judgement> judge(CaseSpec c, Observation o) {
+        return judge(c, o, 1);
+    }
+
+    /**
+     * @param attempts 本用例本次跑了多少次。大于 1 时稳定性交给跑完之后的一致性判定，
+     *                 这里不再出 SKIP —— 否则同一维度会出现两条相反的结论
+     */
+    public List<Judgement> judge(CaseSpec c, Observation o, int attempts) {
         List<Judgement> out = new ArrayList<>();
-        out.add(stability(c, o));
+        Judgement stability = stability(c, o, attempts);
+        if (stability != null) {
+            out.add(stability);
+        }
         out.add(quality(c, o));
         out.add(rag(c, o));
         out.add(cost(c, o));
@@ -43,12 +54,12 @@ public class RuleJudge {
         return out;
     }
 
-    private Judgement stability(CaseSpec c, Observation o) {
+    private Judgement stability(CaseSpec c, Observation o, int attempts) {
         if (o.totalMs() > TIMEOUT_MS) {
             return fail("stability", "单例耗时 " + o.totalMs() + " ms 超过时限", "STB_TIMEOUT",
                     Map.of("latencyMs", o.totalMs(), "limitMs", TIMEOUT_MS));
         }
-        return skip("stability", "未做重复运行，稳定性暂不判");
+        return attempts > 1 ? null : skip("stability", "未做重复运行，稳定性暂不判");
     }
 
     private Judgement quality(CaseSpec c, Observation o) {

@@ -1,6 +1,10 @@
 package com.example.qqbot.eval;
 
+import com.example.qqbot.kb.KbPolicy;
+import com.example.qqbot.kb.block.KbBlockStore;
+import com.example.qqbot.llm.LlmPolicy;
 import com.example.qqbot.persistence.EvalRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -8,40 +12,58 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 批次执行器 —— 把一批用例放到**独立的低优先级线程池**里跑。
  *
- * <h2>为什么要独立线程池</h2>
- * 问答池只有 6 个线程。评测直接把批次塞进去，一批 300 条就是一个持续的占满，
- * 群友那一刻问什么都得排队。独立池 + 默认 2 并发是"能跑完，但绝不挤占线上"的折中。
+ * <h2>并发听批次的</h2>
+ * 每个批次按自己的 {@code concurrency} 拿许可，上限 4。线程池只有 4 个线程，
+ * 批次再多也只能排着 —— SQLite 单连接下把并发抬上去，所有人一起变慢。
  *
- * <p>代价是批次之间也只并行 2 个。想更快就开第二个进程指向库副本，
- * 而不是把并发调大 —— SQLite 单连接会让所有人一起变慢。
+ * <h2>为什么跑完要检查漂移</h2>
+ * 建批时锁了阈值与 provider，但执行读的是实时配置。跑完比对一次：
+ * 不一致就标警告并把原因写进批次，让人知道这批结论不是同一个系统跑出来的。
  */
 @Component
 public class EvalRunner {
 
     private static final Logger log = LoggerFactory.getLogger(EvalRunner.class);
 
+    /** 线程池上限。与设计文档一致：不靠调大并发提速 */
+    private static final int POOL_SIZE = 4;
+
+    /** 批次总时限：一条用例最长 60 秒，留足余量后仍卡住就判失败 */
+    private static final long BATCH_TIMEOUT_HOURS = 2;
+
     private final EvalRepository repo;
     private final EvalCaseExecutor executor;
     private final EvalAggregator aggregator;
     private final ObjectMapper mapper;
+    private final KbPolicy kbPolicy;
+    private final LlmPolicy llmPolicy;
+    private final KbBlockStore blockStore;
     private final ExecutorService pool;
 
     public EvalRunner(EvalRepository repo, EvalCaseExecutor executor, EvalAggregator aggregator,
-                      ObjectMapper mapper) {
+                      ObjectMapper mapper, KbPolicy kbPolicy, LlmPolicy llmPolicy, KbBlockStore blockStore) {
         this.repo = repo;
         this.executor = executor;
         this.aggregator = aggregator;
         this.mapper = mapper;
+        this.kbPolicy = kbPolicy;
+        this.llmPolicy = llmPolicy;
+        this.blockStore = blockStore;
         AtomicInteger seq = new AtomicInteger();
-        this.pool = Executors.newFixedThreadPool(2, r -> {
+        this.pool = Executors.newFixedThreadPool(POOL_SIZE, r -> {
             Thread t = new Thread(r, "eval-runner-" + seq.incrementAndGet());
             t.setDaemon(true);
             t.setPriority(Thread.MIN_PRIORITY);
@@ -59,33 +81,100 @@ public class EvalRunner {
     }
 
     void runBatch(long batchId) {
+        EvalRepository.BatchRow batch = repo.findBatch(batchId);
+        if (batch == null) {
+            return;
+        }
         List<EvalRepository.PendingItem> items = repo.itemsOfBatch(batchId);
         repo.markBatchRunning(batchId, Instant.now().toString());
-        log.info("[EVAL] 批次 {} 开始执行，共 {} 条", batchId, items.size());
-        int failed = 0;
+        log.info("[EVAL] 批次 {} 开始执行：{} 条用例，重复 {} 次，并发 {}",
+                batchId, items.size(), batch.repeatTimes(), batch.concurrency());
+
+        Semaphore permits = new Semaphore(Math.max(1, Math.min(POOL_SIZE, batch.concurrency())));
+        CountDownLatch remaining = new CountDownLatch(items.size());
         for (EvalRepository.PendingItem item : items) {
-            try {
-                CaseSpec spec = mapper.readValue(item.snapshot(), CaseSpec.class);
-                executor.execute(batchId, item.id(), spec);
-            } catch (Exception e) {
-                failed++;
-                repo.updateItemStatus(item.id(), "failed");
-                log.warn("[EVAL] 用例项 {} 执行异常：{}", item.id(), e.getMessage());
-            }
+            pool.submit(() -> {
+                boolean acquired = false;
+                try {
+                    permits.acquire();
+                    acquired = true;
+                    CaseSpec spec = mapper.readValue(item.snapshot(), CaseSpec.class);
+                    executor.execute(batchId, item.id(), spec, batch.repeatTimes());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    repo.updateItemStatus(item.id(), "failed");
+                    log.warn("[EVAL] 用例项 {} 执行异常：{}", item.id(), e.getMessage());
+                } finally {
+                    if (acquired) {
+                        permits.release();
+                    }
+                    remaining.countDown();
+                }
+            });
         }
+
+        boolean finished;
+        try {
+            finished = remaining.await(BATCH_TIMEOUT_HOURS, TimeUnit.HOURS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            finished = false;
+        }
+        if (!finished) {
+            repo.finishBatch(batchId, "failed", null, "pending", "批次超时未跑完", Instant.now().toString());
+            log.warn("[EVAL] 批次 {} 超过 {} 小时仍未结束，标记失败", batchId, BATCH_TIMEOUT_HOURS);
+            return;
+        }
+
         try {
             EvalViews.Summary summary = aggregator.summarise(batchId);
             String gate = aggregator.gateOf(summary);
-            repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate,
+            String drift = driftOf(batch);
+            String reason = drift != null ? drift : gateReason(gate, summary);
+            if (drift != null) {
+                gate = "warned";
+            }
+            repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate, reason,
                     Instant.now().toString());
-            log.info("[EVAL] 批次 {} 完成：判定 {} 条，通过率 {}，门禁 {}",
-                    batchId, summary.judged(), summary.passRate(), gate);
+            log.info("[EVAL] 批次 {} 完成：判定 {} 条，通过率 {}，门禁 {}（{}）",
+                    batchId, summary.judged(), summary.passRate(), gate, reason);
         } catch (Exception e) {
-            repo.finishBatch(batchId, "failed", null, "pending", Instant.now().toString());
+            repo.finishBatch(batchId, "failed", null, "pending", "聚合失败", Instant.now().toString());
             log.warn("[EVAL] 批次 {} 聚合失败：{}（已完成的结果保留）", batchId, e.getMessage());
         }
-        if (failed > 0) {
-            log.warn("[EVAL] 批次 {} 有 {} 条用例执行异常", batchId, failed);
+    }
+
+    /** 目标快照与实际配置、语料版本的差异；没有差异返回 null */
+    private String driftOf(EvalRepository.BatchRow batch) {
+        Map<String, Object> stored;
+        try {
+            stored = mapper.readValue(batch.targetJson(), new TypeReference<LinkedHashMap<String, Object>>() { });
+        } catch (Exception e) {
+            return null;
         }
+        Map<String, Object> live = EvalTarget.of(kbPolicy, llmPolicy).toMap();
+        for (Map.Entry<String, Object> e : live.entrySet()) {
+            Object before = stored.get(e.getKey());
+            if (before != null && !String.valueOf(before).equals(String.valueOf(e.getValue()))) {
+                return "参数在批次期间变化：" + e.getKey() + " " + before + " → " + e.getValue();
+            }
+        }
+        Object corpus = stored.get("corpusVersion");
+        if (corpus instanceof Number n) {
+            long now = blockStore.version();
+            if (n.longValue() != now) {
+                return "语料在批次期间变化：版本 " + n + " → " + now;
+            }
+        }
+        return null;
+    }
+
+    private static String gateReason(String gate, EvalViews.Summary summary) {
+        return switch (gate) {
+            case "passed" -> "通过率 " + Math.round(summary.passRate() * 100) + "% 达到阈值";
+            case "warned" -> "通过率 " + Math.round(summary.passRate() * 100) + "% 低于默认阈值 80%";
+            default -> "没有可判定的用例";
+        };
     }
 }

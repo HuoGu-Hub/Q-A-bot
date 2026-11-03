@@ -10,6 +10,8 @@ import com.example.qqbot.llm.Provider;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.persistence.EvalRepository;
 import com.example.qqbot.trace.KbTrace;
+import com.example.qqbot.trace.LlmUsage;
+import com.example.qqbot.trace.ToolCallTrace;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -30,18 +33,18 @@ import java.util.UUID;
  * 所以这里只做两件事：装配一个合成事件、把调用的各阶段耗时翻译成 span。
  * 检索、注入、工具循环、降级链全部是生产代码 —— 结论因此可以外推到线上。
  *
+ * <h2>重复运行</h2>
+ * 同一个用例跑 N 次，每次是一条独立的 run；跑完再补一条一致性判定。
+ * 一致性必须放在整组跑完之后算，否则第一次永远"一致"。
+ *
  * <h2>现在拿不到的</h2>
- * 逐次 token、工具调用的参数与返回值、逐句引用。这三样还在生产链路的日志里，
- * 没有结构化出口。P0 先如实留空并标注 {@code measured=false}，
- * 等埋点做完再替换来源 —— 视图与表结构不需要改。
+ * 工具调用的返回值与耗时只有执行前钩子，逐句引用还没有出口。
+ * P0 只记"调了什么、传了什么"，并把不可得的部分标为未知，不编数。
  */
 @Component
 public class EvalCaseExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(EvalCaseExecutor.class);
-
-    /** 输出分片长度，与出站层一致；这里只用来估算"会发几条" */
-    private static final int CHUNK_CHARS = 300;
 
     private final ChatService chatService;
     private final IntentPlanner intentPlanner;
@@ -61,11 +64,30 @@ public class EvalCaseExecutor {
     }
 
     /**
-     * 跑一条用例。
+     * 跑一条用例，按重复次数生成多条 run。
      *
-     * @return 落库后的 run id
+     * @return 本次产生的 run id，按 attempt 顺序
      */
-    public long execute(long batchId, long itemId, CaseSpec spec) {
+    public List<Long> execute(long batchId, long itemId, CaseSpec spec, int repeatTimes) {
+        int attempts = Math.max(1, Math.min(5, repeatTimes));
+        List<Long> runIds = new ArrayList<>();
+        List<Map<String, String>> verdicts = new ArrayList<>();
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            Outcome outcome = runOnce(batchId, itemId, spec, attempt, attempts);
+            runIds.add(outcome.runId());
+            verdicts.add(outcome.verdicts());
+        }
+        if (attempts > 1) {
+            applyConsistency(runIds, verdicts);
+        }
+        repo.updateItemStatus(itemId, "done");
+        return runIds;
+    }
+
+    private record Outcome(long runId, Map<String, String> verdicts) {
+    }
+
+    private Outcome runOnce(long batchId, long itemId, CaseSpec spec, int attempt, int attempts) {
         long started = System.nanoTime();
         String traceId = UUID.randomUUID().toString();
         String now = Instant.now().toString();
@@ -75,6 +97,11 @@ public class EvalCaseExecutor {
         String errorCode = null;
         KbTrace trace = KbTrace.disabled();
         long planMs = 0;
+        List<LlmUsage.Call> usage;
+        List<ToolCallTrace.Call> toolCalls;
+
+        LlmUsage.begin();
+        ToolCallTrace.begin();
         try {
             long planStart = System.nanoTime();
             TurnPlan plan = intentPlanner.plan(spec.question());
@@ -85,39 +112,85 @@ public class EvalCaseExecutor {
             trace = result.kb() == null ? KbTrace.disabled() : result.kb();
         } catch (Exception e) {
             errorCode = "EVAL_ERROR";
-            log.warn("[EVAL] 用例 {} 执行失败：{}", spec.caseKey(), e.getMessage());
+            log.warn("[EVAL] 用例 {} 第 {} 次执行失败：{}", spec.caseKey(), attempt, e.getMessage());
+        } finally {
+            // 必须在 finally 里收口：异常路径若不 end，收集器会跟着线程一直活着
+            usage = LlmUsage.end();
+            toolCalls = ToolCallTrace.end();
         }
-        long totalMs = elapsedMs(started);
-        String runStatus = errorCode == null && !answer.isBlank() ? "succeeded" : "failed";
 
-        long runId = repo.insertRun(itemId, batchId, spec.caseId(), 1, runStatus, traceId, answer,
-                totalMs, trace.hitCount(), trace.bestCosineRaw(), trace.enabled(),
-                modelName(), errorCode, now);
+        long totalMs = elapsedMs(started);
+        long tokensIn = LlmUsage.totalIn(usage);
+        long tokensOut = LlmUsage.totalOut(usage);
+        String runStatus = errorCode == null && !answer.isBlank() ? "succeeded" : "failed";
+        String runModel = usage.isEmpty() ? modelName() : usage.get(usage.size() - 1).model();
+
+        long runId = repo.insertRun(itemId, batchId, spec.caseId(), attempt, runStatus, traceId, answer,
+                totalMs, trace.hitCount(), trace.bestCosineRaw(), trace.enabled(), runModel,
+                tokensIn, tokensOut, 0L, errorCode, now);
 
         List<Judgement> judgements = judge.judge(spec, new Observation(answer, trace.enabled(),
-                trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs));
+                trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs), attempts);
 
         long judgeStart = System.nanoTime();
         List<EvalRepository.JudgeWrite> judgeWrites = new ArrayList<>();
         List<EvalRepository.FailureWrite> failures = new ArrayList<>();
+        Map<String, String> verdicts = new LinkedHashMap<>();
         for (Judgement j : judgements) {
             judgeWrites.add(new EvalRepository.JudgeWrite(j.dimension(), "rule",
                     runId + ":" + j.dimension() + ":rule", j.verdict(), j.score(), j.reason(),
                     j.tag(), json(j.evidence())));
+            verdicts.putIfAbsent(j.dimension(), j.verdict());
             if (j.failed() && j.tag() != null) {
                 failures.add(new EvalRepository.FailureWrite(j.dimension(), j.tag(), j.reason()));
             }
         }
         long judgeMs = elapsedMs(judgeStart);
 
-        repo.saveExecution(runId, spans(spec, trace, planMs, totalMs, judgeMs, errorCode),
+        repo.saveExecution(runId,
+                spans(spec, trace, planMs, totalMs, judgeMs, errorCode, usage, toolCalls, tokensIn, tokensOut),
                 retrieval(spec, trace), judgeWrites, failures, now);
-        repo.updateItemStatus(itemId, "done");
-        return runId;
+        if (!toolCalls.isEmpty()) {
+            repo.insertToolCalls(runId, toolWrites(toolCalls), now);
+        }
+        return new Outcome(runId, verdicts);
+    }
+
+    /**
+     * 重复运行的一致性判定。
+     *
+     * <p>比较的是"同一用例的结论是否稳定"，不是分数是否一样 ——
+     * 两次都失败也算一致，那说明失败是确定性的，该修根因而不是重试。
+     */
+    private void applyConsistency(List<Long> runIds, List<Map<String, String>> verdicts) {
+        Map<String, String> first = verdicts.get(0);
+        boolean consistent = verdicts.stream().allMatch(v ->
+                Objects.equals(v.get("quality"), first.get("quality"))
+                        && Objects.equals(v.get("rag"), first.get("rag")));
+        String now = Instant.now().toString();
+        for (Long runId : runIds) {
+            EvalRepository.JudgeWrite write = consistent
+                    ? new EvalRepository.JudgeWrite("stability", "rule", runId + ":stability:consistency",
+                    Judgement.PASS, 1.0, "重复 " + verdicts.size() + " 次结论一致", null, "{}")
+                    : new EvalRepository.JudgeWrite("stability", "rule", runId + ":stability:consistency",
+                    Judgement.FAIL, 0.0, "重复 " + verdicts.size() + " 次结论不一致", "STB_FLAKY",
+                    json(verdicts));
+            repo.upsertJudge(runId, write, now);
+        }
+    }
+
+    private List<EvalRepository.ToolCallWrite> toolWrites(List<ToolCallTrace.Call> calls) {
+        List<EvalRepository.ToolCallWrite> out = new ArrayList<>();
+        for (ToolCallTrace.Call c : calls) {
+            out.add(new EvalRepository.ToolCallWrite(c.index(), c.name(), c.args(), "unknown", null, null));
+        }
+        return out;
     }
 
     private List<EvalRepository.SpanRow> spans(CaseSpec spec, KbTrace trace, long planMs,
-                                               long totalMs, long judgeMs, String errorCode) {
+                                               long totalMs, long judgeMs, String errorCode,
+                                               List<LlmUsage.Call> usage, List<ToolCallTrace.Call> toolCalls,
+                                               long tokensIn, long tokensOut) {
         TraceBuilder b = new TraceBuilder();
         Map<String, Object> rootAttrs = new LinkedHashMap<>();
         rootAttrs.put("caseKey", spec.caseKey());
@@ -145,10 +218,28 @@ public class EvalCaseExecutor {
         long llmStart = planMs + retrieveMs;
         Map<String, Object> llmAttrs = new LinkedHashMap<>();
         llmAttrs.put("provider", llmPolicy.getDefaultProvider());
-        llmAttrs.put("model", modelName());
+        llmAttrs.put("model", usage.isEmpty() ? modelName() : usage.get(usage.size() - 1).model());
+        llmAttrs.put("rounds", Math.max(1, usage.size()));
+        llmAttrs.put("tokensIn", tokensIn);
+        llmAttrs.put("tokensOut", tokensOut);
         llmAttrs.put("hits", trace.hitCount());
-        llmAttrs.put("tokensMeasured", false);
         b.add(root, "llm", "chat", "ok", llmStart, Math.max(0, totalMs - llmStart), llmAttrs);
+
+        if (!toolCalls.isEmpty()) {
+            List<Map<String, Object>> calls = new ArrayList<>();
+            for (ToolCallTrace.Call c : toolCalls) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("index", c.index());
+                row.put("name", c.name());
+                row.put("args", c.args());
+                calls.add(row);
+            }
+            Map<String, Object> toolAttrs = new LinkedHashMap<>();
+            toolAttrs.put("count", toolCalls.size());
+            toolAttrs.put("calls", calls);
+            toolAttrs.put("measured", false);
+            b.add(root, "tool", "calls", "ok", llmStart, 0, toolAttrs);
+        }
 
         long judgeStartMs = totalMs;
         Map<String, Object> judgeAttrs = new LinkedHashMap<>();
@@ -158,7 +249,7 @@ public class EvalCaseExecutor {
 
         Map<String, Object> outAttrs = new LinkedHashMap<>();
         outAttrs.put("dryRun", true);
-        outAttrs.put("chunks", estimateChunks(spec, trace));
+        outAttrs.put("chunks", 1);
         b.add(root, "outbound", "dry-run", "ok", judgeStartMs + judgeMs, 0, outAttrs);
 
         List<EvalRepository.SpanRow> rows = new ArrayList<>();
@@ -167,10 +258,6 @@ public class EvalCaseExecutor {
                     s.startOffsetMs(), s.durationMs(), json(s.attrs()), s.errorCode()));
         }
         return rows;
-    }
-
-    private int estimateChunks(CaseSpec spec, KbTrace trace) {
-        return 1;
     }
 
     private EvalRepository.RetrievalRow retrieval(CaseSpec spec, KbTrace trace) {

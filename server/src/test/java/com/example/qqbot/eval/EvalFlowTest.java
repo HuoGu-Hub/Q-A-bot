@@ -87,7 +87,7 @@ class EvalFlowTest {
         assertThat(version).isNotNull();
         assertThat(version.caseCount()).isEqualTo(1);
 
-        long batchId = service.createBatch("流程批次", dataset.id(), version.id(), 1, 2,
+        long batchId = service.createBatch("流程批次", dataset.id(), version.id(), 2, 2,
                 "offline", 1.0, "test");
 
         EvalRepository.BatchRow batch = waitForBatch(batchId);
@@ -95,13 +95,14 @@ class EvalFlowTest {
         assertThat(batch.itemTotal()).isEqualTo(1);
 
         EvalViews.Summary summary = service.summary(batchId);
-        assertThat(summary.runs()).isEqualTo(1);
-        assertThat(summary.pass()).isEqualTo(1);
+        assertThat(summary.runs()).isEqualTo(2);
+        assertThat(summary.pass()).isEqualTo(2);
         assertThat(summary.passRate()).isEqualTo(1.0);
         assertThat(batch.gateStatus()).isEqualTo("passed");
 
         EvalViews.BatchDetail detail = service.batchDetail(batchId, 20);
         assertThat(detail.items()).hasSize(1);
+        assertThat(detail.items().get(0).attempts()).isEqualTo(2);
         Long runId = detail.items().get(0).runId();
         assertThat(runId).isNotNull();
 
@@ -111,7 +112,9 @@ class EvalFlowTest {
         assertThat(run.retrieval()).isNotNull();
         assertThat(run.retrieval().hits()).hasSize(1);
         assertThat(run.judges()).extracting(EvalViews.Judge::dimension)
-                .contains("rag", "quality");
+                .contains("rag", "quality", "stability");
+        assertThat(run.judges()).filteredOn(j -> j.dimension().equals("stability"))
+                .allMatch(j -> j.verdict().equals("PASS"));
         assertThat(run.question()).isEqualTo("废料杯在哪");
     }
 
