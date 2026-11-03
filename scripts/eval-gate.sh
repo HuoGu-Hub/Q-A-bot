@@ -13,7 +13,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DB="${EVAL_DB:-$ROOT/server/data/qa/qqbot.sqlite}"
+# 评测库是独立文件（默认与主库同目录的 eval.sqlite）
+DB="${EVAL_DB:-$ROOT/server/data/eval/eval.sqlite}"
 BATCH="${1:-}"
 
 # 取最新那个 jar：target 里可能同时躺着旧版本

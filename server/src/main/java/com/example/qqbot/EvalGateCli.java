@@ -31,7 +31,7 @@ public final class EvalGateCli {
     }
 
     public static void main(String[] args) {
-        String db = arg(args, "--db", "data/qa/qqbot.sqlite");
+        String db = arg(args, "--db", "data/eval/eval.sqlite");
         Long batchId = longOrNull(arg(args, "--batch", null));
         System.exit(run(db, batchId));
     }

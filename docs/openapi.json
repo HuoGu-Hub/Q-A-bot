@@ -28275,6 +28275,9 @@
           "dimension" : {
             "type" : "string"
           },
+          "judgeType" : {
+            "type" : "string"
+          },
           "verdict" : {
             "type" : "string"
           },

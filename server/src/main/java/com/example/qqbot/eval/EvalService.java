@@ -494,7 +494,8 @@ public class EvalService {
                 r.sources(), r.emptyReason(), r.latencyMs());
         List<EvalViews.Judge> judges = new ArrayList<>();
         for (EvalRepository.JudgeRow j : repo.judgesOf(runId)) {
-            judges.add(new EvalViews.Judge(j.dimension(), j.verdict(), j.score(), j.reason(), j.tag()));
+            judges.add(new EvalViews.Judge(j.dimension(), j.judgeType(), j.verdict(), j.score(),
+                    j.reason(), j.tag()));
         }
         List<EvalViews.Citation> citations = new ArrayList<>();
         for (EvalRepository.CitationRow c : repo.citationsOf(runId)) {

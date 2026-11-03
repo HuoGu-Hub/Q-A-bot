@@ -9,6 +9,7 @@ import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.intent.IntentPlanner;
 import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.llm.LlmPolicy;
+import com.example.qqbot.llm.LlmQualityJudge;
 import com.example.qqbot.llm.Provider;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.persistence.EvalRepository;
@@ -18,6 +19,7 @@ import com.example.qqbot.trace.ToolCallTrace;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -57,10 +59,13 @@ public class EvalCaseExecutor {
     private final LlmPolicy llmPolicy;
     private final EvalPricing pricing;
     private final GuardPipeline guardPipeline;
+    private final LlmQualityJudge llmJudge;
+    private final Environment env;
 
     public EvalCaseExecutor(ChatService chatService, IntentPlanner intentPlanner, EvalRepository repo,
                             RuleJudge judge, ObjectMapper mapper, LlmPolicy llmPolicy,
-                            EvalPricing pricing, GuardPipeline guardPipeline) {
+                            EvalPricing pricing, GuardPipeline guardPipeline,
+                            LlmQualityJudge llmJudge, Environment env) {
         this.chatService = chatService;
         this.intentPlanner = intentPlanner;
         this.repo = repo;
@@ -69,6 +74,8 @@ public class EvalCaseExecutor {
         this.llmPolicy = llmPolicy;
         this.pricing = pricing;
         this.guardPipeline = guardPipeline;
+        this.llmJudge = llmJudge;
+        this.env = env;
     }
 
     /**
@@ -172,13 +179,23 @@ public class EvalCaseExecutor {
                 trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs,
                 guardAction, guardStage, guardReply, citations.size(), cited), attempts);
 
+        LlmQualityJudge.Opinion opinion = llmOpinion(spec, trace, answer, runId);
+        if (opinion != null) {
+            judgements.removeIf(x -> "quality".equals(x.dimension()));
+            judgements.add(new Judgement("quality", opinion.pass() ? Judgement.PASS : Judgement.FAIL,
+                    opinion.score(), opinion.reason(), opinion.pass() ? null : "ANS_LLM_LOW",
+                    Map.of("judge", "llm", "model", opinion.model(),
+                            "tokensIn", opinion.tokensIn(), "tokensOut", opinion.tokensOut())));
+        }
+
         long judgeStart = System.nanoTime();
         List<EvalRepository.JudgeWrite> judgeWrites = new ArrayList<>();
         List<EvalRepository.FailureWrite> failures = new ArrayList<>();
         Map<String, String> verdicts = new LinkedHashMap<>();
         for (Judgement j : judgements) {
-            judgeWrites.add(new EvalRepository.JudgeWrite(j.dimension(), "rule",
-                    runId + ":" + j.dimension() + ":rule", j.verdict(), j.score(), j.reason(),
+            String type = opinion != null && "quality".equals(j.dimension()) ? "llm" : "rule";
+            judgeWrites.add(new EvalRepository.JudgeWrite(j.dimension(), type,
+                    runId + ":" + j.dimension() + ":" + type, j.verdict(), j.score(), j.reason(),
                     j.tag(), json(j.evidence())));
             verdicts.putIfAbsent(j.dimension(), j.verdict());
             if (j.failed() && j.tag() != null) {
@@ -242,6 +259,28 @@ public class EvalCaseExecutor {
             String due = Instant.parse(now).plusSeconds((safety ? 24 : 72) * 3600L).toString();
             repo.enqueueReview(batchId, runId, j.reason(), safety ? "urgent" : "high", due, now);
         }
+    }
+
+    /**
+     * 抽样调用模型判定。开关关闭或没抽中时返回 null，调用方保留规则结论。
+     *
+     * <p>抽样用 runId 取模而不是随机数：同一批次重复执行得到同一批被抽中的用例，
+     * 两批对比时才不会把"这次没抽到"误读成质量变化。
+     */
+    private LlmQualityJudge.Opinion llmOpinion(CaseSpec spec, KbTrace trace, String answer, long runId) {
+        if (spec.isSafety() || answer == null || answer.isBlank()) {
+            return null;
+        }
+        if (!Boolean.parseBoolean(env.getProperty("app.eval.llm-judge.enabled", "false"))) {
+            return null;
+        }
+        double rate = Double.parseDouble(env.getProperty("app.eval.llm-judge.sample-rate", "0.2"));
+        if (rate <= 0 || (rate < 1.0 && Math.floorMod(runId, 1000) >= rate * 1000)) {
+            return null;
+        }
+        List<String> titles = trace.hits().stream().map(KbTrace.Hit::title)
+                .filter(t -> t != null && !t.isBlank()).distinct().toList();
+        return llmJudge.judge(spec.question(), answer, titles, trace.sources());
     }
 
     private List<EvalRepository.CitationWrite> citationWrites(List<CitationExtractor.Line> lines) {

@@ -1,5 +1,6 @@
 package com.example.qqbot.persistence;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -26,7 +27,8 @@ public class EvalRepository {
 
     private final Jdbc jdbc;
 
-    public EvalRepository(Jdbc jdbc) {
+    /** 用评测库自己的连接；主库连接由 @Primary 保证给其他仓储 */
+    public EvalRepository(@Qualifier("evalJdbc") Jdbc jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -579,13 +581,14 @@ public class EvalRepository {
                         rs.str("empty_reason"), rs.longOf("latency_ms")), runId);
     }
 
-    public record JudgeRow(String dimension, String verdict, double score, String reason, String tag) {
+    public record JudgeRow(String dimension, String judgeType, String verdict, double score, String reason,
+                    String tag) {
     }
 
     public List<JudgeRow> judgesOf(long runId) {
-        return jdbc.query("SELECT dimension, verdict, score, reason, tag FROM eval_judge"
+        return jdbc.query("SELECT dimension, judge_type, verdict, score, reason, tag FROM eval_judge"
                         + " WHERE run_id=? ORDER BY id",
-                rs -> new JudgeRow(rs.str("dimension"), rs.str("verdict"),
+                rs -> new JudgeRow(rs.str("dimension"), rs.str("judge_type"), rs.str("verdict"),
                         rs.dbl("score"), rs.str("reason"), rs.str("tag")), runId);
     }
 

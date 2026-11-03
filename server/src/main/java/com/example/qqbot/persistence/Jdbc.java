@@ -2,6 +2,7 @@ package com.example.qqbot.persistence;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -36,6 +37,7 @@ import java.util.concurrent.Callable;
  * <p><b>3. 让"SQL 搬进 Repository"这件事有落脚点。</b>
  * 本类只管**怎么执行**，不管**执行什么** —— SQL 语句属于各个 Repository。
  */
+@Primary
 @Component
 public class Jdbc {
 

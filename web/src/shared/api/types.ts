@@ -870,6 +870,7 @@ export interface EvalRetrieval {
 
 export interface EvalJudge {
   dimension: string
+  judgeType: string
   verdict: string
   score: number
   reason: string

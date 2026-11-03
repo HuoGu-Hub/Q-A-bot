@@ -3,6 +3,7 @@ package com.example.qqbot.eval;
 import com.example.qqbot.persistence.EvalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -20,9 +21,11 @@ public class EvalAlerts {
     private static final Logger log = LoggerFactory.getLogger(EvalAlerts.class);
 
     private final EvalRepository repo;
+    private final ApplicationEventPublisher publisher;
 
-    public EvalAlerts(EvalRepository repo) {
+    public EvalAlerts(EvalRepository repo, ApplicationEventPublisher publisher) {
         this.repo = repo;
+        this.publisher = publisher;
     }
 
     /** 返回本次命中的事件数 */
@@ -41,6 +44,8 @@ public class EvalAlerts {
             }
             if (hit(rule.comparator(), value, rule.threshold())) {
                 repo.insertAlertEvent(rule.id(), batchId, value, rule.threshold(), rule.severity(), now);
+                publisher.publishEvent(new EvalAlertRaised(rule.id(), rule.name(), batchId,
+                        rule.metric(), value, rule.threshold(), rule.severity()));
                 hits++;
                 log.info("[EVAL] 告警命中：{}（{}={} 阈值 {}）", rule.name(), rule.metric(), value,
                         rule.threshold());

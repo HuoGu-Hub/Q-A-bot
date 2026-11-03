@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Files;
@@ -33,6 +34,7 @@ import java.sql.Statement;
  * 那个库是**多个功能共用**的 —— 问答统计 / 指令 / 词条 / 分类 / 文案 / 轮播清单，
  * 所以它不该挂在 {@code qa} 名下。
  */
+@Primary
 @Component
 public class SqliteDatabase implements SqliteConnectionProvider, AutoCloseable {
 

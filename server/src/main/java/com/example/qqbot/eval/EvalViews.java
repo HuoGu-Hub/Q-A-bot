@@ -106,7 +106,8 @@ public final class EvalViews {
                             long latencyMs) {
     }
 
-    public record Judge(String dimension, String verdict, double score, String reason, String tag) {
+    public record Judge(String dimension, String judgeType, String verdict, double score, String reason,
+                 String tag) {
     }
 
     public record Citation(int sentenceIndex, String sentence, String blockIds, int chars) {
