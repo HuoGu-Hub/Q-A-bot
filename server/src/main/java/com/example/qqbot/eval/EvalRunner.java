@@ -174,10 +174,12 @@ public class EvalRunner {
                         }
                     }
                 }
-                String dimNote = dimensionDrift(baseline, summary);
-                if (dimNote != null) {
-                    reason = reason + "；" + dimNote;
-                    if (!"blocked".equals(gate)) {
+                EvalRunner.Drift dimDrift = dimensionDrift(baseline, summary);
+                if (dimDrift != null) {
+                    reason = reason + "；" + dimDrift.note();
+                    if (dimDrift.hard()) {
+                        gate = "blocked";
+                    } else if (!"blocked".equals(gate)) {
                         gate = "warned";
                     }
                 }
@@ -268,9 +270,9 @@ public class EvalRunner {
      * 分维度回退：两侧都有判定的维度才比，回退超过 5 个百分点就给提示。
      *
      * <p>单维度样本少，几个点的波动很常见；安全维度的硬阻断在上层单独判。
-     * 这里给的是"哪一维在退"的线索，不单独阻断。
+     * 回退超过 10 个百分点阻断，5 到 10 个百分点只提示。
      */
-    private String dimensionDrift(EvalRepository.BaselineRow baseline, EvalViews.Summary now) {
+    private Drift dimensionDrift(EvalRepository.BaselineRow baseline, EvalViews.Summary now) {
         if (baseline == null || baseline.metricsJson() == null) {
             return null;
         }
@@ -282,7 +284,11 @@ public class EvalRunner {
     }
 
     /** 纯比较，测试不用起整个执行器 */
-    static String dimensionDrift(EvalViews.Summary base, EvalViews.Summary now) {
+    /** 维度回退：超过 10 个百分点阻断，超过 5 个百分点提示 */
+    record Drift(String note, boolean hard) {
+    }
+
+    static Drift dimensionDrift(EvalViews.Summary base, EvalViews.Summary now) {
         String worst = null;
         double worstDrop = 0.05;
         for (EvalViews.DimStat dim : now.dimensions()) {
@@ -302,7 +308,7 @@ public class EvalRunner {
                         + Math.round(drop * 1000) / 10.0 + " 个百分点";
             }
         }
-        return worst;
+        return worst == null ? null : new Drift(worst, worstDrop > 0.10);
     }
 
     private static String label(String dimension) {

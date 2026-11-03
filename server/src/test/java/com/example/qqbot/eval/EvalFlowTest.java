@@ -113,6 +113,12 @@ class EvalFlowTest {
         String html = report.html(batchId);
         assertThat(html).contains("评测报告").contains("通过率").contains("失败归因");
 
+        EvalViews.RunDetail citationsRun = service.runDetail(runId);
+        assertThat(citationsRun.citations()).isNotEmpty();
+        assertThat(citationsRun.citations().get(0).blockIds()).contains("block-1");
+        assertThat(citationsRun.judges()).filteredOn(j -> j.dimension().equals("evidence"))
+                .anyMatch(j -> "PASS".equals(j.verdict()));
+
         EvalViews.RunDetail run = service.runDetail(runId);
         assertThat(run.spans()).extracting(EvalViews.Span::kind)
                 .contains("request", "retrieve", "llm", "judge", "outbound");

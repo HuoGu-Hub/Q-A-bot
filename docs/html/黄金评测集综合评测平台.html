@@ -1238,7 +1238,7 @@ baseline：candidate ──promote──► active ──retire──► retired
 <tr><td>成本价目</td><td>已接入：按元每百万 token 配置，成本以微元存，批次门禁比较单条平均成本</td><td><code>eval_price</code>、<code>EvalPricing</code>、<code>/eval/prices</code></td></tr>
 <tr><td>工具调用</td><td>已包装执行器：记录状态、耗时、返回长度与失败原因；授权拒绝单独记 denied</td><td><code>ToolCallTrace</code>、<code>TracingToolExecutor</code></td></tr>
 <tr><td>安全维度</td><td>已接入护栏：安全用例先过 pipeline，逐层结果进 span；按 should-block、no-leak、refuse 判 SEC_BYPASS、SEC_LEAK、SEC_HARM，失败硬阻断批次</td><td><code>RuleJudge</code>、<code>EvalCaseExecutor</code>、<code>tests/golden/safety-golden.tsv</code></td></tr>
-<tr><td>逐句引用</td><td>未采集，页面不展示而不是显示 0</td><td>待后置对齐</td></tr>
+<tr><td>逐句引用</td><td>已实现字符级归属：句子出现资料标题即算引用，<code>eval_citation</code> 落库，单条页展示证据链；判 CIT_NONE 或 CIT_PARTIAL</td><td><code>CitationExtractor</code>、<code>/eval/runs/:id</code></td></tr>
 <tr><td>趋势与版本对比</td><td>已实现：按用例集的批次趋势、两次运行的差异与逐条翻转清单</td><td><code>/eval/trends</code>、<code>/compare</code></td></tr>
 <tr><td>报告导出</td><td>已实现单文件 HTML；不可变快照待报告中心</td><td><code>EvalReport</code>、<code>/batches/{id}/report</code></td></tr>
 <tr><td>告警</td><td>已实现规则、事件与处置；暂不主动发通知</td><td><code>eval_alert_rule</code>、<code>eval_alert_event</code>、<code>/eval/alerts</code></td></tr>
@@ -1247,7 +1247,7 @@ baseline：candidate ──promote──► active ──retire──► retired
 </tbody>
 </table></div>
 
-<p>完整的缺口清单共 31 条，按数据、判定、执行、门禁、展示、治理六组列在 <a href="../eval.md">docs/eval.md</a> 第七节，并在末尾写明当前页面能回答与不能回答的边界。</p>
+<p>完整的缺口清单共 25 条，按数据、判定、执行、门禁、展示、治理六组列在 <a href="../eval.md">docs/eval.md</a> 第七节，并在末尾写明当前页面能回答与不能回答的边界。</p>
 
 <p>验证口径：规则判定、仓储落库、建批到出结论、复核覆盖、基线阻断、成本计价、批次对比与告警命中都有测试；前端通过类型检查与生产构建。检索黄金集门禁在本机另有失败，属于检索基线问题，与本模块无代码交集。</p>
 

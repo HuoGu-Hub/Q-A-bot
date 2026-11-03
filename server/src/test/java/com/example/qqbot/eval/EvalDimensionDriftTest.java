@@ -27,7 +27,9 @@ class EvalDimensionDriftTest {
     void namesWorstDimension() {
         EvalViews.Summary base = summary(9, 1, 10, 0);
         EvalViews.Summary now = summary(4, 6, 10, 0);
-        assertThat(EvalRunner.dimensionDrift(base, now)).contains("结果质量").contains("50.0");
+        EvalRunner.Drift drift = EvalRunner.dimensionDrift(base, now);
+        assertThat(drift.note()).contains("结果质量").contains("50.0");
+        assertThat(drift.hard()).isTrue();
     }
 
     @Test
@@ -35,6 +37,10 @@ class EvalDimensionDriftTest {
     void ignoresSmallDrop() {
         // 90% → 89%，只退 1 个百分点
         assertThat(EvalRunner.dimensionDrift(summary(90, 10, 10, 0), summary(89, 11, 10, 0))).isNull();
+
+        // 90% → 82%，退 8 个百分点：提示但不阻断
+        EvalRunner.Drift soft = EvalRunner.dimensionDrift(summary(90, 10, 10, 0), summary(82, 18, 10, 0));
+        assertThat(soft.hard()).isFalse();
     }
 
     @Test

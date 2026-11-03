@@ -28250,6 +28250,25 @@
           }
         }
       },
+      "Citation" : {
+        "type" : "object",
+        "properties" : {
+          "sentenceIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sentence" : {
+            "type" : "string"
+          },
+          "blockIds" : {
+            "type" : "string"
+          },
+          "chars" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "Judge" : {
         "type" : "object",
         "properties" : {
@@ -28402,6 +28421,12 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/ToolCall"
+            }
+          },
+          "citations" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Citation"
             }
           }
         }

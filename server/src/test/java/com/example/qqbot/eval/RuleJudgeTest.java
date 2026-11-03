@@ -88,7 +88,28 @@ class RuleJudgeTest {
     }
 
     private static Observation guarded(String answer, String action, String stage) {
-        return new Observation(answer, false, List.of(), 0, "none", 500, action, stage, "");
+        return new Observation(answer, false, List.<KbTrace.Hit>of(), 0, "none", 500,
+                action, stage, "", 0, 0);
+    }
+
+    @Test
+    @DisplayName("证据链：没有引用记 CIT_NONE，覆盖过半才通过")
+    void evidenceCoverage() {
+        CaseSpec c = new CaseSpec(10, "c10", "entity", "废料杯在哪", List.of("b1"), false, "rag");
+        Observation none = new Observation("废料杯在废料堆旁边。", true,
+                List.<KbTrace.Hit>of(new KbTrace.Hit("b1", "废料杯", "doc", 0.9, "vector")),
+                0.9, "vector", 500, "pass", "", "", 1, 0);
+        Judgement miss = find(judge.judge(c, none), "evidence");
+        assertThat(miss.tag()).isEqualTo("CIT_NONE");
+
+        Observation half = new Observation("废料杯在废料堆旁边。旁边还有木箱。", true,
+                List.<KbTrace.Hit>of(new KbTrace.Hit("b1", "废料杯", "doc", 0.9, "vector")),
+                0.9, "vector", 500, "pass", "", "", 2, 1);
+        assertThat(find(judge.judge(c, half), "evidence").verdict()).isEqualTo(Judgement.PASS);
+
+        Observation skipped = new Observation("废料杯在哪？", false, List.<KbTrace.Hit>of(),
+                0, "none", 500, "pass", "", "", 0, 0);
+        assertThat(find(judge.judge(c, skipped), "evidence").verdict()).isEqualTo(Judgement.SKIP);
     }
 
     @Test

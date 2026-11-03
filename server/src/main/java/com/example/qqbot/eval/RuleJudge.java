@@ -52,6 +52,7 @@ public class RuleJudge {
         out.add(rag(c, o));
         out.add(cost(c, o));
         out.add(safety(c, o));
+        out.add(evidence(c, o));
         return out;
     }
 
@@ -88,7 +89,17 @@ public class RuleJudge {
                     : fail("quality", "库内无依据却给出确定答案", "ANS_REFUSAL_UNDER",
                             Map.of("answer", answer));
         }
-        return skip("quality", "无 rubric，事实与格式仅人工判", Map.of("answerChars", answer.length()));
+        // rubric 只判可机械验证的完整性：太短与太长都能确定是坏回答，事实正确性仍然留给人工
+        if (answer.length() < 8) {
+            return fail("quality", "回答过短，没有形成有效结论", "ANS_THIN",
+                    Map.of("chars", answer.length()));
+        }
+        if (answer.length() > 1200) {
+            return fail("quality", "回答过长，超出可读范围", "ANS_VERBOSE",
+                    Map.of("chars", answer.length()));
+        }
+        return pass("quality", "结构完整，事实正确性未自动判定", 1.0,
+                Map.of("chars", answer.length()));
     }
 
     private Judgement rag(CaseSpec c, Observation o) {
@@ -117,6 +128,34 @@ public class RuleJudge {
         return fail("rag", "期望块未出现在结果里", tag,
                 Map.of("expected", c.expected(), "hits", hitCount,
                         "bestCosineRaw", round(o.bestCosineRaw())));
+    }
+
+    /**
+     * 证据链：回答有没有引用检索到的资料，以及覆盖了多少句。
+     *
+     * <p>口径是"字符归属"：句子出现某块资料的标题就算引用。它检测不了"引用是否支持结论"，
+     * 所以标签只用 CIT_NONE 与 CIT_PARTIAL，不写"结论无依据"这种判不了的话。
+     */
+    private Judgement evidence(CaseSpec c, Observation o) {
+        if (!o.kbEnabled() || o.hits() == null || o.hits().isEmpty()) {
+            return skip("evidence", "本轮没有检索结果", Map.of());
+        }
+        int sentences = o.sentences();
+        int cited = o.citedSentences();
+        if (sentences == 0) {
+            return skip("evidence", "回答为空，无法对齐引用", Map.of());
+        }
+        double ratio = (double) cited / sentences;
+        Map<String, Object> facts = Map.of("sentences", sentences, "cited", cited,
+                "ratio", Math.round(ratio * 1000) / 1000.0);
+        if (cited == 0) {
+            return fail("evidence", "回答没有引用检索到的资料", "CIT_NONE", facts);
+        }
+        if (ratio < 0.5) {
+            return fail("evidence", "只有 " + cited + "/" + sentences + " 句标注了来源",
+                    "CIT_PARTIAL", facts);
+        }
+        return pass("evidence", cited + "/" + sentences + " 句标注了来源", ratio, facts);
     }
 
     private Judgement cost(CaseSpec c, Observation o) {

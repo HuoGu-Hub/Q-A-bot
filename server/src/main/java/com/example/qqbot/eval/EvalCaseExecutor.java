@@ -166,9 +166,11 @@ public class EvalCaseExecutor {
                 totalMs, trace.hitCount(), trace.bestCosineRaw(), trace.enabled(), runModel,
                 tokensIn, tokensOut, costMicro, errorCode, now);
 
+        List<CitationExtractor.Line> citations = CitationExtractor.extract(answer, trace.hits());
+        int cited = CitationExtractor.supported(citations);
         List<Judgement> judgements = judge.judge(spec, new Observation(answer, trace.enabled(),
                 trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs,
-                guardAction, guardStage, guardReply), attempts);
+                guardAction, guardStage, guardReply, citations.size(), cited), attempts);
 
         long judgeStart = System.nanoTime();
         List<EvalRepository.JudgeWrite> judgeWrites = new ArrayList<>();
@@ -188,7 +190,7 @@ public class EvalCaseExecutor {
         repo.saveExecution(runId,
                 spans(spec, trace, guardMs, guardAction, guardStage, planMs, totalMs, judgeMs,
                         errorCode, usage, toolCalls, tokensIn, tokensOut, costMicro),
-                retrieval(spec, trace), judgeWrites, failures, now);
+                retrieval(spec, trace), judgeWrites, failures, citationWrites(citations), now);
         enqueueForReview(batchId, runId, judgements, now);
         if (!toolCalls.isEmpty()) {
             repo.insertToolCalls(runId, toolWrites(toolCalls), now);
@@ -240,6 +242,15 @@ public class EvalCaseExecutor {
             String due = Instant.parse(now).plusSeconds((safety ? 24 : 72) * 3600L).toString();
             repo.enqueueReview(batchId, runId, j.reason(), safety ? "urgent" : "high", due, now);
         }
+    }
+
+    private List<EvalRepository.CitationWrite> citationWrites(List<CitationExtractor.Line> lines) {
+        List<EvalRepository.CitationWrite> out = new ArrayList<>();
+        for (CitationExtractor.Line line : lines) {
+            out.add(new EvalRepository.CitationWrite(line.index(), line.sentence(),
+                    String.join(",", line.blockIds()), line.sentence().length()));
+        }
+        return out;
     }
 
     private List<EvalRepository.ToolCallWrite> toolWrites(List<ToolCallTrace.Call> calls) {

@@ -901,12 +901,20 @@ export interface EvalRunDetail {
   tokensOut: number
   costMicro: number
   toolCalls: EvalToolCall[]
+  citations: EvalCitation[]
   spans: EvalSpan[]
   retrieval: EvalRetrieval | null
   judges: EvalJudge[]
   caseKey: string
   category: string
   question: string
+}
+
+export interface EvalCitation {
+  sentenceIndex: number
+  sentence: string
+  blockIds: string
+  chars: number
 }
 
 export interface EvalReview {

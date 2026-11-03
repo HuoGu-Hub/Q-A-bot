@@ -202,6 +202,28 @@ function attrText(attrs: Record<string, unknown>): string {
         </table>
       </Panel>
 
+      <Panel v-if="run.citations?.length" title="证据链"
+             :count="run.citations.filter(c => c.blockIds).length"
+             hint="句子出现资料标题即算标注；只证明引用了检索结果，不证明引用支持结论">
+        <DataTable :rows="run.citations.length" label="逐句引用" empty="没有可对齐的句子">
+          <thead>
+            <tr><th class="num">#</th><th>句子</th><th>命中资料</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in run.citations" :key="c.sentenceIndex">
+              <td class="num">{{ c.sentenceIndex + 1 }}</td>
+              <td>{{ c.sentence }}</td>
+              <td>
+                <template v-if="c.blockIds">
+                  <Tag v-for="id in c.blockIds.split(',')" :key="id" tone="good">{{ id }}</Tag>
+                </template>
+                <template v-else>未标注</template>
+              </td>
+            </tr>
+          </tbody>
+        </DataTable>
+      </Panel>
+
       <Panel v-if="run.retrieval" title="检索快照">
         <div class="meta">
           <span>向量候选 {{ run.retrieval.vectorCandidates }}</span>

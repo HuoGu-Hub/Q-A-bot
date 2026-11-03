@@ -164,6 +164,13 @@ public class EvalRepository {
                 + " created_at TEXT NOT NULL)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_judge_run ON eval_judge(run_id, dimension)");
 
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_citation ("
+                + " run_id INTEGER NOT NULL,"
+                + " sentence_index INTEGER NOT NULL,"
+                + " sentence TEXT NOT NULL,"
+                + " block_ids TEXT NOT NULL,"
+                + " chars INTEGER NOT NULL,"
+                + " PRIMARY KEY (run_id, sentence_index))");
         jdbc.execute("CREATE TABLE IF NOT EXISTS eval_failure ("
                 + " id INTEGER PRIMARY KEY,"
                 + " run_id INTEGER NOT NULL,"
@@ -612,8 +619,15 @@ public class EvalRepository {
      * <p>半截数据在过程页上会变成"有结论、没过程"，比完全没有更难判断 ——
      * 那一屏看起来像"模型没检索"，其实是写库失败。
      */
+    public record CitationWrite(int sentenceIndex, String sentence, String blockIds, int chars) {
+    }
+
+    public record CitationRow(int sentenceIndex, String sentence, String blockIds, int chars) {
+    }
+
     public void saveExecution(long runId, List<SpanRow> spans, RetrievalRow retrieval,
-                              List<JudgeWrite> judges, List<FailureWrite> failures, String now) {
+                              List<JudgeWrite> judges, List<FailureWrite> failures,
+                              List<CitationWrite> citations, String now) {
         jdbc.transaction(() -> {
             if (spans != null && !spans.isEmpty()) {
                 List<Object[]> rows = new ArrayList<>(spans.size());
@@ -632,6 +646,14 @@ public class EvalRepository {
                         retrieval.keywordCandidates(), retrieval.bestCosine(), retrieval.bestCosineRaw(),
                         retrieval.hits(), retrieval.sources(), retrieval.emptyReason(),
                         retrieval.latencyMs());
+            }
+            if (citations != null && !citations.isEmpty()) {
+                List<Object[]> rows = new ArrayList<>(citations.size());
+                for (CitationWrite c : citations) {
+                    rows.add(new Object[]{runId, c.sentenceIndex(), c.sentence(), c.blockIds(), c.chars()});
+                }
+                jdbc.batch("INSERT OR REPLACE INTO eval_citation (run_id, sentence_index, sentence,"
+                        + " block_ids, chars) VALUES (?,?,?,?,?)", rows);
             }
             if (judges != null) {
                 for (JudgeWrite j : judges) {
@@ -694,6 +716,13 @@ public class EvalRepository {
 
     public record ToolCallRow(int callIndex, String name, String args, String status,
                               Long latencyMs, Integer resultChars, String error) {
+    }
+
+    public List<CitationRow> citationsOf(long runId) {
+        return jdbc.query("SELECT sentence_index, sentence, block_ids, chars FROM eval_citation"
+                        + " WHERE run_id=? ORDER BY sentence_index",
+                rs -> new CitationRow(rs.intOf("sentence_index"), rs.str("sentence"),
+                        rs.str("block_ids"), rs.intOf("chars")), runId);
     }
 
     public List<ToolCallRow> toolCallsOf(long runId) {
@@ -907,7 +936,7 @@ public class EvalRepository {
     }
 
     public record CaseVerdict(long caseId, String caseKey, String question, String quality,
-                              String rag, String safety, String tag, long runId) {
+                              String rag, String safety, String evidence, String tag, long runId) {
     }
 
     /** 每个用例第一次执行的结论，对比用 */
@@ -919,13 +948,16 @@ public class EvalRepository {
                         + "  ORDER BY j.id DESC LIMIT 1) AS rag,"
                         + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='safety'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS safety,"
+                        + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='evidence'"
+                        + "  ORDER BY j.id DESC LIMIT 1) AS evidence,"
                         + " (SELECT j.tag FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS tag"
                         + " FROM eval_run r JOIN eval_case c ON c.id=r.case_id"
                         + " WHERE r.batch_id=? AND r.attempt=1 ORDER BY c.case_key",
                 rs -> new CaseVerdict(rs.longOf("case_id"), rs.str("case_key"), rs.str("question"),
                         rs.str("quality"),
-                        rs.str("rag"), rs.str("safety"), rs.str("tag"), rs.longOf("run_id")), batchId);
+                        rs.str("rag"), rs.str("safety"), rs.str("evidence"), rs.str("tag"),
+                        rs.longOf("run_id")), batchId);
     }
 
     /* ==================== 告警 ==================== */

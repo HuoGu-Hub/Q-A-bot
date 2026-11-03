@@ -109,6 +109,9 @@ public final class EvalViews {
     public record Judge(String dimension, String verdict, double score, String reason, String tag) {
     }
 
+    public record Citation(int sentenceIndex, String sentence, String blockIds, int chars) {
+    }
+
     public record ToolCall(int callIndex, String name, String args, String status,
                            Long latencyMs, Integer resultChars, String error) {
     }
@@ -128,6 +131,6 @@ public final class EvalViews {
                             long tokensIn, long tokensOut, long costMicro,
                             List<Span> spans, Retrieval retrieval, List<Judge> judges,
                             String caseKey, String category, String question,
-                            List<ToolCall> toolCalls) {
+                            List<ToolCall> toolCalls, List<Citation> citations) {
     }
 }

@@ -90,8 +90,15 @@ class EvalRepositoryTest {
                         "FAIL", 0.0, "空返回", "STB_EMPTY", "{}"));
         var failures = List.of(new EvalRepository.FailureWrite("quality", "STB_EMPTY", "空返回"));
 
-        repo.saveExecution(runId, spans, retrieval, judges, failures, "2026-11-03T10:00:02Z");
+        repo.saveExecution(runId, spans, retrieval, judges, failures, List.of(),
+                "2026-11-03T10:00:02Z");
 
+        assertThat(repo.citationsOf(runId)).isEmpty();
+        repo.saveExecution(runId, List.of(), null, List.of(), List.of(),
+                List.of(new EvalRepository.CitationWrite(0, "废料杯在废料堆旁边。", "block-1", 11)),
+                "2026-11-03T10:00:03Z");
+        assertThat(repo.citationsOf(runId)).hasSize(1);
+        assertThat(repo.citationsOf(runId).get(0).blockIds()).isEqualTo("block-1");
         assertThat(repo.spansOf(runId)).hasSize(2);
         assertThat(repo.spansOf(runId).get(1).kind()).isEqualTo("retrieve");
         assertThat(repo.retrievalOf(runId).bestCosineRaw()).isEqualTo(0.71);
@@ -106,9 +113,10 @@ class EvalRepositoryTest {
         long runId = seedRun();
         var judge = new EvalRepository.JudgeWrite("rag", "rule", runId + ":rag:rule",
                 "FAIL", 0.0, "未命中", "RET_MISS", "{}");
-        repo.saveExecution(runId, List.of(), null, List.of(judge), List.of(), "2026-11-03T10:00:02Z");
+        repo.saveExecution(runId, List.of(), null, List.of(judge), List.of(), List.of(),
+                "2026-11-03T10:00:02Z");
         repo.saveExecution(runId, List.of(), null, List.of(new EvalRepository.JudgeWrite("rag", "rule",
-                runId + ":rag:rule", "PASS", 1.0, "复核通过", null, "{}")), List.of(),
+                runId + ":rag:rule", "PASS", 1.0, "复核通过", null, "{}")), List.of(), List.of(),
                 "2026-11-03T10:05:00Z");
         assertThat(repo.judgesOf(runId)).hasSize(1);
         assertThat(repo.judgesOf(runId).get(0).verdict()).isEqualTo("PASS");

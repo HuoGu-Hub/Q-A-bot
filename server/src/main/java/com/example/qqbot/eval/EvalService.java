@@ -311,9 +311,9 @@ public class EvalService {
         Map<String, String> out = new LinkedHashMap<>();
         for (EvalRepository.CaseVerdict c : repo.caseVerdicts(batchId)) {
             boolean failed = Judgement.FAIL.equals(c.quality()) || Judgement.FAIL.equals(c.rag())
-                    || Judgement.FAIL.equals(c.safety());
+                    || Judgement.FAIL.equals(c.safety()) || Judgement.FAIL.equals(c.evidence());
             boolean passed = Judgement.PASS.equals(c.quality()) || Judgement.PASS.equals(c.rag())
-                    || Judgement.PASS.equals(c.safety());
+                    || Judgement.PASS.equals(c.safety()) || Judgement.PASS.equals(c.evidence());
             out.put(c.caseKey(), failed ? Judgement.FAIL : passed ? Judgement.PASS : Judgement.SKIP);
         }
         return out;
@@ -496,6 +496,11 @@ public class EvalService {
         for (EvalRepository.JudgeRow j : repo.judgesOf(runId)) {
             judges.add(new EvalViews.Judge(j.dimension(), j.verdict(), j.score(), j.reason(), j.tag()));
         }
+        List<EvalViews.Citation> citations = new ArrayList<>();
+        for (EvalRepository.CitationRow c : repo.citationsOf(runId)) {
+            citations.add(new EvalViews.Citation(c.sentenceIndex(), c.sentence(), c.blockIds(),
+                    c.chars()));
+        }
         List<EvalViews.ToolCall> tools = new ArrayList<>();
         for (EvalRepository.ToolCallRow t : repo.toolCallsOf(runId)) {
             tools.add(new EvalViews.ToolCall(t.callIndex(), t.name(), t.args(), t.status(),
@@ -504,7 +509,8 @@ public class EvalService {
         return new EvalViews.RunDetail(run.id(), run.batchId(), run.itemId(), run.attempt(), run.status(),
                 run.answer(), run.latencyMs(), run.hitCount(), run.kbEnabled(), run.createdAt(),
                 run.tokensIn(), run.tokensOut(), run.costMicro(),
-                spans, retrieval, judges, run.caseKey(), run.category(), run.question(), tools);
+                spans, retrieval, judges, run.caseKey(), run.category(), run.question(), tools,
+                citations);
     }
 
     /** 期望列：{@code -} 表示期望空结果，空串表示未标注，其余是分号分隔的块 id */

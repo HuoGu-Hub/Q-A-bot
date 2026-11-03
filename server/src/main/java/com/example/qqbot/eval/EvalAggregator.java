@@ -70,11 +70,12 @@ public class EvalAggregator {
             String rag = verdictOf(e.getValue(), "rag");
             String quality = verdictOf(e.getValue(), "quality");
             String safety = verdictOf(e.getValue(), "safety");
+            String evidence = verdictOf(e.getValue(), "evidence");
             if (Judgement.FAIL.equals(rag) || Judgement.FAIL.equals(quality)
-                    || Judgement.FAIL.equals(safety)) {
+                    || Judgement.FAIL.equals(safety) || Judgement.FAIL.equals(evidence)) {
                 fail++;
             } else if (Judgement.PASS.equals(rag) || Judgement.PASS.equals(quality)
-                    || Judgement.PASS.equals(safety)) {
+                    || Judgement.PASS.equals(safety) || Judgement.PASS.equals(evidence)) {
                 pass++;
             } else {
                 skip++;

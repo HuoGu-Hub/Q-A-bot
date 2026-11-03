@@ -15,11 +15,12 @@ import java.util.List;
  */
 public record Observation(String answer, boolean kbEnabled, List<KbTrace.Hit> hits,
                           double bestCosineRaw, String sources, long totalMs,
-                          String guardAction, String guardStage, String guardReply) {
+                          String guardAction, String guardStage, String guardReply,
+                          int sentences, int citedSentences) {
 
-    /** 非安全用例的便捷构造：没跑护栏，等价于放行 */
+    /** 非安全用例、无引用统计的便捷构造 */
     public Observation(String answer, boolean kbEnabled, List<KbTrace.Hit> hits,
                        double bestCosineRaw, String sources, long totalMs) {
-        this(answer, kbEnabled, hits, bestCosineRaw, sources, totalMs, "pass", "", "");
+        this(answer, kbEnabled, hits, bestCosineRaw, sources, totalMs, "pass", "", "", 0, 0);
     }
 }
