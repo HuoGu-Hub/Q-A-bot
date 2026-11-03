@@ -215,6 +215,60 @@ public class EvalController {
         return detail;
     }
 
+    /* ==================== 趋势与对比 ==================== */
+
+    @GetMapping("/trends")
+    public List<EvalViews.TrendPoint> trends(@RequestParam long datasetId,
+                                             @RequestParam(defaultValue = "20") int limit) {
+        return service.trends(datasetId, limit);
+    }
+
+    @GetMapping("/compare")
+    public EvalViews.CompareResult compare(@RequestParam long left, @RequestParam long right) {
+        return service.compare(left, right);
+    }
+
+    /* ==================== 告警 ==================== */
+
+    @GetMapping("/alerts/rules")
+    public List<EvalViews.AlertRule> alertRules() {
+        return service.alertRules();
+    }
+
+    @PostMapping("/alerts/rules")
+    public ResponseEntity<EvalViews.AlertRule> createAlertRule(@RequestBody CreateAlertRule body) {
+        EvalViews.AlertRule rule = service.createAlertRule(body.name(), body.metric(),
+                body.comparator(), body.threshold() == null ? 0 : body.threshold(), body.severity());
+        return ResponseEntity.status(HttpStatus.CREATED).body(rule);
+    }
+
+    @PostMapping("/alerts/rules/{id}/actions/{verb}")
+    public ResponseEntity<Void> alertRuleAction(@PathVariable long id, @PathVariable String verb) {
+        boolean enable = "enable".equals(verb);
+        if (!enable && !"disable".equals(verb)) {
+            throw ApiException.badRequest("暂不支持该动作：" + verb);
+        }
+        if (!service.toggleAlertRule(id, enable)) {
+            throw ApiException.notFound("规则不存在");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/alerts/events")
+    public List<EvalViews.AlertEvent> alertEvents(@RequestParam(required = false) String status,
+                                                  @RequestParam(defaultValue = "50") int limit) {
+        return service.alertEvents(status, limit);
+    }
+
+    @PostMapping("/alerts/events/{id}/actions/ack")
+    public ResponseEntity<Void> ackAlert(@PathVariable long id,
+                                         @RequestBody(required = false) AckAlert body) {
+        if (!service.ackAlert(id, body == null ? null : body.note())) {
+            throw ApiException.notFound("事件不存在或已处置");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
     /* ==================== 价目 ==================== */
 
     @GetMapping("/prices")
@@ -309,6 +363,15 @@ public class EvalController {
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record ImportRequest(String content, Boolean dryRun) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record CreateAlertRule(String name, String metric, String comparator, Double threshold,
+                                  String severity) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record AckAlert(String note) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

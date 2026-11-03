@@ -47,6 +47,33 @@ public final class EvalViews {
     public record TagStat(String tag, int count) {
     }
 
+    public record TrendPoint(long batchId, String name, long datasetVersionId, String createdAt,
+                             String gateStatus, String gateReason, double passRate, int judged,
+                             long costMicro, int pricedRuns, long p95Ms) {
+    }
+
+    public record CompareSide(long batchId, String name, long datasetVersionId, double passRate,
+                              int judged, long costMicro, long p95Ms) {
+    }
+
+    public record CompareCase(String caseKey, String question, String left, String right,
+                              String tag, Long leftRunId, Long rightRunId) {
+    }
+
+    public record CompareResult(CompareSide left, CompareSide right, boolean sameDataset,
+                                boolean sameVersion, int improved, int regressed, int same,
+                                List<CompareCase> changes) {
+    }
+
+    public record AlertRule(long id, String name, String metric, String comparator, double threshold,
+                            String severity, boolean enabled, String createdAt) {
+    }
+
+    public record AlertEvent(long id, long ruleId, String ruleName, long batchId, double metricValue,
+                             double threshold, String severity, String status, String createdAt,
+                             String ackedAt, String note) {
+    }
+
     public record Price(long id, String provider, String model, double inputPerMillion,
                         double outputPerMillion, String currency, String updatedAt) {
     }

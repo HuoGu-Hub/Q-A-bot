@@ -940,3 +940,73 @@ export interface EvalPrice {
   currency: string
   updatedAt: string
 }
+
+export interface EvalTrendPoint {
+  batchId: number
+  name: string
+  datasetVersionId: number
+  createdAt: string
+  gateStatus: string
+  gateReason: string | null
+  passRate: number
+  judged: number
+  costMicro: number
+  pricedRuns: number
+  p95Ms: number
+}
+
+export interface EvalCompareSide {
+  batchId: number
+  name: string
+  datasetVersionId: number
+  passRate: number
+  judged: number
+  costMicro: number
+  p95Ms: number
+}
+
+export interface EvalCompareCase {
+  caseKey: string
+  question: string
+  left: string
+  right: string
+  tag: string | null
+  leftRunId: number | null
+  rightRunId: number | null
+}
+
+export interface EvalCompareResult {
+  left: EvalCompareSide
+  right: EvalCompareSide
+  sameDataset: boolean
+  sameVersion: boolean
+  improved: number
+  regressed: number
+  same: number
+  changes: EvalCompareCase[]
+}
+
+export interface EvalAlertRule {
+  id: number
+  name: string
+  metric: string
+  comparator: string
+  threshold: number
+  severity: string
+  enabled: boolean
+  createdAt: string
+}
+
+export interface EvalAlertEvent {
+  id: number
+  ruleId: number
+  ruleName: string
+  batchId: number
+  metricValue: number
+  threshold: number
+  severity: string
+  status: string
+  createdAt: string
+  ackedAt: string | null
+  note: string | null
+}

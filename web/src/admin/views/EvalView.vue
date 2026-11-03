@@ -153,6 +153,8 @@ function when(value: string | null): string {
     </template>
     <template #actions>
       <Button size="sm" to="/eval/reviews">复核队列</Button>
+      <Button size="sm" to="/eval/trends">趋势与对比</Button>
+      <Button size="sm" to="/eval/alerts">告警</Button>
       <Button size="sm" to="/eval/prices">价目</Button>
       <Button size="sm" :disabled="loading" @click="refresh">刷新</Button>
     </template>

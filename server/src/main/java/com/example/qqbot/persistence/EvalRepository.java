@@ -226,6 +226,29 @@ public class EvalRepository {
                 + " updated_at TEXT NOT NULL,"
                 + " UNIQUE(provider, model))");
 
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_alert_rule ("
+                + " id INTEGER PRIMARY KEY,"
+                + " name TEXT NOT NULL,"
+                + " metric TEXT NOT NULL,"
+                + " comparator TEXT NOT NULL DEFAULT 'lt',"
+                + " threshold REAL NOT NULL,"
+                + " severity TEXT NOT NULL DEFAULT 'warn',"
+                + " enabled INTEGER NOT NULL DEFAULT 1,"
+                + " created_at TEXT NOT NULL)");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_alert_event ("
+                + " id INTEGER PRIMARY KEY,"
+                + " rule_id INTEGER NOT NULL,"
+                + " batch_id INTEGER NOT NULL,"
+                + " metric_value REAL NOT NULL,"
+                + " threshold REAL NOT NULL,"
+                + " severity TEXT NOT NULL,"
+                + " status TEXT NOT NULL DEFAULT 'open',"
+                + " created_at TEXT NOT NULL,"
+                + " acked_at TEXT,"
+                + " note TEXT)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_alert_event_status"
+                + " ON eval_alert_event(status, created_at)");
+
         // 老库补列：CREATE TABLE IF NOT EXISTS 对已存在的表什么都不做
         ensureColumn("eval_batch", "gate_reason", "gate_reason TEXT");
         ensureColumn("eval_run", "tokens_in", "tokens_in INTEGER DEFAULT 0");
@@ -846,6 +869,97 @@ public class EvalRepository {
         return new PriceRow(rs.longOf("id"), rs.str("provider"), rs.str("model"),
                 rs.dbl("input_per_million"), rs.dbl("output_per_million"), rs.str("currency"),
                 rs.str("updated_at"));
+    }
+
+    /* ==================== 趋势与对比 ==================== */
+
+    public List<BatchRow> batchesOfDataset(long datasetId, int limit) {
+        return jdbc.query("SELECT id, name, dataset_id, dataset_version_id, target_json, mode, concurrency,"
+                        + " repeat_times, sample_rate, status, gate_status, gate_reason, item_total,"
+                        + " stats_json, created_at, started_at, finished_at FROM eval_batch"
+                        + " WHERE dataset_id=? AND status='completed' ORDER BY id DESC LIMIT ?",
+                rs -> new BatchRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_id"),
+                        rs.longOf("dataset_version_id"), rs.str("target_json"), rs.str("mode"),
+                        rs.intOf("concurrency"), rs.intOf("repeat_times"), rs.dbl("sample_rate"),
+                        rs.str("status"), rs.str("gate_status"), rs.str("gate_reason"),
+                        rs.intOf("item_total"), rs.str("stats_json"), rs.str("created_at"),
+                        rs.str("started_at"), rs.str("finished_at")), datasetId, limit);
+    }
+
+    public record CaseVerdict(String caseKey, String question, String quality, String rag,
+                              String tag, long runId) {
+    }
+
+    /** 每个用例第一次执行的结论，对比用 */
+    public List<CaseVerdict> caseVerdicts(long batchId) {
+        return jdbc.query("SELECT c.case_key, c.question, r.id AS run_id,"
+                        + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='quality'"
+                        + "  ORDER BY j.id DESC LIMIT 1) AS quality,"
+                        + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
+                        + "  ORDER BY j.id DESC LIMIT 1) AS rag,"
+                        + " (SELECT j.tag FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
+                        + "  ORDER BY j.id DESC LIMIT 1) AS tag"
+                        + " FROM eval_run r JOIN eval_case c ON c.id=r.case_id"
+                        + " WHERE r.batch_id=? AND r.attempt=1 ORDER BY c.case_key",
+                rs -> new CaseVerdict(rs.str("case_key"), rs.str("question"), rs.str("quality"),
+                        rs.str("rag"), rs.str("tag"), rs.longOf("run_id")), batchId);
+    }
+
+    /* ==================== 告警 ==================== */
+
+    public record AlertRule(long id, String name, String metric, String comparator,
+                            double threshold, String severity, boolean enabled, String createdAt) {
+    }
+
+    public record AlertEvent(long id, long ruleId, String ruleName, long batchId, double metricValue,
+                             double threshold, String severity, String status, String createdAt,
+                             String ackedAt, String note) {
+    }
+
+    public long insertAlertRule(String name, String metric, String comparator, double threshold,
+                                String severity, String now) {
+        return jdbc.insert("INSERT INTO eval_alert_rule (name, metric, comparator, threshold, severity,"
+                + " enabled, created_at) VALUES (?,?,?,?,?,1,?)",
+                name, metric, comparator, threshold, severity, now);
+    }
+
+    public List<AlertRule> listAlertRules() {
+        return jdbc.query("SELECT id, name, metric, comparator, threshold, severity, enabled, created_at"
+                        + " FROM eval_alert_rule ORDER BY id DESC",
+                rs -> new AlertRule(rs.longOf("id"), rs.str("name"), rs.str("metric"),
+                        rs.str("comparator"), rs.dbl("threshold"), rs.str("severity"),
+                        rs.bool("enabled"), rs.str("created_at")));
+    }
+
+    public void setAlertRuleEnabled(long id, boolean enabled) {
+        jdbc.update("UPDATE eval_alert_rule SET enabled=? WHERE id=?", enabled, id);
+    }
+
+    public long insertAlertEvent(long ruleId, long batchId, double value, double threshold,
+                                 String severity, String now) {
+        return jdbc.insert("INSERT INTO eval_alert_event (rule_id, batch_id, metric_value, threshold,"
+                + " severity, status, created_at) VALUES (?,?,?,?,?,'open',?)",
+                ruleId, batchId, value, threshold, severity, now);
+    }
+
+    public List<AlertEvent> listAlertEvents(String status, int limit) {
+        String where = status == null || status.isBlank() ? "" : " WHERE e.status=?";
+        String sql = "SELECT e.id, e.rule_id, e.batch_id, e.metric_value, e.threshold, e.severity,"
+                + " e.status, e.created_at, e.acked_at, e.note, r.name AS rule_name"
+                + " FROM eval_alert_event e LEFT JOIN eval_alert_rule r ON r.id=e.rule_id" + where
+                + " ORDER BY e.id DESC LIMIT ?";
+        Jdbc.RowMapper<AlertEvent> mapper = rs -> new AlertEvent(rs.longOf("id"), rs.longOf("rule_id"),
+                rs.str("rule_name"), rs.longOf("batch_id"), rs.dbl("metric_value"), rs.dbl("threshold"),
+                rs.str("severity"), rs.str("status"), rs.str("created_at"), rs.str("acked_at"),
+                rs.str("note"));
+        return status == null || status.isBlank()
+                ? jdbc.query(sql, mapper, limit)
+                : jdbc.query(sql, mapper, status, limit);
+    }
+
+    public boolean ackAlertEvent(long id, String note, String now) {
+        return jdbc.update("UPDATE eval_alert_event SET status='acked', acked_at=?, note=?"
+                + " WHERE id=? AND status='open'", now, note, id) == 1;
     }
 
     /* ==================== 统计 ==================== */

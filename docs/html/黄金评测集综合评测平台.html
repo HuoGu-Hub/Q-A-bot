@@ -1237,7 +1237,10 @@ baseline：candidate ──promote──► active ──retire──► retired
 <tr><td>页面</td><td>批次与用例集、批次结果、单条时间轴、复核队列、成本价目</td><td><code>/eval</code>、<code>/eval/batches/:id</code>、<code>/eval/runs/:id</code>、<code>/eval/reviews</code>、<code>/eval/prices</code></td></tr>
 <tr><td>成本价目</td><td>已接入：按元每百万 token 配置，成本以微元存，批次门禁比较单条平均成本</td><td><code>eval_price</code>、<code>EvalPricing</code>、<code>/eval/prices</code></td></tr>
 <tr><td>工具返回值、逐句引用</td><td>未采集，页面不展示而不是显示 0</td><td>待包装执行器与后置对齐</td></tr>
-<tr><td>告警、报告、趋势、版本对比、失败归因独立页</td><td>未实现</td><td>P1</td></tr>
+<tr><td>趋势与版本对比</td><td>已实现：按用例集的批次趋势、两次运行的差异与逐条翻转清单</td><td><code>/eval/trends</code>、<code>/compare</code></td></tr>
+<tr><td>报告导出</td><td>已实现单文件 HTML；不可变快照待报告中心</td><td><code>EvalReport</code>、<code>/batches/{id}/report</code></td></tr>
+<tr><td>告警</td><td>已实现规则、事件与处置；暂不主动发通知</td><td><code>eval_alert_rule</code>、<code>eval_alert_event</code>、<code>/eval/alerts</code></td></tr>
+<tr><td>失败归因独立页</td><td>未做，按标签下钻已够用</td><td>可接受</td></tr>
 <tr><td>评测执行隔离</td><td>仍与线上共用主库</td><td>批次量上来后切库副本</td></tr>
 </tbody>
 </table></div>

@@ -217,6 +217,66 @@ class EvalFlowTest {
         assertThat(service.runDetail(runId).costMicro()).isEqualTo(20_000L);
     }
 
+    @Test
+    @DisplayName("两次批次对比给出回退用例清单")
+    void comparesTwoBatches() throws Exception {
+        KbTrace trace = new KbTrace(true,
+                List.of(new KbTrace.Hit("block-1", "废料杯", "doc-1", 0.82, "vector")),
+                0.8, 0.81, 3, 1, List.of(), 120);
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenReturn(new ChatService.ReplyResult("废料杯在废料堆旁边。", 800, trace, List.of()));
+
+        EvalViews.Dataset dataset = datasets.create("compare-" + Instant.now().toEpochMilli(),
+                "对比用例集", "", "test");
+        datasets.addCase(dataset.id(), "entity-x", "entity", "废料杯在哪", "block-1", "");
+        EvalViews.Version version = datasets.freeze(dataset.id(), "test");
+        long left = service.createBatch("对比左", dataset.id(), version.id(), 1, 1, "offline", 1.0, "test");
+        waitForBatch(left);
+
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenReturn(new ChatService.ReplyResult("", 300, trace, List.of()));
+        long right = service.createBatch("对比右", dataset.id(), version.id(), 1, 1, "offline", 1.0, "test");
+        waitForBatch(right);
+
+        EvalViews.CompareResult result = service.compare(left, right);
+        assertThat(result.sameDataset()).isTrue();
+        assertThat(result.sameVersion()).isTrue();
+        assertThat(result.regressed()).isEqualTo(1);
+        assertThat(result.changes()).hasSize(1);
+        assertThat(result.changes().get(0).left()).isEqualTo("PASS");
+        assertThat(result.changes().get(0).right()).isEqualTo("FAIL");
+    }
+
+    @Test
+    @DisplayName("告警规则命中生成事件，处置后不再出现在待处理里")
+    void alertRuleFiresAndAcks() throws Exception {
+        EvalRepository.AlertRule rule = repo.listAlertRules().stream()
+                .filter(r -> "测试通过率".equals(r.name())).findFirst()
+                .orElseGet(() -> {
+                    long id = repo.insertAlertRule("测试通过率", "passRate", "lt", 0.9, "warn",
+                            Instant.now().toString());
+                    return repo.listAlertRules().stream().filter(r -> r.id() == id).findFirst().orElseThrow();
+                });
+
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenReturn(new ChatService.ReplyResult("", 300,
+                        new KbTrace(true, List.of(), 0, 0, 0, 0, List.of(), 10), List.of()));
+        EvalViews.Dataset dataset = datasets.create("alert-" + Instant.now().toEpochMilli(),
+                "告警用例集", "", "test");
+        datasets.addCase(dataset.id(), "entity-a", "entity", "废料杯在哪", "block-1", "");
+        EvalViews.Version version = datasets.freeze(dataset.id(), "test");
+        long batchId = service.createBatch("告警批次", dataset.id(), version.id(), 1, 1,
+                "offline", 1.0, "test");
+        waitForBatch(batchId);
+
+        List<EvalViews.AlertEvent> open = service.alertEvents("open", 50);
+        assertThat(open).anyMatch(e -> e.ruleId() == rule.id() && e.batchId() == batchId);
+        EvalViews.AlertEvent event = open.stream()
+                .filter(e -> e.ruleId() == rule.id() && e.batchId() == batchId).findFirst().orElseThrow();
+        assertThat(service.ackAlert(event.id(), "已知回退")).isTrue();
+        assertThat(service.alertEvents("open", 50)).noneMatch(e -> e.id() == event.id());
+    }
+
     /** 批次在独立线程里跑，这里等它进终态；超时就把当时状态报出来 */
     private EvalRepository.BatchRow waitForBatch(long batchId) throws InterruptedException {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));

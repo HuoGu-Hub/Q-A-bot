@@ -51,6 +51,8 @@ eval
 | `eval_review_task` | 复核队列，同一 run 只留一个未关闭任务 |
 | `eval_baseline` | 基线，同一版本只允许一条 active |
 | `eval_price` | 模型价目，单位元 / 百万 token |
+| `eval_alert_rule` | 告警规则，指标限通过率、单条成本、P95 |
+| `eval_alert_event` | 告警事件，命中即生成，可处置 |
 
 建表在 `EvalRepository.initSchema`，幂等；启动时由 `EvalSeeder` 调用一次。
 
@@ -74,6 +76,13 @@ eval
 | GET | `/runs/{id}` | 单条执行：span、检索快照、判定、工具调用 |
 | GET | `/batches/{id}/failures` | 失败归因下钻，可按标签过滤 |
 | GET | `/batches/{id}/report` | 单文件 HTML 报告，可直接归档 |
+| GET | `/trends?datasetId=` | 用例集的批次趋势，只含已完成批次 |
+| GET | `/compare?left=&right=` | 两次运行对比，给出变好、变差与逐条变化 |
+| GET | `/alerts/rules` | 告警规则 |
+| POST | `/alerts/rules` | 新建规则 |
+| POST | `/alerts/rules/{id}/actions/{enable|disable}` | 启停规则 |
+| GET | `/alerts/events` | 告警事件 |
+| POST | `/alerts/events/{id}/actions/ack` | 处置事件 |
 | POST | `/runs/{id}/actions/review` | 人工转复核 |
 | GET | `/reviews` | 复核队列 |
 | POST | `/reviews/{id}/actions/claim` | 认领 |
@@ -122,8 +131,9 @@ eval
 | 工具调用只有名称与参数，返回值与耗时未采集 | Agent 维度能判"选对没有"，判不了"返回对不对" | 包装 `ToolExecutor` 记录执行结果 |
 | 逐句引用未采集 | 证据链维度为空 | 后置对齐原型 |
 | 重跑失败项、暂停、取消 | 只能克隆整批 | 执行器支持中断与断点 |
-| 告警、趋势、版本对比 | 页面未提供入口 | P1 |
 | 报告是即时生成 | 数据变化后同一批次报告会变 | 报告中心做不可变快照 |
+| 告警只落事件，不发通知 | 需要有人主动看页面 | 接 QQ 私聊或 webhook |
+| 趋势只按用例集聚合 | 没有按类别的分层趋势 | 加类别维度 |
 | 失败归因没有独立页 | 只能在批次页按标签下钻 | 可接受 |
 | 评测写入共用主库 | 大批次会与问答抢写 | 批次量上来后切库副本 |
 
@@ -136,6 +146,6 @@ eval
 |---|---|
 | `RuleJudgeTest` | 判定口径：空返回、噪声、名次分、未标注、超时 |
 | `EvalRepositoryTest` | 建表幂等、一次执行整体落库、判定幂等、批次读取 |
-| `EvalFlowTest` | 建批到出结论、重复运行一致性、复核覆盖、基线阻断、成本计价 |
+| `EvalFlowTest` | 建批到出结论、重复运行一致性、复核覆盖、基线阻断、成本计价、批次对比、告警命中与处置 |
 | `EvalPricingTest` | 微元换算口径 |
 | `LlmUsageTest` | 用量收集只在打开时记 |

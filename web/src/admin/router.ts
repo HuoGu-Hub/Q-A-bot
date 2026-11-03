@@ -48,6 +48,8 @@ export const router = createRouter({
     // 旧的 /glossary 与 /keywords 都指向同一个 tab —— 后端把术语表收成 kb_term
     // 单表后，这两块本来就是同一批对象，redirect 到同一处正好说明这一点。
     { path: '/eval', name: 'eval', component: () => import('./views/EvalView.vue'), meta: { area: 'eval' } },
+    { path: '/eval/trends', name: 'eval-trends', component: () => import('./views/EvalTrendsView.vue'), meta: { area: 'eval' } },
+    { path: '/eval/alerts', name: 'eval-alerts', component: () => import('./views/EvalAlertsView.vue'), meta: { area: 'eval' } },
     { path: '/eval/prices', name: 'eval-prices', component: () => import('./views/EvalPricesView.vue'), meta: { area: 'eval' } },
     { path: '/eval/reviews', name: 'eval-reviews', component: () => import('./views/EvalReviewsView.vue'), meta: { area: 'eval' } },
     { path: '/eval/batches/:id', name: 'eval-batch', component: () => import('./views/EvalBatchView.vue'), meta: { area: 'eval' } },

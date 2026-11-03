@@ -231,6 +231,142 @@ public class EvalService {
                 b.status(), b.createdAt(), b.promotedBy(), b.promotedAt());
     }
 
+    /* ==================== 趋势与对比 ==================== */
+
+    public List<EvalViews.TrendPoint> trends(long datasetId, int limit) {
+        List<EvalViews.TrendPoint> out = new ArrayList<>();
+        for (EvalRepository.BatchRow b : repo.batchesOfDataset(datasetId, Math.max(1, Math.min(50, limit)))) {
+            EvalViews.Summary summary = summaryOrNull(b.statsJson());
+            out.add(new EvalViews.TrendPoint(b.id(), b.name(), b.datasetVersionId(), b.createdAt(),
+                    b.gateStatus(), b.gateReason(), summary == null ? 0 : summary.passRate(),
+                    summary == null ? 0 : summary.judged(), summary == null ? 0 : summary.costMicro(),
+                    summary == null ? 0 : summary.pricedRuns(), summary == null ? 0 : summary.p95Ms()));
+        }
+        return out;
+    }
+
+    public EvalViews.CompareResult compare(long leftId, long rightId) {
+        EvalRepository.BatchRow left = repo.findBatch(leftId);
+        EvalRepository.BatchRow right = repo.findBatch(rightId);
+        if (left == null || right == null) {
+            throw ApiException.notFound("批次不存在");
+        }
+        EvalViews.Summary leftSummary = aggregator.summarise(leftId);
+        EvalViews.Summary rightSummary = aggregator.summarise(rightId);
+        Map<String, String> leftVerdicts = verdictMap(leftId);
+        Map<String, String> rightVerdicts = verdictMap(rightId);
+        Map<String, EvalRepository.CaseVerdict> rightDetail = new LinkedHashMap<>();
+        for (EvalRepository.CaseVerdict c : repo.caseVerdicts(rightId)) {
+            rightDetail.put(c.caseKey(), c);
+        }
+        int improved = 0;
+        int regressed = 0;
+        int same = 0;
+        List<EvalViews.CompareCase> changes = new ArrayList<>();
+        for (Map.Entry<String, String> e : leftVerdicts.entrySet()) {
+            String before = e.getValue();
+            String after = rightVerdicts.get(e.getKey());
+            if (after == null) {
+                continue;
+            }
+            boolean wasPass = Judgement.PASS.equals(before);
+            boolean isPass = Judgement.PASS.equals(after);
+            if (wasPass && isPass) {
+                same++;
+            } else if (!wasPass && isPass) {
+                improved++;
+                changes.add(change(e.getKey(), before, after, rightDetail));
+            } else if (wasPass) {
+                regressed++;
+                changes.add(change(e.getKey(), before, after, rightDetail));
+            } else {
+                same++;
+            }
+        }
+        return new EvalViews.CompareResult(side(left, leftSummary), side(right, rightSummary),
+                left.datasetId() == right.datasetId(),
+                left.datasetVersionId() == right.datasetVersionId(),
+                improved, regressed, same, changes);
+    }
+
+    private EvalViews.CompareCase change(String caseKey, String before, String after,
+                                         Map<String, EvalRepository.CaseVerdict> rightDetail) {
+        EvalRepository.CaseVerdict c = rightDetail.get(caseKey);
+        return new EvalViews.CompareCase(caseKey, c == null ? "" : c.question(), before, after,
+                c == null ? null : c.tag(), null, c == null ? null : c.runId());
+    }
+
+    private Map<String, String> verdictMap(long batchId) {
+        Map<String, String> out = new LinkedHashMap<>();
+        for (EvalRepository.CaseVerdict c : repo.caseVerdicts(batchId)) {
+            boolean failed = Judgement.FAIL.equals(c.quality()) || Judgement.FAIL.equals(c.rag());
+            boolean passed = Judgement.PASS.equals(c.quality()) || Judgement.PASS.equals(c.rag());
+            out.put(c.caseKey(), failed ? Judgement.FAIL : passed ? Judgement.PASS : Judgement.SKIP);
+        }
+        return out;
+    }
+
+    private static EvalViews.CompareSide side(EvalRepository.BatchRow b, EvalViews.Summary s) {
+        return new EvalViews.CompareSide(b.id(), b.name(), b.datasetVersionId(), s.passRate(),
+                s.judged(), s.costMicro(), s.p95Ms());
+    }
+
+    private EvalViews.Summary summaryOrNull(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper.readValue(json, EvalViews.Summary.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /* ==================== 告警 ==================== */
+
+    public List<EvalViews.AlertRule> alertRules() {
+        List<EvalViews.AlertRule> out = new ArrayList<>();
+        for (EvalRepository.AlertRule r : repo.listAlertRules()) {
+            out.add(new EvalViews.AlertRule(r.id(), r.name(), r.metric(), r.comparator(),
+                    r.threshold(), r.severity(), r.enabled(), r.createdAt()));
+        }
+        return out;
+    }
+
+    public EvalViews.AlertRule createAlertRule(String name, String metric, String comparator,
+                                               double threshold, String severity) {
+        if (name == null || name.isBlank() || metric == null) {
+            throw ApiException.badRequest("需要名称与指标");
+        }
+        long id = repo.insertAlertRule(name.strip(), metric,
+                comparator == null || comparator.isBlank() ? "lt" : comparator,
+                threshold, severity == null || severity.isBlank() ? "warn" : severity,
+                Instant.now().toString());
+        return alertRules().stream().filter(r -> r.id() == id).findFirst().orElse(null);
+    }
+
+    public boolean toggleAlertRule(long id, boolean enabled) {
+        if (repo.listAlertRules().stream().noneMatch(r -> r.id() == id)) {
+            return false;
+        }
+        repo.setAlertRuleEnabled(id, enabled);
+        return true;
+    }
+
+    public List<EvalViews.AlertEvent> alertEvents(String status, int limit) {
+        List<EvalViews.AlertEvent> out = new ArrayList<>();
+        for (EvalRepository.AlertEvent e : repo.listAlertEvents(status, Math.max(1, Math.min(200, limit)))) {
+            out.add(new EvalViews.AlertEvent(e.id(), e.ruleId(), e.ruleName(), e.batchId(),
+                    e.metricValue(), e.threshold(), e.severity(), e.status(), e.createdAt(),
+                    e.ackedAt(), e.note()));
+        }
+        return out;
+    }
+
+    public boolean ackAlert(long id, String note) {
+        return repo.ackAlertEvent(id, note, Instant.now().toString());
+    }
+
     public List<EvalViews.Price> prices() {
         List<EvalViews.Price> out = new ArrayList<>();
         for (EvalRepository.PriceRow p : repo.listPrices()) {

@@ -51,10 +51,12 @@ public class EvalRunner {
     private final KbPolicy kbPolicy;
     private final LlmPolicy llmPolicy;
     private final KbBlockStore blockStore;
+    private final EvalAlerts alerts;
     private final ExecutorService pool;
 
     public EvalRunner(EvalRepository repo, EvalCaseExecutor executor, EvalAggregator aggregator,
-                      ObjectMapper mapper, KbPolicy kbPolicy, LlmPolicy llmPolicy, KbBlockStore blockStore) {
+                      ObjectMapper mapper, KbPolicy kbPolicy, LlmPolicy llmPolicy, KbBlockStore blockStore,
+                      EvalAlerts alerts) {
         this.repo = repo;
         this.executor = executor;
         this.aggregator = aggregator;
@@ -62,6 +64,7 @@ public class EvalRunner {
         this.kbPolicy = kbPolicy;
         this.llmPolicy = llmPolicy;
         this.blockStore = blockStore;
+        this.alerts = alerts;
         AtomicInteger seq = new AtomicInteger();
         this.pool = Executors.newFixedThreadPool(POOL_SIZE, r -> {
             Thread t = new Thread(r, "eval-runner-" + seq.incrementAndGet());
@@ -156,8 +159,9 @@ public class EvalRunner {
             }
             repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate, reason,
                     Instant.now().toString());
-            log.info("[EVAL] 批次 {} 完成：判定 {} 条，通过率 {}，门禁 {}（{}）",
-                    batchId, summary.judged(), summary.passRate(), gate, reason);
+            int hits = alerts.evaluate(batchId, summary);
+            log.info("[EVAL] 批次 {} 完成：判定 {} 条，通过率 {}，门禁 {}（{}），告警 {} 条",
+                    batchId, summary.judged(), summary.passRate(), gate, reason, hits);
         } catch (Exception e) {
             repo.finishBatch(batchId, "failed", null, "pending", "聚合失败", Instant.now().toString());
             log.warn("[EVAL] 批次 {} 聚合失败：{}（已完成的结果保留）", batchId, e.getMessage());
