@@ -369,6 +369,32 @@ public class EvalService {
         return repo.ackAlertEvent(id, note, Instant.now().toString());
     }
 
+    /* ==================== 用例维护 ==================== */
+
+    public EvalViews.CaseView updateCase(long datasetId, long caseId, String question,
+                                         String expected, String note, Boolean enabled) {
+        EvalRepository.CaseRow existing = repo.listCases(datasetId, 1000, 0).stream()
+                .filter(c -> c.id() == caseId).findFirst().orElse(null);
+        if (existing == null) {
+            throw ApiException.notFound("用例不存在");
+        }
+        String q = question == null || question.isBlank() ? existing.question() : question.strip();
+        String e = expected == null ? existing.expected() : expected.strip();
+        String n = note == null ? existing.note() : note.strip();
+        boolean on = enabled == null ? existing.enabled() : enabled;
+        if (!repo.updateCase(datasetId, caseId, q, e, n, on, Instant.now().toString())) {
+            throw ApiException.notFound("用例不存在");
+        }
+        return new EvalViews.CaseView(caseId, existing.caseKey(), existing.category(), q, e, n, on,
+                existing.dimension());
+    }
+
+    public void deleteCase(long datasetId, long caseId) {
+        if (!repo.deleteCase(datasetId, caseId)) {
+            throw ApiException.notFound("用例不存在");
+        }
+    }
+
     public List<EvalViews.Price> prices() {
         List<EvalViews.Price> out = new ArrayList<>();
         for (EvalRepository.PriceRow p : repo.listPrices()) {

@@ -1011,3 +1011,21 @@ export interface EvalAlertEvent {
   ackedAt: string | null
   note: string | null
 }
+
+export interface EvalCase {
+  id: number
+  caseKey: string
+  category: string
+  question: string
+  expected: string
+  note: string
+  enabled: boolean
+  dimension: string
+}
+
+export interface EvalDatasetDetail {
+  dataset: EvalDataset
+  versions: EvalVersion[]
+  cases: EvalCase[]
+  totalCases: number
+}

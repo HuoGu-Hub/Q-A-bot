@@ -325,6 +325,18 @@ public class EvalRepository {
                 datasetId, limit, offset);
     }
 
+    /** 改一条用例；不动 case_key，避免已冻结版本与历史 run 的引用错位 */
+    public boolean updateCase(long datasetId, long caseId, String question, String expected,
+                              String note, boolean enabled, String now) {
+        return jdbc.update("UPDATE eval_case SET question=?, expected=?, note=?, enabled=?,"
+                + " updated_at=? WHERE id=? AND dataset_id=?",
+                question, expected, note, enabled, now, caseId, datasetId) == 1;
+    }
+
+    public boolean deleteCase(long datasetId, long caseId) {
+        return jdbc.update("DELETE FROM eval_case WHERE id=? AND dataset_id=?", caseId, datasetId) == 1;
+    }
+
     public long countCases(long datasetId) {
         return jdbc.count("SELECT COUNT(*) FROM eval_case WHERE dataset_id=?", datasetId);
     }

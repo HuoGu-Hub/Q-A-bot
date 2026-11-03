@@ -63,6 +63,16 @@ class EvalRepositoryTest {
         repo.upsertCase(datasetId, "k1", "entity", "问题一改", "b1;b2", "备注", "rag", "2026-11-03T10:01:00Z");
         assertThat(repo.countCases(datasetId)).isEqualTo(1);
         assertThat(repo.findCase(datasetId, "k1").question()).isEqualTo("问题一改");
+
+        EvalRepository.CaseRow k1 = repo.findCase(datasetId, "k1");
+        assertThat(repo.updateCase(datasetId, k1.id(), "问题二", "b3", "改过", false,
+                "2026-11-03T10:02:00Z")).isTrue();
+        EvalRepository.CaseRow updated = repo.findCase(datasetId, "k1");
+        assertThat(updated.question()).isEqualTo("问题二");
+        assertThat(updated.enabled()).isFalse();
+
+        assertThat(repo.deleteCase(datasetId, k1.id())).isTrue();
+        assertThat(repo.findCase(datasetId, "k1")).isNull();
     }
 
     @Test

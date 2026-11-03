@@ -242,7 +242,10 @@ function when(value: string | null): string {
               <td class="num">{{ d.caseCount }}</td>
               <td class="num">{{ d.versionCount }}</td>
               <td>{{ when(d.createdAt) }}</td>
-              <td><Button size="sm" :disabled="d.caseCount === 0" @click="freeze(d.id)">冻结</Button></td>
+              <td>
+                <Button size="sm" :to="`/eval/datasets/${d.id}`">用例</Button>
+                <Button size="sm" :disabled="d.caseCount === 0" @click="freeze(d.id)">冻结</Button>
+              </td>
             </tr>
           </tbody>
         </DataTable>

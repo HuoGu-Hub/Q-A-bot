@@ -16,6 +16,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -131,6 +133,23 @@ public class EvalController {
         }
         audit(request, "dataset.freeze", "dataset=" + id + " version=" + version.version());
         return ResponseEntity.status(HttpStatus.CREATED).body(version);
+    }
+
+    @PatchMapping("/datasets/{id}/cases/{caseId}")
+    public EvalViews.CaseView updateCase(@PathVariable long id, @PathVariable long caseId,
+                                         @RequestBody UpdateCase body, HttpServletRequest request) {
+        EvalViews.CaseView view = service.updateCase(id, caseId, body.question(), body.expected(),
+                body.note(), body.enabled());
+        audit(request, "dataset.case.update", "dataset=" + id + " case=" + caseId);
+        return view;
+    }
+
+    @DeleteMapping("/datasets/{id}/cases/{caseId}")
+    public ResponseEntity<Void> deleteCase(@PathVariable long id, @PathVariable long caseId,
+                                           HttpServletRequest request) {
+        service.deleteCase(id, caseId);
+        audit(request, "dataset.case.delete", "dataset=" + id + " case=" + caseId);
+        return ResponseEntity.noContent().build();
     }
 
     /* ==================== 批次 ==================== */
@@ -374,6 +393,10 @@ public class EvalController {
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record ImportRequest(String content, Boolean dryRun) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record UpdateCase(String question, String expected, String note, Boolean enabled) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
