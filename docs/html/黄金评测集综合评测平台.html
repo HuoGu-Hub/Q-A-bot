@@ -65,6 +65,8 @@ tbody tr:last-child td { border-bottom:0; }
 tbody td:first-child code { white-space:nowrap; }
 table.api tbody td:nth-child(2) code { white-space:nowrap; }
 table.modules tbody td:first-child { white-space:nowrap; }
+table.decision { table-layout:fixed; }
+table.decision tbody td { vertical-align:top; }
 .pill { display:inline-block; font-size:.76em; font-weight:700; padding:.06em .45em; border-radius:999px; border:1px solid var(--border); background:var(--bg-soft); color:var(--fg-soft); white-space:nowrap; }
 .pill.p0 { color:#fff; background:var(--danger); border-color:var(--danger); }
 .pill.p1 { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
@@ -122,7 +124,7 @@ table.modules tbody td:first-child { white-space:nowrap; }
     <li><a href="#s8">八、关键接口清单</a></li>
     <li><a href="#s9">九、状态机与权限模型</a></li>
     <li><a href="#s10">十、P0/P1/P2 与 30 天路线图</a></li>
-    <li><a href="#s11">十一、仍需补充的信息</a></li>
+    <li><a href="#s11">十一、决策清单与兜底口径</a></li>
     <li><a href="#sa">附录 A 已有与改造与新增总表</a></li>
   </ol>
   <details><summary>目录</summary>
@@ -137,7 +139,7 @@ table.modules tbody td:first-child { white-space:nowrap; }
       <li><a href="#s8">八、关键接口清单</a></li>
       <li><a href="#s9">九、状态机与权限模型</a></li>
       <li><a href="#s10">十、P0/P1/P2 与 30 天路线图</a></li>
-      <li><a href="#s11">十一、仍需补充的信息</a></li>
+      <li><a href="#s11">十一、决策清单与兜底口径</a></li>
       <li><a href="#sa">附录 A 已有与改造与新增总表</a></li>
     </ol>
   </details>
@@ -223,7 +225,7 @@ table.modules tbody td:first-child { white-space:nowrap; }
 <h3>1.4 一次评测批次的数据流</h3>
 <ol>
 <li>用例集冻结：<code>eval_dataset_version</code> 写入 checksum，后续批次引用该版本，不随用例编辑漂移。</li>
-<li>新建批次：写入目标快照，含模型 provider、<code>top-k</code>、<code>min-score</code>、<code>title-gate</code>、提示词哈希、语料版本、工具预算。</li>
+<li>新建批次：写入目标快照，含模型 provider、<code>top-k</code>、<code>min-score</code>、<code>title-gate</code>、提示词哈希、语料版本与工具预算，并复制一份语料库。</li>
 <li>拆解 item：批次按用例逐条生成 <code>eval_item</code>，重复运行生成多个 <code>eval_run</code>，attempt 从 1 递增。</li>
 <li>执行：<code>EvalCaseExecutor</code> 组装合成事件，走真实链路，检索使用只读库副本，出站只做干跑不发送。</li>
 <li>留痕：span 在链路各点开启与关闭，检索快照、工具调用、引用映射分别落明细表。</li>
@@ -581,6 +583,7 @@ table.modules tbody td:first-child { white-space:nowrap; }
 <tbody>
 <tr><td>通过率</td><td>判定为通过的用例数除以已判定用例数</td><td>已判定，排除跳过</td><td>不低于基线 1pp</td></tr>
 <tr><td>判定覆盖率</td><td>已判定除以应判定</td><td>执行成功用例</td><td>不低于 90%</td></tr>
+<tr><td>自动判定覆盖率</td><td>进入自动判定的用例除以应判定</td><td>应判定，排除仅人工用例</td><td>不低于 80%</td></tr>
 <tr><td>过程完整率</td><td>span 齐全的 run 除以总 run</td><td>全部 run</td><td>不低于 98%</td></tr>
 <tr><td>稳定性</td><td>1 减去重复运行结论不一致率</td><td>重复次数大于 1 的用例</td><td>不低于 95%</td></tr>
 <tr><td>单任务成本</td><td>tokens 乘价格加工具成本</td><td>执行成功用例</td><td>不高于基线 30%</td></tr>
@@ -735,7 +738,7 @@ table.modules tbody td:first-child { white-space:nowrap; }
 <thead><tr><th>参数</th><th>默认</th><th>作用</th><th>约束</th></tr></thead>
 <tbody>
 <tr><td>执行模式</td><td>offline</td><td>offline 用库副本，shadow 只读线上采样，online 灰度真实链路</td><td>online 必须二次确认并记录审计</td></tr>
-<tr><td>目标快照</td><td>当前生产配置</td><td>模型 provider、温度、<code>top-k</code>、<code>min-score</code>、<code>title-gate</code>、提示词哈希、工具预算</td><td>快照写入批次，执行期不随线上改配置漂移</td></tr>
+<tr><td>目标快照</td><td>当前生产配置</td><td>模型 provider、温度、<code>top-k</code>、<code>min-score</code>、<code>title-gate</code>、提示词哈希、语料版本、工具预算</td><td>快照写入批次并复制语料库，执行期不随线上改配置与语料漂移</td></tr>
 <tr><td>并发</td><td>2</td><td>同时执行的用例数</td><td>上限 4，避免挤占问答池 6 线程</td></tr>
 <tr><td>重复次数</td><td>1</td><td>稳定性维度需要大于 1</td><td>上限 5，成本线性增长需提示</td></tr>
 <tr><td>采样率</td><td>100%</td><td>大集快速回归</td><td>低于 100% 时结论标注置信区间</td></tr>
@@ -796,7 +799,7 @@ rubric 结构示例
 <tr><td>安全类冲突</td><td>任何一方判定为漏拦即按漏拦处理</td><td>强制进安全复核，禁止直接关闭</td></tr>
 </tbody>
 </table></div>
-<p>判定幂等：<code>judge_key</code> 为 run、维度、判定器、rubric 版本与提示词哈希的组合，重复执行命中同一行，不会产生第二份结论。</p>
+<p>判定幂等：<code>judge_key</code> 为 run、维度、判定器、rubric 版本与提示词哈希的组合，重复执行命中同一行，不会产生第二份结论。判定预算未定量前按 30% 抽样执行，P0 用例仍全量人工复核，页面标注抽样率与置信区间。</p>
 
 <h3>6.6 复核</h3>
 <div class="table-wrap"><table>
@@ -1220,23 +1223,47 @@ baseline：candidate ──promote──► active ──retire──► retired
 </table></div>
 <p>关键路径是留痕底座与判定口径：底座不稳，后续所有页面都在展示不可信数据；口径不统一，趋势与对比会给出互相矛盾的结论。因此 W1 与 W2 不允许并行压缩。</p>
 
-<h2 id="s11">十一、仍需补充的信息</h2>
-<div class="table-wrap"><table>
-<thead><tr><th>信息</th><th>为什么影响设计</th><th>暂定假设</th></tr></thead>
+<h2 id="s11">十一、决策清单与兜底口径</h2>
+
+<p>十三条待定信息已经转成有责任人和截止时点的决策项。未完成决策前，全部按兜底口径执行，批次与报告上标注“兜底口径”，决策落地后优先改配置而不是改代码。</p>
+
+<div class="table-wrap"><table class="decision">
+<colgroup><col style="width:4%"><col style="width:17%"><col style="width:12%"><col style="width:24%"><col style="width:19%"><col style="width:11%"><col style="width:23%"></colgroup>
+<thead><tr><th>#</th><th>信息项与类型</th><th>谁来定</th><th>怎么定</th><th>完成标准</th><th>截止时点</th><th>定不了时的兜底</th></tr></thead>
 <tbody>
-<tr><td>黄金集当前规模与标注人力</td><td>决定判定器比例与复核队列容量</td><td>312 条，1 人兼职标注</td></tr>
-<tr><td>答案级期望值的来源</td><td>没有参考答案就只能用 rubric 判定</td><td>关键事实列表，由产品与算法共同维护</td></tr>
-<tr><td>判定模型预算</td><td>LLM 判定每条一次调用，成本可能超过被测调用</td><td>允许同供应商低价模型，单条预算不超过被测的 50%</td></tr>
-<tr><td>引用格式能否改造</td><td>句级引用需要模型输出标记或后置对齐</td><td>先用后置对齐，逐步过渡到标记</td></tr>
-<tr><td>单任务成本口径</td><td>是否含 embedding 与重排、是否含失败重试</td><td>含全部模型调用，不含人工</td></tr>
-<tr><td>语料版本快照方式</td><td>对比批次必须锁定同一语料，否则结论不可比</td><td>批次记录语料版本号，必要时复制库</td></tr>
-<tr><td>发版节奏与门禁强制力</td><td>决定阻断是硬性还是建议</td><td>质量软阻断，安全硬阻断</td></tr>
-<tr><td>评测数据保留期</td><td>合规与磁盘容量</td><td>明细 90 天，结论永久</td></tr>
-<tr><td>是否需要多实例</td><td>单进程单 SQLite 是当前硬边界</td><td>不做，先按单机设计</td></tr>
-<tr><td>是否已有外部 trace 平台</td><td>有则可直接对接 OpenTelemetry，少写一套</td><td>没有，自建 span</td></tr>
-<tr><td>安全评测语料来源</td><td>注入与越权样本需要专门策划</td><td>先由安全同学提供 40 条基线</td></tr>
-<tr><td>报告受众与格式要求</td><td>决定模板章节与是否需要 PDF</td><td>HTML 归档，PDF 由浏览器打印</td></tr>
-<tr><td>复核人的组织归属</td><td>决定 SLA 与升级路径</td><td>测试与产品轮值</td></tr>
+<tr><td>1</td><td>黄金集规模与标注人力<br><span class="pill">事实确认</span></td><td>测试负责人</td><td>查用例库确认 312 条，统计过去两周实际复核吞吐，折算条每人天</td><td>得出每周可复核上限这个数字</td><td>平台设计前</td><td>按 312 条、1 人每天 20 条估算队列容量</td></tr>
+<tr><td>2</td><td>答案级期望值来源<br><span class="pill">产品 + 算法</span></td><td>产品负责人、算法负责人</td><td>抽 20 条做 rubric 试点，看关键事实列表能否支撑判定</td><td>每维至少 1 个 rubric 模板并指定维护责任人</td><td>P0 判定器开发前</td><td>无参考答案的用例标为仅人工，不进自动判定</td></tr>
+<tr><td>3</td><td>判定模型预算<br><span class="pill">资源估算</span></td><td>算法负责人、成本 owner</td><td>用低价模型跑 100 条，测单条成本与判定一致性，推算每批次总成本</td><td>单条判定成本不超过被测调用的 50%，写入预算</td><td>判定器选型前</td><td>抽样判定 30%，P0 用例人工复核全量</td></tr>
+<tr><td>4</td><td>引用格式能否改造<br><span class="pill">技术 spike</span></td><td>算法负责人</td><td>两周内做后置对齐原型，测句级引用准确率</td><td>准确率达标则直接上后置对齐，不达标再评估标记方案</td><td>P1 证据链上线前</td><td>固定用后置对齐，标记方案列入 P2</td></tr>
+<tr><td>5</td><td>单任务成本口径<br><span class="pill">定义</span></td><td>评测平台 owner</td><td>写进指标字典：含 embedding、重排与重试，不含人工</td><td>指标字典只有唯一口径，看板按此口径计算</td><td>立刻</td><td>无，本条按给定口径直接执行</td></tr>
+<tr><td>6</td><td>语料版本快照方式<br><span class="pill">技术 / 数据</span></td><td>数据平台负责人</td><td>确认语料库是否支持版本号，不支持则评估复制库的成本与耗时</td><td>能复现任一历史批次的语料状态</td><td>批次对比功能开发前</td><td>每批次复制库快照并记录版本号</td></tr>
+<tr><td>7</td><td>发版节奏与门禁强制力<br><span class="pill">治理</span></td><td>研发负责人、安全负责人</td><td>开会拍板质量软阻断与安全硬阻断，并对齐发版频率</td><td>写入 CI 门禁规则文档</td><td>P0 平台上线前</td><td>先全部软阻断，安全项走人工卡点</td></tr>
+<tr><td>8</td><td>评测数据保留期<br><span class="pill">定义 / 合规</span></td><td>合规、运维</td><td>合规确认最低保留要求，运维估算 90 天明细的磁盘占用</td><td>写入数据保留策略：明细 90 天，结论永久</td><td>上线前</td><td>明细先跑 30 天，结论永久</td></tr>
+<tr><td>9</td><td>是否需要多实例<br><span class="pill">技术 / 架构</span></td><td>架构负责人</td><td>估算当前数据量与批次并发，设升级触发线，例如批次大于 500 或并发大于 10</td><td>明确单机容量上限与升级触发条件</td><td>架构评审时</td><td>单机 SQLite 先行，触发线写入架构决策记录</td></tr>
+<tr><td>10</td><td>是否已有外部 trace 平台<br><span class="pill">事实确认</span></td><td>平台、IT</td><td>问 IT 与可观测团队，查现有 OTel 或 Jaeger 部署</td><td>确认有或无，有则列出对接字段</td><td>立刻</td><td>按无处理，自建 span，字段兼容 OTel 语义</td></tr>
+<tr><td>11</td><td>安全评测语料来源<br><span class="pill">资源 / 交付</span></td><td>安全负责人</td><td>约定 40 条基线的交付时间、格式与覆盖类目：注入、越权、隐私、有害</td><td>40 条入库并标注期望拦截行为</td><td>安全维度上线前</td><td>先用公开样本 20 条占位并标记待替换</td></tr>
+<tr><td>12</td><td>报告受众与格式<br><span class="pill">产品</span></td><td>产品负责人</td><td>问管理层与合规：HTML 归档是否可接受，是否需要 PDF</td><td>确认报告模板章节与导出格式</td><td>报告模块开发前</td><td>HTML 归档加浏览器打印 PDF，先上线</td></tr>
+<tr><td>13</td><td>复核人组织归属<br><span class="pill">治理</span></td><td>测试负责人、产品负责人</td><td>定轮值表与 SLA，例如 P0 24 小时、P1 72 小时，并定升级路径</td><td>轮值表与 SLA 写入运营机制</td><td>平台试运行前</td><td>测试先兜底，产品每周抽检</td></tr>
+</tbody>
+</table></div>
+
+<h3>11.1 兜底口径在方案中的落点</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>决策</th><th>影响的设计点</th><th>当前方案写法</th></tr></thead>
+<tbody>
+<tr><td>1 规模与人力</td><td>复核队列容量与 SLA</td><td>按 312 条规划；复核页按 20 条每人天配上限与超时升级</td></tr>
+<tr><td>2 期望值来源</td><td>判定分母与通过率口径</td><td>未标注期望值的用例标为仅人工，只进复核，不计入自动判定分母</td></tr>
+<tr><td>3 判定预算</td><td>判定器执行策略</td><td>单条判定成本不超过被测 50%；超预算时按 30% 抽样，P0 用例仍全量人工复核</td></tr>
+<tr><td>4 引用改造</td><td>证据链句级定位</td><td>P1 只做后置对齐；引用区间与支持关系在 P1 内可交付，标记方案不阻塞</td></tr>
+<tr><td>5 成本口径</td><td>单任务成本与报告</td><td>含 embedding、重排、失败重试，不含人工；成本列按此口径唯一计算</td></tr>
+<tr><td>6 语料快照</td><td>批次目标快照与可比性</td><td>批次默认复制库并记录语料版本；对比视图校验两边语料版本一致</td></tr>
+<tr><td>7 门禁强制力</td><td>三态门禁与解除权限</td><td>质量软阻断，安全硬阻断；解除需评测管理员与安全负责人确认</td></tr>
+<tr><td>8 保留期</td><td>清理任务与报告依赖</td><td>明细 90 天，结论永久；报告与基线不随明细清理失效</td></tr>
+<tr><td>9 多实例</td><td>存储与并发上限</td><td>单机单 SQLite，执行并发上限 4；升级触发线写入架构决策记录</td></tr>
+<tr><td>10 trace 平台</td><td>span 模型与字段</td><td>自建 span，字段命名对齐 OTel 语义，便于将来对接</td></tr>
+<tr><td>11 安全语料</td><td>安全维度上线范围</td><td>先按 20 条公开样本上线并标记待替换，40 条到位后替换并重跑基线</td></tr>
+<tr><td>12 报告格式</td><td>报告模块与归档</td><td>HTML 单文件归档，PDF 由浏览器打印；报告快照不可变并记 digest</td></tr>
+<tr><td>13 复核归属</td><td>权限与运营机制</td><td>复核资格为账号级标记，测试与产品轮值；超时 72 小时自动升级为阻塞项</td></tr>
 </tbody>
 </table></div>
 
