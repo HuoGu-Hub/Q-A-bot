@@ -51,6 +51,17 @@ class AdminAreaTest {
     }
 
     @Test
+    @DisplayName("复核接口单独成区，且不被更宽的评测前缀吃掉")
+    void reviewPathsBelongToJudgeArea() {
+        assertThat(AdminArea.of("/admin/api/eval/reviews")).contains(AdminArea.EVAL_JUDGE);
+        assertThat(AdminArea.of("/admin/api/eval/reviews/3/actions/submit"))
+                .contains(AdminArea.EVAL_JUDGE);
+        assertThat(AdminArea.of("/admin/api/eval/batches")).contains(AdminArea.EVAL);
+        assertThat(AdminArea.defaultsOf(AdminRole.VIEWER)).doesNotContain(AdminArea.EVAL_JUDGE);
+        assertThat(AdminArea.defaultsOf(AdminRole.ADMIN)).contains(AdminArea.EVAL_JUDGE);
+    }
+
+    @Test
     @DisplayName("只有「管理 × 账号」必须保留")
     void usersAreaIsMandatoryForAdmin() {
         assertThat(AdminArea.USERS.mustKeepFor(AdminRole.ADMIN)).isTrue();

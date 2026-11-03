@@ -30,6 +30,18 @@ public enum AdminArea {
             "/admin/api/traffic", "/admin/api/llm", "/admin/api/records",
             "/admin/api/annotate"),
 
+    /**
+     * 评测复核：认领与提交人工结论。
+     *
+     * <p>单独成区而不是并进评测，是因为"能看结论"和"能改结论"是两件事。
+     * 默认只给管理员；要让人参与复核，由管理员把这块勾给他的角色。
+     *
+     * <p>⚠️ 必须排在 {@link #EVAL} 之前：区域按枚举顺序取第一个命中的前缀，
+     * 反过来的话 /reviews 会先被更宽的 /eval 吃掉。
+     */
+    EVAL_JUDGE("eval-judge", "评测复核", EnumSet.of(AdminRole.ADMIN),
+            "/admin/api/eval/reviews"),
+
     /** 评测：批次、过程、报告 —— 只读接口对三级角色开放，写操作仍由角色级别决定 */
     EVAL("eval", "评测", EnumSet.of(AdminRole.VIEWER, AdminRole.EDITOR, AdminRole.ADMIN),
             "/admin/api/eval"),

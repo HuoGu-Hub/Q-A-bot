@@ -123,11 +123,13 @@ public class EvalController {
     }
 
     @PostMapping("/datasets/{id}/actions/freeze")
-    public ResponseEntity<EvalViews.Version> freeze(@PathVariable long id) {
+    public ResponseEntity<EvalViews.Version> freeze(@PathVariable long id,
+                                                    HttpServletRequest request) {
         EvalViews.Version version = datasets.freeze(id, ACTOR);
         if (version == null) {
             throw ApiException.badRequest("用例集为空，不能冻结");
         }
+        audit(request, "dataset.freeze", "dataset=" + id + " version=" + version.version());
         return ResponseEntity.status(HttpStatus.CREATED).body(version);
     }
 
@@ -168,7 +170,8 @@ public class EvalController {
      */
     @PostMapping("/batches/{id}/actions/{verb}")
     public ResponseEntity<EvalViews.IdResult> batchAction(@PathVariable long id,
-                                                          @PathVariable String verb) {
+                                                          @PathVariable String verb,
+                                                          HttpServletRequest request) {
         EvalRepository.BatchRow batch = repo.findBatch(id);
         if (batch == null) {
             throw ApiException.notFound("批次不存在");
@@ -179,6 +182,7 @@ public class EvalController {
         long newId = service.createBatch(batch.name() + " 副本", batch.datasetId(),
                 batch.datasetVersionId(), batch.repeatTimes(), batch.concurrency(), batch.mode(),
                 batch.sampleRate(), ACTOR);
+        audit(request, "batch.clone", "from=" + id + " to=" + newId);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new EvalViews.IdResult(newId));
     }
 
@@ -236,14 +240,17 @@ public class EvalController {
     }
 
     @PostMapping("/alerts/rules")
-    public ResponseEntity<EvalViews.AlertRule> createAlertRule(@RequestBody CreateAlertRule body) {
+    public ResponseEntity<EvalViews.AlertRule> createAlertRule(@RequestBody CreateAlertRule body,
+                                                               HttpServletRequest request) {
         EvalViews.AlertRule rule = service.createAlertRule(body.name(), body.metric(),
                 body.comparator(), body.threshold() == null ? 0 : body.threshold(), body.severity());
+        audit(request, "alert.rule.create", "rule=" + rule.id() + " metric=" + rule.metric());
         return ResponseEntity.status(HttpStatus.CREATED).body(rule);
     }
 
     @PostMapping("/alerts/rules/{id}/actions/{verb}")
-    public ResponseEntity<Void> alertRuleAction(@PathVariable long id, @PathVariable String verb) {
+    public ResponseEntity<Void> alertRuleAction(@PathVariable long id, @PathVariable String verb,
+                                                HttpServletRequest request) {
         boolean enable = "enable".equals(verb);
         if (!enable && !"disable".equals(verb)) {
             throw ApiException.badRequest("暂不支持该动作：" + verb);
@@ -251,6 +258,7 @@ public class EvalController {
         if (!service.toggleAlertRule(id, enable)) {
             throw ApiException.notFound("规则不存在");
         }
+        audit(request, "alert.rule." + verb, "rule=" + id);
         return ResponseEntity.noContent().build();
     }
 
@@ -262,10 +270,12 @@ public class EvalController {
 
     @PostMapping("/alerts/events/{id}/actions/ack")
     public ResponseEntity<Void> ackAlert(@PathVariable long id,
-                                         @RequestBody(required = false) AckAlert body) {
+                                         @RequestBody(required = false) AckAlert body,
+                                         HttpServletRequest request) {
         if (!service.ackAlert(id, body == null ? null : body.note())) {
             throw ApiException.notFound("事件不存在或已处置");
         }
+        audit(request, "alert.ack", "event=" + id);
         return ResponseEntity.noContent().build();
     }
 
@@ -278,7 +288,7 @@ public class EvalController {
 
     /** 价目按"每百万 token 多少元"填，成本在服务端换算成微元 */
     @PutMapping("/prices")
-    public EvalViews.Price upsertPrice(@RequestBody UpsertPrice body) {
+    public EvalViews.Price upsertPrice(@RequestBody UpsertPrice body, HttpServletRequest request) {
         if (body.inputPerMillion() == null || body.outputPerMillion() == null) {
             throw ApiException.badRequest("需要输入与输出单价");
         }
@@ -307,10 +317,11 @@ public class EvalController {
     }
 
     @PostMapping("/baselines/{id}/actions/promote")
-    public ResponseEntity<Void> promoteBaseline(@PathVariable long id) {
+    public ResponseEntity<Void> promoteBaseline(@PathVariable long id, HttpServletRequest request) {
         if (!service.promoteBaseline(id, ACTOR)) {
             throw ApiException.notFound("基线不存在");
         }
+        audit(request, "baseline.promote", "baseline=" + id);
         return ResponseEntity.noContent().build();
     }
 

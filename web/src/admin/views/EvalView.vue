@@ -9,6 +9,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
+import { useAuth } from '../useAuth'
 import type { EvalBatch, EvalDataset, EvalImportResult } from '@shared/api/types'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Tabs from '@shared/ui/Tabs.vue'
@@ -31,6 +32,7 @@ const TABS = [
 
 const loading = ref(false)
 const error = ref('')
+const { areaOk } = useAuth()
 const notice = ref('')
 const batches = ref<EvalBatch[]>([])
 const datasets = ref<EvalDataset[]>([])
@@ -152,7 +154,7 @@ function when(value: string | null): string {
       <Tabs :tabs="TABS" :model-value="tab" @update:model-value="(v: string) => (tab = v as Tab)" />
     </template>
     <template #actions>
-      <Button size="sm" to="/eval/reviews">复核队列</Button>
+      <Button v-if="areaOk('eval-judge')" size="sm" to="/eval/reviews">复核队列</Button>
       <Button size="sm" to="/eval/trends">趋势与对比</Button>
       <Button size="sm" to="/eval/alerts">告警</Button>
       <Button size="sm" to="/eval/prices">价目</Button>
