@@ -150,6 +150,7 @@ public class EvalCaseExecutor {
         repo.saveExecution(runId,
                 spans(spec, trace, planMs, totalMs, judgeMs, errorCode, usage, toolCalls, tokensIn, tokensOut),
                 retrieval(spec, trace), judgeWrites, failures, now);
+        enqueueForReview(batchId, runId, judgements, now);
         if (!toolCalls.isEmpty()) {
             repo.insertToolCalls(runId, toolWrites(toolCalls), now);
         }
@@ -176,6 +177,29 @@ public class EvalCaseExecutor {
                     Judgement.FAIL, 0.0, "重复 " + verdicts.size() + " 次结论不一致", "STB_FLAKY",
                     json(verdicts));
             repo.upsertJudge(runId, write, now);
+            if (!consistent) {
+                repo.enqueueReview(repo.findRun(runId).batchId(), runId, "重复运行结论不一致",
+                        "normal", Instant.parse(now).plusSeconds(72 * 3600L).toString(), now);
+            }
+        }
+    }
+
+    /**
+     * 需要人看的失败才进队列：质量类失败与不安全内容。
+     * 检索没命中是机械结论，进队列只会把人的注意力耗在能自动判的事情上。
+     */
+    private void enqueueForReview(long batchId, long runId, List<Judgement> judgements, String now) {
+        for (Judgement j : judgements) {
+            if (!Judgement.FAIL.equals(j.verdict())) {
+                continue;
+            }
+            boolean safety = "safety".equals(j.dimension());
+            boolean quality = "quality".equals(j.dimension());
+            if (!safety && !quality) {
+                continue;
+            }
+            String due = Instant.parse(now).plusSeconds((safety ? 24 : 72) * 3600L).toString();
+            repo.enqueueReview(batchId, runId, j.reason(), safety ? "urgent" : "high", due, now);
         }
     }
 

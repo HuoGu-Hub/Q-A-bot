@@ -134,6 +134,18 @@ public class EvalRunner {
             String reason = drift != null ? drift : gateReason(gate, summary);
             if (drift != null) {
                 gate = "warned";
+            } else {
+                EvalRepository.BaselineRow baseline = repo.activeBaseline(batch.datasetVersionId());
+                if (baseline != null) {
+                    double base = baselineRate(baseline);
+                    double delta = summary.passRate() - base;
+                    reason = String.format("较基线 %+.1f 个百分点（基线 %.1f%%）", delta * 100, base * 100);
+                    if (delta < -0.03) {
+                        gate = "blocked";
+                    } else if (!"passed".equals(gate)) {
+                        gate = "passed";
+                    }
+                }
             }
             repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate, reason,
                     Instant.now().toString());
@@ -168,6 +180,14 @@ public class EvalRunner {
             }
         }
         return null;
+    }
+
+    private double baselineRate(EvalRepository.BaselineRow baseline) {
+        try {
+            return mapper.readValue(baseline.metricsJson(), EvalViews.Summary.class).passRate();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private static String gateReason(String gate, EvalViews.Summary summary) {

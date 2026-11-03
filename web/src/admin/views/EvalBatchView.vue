@@ -25,6 +25,7 @@ const batchId = Number(route.params.id)
 const detail = ref<EvalBatchDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
+const notice = ref('')
 let timer: number | null = null
 
 const running = computed(() => {
@@ -88,6 +89,27 @@ async function clone() {
   }
 }
 
+/**
+ * 设为基线并立刻激活。
+ *
+ * <p>两步合成一次点击：先建候选再晋升，中间状态对使用者没有意义 ——
+ * 不会有人想"建一条候选基线放着不用"。
+ */
+async function makeBaseline() {
+  if (!detail.value) return
+  try {
+    const created = await adminApi.post<{ id: number }>('/eval/baselines', {
+      batchId,
+      name: detail.value.batch.name,
+    })
+    await adminApi.post(`/eval/baselines/${created.id}/actions/promote`)
+    notice.value = '已设为该用例集版本的活动基线，后续批次会与它比较'
+    await load()
+  } catch (e) {
+    error.value = describeError(e)
+  }
+}
+
 function openRun(item: EvalItem) {
   if (item.runId != null) router.push(`/eval/runs/${item.runId}`)
 }
@@ -116,11 +138,15 @@ const DIM_LABEL: Record<string, string> = {
   <AdminPage width="wide" :title="detail ? detail.batch.name : '批次'" :count="detail?.batch.itemTotal ?? ''">
     <template #actions>
       <Button size="sm" :disabled="loading" @click="load">刷新</Button>
+      <Button size="sm" :disabled="detail?.batch.status !== 'completed'" @click="makeBaseline">
+        设为基线
+      </Button>
       <Button size="sm" @click="clone">克隆批次</Button>
       <Button size="sm" to="/eval">返回列表</Button>
     </template>
 
     <Notice v-if="error" tone="error">{{ error }}</Notice>
+    <Notice v-if="notice" tone="ok">{{ notice }}</Notice>
     <Empty v-if="!detail && !loading" title="批次不存在" />
 
     <template v-if="detail">

@@ -123,6 +123,104 @@ public class EvalService {
         return new EvalViews.BatchDetail(toView(b), aggregator.summarise(batchId), items);
     }
 
+    public List<EvalViews.Review> reviews(String status, int limit) {
+        List<EvalViews.Review> out = new ArrayList<>();
+        for (EvalRepository.ReviewRow r : repo.listReviews(status, Math.max(1, Math.min(200, limit)))) {
+            out.add(new EvalViews.Review(r.id(), r.runId(), r.batchId(), r.caseKey(), r.question(),
+                    r.reason(), r.priority(), r.status(), r.assignee(), r.createdAt(), r.dueAt()));
+        }
+        return out;
+    }
+
+    /** 人工转复核：页面上的「转复核」走这里，重复提交会被唯一索引挡住 */
+    public long requestReview(long runId, String reason) {
+        EvalRepository.RunRow run = repo.findRun(runId);
+        if (run == null) {
+            throw ApiException.notFound("执行记录不存在");
+        }
+        String now = Instant.now().toString();
+        String why = reason == null || reason.isBlank() ? "人工要求复核" : reason.strip();
+        long id = repo.enqueueReview(run.batchId(), runId, why, "normal",
+                Instant.now().plusSeconds(72 * 3600L).toString(), now);
+        if (id < 0) {
+            throw ApiException.badRequest("这条执行已经在复核队列里");
+        }
+        return id;
+    }
+
+    public boolean claimReview(long id, String by) {
+        return repo.claimReview(id, by, Instant.now().toString());
+    }
+
+    /**
+     * 提交复核结论。
+     *
+     * <p>人工结论写成一条 {@code judge_type=human} 的判定，维度默认结果质量。
+     * 聚合时它排在规则判定之后，因此会覆盖自动结论 —— 覆盖是有意的，
+     * 但两条都留在库里，事后能看出是谁改的、改成了什么。
+     */
+    public boolean submitReview(long id, String verdict, String note, String by) {
+        EvalRepository.ReviewRow task = repo.findReview(id);
+        if (task == null) {
+            return false;
+        }
+        String v = Judgement.PASS.equalsIgnoreCase(verdict) ? Judgement.PASS
+                : Judgement.FAIL.equalsIgnoreCase(verdict) ? Judgement.FAIL : null;
+        if (v == null) {
+            throw ApiException.badRequest("结论只能是 PASS 或 FAIL");
+        }
+        String now = Instant.now().toString();
+        repo.upsertJudge(task.runId(), new EvalRepository.JudgeWrite("quality", "human",
+                task.runId() + ":quality:human", v, Judgement.PASS.equals(v) ? 1.0 : 0.0,
+                (note == null || note.isBlank() ? "人工复核" : note.strip()) + " · " + by,
+                null, "{}"), now);
+        return repo.submitReview(id, note, now);
+    }
+
+    public EvalViews.Baseline createBaseline(long batchId, String name) {
+        EvalRepository.BatchRow batch = repo.findBatch(batchId);
+        if (batch == null) {
+            throw ApiException.notFound("批次不存在");
+        }
+        EvalViews.Summary summary = aggregator.summarise(batchId);
+        if (summary.pass() + summary.fail() == 0) {
+            throw ApiException.badRequest("批次还没有可判定的结论，不能作为基线");
+        }
+        long id = repo.insertBaseline(name == null || name.isBlank() ? "批次 " + batchId + " 基线" : name,
+                batch.datasetVersionId(), batchId, json(summary), Instant.now().toString());
+        return toBaseline(repo.findBaseline(id));
+    }
+
+    public List<EvalViews.Baseline> baselines(Long versionId, String status, int limit) {
+        List<EvalViews.Baseline> out = new ArrayList<>();
+        for (EvalRepository.BaselineRow b : repo.listBaselines(versionId, status,
+                Math.max(1, Math.min(100, limit)))) {
+            out.add(toBaseline(b));
+        }
+        return out;
+    }
+
+    public boolean promoteBaseline(long id, String by) {
+        EvalRepository.BaselineRow row = repo.findBaseline(id);
+        if (row == null) {
+            return false;
+        }
+        repo.activateBaseline(id, row.datasetVersionId(), by, Instant.now().toString());
+        return true;
+    }
+
+    private EvalViews.Baseline toBaseline(EvalRepository.BaselineRow b) {
+        double rate = 0;
+        try {
+            EvalViews.Summary summary = mapper.readValue(b.metricsJson(), EvalViews.Summary.class);
+            rate = summary.passRate();
+        } catch (Exception ignored) {
+            // 基线指标读不出来时保留 0，页面能看出异常而不是崩掉
+        }
+        return new EvalViews.Baseline(b.id(), b.name(), b.datasetVersionId(), b.batchId(), rate,
+                b.status(), b.createdAt(), b.promotedBy(), b.promotedAt());
+    }
+
     public EvalViews.Summary summary(long batchId) {
         return aggregator.summarise(batchId);
     }

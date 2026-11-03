@@ -185,6 +185,37 @@ public class EvalRepository {
                 + " created_at TEXT)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_tool_run ON eval_tool_call(run_id, call_index)");
 
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_review_task ("
+                + " id INTEGER PRIMARY KEY,"
+                + " batch_id INTEGER NOT NULL,"
+                + " run_id INTEGER NOT NULL,"
+                + " reason TEXT,"
+                + " priority TEXT NOT NULL DEFAULT 'normal',"
+                + " status TEXT NOT NULL DEFAULT 'pending',"
+                + " assignee TEXT,"
+                + " note TEXT,"
+                + " created_at TEXT NOT NULL,"
+                + " claimed_at TEXT,"
+                + " submitted_at TEXT,"
+                + " due_at TEXT)");
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_eval_review_open"
+                + " ON eval_review_task(run_id) WHERE status IN ('pending','claimed')");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_review_status"
+                + " ON eval_review_task(status, priority, created_at)");
+
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_baseline ("
+                + " id INTEGER PRIMARY KEY,"
+                + " name TEXT NOT NULL,"
+                + " dataset_version_id INTEGER NOT NULL,"
+                + " batch_id INTEGER NOT NULL,"
+                + " metrics_json TEXT NOT NULL,"
+                + " status TEXT NOT NULL DEFAULT 'candidate',"
+                + " created_at TEXT NOT NULL,"
+                + " promoted_by TEXT,"
+                + " promoted_at TEXT)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_baseline_version"
+                + " ON eval_baseline(dataset_version_id, status)");
+
         // 老库补列：CREATE TABLE IF NOT EXISTS 对已存在的表什么都不做
         ensureColumn("eval_batch", "gate_reason", "gate_reason TEXT");
         ensureColumn("eval_run", "tokens_in", "tokens_in INTEGER DEFAULT 0");
@@ -616,6 +647,137 @@ public class EvalRepository {
                 rs -> new ToolCallRow(rs.intOf("call_index"), rs.str("name"), rs.str("args"),
                         rs.str("status"), nullableLong(rs, "latency_ms"),
                         rs.isNull("result_chars") ? null : rs.intOf("result_chars")), runId);
+    }
+
+    /* ==================== 复核 ==================== */
+
+    public record ReviewRow(long id, long runId, long batchId, String caseKey, String question,
+                            String reason, String priority, String status, String assignee,
+                            String createdAt, String dueAt) {
+    }
+
+    /** 同一条 run 只保留一个未关闭的复核任务，重复入队直接忽略 */
+    public long enqueueReview(long batchId, long runId, String reason, String priority,
+                              String dueAt, String now) {
+        try {
+            return jdbc.insert("INSERT INTO eval_review_task (batch_id, run_id, reason, priority,"
+                            + " status, created_at, due_at) VALUES (?,?,?,?,'pending',?,?)",
+                    batchId, runId, reason, priority, now, dueAt);
+        } catch (RuntimeException e) {
+            return -1;
+        }
+    }
+
+    public List<ReviewRow> listReviews(String status, int limit) {
+        String where = status == null || status.isBlank() ? "" : " WHERE t.status=?";
+        String sql = "SELECT t.id, t.run_id, t.batch_id, t.reason, t.priority, t.status, t.assignee,"
+                + " t.created_at, t.due_at, c.case_key, c.question"
+                + " FROM eval_review_task t"
+                + " JOIN eval_run r ON r.id=t.run_id"
+                + " LEFT JOIN eval_case c ON c.id=r.case_id" + where
+                + " ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,"
+                + " t.created_at DESC LIMIT ?";
+        Jdbc.RowMapper<ReviewRow> mapper = rs -> new ReviewRow(rs.longOf("id"), rs.longOf("run_id"),
+                rs.longOf("batch_id"), rs.str("case_key"), rs.str("question"), rs.str("reason"),
+                rs.str("priority"), rs.str("status"), rs.str("assignee"), rs.str("created_at"),
+                rs.str("due_at"));
+        return where.isEmpty() ? jdbc.query(sql, mapper, limit)
+                : jdbc.query(sql, mapper, status, limit);
+    }
+
+    public boolean claimReview(long id, String assignee, String now) {
+        return jdbc.update("UPDATE eval_review_task SET status='claimed', assignee=?, claimed_at=?"
+                + " WHERE id=? AND status='pending'", assignee, now, id) == 1;
+    }
+
+    public boolean submitReview(long id, String note, String now) {
+        return jdbc.update("UPDATE eval_review_task SET status='submitted', note=?, submitted_at=?"
+                + " WHERE id=? AND status IN ('pending','claimed')", note, now, id) == 1;
+    }
+
+    public ReviewRow findReview(long id) {
+        List<ReviewRow> rows = jdbc.query("SELECT t.id, t.run_id, t.batch_id, t.reason, t.priority,"
+                        + " t.status, t.assignee, t.created_at, t.due_at, c.case_key, c.question"
+                        + " FROM eval_review_task t JOIN eval_run r ON r.id=t.run_id"
+                        + " LEFT JOIN eval_case c ON c.id=r.case_id WHERE t.id=?",
+                rs -> new ReviewRow(rs.longOf("id"), rs.longOf("run_id"), rs.longOf("batch_id"),
+                        rs.str("case_key"), rs.str("question"), rs.str("reason"), rs.str("priority"),
+                        rs.str("status"), rs.str("assignee"), rs.str("created_at"), rs.str("due_at")),
+                id);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** 过期清理：明细类表按 run 的创建时间删，结论类不删 */
+    public int purgeDetailBefore(String cutoff) {
+        int removed = 0;
+        removed += jdbc.update("DELETE FROM eval_span WHERE run_id IN"
+                + " (SELECT id FROM eval_run WHERE created_at < ?)", cutoff);
+        removed += jdbc.update("DELETE FROM eval_retrieval WHERE run_id IN"
+                + " (SELECT id FROM eval_run WHERE created_at < ?)", cutoff);
+        removed += jdbc.update("DELETE FROM eval_tool_call WHERE run_id IN"
+                + " (SELECT id FROM eval_run WHERE created_at < ?)", cutoff);
+        return removed;
+    }
+
+    /* ==================== 基线 ==================== */
+
+    public record BaselineRow(long id, String name, long datasetVersionId, long batchId,
+                              String metricsJson, String status, String createdAt,
+                              String promotedBy, String promotedAt) {
+    }
+
+    public long insertBaseline(String name, long versionId, long batchId, String metricsJson,
+                               String now) {
+        return jdbc.insert("INSERT INTO eval_baseline (name, dataset_version_id, batch_id,"
+                        + " metrics_json, status, created_at) VALUES (?,?,?,?,'candidate',?)",
+                name, versionId, batchId, metricsJson, now);
+    }
+
+    public List<BaselineRow> listBaselines(Long versionId, String status, int limit) {
+        StringBuilder sql = new StringBuilder("SELECT id, name, dataset_version_id, batch_id,"
+                + " metrics_json, status, created_at, promoted_by, promoted_at FROM eval_baseline WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        if (versionId != null) {
+            sql.append(" AND dataset_version_id=?");
+            args.add(versionId);
+        }
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND status=?");
+            args.add(status);
+        }
+        sql.append(" ORDER BY id DESC LIMIT ?");
+        args.add(limit);
+        return jdbc.query(sql.toString(), EvalRepository::mapBaseline, args.toArray());
+    }
+
+    public BaselineRow findBaseline(long id) {
+        return jdbc.queryOne("SELECT id, name, dataset_version_id, batch_id, metrics_json, status,"
+                + " created_at, promoted_by, promoted_at FROM eval_baseline WHERE id=?",
+                EvalRepository::mapBaseline, id);
+    }
+
+    /** 同一版本只有一条激活基线：先退役旧的全新晋升 */
+    public void activateBaseline(long id, long versionId, String by, String now) {
+        jdbc.transaction(() -> {
+            jdbc.update("UPDATE eval_baseline SET status='retired' WHERE dataset_version_id=?"
+                    + " AND status='active'", versionId);
+            jdbc.update("UPDATE eval_baseline SET status='active', promoted_by=?, promoted_at=?"
+                    + " WHERE id=?", by, now, id);
+            return null;
+        });
+    }
+
+    public BaselineRow activeBaseline(long versionId) {
+        return jdbc.queryOne("SELECT id, name, dataset_version_id, batch_id, metrics_json, status,"
+                        + " created_at, promoted_by, promoted_at FROM eval_baseline"
+                        + " WHERE dataset_version_id=? AND status='active' LIMIT 1",
+                EvalRepository::mapBaseline, versionId);
+    }
+
+    private static BaselineRow mapBaseline(Jdbc.Row rs) {
+        return new BaselineRow(rs.longOf("id"), rs.str("name"), rs.longOf("dataset_version_id"),
+                rs.longOf("batch_id"), rs.str("metrics_json"), rs.str("status"),
+                rs.str("created_at"), rs.str("promoted_by"), rs.str("promoted_at"));
     }
 
     /* ==================== 统计 ==================== */

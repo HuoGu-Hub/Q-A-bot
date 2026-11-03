@@ -357,7 +357,7 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     }
 
     /** IP 只存哈希 —— 统计与审计都不需要原始 IP */
-    static String hashIp(String ip) {
+    public static String hashIp(String ip) {
         if (ip == null) {
             return "";
         }

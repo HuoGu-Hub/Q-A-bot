@@ -152,6 +152,7 @@ function when(value: string | null): string {
       <Tabs :tabs="TABS" :model-value="tab" @update:model-value="(v: string) => (tab = v as Tab)" />
     </template>
     <template #actions>
+      <Button size="sm" to="/eval/reviews">复核队列</Button>
       <Button size="sm" :disabled="loading" @click="refresh">刷新</Button>
     </template>
 

@@ -47,6 +47,9 @@ eval
 | `eval_retrieval` | 检索快照 |
 | `eval_judge` | 判定结论，`judge_key` 唯一 |
 | `eval_failure` | 失败标签 |
+| `eval_tool_call` | 工具调用，只有调用与参数，返回未采集 |
+| `eval_review_task` | 复核队列，同一 run 只留一个未关闭任务 |
+| `eval_baseline` | 基线，同一版本只允许一条 active |
 
 建表在 `EvalRepository.initSchema`，幂等；启动时由 `EvalSeeder` 调用一次。
 
@@ -67,7 +70,14 @@ eval
 | POST | `/batches` | 建批并异步入队 |
 | GET | `/batches/{id}` | 批次、指标、用例列表 |
 | POST | `/batches/{id}/actions/clone` | 用同一用例集再跑一批 |
-| GET | `/runs/{id}` | 单条执行：span、检索快照、判定 |
+| GET | `/runs/{id}` | 单条执行：span、检索快照、判定、工具调用 |
+| POST | `/runs/{id}/actions/review` | 人工转复核 |
+| GET | `/reviews` | 复核队列 |
+| POST | `/reviews/{id}/actions/claim` | 认领 |
+| POST | `/reviews/{id}/actions/submit` | 提交人工结论，覆盖同 run 的结果质量判定 |
+| GET | `/baselines` | 基线列表 |
+| POST | `/baselines` | 用某批次生成候选基线 |
+| POST | `/baselines/{id}/actions/promote` | 晋升为活动基线 |
 
 ## 5. 判定口径
 
@@ -81,8 +91,12 @@ eval
 - 规则判定覆盖：空返回、兜底话术、协议标记泄漏、库外问题该拒未拒、
   期望块是否命中、期望空结果却注入噪声、单例超时。
 - 事实正确性、引用支持、有害内容仍待 rubric，结论为 SKIP 并进人工。
-- 门禁三态：默认阈值 80%，达到为 `passed`，低于为 `warned`，无判定为 `pending`。
-  基线机制上线后改成与激活基线比较。
+- 重复运行：每条用例跑 N 次，N 大于 1 时稳定性由跑完之后的一致性判定给出，
+  一致性比较的是质量与检索两维的结论，不看分数。
+- 门禁三态：同一版本存在活动基线时与基线比较，回退超过 3 个百分点判 `blocked`；
+  没有基线时按默认阈值 80%，达到 `passed`，低于 `warned`，无判定 `pending`。
+- 目标快照：建批时记录检索阈值、provider、语料版本；跑完比对一次，
+  不一致标 `warned` 并把差异写进批次的原因。
 
 ## 6. 运行
 
@@ -96,12 +110,13 @@ eval
 
 | 缺口 | 影响 | 下一步 |
 |---|---|---|
-| 逐次 token 未落库 | 成本维度只能出 SKIP | `LlmRouter` 把 usage 写进 span |
-| 工具调用参数与返回值未落库 | Agent 维度只有一个总 span | `KbToolAssistant` 授权钩子旁写 `eval_tool_call` |
+| token 已按 run 落库，但成本价目未接入 | 成本维度仍出 SKIP，只有 tokens 可看 | 加 `eval_price` 并算 `cost_micro` |
+| 工具调用只有名称与参数，返回值与耗时未采集 | Agent 维度能判"选对没有"，判不了"返回对不对" | 包装 `ToolExecutor` 记录执行结果 |
 | 逐句引用未采集 | 证据链维度为空 | 后置对齐原型 |
 | 重跑失败项、暂停、取消 | 只能克隆整批 | 执行器支持中断与断点 |
-| 人工复核、基线、告警 | 页面未提供入口 | P1 |
+| 告警、报告、趋势、版本对比 | 页面未提供入口 | P1 |
 | 评测写入共用主库 | 大批次会与问答抢写 | 批次量上来后切库副本 |
+| 失败归因没有独立页 | 只能在批次页看标签计数 | 加按标签筛选与逐条下钻 |
 
 评测执行会往 `qa_turn` 写一条 `群 0 / 用户 0` 的记忆，用于意图判定的最近轮次；
 它按 3 条截断、7 天清理，不会进 `qa_stat`。

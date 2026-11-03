@@ -1,9 +1,14 @@
 package com.example.qqbot.eval;
 
+import com.example.qqbot.admin.AdminAuthFilter;
+import com.example.qqbot.admin.AdminClientIp;
+import com.example.qqbot.admin.AdminPrincipal;
+import com.example.qqbot.persistence.AdminAuditRepository;
 import com.example.qqbot.persistence.EvalRepository;
 import com.example.qqbot.web.ApiException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,11 +44,27 @@ public class EvalController {
     private final EvalService service;
     private final EvalDatasetService datasets;
     private final EvalRepository repo;
+    private final AdminAuditRepository audit;
 
-    public EvalController(EvalService service, EvalDatasetService datasets, EvalRepository repo) {
+    public EvalController(EvalService service, EvalDatasetService datasets, EvalRepository repo,
+                          AdminAuditRepository audit) {
         this.service = service;
         this.datasets = datasets;
         this.repo = repo;
+        this.audit = audit;
+    }
+
+    /** 评测的写操作进 admin_audit：出了事要能查到是谁建的批、改的判定 */
+    private void audit(HttpServletRequest request, String action, String detail) {
+        try {
+            AdminPrincipal p = AdminAuthFilter.current(request);
+            String ip = AdminAuthFilter.hashIp(AdminClientIp.of(request));
+            audit.record(p == null ? null : p.id(), p == null ? ACTOR : p.username(),
+                    "eval." + action, "POST",
+                    request == null ? "" : request.getRequestURI(), detail, ip);
+        } catch (RuntimeException ignored) {
+            // 审计失败不该让业务动作回滚
+        }
     }
 
     /* ==================== 用例集 ==================== */
@@ -85,8 +106,15 @@ public class EvalController {
     }
 
     @PostMapping("/datasets/{id}/actions/import")
-    public EvalViews.ImportResult importTsv(@PathVariable long id, @RequestBody ImportRequest body) {
-        return datasets.importTsv(id, body.content(), Boolean.TRUE.equals(body.dryRun()));
+    public EvalViews.ImportResult importTsv(@PathVariable long id, @RequestBody ImportRequest body,
+                                            HttpServletRequest request) {
+        EvalViews.ImportResult result = datasets.importTsv(id, body.content(),
+                Boolean.TRUE.equals(body.dryRun()));
+        if (!result.dryRun() && result.accepted() > 0) {
+            audit(request, "import", "dataset=" + id + " accepted=" + result.accepted()
+                    + " rejected=" + result.rejected());
+        }
+        return result;
     }
 
     @PostMapping("/datasets/{id}/actions/freeze")
@@ -107,11 +135,13 @@ public class EvalController {
     }
 
     @PostMapping("/batches")
-    public ResponseEntity<EvalViews.IdResult> createBatch(@RequestBody CreateBatch body) {
+    public ResponseEntity<EvalViews.IdResult> createBatch(@RequestBody CreateBatch body,
+                                                          HttpServletRequest request) {
         long id = service.createBatch(body.name(), body.datasetId(), body.versionId(),
                 body.repeatTimes() == null ? 1 : body.repeatTimes(),
                 body.concurrency() == null ? 2 : body.concurrency(),
                 body.mode(), body.sampleRate() == null ? 1.0 : body.sampleRate(), ACTOR);
+        audit(request, "batch.create", "batch=" + id + " dataset=" + body.datasetId());
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new EvalViews.IdResult(id));
     }
 
@@ -158,6 +188,70 @@ public class EvalController {
         return detail;
     }
 
+    /* ==================== 基线 ==================== */
+
+    @GetMapping("/baselines")
+    public List<EvalViews.Baseline> baselines(@RequestParam(required = false) Long datasetVersionId,
+                                              @RequestParam(required = false) String status,
+                                              @RequestParam(defaultValue = "20") int limit) {
+        return service.baselines(datasetVersionId, status, limit);
+    }
+
+    @PostMapping("/baselines")
+    public ResponseEntity<EvalViews.Baseline> createBaseline(@RequestBody CreateBaseline body,
+                                                             HttpServletRequest request) {
+        if (body.batchId() == null) {
+            throw ApiException.badRequest("需要 batchId");
+        }
+        EvalViews.Baseline baseline = service.createBaseline(body.batchId(), body.name());
+        audit(request, "baseline.create", "baseline=" + baseline.id() + " batch=" + body.batchId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(baseline);
+    }
+
+    @PostMapping("/baselines/{id}/actions/promote")
+    public ResponseEntity<Void> promoteBaseline(@PathVariable long id) {
+        if (!service.promoteBaseline(id, ACTOR)) {
+            throw ApiException.notFound("基线不存在");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /* ==================== 复核 ==================== */
+
+    @GetMapping("/reviews")
+    public List<EvalViews.Review> reviews(@RequestParam(required = false) String status,
+                                          @RequestParam(defaultValue = "50") int limit) {
+        return service.reviews(status, limit);
+    }
+
+    @PostMapping("/runs/{id}/actions/review")
+    public ResponseEntity<EvalViews.IdResult> requestReview(@PathVariable long id,
+                                                            @RequestBody(required = false) ReviewRequest body) {
+        long reviewId = service.requestReview(id, body == null ? null : body.reason());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(new EvalViews.IdResult(reviewId));
+    }
+
+    @PostMapping("/reviews/{id}/actions/claim")
+    public ResponseEntity<Void> claimReview(@PathVariable long id) {
+        if (!service.claimReview(id, ACTOR)) {
+            throw ApiException.badRequest("任务已被认领或已提交");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/reviews/{id}/actions/submit")
+    public ResponseEntity<Void> submitReview(@PathVariable long id, @RequestBody SubmitReview body,
+                                             HttpServletRequest request) {
+        if (body.verdict() == null) {
+            throw ApiException.badRequest("需要 verdict");
+        }
+        if (!service.submitReview(id, body.verdict(), body.note(), ACTOR)) {
+            throw ApiException.notFound("复核任务不存在或已提交");
+        }
+        audit(request, "review.submit", "review=" + id + " verdict=" + body.verdict());
+        return ResponseEntity.noContent().build();
+    }
+
     /* ==================== 请求体 ==================== */
 
     @JsonIgnoreProperties(ignoreUnknown = false)
@@ -171,6 +265,18 @@ public class EvalController {
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record ImportRequest(String content, Boolean dryRun) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record CreateBaseline(Long batchId, String name) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record ReviewRequest(String reason) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record SubmitReview(String verdict, String note) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

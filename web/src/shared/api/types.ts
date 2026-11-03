@@ -903,3 +903,17 @@ export interface EvalRunDetail {
   category: string
   question: string
 }
+
+export interface EvalReview {
+  id: number
+  runId: number
+  batchId: number
+  caseKey: string
+  question: string
+  reason: string
+  priority: string
+  status: string
+  assignee: string | null
+  createdAt: string
+  dueAt: string | null
+}

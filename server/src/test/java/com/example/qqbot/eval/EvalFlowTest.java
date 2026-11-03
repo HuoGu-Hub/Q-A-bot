@@ -118,6 +118,68 @@ class EvalFlowTest {
         assertThat(run.question()).isEqualTo("废料杯在哪");
     }
 
+    @Test
+    @DisplayName("质量失败自动进复核；提交人工结论后覆盖自动判定")
+    void reviewFlow() throws Exception {
+        KbTrace trace = new KbTrace(true,
+                List.of(new KbTrace.Hit("block-1", "废料杯", "doc-1", 0.82, "vector")),
+                0.8, 0.81, 3, 1, List.of(), 120);
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenAnswer(invocation -> "空白".equals(invocation.getArgument(1))
+                        ? new ChatService.ReplyResult("", 300, trace, List.of())
+                        : new ChatService.ReplyResult("废料杯在废料堆旁边。", 800, trace, List.of()));
+
+        EvalViews.Dataset dataset = datasets.create("review-" + Instant.now().toEpochMilli(),
+                "复核用例集", "", "test");
+        datasets.addCase(dataset.id(), "blank-1", "entity", "空白", "block-1", "");
+        EvalViews.Version version = datasets.freeze(dataset.id(), "test");
+        long batchId = service.createBatch("复核批次", dataset.id(), version.id(), 1, 1,
+                "offline", 1.0, "test");
+        waitForBatch(batchId);
+
+        List<EvalViews.Review> pending = service.reviews("pending", 10);
+        assertThat(pending).isNotEmpty();
+        EvalViews.Review task = pending.get(0);
+        assertThat(task.reason()).contains("空返回");
+
+        assertThat(service.claimReview(task.id(), "tester")).isTrue();
+        assertThat(service.submitReview(task.id(), "PASS", "人工确认是模型抖动", "tester")).isTrue();
+
+        EvalViews.RunDetail run = service.runDetail(task.runId());
+        assertThat(run.judges()).filteredOn(j -> j.dimension().equals("quality"))
+                .anyMatch(j -> j.verdict().equals("PASS") && j.reason().contains("人工确认"));
+        assertThat(service.reviews("pending", 10)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("基线晋升后，下一批回退超过 3 个百分点直接判阻断")
+    void baselineBlocksRegression() throws Exception {
+        KbTrace trace = new KbTrace(true,
+                List.of(new KbTrace.Hit("block-1", "废料杯", "doc-1", 0.82, "vector")),
+                0.8, 0.81, 3, 1, List.of(), 120);
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenReturn(new ChatService.ReplyResult("废料杯在废料堆旁边。", 800, trace, List.of()));
+
+        EvalViews.Dataset dataset = datasets.create("baseline-" + Instant.now().toEpochMilli(),
+                "基线用例集", "", "test");
+        datasets.addCase(dataset.id(), "entity-b", "entity", "废料杯在哪", "block-1", "");
+        EvalViews.Version version = datasets.freeze(dataset.id(), "test");
+
+        long goodBatch = service.createBatch("基线批次", dataset.id(), version.id(), 1, 1,
+                "offline", 1.0, "test");
+        waitForBatch(goodBatch);
+        EvalViews.Baseline baseline = service.createBaseline(goodBatch, "v1 基线");
+        assertThat(service.promoteBaseline(baseline.id(), "test")).isTrue();
+
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenReturn(new ChatService.ReplyResult("", 300, trace, List.of()));
+        long badBatch = service.createBatch("回退批次", dataset.id(), version.id(), 1, 1,
+                "offline", 1.0, "test");
+        EvalRepository.BatchRow row = waitForBatch(badBatch);
+        assertThat(row.gateStatus()).isEqualTo("blocked");
+        assertThat(row.gateReason()).contains("基线");
+    }
+
     /** 批次在独立线程里跑，这里等它进终态；超时就把当时状态报出来 */
     private EvalRepository.BatchRow waitForBatch(long batchId) throws InterruptedException {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));

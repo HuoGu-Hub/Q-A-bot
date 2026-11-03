@@ -7351,6 +7351,248 @@
         } ]
       }
     },
+    "/admin/api/eval/runs/{id}/actions/review" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "requestReview",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviewRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/reviews/{id}/actions/submit" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "submitReview",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubmitReview"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/reviews/{id}/actions/claim" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "claimReview",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
     "/admin/api/eval/datasets" : {
       "get" : {
         "tags" : [ "Eval" ],
@@ -7959,6 +8201,254 @@
                 }
               }
             }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/baselines" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "baselines",
+        "parameters" : [ {
+          "name" : "datasetVersionId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Baseline"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "createBaseline",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateBaseline"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Baseline"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/baselines/{id}/actions/promote" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "promoteBaseline",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
           },
           "400" : {
             "description" : "请求参数或请求体不合法",
@@ -18818,6 +19308,96 @@
         } ]
       }
     },
+    "/admin/api/eval/reviews" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "reviews",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Review"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
     "/admin/api/eval/datasets/{id}" : {
       "get" : {
         "tags" : [ "Eval" ],
@@ -22896,6 +23476,34 @@
           }
         }
       },
+      "ReviewRequest" : {
+        "type" : "object",
+        "properties" : {
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "IdResult" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "SubmitReview" : {
+        "type" : "object",
+        "properties" : {
+          "verdict" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
       "CreateDataset" : {
         "type" : "object",
         "properties" : {
@@ -22907,15 +23515,6 @@
           },
           "description" : {
             "type" : "string"
-          }
-        }
-      },
-      "IdResult" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
           }
         }
       },
@@ -23017,6 +23616,54 @@
           "sampleRate" : {
             "type" : "number",
             "format" : "double"
+          }
+        }
+      },
+      "CreateBaseline" : {
+        "type" : "object",
+        "properties" : {
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Baseline" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "datasetVersionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "passRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "promotedBy" : {
+            "type" : "string"
+          },
+          "promotedAt" : {
+            "type" : "string"
           }
         }
       },

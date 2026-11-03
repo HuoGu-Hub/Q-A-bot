@@ -36,6 +36,17 @@ const totalMs = computed(() => {
 
 const spans = computed(() => run.value?.spans ?? [])
 
+const reviewMsg = ref('')
+
+async function requestReview() {
+  try {
+    await adminApi.post(`/eval/runs/${runId}/actions/review`, { reason: '人工要求复核' })
+    reviewMsg.value = '已转复核'
+  } catch (e) {
+    reviewMsg.value = describeError(e)
+  }
+}
+
 async function load() {
   loading.value = true
   try {
@@ -104,10 +115,12 @@ function attrText(attrs: Record<string, unknown>): string {
     <template #actions>
       <Button size="sm" :disabled="loading" @click="load">刷新</Button>
       <Button v-if="run" size="sm" :to="`/eval/batches/${run.batchId}`">回到批次</Button>
+      <Button size="sm" @click="requestReview">转复核</Button>
       <Button size="sm" @click="router.back()">返回</Button>
     </template>
 
     <Notice v-if="error" tone="error">{{ error }}</Notice>
+    <Notice v-if="reviewMsg" tone="ok">{{ reviewMsg }}</Notice>
     <Empty v-if="!run && !loading" title="执行记录不存在" />
 
     <template v-if="run">

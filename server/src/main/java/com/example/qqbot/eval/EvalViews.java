@@ -77,6 +77,16 @@ public final class EvalViews {
                            Long latencyMs, Integer resultChars) {
     }
 
+    public record Baseline(long id, String name, long datasetVersionId, long batchId,
+                           double passRate, String status, String createdAt,
+                           String promotedBy, String promotedAt) {
+    }
+
+    public record Review(long id, long runId, long batchId, String caseKey, String question,
+                         String reason, String priority, String status, String assignee,
+                         String createdAt, String dueAt) {
+    }
+
     public record RunDetail(long id, long batchId, long itemId, int attempt, String status, String answer,
                             long latencyMs, int hitCount, boolean kbEnabled, String createdAt,
                             long tokensIn, long tokensOut, long costMicro,
