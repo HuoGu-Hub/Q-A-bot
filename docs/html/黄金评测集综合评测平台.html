@@ -1234,8 +1234,8 @@ baseline：candidate ──promote──► active ──retire──► retired
 <tr><td>复核</td><td>质量失败与不一致自动入队，人工认领、提交结论并覆盖自动判定，写入审计</td><td><code>eval_review_task</code>、<code>/eval/reviews</code></td></tr>
 <tr><td>基线与门禁</td><td>批次可作为基线并晋升；后续批次与活动基线比较，回退超过 3 个百分点判阻断</td><td><code>eval_baseline</code>、<code>EvalRunner</code></td></tr>
 <tr><td>生命周期</td><td>明细类 90 天清理，结论永久；写操作进 <code>admin_audit</code></td><td><code>EvalCleaner</code>、<code>EvalController</code></td></tr>
-<tr><td>页面</td><td>批次与用例集、批次结果、单条时间轴、复核队列</td><td><code>/eval</code>、<code>/eval/batches/:id</code>、<code>/eval/runs/:id</code>、<code>/eval/reviews</code></td></tr>
-<tr><td>成本价目</td><td>未接入，成本维度仍为 SKIP，只展示 token</td><td>待加 <code>eval_price</code></td></tr>
+<tr><td>页面</td><td>批次与用例集、批次结果、单条时间轴、复核队列、成本价目</td><td><code>/eval</code>、<code>/eval/batches/:id</code>、<code>/eval/runs/:id</code>、<code>/eval/reviews</code>、<code>/eval/prices</code></td></tr>
+<tr><td>成本价目</td><td>已接入：按元每百万 token 配置，成本以微元存，批次门禁比较单条平均成本</td><td><code>eval_price</code>、<code>EvalPricing</code>、<code>/eval/prices</code></td></tr>
 <tr><td>工具返回值、逐句引用</td><td>未采集，页面不展示而不是显示 0</td><td>待包装执行器与后置对齐</td></tr>
 <tr><td>告警、报告、趋势、版本对比、失败归因独立页</td><td>未实现</td><td>P1</td></tr>
 <tr><td>评测执行隔离</td><td>仍与线上共用主库</td><td>批次量上来后切库副本</td></tr>

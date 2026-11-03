@@ -816,6 +816,10 @@ export interface EvalSummary {
   passRate: number
   p50Ms: number
   p95Ms: number
+  tokensIn: number
+  tokensOut: number
+  costMicro: number
+  pricedRuns: number
   dimensions: EvalDimStat[]
   tags: EvalTagStat[]
 }
@@ -925,4 +929,14 @@ export interface EvalFailureCase {
   dimension: string
   tag: string
   reason: string
+}
+
+export interface EvalPrice {
+  id: number
+  provider: string
+  model: string
+  inputPerMillion: number
+  outputPerMillion: number
+  currency: string
+  updatedAt: string
 }

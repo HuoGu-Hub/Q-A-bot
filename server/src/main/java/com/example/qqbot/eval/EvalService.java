@@ -231,6 +231,32 @@ public class EvalService {
                 b.status(), b.createdAt(), b.promotedBy(), b.promotedAt());
     }
 
+    public List<EvalViews.Price> prices() {
+        List<EvalViews.Price> out = new ArrayList<>();
+        for (EvalRepository.PriceRow p : repo.listPrices()) {
+            out.add(toPrice(p));
+        }
+        return out;
+    }
+
+    public EvalViews.Price upsertPrice(String provider, String model, double inputPerMillion,
+                                       double outputPerMillion, String currency) {
+        if (model == null || model.isBlank()) {
+            throw ApiException.badRequest("需要模型名");
+        }
+        if (inputPerMillion < 0 || outputPerMillion < 0) {
+            throw ApiException.badRequest("价格不能为负");
+        }
+        repo.upsertPrice(provider, model.strip(), inputPerMillion, outputPerMillion, currency,
+                Instant.now().toString());
+        return toPrice(repo.findPrice(provider == null ? "" : provider, model.strip()));
+    }
+
+    private EvalViews.Price toPrice(EvalRepository.PriceRow p) {
+        return p == null ? null : new EvalViews.Price(p.id(), p.provider(), p.model(),
+                p.inputPerMillion(), p.outputPerMillion(), p.currency(), p.updatedAt());
+    }
+
     public EvalViews.Summary summary(long batchId) {
         return aggregator.summarise(batchId);
     }

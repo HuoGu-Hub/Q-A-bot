@@ -3,6 +3,7 @@ package com.example.qqbot.eval;
 import com.example.qqbot.agent.ChatService;
 import com.example.qqbot.persistence.EvalRepository;
 import com.example.qqbot.trace.KbTrace;
+import com.example.qqbot.trace.LlmUsage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -178,6 +179,36 @@ class EvalFlowTest {
         EvalRepository.BatchRow row = waitForBatch(badBatch);
         assertThat(row.gateStatus()).isEqualTo("blocked");
         assertThat(row.gateReason()).contains("基线");
+    }
+
+    @Test
+    @DisplayName("有价目时按 token 算出微元成本，并进汇总")
+    void computesCostFromPrice() throws Exception {
+        KbTrace trace = new KbTrace(true,
+                List.of(new KbTrace.Hit("block-1", "废料杯", "doc-1", 0.82, "vector")),
+                0.8, 0.81, 3, 1, List.of(), 120);
+        when(chatService.reply(any(), anyString(), any(), anyList(), any(), anyBoolean(), any()))
+                .thenAnswer(invocation -> {
+                    LlmUsage.record("mock", "mock-model", 1000, 500);
+                    return new ChatService.ReplyResult("废料杯在废料堆旁边。", 800, trace, List.of());
+                });
+        repo.upsertPrice("mock", "mock-model", 10, 20, "CNY", Instant.now().toString());
+
+        EvalViews.Dataset dataset = datasets.create("cost-" + Instant.now().toEpochMilli(),
+                "成本用例集", "", "test");
+        datasets.addCase(dataset.id(), "entity-c", "entity", "废料杯在哪", "block-1", "");
+        EvalViews.Version version = datasets.freeze(dataset.id(), "test");
+        long batchId = service.createBatch("成本批次", dataset.id(), version.id(), 1, 1,
+                "offline", 1.0, "test");
+        waitForBatch(batchId);
+
+        EvalViews.Summary summary = service.summary(batchId);
+        assertThat(summary.costMicro()).isEqualTo(20_000L);
+        assertThat(summary.pricedRuns()).isEqualTo(1);
+        assertThat(summary.tokensIn()).isEqualTo(1000);
+        assertThat(summary.tokensOut()).isEqualTo(500);
+        Long runId = service.batchDetail(batchId, 10).items().get(0).runId();
+        assertThat(service.runDetail(runId).costMicro()).isEqualTo(20_000L);
     }
 
     /** 批次在独立线程里跑，这里等它进终态；超时就把当时状态报出来 */

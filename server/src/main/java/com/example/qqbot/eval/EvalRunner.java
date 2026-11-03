@@ -145,6 +145,13 @@ public class EvalRunner {
                     } else if (!"passed".equals(gate)) {
                         gate = "passed";
                     }
+                    String costNote = costDrift(baseline, summary);
+                    if (costNote != null) {
+                        reason = reason + "；" + costNote;
+                        if (!"blocked".equals(gate)) {
+                            gate = "warned";
+                        }
+                    }
                 }
             }
             repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate, reason,
@@ -180,6 +187,31 @@ public class EvalRunner {
             }
         }
         return null;
+    }
+
+    /** 单条平均成本涨超过 30% 就提醒；没有计价或基线没成本时不出结论 */
+    private String costDrift(EvalRepository.BaselineRow baseline, EvalViews.Summary summary) {
+        if (summary.pricedRuns() == 0 || summary.runs() == 0) {
+            return null;
+        }
+        try {
+            EvalViews.Summary base = mapper.readValue(baseline.metricsJson(), EvalViews.Summary.class);
+            if (base.pricedRuns() == 0 || base.runs() == 0) {
+                return null;
+            }
+            double now = (double) summary.costMicro() / summary.pricedRuns();
+            double before = (double) base.costMicro() / base.pricedRuns();
+            if (before <= 0) {
+                return null;
+            }
+            double ratio = now / before;
+            if (ratio > 1.3) {
+                return String.format("单条成本较基线 +%.0f%%", (ratio - 1) * 100);
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private double baselineRate(EvalRepository.BaselineRow baseline) {

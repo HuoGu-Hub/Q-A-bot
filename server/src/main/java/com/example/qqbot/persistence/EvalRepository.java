@@ -216,6 +216,16 @@ public class EvalRepository {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_baseline_version"
                 + " ON eval_baseline(dataset_version_id, status)");
 
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_price ("
+                + " id INTEGER PRIMARY KEY,"
+                + " provider TEXT NOT NULL DEFAULT '',"
+                + " model TEXT NOT NULL,"
+                + " input_per_million REAL NOT NULL DEFAULT 0,"
+                + " output_per_million REAL NOT NULL DEFAULT 0,"
+                + " currency TEXT NOT NULL DEFAULT 'CNY',"
+                + " updated_at TEXT NOT NULL,"
+                + " UNIQUE(provider, model))");
+
         // 老库补列：CREATE TABLE IF NOT EXISTS 对已存在的表什么都不做
         ensureColumn("eval_batch", "gate_reason", "gate_reason TEXT");
         ensureColumn("eval_run", "tokens_in", "tokens_in INTEGER DEFAULT 0");
@@ -540,13 +550,16 @@ public class EvalRepository {
                         rs.str("verdict"), rs.str("tag")), batchId);
     }
 
-    public record RunLite(long id, String status, long latencyMs, int hitCount) {
+    public record RunLite(long id, String status, long latencyMs, int hitCount,
+                          long tokensIn, long tokensOut, long costMicro) {
     }
 
     public List<RunLite> runsOfBatch(long batchId) {
-        return jdbc.query("SELECT id, status, latency_ms, hit_count FROM eval_run WHERE batch_id=?",
-                rs -> new RunLite(rs.longOf("id"), rs.str("status"),
-                        rs.longOf("latency_ms"), rs.intOf("hit_count")), batchId);
+        return jdbc.query("SELECT id, status, latency_ms, hit_count, tokens_in, tokens_out,"
+                        + " cost_micro FROM eval_run WHERE batch_id=?",
+                rs -> new RunLite(rs.longOf("id"), rs.str("status"), rs.longOf("latency_ms"),
+                        rs.intOf("hit_count"), rs.longOf("tokens_in"), rs.longOf("tokens_out"),
+                        rs.longOf("cost_micro")), batchId);
     }
 
     /* ==================== 一次执行的整体写入 ==================== */
@@ -797,6 +810,42 @@ public class EvalRepository {
         return tag == null || tag.isBlank()
                 ? jdbc.query(sql, mapper, batchId, limit)
                 : jdbc.query(sql, mapper, batchId, tag, limit);
+    }
+
+    /* ==================== 价目 ==================== */
+
+    public record PriceRow(long id, String provider, String model, double inputPerMillion,
+                           double outputPerMillion, String currency, String updatedAt) {
+    }
+
+    public void upsertPrice(String provider, String model, double inputPerMillion,
+                            double outputPerMillion, String currency, String now) {
+        jdbc.update("INSERT INTO eval_price (provider, model, input_per_million, output_per_million,"
+                        + " currency, updated_at) VALUES (?,?,?,?,?,?)"
+                        + " ON CONFLICT(provider, model) DO UPDATE SET"
+                        + " input_per_million=excluded.input_per_million,"
+                        + " output_per_million=excluded.output_per_million,"
+                        + " currency=excluded.currency, updated_at=excluded.updated_at",
+                provider == null ? "" : provider, model, inputPerMillion, outputPerMillion,
+                currency == null || currency.isBlank() ? "CNY" : currency, now);
+    }
+
+    public List<PriceRow> listPrices() {
+        return jdbc.query("SELECT id, provider, model, input_per_million, output_per_million,"
+                        + " currency, updated_at FROM eval_price ORDER BY provider, model",
+                EvalRepository::mapPrice);
+    }
+
+    public PriceRow findPrice(String provider, String model) {
+        return jdbc.queryOne("SELECT id, provider, model, input_per_million, output_per_million,"
+                        + " currency, updated_at FROM eval_price WHERE provider=? AND model=?",
+                EvalRepository::mapPrice, provider == null ? "" : provider, model);
+    }
+
+    private static PriceRow mapPrice(Jdbc.Row rs) {
+        return new PriceRow(rs.longOf("id"), rs.str("provider"), rs.str("model"),
+                rs.dbl("input_per_million"), rs.dbl("output_per_million"), rs.str("currency"),
+                rs.str("updated_at"));
     }
 
     /* ==================== 统计 ==================== */

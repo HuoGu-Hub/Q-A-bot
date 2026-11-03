@@ -79,8 +79,18 @@ public class EvalAggregator {
         }
 
         List<Long> latencies = new ArrayList<>();
+        long tokensIn = 0;
+        long tokensOut = 0;
+        long costMicro = 0;
+        int pricedRuns = 0;
         for (EvalRepository.RunLite r : runs) {
             latencies.add(r.latencyMs());
+            tokensIn += r.tokensIn();
+            tokensOut += r.tokensOut();
+            if (r.costMicro() > 0) {
+                costMicro += r.costMicro();
+                pricedRuns++;
+            }
         }
         double rate = pass + fail == 0 ? 0 : (double) pass / (pass + fail);
 
@@ -95,7 +105,7 @@ public class EvalAggregator {
         }
         return new EvalViews.Summary(runs.size(), judged, pass, fail, skip,
                 Math.round(rate * 1000) / 1000.0, percentile(latencies, 0.50), percentile(latencies, 0.95),
-                dimStats, tags);
+                tokensIn, tokensOut, costMicro, pricedRuns, dimStats, tags);
     }
 
     /** 门禁三态：没有判定就还是 pending，有判定才谈得上通过与警告 */

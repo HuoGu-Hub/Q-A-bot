@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -196,6 +197,23 @@ public class EvalController {
         return detail;
     }
 
+    /* ==================== 价目 ==================== */
+
+    @GetMapping("/prices")
+    public List<EvalViews.Price> prices() {
+        return service.prices();
+    }
+
+    /** 价目按"每百万 token 多少元"填，成本在服务端换算成微元 */
+    @PutMapping("/prices")
+    public EvalViews.Price upsertPrice(@RequestBody UpsertPrice body) {
+        if (body.inputPerMillion() == null || body.outputPerMillion() == null) {
+            throw ApiException.badRequest("需要输入与输出单价");
+        }
+        return service.upsertPrice(body.provider(), body.model(),
+                body.inputPerMillion(), body.outputPerMillion(), body.currency());
+    }
+
     /* ==================== 基线 ==================== */
 
     @GetMapping("/baselines")
@@ -273,6 +291,11 @@ public class EvalController {
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record ImportRequest(String content, Boolean dryRun) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record UpsertPrice(String provider, String model, Double inputPerMillion,
+                              Double outputPerMillion, String currency) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

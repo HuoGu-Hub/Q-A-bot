@@ -52,15 +52,18 @@ public class EvalCaseExecutor {
     private final RuleJudge judge;
     private final ObjectMapper mapper;
     private final LlmPolicy llmPolicy;
+    private final EvalPricing pricing;
 
     public EvalCaseExecutor(ChatService chatService, IntentPlanner intentPlanner, EvalRepository repo,
-                            RuleJudge judge, ObjectMapper mapper, LlmPolicy llmPolicy) {
+                            RuleJudge judge, ObjectMapper mapper, LlmPolicy llmPolicy,
+                            EvalPricing pricing) {
         this.chatService = chatService;
         this.intentPlanner = intentPlanner;
         this.repo = repo;
         this.judge = judge;
         this.mapper = mapper;
         this.llmPolicy = llmPolicy;
+        this.pricing = pricing;
     }
 
     /**
@@ -122,12 +125,14 @@ public class EvalCaseExecutor {
         long totalMs = elapsedMs(started);
         long tokensIn = LlmUsage.totalIn(usage);
         long tokensOut = LlmUsage.totalOut(usage);
+        Long priced = pricing.totalCostMicro(usage);
+        long costMicro = priced == null ? 0L : priced;
         String runStatus = errorCode == null && !answer.isBlank() ? "succeeded" : "failed";
         String runModel = usage.isEmpty() ? modelName() : usage.get(usage.size() - 1).model();
 
         long runId = repo.insertRun(itemId, batchId, spec.caseId(), attempt, runStatus, traceId, answer,
                 totalMs, trace.hitCount(), trace.bestCosineRaw(), trace.enabled(), runModel,
-                tokensIn, tokensOut, 0L, errorCode, now);
+                tokensIn, tokensOut, costMicro, errorCode, now);
 
         List<Judgement> judgements = judge.judge(spec, new Observation(answer, trace.enabled(),
                 trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs), attempts);
@@ -148,7 +153,8 @@ public class EvalCaseExecutor {
         long judgeMs = elapsedMs(judgeStart);
 
         repo.saveExecution(runId,
-                spans(spec, trace, planMs, totalMs, judgeMs, errorCode, usage, toolCalls, tokensIn, tokensOut),
+                spans(spec, trace, planMs, totalMs, judgeMs, errorCode, usage, toolCalls,
+                        tokensIn, tokensOut, costMicro),
                 retrieval(spec, trace), judgeWrites, failures, now);
         enqueueForReview(batchId, runId, judgements, now);
         if (!toolCalls.isEmpty()) {
@@ -214,7 +220,7 @@ public class EvalCaseExecutor {
     private List<EvalRepository.SpanRow> spans(CaseSpec spec, KbTrace trace, long planMs,
                                                long totalMs, long judgeMs, String errorCode,
                                                List<LlmUsage.Call> usage, List<ToolCallTrace.Call> toolCalls,
-                                               long tokensIn, long tokensOut) {
+                                               long tokensIn, long tokensOut, long costMicro) {
         TraceBuilder b = new TraceBuilder();
         Map<String, Object> rootAttrs = new LinkedHashMap<>();
         rootAttrs.put("caseKey", spec.caseKey());
@@ -246,6 +252,7 @@ public class EvalCaseExecutor {
         llmAttrs.put("rounds", Math.max(1, usage.size()));
         llmAttrs.put("tokensIn", tokensIn);
         llmAttrs.put("tokensOut", tokensOut);
+        llmAttrs.put("costMicro", costMicro);
         llmAttrs.put("hits", trace.hitCount());
         b.add(root, "llm", "chat", "ok", llmStart, Math.max(0, totalMs - llmStart), llmAttrs);
 

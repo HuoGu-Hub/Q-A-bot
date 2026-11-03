@@ -52,6 +52,21 @@ const rateText = computed(() => {
   return s ? `${(s.passRate * 100).toFixed(1)}%` : '—'
 })
 
+/** 微元转元，保留四位 —— 单条成本常在 0.001 量级，两位小数会全变 0.00 */
+const yuan = (micro: number) => (micro / 1_000_000).toFixed(4)
+
+const costText = computed(() => {
+  const s = detail.value?.summary
+  if (!s || s.pricedRuns === 0) return '未计价'
+  return `${yuan(s.costMicro)} 元`
+})
+
+const avgCostText = computed(() => {
+  const s = detail.value?.summary
+  if (!s || s.pricedRuns === 0) return '未计价'
+  return `${yuan(s.costMicro / s.pricedRuns)} 元`
+})
+
 async function loadFailures(tag: string) {
   activeTag.value = tag
   try {
@@ -171,6 +186,8 @@ const DIM_LABEL: Record<string, string> = {
         <Stat label="未判定" :value="detail.summary.skip" tone="mist" />
         <Stat label="P50" :value="`${detail.summary.p50Ms} ms`" tone="mist" />
         <Stat label="P95" :value="`${detail.summary.p95Ms} ms`" tone="mist" />
+        <Stat label="单条成本" :value="avgCostText" tone="rust" hint="按价目换算，未配价目时不计价" />
+        <Stat label="总成本" :value="costText" tone="rust" />
       </div>
 
       <Panel title="批次信息">

@@ -139,6 +139,7 @@ function attrText(attrs: Record<string, unknown>): string {
         <Stat label="命中块" :value="run.hitCount" tone="mist" />
         <Stat label="token 入" :value="run.tokensIn || '未计量'" tone="mist" />
         <Stat label="token 出" :value="run.tokensOut || '未计量'" tone="mist" />
+        <Stat label="成本" :value="run.costMicro > 0 ? `${(run.costMicro / 1_000_000).toFixed(4)} 元` : '未计价'" tone="rust" />
         <Stat label="spans" :value="run.spans.length" tone="mist" />
       </div>
 

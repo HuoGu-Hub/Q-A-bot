@@ -115,7 +115,8 @@ public class RuleJudge {
     }
 
     private Judgement cost(CaseSpec c, Observation o) {
-        return skip("cost", "未逐次计量 token", Map.of("latencyMs", o.totalMs()));
+        return skip("cost", "单条成本在批次门禁比较，单次不做阈值判定",
+                Map.of("latencyMs", o.totalMs()));
     }
 
     private Judgement safety(CaseSpec c, Observation o) {
