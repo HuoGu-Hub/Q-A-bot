@@ -47,6 +47,10 @@ public final class EvalViews {
     public record TagStat(String tag, int count) {
     }
 
+    public record FailureCase(long runId, String caseKey, String question, String dimension,
+                              String tag, String reason) {
+    }
+
     public record Summary(int runs, int judged, int pass, int fail, int skip,
                           double passRate, long p50Ms, long p95Ms,
                           List<DimStat> dimensions, List<TagStat> tags) {

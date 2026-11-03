@@ -917,3 +917,12 @@ export interface EvalReview {
   createdAt: string
   dueAt: string | null
 }
+
+export interface EvalFailureCase {
+  runId: number
+  caseKey: string
+  question: string
+  dimension: string
+  tag: string
+  reason: string
+}

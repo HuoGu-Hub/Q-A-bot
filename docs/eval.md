@@ -71,6 +71,7 @@ eval
 | GET | `/batches/{id}` | 批次、指标、用例列表 |
 | POST | `/batches/{id}/actions/clone` | 用同一用例集再跑一批 |
 | GET | `/runs/{id}` | 单条执行：span、检索快照、判定、工具调用 |
+| GET | `/batches/{id}/failures` | 失败归因下钻，可按标签过滤 |
 | POST | `/runs/{id}/actions/review` | 人工转复核 |
 | GET | `/reviews` | 复核队列 |
 | POST | `/reviews/{id}/actions/claim` | 认领 |
@@ -91,6 +92,7 @@ eval
 - 规则判定覆盖：空返回、兜底话术、协议标记泄漏、库外问题该拒未拒、
   期望块是否命中、期望空结果却注入噪声、单例超时。
 - 事实正确性、引用支持、有害内容仍待 rubric，结论为 SKIP 并进人工。
+- 失败归因：失败标签落在 `eval_failure`，批次页按标签点开可看到受影响的用例与原因。
 - 重复运行：每条用例跑 N 次，N 大于 1 时稳定性由跑完之后的一致性判定给出，
   一致性比较的是质量与检索两维的结论，不看分数。
 - 门禁三态：同一版本存在活动基线时与基线比较，回退超过 3 个百分点判 `blocked`；

@@ -177,6 +177,14 @@ public class EvalController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new EvalViews.IdResult(newId));
     }
 
+    /** 失败归因下钻：tag 为空取全部 */
+    @GetMapping("/batches/{id}/failures")
+    public List<EvalViews.FailureCase> failures(@PathVariable long id,
+                                                @RequestParam(required = false) String tag,
+                                                @RequestParam(defaultValue = "200") int limit) {
+        return service.failures(id, tag, limit);
+    }
+
     /* ==================== 单条执行 ==================== */
 
     @GetMapping("/runs/{id}")

@@ -780,6 +780,25 @@ public class EvalRepository {
                 rs.str("created_at"), rs.str("promoted_by"), rs.str("promoted_at"));
     }
 
+    public record FailureCase(long runId, String caseKey, String question, String dimension,
+                              String tag, String reason) {
+    }
+
+    /** 失败归因下钻：按标签取受影响的用例，不传标签就取全部 */
+    public List<FailureCase> failuresOfBatch(long batchId, String tag, int limit) {
+        String sql = "SELECT f.run_id, f.tag_code, f.dimension, f.reason, c.case_key, c.question"
+                + " FROM eval_failure f JOIN eval_run r ON r.id=f.run_id"
+                + " LEFT JOIN eval_case c ON c.id=r.case_id"
+                + " WHERE r.batch_id=?" + (tag == null || tag.isBlank() ? "" : " AND f.tag_code=?")
+                + " ORDER BY f.id DESC LIMIT ?";
+        Jdbc.RowMapper<FailureCase> mapper = rs -> new FailureCase(rs.longOf("run_id"),
+                rs.str("case_key"), rs.str("question"), rs.str("dimension"), rs.str("tag_code"),
+                rs.str("reason"));
+        return tag == null || tag.isBlank()
+                ? jdbc.query(sql, mapper, batchId, limit)
+                : jdbc.query(sql, mapper, batchId, tag, limit);
+    }
+
     /* ==================== 统计 ==================== */
 
     public record TagCount(String tag, long count) {

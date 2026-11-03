@@ -8,7 +8,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
-import type { EvalBatchDetail, EvalItem } from '@shared/api/types'
+import type { EvalBatchDetail, EvalFailureCase, EvalItem } from '@shared/api/types'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Panel from '@shared/ui/Panel.vue'
 import DataTable from '@shared/ui/DataTable.vue'
@@ -23,6 +23,8 @@ const router = useRouter()
 const batchId = Number(route.params.id)
 
 const detail = ref<EvalBatchDetail | null>(null)
+const failures = ref<EvalFailureCase[]>([])
+const activeTag = ref('')
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
@@ -50,6 +52,16 @@ const rateText = computed(() => {
   return s ? `${(s.passRate * 100).toFixed(1)}%` : '—'
 })
 
+async function loadFailures(tag: string) {
+  activeTag.value = tag
+  try {
+    const q = tag ? `?tag=${encodeURIComponent(tag)}` : ''
+    failures.value = await adminApi.get<EvalFailureCase[]>(`/eval/batches/${batchId}/failures${q}`)
+  } catch (e) {
+    error.value = describeError(e)
+  }
+}
+
 async function load() {
   loading.value = true
   try {
@@ -73,6 +85,7 @@ function schedule() {
 
 onMounted(async () => {
   await load()
+  await loadFailures('')
   schedule()
 })
 
@@ -188,10 +201,27 @@ const DIM_LABEL: Record<string, string> = {
         </DataTable>
       </Panel>
 
-      <Panel v-if="detail.summary.tags.length" title="失败标签" hint="按出现次数倒序">
+      <Panel v-if="detail.summary.tags.length" title="失败归因" hint="点标签看受影响的用例">
         <div class="tags">
-          <Tag v-for="t in detail.summary.tags" :key="t.tag" tone="bad">{{ t.tag }} · {{ t.count }}</Tag>
+          <button v-for="t in detail.summary.tags" :key="t.tag" type="button" class="tagbtn"
+                  :class="{ on: activeTag === t.tag }" @click="loadFailures(activeTag === t.tag ? '' : t.tag)">
+            {{ t.tag }} <span class="num">{{ t.count }}</span>
+          </button>
         </div>
+        <table v-if="failures.length" class="tbl">
+          <thead>
+            <tr><th>用例</th><th>问题</th><th>维度</th><th>原因</th><th /></tr>
+          </thead>
+          <tbody>
+            <tr v-for="f in failures" :key="f.runId + f.tag">
+              <td><code>{{ f.caseKey }}</code></td>
+              <td class="q">{{ f.question }}</td>
+              <td>{{ f.dimension }}</td>
+              <td class="q">{{ f.reason }}</td>
+              <td><Button size="sm" @click="router.push(`/eval/runs/${f.runId}`)">过程</Button></td>
+            </tr>
+          </tbody>
+        </table>
       </Panel>
 
       <Panel title="用例" :count="detail.items.length">
@@ -244,6 +274,23 @@ const DIM_LABEL: Record<string, string> = {
 }
 .meta span { display: inline-flex; align-items: center; gap: 6px; }
 .reason { color: var(--warn); }
-.tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.tagbtn {
+  border: 1px solid var(--edge);
+  background: var(--stone-400);
+  color: var(--ink-2);
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.tagbtn.on { color: var(--blight); border-color: var(--blight); }
+.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.tbl th {
+  text-align: left; font-weight: var(--fw-medium); font-size: var(--fs-xs); color: var(--ink-3);
+  padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--edge); white-space: nowrap;
+}
+.tbl td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--hairline); vertical-align: top; }
 .q { max-width: 360px; }
 </style>

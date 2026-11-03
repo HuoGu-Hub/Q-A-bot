@@ -123,6 +123,16 @@ public class EvalService {
         return new EvalViews.BatchDetail(toView(b), aggregator.summarise(batchId), items);
     }
 
+    public List<EvalViews.FailureCase> failures(long batchId, String tag, int limit) {
+        List<EvalViews.FailureCase> out = new ArrayList<>();
+        for (EvalRepository.FailureCase f : repo.failuresOfBatch(batchId, tag,
+                Math.max(1, Math.min(500, limit)))) {
+            out.add(new EvalViews.FailureCase(f.runId(), f.caseKey(), f.question(), f.dimension(),
+                    f.tag(), f.reason()));
+        }
+        return out;
+    }
+
     public List<EvalViews.Review> reviews(String status, int limit) {
         List<EvalViews.Review> out = new ArrayList<>();
         for (EvalRepository.ReviewRow r : repo.listReviews(status, Math.max(1, Math.min(200, limit)))) {
