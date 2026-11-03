@@ -303,25 +303,25 @@ public class EvalRepository {
     }
 
     public record CaseRow(long id, String caseKey, String category, String question,
-                          String expected, String note, boolean enabled) {
+                          String expected, String note, boolean enabled, String dimension) {
     }
 
     public void upsertCase(long datasetId, String caseKey, String category, String question,
-                           String expected, String note, String now) {
+                           String expected, String note, String dimension, String now) {
         jdbc.update("INSERT INTO eval_case (dataset_id, case_key, category, dimension, question, expected,"
-                + " note, enabled, created_at, updated_at) VALUES (?,?,?,'rag',?,?,?,1,?,?)"
+                + " note, enabled, created_at, updated_at) VALUES (?,?,?,?,?,?,?,1,?,?)"
                 + " ON CONFLICT(dataset_id, case_key) DO UPDATE SET"
-                + " category=excluded.category, question=excluded.question,"
+                + " category=excluded.category, dimension=excluded.dimension, question=excluded.question,"
                 + " expected=excluded.expected, note=excluded.note, updated_at=excluded.updated_at",
-                datasetId, caseKey, category, question, expected, note, now, now);
+                datasetId, caseKey, category, dimension, question, expected, note, now, now);
     }
 
     public List<CaseRow> listCases(long datasetId, int limit, int offset) {
-        return jdbc.query("SELECT id, case_key, category, question, expected, note, enabled"
+        return jdbc.query("SELECT id, case_key, category, question, expected, note, enabled, dimension"
                 + " FROM eval_case WHERE dataset_id=? ORDER BY id LIMIT ? OFFSET ?",
                 rs -> new CaseRow(rs.longOf("id"), rs.str("case_key"), rs.str("category"),
                         rs.str("question"), rs.str("expected"), rs.str("note"),
-                        rs.bool("enabled")),
+                        rs.bool("enabled"), rs.str("dimension")),
                 datasetId, limit, offset);
     }
 
@@ -330,10 +330,11 @@ public class EvalRepository {
     }
 
     public CaseRow findCase(long datasetId, String caseKey) {
-        return jdbc.queryOne("SELECT id, case_key, category, question, expected, note, enabled"
+        return jdbc.queryOne("SELECT id, case_key, category, question, expected, note, enabled, dimension"
                         + " FROM eval_case WHERE dataset_id=? AND case_key=?",
                 rs -> new CaseRow(rs.longOf("id"), rs.str("case_key"), rs.str("category"),
-                        rs.str("question"), rs.str("expected"), rs.str("note"), rs.bool("enabled")),
+                        rs.str("question"), rs.str("expected"), rs.str("note"), rs.bool("enabled"),
+                        rs.str("dimension")),
                 datasetId, caseKey);
     }
 
@@ -421,15 +422,16 @@ public class EvalRepository {
     }
 
     public record PendingCase(long caseId, String caseKey, String category, String question,
-                              String expected, String note) {
+                              String expected, String note, String dimension) {
     }
 
     /** 批次建好之后要跑的用例 —— 只取启用的，按 id 稳定排序 */
     public List<PendingCase> pendingCases(long datasetId) {
-        return jdbc.query("SELECT id, case_key, category, question, expected, note FROM eval_case"
-                        + " WHERE dataset_id=? AND enabled=1 ORDER BY id",
+        return jdbc.query("SELECT id, case_key, category, question, expected, note, dimension"
+                        + " FROM eval_case WHERE dataset_id=? AND enabled=1 ORDER BY id",
                 rs -> new PendingCase(rs.longOf("id"), rs.str("case_key"), rs.str("category"),
-                        rs.str("question"), rs.str("expected"), rs.str("note")), datasetId);
+                        rs.str("question"), rs.str("expected"), rs.str("note"),
+                        rs.str("dimension")), datasetId);
     }
 
     public long insertItem(long batchId, long caseId, String snapshot, String now) {
@@ -890,7 +892,7 @@ public class EvalRepository {
     }
 
     public record CaseVerdict(String caseKey, String question, String quality, String rag,
-                              String tag, long runId) {
+                              String safety, String tag, long runId) {
     }
 
     /** 每个用例第一次执行的结论，对比用 */
@@ -900,12 +902,14 @@ public class EvalRepository {
                         + "  ORDER BY j.id DESC LIMIT 1) AS quality,"
                         + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS rag,"
+                        + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='safety'"
+                        + "  ORDER BY j.id DESC LIMIT 1) AS safety,"
                         + " (SELECT j.tag FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS tag"
                         + " FROM eval_run r JOIN eval_case c ON c.id=r.case_id"
                         + " WHERE r.batch_id=? AND r.attempt=1 ORDER BY c.case_key",
                 rs -> new CaseVerdict(rs.str("case_key"), rs.str("question"), rs.str("quality"),
-                        rs.str("rag"), rs.str("tag"), rs.longOf("run_id")), batchId);
+                        rs.str("rag"), rs.str("safety"), rs.str("tag"), rs.longOf("run_id")), batchId);
     }
 
     /* ==================== 告警 ==================== */

@@ -22,7 +22,7 @@ public final class EvalViews {
     }
 
     public record CaseView(long id, String caseKey, String category, String question,
-                           String expected, String note, boolean enabled) {
+                           String expected, String note, boolean enabled, String dimension) {
     }
 
     public record DatasetDetail(Dataset dataset, List<Version> versions, List<CaseView> cases,

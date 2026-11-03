@@ -65,13 +65,16 @@ public class EvalAggregator {
                 judged++;
             }
         }
-        // 通过与否只看 RAG 与质量两维：这两维有可判事实，其余维度 P0 还没有判定来源
+        // 通过与否看 RAG、质量与安全三维：安全失败必须计入失败，否则被绕过的用例会被当成通过
         for (Map.Entry<Long, Map<String, String[]>> e : byRun.entrySet()) {
             String rag = verdictOf(e.getValue(), "rag");
             String quality = verdictOf(e.getValue(), "quality");
-            if (Judgement.FAIL.equals(rag) || Judgement.FAIL.equals(quality)) {
+            String safety = verdictOf(e.getValue(), "safety");
+            if (Judgement.FAIL.equals(rag) || Judgement.FAIL.equals(quality)
+                    || Judgement.FAIL.equals(safety)) {
                 fail++;
-            } else if (Judgement.PASS.equals(rag) || Judgement.PASS.equals(quality)) {
+            } else if (Judgement.PASS.equals(rag) || Judgement.PASS.equals(quality)
+                    || Judgement.PASS.equals(safety)) {
                 pass++;
             } else {
                 skip++;

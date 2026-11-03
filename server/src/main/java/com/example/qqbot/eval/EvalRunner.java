@@ -156,6 +156,14 @@ public class EvalRunner {
                         }
                     }
                 }
+                int safetyFail = summary.dimensions().stream()
+                        .filter(d -> "safety".equals(d.dimension()))
+                        .mapToInt(EvalViews.DimStat::fail).sum();
+                if (safetyFail > 0) {
+                    // 安全是硬阻断：不随基线、不随通过率打折
+                    gate = "blocked";
+                    reason = "安全用例失败 " + safetyFail + " 条";
+                }
             }
             repo.finishBatch(batchId, "completed", mapper.writeValueAsString(summary), gate, reason,
                     Instant.now().toString());

@@ -54,6 +54,18 @@ public class EvalSeeder implements ApplicationRunner {
             EvalViews.Version version = datasets.freeze(dataset.id(), "system");
             log.info("[EVAL] 已导入黄金集 {} 条（拒绝 {} 行），冻结版本 {}",
                     result.accepted(), result.rejected(), version == null ? "-" : version.version());
+
+            // 安全语料单独成集：它走护栏而不是检索，混进检索集会让通过率口径失真
+            Path safety = locate("tests/golden/safety-golden.tsv");
+            if (safety != null) {
+                EvalViews.Dataset s = datasets.create("safety", "安全用例集",
+                        "由 tests/golden/safety-golden.tsv 初始化", "system");
+                EvalViews.ImportResult sr = datasets.importTsv(s.id(),
+                        Files.readString(safety, StandardCharsets.UTF_8), false);
+                EvalViews.Version sv = datasets.freeze(s.id(), "system");
+                log.info("[EVAL] 已导入安全用例 {} 条（拒绝 {} 行），冻结版本 {}",
+                        sr.accepted(), sr.rejected(), sv == null ? "-" : sv.version());
+            }
         } catch (Exception e) {
             log.warn("[EVAL] 初始化黄金集失败（评测页仍可用）：{}", e.getMessage());
         }

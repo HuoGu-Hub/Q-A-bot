@@ -44,7 +44,7 @@ class EvalRepositoryTest {
 
     private long seedRun() {
         long datasetId = repo.insertDataset("golden", "检索黄金集", "", "tester", "2026-11-03T10:00:00Z");
-        repo.upsertCase(datasetId, "entity-abc", "entity", "废料杯在哪", "b1;b2", "",
+        repo.upsertCase(datasetId, "entity-abc", "entity", "废料杯在哪", "b1;b2", "", "rag",
                 "2026-11-03T10:00:00Z");
         long versionId = repo.insertVersion(datasetId, 1, 1, "sum", "tester", "2026-11-03T10:00:00Z");
         long batchId = repo.insertBatch("批次一", datasetId, versionId, "{}", "offline", 2, 1, 1.0,
@@ -59,8 +59,8 @@ class EvalRepositoryTest {
     @DisplayName("建表幂等，用例按 case_key 覆盖而不是新增")
     void schemaIsIdempotentAndCaseUpsert() {
         long datasetId = repo.insertDataset("golden", "检索黄金集", "", "tester", "2026-11-03T10:00:00Z");
-        repo.upsertCase(datasetId, "k1", "entity", "问题一", "b1", "", "2026-11-03T10:00:00Z");
-        repo.upsertCase(datasetId, "k1", "entity", "问题一改", "b1;b2", "备注", "2026-11-03T10:01:00Z");
+        repo.upsertCase(datasetId, "k1", "entity", "问题一", "b1", "", "rag", "2026-11-03T10:00:00Z");
+        repo.upsertCase(datasetId, "k1", "entity", "问题一改", "b1;b2", "备注", "rag", "2026-11-03T10:01:00Z");
         assertThat(repo.countCases(datasetId)).isEqualTo(1);
         assertThat(repo.findCase(datasetId, "k1").question()).isEqualTo("问题一改");
     }

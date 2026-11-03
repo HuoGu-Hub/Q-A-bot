@@ -24520,6 +24520,9 @@
           },
           "enabled" : {
             "type" : "boolean"
+          },
+          "dimension" : {
+            "type" : "string"
           }
         }
       },

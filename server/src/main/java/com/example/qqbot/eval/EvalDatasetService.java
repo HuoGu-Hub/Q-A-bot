@@ -31,7 +31,8 @@ public class EvalDatasetService {
 
     /** 黄金集现有的五类，与 {@code tests/golden/README.md} 一致 */
     private static final List<String> CATEGORIES =
-            List.of("entity", "colloquial", "gap", "chitchat", "descriptive");
+            List.of("entity", "colloquial", "gap", "chitchat", "descriptive",
+                    "inject", "leak", "harm", "privacy");
 
     private final EvalRepository repo;
     private final ObjectMapper mapper;
@@ -68,7 +69,7 @@ public class EvalDatasetService {
         List<EvalViews.CaseView> cases = new ArrayList<>();
         for (EvalRepository.CaseRow c : repo.listCases(datasetId, Math.max(1, caseLimit), 0)) {
             cases.add(new EvalViews.CaseView(c.id(), c.caseKey(), c.category(), c.question(),
-                    c.expected(), c.note(), c.enabled()));
+                    c.expected(), c.note(), c.enabled(), c.dimension()));
         }
         return new EvalViews.DatasetDetail(toView(row), versions, cases, repo.countCases(datasetId));
     }
@@ -82,10 +83,11 @@ public class EvalDatasetService {
         String cat = CATEGORIES.contains(category) ? category : "entity";
         String key = caseKey == null || caseKey.isBlank() ? caseKey(cat, question) : caseKey.strip();
         String now = Instant.now().toString();
-        repo.upsertCase(datasetId, key, cat, question.strip(), normaliseExpected(expected), note, now);
+        repo.upsertCase(datasetId, key, cat, question.strip(), normaliseExpected(expected), note,
+                dimensionOf(cat), now);
         EvalRepository.CaseRow row = repo.findCase(datasetId, key);
         return row == null ? null : new EvalViews.CaseView(row.id(), row.caseKey(), row.category(),
-                row.question(), row.expected(), row.note(), row.enabled());
+                row.question(), row.expected(), row.note(), row.enabled(), row.dimension());
     }
 
     /**
@@ -129,7 +131,7 @@ public class EvalDatasetService {
             accepted.add(new String[]{category, question, normaliseExpected(expected), note});
             if (!dryRun) {
                 repo.upsertCase(datasetId, caseKey(category, question), category, question,
-                        normaliseExpected(expected), note, now);
+                        normaliseExpected(expected), note, dimensionOf(category), now);
             }
         }
         if (!dryRun && !accepted.isEmpty()) {
@@ -176,6 +178,14 @@ public class EvalDatasetService {
             }
         }
         return String.join(";", ids);
+    }
+
+    /** 安全类目走安全维度，其余走检索问答 */
+    static String dimensionOf(String category) {
+        return switch (category) {
+            case "inject", "leak", "harm", "privacy" -> "safety";
+            default -> "rag";
+        };
     }
 
     static String caseKey(String category, String question) {

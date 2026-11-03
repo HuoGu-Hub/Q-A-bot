@@ -92,7 +92,7 @@ public class EvalService {
         int created = 0;
         for (EvalRepository.PendingCase c : picked) {
             CaseSpec spec = new CaseSpec(c.caseId(), c.caseKey(), c.category(), c.question(),
-                    expectedIds(c.expected()), "-".equals(c.expected()));
+                    expectedIds(c.expected()), "-".equals(c.expected()), c.dimension());
             repo.insertItem(batchId, c.caseId(), json(spec), now);
             created++;
         }
@@ -299,8 +299,10 @@ public class EvalService {
     private Map<String, String> verdictMap(long batchId) {
         Map<String, String> out = new LinkedHashMap<>();
         for (EvalRepository.CaseVerdict c : repo.caseVerdicts(batchId)) {
-            boolean failed = Judgement.FAIL.equals(c.quality()) || Judgement.FAIL.equals(c.rag());
-            boolean passed = Judgement.PASS.equals(c.quality()) || Judgement.PASS.equals(c.rag());
+            boolean failed = Judgement.FAIL.equals(c.quality()) || Judgement.FAIL.equals(c.rag())
+                    || Judgement.FAIL.equals(c.safety());
+            boolean passed = Judgement.PASS.equals(c.quality()) || Judgement.PASS.equals(c.rag())
+                    || Judgement.PASS.equals(c.safety());
             out.put(c.caseKey(), failed ? Judgement.FAIL : passed ? Judgement.PASS : Judgement.SKIP);
         }
         return out;

@@ -12,9 +12,14 @@ import java.util.List;
  * @param expectEmpty true = 期望一条资料都不注入
  */
 public record CaseSpec(long caseId, String caseKey, String category, String question,
-                       List<String> expected, boolean expectEmpty) {
+                       List<String> expected, boolean expectEmpty, String dimension) {
 
     public boolean labelled() {
         return expectEmpty || !expected.isEmpty();
+    }
+
+    /** 安全用例走护栏，其余走检索问答 */
+    public boolean isSafety() {
+        return "safety".equals(dimension);
     }
 }

@@ -3,6 +3,9 @@ package com.example.qqbot.eval;
 import com.example.qqbot.agent.ChatService;
 import com.example.qqbot.agent.Quote;
 import com.example.qqbot.agent.ReplyMode;
+import com.example.qqbot.guard.GuardContext;
+import com.example.qqbot.guard.GuardPipeline;
+import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.intent.IntentPlanner;
 import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.llm.LlmPolicy;
@@ -53,10 +56,11 @@ public class EvalCaseExecutor {
     private final ObjectMapper mapper;
     private final LlmPolicy llmPolicy;
     private final EvalPricing pricing;
+    private final GuardPipeline guardPipeline;
 
     public EvalCaseExecutor(ChatService chatService, IntentPlanner intentPlanner, EvalRepository repo,
                             RuleJudge judge, ObjectMapper mapper, LlmPolicy llmPolicy,
-                            EvalPricing pricing) {
+                            EvalPricing pricing, GuardPipeline guardPipeline) {
         this.chatService = chatService;
         this.intentPlanner = intentPlanner;
         this.repo = repo;
@@ -64,6 +68,7 @@ public class EvalCaseExecutor {
         this.mapper = mapper;
         this.llmPolicy = llmPolicy;
         this.pricing = pricing;
+        this.guardPipeline = guardPipeline;
     }
 
     /**
@@ -95,24 +100,51 @@ public class EvalCaseExecutor {
         String traceId = UUID.randomUUID().toString();
         String now = Instant.now().toString();
 
-        OneBotEvent event = syntheticEvent();
+        OneBotEvent event = syntheticEvent(spec);
         String answer = "";
         String errorCode = null;
         KbTrace trace = KbTrace.disabled();
         long planMs = 0;
+        long guardMs = 0;
+        String guardAction = "pass";
+        String guardStage = "";
+        String guardReply = "";
         List<LlmUsage.Call> usage;
         List<ToolCallTrace.Call> toolCalls;
 
         LlmUsage.begin();
         ToolCallTrace.begin();
         try {
-            long planStart = System.nanoTime();
-            TurnPlan plan = intentPlanner.plan(spec.question());
-            planMs = elapsedMs(planStart);
-            ChatService.ReplyResult result = chatService.reply(event, spec.question(), Quote.NONE,
-                    List.of(), ReplyMode.KB, false, plan);
-            answer = result.text() == null ? "" : result.text();
-            trace = result.kb() == null ? KbTrace.disabled() : result.kb();
+            GuardResult guard = GuardResult.pass();
+            if (spec.isSafety()) {
+                // 安全用例先过护栏：被拦下就不该再调模型，这一步本身就是要验证的能力
+                long guardStart = System.nanoTime();
+                try {
+                    guard = guardPipeline.check(new GuardContext(event, spec.question(),
+                            List.of(), false, true));
+                } catch (RuntimeException e) {
+                    guard = GuardResult.pass();
+                }
+                guardMs = elapsedMs(guardStart);
+                if (guard instanceof GuardResult.Drop drop) {
+                    guardAction = "drop";
+                    guardStage = drop.stage() == null ? "" : drop.stage();
+                } else if (guard instanceof GuardResult.Reply reply) {
+                    guardAction = "reply";
+                    guardStage = reply.stage() == null ? "" : reply.stage();
+                    guardReply = reply.text() == null ? "" : reply.text();
+                    answer = guardReply;
+                }
+            }
+            if (guard instanceof GuardResult.Pass) {
+                long planStart = System.nanoTime();
+                TurnPlan plan = intentPlanner.plan(spec.question());
+                planMs = elapsedMs(planStart);
+                ChatService.ReplyResult result = chatService.reply(event, spec.question(), Quote.NONE,
+                        List.of(), ReplyMode.KB, false, plan);
+                answer = result.text() == null ? "" : result.text();
+                trace = result.kb() == null ? KbTrace.disabled() : result.kb();
+            }
         } catch (Exception e) {
             errorCode = "EVAL_ERROR";
             log.warn("[EVAL] 用例 {} 第 {} 次执行失败：{}", spec.caseKey(), attempt, e.getMessage());
@@ -135,7 +167,8 @@ public class EvalCaseExecutor {
                 tokensIn, tokensOut, costMicro, errorCode, now);
 
         List<Judgement> judgements = judge.judge(spec, new Observation(answer, trace.enabled(),
-                trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs), attempts);
+                trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs,
+                guardAction, guardStage, guardReply), attempts);
 
         long judgeStart = System.nanoTime();
         List<EvalRepository.JudgeWrite> judgeWrites = new ArrayList<>();
@@ -153,8 +186,8 @@ public class EvalCaseExecutor {
         long judgeMs = elapsedMs(judgeStart);
 
         repo.saveExecution(runId,
-                spans(spec, trace, planMs, totalMs, judgeMs, errorCode, usage, toolCalls,
-                        tokensIn, tokensOut, costMicro),
+                spans(spec, trace, guardMs, guardAction, guardStage, planMs, totalMs, judgeMs,
+                        errorCode, usage, toolCalls, tokensIn, tokensOut, costMicro),
                 retrieval(spec, trace), judgeWrites, failures, now);
         enqueueForReview(batchId, runId, judgements, now);
         if (!toolCalls.isEmpty()) {
@@ -218,7 +251,8 @@ public class EvalCaseExecutor {
         return out;
     }
 
-    private List<EvalRepository.SpanRow> spans(CaseSpec spec, KbTrace trace, long planMs,
+    private List<EvalRepository.SpanRow> spans(CaseSpec spec, KbTrace trace, long guardMs,
+                                               String guardAction, String guardStage, long planMs,
                                                long totalMs, long judgeMs, String errorCode,
                                                List<LlmUsage.Call> usage, List<ToolCallTrace.Call> toolCalls,
                                                long tokensIn, long tokensOut, long costMicro) {
@@ -232,10 +266,15 @@ public class EvalCaseExecutor {
         int root = b.add(0, "request", "chat", errorCode == null ? "ok" : "error",
                 0, totalMs, rootAttrs, errorCode);
 
+        Map<String, Object> guardAttrs = new LinkedHashMap<>();
+        guardAttrs.put("action", guardAction);
+        guardAttrs.put("stage", guardStage);
+        b.add(root, "guard", "pipeline", spec.isSafety() ? "ok" : "skipped", 0, guardMs, guardAttrs);
+
         long retrieveMs = Math.min(trace.retrieveMs(), totalMs);
         Map<String, Object> intentAttrs = new LinkedHashMap<>();
         intentAttrs.put("retrieve", trace.enabled());
-        b.add(root, "intent", "plan", "ok", 0, planMs, intentAttrs);
+        b.add(root, "intent", "plan", "ok", guardMs, planMs, intentAttrs);
 
         Map<String, Object> retrieveAttrs = new LinkedHashMap<>();
         retrieveAttrs.put("hits", trace.hitCount());
@@ -244,9 +283,9 @@ public class EvalCaseExecutor {
         retrieveAttrs.put("keywordCandidates", trace.keywordCandidates());
         retrieveAttrs.put("sources", trace.sources());
         retrieveAttrs.put("emptyReason", RetrievalSnapshot.emptyReasonOf(trace));
-        b.add(root, "retrieve", "kb", "ok", planMs, retrieveMs, retrieveAttrs);
+        b.add(root, "retrieve", "kb", "ok", guardMs + planMs, retrieveMs, retrieveAttrs);
 
-        long llmStart = planMs + retrieveMs;
+        long llmStart = guardMs + planMs + retrieveMs;
         Map<String, Object> llmAttrs = new LinkedHashMap<>();
         llmAttrs.put("provider", llmPolicy.getDefaultProvider());
         llmAttrs.put("model", usage.isEmpty() ? modelName() : usage.get(usage.size() - 1).model());
@@ -303,11 +342,15 @@ public class EvalCaseExecutor {
                 snap.latencyMs());
     }
 
-    private OneBotEvent syntheticEvent() {
+    /**
+     * 合成事件。安全用例用独立的群号：护栏的限流是"每群每分钟"，
+     * 共用群 0 会让第 11 条安全用例起全部被限流，测出来的就不是拦截能力了。
+     */
+    private OneBotEvent syntheticEvent(CaseSpec spec) {
         OneBotEvent event = new OneBotEvent();
         event.setPostType("message");
         event.setMessageType("group");
-        event.setGroupId(0L);
+        event.setGroupId(spec.isSafety() ? -(1_000_000L + spec.caseId()) : 0L);
         event.setUserId(0L);
         event.setSelfId(0L);
         event.setMessageId(0L);
