@@ -108,6 +108,11 @@ onBeforeUnmount(() => {
   if (timer !== null) window.clearTimeout(timer)
 })
 
+/** 报告是服务端生成的单文件 HTML，直接下走，不在前端拼 */
+function downloadReport() {
+  window.location.href = `/admin/api/eval/batches/${batchId}/report`
+}
+
 async function clone() {
   try {
     const res = await adminApi.post<{ id: number }>(`/eval/batches/${batchId}/actions/clone`)
@@ -169,6 +174,7 @@ const DIM_LABEL: Record<string, string> = {
       <Button size="sm" :disabled="detail?.batch.status !== 'completed'" @click="makeBaseline">
         设为基线
       </Button>
+      <Button size="sm" @click="downloadReport">导出报告</Button>
       <Button size="sm" @click="clone">克隆批次</Button>
       <Button size="sm" to="/eval">返回列表</Button>
     </template>

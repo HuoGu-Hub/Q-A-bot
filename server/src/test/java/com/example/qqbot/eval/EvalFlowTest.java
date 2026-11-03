@@ -69,6 +69,9 @@ class EvalFlowTest {
     @Autowired
     private EvalRepository repo;
 
+    @Autowired
+    private EvalReport report;
+
     @BeforeEach
     void stubModel() {
         KbTrace trace = new KbTrace(true,
@@ -106,6 +109,9 @@ class EvalFlowTest {
         assertThat(detail.items().get(0).attempts()).isEqualTo(2);
         Long runId = detail.items().get(0).runId();
         assertThat(runId).isNotNull();
+
+        String html = report.html(batchId);
+        assertThat(html).contains("评测报告").contains("通过率").contains("失败归因");
 
         EvalViews.RunDetail run = service.runDetail(runId);
         assertThat(run.spans()).extracting(EvalViews.Span::kind)

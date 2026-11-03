@@ -10,7 +10,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,13 +48,15 @@ public class EvalController {
     private final EvalDatasetService datasets;
     private final EvalRepository repo;
     private final AdminAuditRepository audit;
+    private final EvalReport report;
 
     public EvalController(EvalService service, EvalDatasetService datasets, EvalRepository repo,
-                          AdminAuditRepository audit) {
+                          AdminAuditRepository audit, EvalReport report) {
         this.service = service;
         this.datasets = datasets;
         this.repo = repo;
         this.audit = audit;
+        this.report = report;
     }
 
     /** 评测的写操作进 admin_audit：出了事要能查到是谁建的批、改的判定 */
@@ -176,6 +180,20 @@ public class EvalController {
                 batch.datasetVersionId(), batch.repeatTimes(), batch.concurrency(), batch.mode(),
                 batch.sampleRate(), ACTOR);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new EvalViews.IdResult(newId));
+    }
+
+    /** 单文件 HTML 报告，可直接归档或转发；P1 为即时生成，不是不可变快照 */
+    @GetMapping(value = "/batches/{id}/report", produces = "text/html;charset=UTF-8")
+    public ResponseEntity<String> report(@PathVariable long id) {
+        String html = report.html(id);
+        if (html == null) {
+            throw ApiException.notFound("批次不存在");
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"eval-batch-" + id + ".html\"")
+                .contentType(MediaType.TEXT_HTML)
+                .body(html);
     }
 
     /** 失败归因下钻：tag 为空取全部 */
