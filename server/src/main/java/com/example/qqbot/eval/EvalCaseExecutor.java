@@ -9,6 +9,9 @@ import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.intent.IntentPlanner;
 import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.llm.LlmPolicy;
+import com.example.qqbot.kb.block.KbBlock;
+import com.example.qqbot.kb.block.KbBlockStore;
+import com.example.qqbot.kb.EntryId;
 import com.example.qqbot.llm.JudgeModel;
 import com.example.qqbot.llm.Provider;
 import com.example.qqbot.onebot.model.OneBotEvent;
@@ -60,12 +63,13 @@ public class EvalCaseExecutor {
     private final EvalPricing pricing;
     private final GuardPipeline guardPipeline;
     private final RubricJudge rubricJudge;
+    private final KbBlockStore blockStore;
     private final Environment env;
 
     public EvalCaseExecutor(ChatService chatService, IntentPlanner intentPlanner, EvalRepository repo,
                             RuleJudge judge, ObjectMapper mapper, LlmPolicy llmPolicy,
                             EvalPricing pricing, GuardPipeline guardPipeline,
-                            RubricJudge rubricJudge, Environment env) {
+                            RubricJudge rubricJudge, KbBlockStore blockStore, Environment env) {
         this.chatService = chatService;
         this.intentPlanner = intentPlanner;
         this.repo = repo;
@@ -75,6 +79,7 @@ public class EvalCaseExecutor {
         this.pricing = pricing;
         this.guardPipeline = guardPipeline;
         this.rubricJudge = rubricJudge;
+        this.blockStore = blockStore;
         this.env = env;
     }
 
@@ -187,6 +192,11 @@ public class EvalCaseExecutor {
                     opinion.evidence()));
         }
 
+        Judgement agentLoop = AgentLoopJudge.judge(toolCalls);
+        if (agentLoop != null) {
+            judgements.add(agentLoop);
+        }
+
         long judgeStart = System.nanoTime();
         List<EvalRepository.JudgeWrite> judgeWrites = new ArrayList<>();
         List<EvalRepository.FailureWrite> failures = new ArrayList<>();
@@ -291,9 +301,7 @@ public class EvalCaseExecutor {
         int samples = Integer.parseInt(env.getProperty("app.eval.judge.samples", "3"));
         String strategy = env.getProperty("app.eval.judge.strategy", "average");
         String provider = env.getProperty("app.eval.judge.provider", "");
-        String context = trace.hits().stream()
-                .map(h -> (h.title() == null ? "" : h.title()) + "（" + h.source() + "）")
-                .filter(t -> !t.isBlank()).distinct().reduce((a, b) -> a + "；" + b).orElse("");
+        String context = evidenceContext(trace);
 
         List<RubricJudge.Opinion> opinions = new ArrayList<>();
         RubricJudge.Opinion relevance = rubricJudge.judge(RubricJudge.RELEVANCE, spec.question(),
@@ -324,6 +332,47 @@ public class EvalCaseExecutor {
         String reason = opinions.size() == 1 ? relevance.reason()
                 : relevance.reason() + "；" + opinions.get(1).reason();
         return new Composite(Math.round(score * 100) / 100.0, pass, reason, ev);
+    }
+
+    /**
+     * 判定用的资料上下文：优先取块正文前 400 字，取不到再退回标题与来源。
+     *
+     * <p>只喂标题的忠实度判定等于让人看目录判断内容，误判率高；
+     * 但也不能把整篇文档塞进去，成本和噪声都不可控。
+     */
+    private String evidenceContext(KbTrace trace) {
+        StringBuilder sb = new StringBuilder();
+        int used = 0;
+        for (KbTrace.Hit hit : trace.hits()) {
+            if (used >= 3) {
+                break;
+            }
+            String block = "";
+            try {
+                KbBlock b = blockStore.get(new EntryId(hit.id()));
+                if (b != null) {
+                    block = b.title() + "：" + excerpt(b.body(), 400);
+                }
+            } catch (RuntimeException ignored) {
+                // 块被删或 id 形态不认识，退回标题
+            }
+            if (block.isBlank()) {
+                block = (hit.title() == null ? "" : hit.title()) + "（" + hit.source() + "）";
+            }
+            if (!block.isBlank()) {
+                sb.append(block).append('\n');
+                used++;
+            }
+        }
+        return sb.toString().strip();
+    }
+
+    private static String excerpt(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        String oneLine = s.replaceAll("\\s+", " ").strip();
+        return oneLine.length() <= max ? oneLine : oneLine.substring(0, max) + "…";
     }
 
     private List<EvalRepository.CitationWrite> citationWrites(List<CitationExtractor.Line> lines) {

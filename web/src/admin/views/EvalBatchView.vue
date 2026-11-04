@@ -188,6 +188,8 @@ const DIM_LABEL: Record<string, string> = {
   stability: '稳定性',
   cost: '成本效率',
   safety: '安全限制',
+  evidence: '证据链',
+  agent: 'Agent 过程',
 }
 </script>
 

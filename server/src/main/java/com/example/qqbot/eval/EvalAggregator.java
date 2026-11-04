@@ -71,11 +71,14 @@ public class EvalAggregator {
             String quality = verdictOf(e.getValue(), "quality");
             String safety = verdictOf(e.getValue(), "safety");
             String evidence = verdictOf(e.getValue(), "evidence");
+            String agent = verdictOf(e.getValue(), "agent");
             if (Judgement.FAIL.equals(rag) || Judgement.FAIL.equals(quality)
-                    || Judgement.FAIL.equals(safety) || Judgement.FAIL.equals(evidence)) {
+                    || Judgement.FAIL.equals(safety) || Judgement.FAIL.equals(evidence)
+                    || Judgement.FAIL.equals(agent)) {
                 fail++;
             } else if (Judgement.PASS.equals(rag) || Judgement.PASS.equals(quality)
-                    || Judgement.PASS.equals(safety) || Judgement.PASS.equals(evidence)) {
+                    || Judgement.PASS.equals(safety) || Judgement.PASS.equals(evidence)
+                    || Judgement.PASS.equals(agent)) {
                 pass++;
             } else {
                 skip++;

@@ -939,7 +939,8 @@ public class EvalRepository {
     }
 
     public record CaseVerdict(long caseId, String caseKey, String question, String quality,
-                              String rag, String safety, String evidence, String tag, long runId) {
+                              String rag, String safety, String evidence, String agent, String tag,
+                              long runId) {
     }
 
     /** 每个用例第一次执行的结论，对比用 */
@@ -953,14 +954,16 @@ public class EvalRepository {
                         + "  ORDER BY j.id DESC LIMIT 1) AS safety,"
                         + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='evidence'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS evidence,"
+                        + " (SELECT j.verdict FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='agent'"
+                        + "  ORDER BY j.id DESC LIMIT 1) AS agent,"
                         + " (SELECT j.tag FROM eval_judge j WHERE j.run_id=r.id AND j.dimension='rag'"
                         + "  ORDER BY j.id DESC LIMIT 1) AS tag"
                         + " FROM eval_run r JOIN eval_case c ON c.id=r.case_id"
                         + " WHERE r.batch_id=? AND r.attempt=1 ORDER BY c.case_key",
                 rs -> new CaseVerdict(rs.longOf("case_id"), rs.str("case_key"), rs.str("question"),
                         rs.str("quality"),
-                        rs.str("rag"), rs.str("safety"), rs.str("evidence"), rs.str("tag"),
-                        rs.longOf("run_id")), batchId);
+                        rs.str("rag"), rs.str("safety"), rs.str("evidence"), rs.str("agent"),
+                        rs.str("tag"), rs.longOf("run_id")), batchId);
     }
 
     /* ==================== 告警 ==================== */

@@ -141,6 +141,9 @@ eval
   再按 `sample-rate` 抽样跑 rubric 判定，模型的结论**替换**规则结论，落库类型记 `llm`。
 - 判定器：两个 rubric，相关性看有没有答到点上，忠实度看回答有没有资料依据，都是 1 到 5 分，
   阈值 3.5。两个都跑时分数取均值、任一不过就算不过，明细写进判定的 evidence。
+  忠实度的上下文优先取命中块正文前 400 字，取不到再退回标题与来源，避免"看目录判内容"。
+- Agent 维度：同一工具用相同参数调用 3 次以上判 `AGENT_LOOP`，是代码判定，不花 token；
+  被拒绝的调用不计入重复。
 - 采样：`app.eval.judge.samples` 控制每条判定重复几次，`strategy=average` 取均值、
   `vote` 取多数票。判定模型可以用 `app.eval.judge.provider` 指定，和被测模型解耦。
 - 校准：`POST /judges/actions/calibrate` 用人工标注的 13 条样本算一致率与分档差。
@@ -267,5 +270,6 @@ P3 是体验与远期。已实现的部分不在这里重复。
 | `CitationExtractorTest` | 逐句引用只按标题归属，空输入不产生行 |
 | `RubricJudgeTest` | 1-5 分解析、均值与投票策略、解析失败不猜 |
 | `JudgeCalibrationTest` | 一致率、两类均值与分档差的口径 |
+| `AgentLoopJudgeTest` | 两次算重试、三次算循环，拒绝调用不计 |
 | `ToolCallTraceTest` | 工具成功、失败、拒绝三种记录 |
 | `LlmUsageTest` | 用量收集只在打开时记 |

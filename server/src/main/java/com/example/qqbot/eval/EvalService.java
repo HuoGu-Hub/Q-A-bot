@@ -311,9 +311,11 @@ public class EvalService {
         Map<String, String> out = new LinkedHashMap<>();
         for (EvalRepository.CaseVerdict c : repo.caseVerdicts(batchId)) {
             boolean failed = Judgement.FAIL.equals(c.quality()) || Judgement.FAIL.equals(c.rag())
-                    || Judgement.FAIL.equals(c.safety()) || Judgement.FAIL.equals(c.evidence());
+                    || Judgement.FAIL.equals(c.safety()) || Judgement.FAIL.equals(c.evidence())
+                    || Judgement.FAIL.equals(c.agent());
             boolean passed = Judgement.PASS.equals(c.quality()) || Judgement.PASS.equals(c.rag())
-                    || Judgement.PASS.equals(c.safety()) || Judgement.PASS.equals(c.evidence());
+                    || Judgement.PASS.equals(c.safety()) || Judgement.PASS.equals(c.evidence())
+                    || Judgement.PASS.equals(c.agent());
             out.put(c.caseKey(), failed ? Judgement.FAIL : passed ? Judgement.PASS : Judgement.SKIP);
         }
         return out;
