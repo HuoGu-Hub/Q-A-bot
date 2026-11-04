@@ -52,7 +52,13 @@ const q = ref('')
 const view = ref('all')
 const category = ref('')
 
-const PAGE = 100
+/**
+ * 一页 30 条。
+ *
+ * <p>原来 100 条：列表虽然只带标题/别名/分类，但 100 行一屏仍然是
+ * 一大段 DOM，手机上很难滚动定位。30 条一页，翻页看后面的。
+ */
+const PAGE = 30
 const offset = ref(0)
 
 const VIEWS = [

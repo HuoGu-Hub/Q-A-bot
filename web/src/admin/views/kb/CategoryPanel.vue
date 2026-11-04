@@ -119,17 +119,33 @@ const entryTotal = ref(0)
 const entryItems = ref<CategoryEntry[]>([])
 const entryLoading = ref(false)
 const entryError = ref('')
-const ENTRY_LIMIT = 300
+/**
+ * 一页 30 条。
+ *
+ * <p>原来一次拉 300 条，每条还带正文片段 —— 打开一个分类要等很久，
+ * 长列表在手机上也会滚成上万像素。30 条一页，翻页看后面的。
+ */
+const ENTRY_PAGE = 30
+const entryOffset = ref(0)
 
 function openEntries(cat: string) {
   entryCategory.value = cat
   entryQ.value = ''
+  entryOffset.value = 0
   entryOpen.value = true
   loadEntries()
 }
 function closeEntries() {
   entryOpen.value = false
 }
+
+const entryPageLabel = computed(() => {
+  if (!entryTotal.value) return '0 条'
+  return (entryOffset.value + 1) + '–' + Math.min(entryOffset.value + ENTRY_PAGE, entryTotal.value)
+    + ' / ' + entryTotal.value
+})
+const entryCanPrev = computed(() => entryOffset.value > 0)
+const entryCanNext = computed(() => entryOffset.value + ENTRY_PAGE < entryTotal.value)
 
 async function loadEntries() {
   entryLoading.value = true
@@ -138,7 +154,8 @@ async function loadEntries() {
     const p = new URLSearchParams()
     p.set('category', entryCategory.value)
     if (entryQ.value.trim()) p.set('q', entryQ.value.trim())
-    p.set('limit', String(ENTRY_LIMIT))
+    p.set('limit', String(ENTRY_PAGE))
+    p.set('offset', String(entryOffset.value))
     const r = await adminApi.get<CategoryEntryPage>('/kb/categories/entries?' + p.toString())
     entryItems.value = r.items ?? []
     entryTotal.value = r.total ?? 0
@@ -149,6 +166,20 @@ async function loadEntries() {
   } finally {
     entryLoading.value = false
   }
+}
+
+/** 改搜索词等于换一批结果，必须回到第一页 */
+function searchEntries() {
+  entryOffset.value = 0
+  loadEntries()
+}
+
+function goEntryPage(delta: number) {
+  if (entryLoading.value) return
+  const next = Math.max(0, entryOffset.value + delta * ENTRY_PAGE)
+  if (next === entryOffset.value) return
+  entryOffset.value = next
+  loadEntries()
 }
 
 const entryTitle = computed(() => '「' + entryCategory.value + '」下的词条')
@@ -260,11 +291,13 @@ defineExpose({
           class="ent-kw"
           placeholder="在结果里搜索（标题 / id / 文档 / 正文）…"
           aria-label="在词条里搜索"
-          @keyup.enter="loadEntries"
+          @keyup.enter="searchEntries"
         />
-        <Button size="sm" :disabled="entryLoading" @click="loadEntries">搜索</Button>
-        <span class="faint ent-total">
-          共 {{ entryTotal }} 条<template v-if="entryItems.length < entryTotal">，显示前 {{ entryItems.length }} 条</template>
+        <Button size="sm" :disabled="entryLoading" @click="searchEntries">搜索</Button>
+        <span class="ent-pager">
+          <span class="faint">{{ entryPageLabel }}</span>
+          <Button size="sm" :disabled="!entryCanPrev || entryLoading" @click="goEntryPage(-1)">上一页</Button>
+          <Button size="sm" :disabled="!entryCanNext || entryLoading" @click="goEntryPage(1)">下一页</Button>
         </span>
       </div>
 
@@ -319,7 +352,7 @@ tr.uncat td { background: var(--surface-inset); }
 
 .ent-tools { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--sp-3); }
 .ent-kw { flex: 1; min-width: 220px; }
-.ent-total { font-size: var(--fs-meta); }
+.ent-pager { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; font-size: var(--fs-meta); }
 .ent-loading { padding: var(--sp-4); text-align: center; }
 
 .ent-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }

@@ -50,7 +50,9 @@ async function load() {
   const q = '?days=' + props.days
   try {
     const [m, s] = await Promise.all([
-      adminApi.get<MissResponse>('/misses' + q + '&limit=20'),
+      // 各取前 10 条：这两张表是「该补什么」的线索，不是完整清单。
+      // 一次拉 20+20 条会让面板变长，也对排查没有额外帮助。
+      adminApi.get<MissResponse>('/misses' + q + '&limit=10'),
       adminApi.get<SourcesResponse>('/sources' + q),
     ])
     misses.value = m
@@ -74,7 +76,7 @@ defineExpose({
   <div class="wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <Panel title="未命中 · 该补什么">
+    <Panel title="未命中 · 该补什么" hint="各取前 10 条">
       <div class="miss">
         <div>
           <div class="sub faint">认出了词，但知识库没有资料</div>

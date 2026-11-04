@@ -27,6 +27,16 @@ const scope = ref<'questions' | 'all'>('questions')
 const rows = ref<RecordRow[]>([])
 const total = ref(0)
 
+/**
+ * 一页 20 条。
+ *
+ * <p>原来一次拉 100 条：每条都带完整问题与回答，100 条既把请求撑大，
+ * 也让表格在手机上滚成一万多像素。20 条刚好让 DataTable 的卡片模式生效
+ * （≤30 行才转卡片），翻页再看更早的记录。
+ */
+const PAGE = 20
+const offset = ref(0)
+
 const loading = ref(false)
 const error = ref('')
 const busyId = ref<number | null>(null)
@@ -42,12 +52,19 @@ const tableRows = computed(() =>
   !rows.value.length && loading.value ? undefined : rows.value.length
 )
 
+const pageLabel = computed(() => {
+  if (!total.value) return '0 条'
+  return (offset.value + 1) + '–' + Math.min(offset.value + PAGE, total.value) + ' / ' + total.value
+})
+const canPrev = computed(() => offset.value > 0)
+const canNext = computed(() => offset.value + PAGE < total.value)
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
     const r = await adminApi.get<{ rows: RecordRow[]; total: number; scope: string }>(
-      `/records?days=${props.days}&limit=100&scope=${scope.value}`)
+      `/records?days=${props.days}&limit=${PAGE}&offset=${offset.value}&scope=${scope.value}`)
     rows.value = r.rows
     total.value = r.total
   } catch (e) {
@@ -55,6 +72,16 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+/** 翻页时收起详情：上一页展开的那条不在新列表里，留着只会让人以为没翻过去 */
+function goPage(delta: number) {
+  if (loading.value) return
+  const next = Math.max(0, offset.value + delta * PAGE)
+  if (next === offset.value) return
+  offset.value = next
+  expanded.value = null
+  load()
 }
 
 async function annotate(id: number, verdict: string) {
@@ -85,11 +112,15 @@ function setScope(v: string) {
   const next = v === 'all' ? 'all' : 'questions'
   if (next === scope.value) return
   scope.value = next
+  offset.value = 0
+  expanded.value = null
   if (active) load()
   else dirty = true
 }
 
 watch(() => props.days, () => {
+  offset.value = 0
+  expanded.value = null
   if (active) load()
   else dirty = true
 })
@@ -128,6 +159,11 @@ onMounted(load)
     </Notice>
 
     <Panel>
+      <div class="pager">
+        <span class="faint page">{{ pageLabel }}</span>
+        <Button size="sm" :disabled="!canPrev || loading" @click="goPage(-1)">上一页</Button>
+        <Button size="sm" :disabled="!canNext || loading" @click="goPage(1)">下一页</Button>
+      </div>
       <DataTable
         class="records"
         cards
@@ -207,6 +243,10 @@ onMounted(load)
 <style scoped>
 /* 面板之间留出整页统一的竖向节奏 */
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+/* 翻页条放在表头上方：长表滚到底部才能翻页，等于逼人先滚完 20 行 */
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.pager .page { font-size: var(--fs-meta); }
 
 /* 展开详情改挂在问题按钮上（见模板注释）。按钮长得像文本 ——
    它是"标题"不是"控件"，画成按钮会在七列里显得很吵。 */
