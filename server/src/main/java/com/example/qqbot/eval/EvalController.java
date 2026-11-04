@@ -262,15 +262,31 @@ public class EvalController {
     /** 跑一遍判定器校准集，返回一致率与分档差；不落库，校准是诊断动作 */
     @PostMapping("/judges/actions/calibrate")
     public JudgeCalibration.Report calibrateJudges(
-            @RequestParam(required = false) String grader, HttpServletRequest request) {
-        JudgeCalibration.Report report = calibration.runDefault(grader,
-                env.getProperty("app.eval.judge.provider", ""));
+            @RequestParam(required = false) String grader,
+            @RequestBody(required = false) CalibrateBody body,
+            HttpServletRequest request) {
+        String provider = env.getProperty("app.eval.judge.provider", "");
+        JudgeCalibration.Report report = body != null && body.tsv() != null && !body.tsv().isBlank()
+                ? calibration.run(body.tsv(), grader, provider)
+                : calibration.runDefault(grader, provider);
         if (report == null) {
             throw ApiException.badRequest("没有找到校准集，或判定器不存在：" + grader);
         }
         audit(request, "judge.calibrate", "grader=" + report.grader() + " total=" + report.total()
                 + " agreement=" + report.agreement());
         return report;
+    }
+
+    /** 导出最近有回答的 run 作为待标注校准候选，期望结论留空 */
+    @GetMapping(value = "/judges/calibration/export", produces = "text/tab-separated-values;charset=UTF-8")
+    public ResponseEntity<String> exportCalibration(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "relevance") String grader) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"judge-calibration-candidates.tsv\"")
+                .contentType(MediaType.parseMediaType("text/tab-separated-values;charset=UTF-8"))
+                .body(service.exportCalibrationCandidates(limit, grader));
     }
 
     /* ==================== 趋势与对比 ==================== */
@@ -428,6 +444,10 @@ public class EvalController {
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record ImportRequest(String content, Boolean dryRun) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record CalibrateBody(String tsv) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)

@@ -94,7 +94,8 @@ eval
 | GET | `/runs/{id}` | 单条执行：span、检索快照、判定、工具调用 |
 | GET | `/batches/{id}/failures` | 失败归因下钻，可按标签过滤 |
 | GET | `/batches/{id}/report` | 单文件 HTML 报告，可直接归档 |
-| POST | `/judges/actions/calibrate?grader=` | 跑指定判定器的校准集，返回一致率与分档差 |
+| POST | `/judges/actions/calibrate?grader=` | 跑指定判定器的校准集，可传 tsv 覆盖默认文件 |
+| GET | `/judges/calibration/export` | 导出最近有回答的 run 作为待标注候选 |
 | GET | `/trends?datasetId=` | 用例集的批次趋势，只含已完成批次 |
 | GET | `/compare?left=&right=` | 两次运行对比，给出变好、变差与逐条变化 |
 | GET | `/alerts/rules` | 告警规则 |
@@ -151,6 +152,8 @@ eval
 - 校准：`POST /judges/actions/calibrate?grader=` 用人工标注样本算一致率与分档差，
   判定器可选 relevance、groundedness、tool-selection。校准集五列：判定器、问题、回答、上下文、期望结论。
   一致率低于 80% 时应当先改 rubric，而不是打开自动判定。
+- 线上样本闭环：`GET /judges/calibration/export` 导出最近有回答的 run 作为待标注候选，
+  期望结论留空；人工填 PASS 或 FAIL 后粘回校准面板即可，不必改仓库文件。
 - 失败归因：失败标签落在 `eval_failure`，批次页按标签点开可看到受影响的用例与原因。
 - 重复运行：每条用例跑 N 次，N 大于 1 时稳定性由跑完之后的一致性判定给出，
   一致性比较的是质量与检索两维的结论，不看分数。
@@ -273,6 +276,7 @@ P3 是体验与远期。已实现的部分不在这里重复。
 | `CitationExtractorTest` | 逐句引用只按标题归属，空输入不产生行 |
 | `RubricJudgeTest` | 1-5 分解析、均值与投票策略、解析失败不猜 |
 | `JudgeCalibrationTest` | 一致率、两类均值与分档差的口径 |
+| `CalibrationExportTest` | 导出候选的列数、空 expected 与超长截断 |
 | `AgentLoopJudgeTest` | 两次算重试、三次算循环，拒绝调用不计 |
 | `ToolCallTraceTest` | 工具成功、失败、拒绝三种记录 |
 | `LlmUsageTest` | 用量收集只在打开时记 |

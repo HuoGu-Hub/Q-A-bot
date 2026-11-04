@@ -242,6 +242,41 @@ public class EvalService {
                 b.status(), b.createdAt(), b.promotedBy(), b.promotedAt());
     }
 
+    /* ==================== 校准候选 ==================== */
+
+    /**
+     * 导出待标注 TSV：最近有回答的 run，期望结论留空等人填。
+     *
+     * <p>选"最近"而不是"随机"：最新一批才是当前要发版的东西，标它最有用。
+     * 字段里的制表符与换行会被压成空格，否则粘进 TSV 会错列。
+     */
+    public String exportCalibrationCandidates(int limit, String grader) {
+        String g = grader == null || grader.isBlank() ? "relevance" : grader.strip();
+        return renderCandidates(g, repo.recentAnsweredRuns(Math.max(1, Math.min(200, limit))));
+    }
+
+    /** 渲染成 TSV；抽取出来是为了不连库也能测列数与转义 */
+    static String renderCandidates(String grader, List<EvalRepository.CalibrationCandidate> rows) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# grader\tquestion\tanswer\tcontext\texpected\n");
+        sb.append("# 把 expected 填成 PASS 或 FAIL，然后粘回校准面板\n");
+        for (EvalRepository.CalibrationCandidate c : rows) {
+            sb.append(grader).append('\t')
+                    .append(clean(c.question())).append('\t')
+                    .append(clean(c.answer())).append('\t')
+                    .append("\t\n");
+        }
+        return sb.toString();
+    }
+
+    private static String clean(String s) {
+        if (s == null) {
+            return "";
+        }
+        String oneLine = s.replaceAll("[\\t\\r\\n]+", " ").strip();
+        return oneLine.length() <= 1500 ? oneLine : oneLine.substring(0, 1500) + "…";
+    }
+
     /* ==================== 趋势与对比 ==================== */
 
     public List<EvalViews.TrendPoint> trends(long datasetId, int limit) {

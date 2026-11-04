@@ -48,6 +48,7 @@ const importResult = ref<EvalImportResult | null>(null)
 const calibration = ref<EvalCalibrationReport | null>(null)
 const calibrating = ref(false)
 const calibGrader = ref('relevance')
+const calibTsv = ref('')
 const CALIB_GRADERS = [
   { value: 'relevance', label: '相关性' },
   { value: 'groundedness', label: '忠实度' },
@@ -80,6 +81,26 @@ async function refresh() {
 }
 
 onMounted(refresh)
+
+function exportCandidates() {
+  window.location.href =
+    `/admin/api/eval/judges/calibration/export?limit=20&grader=${calibGrader.value}`
+}
+
+async function calibrateWithPasted() {
+  if (!calibTsv.value.trim()) return
+  calibrating.value = true
+  try {
+    calibration.value = await adminApi.post<EvalCalibrationReport>(
+      `/eval/judges/actions/calibrate?grader=${calibGrader.value}`,
+      { tsv: calibTsv.value })
+    notice.value = '用自定义校准集跑完，结果见下方'
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    calibrating.value = false
+  }
+}
 
 async function calibrate() {
   calibrating.value = true
@@ -307,6 +328,14 @@ function when(value: string | null): string {
           <Select v-model="calibGrader" :options="CALIB_GRADERS" aria-label="判定器" />
         </label>
         <Button :disabled="calibrating" @click="calibrate">{{ calibrating ? '正在跑…' : '跑校准' }}</Button>
+        <Button :disabled="calibrating" @click="exportCandidates">导出候选</Button>
+      </div>
+      <textarea v-model="calibTsv" class="calib-tsv" rows="5"
+                placeholder="把导出的候选填上 expected 后粘回这里；表头为 grader / question / answer / context / expected" />
+      <div class="form">
+        <Button :disabled="calibrating || !calibTsv.trim()" @click="calibrateWithPasted">
+          用这份校准
+        </Button>
       </div>
       <template v-if="calibration">
         <p class="calib">
@@ -343,6 +372,17 @@ function when(value: string | null): string {
 .calib { margin: var(--sp-3) 0; font-size: var(--fs-sm); color: var(--ink-2); }
 .calib b { color: var(--ink); }
 .calib-hint { font-size: var(--fs-sm); color: var(--ink-3); }
+.calib-tsv {
+  width: 100%;
+  margin: var(--sp-2) 0;
+  padding: 8px 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  background: var(--stone-400);
+  color: var(--ink);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-xs);
+}
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
 .field.narrow { min-width: 110px; }
 .field span { font-size: var(--fs-xs); color: var(--ink-3); }

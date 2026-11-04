@@ -721,6 +721,19 @@ public class EvalRepository {
                               Long latencyMs, Integer resultChars, String error) {
     }
 
+    /** 有回答的最近若干条，用来导出校准候选 */
+    public record CalibrationCandidate(long runId, String question, String answer, String status) {
+    }
+
+    public List<CalibrationCandidate> recentAnsweredRuns(int limit) {
+        return jdbc.query("SELECT r.id, c.question, r.answer, r.status FROM eval_run r"
+                        + " JOIN eval_case c ON c.id=r.case_id"
+                        + " WHERE r.answer IS NOT NULL AND TRIM(r.answer) <> ''"
+                        + " ORDER BY r.id DESC LIMIT ?",
+                rs -> new CalibrationCandidate(rs.longOf("id"), rs.str("question"),
+                        rs.str("answer"), rs.str("status")), limit);
+    }
+
     public List<CitationRow> citationsOf(long runId) {
         return jdbc.query("SELECT sentence_index, sentence, block_ids, chars FROM eval_citation"
                         + " WHERE run_id=? ORDER BY sentence_index",
