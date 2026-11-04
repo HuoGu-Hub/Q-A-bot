@@ -1038,3 +1038,22 @@ export interface EvalDatasetDetail {
   cases: EvalCase[]
   totalCases: number
 }
+
+export interface EvalCalibrationRow {
+  question: string
+  expected: string
+  actual: string
+  score: number
+  agreed: boolean
+  reason: string
+}
+
+export interface EvalCalibrationReport {
+  total: number
+  agreed: number
+  agreement: number
+  passMean: number
+  failMean: number
+  separation: number
+  rows: EvalCalibrationRow[]
+}

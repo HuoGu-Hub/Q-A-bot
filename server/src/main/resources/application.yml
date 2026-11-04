@@ -465,12 +465,18 @@ app:
   eval:
     # 评测库：留空 = 主库同目录的 eval.sqlite；首次启动会把主库里的评测历史搬过来
     db: ""
-    # LLM 判定：用模型给回答质量打分，补规则看不到的事实与切题程度
-    llm-judge:
+    # rubric 判定：用 1-5 分标准给回答打分，补规则看不到的事实与切题程度
+    judge:
       # 默认关闭：它要花 token，且判定质量取决于当前模型，先把开关交给使用方
       enabled: false
       # 抽样比例：0 表示不判，1 表示每条都判；按 run id 取模，同一批次可复现
       sample-rate: 0.2
+      # 每条判定重复几次；按均值或投票收敛，1 表示不重复
+      samples: 3
+      # average 取均值，vote 取多数票
+      strategy: average
+      # 判定模型优先用哪个 provider，留空走默认降级链
+      provider: ""
     # 告警命中后私聊的 QQ 号，逗号分隔；留空只落事件不通知
     alerts:
       qq: ""

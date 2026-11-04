@@ -1,7 +1,7 @@
 package com.example.qqbot.eval;
 
 import com.example.qqbot.agent.ChatService;
-import com.example.qqbot.llm.LlmQualityJudge;
+import com.example.qqbot.llm.JudgeModel;
 import com.example.qqbot.persistence.EvalRepository;
 import com.example.qqbot.trace.KbTrace;
 import org.junit.jupiter.api.DisplayName;
@@ -51,15 +51,16 @@ class EvalLlmJudgeTest {
         r.add("app.media.kb-images.dir", () -> BASE.resolve("kb-images").toString());
         r.add("app.site.carousel.dir", () -> BASE.resolve("site-images").toString());
         r.add("app.guard.file-access.allowed-roots[0]", () -> BASE.toString());
-        r.add("app.eval.llm-judge.enabled", () -> "true");
-        r.add("app.eval.llm-judge.sample-rate", () -> "1.0");
+        r.add("app.eval.judge.enabled", () -> "true");
+        r.add("app.eval.judge.sample-rate", () -> "1.0");
+        r.add("app.eval.judge.samples", () -> "2");
     }
 
     @MockitoBean
     private ChatService chatService;
 
     @MockitoBean
-    private LlmQualityJudge llmJudge;
+    private JudgeModel judgeModel;
 
     @Autowired
     private EvalService service;
@@ -78,9 +79,8 @@ class EvalLlmJudgeTest {
                         new KbTrace(true,
                                 List.of(new KbTrace.Hit("block-1", "废料杯", "doc-1", 0.9, "vector")),
                                 0.9, 0.9, 1, 1, List.of(), 20), List.of()));
-        when(llmJudge.judge(anyString(), anyString(), anyList(), anyString()))
-                .thenReturn(new LlmQualityJudge.Opinion(0.25, false, "编造了资料里没有的信息",
-                        "mock", 30, 10));
+        when(judgeModel.ask(anyString(), anyString(), anyString()))
+                .thenReturn("{\"score\": 2, \"reason\": \"没有正面回答问题\"}");
 
         EvalViews.Dataset dataset = datasets.create("llm-" + Instant.now().toEpochMilli(),
                 "LLM 判定用例集", "", "test");
@@ -95,7 +95,8 @@ class EvalLlmJudgeTest {
         assertThat(run.judges()).filteredOn(j -> j.dimension().equals("quality"))
                 .hasSize(1)
                 .allMatch(j -> "llm".equals(j.judgeType()))
-                .anyMatch(j -> "FAIL".equals(j.verdict()) && "ANS_LLM_LOW".equals(j.tag()));
+                .anyMatch(j -> "FAIL".equals(j.verdict()) && "ANS_LOW_SCORE".equals(j.tag())
+                        && j.score() == 2.0);
     }
 
     private EvalRepository.BatchRow waitFor(long batchId) throws InterruptedException {

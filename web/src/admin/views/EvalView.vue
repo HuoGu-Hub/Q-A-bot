@@ -10,7 +10,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
 import { useAuth } from '../useAuth'
-import type { EvalBatch, EvalDataset, EvalImportResult } from '@shared/api/types'
+import type {
+  EvalBatch, EvalCalibrationReport, EvalDataset, EvalImportResult,
+} from '@shared/api/types'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Tabs from '@shared/ui/Tabs.vue'
 import Panel from '@shared/ui/Panel.vue'
@@ -43,6 +45,8 @@ const importTarget = ref('')
 const tsv = ref('')
 const importing = ref(false)
 const importResult = ref<EvalImportResult | null>(null)
+const calibration = ref<EvalCalibrationReport | null>(null)
+const calibrating = ref(false)
 
 const datasetOptions = computed(() =>
   datasets.value.map(d => ({ value: String(d.id), label: `${d.name} · ${d.caseCount} 条 · ${d.versionCount} 版` })))
@@ -70,6 +74,18 @@ async function refresh() {
 }
 
 onMounted(refresh)
+
+async function calibrate() {
+  calibrating.value = true
+  try {
+    calibration.value = await adminApi.post<EvalCalibrationReport>('/eval/judges/actions/calibrate')
+    notice.value = '校准完成，结果见下方'
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    calibrating.value = false
+  }
+}
 
 async function createBatch() {
   if (!canCreate.value) return
@@ -276,6 +292,36 @@ function when(value: string | null): string {
       </Panel>
     </template>
 
+    <Panel title="判定器校准"
+           hint="用人工标注的 13 条样本量一致率与分档差；跑一次会调用判定模型">
+      <div class="form">
+        <Button :disabled="calibrating" @click="calibrate">{{ calibrating ? '正在跑…' : '跑校准' }}</Button>
+      </div>
+      <template v-if="calibration">
+        <p class="calib">
+          样本 {{ calibration.total }} 条，一致 {{ calibration.agreed }} 条，
+          一致率 <b>{{ (calibration.agreement * 100).toFixed(1) }}%</b>，
+          PASS 均分 {{ calibration.passMean }}，FAIL 均分 {{ calibration.failMean }}，
+          分档差 {{ calibration.separation }}
+        </p>
+        <DataTable :rows="calibration.rows.length" label="校准明细" empty="没有可用的标注样本">
+          <thead>
+            <tr><th>问题</th><th>期望</th><th>实际</th><th class="num">分数</th><th>理由</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in calibration.rows" :key="r.question + r.expected">
+              <td>{{ r.question }}</td>
+              <td>{{ r.expected }}</td>
+              <td>{{ r.actual }}</td>
+              <td class="num">{{ r.score }}</td>
+              <td>{{ r.reason }}</td>
+            </tr>
+          </tbody>
+        </DataTable>
+      </template>
+      <p v-else class="calib-hint">还没有跑过。一致率低于 80% 时先改 rubric，别急着开自动判定。</p>
+    </Panel>
+
     <Empty v-if="!loading && tab === 'batches' && batches.length === 0 && datasets.length === 0"
            title="评测还没有数据" hint="首次启动会尝试导入检索黄金集；也可以在上面手动导入" />
   </AdminPage>
@@ -283,6 +329,9 @@ function when(value: string | null): string {
 
 <style scoped>
 .form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3); }
+.calib { margin: var(--sp-3) 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.calib b { color: var(--ink); }
+.calib-hint { font-size: var(--fs-sm); color: var(--ink-3); }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
 .field.narrow { min-width: 110px; }
 .field span { font-size: var(--fs-xs); color: var(--ink-3); }

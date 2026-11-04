@@ -9,7 +9,7 @@ import com.example.qqbot.guard.GuardResult;
 import com.example.qqbot.intent.IntentPlanner;
 import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.llm.LlmPolicy;
-import com.example.qqbot.llm.LlmQualityJudge;
+import com.example.qqbot.llm.JudgeModel;
 import com.example.qqbot.llm.Provider;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.persistence.EvalRepository;
@@ -59,13 +59,13 @@ public class EvalCaseExecutor {
     private final LlmPolicy llmPolicy;
     private final EvalPricing pricing;
     private final GuardPipeline guardPipeline;
-    private final LlmQualityJudge llmJudge;
+    private final RubricJudge rubricJudge;
     private final Environment env;
 
     public EvalCaseExecutor(ChatService chatService, IntentPlanner intentPlanner, EvalRepository repo,
                             RuleJudge judge, ObjectMapper mapper, LlmPolicy llmPolicy,
                             EvalPricing pricing, GuardPipeline guardPipeline,
-                            LlmQualityJudge llmJudge, Environment env) {
+                            RubricJudge rubricJudge, Environment env) {
         this.chatService = chatService;
         this.intentPlanner = intentPlanner;
         this.repo = repo;
@@ -74,7 +74,7 @@ public class EvalCaseExecutor {
         this.llmPolicy = llmPolicy;
         this.pricing = pricing;
         this.guardPipeline = guardPipeline;
-        this.llmJudge = llmJudge;
+        this.rubricJudge = rubricJudge;
         this.env = env;
     }
 
@@ -179,13 +179,12 @@ public class EvalCaseExecutor {
                 trace.hits(), trace.bestCosineRaw(), trace.sources(), totalMs,
                 guardAction, guardStage, guardReply, citations.size(), cited), attempts);
 
-        LlmQualityJudge.Opinion opinion = llmOpinion(spec, trace, answer, runId);
+        Composite opinion = rubricOpinion(spec, trace, answer, runId);
         if (opinion != null) {
             judgements.removeIf(x -> "quality".equals(x.dimension()));
             judgements.add(new Judgement("quality", opinion.pass() ? Judgement.PASS : Judgement.FAIL,
-                    opinion.score(), opinion.reason(), opinion.pass() ? null : "ANS_LLM_LOW",
-                    Map.of("judge", "llm", "model", opinion.model(),
-                            "tokensIn", opinion.tokensIn(), "tokensOut", opinion.tokensOut())));
+                    opinion.score(), opinion.reason(), opinion.pass() ? null : "ANS_LOW_SCORE",
+                    opinion.evidence()));
         }
 
         long judgeStart = System.nanoTime();
@@ -267,20 +266,64 @@ public class EvalCaseExecutor {
      * <p>抽样用 runId 取模而不是随机数：同一批次重复执行得到同一批被抽中的用例，
      * 两批对比时才不会把"这次没抽到"误读成质量变化。
      */
-    private LlmQualityJudge.Opinion llmOpinion(CaseSpec spec, KbTrace trace, String answer, long runId) {
+    /** 判定器组合的结论：分数取加权均值，任一判定器不过就不算过 */
+    private record Composite(double score, boolean pass, String reason,
+                             Map<String, Object> evidence) {
+    }
+
+    /**
+     * 抽样调用 rubric 判定。开关关闭或没抽中时返回 null，保留规则结论。
+     *
+     * <p>抽样用 runId 取模而不是随机数：同一批次重复执行抽中同一批用例，
+     * 两批对比时才不会把"这次没抽到"误读成质量变化。
+     */
+    private Composite rubricOpinion(CaseSpec spec, KbTrace trace, String answer, long runId) {
         if (spec.isSafety() || answer == null || answer.isBlank()) {
             return null;
         }
-        if (!Boolean.parseBoolean(env.getProperty("app.eval.llm-judge.enabled", "false"))) {
+        if (!Boolean.parseBoolean(env.getProperty("app.eval.judge.enabled", "false"))) {
             return null;
         }
-        double rate = Double.parseDouble(env.getProperty("app.eval.llm-judge.sample-rate", "0.2"));
+        double rate = Double.parseDouble(env.getProperty("app.eval.judge.sample-rate", "0.2"));
         if (rate <= 0 || (rate < 1.0 && Math.floorMod(runId, 1000) >= rate * 1000)) {
             return null;
         }
-        List<String> titles = trace.hits().stream().map(KbTrace.Hit::title)
-                .filter(t -> t != null && !t.isBlank()).distinct().toList();
-        return llmJudge.judge(spec.question(), answer, titles, trace.sources());
+        int samples = Integer.parseInt(env.getProperty("app.eval.judge.samples", "3"));
+        String strategy = env.getProperty("app.eval.judge.strategy", "average");
+        String provider = env.getProperty("app.eval.judge.provider", "");
+        String context = trace.hits().stream()
+                .map(h -> (h.title() == null ? "" : h.title()) + "（" + h.source() + "）")
+                .filter(t -> !t.isBlank()).distinct().reduce((a, b) -> a + "；" + b).orElse("");
+
+        List<RubricJudge.Opinion> opinions = new ArrayList<>();
+        RubricJudge.Opinion relevance = rubricJudge.judge(RubricJudge.RELEVANCE, spec.question(),
+                answer, context, samples, strategy, provider);
+        if (relevance == null) {
+            return null;
+        }
+        opinions.add(relevance);
+        if (!context.isBlank()) {
+            RubricJudge.Opinion grounded = rubricJudge.judge(RubricJudge.GROUNDEDNESS,
+                    spec.question(), answer, context, samples, strategy, provider);
+            if (grounded != null) {
+                opinions.add(grounded);
+            }
+        }
+        double score = opinions.stream().mapToDouble(RubricJudge.Opinion::score).average().orElse(0);
+        boolean pass = opinions.stream().allMatch(RubricJudge.Opinion::pass);
+        Map<String, Object> ev = new LinkedHashMap<>();
+        ev.put("judge", "rubric");
+        ev.put("strategy", strategy);
+        ev.put("samples", samples);
+        List<Map<String, Object>> detail = new ArrayList<>();
+        for (RubricJudge.Opinion o : opinions) {
+            detail.add(Map.of("grader", o.graderId(), "version", o.graderVersion(),
+                    "score", o.score(), "pass", o.pass(), "raw", o.rawScores()));
+        }
+        ev.put("graders", detail);
+        String reason = opinions.size() == 1 ? relevance.reason()
+                : relevance.reason() + "；" + opinions.get(1).reason();
+        return new Composite(Math.round(score * 100) / 100.0, pass, reason, ev);
     }
 
     private List<EvalRepository.CitationWrite> citationWrites(List<CitationExtractor.Line> lines) {

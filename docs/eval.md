@@ -94,6 +94,7 @@ eval
 | GET | `/runs/{id}` | 单条执行：span、检索快照、判定、工具调用 |
 | GET | `/batches/{id}/failures` | 失败归因下钻，可按标签过滤 |
 | GET | `/batches/{id}/report` | 单文件 HTML 报告，可直接归档 |
+| POST | `/judges/actions/calibrate` | 跑判定器校准集，返回一致率与分档差 |
 | GET | `/trends?datasetId=` | 用例集的批次趋势，只含已完成批次 |
 | GET | `/compare?left=&right=` | 两次运行对比，给出变好、变差与逐条变化 |
 | GET | `/alerts/rules` | 告警规则 |
@@ -136,9 +137,14 @@ eval
 - 证据链：回答按句切开，句子出现某块资料的标题就算"该句引用了这块"。
   至少一半句子有标注判通过，一句都没有记 `CIT_NONE`，不足一半记 `CIT_PARTIAL`。
   这是字符归属，只证明"引用了检索结果"，不证明"引用支持结论"。
-- 结果质量：先跑 rubric 的完整性与长度检查；开启 `app.eval.llm-judge.enabled` 后，
-  按 `sample-rate` 抽样调用模型打分，模型的结论**替换**这一维的规则结论，落库类型记 `llm`。
-  输出解析失败或调用异常时退回规则结论，绝不猜一个分数进通过率。
+- 结果质量：规则先判空返回、兜底话术、协议标记、过短过长。开启 `app.eval.judge.enabled` 后，
+  再按 `sample-rate` 抽样跑 rubric 判定，模型的结论**替换**规则结论，落库类型记 `llm`。
+- 判定器：两个 rubric，相关性看有没有答到点上，忠实度看回答有没有资料依据，都是 1 到 5 分，
+  阈值 3.5。两个都跑时分数取均值、任一不过就算不过，明细写进判定的 evidence。
+- 采样：`app.eval.judge.samples` 控制每条判定重复几次，`strategy=average` 取均值、
+  `vote` 取多数票。判定模型可以用 `app.eval.judge.provider` 指定，和被测模型解耦。
+- 校准：`POST /judges/actions/calibrate` 用人工标注的 13 条样本算一致率与分档差。
+  一致率低于 80% 时应当先改 rubric，而不是打开自动判定。
 - 失败归因：失败标签落在 `eval_failure`，批次页按标签点开可看到受影响的用例与原因。
 - 重复运行：每条用例跑 N 次，N 大于 1 时稳定性由跑完之后的一致性判定给出，
   一致性比较的是质量与检索两维的结论，不看分数。
@@ -162,8 +168,11 @@ eval
 | 配置 | 默认 | 作用 |
 |---|---|---|
 | `app.eval.db` | 空 | 评测库路径；空 = 主库同目录的 `eval.sqlite` |
-| `app.eval.llm-judge.enabled` | false | 是否用模型判结果质量 |
-| `app.eval.llm-judge.sample-rate` | 0.2 | 抽样比例，按 run id 取模可复现 |
+| `app.eval.judge.enabled` | false | 是否用 rubric 判定结果质量 |
+| `app.eval.judge.sample-rate` | 0.2 | 抽样比例，按 run id 取模可复现 |
+| `app.eval.judge.samples` | 3 | 每条判定重复几次，1 到 5 |
+| `app.eval.judge.strategy` | average | average 取均值、vote 取多数票 |
+| `app.eval.judge.provider` | 空 | 判定模型优先用的 provider |
 | `app.eval.alerts.qq` | 空 | 告警私聊的 QQ 号，逗号分隔；空 = 只落事件 |
 
 ### 6.1 CI 门禁
@@ -256,5 +265,7 @@ P3 是体验与远期。已实现的部分不在这里重复。
 | `EvalSafetyTest` | 护栏拦下不调模型、该拦没拦判越权并硬阻断 |
 | `EvalDimensionDriftTest` | 分维度回退：5 个百分点提示、10 个百分点阻断 |
 | `CitationExtractorTest` | 逐句引用只按标题归属，空输入不产生行 |
+| `RubricJudgeTest` | 1-5 分解析、均值与投票策略、解析失败不猜 |
+| `JudgeCalibrationTest` | 一致率、两类均值与分档差的口径 |
 | `ToolCallTraceTest` | 工具成功、失败、拒绝三种记录 |
 | `LlmUsageTest` | 用量收集只在打开时记 |

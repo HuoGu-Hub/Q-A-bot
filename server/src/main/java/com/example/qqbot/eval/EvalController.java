@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -51,14 +52,19 @@ public class EvalController {
     private final EvalRepository repo;
     private final AdminAuditRepository audit;
     private final EvalReport report;
+    private final JudgeCalibration calibration;
+    private final Environment env;
 
     public EvalController(EvalService service, EvalDatasetService datasets, EvalRepository repo,
-                          AdminAuditRepository audit, EvalReport report) {
+                          AdminAuditRepository audit, EvalReport report,
+                          JudgeCalibration calibration, Environment env) {
         this.service = service;
         this.datasets = datasets;
         this.repo = repo;
         this.audit = audit;
         this.report = report;
+        this.calibration = calibration;
+        this.env = env;
     }
 
     /** 评测的写操作进 admin_audit：出了事要能查到是谁建的批、改的判定 */
@@ -249,6 +255,21 @@ public class EvalController {
             throw ApiException.notFound("执行记录不存在");
         }
         return detail;
+    }
+
+    /* ==================== 判定器校准 ==================== */
+
+    /** 跑一遍判定器校准集，返回一致率与分档差；不落库，校准是诊断动作 */
+    @PostMapping("/judges/actions/calibrate")
+    public JudgeCalibration.Report calibrateJudges(HttpServletRequest request) {
+        JudgeCalibration.Report report = calibration.runDefault(
+                env.getProperty("app.eval.judge.provider", ""));
+        if (report == null) {
+            throw ApiException.notFound("没有找到 tests/golden/judge-calibration.tsv");
+        }
+        audit(request, "judge.calibrate", "total=" + report.total()
+                + " agreement=" + report.agreement());
+        return report;
     }
 
     /* ==================== 趋势与对比 ==================== */
