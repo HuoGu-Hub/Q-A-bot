@@ -66,8 +66,29 @@ public class RubricJudge {
             只输出一行 JSON：{"score": 4, "reason": "一句话说明依据"}
             """);
 
+    /** 工具选择：调用的工具与参数是否适合这个问题，只对有工具调用的 run 判 */
+    public static final Grader TOOL_SELECTION = new Grader("tool-selection", 1, "agent", 3.5, """
+            你是工具调用评审。给你用户问题和助手实际调用的工具与参数。
+            5 分：工具选得对，参数完整，足以支撑回答
+            4 分：工具对，参数有小瑕疵，但不影响结果
+            3 分：工具勉强相关，但看不出必要性
+            2 分：工具与问题基本无关，或有明显多余调用
+            1 分：完全没有调用该调的工具，或者调用了错误的工具
+            只输出一行 JSON：{"score": 4, "reason": "一句话说明理由"}
+            """);
+
     public List<Grader> graders() {
-        return List.of(RELEVANCE, GROUNDEDNESS);
+        return List.of(RELEVANCE, GROUNDEDNESS, TOOL_SELECTION);
+    }
+
+    /** 按判定器 id 找内置 grader，找不到返回 null */
+    public static Grader graderById(String id) {
+        for (Grader g : List.of(RELEVANCE, GROUNDEDNESS, TOOL_SELECTION)) {
+            if (g.id().equals(id)) {
+                return g;
+            }
+        }
+        return null;
     }
 
     /**
@@ -80,8 +101,13 @@ public class RubricJudge {
         if (answer == null || answer.isBlank()) {
             return null;
         }
+        return judgeRaw(grader, buildUser(question, answer, context), samples, strategy, provider);
+    }
+
+    /** 直接给完整用户消息，工具选择这类输入形态不一样的判定器用这个 */
+    public Opinion judgeRaw(Grader grader, String user, int samples, String strategy,
+                            String provider) {
         int n = Math.max(1, Math.min(5, samples));
-        String user = buildUser(question, answer, context);
         List<Double> scores = new ArrayList<>();
         List<String> reasons = new ArrayList<>();
         for (int i = 0; i < n; i++) {

@@ -1049,6 +1049,7 @@ export interface EvalCalibrationRow {
 }
 
 export interface EvalCalibrationReport {
+  grader: string
   total: number
   agreed: number
   agreement: number

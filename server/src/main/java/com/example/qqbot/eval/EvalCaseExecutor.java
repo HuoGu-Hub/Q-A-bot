@@ -193,8 +193,12 @@ public class EvalCaseExecutor {
         }
 
         Judgement agentLoop = AgentLoopJudge.judge(toolCalls);
-        if (agentLoop != null) {
-            judgements.add(agentLoop);
+        Judgement toolSelection = toolSelectionOpinion(spec, toolCalls, runId);
+        // 循环是硬信号：只要判出循环，就不再让模型去评"选得对不对"
+        Judgement agent = agentLoop != null && agentLoop.failed() ? agentLoop
+                : toolSelection != null ? toolSelection : agentLoop;
+        if (agent != null) {
+            judgements.add(agent);
         }
 
         long judgeStart = System.nanoTime();
@@ -276,6 +280,49 @@ public class EvalCaseExecutor {
      * <p>抽样用 runId 取模而不是随机数：同一批次重复执行得到同一批被抽中的用例，
      * 两批对比时才不会把"这次没抽到"误读成质量变化。
      */
+    /** 开关与抽样：关着或没抽中就不调模型，省 token 也保证两批可比 */
+    private boolean judgeEnabled(long runId) {
+        if (!Boolean.parseBoolean(env.getProperty("app.eval.judge.enabled", "false"))) {
+            return false;
+        }
+        double rate = Double.parseDouble(env.getProperty("app.eval.judge.sample-rate", "0.2"));
+        return rate > 0 && (rate >= 1.0 || Math.floorMod(runId, 1000) < rate * 1000);
+    }
+
+    private int judgeSamples() {
+        return Integer.parseInt(env.getProperty("app.eval.judge.samples", "3"));
+    }
+
+    /**
+     * 工具选择判定：只在有工具调用、且抽中判定时跑。
+     * 输入是问题加调用清单，不是回答；所以走 judgeRaw 而不是拼"资料/回答"。
+     */
+    private Judgement toolSelectionOpinion(CaseSpec spec, List<ToolCallTrace.Call> calls, long runId) {
+        if (calls == null || calls.isEmpty() || !judgeEnabled(runId)) {
+            return null;
+        }
+        StringBuilder user = new StringBuilder("问题：").append(spec.question()).append('\n')
+                .append("工具调用：\n");
+        for (ToolCallTrace.Call c : calls) {
+            user.append(c.index()).append(". ").append(c.name()).append('(').append(c.args())
+                    .append(") 状态 ").append(c.status()).append('\n');
+        }
+        RubricJudge.Opinion o = rubricJudge.judgeRaw(RubricJudge.TOOL_SELECTION, user.toString(),
+                judgeSamples(), env.getProperty("app.eval.judge.strategy", "average"),
+                env.getProperty("app.eval.judge.provider", ""));
+        if (o == null) {
+            return null;
+        }
+        Map<String, Object> ev = new LinkedHashMap<>();
+        ev.put("grader", o.graderId());
+        ev.put("version", o.graderVersion());
+        ev.put("strategy", o.strategy());
+        ev.put("samples", o.samples());
+        ev.put("rawScores", o.rawScores());
+        return new Judgement("agent", o.pass() ? Judgement.PASS : Judgement.FAIL, o.score(),
+                o.reason(), o.pass() ? null : "AGENT_TOOL_WRONG", ev);
+    }
+
     /** 判定器组合的结论：分数取加权均值，任一判定器不过就不算过 */
     private record Composite(double score, boolean pass, String reason,
                              Map<String, Object> evidence) {
@@ -291,14 +338,10 @@ public class EvalCaseExecutor {
         if (spec.isSafety() || answer == null || answer.isBlank()) {
             return null;
         }
-        if (!Boolean.parseBoolean(env.getProperty("app.eval.judge.enabled", "false"))) {
+        if (!judgeEnabled(runId)) {
             return null;
         }
-        double rate = Double.parseDouble(env.getProperty("app.eval.judge.sample-rate", "0.2"));
-        if (rate <= 0 || (rate < 1.0 && Math.floorMod(runId, 1000) >= rate * 1000)) {
-            return null;
-        }
-        int samples = Integer.parseInt(env.getProperty("app.eval.judge.samples", "3"));
+        int samples = judgeSamples();
         String strategy = env.getProperty("app.eval.judge.strategy", "average");
         String provider = env.getProperty("app.eval.judge.provider", "");
         String context = evidenceContext(trace);

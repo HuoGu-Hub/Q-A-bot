@@ -47,6 +47,12 @@ const importing = ref(false)
 const importResult = ref<EvalImportResult | null>(null)
 const calibration = ref<EvalCalibrationReport | null>(null)
 const calibrating = ref(false)
+const calibGrader = ref('relevance')
+const CALIB_GRADERS = [
+  { value: 'relevance', label: '相关性' },
+  { value: 'groundedness', label: '忠实度' },
+  { value: 'tool-selection', label: '工具选择' },
+]
 
 const datasetOptions = computed(() =>
   datasets.value.map(d => ({ value: String(d.id), label: `${d.name} · ${d.caseCount} 条 · ${d.versionCount} 版` })))
@@ -78,7 +84,8 @@ onMounted(refresh)
 async function calibrate() {
   calibrating.value = true
   try {
-    calibration.value = await adminApi.post<EvalCalibrationReport>('/eval/judges/actions/calibrate')
+    calibration.value = await adminApi.post<EvalCalibrationReport>(
+      `/eval/judges/actions/calibrate?grader=${calibGrader.value}`)
     notice.value = '校准完成，结果见下方'
   } catch (e) {
     error.value = describeError(e)
@@ -295,11 +302,15 @@ function when(value: string | null): string {
     <Panel title="判定器校准"
            hint="用人工标注的 13 条样本量一致率与分档差；跑一次会调用判定模型">
       <div class="form">
+        <label class="field">
+          <span>判定器</span>
+          <Select v-model="calibGrader" :options="CALIB_GRADERS" aria-label="判定器" />
+        </label>
         <Button :disabled="calibrating" @click="calibrate">{{ calibrating ? '正在跑…' : '跑校准' }}</Button>
       </div>
       <template v-if="calibration">
         <p class="calib">
-          样本 {{ calibration.total }} 条，一致 {{ calibration.agreed }} 条，
+          {{ calibration.grader }} · 样本 {{ calibration.total }} 条，一致 {{ calibration.agreed }} 条，
           一致率 <b>{{ (calibration.agreement * 100).toFixed(1) }}%</b>，
           PASS 均分 {{ calibration.passMean }}，FAIL 均分 {{ calibration.failMean }}，
           分档差 {{ calibration.separation }}

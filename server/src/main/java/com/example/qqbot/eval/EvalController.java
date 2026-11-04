@@ -261,13 +261,14 @@ public class EvalController {
 
     /** 跑一遍判定器校准集，返回一致率与分档差；不落库，校准是诊断动作 */
     @PostMapping("/judges/actions/calibrate")
-    public JudgeCalibration.Report calibrateJudges(HttpServletRequest request) {
-        JudgeCalibration.Report report = calibration.runDefault(
+    public JudgeCalibration.Report calibrateJudges(
+            @RequestParam(required = false) String grader, HttpServletRequest request) {
+        JudgeCalibration.Report report = calibration.runDefault(grader,
                 env.getProperty("app.eval.judge.provider", ""));
         if (report == null) {
-            throw ApiException.notFound("没有找到 tests/golden/judge-calibration.tsv");
+            throw ApiException.badRequest("没有找到校准集，或判定器不存在：" + grader);
         }
-        audit(request, "judge.calibrate", "total=" + report.total()
+        audit(request, "judge.calibrate", "grader=" + report.grader() + " total=" + report.total()
                 + " agreement=" + report.agreement());
         return report;
     }

@@ -94,7 +94,7 @@ eval
 | GET | `/runs/{id}` | 单条执行：span、检索快照、判定、工具调用 |
 | GET | `/batches/{id}/failures` | 失败归因下钻，可按标签过滤 |
 | GET | `/batches/{id}/report` | 单文件 HTML 报告，可直接归档 |
-| POST | `/judges/actions/calibrate` | 跑判定器校准集，返回一致率与分档差 |
+| POST | `/judges/actions/calibrate?grader=` | 跑指定判定器的校准集，返回一致率与分档差 |
 | GET | `/trends?datasetId=` | 用例集的批次趋势，只含已完成批次 |
 | GET | `/compare?left=&right=` | 两次运行对比，给出变好、变差与逐条变化 |
 | GET | `/alerts/rules` | 告警规则 |
@@ -139,14 +139,17 @@ eval
   这是字符归属，只证明"引用了检索结果"，不证明"引用支持结论"。
 - 结果质量：规则先判空返回、兜底话术、协议标记、过短过长。开启 `app.eval.judge.enabled` 后，
   再按 `sample-rate` 抽样跑 rubric 判定，模型的结论**替换**规则结论，落库类型记 `llm`。
-- 判定器：两个 rubric，相关性看有没有答到点上，忠实度看回答有没有资料依据，都是 1 到 5 分，
-  阈值 3.5。两个都跑时分数取均值、任一不过就算不过，明细写进判定的 evidence。
+- 判定器：三个 rubric，相关性看有没有答到点上，忠实度看回答有没有资料依据，工具选择看调用的工具与参数是否合适；
+  都是 1 到 5 分，阈值 3.5。相关性与忠实度都跑时分数取均值、任一不过就算不过，明细写进判定的 evidence。
   忠实度的上下文优先取命中块正文前 400 字，取不到再退回标题与来源，避免"看目录判内容"。
+  工具选择只在有工具调用时跑，输入是问题加调用清单。
 - Agent 维度：同一工具用相同参数调用 3 次以上判 `AGENT_LOOP`，是代码判定，不花 token；
-  被拒绝的调用不计入重复。
+  被拒绝的调用不计入重复。没有循环时，抽中判定的 run 会再跑一次工具选择，判不过记 `AGENT_TOOL_WRONG`；
+  循环是硬信号，一旦判出就不再让模型评"选得对不对"。
 - 采样：`app.eval.judge.samples` 控制每条判定重复几次，`strategy=average` 取均值、
   `vote` 取多数票。判定模型可以用 `app.eval.judge.provider` 指定，和被测模型解耦。
-- 校准：`POST /judges/actions/calibrate` 用人工标注的 13 条样本算一致率与分档差。
+- 校准：`POST /judges/actions/calibrate?grader=` 用人工标注样本算一致率与分档差，
+  判定器可选 relevance、groundedness、tool-selection。校准集五列：判定器、问题、回答、上下文、期望结论。
   一致率低于 80% 时应当先改 rubric，而不是打开自动判定。
 - 失败归因：失败标签落在 `eval_failure`，批次页按标签点开可看到受影响的用例与原因。
 - 重复运行：每条用例跑 N 次，N 大于 1 时稳定性由跑完之后的一致性判定给出，

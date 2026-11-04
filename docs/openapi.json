@@ -7748,6 +7748,14 @@
       "post" : {
         "tags" : [ "Eval" ],
         "operationId" : "calibrateJudges",
+        "parameters" : [ {
+          "name" : "grader",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
         "responses" : {
           "200" : {
             "description" : "OK",
@@ -24710,6 +24718,9 @@
       "Report" : {
         "type" : "object",
         "properties" : {
+          "grader" : {
+            "type" : "string"
+          },
           "total" : {
             "type" : "integer",
             "format" : "int32"
@@ -24745,6 +24756,9 @@
       "Row" : {
         "type" : "object",
         "properties" : {
+          "grader" : {
+            "type" : "string"
+          },
           "question" : {
             "type" : "string"
           },

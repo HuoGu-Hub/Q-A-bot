@@ -1,13 +1,21 @@
-不知道	这个我不知道	FAIL	明显拒答
-不知道	我不太确定，可能需要你自己查一下	FAIL	含糊其辞
-不知道	建议你去问别人	FAIL	推诿
-废料杯在哪	废料杯在废料堆旁边	PASS	直接回答
-废料杯在哪	废料杯在废料堆旁边，和木箱放在一起	PASS	直接回答并补充细节
-火把怎么用	拿着火把靠近木头就会点燃	PASS	回答清楚
-火把怎么用	火把是一种照明工具	FAIL	答非所问
-游戏里有飞行坐骑吗	有，完成主线第三章后解锁	PASS	明确回答
-游戏里有飞行坐骑吗	这个游戏内容很丰富，有很多玩法	FAIL	空泛
-金黄花在哪采	金黄花在河边草地，白天刷新	PASS	回答具体
-金黄花在哪采	我不知道，你自己找找	FAIL	拒答
-怎么解锁隐藏结局	需要收集全部十二个信物后去找守墓人	PASS	回答具体
-怎么解锁隐藏结局	结局有很多种，看你怎么玩	FAIL	空泛
+# grader  question  answer  context  expected
+relevance	不知道	这个我不知道			FAIL
+relevance	不知道	我不太确定，可能需要你自己查一下			FAIL
+relevance	废料杯在哪	废料杯在废料堆旁边			PASS
+relevance	废料杯在哪	废料杯在废料堆旁边，和木箱放在一起			PASS
+relevance	火把怎么用	拿着火把靠近木头就会点燃			PASS
+relevance	火把怎么用	火把是一种照明工具			FAIL
+relevance	游戏里有飞行坐骑吗	有，完成主线第三章后解锁			PASS
+relevance	游戏里有飞行坐骑吗	这个游戏内容很丰富，有很多玩法			FAIL
+relevance	金黄花在哪采	金黄花在河边草地，白天刷新			PASS
+relevance	金黄花在哪采	我不知道，你自己找找			FAIL
+relevance	怎么解锁隐藏结局	需要收集全部十二个信物后去找守墓人			PASS
+relevance	怎么解锁隐藏结局	结局有很多种，看你怎么玩			FAIL
+groundedness	废料杯在哪	废料杯在废料堆旁边	废料杯：废料杯放在废料堆旁边，和木箱挨着。	PASS
+groundedness	废料杯在哪	废料杯在铁匠铺门口	废料杯：废料杯放在废料堆旁边，和木箱挨着。	FAIL
+groundedness	火把怎么用	拿着火把靠近木头就会点燃	火把：手持火把靠近可燃物会点燃，雨天不能点。	PASS
+groundedness	火把怎么用	火把可以发射火箭	火把：手持火把靠近可燃物会点燃，雨天不能点。	FAIL
+tool-selection	废料杯在哪	-	1. lookup({"q":"废料杯"}) 状态 ok	PASS
+tool-selection	废料杯在哪	-	1. say({"text":"我不知道"}) 状态 ok	FAIL
+tool-selection	金黄花在哪采	-	1. locate({"place":"金黄花"}) 状态 ok	PASS
+tool-selection	金黄花在哪采	-	1. lookup({"q":"天气"}) 状态 denied	FAIL

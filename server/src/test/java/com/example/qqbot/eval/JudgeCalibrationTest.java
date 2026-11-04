@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,10 +18,12 @@ import static org.mockito.Mockito.when;
 class JudgeCalibrationTest {
 
     private static final String TSV = """
-            不知道\t这个我不知道\tFAIL\t拒答
-            火把怎么用\t拿着火把靠近木头就会点燃\tPASS\t清楚
-            金黄花在哪\t金黄花在河边草地\tPASS\t具体
-            怎么解锁\t结局有很多种\tFAIL\t空泛
+            relevance\t不知道\t这个我不知道\t\tFAIL
+            relevance\t火把怎么用\t拿着火把靠近木头就会点燃\t\tPASS
+            relevance\t金黄花在哪\t金黄花在河边草地\t\tPASS
+            relevance\t怎么解锁\t结局有很多种\t\tFAIL
+            groundedness\t废料杯在哪\t废料杯在废料堆旁边\t废料杯：放在废料堆旁边\tPASS
+            tool-selection\t废料杯在哪\t-\t1. lookup({"q":"废料杯"}) 状态 ok\tPASS
             """;
 
     @Test
@@ -35,13 +38,33 @@ class JudgeCalibrationTest {
                             1, java.util.List.of(bad ? 1.5 : 4.5), "average", "relevance", 1);
                 });
 
-        JudgeCalibration.Report report = new JudgeCalibration(judge).run(TSV, "");
+        JudgeCalibration.Report report = new JudgeCalibration(judge).run(TSV, "relevance", "");
         assertThat(report.total()).isEqualTo(4);
         assertThat(report.agreed()).isEqualTo(4);
         assertThat(report.agreement()).isEqualTo(1.0);
         assertThat(report.passMean()).isEqualTo(4.5);
         assertThat(report.failMean()).isEqualTo(1.5);
         assertThat(report.separation()).isEqualTo(3.0);
+    }
+
+    @Test
+    @DisplayName("只校准指定判定器，别的行不参与")
+    void filtersByGrader() {
+        RubricJudge judge = mock(RubricJudge.class);
+        when(judge.judge(any(), anyString(), anyString(), anyString(), anyInt(), anyString(),
+                anyString())).thenReturn(new RubricJudge.Opinion(4.5, true, "有依据", 1,
+                java.util.List.of(4.5), "average", "groundedness", 1));
+
+        JudgeCalibration.Report report = new JudgeCalibration(judge).run(TSV, "groundedness", "");
+        assertThat(report.grader()).isEqualTo("groundedness");
+        assertThat(report.total()).isEqualTo(1);
+        assertThat(report.agreement()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("未知判定器返回 null")
+    void unknownGrader() {
+        assertThat(new JudgeCalibration(mock(RubricJudge.class)).run(TSV, "nope", "")).isNull();
     }
 
     @Test
@@ -53,7 +76,7 @@ class JudgeCalibrationTest {
                 .thenReturn(new RubricJudge.Opinion(4.0, true, "看起来不错", 1,
                         java.util.List.of(4.0), "average", "relevance", 1));
 
-        JudgeCalibration.Report report = new JudgeCalibration(judge).run(TSV, "");
+        JudgeCalibration.Report report = new JudgeCalibration(judge).run(TSV, "relevance", "");
         assertThat(report.total()).isEqualTo(4);
         // 两条 PASS 被判定命中，两条 FAIL 没命中
         assertThat(report.agreed()).isEqualTo(2);
