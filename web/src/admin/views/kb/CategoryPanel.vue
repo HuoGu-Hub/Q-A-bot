@@ -115,6 +115,8 @@ async function removeCategory(c: KbCategoryStat) {
 const entryOpen = ref(false)
 const entryCategory = ref('')
 const entryQ = ref('')
+/** 当前这批结果是用哪个搜索词查出来的 —— 输入框改了但没按搜索时，翻页不能拿新词去跳页 */
+const entryAppliedQ = ref('')
 const entryTotal = ref(0)
 const entryItems = ref<CategoryEntry[]>([])
 const entryLoading = ref(false)
@@ -153,7 +155,9 @@ async function loadEntries() {
   try {
     const p = new URLSearchParams()
     p.set('category', entryCategory.value)
-    if (entryQ.value.trim()) p.set('q', entryQ.value.trim())
+    const q = entryQ.value.trim()
+    if (q) p.set('q', q)
+    entryAppliedQ.value = q
     p.set('limit', String(ENTRY_PAGE))
     p.set('offset', String(entryOffset.value))
     const r = await adminApi.get<CategoryEntryPage>('/kb/categories/entries?' + p.toString())
@@ -176,6 +180,11 @@ function searchEntries() {
 
 function goEntryPage(delta: number) {
   if (entryLoading.value) return
+  // 输入框改了但还没点搜索：从第一页查新词，而不是接着旧结果的页码跳
+  if (entryQ.value.trim() !== entryAppliedQ.value) {
+    searchEntries()
+    return
+  }
   const next = Math.max(0, entryOffset.value + delta * ENTRY_PAGE)
   if (next === entryOffset.value) return
   entryOffset.value = next
