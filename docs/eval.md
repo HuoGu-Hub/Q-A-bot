@@ -8,28 +8,41 @@
 它不复制检索与作答的实现：执行器只装配参数、开 span，检索、注入、工具循环与降级
 全部调用生产代码。结论因此能外推到线上。
 
+功能层面的介绍见 [评测中台功能说明](html/评测中台功能说明.html)；本文只讲实现与口径。
+
 ## 2. 代码位置
 
 | 位置 | 内容 |
 |---|---|
 | `server/src/main/java/com/example/qqbot/eval` | 用例集、执行器、判定、聚合、接口 |
-| `server/src/main/java/com/example/qqbot/persistence/EvalRepository.java` | 十一张表的 SQL |
+| `server/src/main/java/com/example/qqbot/persistence/EvalRepository.java` | 十七张表的 SQL |
 | `web/src/admin/views/EvalView.vue` | 批次与用例集 |
+| `web/src/admin/views/EvalDatasetView.vue` | 用例集详情与用例维护 |
 | `web/src/admin/views/EvalBatchView.vue` | 单批次结果 |
-| `web/src/admin/views/EvalRunView.vue` | 单条用例时间轴 |
+| `web/src/admin/views/EvalRunView.vue` | 单条用例时间轴与证据链 |
+| `web/src/admin/views/EvalReviewsView.vue` | 复核队列 |
+| `web/src/admin/views/EvalTrendsView.vue` | 趋势与版本对比 |
+| `web/src/admin/views/EvalAlertsView.vue` | 告警规则与事件 |
+| `web/src/admin/views/EvalPricesView.vue` | 成本价目 |
 
 ```
 eval
-├─ EvalSpan / TraceBuilder      过程 span
+├─ EvalSpan / TraceBuilder      过程 span 树
 ├─ CaseSpec / Observation       执行期快照与判定输入
-├─ RuleJudge                    规则判定，不调模型
+├─ RuleJudge                    规则判定，含质量、RAG、安全、证据链
+├─ CitationExtractor            逐句引用归属
 ├─ RetrievalSnapshot            检索快照与空结果原因
 ├─ EvalDatasetService           TSV 导入、用例维护、冻结版本
 ├─ EvalCaseExecutor             跑一条用例并落 span 树
-├─ EvalRunner                   独立低优先级线程池，默认 2 并发
+├─ EvalRunner                   独立低优先级线程池，取消与超时
 ├─ EvalAggregator               通过率、维度、延迟分位、失败标签
-├─ EvalService                  建批、拆项、查询
-├─ EvalSeeder                   首次启动导入检索黄金集
+├─ EvalService                  建批、拆项、重跑、对比、查询
+├─ EvalAlerts / EvalAlertRaised 告警求值与事件
+├─ EvalReport                   单文件 HTML 报告
+├─ EvalPricing                  价目与微元成本
+├─ EvalDbMigration              主库评测历史迁移
+├─ EvalCleaner                  明细保留期清理
+├─ EvalSeeder                   首次启动导入检索与安全语料
 └─ EvalController               /admin/api/eval
 ```
 

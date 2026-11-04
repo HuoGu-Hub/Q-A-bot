@@ -36,10 +36,10 @@ public class EvalDbMigration implements ApplicationRunner {
 
     /** 迁移顺序按外键依赖排，子表在后 */
     private static final List<String> TABLES = List.of(
-            "eval_dataset", "eval_case", "eval_version", "eval_batch", "eval_item", "eval_run",
-            "eval_span", "eval_retrieval", "eval_judge", "eval_failure", "eval_tool_call",
-            "eval_citation", "eval_review", "eval_baseline", "eval_price", "eval_alert_rule",
-            "eval_alert_event");
+            "eval_dataset", "eval_dataset_version", "eval_case", "eval_batch", "eval_item",
+            "eval_run", "eval_span", "eval_retrieval", "eval_judge", "eval_failure",
+            "eval_tool_call", "eval_citation", "eval_review_task", "eval_baseline", "eval_price",
+            "eval_alert_rule", "eval_alert_event");
 
     private final Jdbc jdbc;
     private final EvalRepository repo;

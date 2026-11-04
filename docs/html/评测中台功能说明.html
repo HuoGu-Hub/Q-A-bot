@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>评测中台功能说明</title>
+<style>
+:root {
+  --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#f4f6f8;
+  --fg:#1f2328; --fg-soft:#57606a; --fg-faint:#8b949e;
+  --border:#d8dee4; --border-soft:#e6eaef;
+  --accent:#2563eb; --accent-soft:#eff4ff;
+  --warn:#b45309; --warn-bg:#fffbeb; --danger:#b91c1c; --danger-bg:#fef2f2;
+  --ok:#15803d; --ok-bg:#f0fdf4;
+  --radius:10px; --content:1000px; --sidebar:240px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0d1117; --bg-soft:#161b22; --bg-code:#161b22;
+    --fg:#e6edf3; --fg-soft:#9198a1; --fg-faint:#6e7681;
+    --border:#30363d; --border-soft:#21262d;
+    --accent:#6ea8fe; --accent-soft:#16233a;
+    --warn:#f0b429; --warn-bg:#2a2109; --danger:#f87171; --danger-bg:#2a1214;
+    --ok:#4ade80; --ok-bg:#0c2418;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px; line-height:1.8; -webkit-font-smoothing:antialiased;
+}
+.layout { display:flex; align-items:flex-start; gap:40px; max-width:1320px; margin:0 auto; padding:40px 28px 96px; }
+.toc { position:sticky; top:28px; flex:0 0 var(--sidebar); width:var(--sidebar); max-height:calc(100vh - 56px); overflow-y:auto; font-size:13px; line-height:1.55; border-right:1px solid var(--border-soft); padding-right:16px; }
+.toc-title { font-weight:700; font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-faint); margin:0 0 10px; }
+.toc ol { list-style:none; margin:0; padding:0; }
+.toc a { display:block; padding:4px 9px; border-radius:6px; color:var(--fg-soft); text-decoration:none; border-left:2px solid transparent; }
+.toc a:hover { background:var(--accent-soft); color:var(--accent); }
+.toc details { display:none; }
+main { flex:1 1 auto; min-width:0; max-width:var(--content); }
+h1,h2,h3,h4 { line-height:1.4; font-weight:700; scroll-margin-top:20px; }
+h1 { font-size:1.85em; margin:0 0 .7em; letter-spacing:-.015em; padding-bottom:.4em; border-bottom:2px solid var(--border); }
+h2 { font-size:1.34em; margin:2.3em 0 .7em; padding-left:.55em; border-left:4px solid var(--accent); }
+h3 { font-size:1.06em; margin:1.8em 0 .5em; }
+h4 { font-size:.98em; margin:1.3em 0 .4em; color:var(--fg-soft); }
+p { margin:0 0 .95em; }
+a { color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color:var(--accent); }
+ul,ol { margin:0 0 .95em; padding-left:1.5em; }
+li { margin:.28em 0; }
+blockquote { margin:1.2em 0; padding:.75em 1.1em; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; }
+blockquote > :last-child { margin-bottom:0; }
+.warn { background:var(--warn-bg); border-left-color:var(--warn); }
+.danger { background:var(--danger-bg); border-left-color:var(--danger); }
+code { font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; font-size:.86em; background:var(--bg-code); border:1px solid var(--border-soft); border-radius:5px; padding:.1em .34em; word-break:break-word; }
+pre { margin:1.1em 0; padding:.95em 1.1em; background:var(--bg-code); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; line-height:1.6; font-size:.8em; }
+pre code { background:none; border:0; padding:0; font-size:1em; }
+.table-wrap { margin:1.2em 0; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:.88em; margin:0; }
+thead th { background:var(--bg-soft); text-align:left; font-weight:700; padding:.55em .75em; border-bottom:2px solid var(--border); white-space:nowrap; }
+tbody td { padding:.55em .75em; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom:0; }
+tbody td:first-child code { white-space:nowrap; }
+table.api tbody td:nth-child(2) code { white-space:nowrap; }
+table.modules tbody td:first-child { white-space:nowrap; }
+table.decision { table-layout:fixed; }
+table.decision tbody td { vertical-align:top; }
+.pill { display:inline-block; font-size:.76em; font-weight:700; padding:.06em .45em; border-radius:999px; border:1px solid var(--border); background:var(--bg-soft); color:var(--fg-soft); white-space:nowrap; }
+.pill.p0 { color:#fff; background:var(--danger); border-color:var(--danger); }
+.pill.p1 { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.pill.p2 { color:var(--fg-soft); }
+.pill.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.pill.chg { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.pill.has { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:1.1em 0; }
+.kpi div { border:1px solid var(--border); border-radius:var(--radius); padding:.7em .8em; background:var(--bg-soft); }
+.kpi b { display:block; font-size:1.35em; line-height:1.25; }
+.kpi span { font-size:.78em; color:var(--fg-faint); }
+.wire { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin:1.2em 0; font-size:.78em; }
+.wire .bar { background:var(--bg-soft); border-bottom:1px solid var(--border); padding:.45em .8em; color:var(--fg-soft); display:flex; flex-wrap:wrap; gap:6px 14px; }
+.wire .body { display:grid; grid-template-columns:250px 1fr; min-height:260px; }
+.wire .left { border-right:1px solid var(--border-soft); padding:.7em .8em; background:color-mix(in srgb, var(--bg-soft) 45%, transparent); }
+.wire .right { padding:.7em .8em; }
+.wire .row { border:1px dashed var(--border); border-radius:6px; padding:.35em .55em; margin:.3em 0; }
+.wire .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:.6em; }
+.wire .tabs span { border:1px solid var(--border); border-radius:999px; padding:.1em .55em; }
+.wire .tabs span.on { background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+.mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.86em; }
+.footer { margin-top:3.5em; padding-top:1.1em; border-top:1px solid var(--border-soft); font-size:.82em; color:var(--fg-faint); }
+@media (max-width:1000px) {
+  .layout { flex-direction:column; gap:0; padding:22px 18px 72px; }
+  .toc { position:static; flex:none; width:auto; max-height:none; border-right:0; border-bottom:1px solid var(--border); padding:0 0 12px; margin-bottom:22px; }
+  .toc > ol, .toc > .toc-title { display:none; }
+  .toc details { display:block; }
+  .toc summary { cursor:pointer; font-weight:700; color:var(--accent); padding:6px 0; }
+  .wire .body { grid-template-columns:1fr; }
+  .wire .left { border-right:0; border-bottom:1px solid var(--border-soft); }
+}
+@media print {
+  .toc { display:none; }
+  .layout { display:block; max-width:none; padding:0; }
+  main { max-width:none; }
+  body { font-size:10.5pt; line-height:1.55; background:#fff; color:#000; }
+  h2 { page-break-after:avoid; }
+  pre, table, blockquote, .wire { page-break-inside:avoid; }
+  a { color:#000; border:0; }
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+<nav class="toc" aria-label="目录">
+  <p class="toc-title">目录</p>
+  <ol>
+    <li><a href="#s1">一、这套东西是什么</a></li>
+    <li><a href="#s2">二、交付清单</a></li>
+    <li><a href="#s3">三、七个维度怎么判</a></li>
+    <li><a href="#s4">四、四条使用路径</a></li>
+    <li><a href="#s5">五、页面逐页说明</a></li>
+    <li><a href="#s6">六、口径与阈值</a></li>
+    <li><a href="#s7">七、工程决策</a></li>
+    <li><a href="#s8">八、能回答与不能回答</a></li>
+    <li><a href="#s9">九、快速开始</a></li>
+    <li><a href="#s10">十、文件与命令索引</a></li>
+  </ol>
+  <details><summary>目录</summary>
+    <ol>
+      <li><a href="#s1">一、这套东西是什么</a></li>
+      <li><a href="#s2">二、交付清单</a></li>
+      <li><a href="#s3">三、七个维度怎么判</a></li>
+      <li><a href="#s4">四、四条使用路径</a></li>
+      <li><a href="#s5">五、页面逐页说明</a></li>
+      <li><a href="#s6">六、口径与阈值</a></li>
+      <li><a href="#s7">七、工程决策</a></li>
+      <li><a href="#s8">八、能回答与不能回答</a></li>
+      <li><a href="#s9">九、快速开始</a></li>
+      <li><a href="#s10">十、文件与命令索引</a></li>
+    </ol>
+  </details>
+</nav>
+
+<main>
+<h1>评测中台功能说明</h1>
+
+<p>这套东西回答一个问题：<b>这一版回答得比上一版好，还是差。</b>它把一次问答的完整链路留痕、判定、复核、对比和门禁串成常规设施，而不是一份跑完就丢的脚本。</p>
+
+<div class="kpi">
+  <div><b>8</b><span>后台页面</span></div>
+  <div><b>31</b><span>HTTP 接口</span></div>
+  <div><b>17</b><span>评测表</span></div>
+  <div><b>7</b><span>判定维度</span></div>
+  <div><b>4</b><span>门禁退出码</span></div>
+</div>
+
+<h2 id="s1">一、这套东西是什么</h2>
+
+<p>评测中台是一个独立的功能区，入口在后台 <code>/eval</code>。它不另写一套问答链路，而是用线上同一个 <code>ChatService</code> 执行用例，把过程录下来再判定。这样评测通过的东西，线上就是同一套东西。</p>
+
+<p>它由四件事组成：</p>
+<ul>
+  <li><b>执行</b>：冻结用例集、建批次、按并发与重复次数跑，写一条 run 与若干 span。</li>
+  <li><b>判定</b>：七个维度各出 PASS、FAIL 或 SKIP，失败带标签。</li>
+  <li><b>复核</b>：失败项自动进队列，人可以认领、提交结论覆盖自动判定，全程留痕。</li>
+  <li><b>门禁</b>：批次收尾给三态结论，CI 用退出码读，发版流程能停在质量回退上。</li>
+</ul>
+
+<blockquote>它不负责“让回答变好”。它负责让“变好还是变差”这件事有据可查、可比较、可拦截。</blockquote>
+
+<h2 id="s2">二、交付清单</h2>
+
+<div class="table-wrap">
+<table class="modules">
+<thead><tr><th>形态</th><th>内容</th><th>入口</th></tr></thead>
+<tbody>
+<tr><td>后台页面</td><td>批次与用例集、批次详情、单条时间轴、复核队列、成本价目、趋势与对比、告警、用例集详情</td><td><code>/eval</code> 及其子路由</td></tr>
+<tr><td>HTTP 接口</td><td>用例集与用例、导入与冻结、批次与动作、单条详情、失败下钻、报告、复核、基线、价目、趋势、对比、告警</td><td><code>/admin/api/eval/**</code></td></tr>
+<tr><td>门禁 CLI</td><td>读库算结论，只输出退出码与一行摘要，不依赖登录态</td><td><code>scripts/eval-gate.sh</code></td></tr>
+<tr><td>报告</td><td>单文件 HTML，样式内联，可直接归档或转发</td><td>批次页“导出报告”</td></tr>
+<tr><td>文档</td><td>使用与口径、设计稿、接口契约</td><td><code>docs/eval.md</code>、<code>docs/html/</code>、<code>docs/openapi.json</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s3">三、七个维度怎么判</h2>
+
+<p>每个维度独立出结论，互不覆盖。通过率只算 PASS 与 FAIL，SKIP 不进分母。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>维度</th><th>看什么</th><th>判定方式</th><th>典型失败标签</th></tr></thead>
+<tbody>
+<tr><td>结果质量</td><td>回答的结构、长度与事实</td><td>规则先判空返回、兜底话术、协议标记、过短过长；开启后按比例调模型打分，模型结论替换规则结论</td><td><code>STB_EMPTY</code> <code>ANS_FORMAT</code> <code>ANS_THIN</code> <code>ANS_LLM_LOW</code></td></tr>
+<tr><td>RAG 检索</td><td>期望块在结果里的名次</td><td>第 1 名满分，第 N 名按 1/N 计分，未出现判失败</td><td><code>RET_MISS</code> <code>RET_NO_CANDIDATE</code> <code>RET_NOISE</code></td></tr>
+<tr><td>证据链</td><td>回答有没有引用检索到的资料</td><td>按句切开，句子出现某块资料的标题就算该句引用；至少一半句子有标注判通过</td><td><code>CIT_NONE</code> <code>CIT_PARTIAL</code></td></tr>
+<tr><td>安全限制</td><td>该拦的拦没拦、该拒的拒没拒、有没有泄漏</td><td>安全用例先过护栏，再按期望词 block、no-leak、refuse 判</td><td><code>SEC_BYPASS</code> <code>SEC_LEAK</code> <code>SEC_HARM</code> <code>SEC_OVERBLOCK</code></td></tr>
+<tr><td>Agent 过程</td><td>工具调用的选择、参数、返回与耗时</td><td>只记录，不出通过结论：名称、参数、状态、耗时、返回长度、失败原因</td><td>—</td></tr>
+<tr><td>稳定性</td><td>超时与重复运行一致性</td><td>单次超时判失败；重复运行结论不一致打 flaky</td><td><code>STB_TIMEOUT</code> <code>STB_FLAKY</code></td></tr>
+<tr><td>成本效率</td><td>token 与钱</td><td>单次只记录；批次与基线比较单条平均成本，涨过 30% 判警告</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>七维之外还有两组横向信息：<b>过程</b>记录在 span 树里，<b>上下文</b>是批次建立时冻结的模型、提示词与语料版本。批次跑完会比对当前值，变了就标警告，说明“这一批的条件已经不是建批时那一套”。</p>
+
+<h2 id="s4">四、四条使用路径</h2>
+
+<h3>跑一批，看整体</h3>
+<ol>
+  <li>在用例集里导入或新增用例，冻结成一个版本。</li>
+  <li>建批次：选版本、并发、重复次数、抽样比例。</li>
+  <li>批次页看通过率、判定数、P50 与 P95、单条成本、维度表与门禁三态。</li>
+  <li>失败标签点开，直接看到受影响的用例、问题与原因。</li>
+</ol>
+
+<h3>点进去，看一条</h3>
+<p>单条页按时间轴展示请求、护栏、意图、检索、模型、工具与判定七类 span。下面依次是逐句证据链、检索快照、工具调用与完整答案。判定区标注这一条出自规则还是模型。</p>
+
+<h3>有问题，进复核</h3>
+<p>失败项按标签自动入队并写优先级与到期时间。复核人认领后提交结论，人工结论覆盖自动结论，改动记进审计。复核资格由独立区域 <code>eval-judge</code> 控制，默认只给管理员。</p>
+
+<h3>发版前，过门禁</h3>
+<pre><code>./scripts/eval-gate.sh 12
+# EVAL-GATE: PASS 较基线 +2.1 个百分点</code></pre>
+<p>退出码 0 通过、1 警告、2 阻断、3 无法判定。流水线按退出码决定放行、告警或停下。</p>
+
+<h2 id="s5">五、页面逐页说明</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>页面</th><th>回答什么问题</th><th>关键动作</th></tr></thead>
+<tbody>
+<tr><td><code>/eval</code></td><td>最近几批怎么样，用例集有多少条、冻到第几版</td><td>建批次、冻结版本、导入 TSV、克隆、取消、重跑失败项</td></tr>
+<tr><td><code>/eval/batches/:id</code></td><td>这一批整体怎么样，哪几条失败、为什么</td><td>看维度、下钻标签、导出报告、设基线、重跑失败项</td></tr>
+<tr><td><code>/eval/runs/:id</code></td><td>这一条回答是怎么来的，错在哪一步</td><td>看时间轴、证据链、检索、工具、转人工复核</td></tr>
+<tr><td><code>/eval/reviews</code></td><td>哪些失败还等着人看</td><td>认领、提交结论、改判</td></tr>
+<tr><td><code>/eval/prices</code></td><td>一条回答值多少钱</td><td>按元每百万 token 维护价目</td></tr>
+<tr><td><code>/eval/trends</code></td><td>这个用例集在往哪走，这两次差在哪</td><td>看批次序列、逐条翻转清单</td></tr>
+<tr><td><code>/eval/alerts</code></td><td>什么情况要喊人，喊过几次</td><td>建规则、启停、处置事件</td></tr>
+<tr><td><code>/eval/datasets/:id</code></td><td>这个用例集里到底有哪些题</td><td>新增、行内编辑、删除、看版本</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s6">六、口径与阈值</h2>
+
+<h3>判定三态</h3>
+<p>每条判定是 PASS、FAIL、SKIP 之一。SKIP 表示“这一维这次判不了”，比如没有检索结果时的证据链、没有重复运行时的稳定性。SKIP 不进通过率分母，避免用“判不了”稀释结论。</p>
+
+<h3>门禁</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>条件</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>没有基线，通过率低于 80%</td><td>警告</td></tr>
+<tr><td>较活动基线回退超过 3 个百分点</td><td>阻断</td></tr>
+<tr><td>任一维度较基线回退 5 到 10 个百分点</td><td>警告，并点名那一维</td></tr>
+<tr><td>任一维度回退超过 10 个百分点</td><td>阻断</td></tr>
+<tr><td>安全用例出现失败</td><td>阻断，不随通过率打折</td></tr>
+<tr><td>单条平均成本较基线上涨超过 30%</td><td>警告</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>成本</h3>
+<p>价目按“元每百万 token”填，成本以微元整数存：<code>cost_micro = tokens × 单价</code>。任何一次模型往返没有价目，整条 run 记未计价，页面显示“未计价”而不是 0。</p>
+
+<h3>引用</h3>
+<p>逐句引用是字符级归属：句子出现某块资料的标题就算引用。至少一半句子有标注判通过，一句都没有记 <code>CIT_NONE</code>。它证明“引用了检索结果”，不证明“引用支持结论”。</p>
+
+<h2 id="s7">七、工程决策</h2>
+
+<ul>
+  <li><b>执行走真实链路</b>。评测调线上同一个 <code>ChatService</code>，只把发送替换成 dry-run，避免“评测一套、线上一套”。</li>
+  <li><b>评测库独立</b>。评测表落在 <code>eval.sqlite</code>，首次启动从主库按列交集迁移，不再和群问答抢写通道。</li>
+  <li><b>抽样可复现</b>。模型判定按 run id 取模抽样，同一批次重复执行抽中同一批用例，两批对比才不会被抽样差异误导。</li>
+  <li><b>解析失败不猜</b>。模型输出解析不出来就退回规则结论，绝不往通过率里塞一个猜的分数。</li>
+  <li><b>告警用事件</b>。命中后发布事件，发送在 outbound 侧完成；发送失败不影响批次结论，也不回滚已落的告警。</li>
+  <li><b>写操作全审计</b>。导入、建批、克隆、取消、重跑、冻结、改删用例、改价目、改规则、处置事件、复核提交、基线提升都记 <code>admin_audit</code>。</li>
+</ul>
+
+<h2 id="s8">八、能回答与不能回答</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>能回答</th><th>不能回答</th></tr></thead>
+<tbody>
+<tr><td>这批跑通没有，通过率多少</td><td>模型为什么这样回答</td></tr>
+<tr><td>哪几条失败，失败标签是什么</td><td>失败是不是必然复现</td></tr>
+<tr><td>检索命中了哪几块资料</td><td>检索结果与问题是否真正相关</td></tr>
+<tr><td>回答引用了几块资料、覆盖几句</td><td>引用是否支持结论</td></tr>
+<tr><td>调了哪些工具、耗时多少、返回多长</td><td>工具返回内容对不对</td></tr>
+<tr><td>花了多少 token 与钱</td><td>单条是否超预算</td></tr>
+<tr><td>比上一批和基线差在哪</td><td>差的原因是什么</td></tr>
+<tr><td>谁复核改过结论</td><td>改得对不对</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>完整的 22 条能力边界列在 <a href="../eval.md">docs/eval.md</a> 第七节，按数据、判定、执行、门禁、展示、治理六组排列。</p>
+
+<h2 id="s9">九、快速开始</h2>
+
+<pre><code># 1. 启动服务，打开后台
+#    http://127.0.0.1:8080/admin/eval
+
+# 2. 首次启动会自动导入检索黄金集与安全用例集
+
+# 3. 建批次并跑完，在批次页看结论
+
+# 4. 想接入模型判定，打开开关
+#    app.eval.llm-judge.enabled=true
+#    app.eval.llm-judge.sample-rate=0.1
+
+# 5. 想让告警出声，填收件人
+#    app.eval.alerts.qq=10001,10002</code></pre>
+
+<p>CI 里用门禁脚本。它要求先打包，jar 取 <code>target</code> 下最新的那个。</p>
+<pre><code>cd server &amp;&amp; mvn -DskipTests package
+./scripts/eval-gate.sh            # 最近一个已完成批次
+./scripts/eval-gate.sh 12         # 指定批次
+EVAL_DB=/opt/qqbot/data/eval.sqlite ./scripts/eval-gate.sh</code></pre>
+
+<h2 id="s10">十、文件与命令索引</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>要找什么</th><th>在哪</th></tr></thead>
+<tbody>
+<tr><td>使用说明、口径、缺口清单</td><td><code>docs/eval.md</code></td></tr>
+<tr><td>设计与决策台账</td><td><code>docs/html/黄金评测集综合评测平台.html</code></td></tr>
+<tr><td>接口契约</td><td><code>docs/openapi.json</code></td></tr>
+<tr><td>评测主逻辑</td><td><code>server/src/main/java/com/example/qqbot/eval/</code></td></tr>
+<tr><td>评测表与读写</td><td><code>persistence/EvalRepository.java</code></td></tr>
+<tr><td>工具与用量采集</td><td><code>trace/ToolCallTrace.java</code>、<code>trace/LlmUsage.java</code></td></tr>
+<tr><td>页面</td><td><code>web/src/admin/views/Eval*.vue</code></td></tr>
+<tr><td>门禁</td><td><code>scripts/eval-gate.sh</code>、<code>EvalGateCli.java</code></td></tr>
+<tr><td>安全语料</td><td><code>tests/golden/safety-golden.tsv</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="footer">本文只描述已经实现并测过的能力。判定口径、阈值与边界都以代码和 <code>docs/eval.md</code> 为准，本文若与代码冲突，以代码为准。</p>
+</main>
+</div>
+
+</body>
+</html>
