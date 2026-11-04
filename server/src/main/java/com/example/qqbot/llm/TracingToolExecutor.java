@@ -35,6 +35,12 @@ class TracingToolExecutor implements ToolExecutor {
         ToolExecutionResult[] holder = new ToolExecutionResult[1];
         ToolCallTrace.run(name, args, () -> {
             holder[0] = delegate.executeWithContext(request, context);
+            // 默认执行器会把异常转成 isError=true 的结果。这里必须再抛出去，
+            // 否则 AiServices 的 toolExecutionErrorHandler 不会介入，异常原文
+            // 会被当成正常结果回灌给模型 —— 路径、SQL 就是这么泄出去的。
+            if (holder[0] != null && holder[0].isError()) {
+                throw new IllegalStateException(holder[0].resultText());
+            }
             return holder[0] == null ? "" : holder[0].resultText();
         });
         return holder[0];
