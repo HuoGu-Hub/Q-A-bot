@@ -1,7 +1,6 @@
 import { computed, ref } from 'vue'
 import { adminApi } from '@shared/api/client'
 
-/** 后端 /admin/api/session 返回的身份 */
 export interface AdminMe {
   id: number
   username: string
@@ -10,9 +9,7 @@ export interface AdminMe {
   roleLabel: string
   qq: string
   qqVerified: boolean
-  /** 这个身份登录要不要 QQ 验证码 —— 只读账号不要 */
   qqRequired: boolean
-  /** 当前角色被允许进入的区域，见后端的 AdminArea */
   areas: string[]
 }
 
@@ -27,13 +24,6 @@ export type AdminRoleId = 'viewer' | 'editor' | 'admin'
 
 const RANK: Record<AdminRoleId, number> = { viewer: 1, editor: 2, admin: 3 }
 
-/**
- * 会话状态（模块级单例，够用 —— 不需要 pinia）。
- *
- * ⚠️ 这只是**体验层**的判断：真正的安全边界在后端。
- * 前端守卫的作用是"别让用户看到一堆 401 / 403"和"别把管不了的入口摆出来"，
- * 而不是"防止未授权访问"。
- */
 const ok = ref(false)
 const checked = ref(false)
 const me = ref<AdminMe | null>(null)
@@ -43,21 +33,13 @@ export function useAuth() {
     ok,
     checked,
     me,
-    /** 当前账号是否达到某一级 */
     can(role: AdminRoleId) {
       const mine = me.value?.role
       return !!mine && RANK[mine] >= RANK[role]
     },
-    /**
-     * 当前账号能不能进某个区域。
-     *
-     * <p>级别够、但管理员把这块收窄了，同样进不去 ——
-     * 两个条件都要过。真正的拦截在后端，这里只负责别把入口摆出来。
-     */
     areaOk(area: string) {
       return !!me.value?.areas?.includes(area)
     },
-    /** 问一次后端"我还登录着吗"，顺便把身份拿回来 */
     async check() {
       try {
         const r = await adminApi.get<{ user: AdminMe }>('/session')
@@ -96,14 +78,13 @@ export function useAuth() {
       checked.value = true
     },
     async logout() {
-      try { await adminApi.post('/logout') } catch { /* 忽略 */ }
+      try { await adminApi.post('/logout') } catch {   }
       ok.value = false
       me.value = null
     },
   }
 }
 
-/** 角色显示用的顺序，给下拉选项用 */
 export const ADMIN_ROLES: { value: AdminRoleId; label: string }[] = [
   { value: 'viewer', label: '只读' },
   { value: 'editor', label: '编辑' },

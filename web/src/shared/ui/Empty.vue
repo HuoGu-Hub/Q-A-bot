@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/** 空态。空白页会让人以为坏了，所以要明确说「这里本来就没东西」。 */
 import Icon from './Icon.vue'
 
 withDefaults(defineProps<{ text?: string; hint?: string; icon?: string }>(), {

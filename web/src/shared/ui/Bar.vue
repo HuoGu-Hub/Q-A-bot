@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/** 横向条形：用于排行。宽度按最大值归一化。 */
 const props = withDefaults(defineProps<{
   label: string
   value: number
@@ -32,7 +31,6 @@ const width = () => {
   font-size: var(--fs-xs);
 }
 .lbl { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 轨道是刻进去的槽：底色更深 + 内阴影 */
 .track {
   height: 7px;
   background: var(--stone-void);

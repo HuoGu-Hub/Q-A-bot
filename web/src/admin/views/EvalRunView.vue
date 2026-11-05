@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 单条用例的过程 —— 从输入到判定的一条时间轴。
- *
- * <p>left 是阶段清单，right 是按总耗时归一化的条。条的长度就是耗时占比，
- * 这样"卡在检索还是卡在模型"不用读数字就能看出来。
- *
- * <p>条只对得起"有开始与耗时"的 span。工具调用的细粒度、token 都还没有结构化出口，
- * 所以这一屏**不画**它们，也不编一个数 —— 缺的东西写"未采集"。
- */
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
@@ -28,7 +19,6 @@ const run = ref<EvalRunDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
 
-/** 时间轴的基准：根 span 的耗时。没有根时退回 run 自己的耗时 */
 const totalMs = computed(() => {
   const root = run.value?.spans.find(s => s.parentSeq === 0)
   return Math.max(1, root?.durationMs ?? run.value?.latencyMs ?? 1)

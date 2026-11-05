@@ -1,14 +1,3 @@
-/**
- * 指令与板块共用的下拉选项。
- *
- * <p>抽出来的原因很直接：同一个选项会在编辑器、列表标签里出现多次，
- * 各写一份迟早出现「编辑器里有、列表里没有」的漂移。
- *
- * <p><b>准入档位不在这里</b>：它是后端的枚举（{@code CommandAccess}），
- * 由 {@code GET /admin/api/commands/access-modes} 下发，见 {@code ./accessModes.ts}。
- * 前端只保留"自己决定"的那几份词汇表。
- */
-
 export const KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'template', label: '话术' },
   { value: 'agent', label: '问答' },

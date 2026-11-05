@@ -1,13 +1,5 @@
-/**
- * 后端返回的数据类型。
- *
- * 契约来源是 docs/openapi.json。新接口优先用 pnpm gen:api 生成的
- * schema.d.ts，不再往这里加；已有类型按模块迁移，迁完一个删一个。
- */
-
 import type { Schemas } from './generated'
 
-/** 从生成的 schema 取字段，但保留手写类型里“一定存在”的字段 */
 type RequiredFields<T, K extends keyof T> = Required<Pick<T, K>> & Omit<T, K>
 
 type DeepRequired<T> = T extends (infer U)[]
@@ -16,9 +8,6 @@ type DeepRequired<T> = T extends (infer U)[]
     ? { [K in keyof T]-?: DeepRequired<T[K]> }
     : T
 
-/* ==================== 知识库 ==================== */
-
-/** 一条知识库分块（公开站只暴露 title/url/text，不暴露内部分数） */
 export type KbEntry =
   RequiredFields<Schemas['KbEntry'], 'title' | 'url' | 'text'>
   & Pick<Schemas['KbEntry'], 'cats'>
@@ -26,28 +15,12 @@ export type KbEntry =
 export type KbSearchResult = {
   query: string
   count: number
-  /** semantic = 走了向量语义检索（认中文口语）；keyword = 只走了本地术语表关键词 */
   mode?: 'semantic' | 'keyword'
   entries: KbEntry[]
 }
 
-/* ==================== 公开统计 ==================== */
-
-/** 公开统计：刻意不含用户数/群数等内部指标 */
 export type PublicStats = Required<Schemas['PublicStats']>
 
-/* ==================== 管理后台 ==================== */
-
-/**
- * 看板总览。
- *
- * ⚠️ 口径（2026-09-26 确认）：**提问 = @ 了机器人 + 有效回应且未被拦截**
- * （后端 `guard_action='pass'`）。对照下面的字段：
- *   questions ← 唯一能叫「提问」的数
- *   dropped / fixedReplies ← 被拦的两种，都不是提问
- *   commands ← 有回应，但不是提问
- *   total ← 群消息总数，含闲聊与被拦的，**不是**提问数
- */
 export type Overview = DeepRequired<Schemas['Overview']>
 
 export type DayCount = DeepRequired<Schemas['DayCount']>
@@ -56,14 +29,6 @@ export type KeywordStat = DeepRequired<Schemas['KeywordStat']>
 
 export type MissStat = DeepRequired<Schemas['MissStat']>
 
-/**
- * bestCosineRaw = 向量检索在应用 min-score 阈值【之前】的最高余弦。
- *
- * 用途：区分两种"未命中"——
- *   · 接近阈值（0.35~0.45）：库里其实有相关内容，只是差一点被挡 → 考虑调低阈值
- *   · 很低（0.2 以下）：库里确实没有这份资料 → 该补资料，调阈值没用
- *   · 0：这次没走向量路（向量未启用 / 老记录没有这一列）
- */
 export type UnmatchedMiss = DeepRequired<Schemas['UnmatchedMiss']>
 
 export interface MissResponse {
@@ -88,8 +53,6 @@ export type VisitDay = DeepRequired<Schemas['VisitDay']>
 
 export type VisitSummary = DeepRequired<Schemas['VisitSummary']>
 
-/* ==================== 系统日志 ==================== */
-
 export interface LogEntry {
   seq: number
   ts: string
@@ -102,29 +65,19 @@ export type LogHistory = DeepRequired<Schemas['LogHistory']>
 
 export type LogStatus = DeepRequired<Schemas['LogStatus']>
 
-/* ==================== 词条（一个词条 = 一个分块） ====================
-   词条不再是独立的名字表：块本身就是词条，字段是 id / 标题 / 别名 / 分类。
-   核对状态与核对模式已经全部删掉。别名是唯一可写的字段。 */
-
-/** 一条词条 = 一个分块。别名空串表示没单独写过（由标题「（English）」派生） */
 export interface KbEntryItem {
   id: string
   docId: string
   title: string
-  /** 别名（存库那份为空时由标题派生兜底） */
   alias: string
-  /** 认得的分类名（空数组 = 未分类） */
   categories: string[]
-  /** 来源：doc / manual / wiki */
   source: string
   chars: number
   url: string
   retired: boolean
-  /** 是不是未分类（标签认不出，或压根没标签） */
   uncategorized: boolean
 }
 
-/** 全表读数（不受搜索/筛选影响） */
 export interface KbEntryCounts {
   all: number
   aliased: number
@@ -133,7 +86,6 @@ export interface KbEntryCounts {
   retired: number
 }
 
-/** 一个分类的规模 */
 export interface KbCategoryStat {
   name: string
   label: string
@@ -149,12 +101,9 @@ export interface KbEntryListResponse {
   available: boolean
 }
 
-/** Excel/WPS 旁路：导出拿到的是 JSON 包着的表格文本（client 永远走 res.json()） */
 export interface KbEntryExportResponse {
-  /** tsv 文本（format=tsv 时） */
   tsv?: string
   text?: string
-  /** format=xlsx 时的文件字节（base64） */
   xlsxBase64?: string
   format?: 'xlsx' | 'tsv'
   count: number
@@ -165,87 +114,54 @@ export interface KbEntryImportResponse {
   skipped: number
 }
 
-/** 按 id 取单块（含正文）—— 词条面板编辑正文用 */
 export interface KbBlockItemResponse {
   block: KbBlockView
 }
 
-/* ==================== 指令系统 ==================== */
-
-/** 一条命令的参数声明。JSON 键 default 在后端 Java 侧叫 defaultValue */
 export interface AdminParamSpec {
   name: string
-  /** text / int / moment / date / enum */
   type: string
   required: boolean
   default?: string | null
   maxChars?: number
   description?: string | null
   example?: string | null
-  /** 仅 enum 用 */
   options?: string[]
-  /** 能不能一次给多个值，用顿号隔开 */
   multiple?: boolean
 }
 
-/**
- * 一条准入档位。
- *
- * <p><b>这份清单由服务端下发</b>（{@code GET /admin/api/commands/access-modes}），
- * 前端不自己维护：中文名与"要不要露名单"都长在后端 {@code CommandAccess} 枚举上。
- * 以前命令编辑器、板块编辑器、/prompt 弹窗各写一份，于是 /prompt 那份漏了
- * 「管理员与白名单」，文案也和别处不一样。
- */
 export interface AccessMode {
-  /** 存库的值，如 all / admin / admin_whitelist */
   code: string
-  /** 下拉里显示的中文名 */
   label: string
-  /** 这一档下名单是判定依据之一 —— 编辑器要露出名单区 */
   usesAcl: boolean
 }
 
 export interface BotCommand {
   id: number
-  /** 命令路径，用 / 分层：set/output */
   trigger: string
   reply: string
   description: string
   scope: string
   groupIds: number[]
-  /** 准入档位 code，取值见 AccessMode；清单由服务端下发 */
   access: string
   enabled: boolean
   sortOrder: number
   builtin: boolean
-  /** template = 话术（不调模型、不计费）；agent = 智能问答（调模型，会走成本预算） */
   kind: string
-  /** agent 类的回答模式：kb = 走知识库（默认）；none = 不用知识库 */
   mode: string
-  /** 参数表：群里用 #名字-值# 传值，模板里用 {arg.名字} 取 */
   params: AdminParamSpec[]
-  /** 手写的单命令帮助；为空则由参数表自动生成 */
   help?: string | null
-  /** 手写的 /list 回复；为空则由参数表自动生成 */
   listReply?: string | null
-  /** 后端算好的默认 /list 回复，供编辑页实时预览 */
   defaultList: string
-  /** 后端算好的默认帮助，供编辑页实时预览 */
   defaultHelp: string
-  /** action 类绑定的执行器 id，其余类型为空 */
   action?: string | null
-  /** 后端算好的完整用法，带参数示例（与群里 {cmd.list} 的写法一致） */
   usage: string
 }
 
-/** 一个已注册的动作：配置界面用它渲染下拉与「载入参数表」 */
 export interface CommandActionInfo {
   id: string
-  /** 给人看的名字，下拉里显示它 */
   label: string
-  /** 一句话说明它干什么 */
   description: string
-  /** 选中它时自动填的命令路径 */
   defaultPath: string
   params: AdminParamSpec[]
 }
@@ -254,49 +170,39 @@ export interface CommandActions {
   actions: CommandActionInfo[]
 }
 
-/** 一行定时输出。时刻是 ISO 串，展示时按东八区格式化 */
 export interface AdminScheduleTask {
   id: number
-  /** 0 = 私聊 */
   groupId: number
   userId: number
   nickname: string
   content: string
   repeatRule: string
-  /** pending / sending / sent / failed / expired / canceled */
   status: string
   attempts: number
   lastError?: string | null
   fireAt: string
-  /** 「什么时候发」的人话：每天 07:00、14:00 或 2026-10-20 21:30 */
   when: string
-  /** 时刻组：周期是 HH:mm，一次性是 ISO 串 */
   times: string[]
   createdAt: string
   sentAt?: string | null
 }
 
-/** 一条命令的数据策略：能读哪些群、跨群时标多少 */
 export interface CommandPolicy {
   id: number
-  /** GROUP = 只本群；SOME = 指定群；ALL = 全部群 */
   scope: string
   groups: number[]
   showGroup: boolean
   showUser: boolean
-  /** 能不能在私聊里用。默认关 */
   allowPrivate: boolean
 }
 
 export type CommandPolicies = DeepRequired<Schemas['CommandPolicies']>
 
-/** 名单条目：uid = QQ 号，gid = 群号 */
 export interface AclItem {
   type: string
   value: number
 }
 
-/** /prompt 的后台视图：群提示或个人提示 */
 export interface AdminPrompt {
   id: number
   scope: 'group' | 'user'
@@ -305,7 +211,6 @@ export interface AdminPrompt {
   content: string
 }
 
-/** 命令别名：target 是规范命令路径，如 prompt/create、预约开黑/create */
 export interface SystemAliasEntry {
   kind: 'command' | 'action'
   target: string
@@ -336,43 +241,31 @@ export interface CommandAcl {
   black: AclItem[]
 }
 
-/** 命令目录的一条：板块或普通指令。后台列表与 QQ 的 /list 共用这一份数据 */
 export interface CommandCatalogEntry {
   source: 'board' | 'command'
   id: number
-  /** 不含开头斜杠；板块就是板块名 */
   path: string
   title: string
   description: string
-  /** board / template / agent / action */
   kind: string
   params: AdminParamSpec[]
-  /** 完整用法，带参数示例 */
   usage: string
-  /** 归一化后的准入档位 code，取值见 AccessMode */
   access: string
-  /** 板块的数据范围 GROUP / SOME / ALL；指令为 null */
   scope?: string | null
-  /** 板块的投递方式 direct / scheduled；指令为 null */
   delivery?: string | null
   enabled: boolean
   builtin: boolean
-  /** 板块支持的四个动作；指令为空 */
   actions: string[]
 }
 
-/** 后台编辑用的一条板块（/admin/api/boards） */
 export interface AdminBoard {
   id: number
   path: string
   title: string
-  /** 一句话说明，供命令表展示 */
   description: string
   params: AdminParamSpec[]
-  /** direct / scheduled */
   delivery: string
   access: string
-  /** GROUP / SOME / ALL */
   scope: string
   groups: number[]
   showGroup: boolean
@@ -382,21 +275,13 @@ export interface AdminBoard {
   sortOrder: number
   builtin: boolean
   usage: string
-  /** 列表头，支持 {count} {path}；空 = 框架默认 */
   listHeader: string
-  /** 每条格式，支持 {id} {when} {text} {nickname} {group} {params.参数名} */
   listItem: string
-  /** 空列表文案；空 = 框架默认 */
   listEmpty: string
-  /** 最多显示几条；0 = 全部，上限 200 */
   listLimit: number
-  /** 手写的 /list 回复；为空则由参数表自动生成 */
   listReply: string
-  /** 手写的 /help 回复；为空则自动生成 */
   helpReply: string
-  /** 后端算好的默认 /list 回复 */
   defaultList: string
-  /** 后端算好的默认 /help 回复 */
   defaultHelp: string
 }
 
@@ -404,12 +289,10 @@ export interface AdminBoardList {
   boards: AdminBoard[]
 }
 
-/** 提交给后端的板块草稿：originalPath 只在编辑时给，用来确认改的是哪一条 */
 export interface BoardDraft extends AdminBoard {
   originalPath?: string | null
 }
 
-/** 一条板块记录（/admin/api/board-records） */
 export interface AdminBoardRecord {
   id: number
   board: string
@@ -419,11 +302,8 @@ export interface AdminBoardRecord {
   text: string
   params: Record<string, string>
   delivery: string
-  /** 人话时间：定时的是「每天 21:30」，立即展示的是「立即展示」 */
   when: string
-  /** 与群里 /板块 列表同一行格式 */
   line: string
-  /** pending / sending / sent / failed / expired / canceled */
   status: string
   attempts: number
   lastError?: string | null
@@ -447,53 +327,34 @@ export interface CommandVariable {
   label: string
   example: string
   advanced: boolean
-  /** 能不能写在 #名字-值# 的值里 */
   inParam: boolean
-  /** 能不能写在文本与模板里 */
   inText: boolean
 }
 
 export interface CommandVariables {
   variables: CommandVariable[]
-  /** 示例值 */
   preview: Record<string, string>
-  /** 真实值。管理端没有群会话，会话相关的变量仍是占位 */
   current: Record<string, string>
   allowUserIds: boolean
 }
 
 export type CommandStats = DeepRequired<Schemas['CommandStats']>
 
-/* ==================== 知识库块 ====================
-   块是知识库唯一的存储单位，全部按 **块 id** 操作。
-   旧的 chunks.jsonl + 行号那套已经删除，不要再按行号想问题。 */
-
-/** 块存储概览 */
 export interface KbBlockStats {
   available: boolean
-  /** 块总数 */
   blocks: number
-  /** 其中已下架 */
   retired: number
-  /** 文档数 */
   documents: number
-  /** 已算好向量的块数（少于 blocks 说明有半成品） */
   vectors: number
-  /**
-   * 已算好**标题向量**的块数（C 路：用物品名提问时靠它把本体顶上来）。
-   * 少于 blocks 不影响用，只是那些块吃不到这一路 —— 补一次即可。
-   */
   titleVectors: number
 }
 
-/** 一份文档的块数概览 */
 export interface KbDocSummary {
   docId: string
   blocks: number
   retired: number
 }
 
-/** 一块（管理端视图） */
 export interface KbBlockView {
   id: string
   docId: string
@@ -504,27 +365,19 @@ export interface KbBlockView {
   source: string
   retired: boolean
   updatedAt: string
-  /** 人工别名；空串 = 用标题派生 */
   alias: string
 }
 
-/**
- * 导入预览（**只算不改**）。
- *
- * 规则：文件里出现的 id 存在就覆盖、不存在就新增；**没出现的块一个都不动**。
- */
 export interface KbImportPreview {
   added: number
   updated: number
   unchanged: number
-  /** 库里有多少块这次完全没被碰 */
   untouchedExisting: number
   addedIds: string[]
   updatedIds: string[]
   warnings: string[]
 }
 
-/** 导入结果 */
 export interface KbImportResult {
   added: number
   updated: number
@@ -532,8 +385,6 @@ export interface KbImportResult {
   untouched: number
   warnings: string[]
 }
-
-/* ==================== Bot 设置 ==================== */
 
 export interface SettingItem {
   key: string
@@ -550,8 +401,6 @@ export type SettingsView = {
   note: string
 }
 
-/* ==================== 模型配置 ==================== */
-
 export interface ModelProvider {
   name: string
   configured: boolean
@@ -565,18 +414,8 @@ export type ProbeResult = Schemas['ProbeResult']
 
 export type AvailableModels = DeepRequired<Schemas['AvailableModels']>
 
-/* ==================== 知识库管理 ==================== */
-
-
-
-
-/* ==================== 分类（人工维护的平铺清单） ====================
-   分类只有一份人工清单：分块符号里带什么标签就归什么分类，认不出就是「未分类」。
-   没有"原始标签 → 9 大类"的智能归类。 */
-
 export type CategoryList = DeepRequired<Schemas['CategoryList']>
 
-/** 分类穿透里的一条：一个条目 = 一个分块 */
 export interface CategoryEntry {
   id: string
   docId: string
@@ -587,7 +426,6 @@ export interface CategoryEntry {
   snippet: string
 }
 
-/** 分类穿透结果：total 是命中总数，items 是当前页 */
 export interface CategoryEntryPage {
   total: number
   items: CategoryEntry[]
@@ -618,50 +456,28 @@ export type KbBrowseResult = {
   page: number
   pageSize: number
 }
-/* ==================== 首页轮播 ==================== */
 
-/**
- * 一张轮播图。管理端与公开站共用同一份形状。
- *
- * ⚠️ `width`/`height` 可能为 0：后端读不出尺寸时就是 0（实测 WebP 会这样）。
- * 前端必须容错成 16:9，不能拿 0 去算比例 —— 那会得到一条高度为 0 的缝。
- */
 export interface CarouselItem {
   id: number
-  /** 直接能放进 <img src>（形如 /api/public/v1/carousel/image/3），长缓存 */
   imageUrl: string
-  /** 点击跳转地址，可空 */
   link: string
-  /** 图下方的说明文字，可空 */
   caption: string
-  /** 0 = 尺寸未知 */
   width: number
   height: number
   enabled: boolean
-  /** 升序展示 */
   sort: number
   createdAt: string
 }
 
-/** GET /admin/api/carousel —— 列表 + 当前限额（限额用来决定上传控件能不能点） */
 export interface CarouselListResponse {
   items: CarouselItem[]
   maxCount: number
-  /** 业务上限（KB）：超过它后端会明确告诉你"图片太大" */
   maxSizeKb: number
-  /**
-   * 容器的接收上限（KB，来自 spring.servlet.multipart.max-file-size）。
-   *
-   * <p>它比 {@link maxSizeKb} 宽 —— 存在的意义是**超限时也能说清原因**：
-   * 超过这个数，请求会被容器在读完之前掐断，浏览器只会给一句 "Failed to fetch"，
-   * 前端拿这个值先挡一道，用户才知道是"太大了"而不是"网断了"。
-   */
   uploadCeilingKb: number
   intervalMs: number
   enabled: boolean
 }
 
-/** GET /api/public/v1/carousel —— 只含启用的，已按 sort 升序 */
 export type CarouselPublicItem = Required<Pick<
   Schemas['CarouselItemView'],
   'id' | 'imageUrl' | 'link' | 'caption' | 'width' | 'height'
@@ -669,50 +485,28 @@ export type CarouselPublicItem = Required<Pick<
 
 export type CarouselPublicResponse = {
   items: CarouselPublicItem[]
-  /**
-   * 切换间隔（毫秒）。
-   *
-   * ⚠️ 契约里公开接口只承诺 `items`，所以这里是**可选**的：
-   * 后端给了就用它（这样后台的「切换间隔」才真的生效），没给就退回组件默认的 4000。
-   */
   intervalMs?: number
 }
 
-/** 单张图的上传 / 编辑响应 */
 export interface CarouselItemResponse {
   item: CarouselItem
 }
 
-/** 排序 / 删除之后返回整份新列表 —— 前端直接拿它替换，不自己猜顺序 */
 export interface CarouselItemsResponse {
   items: CarouselItem[]
 }
 
-/* ==================== 流量（GET /admin/api/traffic） ==================== */
-
-/** 一分钟的流量读数。{@code p50/p95/max} 只统计 API 请求，单位毫秒 */
 export type TrafficPoint = DeepRequired<Schemas['TrafficPoint']>
 
 export type TrafficSummary = DeepRequired<Schemas['TrafficSummary']>
 
-/**
- * 流量窗口。
- *
- * <p>后端已经把窗口内**每分钟都铺平**了：没有请求的分钟是 0，不是缺失。
- * 前端画图不需要再补零，也不需要理解 epoch 分钟以外的约定。
- */
 export type TrafficResponse = DeepRequired<Schemas['TrafficResponse']>
 
-/* ==================== 模型调用（GET /admin/api/llm） ==================== */
-
-/** 一分钟的模型调用读数。一次群聊回答可能包含多轮工具调用，每轮各算一次 */
 export type LlmPoint = DeepRequired<Schemas['LlmPoint']>
 
 export type LlmSummary = DeepRequired<Schemas['LlmSummary']>
 
 export type LlmResponse = DeepRequired<Schemas['LlmResponse']>
-
-/* ==================== 评测 ==================== */
 
 export interface EvalDataset {
   id: number

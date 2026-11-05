@@ -7,16 +7,6 @@ import Panel from '@shared/ui/Panel.vue'
 import Button from '@shared/ui/Button.vue'
 import Notice from '@shared/ui/Notice.vue'
 
-/**
- * 角色 × 区域的勾选矩阵。
- *
- * <p>它只回答"这一级能进哪几块"。**能不能改**是另一条线，由身份级别决定 ——
- * 把「系统」勾给只读，他看到日志，仍然一条也改不动。两件事分开之后，
- * 这套勾选才敢在接待访客时随便调整。
- *
- * <p>「管理 × 账号」固定勾上且不可取消：账号页是改回这张表的唯一入口，
- * 关掉它等于给自己留一把没有备份的锁。
- */
 interface AreaRow { id: string; label: string }
 interface ScopesResponse {
   areas: AreaRow[]
@@ -30,7 +20,6 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 
-/** 管理员必须保留的区域 —— 与后端 AdminArea.mustKeepFor 是同一条规则 */
 const LOCKED: Record<string, string> = { admin: 'users' }
 
 const roleList = ADMIN_ROLES
@@ -85,7 +74,6 @@ async function save() {
     saved.value = { ...r.scopes }
     toast('可访问范围已保存')
   } catch (e) {
-    // 留在页面上：保存失败意味着屏幕上的勾选没有生效，不能靠一闪而过的提示
     error.value = describeError(e)
   } finally {
     saving.value = false
@@ -146,10 +134,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-/* 定宽而不是铺满：1400px 宽的页面上，7×3 的勾选矩阵摊开会像一张没填完的表，
-   复选框彼此隔着一百多像素，读起来对不上行。640px 是刚好一行扫完的宽度。 */
-/* 窄屏兜底：矩阵的最小内容宽度比 390px 的可用宽度大一点，
-   让它自己横滑，而不是把整页顶出横向滚动条。 */
 .matrix-wrap { overflow-x: auto; }
 
 .matrix {

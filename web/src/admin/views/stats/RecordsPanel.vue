@@ -11,29 +11,11 @@ import Notice from '@shared/ui/Notice.vue'
 import Tag from '@shared/ui/Tag.vue'
 import Button from '@shared/ui/Button.vue'
 
-/**
- * 「统计 → 记录」面板。
- *
- * <p>原「问答记录」页并入统计页后，时间窗口由外层统一持有；这里只保留
- * 记录自己的范围开关（只看提问 / 全部消息）。
- *
- * ⚠️ 这个页面原来列出的是【全部群消息】，其中 93% 是群里没 @ 机器人的闲聊，
- * 却顶着「去群里 @ 机器人问几个问题」的提示语 —— 自相矛盾。
- * 现在默认只看提问：@ 了机器人 + 机器人有效回应且未被拦截。
- * 想看全部消息（排查「为什么没回我」）可以切到 all。
- */
 const props = defineProps<{ days: number }>()
 const scope = ref<'questions' | 'all'>('questions')
 const rows = ref<RecordRow[]>([])
 const total = ref(0)
 
-/**
- * 一页 20 条。
- *
- * <p>原来一次拉 100 条：每条都带完整问题与回答，100 条既把请求撑大，
- * 也让表格在手机上滚成一万多像素。20 条刚好让 DataTable 的卡片模式生效
- * （≤30 行才转卡片），翻页再看更早的记录。
- */
 const PAGE = 20
 const offset = ref(0)
 
@@ -41,13 +23,8 @@ const loading = ref(false)
 const error = ref('')
 const busyId = ref<number | null>(null)
 
-/** 展开的详情行 —— 列表太窄，需要看全问题和答案 */
 const expanded = ref<number | null>(null)
 
-/**
- * 首次加载还没回来时只画表头，不显示空态：
- * 否则每次进页面都会先闪一句「还没有记录」，像是真的没数据。
- */
 const tableRows = computed(() =>
   !rows.value.length && loading.value ? undefined : rows.value.length
 )
@@ -74,7 +51,6 @@ async function load() {
   }
 }
 
-/** 翻页时收起详情：上一页展开的那条不在新列表里，留着只会让人以为没翻过去 */
 function goPage(delta: number) {
   if (loading.value) return
   const next = Math.max(0, offset.value + delta * PAGE)
@@ -101,10 +77,6 @@ function toggle(id: number) {
   expanded.value = expanded.value === id ? null : id
 }
 
-/**
- * 记录没有自动刷新：切走之后不轮询；范围变更发生在不可见期间时，
- * 先记一笔，切回来再补拉，避免两个 tab 的后台请求叠在一起。
- */
 let active = true
 let dirty = false
 
@@ -137,10 +109,6 @@ onDeactivated(() => {
   active = false
 })
 
-/**
- * 页面栏（StatsView）要用的读数与动作。
- * 以函数形式暴露，视图渲染时调用即可把面板内部状态计入渲染依赖。
- */
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
@@ -171,10 +139,6 @@ onMounted(load)
         :empty="scope === 'questions' ? '还没有提问记录' : '还没有任何消息记录'"
       >
         <thead>
-          <!--
-            列名用普通话，并给每个属性加悬浮解释 —— 这一页原先写的是
-            「命中 / 余弦 / 标注 / 打标」这种行话，看不懂的人只能来问。
-          -->
           <tr>
             <th>时间</th><th>问题</th>
             <th class="num" title="这次回答用上了几条资料；0 = 知识库里没找到相关的内容">查到资料</th>
@@ -189,13 +153,6 @@ onMounted(load)
             <tr class="row">
               <td class="muted nowrap" data-label="时间">{{ shortTime(r.ts) }}</td>
               <td class="q" data-label="问题">
-                <!--
-                  ⚠️ 原来展开详情挂在 <tr @click> 上：鼠标能用，键盘用户进不去
-                  （<tr> 不是可聚焦控件，读屏也不会把整行当按钮念）。
-                  改成问题本身是一个真正的 <button>，带 aria-expanded ——
-                  键盘 Tab 得到、回车能开、读屏会念"已展开/已折叠"，
-                  而且不会再出现"点「对/错」时顺手把详情展开"的误触。
-                -->
                 <button
                   type="button"
                   class="q-btn"
@@ -241,15 +198,11 @@ onMounted(load)
 </template>
 
 <style scoped>
-/* 面板之间留出整页统一的竖向节奏 */
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* 翻页条放在表头上方：长表滚到底部才能翻页，等于逼人先滚完 20 行 */
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .pager .page { font-size: var(--fs-meta); }
 
-/* 展开详情改挂在问题按钮上（见模板注释）。按钮长得像文本 ——
-   它是"标题"不是"控件"，画成按钮会在七列里显得很吵。 */
 .q-btn {
   display: block;
   width: 100%;
@@ -269,15 +222,10 @@ onMounted(load)
 .nowrap { white-space: nowrap; }
 .miss { color: var(--rust); }
 
-/* 操作列右对齐。
-   DataTable 的表头写了 text-align:left，而 .right 单类压不过它（元素选择器少一个），
-   所以从 DataTable 根节点（带本页 scope）往下穿透，多带一个类型选择器。 */
 .records :deep(th.right),
 .records :deep(td.right) { text-align: right; white-space: nowrap; }
 .records :deep(td.right .btn + .btn) { margin-left: var(--sp-1); }
 
-/* 展开区：用"下沉表面"表示它属于另一层，不再额外描一层边框。
-   border 只留给可交互元素，层级深浅交给 --surface-* 令牌。 */
 .dpanel {
   display: flex;
   flex-direction: column;

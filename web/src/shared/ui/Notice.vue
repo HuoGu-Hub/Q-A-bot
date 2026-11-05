@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 提示条。
- *
- * 抽它的原因：错误/成功提示原先在 12 个 view 里各写一份 <p class="err">，
- * 样式和语义都不统一。失败和成功都需要一眼看见。
- */
 withDefaults(
   defineProps<{
     tone?: 'error' | 'ok' | 'info' | 'warn'
@@ -34,7 +28,6 @@ withDefaults(
   color: var(--ink-2);
   background: var(--stone-300);
 }
-/* 左侧 3px 状态色条 —— 与站内其它状态色用法一致 */
 .mark {
   flex: none;
   width: 3px;

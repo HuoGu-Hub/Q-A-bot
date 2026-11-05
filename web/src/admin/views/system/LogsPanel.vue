@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * 「系统 → 日志」面板。
- *
- * 只服务业务层日志：内存缓冲取历史 + SSE 实时推送。
- *
- * 级别过滤、搜索、暂停/继续、清空原来在面板自己的过滤行里，现在都收到
- * SystemView 的吸顶页面栏上；本面板通过 defineExpose 把状态与动作抛出去。
- */
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { LogEntry, LogHistory, LogStatus } from '@shared/api/types'
@@ -56,7 +48,6 @@ async function loadHistory() {
   } catch (e) { error.value = describeError(e) }
 }
 
-/** 页面栏「刷新」：状态与历史一起重取 */
 async function reload() {
   error.value = ''
   await loadStatus()
@@ -76,10 +67,9 @@ function connect() {
         entries.value.splice(0, entries.value.length - cap)
       }
       if (following.value) scrollToBottom()
-    } catch { /* 忽略坏消息 */ }
+    } catch {   }
   })
-  // SSE 断线由浏览器自动重连
-  source.onerror = () => { /* noop */ }
+  source.onerror = () => {   }
 }
 
 function closeStream() {
@@ -129,10 +119,6 @@ watch(level, async () => {
   connect()
 })
 
-/**
- * 父页面（SystemView）页面栏上的筛选控件与按钮要读写这些状态。
- * 暴露的是函数：视图渲染时调用它们，读到的依赖计入视图的渲染副作用。
- */
 defineExpose({
   reload,
   levelValue: () => level.value,
@@ -154,7 +140,6 @@ onMounted(async () => {
   connect()
 })
 
-// 被 KeepAlive 换回来时，若本来就在跟随最新，就重新贴到底部
 onActivated(() => { if (following.value) scrollToBottom() })
 
 onBeforeUnmount(closeStream)
@@ -192,8 +177,6 @@ onBeforeUnmount(closeStream)
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 .meta { font-size: var(--fs-meta); }
 
-/* 日志是等宽密集文本，共享表格/面板都不适用。
-   容器用下沉表面表达"这是一块滚动内容"，边界只给一道柔和边缘，不描重线。 */
 .logbox {
   height: 58vh; overflow-y: auto;
   background: var(--surface-inset);
@@ -212,8 +195,6 @@ onBeforeUnmount(closeStream)
 .lv { font-weight: 600; }
 .msg { color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 
-/* 异常块是日志独有的信息形态：左边一道深锈线标出"这里出错了"，
-   它不是容器的边框，所以保留。 */
 .tb {
   grid-column: 3; margin: 2px 0 4px; padding: 6px 8px;
   background: var(--surface-inset); border-left: 2px solid var(--rust-deep);
@@ -221,7 +202,6 @@ onBeforeUnmount(closeStream)
   white-space: pre-wrap; overflow-x: auto;
 }
 
-/* 级别配色：整行淡淡的底 + 级别字变色，扫一眼就能定位 ERROR/WARN */
 .lv-error { background: var(--rust-veil); }
 .lv-error .lv { color: var(--rust); }
 .lv-warn { background: var(--amber-veil); }

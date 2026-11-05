@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 单批次结果 —— 这一屏回答"这批整体怎么样"。
- *
- * <p>执行中每 3 秒轮询一次；批次跑完自动停。停止轮询的条件写在状态里，
- * 不靠"用户会不会切走"——切走再回来是另一个页面实例，定时器跟随组件生命周期。
- */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
@@ -52,7 +46,6 @@ const rateText = computed(() => {
   return s ? `${(s.passRate * 100).toFixed(1)}%` : '—'
 })
 
-/** 微元转元，保留四位 —— 单条成本常在 0.001 量级，两位小数会全变 0.00 */
 const yuan = (micro: number) => (micro / 1_000_000).toFixed(4)
 
 const costText = computed(() => {
@@ -132,7 +125,6 @@ async function retryFailed() {
   }
 }
 
-/** 报告是服务端生成的单文件 HTML，直接下走，不在前端拼 */
 function downloadReport() {
   window.location.href = `/admin/api/eval/batches/${batchId}/report`
 }
@@ -146,12 +138,6 @@ async function clone() {
   }
 }
 
-/**
- * 设为基线并立刻激活。
- *
- * <p>两步合成一次点击：先建候选再晋升，中间状态对使用者没有意义 ——
- * 不会有人想"建一条候选基线放着不用"。
- */
 async function makeBaseline() {
   if (!detail.value) return
   try {

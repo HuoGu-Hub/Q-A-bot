@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 变量胶囊面板。
- *
- * 点击按钮时不抢输入框焦点，父组件据此把变量插入到"当前正在编辑的输入框"，
- * 所以回复、list 回复、help 回复共用同一套变量按钮。
- */
 export interface VariableChip {
   name: string
   label: string

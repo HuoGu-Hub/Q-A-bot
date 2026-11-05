@@ -1,15 +1,4 @@
 <script setup lang="ts">
-/**
- * 指标卡。看板的 KPI 区用它。
- *
- * 顶部一道与 tone 同色的刻线，取代右上角的橙色光晕 ——
- * 光晕在 8 张卡上会变成一片橙雾，等于没有重点；等长刻线反而能把「哪一类指标」读出来。
- *
- * <p>数值一律 nowrap + 等宽：手机上 8 张卡并排时，"34,821 / 21" 折成两行
- * 会让每张卡高度不一致，整片网格跟着参差。
- *
- * <p>hint 是这张卡的口径说明，只在悬浮时以 title 出现 —— 卡片里不再有第二行灰字。
- */
 import Icon from './Icon.vue'
 
 withDefaults(defineProps<{
@@ -41,7 +30,6 @@ withDefaults(defineProps<{
   overflow: hidden;
   min-width: 0;
 }
-/* 刻线：一条 2px 实色，颜色 = 这一类指标的语义 */
 .stat::before {
   content: '';
   position: absolute;
@@ -70,16 +58,12 @@ withDefaults(defineProps<{
   margin-top: 2px;
   color: var(--ink);
   font-weight: var(--fw-medium);
-  /* 组合值（中位数 / P95）在 8 列排布下必须允许折行 ——
-     上一版就是靠折行才放得下「640 ms / 2.0 s」。手机两列时反而够宽，那里再锁 nowrap。 */
   white-space: normal;
 }
 .tone-moss .v { color: var(--vital); }
 .tone-rust .v { color: var(--blight-lift); }
 
 @media (max-width: 760px) {
-  /* 两列排布时卡片内宽只有约 145px，「640 ms / 2.0 s」这种组合值在 19px 下会被切掉。
-     降到 16px 并略收字距，数字仍然清楚。 */
   .v { font-size: var(--fs-lg); letter-spacing: -.01em; white-space: nowrap; }
 }
 </style>

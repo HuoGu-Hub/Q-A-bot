@@ -1,14 +1,7 @@
 <script setup lang="ts">
-/**
- * 复选框 —— 给多选清单用。
- *
- * 为什么不用 Switch：开关表达「这个功能开着还是关着」，多选清单表达
- * 「这一项在这次操作里选没选中」。语义不同，视觉也不该一样。
- */
 withDefaults(defineProps<{
   modelValue: boolean
   disabled?: boolean
-  /** 无障碍标签；清单里没有可见 label 时必须给 */
   ariaLabel?: string
 }>(), { disabled: false, ariaLabel: '选择' })
 
@@ -35,7 +28,6 @@ defineEmits<{ 'update:modelValue': [boolean] }>()
 
 <style scoped>
 .cb { display: inline-flex; cursor: pointer; }
-/* 原生复选框藏起来但保留语义：键盘、读屏、表单行为一样不少 */
 .cb input { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; }
 .box {
   display: inline-flex;
@@ -54,7 +46,6 @@ defineEmits<{ 'update:modelValue': [boolean] }>()
 }
 .cb:hover .box { border-color: var(--ember); }
 .cb input:focus-visible + .box { outline: 2px solid var(--ember); outline-offset: 2px; }
-/* 勾的颜色必须是 --ink-on-ember：日间主题的 --stone-void 是深赭，勾在深棕底上看不见 */
 .cb.on .box { background: var(--ember); border-color: var(--ember); color: var(--ink-on-ember); }
 .cb.dis { cursor: not-allowed; opacity: .45; }
 

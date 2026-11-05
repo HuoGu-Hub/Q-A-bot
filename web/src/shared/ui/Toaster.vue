@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 软弹窗的容器。挂在管理端根组件下一次即可。
- *
- * 固定居中偏上，pointer-events: none（只有关闭按钮自己可点）——
- * 这样它永远不会挡住底下的操作，也不会因为占位把页面顶下去。
- */
 import Icon from './Icon.vue'
 import { dismiss, useToasts } from './toast'
 
@@ -12,10 +6,6 @@ const { items } = useToasts()
 </script>
 
 <template>
-  <!--
-    Teleport 到 body：.admin 自己是一个 z-index: 2 的 stacking context，
-    toast 留在里面时 z-index 再高也只能压过页面，压不过同样挂到 body 的 Modal。
-  -->
   <Teleport to="body">
     <div class="toaster" aria-live="polite">
       <TransitionGroup name="toast">
@@ -61,7 +51,6 @@ const { items } = useToasts()
   font-size: var(--fs-sm);
   color: var(--ink);
 }
-/* 左侧状态竖条 —— 与站内其它状态色用法一致 */
 .mark { width: 3px; align-self: stretch; border-radius: var(--r-pill); background: var(--ink-3); }
 .t-ok .mark { background: var(--vital); }
 .t-error .mark { background: var(--blight); }

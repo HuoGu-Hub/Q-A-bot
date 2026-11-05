@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * 二级目录（Tab）。
- *
- * 下划线式：激活项下方一道 2px 灵火线。比 segmented 控件轻，也不和面板边缘打架。
- * 键盘左右键可在 tab 之间移动 —— role=tablist 的应有行为。
- *
- * <p>手机上 7 个 tab 横排会被截断，所以：可横向滚动 + 右缘渐隐提示「还有」。
- */
 import { ref } from 'vue'
 
 defineProps<{
@@ -79,7 +71,6 @@ function onKey(e: KeyboardEvent) {
 }
 .tab:hover { color: var(--ink); background: var(--surface-hover); }
 .tab.active { color: var(--ember-hot); }
-/* 激活线：压在容器底边上，不额外占高度 */
 .tab.active::after {
   content: '';
   position: absolute;
@@ -100,8 +91,6 @@ function onKey(e: KeyboardEvent) {
 
 @media (max-width: 760px) {
   .tab { min-height: 44px; padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); }
-  /* 右缘渐隐：告诉用户「右边还有」。
-     遮罩作用在整个滚动容器上，所以只在窄屏生效，桌面端最后一项不会被虚化。 */
   .tabs {
     -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
     mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);

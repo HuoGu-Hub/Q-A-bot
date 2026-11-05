@@ -1,21 +1,4 @@
 <script setup lang="ts">
-/**
- * 「文档」面板 —— **系统唯一的入库入口**。
- *
- * 为什么单独一个 tab 而不是并进「词条」：两者动的不是同一种东西。
- *   词条面板：术语、别名、分类这些「名字」层
- *   本面板  ：导入文档、按块改正文、下架与删除
- * 语义完全不同，混在一起最容易点错。
- *
- * 三件事：
- *   ① 导入 —— 粘贴或选文件 → **先预览**（会新增几条、覆盖几条、库里哪些没被碰）
- *      → 确认再导。规则：文件里的 id 存在就覆盖、不存在就新增、没出现的一个都不动。
- *   ② 看 —— 按文档列出块，能直接改正文（**会重算向量**）、下架、真删除。
- *   ③ 整份下架 / 清空 —— 清空是给"首次导入中文语料前"用的，不可逆，要二次确认。
- *
- * ⚠️ 改正文会重算向量，所以每次保存都有一次 embedding 调用 —— 这是有意的：
- *    只改文本不重算向量，检索会按旧正文匹配，改了等于没改。
- */
 import { computed, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
@@ -36,14 +19,6 @@ const okMsg = ref('')
 const stats = ref<KbBlockStats | null>(null)
 const docs = ref<KbDocSummary[]>([])
 
-/**
- * 文档列表的筛选与分批。
- *
- * <p>实测 198 份文档在手机上一张卡一张卡铺开是一万两千像素 ——
- * 用户既找不到想看的，也翻不到底部。这里先按名字筛，再每批 30 份，
- * 下方「加载更多」续读。数据仍然是一次拉全的，只是**渲染**分批，
- * 不改任何接口与操作。
- */
 const docKw = ref('')
 const docLimit = ref(30)
 const DOC_STEP = 30
@@ -54,27 +29,16 @@ const matchedDocs = computed(() => {
 const shownDocs = computed(() => matchedDocs.value.slice(0, docLimit.value))
 watch(docKw, () => { docLimit.value = DOC_STEP })
 
-/** 待导入的文档全文 */
 const docText = ref('')
 const preview = ref<KbImportPreview | null>(null)
 const importResult = ref<KbImportResult | null>(null)
 const busy = ref('')
 
-/** 当前展开的文档 + 它的块 */
 const openDoc = ref('')
 const blocks = ref<KbBlockView[]>([])
-/** 正在编辑哪一块（null = 没在编辑） */
 const editing = ref<{ id: string; text: string } | null>(null)
 
-/**
- * 批量导入（拖拽）。
- *
- * 为什么是"先逐份预览、再一起导入"，而不是拖进来直接导：
- * 一次拖十几份的时候人没法逐份点确认，但又必须能看见"这次会改动多少条" ——
- * 所以预览（只算不改）批量跑一遍，结果摆成一张表，确认后再一起导。
- */
 interface BatchRow {
-  /** 显示用：目录里的相对路径 */
   name: string
   text: string
   status: 'previewing' | 'ready' | 'importing' | 'done' | 'error'
@@ -88,14 +52,12 @@ const dragging = ref(false)
 const batchBusy = ref('')
 const batchProgress = ref('')
 
-/** 待导入 = 勾上了、且还没导过/没报错的那些 */
 const batchReady = computed(function () {
   return batch.value.filter(function (r) {
     return r.include && r.status !== 'error' && r.status !== 'done'
   })
 })
 
-/** 批量预览的汇总（把每份的预计改动加起来） */
 const batchStats = computed(function () {
   let added = 0, updated = 0, unchanged = 0, warnings = 0
   for (const r of batchReady.value) {
@@ -108,10 +70,8 @@ const batchStats = computed(function () {
   return { added: added, updated: updated, unchanged: unchanged, warnings: warnings }
 })
 
-/** 只认这几种后缀 —— 拖进来一堆图片/压缩包不该报错，忽略即可 */
 const DOC_EXT = /\.(md|markdown|txt)$/i
 
-/** 拖拽放下：把 DataTransfer 里的文件和目录都摊平成文件列表 */
 async function onDrop(ev: DragEvent) {
   dragging.value = false
   if (batchBusy.value !== '') return
@@ -134,12 +94,6 @@ async function onDrop(ev: DragEvent) {
   await addFiles(found)
 }
 
-/**
- * 递归展开目录。
- *
- * ⚠️ Chrome 的 readEntries **一次最多给 100 个**，给完不会自动继续 ——
- * 必须反复读到返回空数组为止，否则超过 100 个文件的目录会被悄悄截断。
- */
 function walkEntry(entry: any, prefix: string, out: { file: File; path: string }[]): Promise<void> {
   return new Promise(function (resolve) {
     if (entry.isFile) {
@@ -173,7 +127,6 @@ function walkEntry(entry: any, prefix: string, out: { file: File; path: string }
   })
 }
 
-/** 「选文件」也走同一条路（支持多选） */
 async function pickFiles(ev: Event) {
   const input = ev.target as HTMLInputElement
   const out: { file: File; path: string }[] = []
@@ -182,7 +135,6 @@ async function pickFiles(ev: Event) {
   await addFiles(out)
 }
 
-/** 加进批次，并逐份预览（**只算不改**） */
 async function addFiles(found: { file: File; path: string }[]) {
   const files = found.filter(function (f) {
     return DOC_EXT.test(f.file.name) && f.file.name.charAt(0) !== '.'
@@ -210,14 +162,12 @@ async function addFiles(found: { file: File; path: string }[]) {
       row.error = describeError(e)
       row.include = false
     }
-    // 读文件 + 请求是一个个来的，久了会看着像卡住；替换数组让界面跟着走
     batch.value = batch.value.slice()
   }
   batchProgress.value = ''
   batchBusy.value = ''
 }
 
-/** **顺序**导入勾选的份 —— 顺序有意义：后导的会覆盖同 id 的块 */
 async function importBatch() {
   const rows = batchReady.value
   if (!rows.length) return
@@ -288,7 +238,6 @@ async function loadBlocks(doc: string) {
   }
 }
 
-/** 展开 / 收起某份文档 */
 async function toggleDoc(doc: string) {
   if (openDoc.value === doc) {
     openDoc.value = ''
@@ -300,9 +249,6 @@ async function toggleDoc(doc: string) {
   editing.value = null
   await loadBlocks(doc)
 }
-
-/* ==================== 导入 ==================== */
-
 
 async function doPreview() {
   busy.value = 'preview'
@@ -338,7 +284,6 @@ async function doImport() {
   }
 }
 
-/** 清空全部块（首次导入中文语料前用）—— 不可逆，二次确认 */
 async function clearAll() {
   if (!window.confirm('确定清空知识库里的**全部块与向量**？\n\n这是给「首次导入中文语料前」用的，不可逆。')) return
   busy.value = 'clear'
@@ -355,12 +300,6 @@ async function clearAll() {
   }
 }
 
-/**
- * 补建 / 刷新**标题向量**（C 路）。
- *
- * 先 dryRun 问一句"要补多少条"，再让人确认 —— 这一步会调向量模型（虽然很便宜），
- * 不该在点一下按钮时就悄悄发生。
- */
 async function backfillTitleVectors() {
   busy.value = 'title-vec'
   error.value = ''
@@ -385,8 +324,6 @@ async function backfillTitleVectors() {
     busy.value = ''
   }
 }
-
-/* ==================== 块操作 ==================== */
 
 function startEdit(b: KbBlockView) {
   editing.value = { id: b.id, text: b.text }
@@ -440,7 +377,6 @@ async function retireDoc(doc: string, retired: boolean) {
   }
 }
 
-/** 页面栏的「刷新」调它（见 KbView 的 defineExpose 约定） */
 defineExpose({ reload: load, isLoading: () => loading.value })
 
 onMounted(load)
@@ -451,7 +387,6 @@ onMounted(load)
     <Notice v-if="error" tone="error">{{ error }}</Notice>
     <Notice v-else-if="okMsg" tone="ok">{{ okMsg }}</Notice>
 
-    <!-- 概览 -->
     <Panel title="块存储" collapsible mobile-collapsed default-open>
       <div v-if="stats" class="stats">
         <span class="st"><b class="num">{{ stats.blocks }}</b> 块</span>
@@ -470,9 +405,7 @@ onMounted(load)
       </div>
     </Panel>
 
-    <!-- 导入 -->
     <Panel title="导入文档" collapsible mobile-collapsed default-open>
-      <!-- 拖拽批量导入：拖文件、拖文件夹都行 -->
       <div
         class="drop"
         :class="{ on: dragging, busy: batchBusy !== '' }"
@@ -487,7 +420,6 @@ onMounted(load)
         </label>
       </div>
 
-      <!-- 批量预览：一份文件一行 -->
       <div v-if="batch.length" class="batch">
         <div class="batch-head">
           <span><b class="num">{{ batchReady.length }}</b> / {{ batch.length }} 份待导入</span>
@@ -551,7 +483,7 @@ onMounted(load)
         :rows="10"
         mono
         aria-label="文档内容"
-        placeholder="<!-- doc&#10;name: flame-altar&#10;url: https://...&#10;-->&#10;&#10;=== 灵火祭坛 === <!-- id: flame-altar-0 -->&#10;祭坛是复活点。"
+        placeholder="&#10;&#10;=== 灵火祭坛 === &#10;祭坛是复活点。"
         @update:model-value="(v: string) => { docText = v; preview = null; importResult = null }"
       />
 
@@ -565,7 +497,6 @@ onMounted(load)
         <Button size="sm" variant="danger" :disabled="busy !== ''" @click="clearAll">清空全部块</Button>
       </div>
 
-      <!-- 预览结果：只算不改 -->
       <div v-if="preview" class="preview">
         <div class="pv-line">
           <Tag tone="good">新增 {{ preview.added }}</Tag>
@@ -595,7 +526,6 @@ onMounted(load)
       </div>
     </Panel>
 
-    <!-- 文档列表 -->
     <Panel title="文档" :count="docs.length">
       <div v-if="!docs.length"><Empty text="还没有任何文档" /></div>
       <template v-else>
@@ -626,7 +556,6 @@ onMounted(load)
               </td>
             </tr>
 
-            <!-- 展开：这份文档的块 -->
             <tr v-if="openDoc === d.docId" class="expand detail-row">
               <td colspan="4">
                 <table class="blk">
@@ -687,7 +616,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-/* 文档筛选：一行输入 + 命中数。手机上这是「198 份文档」唯一能用的入口 */
 .doc-filter {
   display: flex;
   align-items: center;
@@ -737,7 +665,6 @@ onMounted(load)
 }
 .docname:hover { color: var(--flame-bright); text-decoration: underline; }
 
-/* 展开行不参与"隔行变色"的视觉，用左侧一条灵火线标出层级 */
 .expand > td { padding: 0 !important; background: var(--surface-inset); }
 .blk { width: 100%; border-collapse: collapse; }
 .blk th {
@@ -754,7 +681,6 @@ onMounted(load)
 .ops-btns { display: flex; gap: var(--sp-1); justify-content: flex-end; }
 .doc-wrap :deep(th.ops), .doc-wrap :deep(td.ops) { text-align: right; white-space: nowrap; }
 
-/* ==================== 拖拽批量导入 ==================== */
 .drop {
   display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
   padding: var(--sp-5) var(--sp-4); margin-bottom: var(--sp-3);

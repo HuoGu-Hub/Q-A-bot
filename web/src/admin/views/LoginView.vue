@@ -23,11 +23,6 @@ const step = ref<'password' | 'code'>('password')
 const busy = ref(false)
 const error = ref('')
 
-/**
- * 自动聚焦：只在精确指针（桌面）上做。
- * 手机上会立刻弹出软键盘：视口被顶掉一半、页面自己滚一段、
- * 「登录」按钮跑到键盘底下 —— 用户第一眼看到的是一个被推歪的页面。
- */
 const formEl = ref<HTMLFormElement | null>(null)
 onMounted(() => {
   if (typeof window === 'undefined') return
@@ -61,12 +56,6 @@ async function submit() {
   }
 }
 
-/**
- * 登录后该不该先去绑 QQ。
- *
- * 判断依据是后端给的 qqRequired，不是"还没验证" —— 只读账号本来就不需要验证，
- * 再用 qqVerified 判断会把它永远送进绑定页。
- */
 function needsBind() {
   const me = auth.me.value
   return !!me?.qqRequired && !me.qqVerified
@@ -88,10 +77,6 @@ async function verify() {
 </script>
 
 <template>
-  <!--
-    登录页故意不用 AdminPage：这里没有顶端导航，也不需要页面标题栏，
-    套上页面外壳只会多出一圈没意义的标题与留白。它是一张居中的卡片。
-  -->
   <div class="wrap">
     <div class="card">
       <div class="card-top">
@@ -158,7 +143,6 @@ async function verify() {
   justify-content: center;
   padding: var(--sp-4);
 }
-/* 卡片是这一页唯一的实体，所以给它「凸出来的石板」：明度阶梯 + 上下内阴影 */
 .card {
   width: min(400px, 100%);
   display: flex;
@@ -175,7 +159,6 @@ async function verify() {
   margin-bottom: var(--sp-4);
 }
 .mark { color: var(--ember); filter: drop-shadow(0 0 8px var(--ember-glow)); }
-/* 副标题删掉之后，标题自己把与表单之间的间距带上 */
 .t { font-size: var(--fs-2xl); letter-spacing: var(--tracking-ink); margin: 0 0 var(--sp-4); }
 form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .err-slot { margin-top: var(--sp-3); }

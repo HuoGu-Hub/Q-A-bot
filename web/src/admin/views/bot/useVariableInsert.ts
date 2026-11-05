@@ -1,14 +1,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
-/**
- * 记录最后一个获得焦点的编辑框，并把变量插入到它的光标位置。
- *
- * 变量按钮用 @mousedown.prevent，点击时焦点仍然留在 textarea/input 上；
- * 这样回复、list 回复、help 回复不需要各自写一套插入逻辑。
- */
 export function useVariableInsert(setters: Record<string, (value: string) => void>, fallbackField = 'reply') {
   let active: HTMLInputElement | HTMLTextAreaElement | null = null
-  /** 当前编辑区的 data-var-field —— 编辑区可用的变量不一样，父组件据此切换变量面板 */
   const activeField = ref('')
 
   function onFocus(event: FocusEvent) {

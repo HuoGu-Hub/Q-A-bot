@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * 「系统 → 模型」面板。
- *
- * 原来是独立的模型页；合并进系统页后，外壳（AdminPage）与二级目录交给
- * SystemView，这里只负责模型这一块的内容 —— 调用顺序、降级链、模型 ID。
- *
- * 页面栏上的「刷新」要调面板内部状态，所以用 defineExpose 把动作抛出去。
- */
 import { onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { ModelList, ModelProvider, ProbeResult, AvailableModels } from '@shared/api/types'
@@ -22,12 +14,9 @@ const error = ref('')
 const ok = ref('')
 const data = ref<ModelList | null>(null)
 
-/** 编辑中的模型 ID（provider 名 → 新值） */
 const edits = ref<Record<string, string>>({})
-/** 每个 provider 的测试结果 */
 const probes = ref<Record<string, ProbeResult>>({})
 const probing = ref<Record<string, boolean>>({})
-/** 从厂商拉回来的可选模型 ID */
 const available = ref<Record<string, string[]>>({})
 const loadingModels = ref<Record<string, boolean>>({})
 
@@ -73,17 +62,12 @@ async function fetchModels(m: ModelProvider) {
   }
 }
 
-/**
- * 下拉选项 = 拉回来的 ID 列表；当前值不在其中时补在最前。
- * 不补的话，浏览器会落到第一个选项上 —— 看起来像"值自己变了"。
- */
 function modelOptions(m: ModelProvider) {
   const ids = available.value[m.name] ?? []
   const cur = current(m)
   return (cur && !ids.includes(cur) ? [cur, ...ids] : ids).map(id => ({ value: id, label: id }))
 }
 
-/** 测试连通性（不改动任何状态） */
 async function test(m: ModelProvider) {
   probing.value = { ...probing.value, [m.name]: true }
   ok.value = ''
@@ -99,7 +83,6 @@ async function test(m: ModelProvider) {
   }
 }
 
-/** 保存（先测再换，测不通就拒绝） */
 async function save(m: ModelProvider) {
   ok.value = ''
   try {
@@ -112,10 +95,6 @@ async function save(m: ModelProvider) {
   } catch (e) { error.value = describeError(e) }
 }
 
-/**
- * 父页面（SystemView）页面栏上的按钮要调这些动作。
- * 全部以函数形式暴露：视图在渲染时调用，读到的响应式依赖计入视图的渲染副作用。
- */
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
@@ -151,8 +130,6 @@ onMounted(load)
         <Tag v-if="m.name === data?.defaultProvider" tone="flame">默认</Tag>
       </div>
 
-      <!-- 唯一可改区：靠凹槽背景 + 一道极淡暖边区分，不再叠一层重边框。
-           密钥没有任何出口路径，这里连掩码都不显示。 -->
       <div class="edit-box">
         <div class="edit-label">
           模型 ID
@@ -171,7 +148,6 @@ onMounted(load)
           </Button>
         </div>
 
-        <!-- 拉回来的列表用共享 Select 呈现，不再靠原生输入建议下拉 -->
         <div v-if="(available[m.name] ?? []).length" class="pick-row">
           <Select
             :model-value="current(m)"
@@ -191,7 +167,6 @@ onMounted(load)
           <span v-if="isChanged(m)" class="faint note">已修改，未保存</span>
         </div>
 
-        <!-- 测试结果：tone 直接表达成功/失败，与全站提示条同一套语义色 -->
         <div v-if="probes[m.name]" class="probe-wrap">
           <Notice :tone="probes[m.name].ok ? 'ok' : 'error'">
             <template v-if="probes[m.name].ok">
@@ -216,7 +191,6 @@ onMounted(load)
 .note { font-size: var(--fs-meta); line-height: 1.9; }
 .note:last-child { margin-bottom: 0; }
 
-/* 调用链：只是静态标识，不是可点元素 —— 所以有底色但没有悬浮反馈 */
 .chain { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
 .node {
   background: var(--surface-inset);
@@ -226,7 +200,6 @@ onMounted(load)
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
 }
-/* 当前默认分支：只有它是暖色 —— 一屏只给一个重点 */
 .node.primary { border-color: var(--flame); color: var(--flame-bright); box-shadow: 0 0 0 3px var(--flame-glow); }
 .node-role { margin-left: var(--sp-1); }
 .arrow { color: var(--copper); }

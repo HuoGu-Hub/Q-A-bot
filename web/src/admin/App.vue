@@ -12,7 +12,6 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 
-/** 管理端也读同一份 app.bot.name；登录页没有会话，走公开的站点信息接口 */
 void loadBotName()
 const brandName = computed(() => botName.value)
 
@@ -20,21 +19,10 @@ watchEffect(() => {
   document.title = `${brandName.value} · 管理后台`
 })
 
-/**
- * 是否显示顶端导航栏。
- *
- * <p>只有登录页不显示。这里踩过坑：早先「数据大屏」是唯一隐藏导航的页面，
- * 而 /admin/ 又默认重定向到它，结果不熟悉的人打不开其余页面。导航是「路」，
- * 不该有让人迷路的例外。
- */
 const hasBar = computed(() => route.name !== 'login')
 
 const drawerOpen = ref(false)
 
-/**
- * 7 个目的地。桌面端平铺，手机端收进抽屉 —— 上一版 7 个 tab 横排，
- * 390px 下「页面信息」和「退出」被挤到屏幕外，等于导航只剩 5 项。
- */
 const nav: { to: string; label: string; icon: string; area: string }[] = [
   { to: '/stats', label: '统计', icon: 'chart', area: 'stats' },
   { to: '/kb', label: '知识库', icon: 'book', area: 'kb' },
@@ -49,28 +37,15 @@ const nav: { to: string; label: string; icon: string; area: string }[] = [
 
 const isActive = (to: string) => route.path.startsWith(to)
 
-/**
- * 只把「当前角色能进的」摆出来。
- *
- * <p>不隐藏也可以，但点进去是一屏 403 —— 那比看不到更让人困惑。
- * 真正的拦截在后端，这里只是别把人往墙上引。
- */
 const visibleNav = computed(() => nav.filter(n => auth.areaOk(n.area)))
 const drawerItems = computed(() =>
   visibleNav.value.map(n => ({ to: n.to, label: n.label, icon: n.icon, active: isActive(n.to) })))
 
-/** 顶端显示"我是谁"，避免多人共用一个后台时分不清 */
 const meLabel = computed(() => {
   const m = auth.me.value
   return m ? m.displayName + ' · ' + m.roleLabel : ''
 })
 
-/**
- * 当前页面的名字，用来给屏幕阅读器一个 h1。
- *
- * <p>页面上故意不写可见的页面标题（顶端导航已经标出你在哪一页，再写一遍是重复），
- * 但无障碍树里的文档必须有一个 h1 —— 读屏用户靠「按标题跳转」在页面间穿行。
- */
 const currentLabel = computed(() => {
   if (!hasBar.value) return '管理员登录'
   const hit = nav.find(n => route.path.startsWith(n.to))
@@ -92,8 +67,6 @@ async function logout() {
           <Icon name="flame" class="mark" :size="18" />
           <span class="brand-txt">{{ brandName }}</span>
           <span class="brand-sub">管理</span>
-          <!-- 窄屏上 .brand-txt / .brand-sub 都被视觉隐藏了，链接就只剩一个图标 ——
-               那会被判成「没有可读名字的链接」。这句只在读屏里出现，兜住站名。 -->
           <span class="sr-only">{{ brandName }} 管理后台</span>
         </RouterLink>
 
@@ -128,7 +101,6 @@ async function logout() {
       </div>
     </header>
 
-    <!-- 软弹窗容器：动作反馈（保存成功/失败）用浮层，不插进页面流 -->
     <Toaster />
 
     <main class="admin-main">
@@ -150,7 +122,6 @@ async function logout() {
 
 <style scoped>
 .admin { position: relative; min-height: 100vh; min-height: 100dvh; z-index: 2; }
-/* 导航栏高度做成变量：吸顶的页面栏与浮层要按「有没有栏」算自己的 top 偏移 */
 .admin.has-bar { --admin-bar-h: 60px; }
 
 .bar {
@@ -193,7 +164,6 @@ async function logout() {
 }
 .brand:hover { color: var(--ink); text-decoration: none; }
 .mark { color: var(--ember); filter: drop-shadow(0 0 7px var(--ember-glow)); }
-/* 「管理」两个字压成小标签：它是限定语，不该和站名一样重 */
 .brand-sub {
   font-family: var(--font-body);
   font-size: var(--fs-micro);
@@ -205,7 +175,6 @@ async function logout() {
   padding: 1px 6px;
 }
 
-/* 6 个 tab：宽屏一行铺开。手机端整条隐藏，改用抽屉 */
 .nav {
   display: flex;
   gap: var(--sp-1);
@@ -228,7 +197,6 @@ async function logout() {
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .nav-link:hover { color: var(--ink); background: var(--surface-hover); text-decoration: none; }
-/* 激活态用底部刻线，和公开站顶栏同一套语言 */
 .nav-link.active { color: var(--ember-hot); }
 .nav-link.active::after {
   content: '';
@@ -240,7 +208,6 @@ async function logout() {
 }
 
 .bar-right { display: flex; align-items: center; gap: var(--sp-2); flex: none; margin-left: auto; }
-/* 当前登录者：只是身份提示，不该和导航抢视觉重量 */
 .who {
   font-size: var(--fs-xs);
   color: var(--ink-3);
@@ -264,7 +231,6 @@ async function logout() {
 }
 .out:hover { border-color: var(--blight); color: var(--blight-lift); background: var(--blight-veil); }
 
-/* 手机端的菜单按钮：只在窄屏出现 */
 .menu-btn {
   display: none;
   place-items: center;
@@ -281,9 +247,6 @@ async function logout() {
 
 @media (max-width: 760px) {
   .admin.has-bar { --admin-bar-h: 54px; }
-  /* ⚠️ 用 sr-only（视觉隐藏、无障碍树里仍在）而不是 display: none：
-     之前「退出」和站名一旦 display:none，按钮/链接就彻底没有名字了。 */
-  /* 只藏「管理」这枚小标签：站名留着，否则左上角只剩一个火苗图标，认不出这是哪 */
   .brand-sub {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;

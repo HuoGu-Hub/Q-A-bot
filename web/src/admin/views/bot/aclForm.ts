@@ -1,12 +1,5 @@
 import type { CommandAcl } from '@shared/api/types'
 
-/**
- * 名单表单 —— 指令、板块、全局名单共用同一份形状。
- *
- * <p>四个输入框都按"一行一个"收号码，提交时再拆成
- * {@code {white: [...], black: [...]}}。抽出来是为了让两处编辑器
- * 不会各自长出一套解析规则。
- */
 export interface AclForm {
   whiteUsers: string
   whiteGroups: string
@@ -53,7 +46,6 @@ export function fillAcl(target: AclForm, source: CommandAcl): void {
   target.blackGroups = source.black.filter((a) => a.type === 'gid').map((a) => a.value).join('\n')
 }
 
-/** 折叠标题上的读数：几条号码，空就是「空」 */
 export function aclCount(form: AclForm): string {
   const n = parseIds(form.whiteUsers).length + parseIds(form.whiteGroups).length
     + parseIds(form.blackUsers).length + parseIds(form.blackGroups).length

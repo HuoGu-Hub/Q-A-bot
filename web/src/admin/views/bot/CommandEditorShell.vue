@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 命令编辑器外壳。
- *
- * 普通命令、板块、/prompt 都用同一个弹窗容器、同一套标题/关闭/保存动作。
- * 具体字段由各编辑器通过默认插槽提供，避免三套页面各写一套壳。
- */
 import Modal from '@shared/ui/Modal.vue'
 import Button from '@shared/ui/Button.vue'
 

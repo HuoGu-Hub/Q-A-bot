@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 知识库 → 聊天蒸馏。
- *
- * 页面只做两件事：
- *   1. 配自动蒸馏：触发条数、图片数、模型、发布方式。
- *   2. 管理笔记：搜索、整理、发布、撤回、删除。
- *
- * 运行记录与历史导入都是旁路，收进可折叠面板，不占主视觉。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import { toast } from '@shared/ui/toast'
@@ -155,7 +146,6 @@ const jobTotal = ref(0)
 const JOB_PAGE_SIZE = 20
 const notes = ref<Note[]>([])
 const selected = ref<NoteDetail | null>(null)
-/** 多选删除：只在笔记列表里生效，与右侧编辑器互不影响 */
 const selectMode = ref(false)
 const picked = ref<number[]>([])
 const selectedJob = ref<{ job: Job; batches: Batch[] } | null>(null)
@@ -238,7 +228,6 @@ const filteredNotes = computed(() => {
   return notes.value.filter(n =>
     (n.title + ' ' + n.category + ' ' + n.body).toLowerCase().includes(q))
 })
-
 
 async function loadAll() {
   loading.value = true
@@ -422,7 +411,6 @@ async function toggleNote(id: number) {
   await selectNote(id)
 }
 
-/** 多选模式下点击笔记：既勾选，也加载右侧只读预览 */
 async function onNoteClick(id: number) {
   if (selectMode.value) {
     togglePick(id)
@@ -433,7 +421,6 @@ async function onNoteClick(id: number) {
   }
   await toggleNote(id)
 }
-
 
 async function saveNote(): Promise<boolean> {
   if (!selected.value) return false
@@ -458,7 +445,6 @@ async function saveNote(): Promise<boolean> {
 
 async function publishNote() {
   if (!selected.value) return
-  // 先把当前编辑内容存下来，否则发布的是库里的旧正文
   if (!(await saveNote())) return
   try {
     await adminApi.post('/distill/notes/' + selected.value.note.id + '/publish')
@@ -519,12 +505,6 @@ function clearPicked() {
   picked.value = []
 }
 
-/**
- * 批量彻底删除。
- *
- * <p>逐条删除在服务端完成，这里只发一次请求 —— 否则 30 条笔记就是 30 个请求，
- * 中途失败还会留下"删了一半"的状态，很难说清楚。
- */
 async function batchDelete() {
   if (picked.value.length === 0) return
   const count = picked.value.length

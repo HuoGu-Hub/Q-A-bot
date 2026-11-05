@@ -1,21 +1,5 @@
-/**
- * 质感层 —— 「石头与火」
- *
- * 全部是 CSS / 内联 SVG：没有图片请求、可无限缩放、改颜色不用重新导出素材。
- *
- * 只做三件事，且全站共用：
- *   · 石头阶梯：靠背景明度差表达层级（tokens 的 --stone-*）
- *   · 刻与凸：靠内阴影表达「凹进去」和「凸出来」（--bevel-*）
- *   · 一盏灯：每个页面只有一处被照亮，其余全部安静
- *
- * 两套主题的差别不在「加不加装饰」，而在材质：
- *   夜间是湿冷的石面，噪点低、四周压暗重；
- *   日间是干燥的羊皮纸，噪点略高、压暗很轻，光从左上偏暖。 */
 @import './tokens.css';
 
-/* ==================== 雾 ====================
-   页面底噪：一层固定的雾。z-index 压在内容之下（内容外壳是 z-index: 2）。
-   不用 background-attachment: fixed —— 它在移动端 Safari/Chrome 上会掉帧。 */
 .mist-veil::before {
   content: '';
   position: fixed;
@@ -23,16 +7,11 @@
   pointer-events: none;
   z-index: 0;
   background:
-    /* 顶上那盏灯：暖光从正上方压下来，越往下越淡 */
     radial-gradient(130% 300px at 50% -60px, var(--veil-warm), transparent 72%),
-    /* 右上角的冷雾：避免整页只有一种色温 */
     radial-gradient(85% 55% at 100% 0%, var(--veil-cool), transparent 62%),
-    /* 四周压暗：把视线的中心让出来 */
     radial-gradient(140% 100% at 50% 42%, transparent 42%, var(--veil-vignette) 100%);
 }
 
-/* ==================== 石材噪点 ====================
-   2% 到 3.5% 的不透明度叠加。有它才有「粗糙表面」，没有就是纯色 UI。 */
 .texture-noise { position: relative; }
 .texture-noise::before {
   content: '';
@@ -44,7 +23,6 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* 全局底层噪点：铺满视口。噪点要**静态**（fixed），跟着内容滚会像屏幕脏了。 */
 .texture-grain::after {
   content: '';
   position: fixed;
@@ -55,10 +33,6 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 
-/* ==================== 石板（面板）====================
-   结构 = 背景明度阶梯 + 上下两道内阴影。
-   ⚠️ 不再挂大投影：暗底上的投影本来就几乎看不见，花了 GPU 什么也没换来。
-   投影只留给真正浮在页面之上的东西：弹窗、抽屉、吸顶栏、提示。 */
 .panel {
   position: relative;
   background: var(--stone-300);
@@ -72,8 +46,6 @@
   box-shadow: var(--bevel-inset);
 }
 
-/* 装饰层：角饰与灯光都画在这一层，向内定位，绝不越出边框盒。
-   ::before 归 .texture-noise 独占（噪点），这里只用 ::after。 */
 .panel::after {
   content: '';
   position: absolute;
@@ -82,8 +54,6 @@
   border-radius: inherit;
 }
 
-/* 内衬刻痕（.panel--corners）——
-   只留**左上**与**右下**两个内衬角，且是发丝线：非对称 = 是选择，不是套模板。 */
 .panel--corners::after {
   inset: 7px;
   border-radius: calc(var(--r-md) - 5px);
@@ -99,8 +69,6 @@
     right bottom, right bottom;
 }
 
-/* ==================== 灯 ====================
-   一页只有一处被照亮。左上角一盏灯罩下来的偏心暖光：人写字的姿势，光在左上、影在右下。 */
 .lit { position: relative; overflow: hidden; }
 .lit::after {
   background:
@@ -108,13 +76,11 @@
     radial-gradient(70% 90% at 100% 100%, var(--shade), transparent 70%);
 }
 
-/* v1 的名字，留给尚未重做的页面 */
 .glow-flame { position: relative; overflow: hidden; }
 .glow-flame::after {
   background: radial-gradient(140px 70px at 88% 0%, var(--ember-veil), transparent 70%);
 }
 
-/* 顶部一道火线：强调「这是当前选中/活跃的」 */
 .flame-rule { position: relative; }
 .flame-rule::before {
   content: '';
@@ -124,7 +90,6 @@
   background: linear-gradient(90deg, var(--ember-deep), var(--ember), transparent);
 }
 
-/* ==================== 刻痕分隔线 ==================== */
 .rule {
   height: 1px;
   border: 0;
@@ -132,8 +97,6 @@
   margin: var(--sp-5) 0;
 }
 
-/* ==================== 首屏那块石碑 ====================
-   全宽、无圆角、下缘一道刻线收口。它承接页面顶部那盏灯，是整页唯一的「实体」。 */
 .slab {
   position: relative;
   background:
@@ -141,7 +104,6 @@
     linear-gradient(180deg, var(--stone-300), var(--stone-200));
   box-shadow: var(--bevel-shelf);
 }
-/* 下缘刻线：中间实、两端虚，把石碑「压」在页面上 */
 .slab::after {
   content: '';
   position: absolute;
@@ -150,16 +112,12 @@
   background: linear-gradient(90deg, transparent, var(--hairline) 18%, var(--hairline) 82%, transparent);
 }
 
-/* 雾层（v1 名字，首屏顶部用） */
 .veil-shroud {
   background:
     radial-gradient(80% 120px at 50% 0%, var(--veil-cool), transparent 70%),
     radial-gradient(60% 90px at 80% 10%, var(--ember-veil), transparent 70%);
 }
 
-/* ==================== 主题切换的灯 ====================
-   切换时给整个页面 200ms 的底色过渡，让「天亮了」有个过程，而不是闪一下。
-   ⚠️ 只在用户手动切换后由 JS 加上 .theme-anim，首帧不动画，避免冷启动闪。 */
 .theme-anim,
 .theme-anim body,
 .theme-anim .panel,

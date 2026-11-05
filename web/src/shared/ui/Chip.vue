@@ -1,17 +1,10 @@
 <script setup lang="ts">
-/**
- * 药丸按钮 —— 标签云、图层筛选、快捷筛选共用。
- *
- * 三个页面各写过一遍 .tag-chip / .chip / .hot-item，圆角、内边距、选中态都不一样。
- * 这里定死：6px 圆角、min-height 32、选中等于灵火描边 + 淡底。
- */
 import Icon from './Icon.vue'
 
 withDefaults(defineProps<{
   active?: boolean
   count?: string | number | ''
   icon?: string
-  /** 小一号：用于行内的次级筛选 */
   small?: boolean
 }>(), { active: false, count: '', icon: '', small: false })
 

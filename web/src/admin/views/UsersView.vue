@@ -1,15 +1,4 @@
 <script setup lang="ts">
-/**
- * 账号管理 —— 一块名册，不是一张表。
- *
- * <p>这一页回答两件事：谁还能进这个后台、他是什么身份；以及最近这里发生过什么。
- * 名册用「余烬点」表示账号还能不能登录（亮=能），身份用宋体写在名字旁边，
- * 时间说成「3 天前」而不是时间戳 —— 人关心的是「多久没人来了」，不是「几号几点」。
- *
- * <p>后端有三条硬规则会在这里体现：不能删自己、不能删/停用最后一个管理员、
- * 密码至少 12 位。前端只做**前置提示**（禁用按钮并说明原因），真正的判定仍在后端，
- * 失败时把后端的话原样弹出来，不重复实现规则。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import { ADMIN_ROLES, useAuth, type AdminRoleId } from '../useAuth'
@@ -52,16 +41,10 @@ const auth = useAuth()
 const rows = ref<AccountRow[]>([])
 const audit = ref<AuditRow[]>([])
 const loading = ref(false)
-/**
- * 读取失败要**留在页面上**：toast 会消失，而「没读到名单」意味着下面那块空白不可信。
- * 动作失败才用 toast —— 那种反馈是瞬时的。
- */
 const loadError = ref('')
 
 const meId = computed(() => auth.me.value?.id ?? -1)
 const adminCount = computed(() => rows.value.filter(r => r.role === 'admin' && r.enabled).length)
-
-/* ==================== 新建 ==================== */
 
 const createOpen = ref(false)
 const form = ref({ username: '', displayName: '', password: '', role: 'viewer' as AdminRoleId, qq: '' })
@@ -78,8 +61,6 @@ function openCreate() {
   createCode.value = ''
   createOpen.value = true
 }
-
-/* ==================== 管理某个账号 ==================== */
 
 const editTarget = ref<AccountRow | null>(null)
 const roleDraft = ref<AdminRoleId>('viewer')
@@ -105,20 +86,17 @@ function closeEdit() {
 
 const isSelf = computed(() => editTarget.value?.id === meId.value)
 
-/** 删除按钮为什么不能点 —— 悬停时直接说原因，不让人点一下才知道 */
 const deleteBlocked = computed(() => {
   if (isSelf.value) return '不能删除自己'
   if (isLastAdmin.value) return '最后一个管理员不能删除'
   return ''
 })
-/** 最后一个可用管理员：删不得、也降不得。这是后端规则在前端的**提示**，不是替代 */
 const isLastAdmin = computed(() =>
   !!editTarget.value
   && editTarget.value.role === 'admin'
   && editTarget.value.enabled
   && adminCount.value <= 1)
 
-/** 只读账号本来就不需要 QQ，写"未绑定"会让人以为这个账号还不能用 */
 function qqLabel(r: AccountRow) {
   if (r.qq) return 'QQ ' + r.qq + (r.qqVerified ? '' : ' · 待验证')
   return r.role === 'viewer' ? '免绑 QQ' : '未绑定 QQ'
@@ -128,12 +106,9 @@ function roleName(r: AdminRoleId) {
   return ADMIN_ROLES.find(x => x.value === r)?.label ?? r
 }
 
-/** 角色卡片是否可选：最后一个管理员不能被降级 */
 function roleLocked(r: AdminRoleId) {
   return isLastAdmin.value && r !== 'admin'
 }
-
-/* ==================== 读取 ==================== */
 
 async function load() {
   loading.value = true
@@ -141,7 +116,6 @@ async function load() {
   try {
     rows.value = await adminApi.get<AccountRow[]>('/users')
     audit.value = await adminApi.get<AuditRow[]>('/users/audit?limit=80')
-    // 弹窗开着的时候刷新：把弹窗里的对象换成新数据，避免显示上一版状态
     if (editTarget.value) {
       editTarget.value = rows.value.find((r) => r.id === editTarget.value?.id) ?? null
     }
@@ -151,8 +125,6 @@ async function load() {
     loading.value = false
   }
 }
-
-/* ==================== 写操作 ==================== */
 
 async function requestCreate() {
   if (creating.value) return
@@ -243,7 +215,6 @@ async function saveNewPassword() {
     newPassword.value = ''
     toast('新密码已保存，请把它发给 ' + t.username)
   } catch (e) {
-    // 留在弹窗里：toast 会消失，而密码校验失败需要一直看见
     passwordError.value = describeError(e)
   } finally {
     savingPassword.value = false
@@ -266,8 +237,6 @@ async function remove() {
   }
 }
 
-/* ==================== 时间的说法 ==================== */
-
 const pad = (n: number) => String(n).padStart(2, '0')
 const dayKey = (d: Date) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
 
@@ -277,7 +246,6 @@ function parseTs(ts: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-/** 「多久没人来了」比「几号几点」更有用；超过 30 天再退回日期 */
 function rel(ts: string | null): string {
   const d = parseTs(ts)
   if (!d) return '从未登录'
@@ -291,7 +259,6 @@ function rel(ts: string | null): string {
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
 }
 
-/** 事件流按天分组：同一天的痕迹归在一起，读起来才像"发生过什么" */
 const auditGroups = computed(() => {
   const out: { day: string; label: string; items: AuditRow[] }[] = []
   const today = new Date()
@@ -327,14 +294,11 @@ onMounted(load)
 
     <Notice v-if="loadError" tone="error">{{ loadError }}</Notice>
 
-    <!-- ==================== 名册 ====================
-         没有标题：标题已经在吸顶栏，和「新增账号」同一行。 -->
     <Panel>
       <p v-if="loading && !rows.length" class="hint">读取中…</p>
 
       <ul v-else class="people">
         <li v-for="r in rows" :key="r.id" class="person" :class="{ out: !r.enabled }">
-          <!-- 余烬点：亮着 = 还能登录。全页只有它用高饱和色 -->
           <span class="ember" :class="{ lit: r.enabled }" aria-hidden="true" />
           <span class="who">
             <span class="name mono">
@@ -353,12 +317,8 @@ onMounted(load)
       </ul>
     </Panel>
 
-    <!-- ==================== 可访问范围 ====================
-         放在名册与痕迹之间：先看清"有谁"，再决定"这一级能进哪几块"，
-         最后才是"最近发生了什么"。 -->
     <RoleScopePanel />
 
-    <!-- ==================== 痕迹 ==================== -->
     <Panel title="最近改动" :count="audit.length">
       <div v-if="auditGroups.length" class="trail">
         <section v-for="g in auditGroups" :key="g.day" class="day">
@@ -378,7 +338,6 @@ onMounted(load)
       <p v-else class="empty">还没有记录。第一次登录之后，这里会留下痕迹。</p>
     </Panel>
 
-    <!-- ==================== 新增 ==================== -->
     <Modal :open="createOpen" title="新增账号" width="560px" @close="createOpen = false">
       <form v-if="createStep === 'form'" class="form" @submit.prevent="requestCreate">
         <Field label="账号" hint="字母、数字、下划线，3–32 位" control-width="240px">
@@ -433,7 +392,6 @@ onMounted(load)
       </form>
     </Modal>
 
-    <!-- ==================== 管理某个账号 ==================== -->
     <Modal
       :open="!!editTarget"
       :title="'账号：' + (editTarget?.username ?? '')"
@@ -534,8 +492,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-/* ==================== 名册 ====================
-   行是名册条目，不是表格行：没有表头、没有列线，靠一条发丝线分隔。 */
 .people { list-style: none; margin: 0; padding: 0; }
 .person {
   display: grid;
@@ -560,7 +516,6 @@ onMounted(load)
   border-radius: 50%;
   background: var(--ink-4);
 }
-/* 亮 = 还能登录。光环只用淡色，别让它变成装饰 */
 .ember.lit {
   background: var(--ember);
   box-shadow: 0 0 0 3px var(--ember-veil), 0 0 10px var(--ember-glow);
@@ -577,12 +532,10 @@ onMounted(load)
 }
 .display { font-size: var(--fs-xs); color: var(--ink-3); }
 .qq { font-size: var(--fs-xs); color: var(--ink-4); }
-/* 占位不是昵称：压到装饰级，别让人以为他叫「未设昵称」 */
 .display.unfilled { color: var(--ink-4); }
 .person.out .name { color: var(--ink-3); }
 .person.out .display { color: var(--ink-4); }
 
-/* 身份用宋体：它是「品级」，不是一组数据 */
 .rank {
   grid-area: rank;
   font-family: var(--font-title);
@@ -604,7 +557,6 @@ onMounted(load)
 
 .empty { margin: 0; padding: var(--sp-6) 0; text-align: center; color: var(--ink-3); font-size: var(--fs-sm); }
 
-/* 保护提示：只在真的触到规则时出现，说清楚为什么不能动 */
 .guard {
   display: flex;
   align-items: flex-start;
@@ -620,8 +572,6 @@ onMounted(load)
 }
 .guard :deep(svg) { flex: none; margin-top: 2px; }
 
-/* ==================== 痕迹 ====================
-   按天分组。方法名与路径是给开发看的，降级到最右一列、只在悬停时给完整值。 */
 .day + .day { margin-top: var(--sp-4); }
 .day-label {
   margin: 0 0 var(--sp-1);
@@ -654,7 +604,6 @@ onMounted(load)
   white-space: nowrap;
 }
 
-/* ==================== 弹窗 ==================== */
 .form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .code-hint { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 .facts {
@@ -712,7 +661,6 @@ onMounted(load)
   font-size: var(--fs-xs);
   line-height: 1.5;
 }
-/* 弹窗里的分隔线收紧：.rule 默认上下各 24px，叠上 form 的 12px 间距会空出一大片 */
 .form .rule { margin: var(--sp-1) 0; }
 
 .zone { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
@@ -723,10 +671,6 @@ onMounted(load)
 .confirm-note { font-size: var(--fs-xs); color: var(--blight-lift); }
 
 @media (min-width: 761px) {
-  /*
-    桌面上把「名字 / 身份 / 最后登录」靠左聚成一组，剩下的空白留在它们和「管理」之间。
-    上一版是四列平铺：名字贴左、身份贴右，中间空出八百像素，读起来又变回一张表。
-  */
   .person {
     grid-template-columns: 12px minmax(0, 320px) 64px 112px minmax(0, 1fr) auto;
     grid-template-areas: 'ember who rank seen . manage';
@@ -737,7 +681,6 @@ onMounted(load)
 }
 
 @media (max-width: 760px) {
-  /* 手机上名字与昵称并成一行：三行一条会让人名册变得很长 */
   .who { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2); }
   .display { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .role-grid { gap: 4px; }
@@ -746,7 +689,6 @@ onMounted(load)
   .role-save-row .roles { flex: 1 1 100%; }
   .role-actions { flex: 1 1 100%; }
   .facts { grid-template-columns: 1fr 1fr; }
-  /* 路径是开发细节，手机上先让位给「谁做了什么」 */
   .event { grid-template-columns: 44px 84px minmax(0, 1fr); }
   .path { display: none; }
   .zone-actions { justify-content: flex-start; }

@@ -1,28 +1,4 @@
 <script setup lang="ts">
-/**
- * Bot 配置 —— 「设置」与「指令」合并后的页面。
- *
- * 为什么合并：这两个页面本来就是一件事的两半。设置管 `app.*` 的行为开关
- * （其中就有 `app.commands.*` 四项目前躺在设置页），指令管指令表本身；
- * 而指令页的文案还写着「可在 Bot 设置里开启」、模型页也在文案里指向「设置」页 ——
- * 交叉引用说明它们该在一起。
- *
- * tab 状态同步到 URL 查询串（`?tab=commands`），这样：
- *   ① 从旧的 /settings、/commands 跳过来能直接落到对应 tab
- *   ② 链接可分享、刷新后不跳回默认 tab
- *
- * 页面栏（吸顶）左边是二级目录、右边是本 tab 的动作按钮；按钮调的是面板
- * 内部状态（保存并生效、新建命令），所以面板用 defineExpose 把动作抛出来，
- * 这里按当前 tab 调对应的那个。
- *
- * ⚠️ **两个面板各用一个 ref，不能共用一个**。实测踩到的坑：Vue 3.5 把模板 ref
- * 的写入推迟到 post-render 队列（runtime-core 的 pendingSetRefMap），
- * 于是「切到某个 tab 的那一次渲染」里，ref 里还留着**上一个**面板的实例。
- * 共用一个 ref 时那是个**类型不对**的实例 —— 页面栏去调 `changedCount()`
- * 会直接抛 TypeError，整块工具栏渲染失败（按钮停在上一个 tab 的样子）。
- * 分开之后每个 ref 只会是「自己那个组件」或 null，可选链兜住 null 即可；
- * post-render 写入完成后会再重渲染一次，读数随即补齐。
- */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminPage from '@shared/ui/AdminPage.vue'
@@ -41,15 +17,12 @@ const router = useRouter()
 const TABS = [
   { key: 'settings', label: '设置' },
   { key: 'commands', label: '命令' },
-  // 只读：系统变量由代码决定，做成可编辑的配置只会多出「配了但代码里没有」
   { key: 'variables', label: '变量' },
-  // 语音素材：上传、试听、试发。语言回复的开关与触发词随后放进这里
   { key: 'voice', label: '语音' },
 ]
 
 const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'settings')
 
-// 浏览器前进/后退时跟着 URL 走
 watch(
   () => route.query.tab,
   (v) => {
@@ -62,11 +35,6 @@ function setTab(k: string) {
   router.replace({ query: { ...route.query, tab: k } })
 }
 
-/**
- * 面板句柄：两个面板各一个 ref，按当前 tab 取用（原因见文件头注释）。
- * 面板的公开动作一律是函数，所以视图在渲染时调用它读到的响应式依赖会计入
- * 视图的渲染副作用 —— 「已改 N 项」这类数字会跟着面板内部状态更新。
- */
 const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const commandsRef = ref<InstanceType<typeof CommandsPanel> | null>(null)
 const variablesRef = ref<InstanceType<typeof VariablesPanel> | null>(null)
@@ -101,11 +69,6 @@ const voice = computed(() => (tab.value === 'voice' ? voiceRef.value : null))
         <Button size="sm" :disabled="voice?.isLoading()" @click="voice?.reload()">刷新</Button>
       </template>
       <template v-else>
-        <!--
-          变量页原先有一整行标题栏：大标题 + 数量 + 搜索框 + 显示模式。
-          它只在页面顶部有意义，往下滚就看不见了。现在搜索与模式都收进这条吸顶栏，
-          滚到任何位置都能改；「高级变量未启用」也不再单独占一行，就挨在刷新旁边。
-        -->
         <Tag
           v-if="variables?.advancedOff()"
           tone="warn"
@@ -125,10 +88,6 @@ const voice = computed(() => (tab.value === 'voice' ? voiceRef.value : null))
       </template>
     </template>
 
-    <!--
-      KeepAlive 是必须的：设置页有「改动缓冲」，改完没保存就切到指令页再切回来，
-      组件被销毁会丢掉未提交的改动。缓存住两个面板即可。
-    -->
     <KeepAlive>
       <SettingsPanel v-if="tab === 'settings'" ref="settingsRef" />
       <CommandsPanel v-else-if="tab === 'commands'" ref="commandsRef" />
@@ -139,7 +98,6 @@ const voice = computed(() => (tab.value === 'voice' ? voiceRef.value : null))
 </template>
 
 <style scoped>
-/* 变量搜索框：桌面上给个固定宽度；窄屏收窄，别把刷新挤出屏幕 */
 .var-search { width: 220px; }
 
 @media (max-width: 760px) {

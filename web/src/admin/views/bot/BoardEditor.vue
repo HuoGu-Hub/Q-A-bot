@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 板块编辑器 —— 与指令编辑器同一套两栏布局，整块替换列表。
- *
- * <p>命令名就是群里的调用名：没有单独的"显示名"。自建命令可以改名，
- * 历史记录会在同一事务里迁到新名字下；内置命令的路径是代码约定，不能改。
- */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import type { AdminBoard, AdminParamSpec, BoardDraft, CommandAcl, CommandVariables } from '@shared/api/types'
 import { adminApi } from '@shared/api/client'
@@ -24,16 +18,13 @@ import { aclBody, aclCount, emptyAclForm, fillAcl } from './aclForm'
 import type { AclBody, AclForm } from './aclForm'
 
 const props = defineProps<{
-  /** null = 新建 */
   board: AdminBoard | null
   saving: boolean
   error: string
-  /** 全局通用变量，与板块专用变量合并后一起展示 */
   variables?: CommandVariables | null
 }>()
 
 const emit = defineEmits<{
-  /** 第二项是名单：保存板块成功后由父组件按板块 id 落到 /boards/{id}/acl */
   save: [BoardDraft, AclBody]
   cancel: []
   remove: [AdminBoard]
@@ -77,10 +68,6 @@ const { insert: insertVariable, activeField } = useVariableInsert({
   helpReply: (value) => { form.helpReply = value },
 })
 
-/**
- * 列表字段走 BoardListFormatter 的变量，list/help 回复走全局变量渲染 ——
- * 两套变量不通用，所以变量面板按当前编辑区切换，不给点不出来的按钮。
- */
 const TEXT_FIELDS = ['listReply', 'helpReply']
 
 const rowVars = computed(() => {
@@ -94,7 +81,6 @@ const rowVars = computed(() => {
     { name: 'group', label: '记录所属群号', example: '269127588' },
     { name: 'params.参数名', label: '参数值', example: '今晚8点' },
   ]
-  // QQ 号跟「显示 QQ」开关走：没勾就不会渲染，面板里就不该出现
   if (form.scope !== 'GROUP' && form.showUser) {
     vars.push({ name: 'user.id', label: '发起人 QQ 号', example: '100000005' })
   }
@@ -110,19 +96,13 @@ const boardVars = computed(() =>
 
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
 
-/** 参数块的“+ 参数”在标题行：先展开，再让参数表插入一行 */
 function addParam() {
   openParams.value = true
   nextTick(() => paramTableRef.value?.addParam())
 }
 
-/** 内置命令的路径由代码约定，不能改名；自建命令可以改名并迁移记录 */
 const pathLocked = computed(() => props.board?.builtin === true)
 
-/**
- * 调度用的重复周期参数：按类型认，名字随意；老配置按「重复」这个名字认。
- * 时间点优先认「时间」，没有时用唯一的 moment —— 与服务端 Board 的判定一致。
- */
 const repeatParam = computed(() => form.params.find((p) => p.type === 'repeat')
   ?? form.params.find((p) => p.name === '重复') ?? null)
 const timeParam = computed(() => {
@@ -135,14 +115,12 @@ const hasRepeat = computed(() => repeatParam.value !== null)
 const hasTime = computed(() => timeParam.value !== null)
 const scheduled = computed(() => form.delivery === 'scheduled')
 
-/** 名单只在看名单的档位下才有意义 —— 判据来自服务端下发的档位，与指令编辑器同一份 */
 const needsAcl = computed(() => accessUsesAcl(form.access))
 const acl = ref<AclForm>(emptyAclForm())
 const openAcl = ref(false)
 const aclSummary = computed(() => aclCount(acl.value))
 
 function reset() {
-  // 档位清单是异步的；父面板一般已经拉过，这里只是幂等兜底
   void loadAccessModes()
   const b = props.board
   form.path = b?.path ?? ''
@@ -163,36 +141,27 @@ function reset() {
   form.listLimit = b?.listLimit ?? 20
   groupsText.value = (b?.groups ?? []).join('\n')
   upgradeRepeatType()
-  // 名单按板块 id 存；新建时还没有 id，等保存成功后再由父组件写入
   acl.value = emptyAclForm()
   if (b?.id) {
     adminApi.get<CommandAcl>('/boards/' + b.id + '/acl')
       .then((saved) => fillAcl(acl.value, saved))
-      .catch(() => { /* 读不到名单不挡编辑 */ })
+      .catch(() => {   })
   }
   openParams.value = true
   openOutput.value = true
 }
 
 watch(() => props.board, reset, { immediate: true })
-// 同一次编辑里把投递改成「到点发送」时，老的文本「重复」也要跟着换类型
 watch(() => form.delivery, (value) => {
   if (value === 'scheduled') upgradeRepeatType()
 })
 
-/**
- * 「重复」是调度约定参数，不是普通文本。
- *
- * <p>重复周期类型上线前建的定时板块把它存成了 text，读进来时统一换成
- * repeat：值不变、解析规则不变，但落库形态会规范成 once / daily / weekly:3。
- */
 function upgradeRepeatType() {
   if (form.delivery !== 'scheduled') return
   const legacy = form.params.find((p) => p.name === '重复' && p.type === 'text')
   if (legacy) legacy.type = 'repeat'
 }
 
-/** 到点发送的两个约定参数：缺哪个补哪个，已有的不动类型除外 —— 老的文本「重复」就地升级 */
 function ensureScheduleParams() {
   upgradeRepeatType()
   if (!hasRepeat.value) {
@@ -241,13 +210,11 @@ function previewVars(record: PreviewRecord, count: string): Record<string, strin
     count,
     path: form.path || '命令',
   }
-  // QQ 号只在「显示 QQ」打开时可取，和 BoardListFormatter 的判定一致
   if (form.scope !== 'GROUP' && form.showUser) vars['user.id'] = record.qq
   for (const [key, value] of Object.entries(record.params)) vars['params.' + key] = value
   return vars
 }
 
-/** 跨群记录才标来源，本群记录不标 —— 与服务端 BoardListFormatter.markOrigin 一致 */
 function previewOrigin(record: PreviewRecord): string {
   if (form.scope === 'GROUP') return ''
   let out = ''
@@ -288,7 +255,6 @@ function submit() {
     id: props.board?.id ?? 0,
     path: form.path.trim(),
     description: form.description.trim(),
-    // 命令名就是调用名，title 只作为历史字段跟着 path 走
     title: form.path.trim(),
     params: form.params.map((p) => ({ ...p })),
     delivery: form.delivery,

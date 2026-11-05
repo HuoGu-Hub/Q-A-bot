@@ -1,20 +1,4 @@
 <script setup lang="ts">
-/**
- * 知识库 —— 「文档」「词条」「分类」「聊天蒸馏」「抓取」五个二级目录合并后的页面。
- *
- *  文档   往知识库**导入文档**（按块 id 操作，导入即自动切割成一个个词条）
- *  词条   **一个词条 = 一个分块**：列表看标题 / 别名 / 分类，点「编辑」展开改别名与正文
- *  分类   人工维护的平铺分类清单：新增 / 改名 / 删除；标签认不出就是「未分类」
- *  聊天蒸馏 自动触发设置 / 蒸馏模型 / 笔记整理与发布
- *  抓取   从 wiki 抓文章：选范围 → 开始抓取（空跑 / 增量 / 强制重洗）→ 看进度与结果
- *
- * 页面栏（吸顶）只剩「刷新」这类整页动作 —— 筛选、导出、导入都在各自面板里，
- * 免得一条吸顶栏塞十几个控件。tab 状态同步到 URL 查询串。
- *
- * ⚠️ **每个面板各用一个 ref，不能共用一个**。Vue 3.5 把模板 ref 的写入推迟到
- * post-render 队列，切 tab 的那一次渲染里 ref 还留着上一个面板的实例 ——
- * 共用一个 ref 时会调到类型不对的实例。分开之后每个 ref 只会是自己那个组件或 null。
- */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminPage from '@shared/ui/AdminPage.vue'
@@ -77,10 +61,6 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
     </template>
 
     <template #actions>
-      <!--
-        词条：动作全在顶栏（筛选、翻页在面板里）。
-        导出收成一个入口，点了先选 xlsx / tsv —— 原来两个并排按钮只差一个后缀。
-      -->
       <template v-if="tab === 'terms'">
         <Button size="sm" variant="primary" :disabled="tmLoading" @click="tm?.openCreate()">新增词条</Button>
         <Button size="sm" :disabled="tmLoading" @click="tm?.openExport()">导出</Button>
@@ -99,10 +79,6 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
         </Button>
       </template>
 
-      <!--
-        抓取：主操作常驻顶栏。这个页面以前最大的问题就是"找不到从哪开始" ——
-        现在无论滚到分类菜单的哪一行，「开始抓取」都在同一处。
-      -->
       <template v-else-if="tab === 'wiki'">
         <Tag :tone="wikiState.tone">{{ wikiState.label }}</Tag>
         <Button size="sm" variant="primary" :disabled="wikiRunning" @click="wikiRef?.openRun()">
@@ -124,9 +100,6 @@ const wikiState = computed(() => wiki.value?.runState() ?? { state: 'idle', labe
       </template>
     </template>
 
-    <!--
-      KeepAlive：词条面板里可能有正在编辑但没保存的别名。切个 tab 就丢掉这些是不可接受的。
-    -->
     <KeepAlive>
       <DocPanel v-if="tab === 'docs'" ref="docRef" />
       <TermPanel v-else-if="tab === 'terms'" ref="termRef" />

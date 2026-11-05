@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 管理端手机导航抽屉。
- *
- * 上一版把 7 个 tab 横排一行，390px 下「页面信息」和「退出」被挤到屏幕外，
- * 而且没有任何滚动提示 —— 等于导航只剩 5 项。
- *
- * 抽屉把 7 个目的地竖着列出来，每项一行、带图标和一句说明，
- * 顺手把主题开关与退出放在底部。
- */
 import { onBeforeUnmount, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import Icon from './Icon.vue'
@@ -96,7 +87,6 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
 }
-/* 从右侧滑出：手机右手拇指够得着，也不会把整页盖满 */
 .panel {
   position: relative;
   width: min(320px, 86vw);
@@ -119,7 +109,6 @@ onBeforeUnmount(() => {
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--hairline);
-  /* 刘海屏：抽屉从屏幕顶开始，标题要让开状态栏 */
   padding-top: calc(var(--sp-3) + var(--safe-t));
 }
 .brand {

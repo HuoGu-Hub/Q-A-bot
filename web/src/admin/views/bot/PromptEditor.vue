@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * /prompt 的编辑弹窗。
- *
- * 它不是普通命令编辑器：命令本身只有启用/停用与黑白名单，
- * 真正的内容是一组群提示和个人提示，所以单独列出、单独删除。
- */
 import { computed, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { AdminPrompt, AdminPromptList, BotCommand, CommandAcl } from '@shared/api/types'
@@ -36,10 +30,6 @@ const helpReply = ref('')
 const textsSaving = ref(false)
 const textsSaved = ref('')
 const acl = ref({ whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' })
-/**
- * 名单模式 —— 与命令、板块编辑器同一个来源（服务端下发的档位清单）。
- * 这里以前自带一份三档清单，漏了「管理员与白名单」，文案也与别处不同。
- */
 const accessMode = ref('all')
 
 const visiblePrompts = computed(() => {

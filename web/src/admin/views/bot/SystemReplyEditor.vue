@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 全局 /list、/help 的回复编辑。
- *
- * 留空 = 继续用自动目录；编辑后群里发 /list 或 /help 直接返回这段文本。
- * 下方预览永远显示最终会发出去的内容，空内容时就是当前自动生成版本。
- */
 import { computed, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { SystemReplyList, CommandVariables } from '@shared/api/types'

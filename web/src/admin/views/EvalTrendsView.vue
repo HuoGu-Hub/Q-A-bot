@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * 趋势与对比。
- *
- * <p>趋势回答"这个用例集的结论在往哪走"，对比回答"这两次到底哪几条变了"。
- * 放在一页是因为它们共用同一批批次数据，来回切页反而丢上下文。
- *
- * <p>对比要求同用例集、同版本：不同版本只在交集上比，页面会直接说明。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
@@ -43,7 +35,6 @@ const datasetOptions = computed(() =>
 const batchOptions = computed(() =>
   batches.value.map(b => ({ value: String(b.id), label: `#${b.id} ${b.name}` })))
 
-/** 通过率条：直接给宽度百分比，0 也留一条底线，否则空行看起来像没渲染 */
 const barWidth = (rate: number) => `${Math.max(2, Math.round(rate * 100))}%`
 
 async function load() {

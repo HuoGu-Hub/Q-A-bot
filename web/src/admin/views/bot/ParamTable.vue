@@ -1,11 +1,4 @@
 <script setup lang="ts">
-/**
- * 参数表编辑器 —— 指令与板块共用。
- *
- * <p>它只认 {@code AdminParamSpec[]}，不关心调用方是"指令"还是"板块"。
- * 每次改动都发一份新数组：父组件用 {@code v-model:params} 或
- * {@code @update:params} 接住，避免子组件直接改 props。
- */
 import type { AdminParamSpec } from '@shared/api/types'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
@@ -42,7 +35,6 @@ function removeParam(i: number) {
 
 defineExpose({ addParam })
 
-/** checkbox 的 change 事件要读 target.checked，模板里直接转型不好读，收成一个函数 */
 function onRequiredChange(i: number, e: Event) {
   patchParam(i, { required: (e.target as HTMLInputElement).checked })
 }
@@ -51,7 +43,6 @@ function onMultipleChange(i: number, e: Event) {
   patchParam(i, { multiple: (e.target as HTMLInputElement).checked })
 }
 
-/** enum 的候选值在表单里是逗号分隔的文本 */
 function optionsText(p: AdminParamSpec) {
   return (p.options ?? []).join(', ')
 }
@@ -135,8 +126,6 @@ function onOptionsChange(i: number, v: string) {
 }
 .param-row {
   display: grid;
-  /* 说明是唯一需要吃剩余宽度的列；示例、类型、必填都够用就好。
-     列宽用 minmax 而不是固定值：命令编辑弹窗比页面窄，固定列会把右侧字段挤没 */
   grid-template-columns:
     minmax(96px, 1.15fr) minmax(88px, .8fr) 52px minmax(90px, .9fr)
     minmax(120px, 1.4fr) 64px auto;

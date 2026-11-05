@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * 下拉选择。
- *
- * ⚠️ 修一个静默 bug 的场景：设置页曾用 key.includes(...) 硬编码选项，
- * 白名单里 app.llm.reply-style.format 也是 enum 却没有对应分支，
- * 结果渲染成空下拉，用户一选就把配置写成空值 —— 页面还不报错。
- * 所以这里强制：要么给 options，要么把当前值本身作为唯一选项显示出来。
- */
 import { computed, useAttrs } from 'vue'
 
 defineOptions({ inheritAttrs: false })
@@ -22,10 +14,6 @@ const props = withDefaults(
 )
 defineEmits<{ 'update:modelValue': [string] }>()
 
-/**
- * 无障碍属性必须落在 select 上，而不是外面那层 div：
- * 否则 aria-label 挂在 div 上、select 自己仍然是「没有名字的下拉框」。
- */
 const attrs = useAttrs()
 const PASS_TO_SELECT = ['aria-label', 'aria-labelledby', 'aria-describedby', 'aria-invalid', 'id', 'name', 'required']
 const selAttrs = computed(() =>
@@ -37,7 +25,6 @@ const fallback = () => props.modelValue || '（空）'
 </script>
 
 <template>
-  <!-- 右侧留出自绘的下箭头位置：appearance:none 之后系统箭头就没了 -->
   <div class="sel" v-bind="wrapAttrs">
     <select
       v-bind="selAttrs"

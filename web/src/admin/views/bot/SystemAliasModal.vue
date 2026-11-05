@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 命令别名。
- *
- * 给任意规范命令声明中文调用名：系统命令、板块、板块动作、普通命令。
- * 别名在分派前展开，因此 /新增预约 和 /预约开黑 /create 走同一条路径。
- */
 import { ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { SystemAliasGroup, SystemAliasList } from '@shared/api/types'

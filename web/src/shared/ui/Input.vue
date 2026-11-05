@@ -1,25 +1,15 @@
 <script setup lang="ts">
-/**
- * 单行 / 多行文本与数字输入。
- *
- * 视觉身份：刻进去的槽 —— 底色比页面更深、内阴影暗在上亮在下。
- * 聚焦环用双层实心环：先描一圈页面底、再描一圈灵火。
- * 半透明的光晕环在亮底上只有 1.x:1，不满足 WCAG 2.4.11，所以不用。
- */
 withDefaults(
   defineProps<{
     modelValue: string
     multiline?: boolean
     rows?: number
-    /** 等宽字体（数字、配置键、代码） */
     mono?: boolean
     placeholder?: string
     disabled?: boolean
-    /** 表单字段名。有 form 的地方必须给，否则提交时拿不到这个值 */
     name?: string
     autocomplete?: string
     type?: string
-    /** 输入法/浏览器的自动大写与自动纠错。键名、代码、配置值都要关掉 */
     autocapitalize?: string
     spellcheck?: boolean
     maxlength?: number | string
@@ -75,12 +65,8 @@ defineEmits<{ 'update:modelValue': [string] }>()
   transition: border-color var(--dur-fast) var(--ease),
               box-shadow var(--dur-fast) var(--ease);
 }
-/* 占位符也是要读的文字（三级文字色）—— --ink-4 属于「看不清」 */
 .inp::placeholder { color: var(--ink-3); }
 .inp:hover:not(:disabled):not(:focus) { border-color: var(--edge-hover); }
-/* ⚠️ 用 :focus-visible 而不是 :focus。
-   文本控件在规范里总是命中 :focus-visible，观感与 :focus 一致；
-   但语义变成「这是键盘/输入态」，而不是「任何获得焦点的时刻」。 */
 .inp:focus-visible {
   outline: none;
   border-color: var(--ember);

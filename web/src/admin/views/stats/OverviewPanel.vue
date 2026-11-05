@@ -12,26 +12,10 @@ import Stat from '@shared/ui/Stat.vue'
 import Bar from '@shared/ui/Bar.vue'
 import Empty from '@shared/ui/Empty.vue'
 
-/**
- * 「统计 → 总览」面板。
- *
- * <p>原「数据看板」页（更早还与「大屏」合并过）现在收进统计页的二级目录，
- * 时间范围由外层统一持有 —— 总览与记录看的是同一个窗口，切 tab 不该重置。
- * 大屏那两处**有能力差异**的东西保留在这里：
- *   · 自动刷新（60 秒）—— 挂在墙上当时钟看时不用手动点
- *   · 「更新于 HH:MM:SS」—— 判断屏幕上的数据是不是陈的
- * 副 tab 不可见时暂停轮询，切回来再继续，避免在记录页后台空打接口。
- */
 const REFRESH_MS = 60_000
 
-/**
- * min-score 阈值（app.kb.min-score 的默认值）。
- * 余弦分布图上那根虚线画在它上面 —— 阈值是这张图唯一的「可操作」信息，
- * 不画出来的话它只是一张好看但没用的柱状图。
- */
 const MIN_SCORE = 0.45
 
-/** 统计窗口由 StatsView 统一持有：默认 0 = 全部（不按时间过滤） */
 const props = defineProps<{ days: number }>()
 const loading = ref(false)
 const error = ref('')
@@ -43,18 +27,10 @@ const keywords = ref<KeywordStat[]>([])
 const cosineDist = ref<Bucket[]>([])
 const visits = ref<VisitSummary | null>(null)
 
-/**
- * 流量窗口（最近 60 分钟）。
- *
- * <p>它是**进程内采集**的读数，不随顶部的「时间范围」变化 ——
- * 那个范围是问答记录的窗口（天），流量看的是分钟。
- */
 const traffic = ref<TrafficResponse | null>(null)
 
-/** 模型调用窗口（最近 60 分钟）。和流量同一时间轴，才能对着看 */
 const llm = ref<LlmResponse | null>(null)
 
-/** 「更新于」：只保留时分秒 —— 判断数据新不新用不到日期 */
 const updatedAt = computed(() => {
   const d = lastAt.value
   if (!d) return ''
@@ -64,12 +40,8 @@ const updatedAt = computed(() => {
 
 const maxKw = computed(() => Math.max(1, ...keywords.value.map(k => k.count)))
 
-/* ==================== 流量 ==================== */
-
-/** 窗口内单分钟最多几次；全 0 时用 1 兜底，避免除零 */
 const trafficPeak = computed(() => Math.max(1, ...(traffic.value?.points ?? []).map(p => p.requests)))
 
-/** 当前 QPS：最近一分钟的请求数 / 60。固定两位小数 —— 0.02 和 0.00 是两种不同的状态 */
 const curQps = computed(() => {
   const pts = traffic.value?.points ?? []
   const last = pts[pts.length - 1]
@@ -78,27 +50,21 @@ const curQps = computed(() => {
 
 const peakQps = computed(() => ((traffic.value?.summary.peakPerMinute ?? 0) / 60).toFixed(2))
 
-/** API 请求占全部请求的比例 —— 这个数直接回答「静态资源该不该交给 nginx」 */
 const apiShare = computed(() => {
   const s = traffic.value?.summary
   if (!s || s.requests === 0) return '—'
   return pct(s.api / s.requests)
 })
 
-/** 一根柱的高度百分比 */
 const barHeight = (requests: number) => (requests === 0 ? '0' : Math.max(4, (requests / trafficPeak.value) * 100) + '%')
-
-/* ==================== 模型调用 ==================== */
 
 const llmPeak = computed(() => Math.max(1, ...(llm.value?.points ?? []).map(p => p.calls)))
 
-/** 窗口内 token 合计：这是成本的直接代理指标 */
 const llmTokens = computed(() => {
   const s = llm.value?.summary
   return s ? s.tokensIn + s.tokensOut : 0
 })
 
-/** 最近一分钟的读数，用来回答「现在在烧吗」 */
 const lastLlm = computed<LlmPoint | null>(() => {
   const pts = llm.value?.points ?? []
   return pts.length ? pts[pts.length - 1] : null
@@ -113,7 +79,6 @@ const llmTip = (p: LlmPoint) => {
   return `${hh}:${mm} · 调用 ${p.calls}（失败 ${p.failures}）· 入 ${p.tokensIn} / 出 ${p.tokensOut} tokens · P95 ${p.p95}ms`
 }
 
-/** 柱子的悬浮说明：这一分钟发生了什么 */
 const barTip = (p: TrafficPoint) => {
   const d = new Date(p.minute * 60_000)
   const hh = String(d.getHours()).padStart(2, '0')
@@ -121,14 +86,6 @@ const barTip = (p: TrafficPoint) => {
   return `${hh}:${mm} · 请求 ${p.requests}（API ${p.api}）· 错误 ${p.errors} · P95 ${p.p95}ms`
 }
 
-/**
- * 最高余弦分布 —— 不是「画 10 根柱子」就完了：这张图的用途是**调阈值**，
- * 所以把每一档按「落在阈值哪一侧」分类，颜色只表达这件事（形状交给柱高）：
- *   blocked（整档都在阈值左边）→ 这一档的检索必然被挡，记 0
- *   kept   （整档都在阈值右边）→ 这一档是真正拿到资料的
- *   edge   （阈值正好落在档内）→ 最该盯的一档：往左一点就被挡
- * 顺带把命中/被挡的量数出来写进图注 —— 光看柱高，读者得自己加总。
- */
 const cosine = computed(() => {
   const buckets = cosineDist.value.map((b) => {
     const [lo, hi] = b.range.split('~').map(Number)
@@ -156,26 +113,15 @@ const cosine = computed(() => {
 const cosineHint = computed(() =>
   cosine.value.peak && cosine.value.total ? `主要落在 ${cosine.value.peak.range}` : '暂无数据')
 
-/**
- * 「每日提问量」折线图的几何（最近 21 天）。
- *
- * 坐标是 0–100 的百分比，SVG 靠 preserveAspectRatio="none" 拉满面板宽度 ——
- * 但非等比缩放会把 <circle> 压成椭圆，所以**圆点不用 SVG 画**，
- * 改成 HTML 绝对定位叠在图上（见模板 .pt）；线用 vector-effect="non-scaling-stroke"
- * 保住 2px 描边。纵轴压到 8%–92%，顶点不会贴边被裁。
- */
 const daily = computed(() => {
   const raw = (ov.value?.daily ?? []).slice(-21)
   const n = raw.length
   const max = Math.max(1, ...raw.map(d => d.count))
-  // 日期标签最多约 8 个：等距取样，末尾那天必留；离末尾太近的刻度丢掉，免得两个日期叠在一起
   const step = Math.max(1, Math.ceil(n / 8))
   const labelAt = new Set<number>()
   for (let i = 0; i < n; i += step) labelAt.add(i)
   if (n) {
     labelAt.add(n - 1)
-    // 末尾留出整整一个 step 的空档：窄屏（390px）下 10% 的间距只有约 31px，
-    // 比「09-16」本身还窄 —— 留半个 step 会导致最后两个日期叠在一起。
     for (const i of [...labelAt]) if (i !== n - 1 && n - 1 - i < step) labelAt.delete(i)
   }
   const pts = raw.map((d, i) => ({
@@ -194,15 +140,9 @@ const daily = computed(() => {
 })
 
 let timer: number | undefined
-/** 面板当前是否可见（被 KeepAlive 切走后为 false） */
 let active = true
-/** 不可见期间时间范围变过 —— 切回来要补拉一次 */
 let dirty = false
 
-/**
- * 只在可见时轮询：切到记录 tab 后后台不该继续打接口。
- * 关掉开关时也必须 clearInterval —— 否则开关关了，后台还在打接口。
- */
 function syncTimer() {
   if (timer !== undefined) {
     window.clearInterval(timer)
@@ -216,7 +156,6 @@ function toggleAuto(v: boolean) {
   syncTimer()
 }
 
-// 范围由外层持有；总览不可见时先记一笔，切回来再拉，避免后台白跑六次请求
 watch(() => props.days, () => {
   if (active) load()
   else dirty = true
@@ -247,7 +186,6 @@ async function load() {
   try {
     const [o, k, c, v, t, l] = await Promise.all([
       adminApi.get<Overview>(`/overview${q}`),
-      // 只取前 8 —— 后端按次数倒序，多了没人看，还会把面板拉得很长
       adminApi.get<KeywordStat[]>(`/keywords${q}&limit=8`),
       adminApi.get<Bucket[]>(`/cosine${q}`),
       adminApi.get<VisitSummary>(`/visits${q}`),
@@ -270,11 +208,6 @@ async function load() {
 
 onMounted(load)
 
-/**
- * 页面栏（StatsView）要用的读数与动作。
- * 全部以函数形式暴露：视图渲染时调用，读到的响应式依赖会计入渲染副作用，
- * 「更新于」和开关状态才会跟着面板内部状态更新。
- */
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
@@ -290,21 +223,11 @@ defineExpose({
 
     <template v-if="ov">
       <div class="kpis">
-        <!-- ⚠️ 口径：提问 = @ 了机器人 + 有效回应且未被拦截（后端 guard_action='pass'）。
-             原来这里叫「实际作答」，而 total 叫「消息总数」放在旁边，容易被读成
-             "1,163 条消息里有 72 条是问答" —— 其实 1,163 里绝大多数是群里没 @ 的闲聊。 -->
         <Stat label="提问量" :value="num(ov.questions)" hint="@ 了机器人且被有效回应" tone="flame" />
         <Stat label="群消息总数" :value="num(ov.total)" hint="含未 @ 与被拦" tone="mist" />
         <Stat label="提问命中率" :value="pct(ov.hitRate)" hint="提问中检索到资料的比例" tone="moss" />
         <Stat label="提问用户 / 群" :value="`${ov.users} / ${ov.groups}`" tone="mist" />
         <Stat label="被拦 / 指令" :value="`${num(ov.dropped + ov.fixedReplies)} / ${num(ov.commands)}`" hint="被拦不含指令" tone="mist" />
-        <!-- 两个数字 = 中位数 / 最慢的 5%（也就是 P50 / P95），hint 就是这两个数的图例。
-             ⚠️ 第二个数**不是**「最长耗时」：实测全部数据里最长的一次是 63.9 s（一个离群点），
-             写成「最长」就会常年挂着那个 64 s —— 刺眼，而且对"平时多久"没有任何参考价值。
-             P95 回答的是「差的时候大概多差」，这才是能拿来做判断的数。
-             真要显示真正的最长，得让后端多回一个 MAX 字段（现在只算了 P50/P95，见 QaAnalytics）。
-             两个数字在这个卡片宽度下会折成两行（斜杠留在第一行末尾）—— 这是接受的代价：
-             只放一个数就看不出"差的时候多差"，那正是这张卡要回答的问题。 -->
         <Stat label="资料搜索耗时 P50 / P95" :value="`${ms(ov.p50RetrieveMs)} / ${ms(ov.p95RetrieveMs)}`"
               hint="中位数 / 最慢的 5%" tone="mist" />
         <Stat label="回答耗时 P50 / P95" :value="`${ms(ov.p50TotalMs)} / ${ms(ov.p95TotalMs)}`"
@@ -312,8 +235,6 @@ defineExpose({
         <Stat label="后台访问" :value="num(visits?.total ?? 0)" tone="mist" />
       </div>
 
-      <!-- ==================== 流量 ====================
-           读数是每分钟一行的历史，不是问答记录，所以不受顶部「时间范围」影响。 -->
       <Panel title="流量 · 最近 60 分钟">
         <template v-if="traffic">
           <Empty v-if="traffic.summary.requests === 0" text="还没有流量数据" />
@@ -363,9 +284,6 @@ defineExpose({
         <div v-else class="muted">读取中…</div>
       </Panel>
 
-      <!-- ==================== 模型调用 ====================
-           和流量共用同一根时间轴，两个面板上下对着看：
-           "请求涨了但调用没涨" 和 "调用涨了但请求没涨" 是两种完全不同的情况。 -->
       <Panel title="模型调用 · 最近 60 分钟">
         <template v-if="llm">
           <Empty v-if="llm.summary.calls === 0" text="这段时间没有调用模型" />
@@ -437,7 +355,6 @@ defineExpose({
       <Panel title="最高余弦分布" :hint="`阈值参考 · ${cosineHint}`">
         <div class="cosine">
           <figure class="hist-fig">
-            <!-- 计数单独占一行：不再让数字骑在各自柱头上 —— 那样顶边参差，最矮的几根根本读不出来 -->
             <div class="hist-vals">
               <span v-for="b in cosine.buckets" :key="b.range" class="hist-val num" :class="{ zero: !b.count }">{{ b.count }}</span>
             </div>
@@ -452,13 +369,10 @@ defineExpose({
                   :title="`${b.range} · ${b.count} 条`"
                 />
               </div>
-              <!-- 阈值线：这张图存在的意义。0.45 落在横轴 45% 处 -->
               <span class="hist-thr" :style="{ left: MIN_SCORE * 100 + '%' }">
                 <i class="thr-tag">阈值 {{ MIN_SCORE.toFixed(2) }}</i>
               </span>
             </div>
-            <!-- 刻度只标「档的下界」：10 个「0.0~0.1」在窄屏挤不下，
-                 而直方图的惯例本来就是刻度落在档的起点上。全称走 title。 -->
             <div class="hist-axis">
               <span
                 v-for="b in cosine.buckets"
@@ -523,20 +437,10 @@ defineExpose({
 </template>
 
 <style scoped>
-/* 这里只剩「本页特有」的东西：面板间距、网格布局、图表、少量排版修饰。
-   .page / .toolbar / .sel / .err / .hint / .tbl / .num 已由共享组件层接管，
-   页面不再各写一份 —— 否则又是 12 份互相漂移的副本。 */
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* 8 个指标：150px 下限刚好让宽屏一行铺满 8 张。
-   原先 160px → 实际只排得下 7 张，第 8 张「后台访问」孤零零换行、左边空一大块。
-   不写死列数：窄屏自然退成 4 / 2 列，不需要另写断点。 */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
-/* 主次：提问量是这一屏最该先看到的数字，给它更大的字号；其余指标同尺寸退后 */
 .bars { display: flex; flex-direction: column; gap: var(--sp-2); }
-/* ==================== 最高余弦分布 ====================
-   不再摊满整屏：条形限宽在 620px 以内，右侧那列放「怎么读」——
-   既压住了「几根柱子拉一屏」的观感，也不至于在右边空出一大块。 */
 .cosine {
   display: grid;
   grid-template-columns: minmax(0, 620px) minmax(220px, 1fr);
@@ -545,11 +449,6 @@ defineExpose({
 }
 
 .hist-fig { margin: 0; }
-/* 计数 / 柱 / 刻度三行用同一套「等宽列」网格 —— 列宽一致，三者天然对齐；
-   grid-auto-flow 让它不依赖「挡数写死是 10」。
-   ⚠️ 列宽必须写 minmax(0, 1fr)：光写 1fr 等于 minmax(auto, 1fr)，
-   轨道的下限是内容的 min-content —— 10 个「0.0~0.1」撑到 470px，
-   窄屏（390px）直接顶破整页，出现横向滚动条。 */
 .hist-vals,
 .hist-bars,
 .hist-axis {
@@ -565,7 +464,6 @@ defineExpose({
   position: relative;
   height: 140px;
   margin-top: var(--sp-2);
-  /* 基线用 strong：--line 太沉，柱子落不住，整张图像是「飘着」的 */
   border-bottom: 1px solid var(--line-strong);
 }
 .hist-bars { position: absolute; inset: 0; align-items: end; }
@@ -577,8 +475,6 @@ defineExpose({
   background: var(--mist);
   transition: height var(--dur-slow) var(--ease);
 }
-/* 颜色只表达「这一档在阈值哪一侧」，不做装饰 —— 沿用全站语义色：
-   moss = 拿到资料，rust = 被挡，flame = 需要你判断的那一档 */
 .side-kept { background: linear-gradient(180deg, var(--moss), var(--moss-deep)); }
 .side-edge {
   background: linear-gradient(180deg, var(--flame-bright), var(--flame-deep));
@@ -586,7 +482,6 @@ defineExpose({
 }
 .side-blocked { background: linear-gradient(180deg, var(--rust), var(--rust-deep)); }
 
-/* 阈值线：中性色。它是一条「参考刻度」，不是状态，别用强调色抢柱子的戏 */
 .hist-thr {
   position: absolute; top: 0; bottom: 0; width: 0;
   border-left: 1px dashed var(--ink-faint);
@@ -600,10 +495,6 @@ defineExpose({
 .hist-axis { margin-top: 6px; }
 .h-lbl { text-align: center; font-size: var(--fs-meta); }
 
-/* ==================== 流量 ====================
-   60 根柱 = 60 分钟。柱高按窗口内的峰值归一 ——
-   所以"整体看着很矮"不等于没流量，要配左边的峰值 QPS 一起读。
-   出过错的分钟单独染红，扫一眼就能定位到出事的时间点。 */
 .tf-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -649,9 +540,6 @@ defineExpose({
 .lg { display: inline-flex; align-items: center; gap: 6px; }
 .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 
-/* ==================== 每日提问量折线 ====================
-   线交给 SVG（preserveAspectRatio=none 拉满宽度，描边靠 non-scaling-stroke
-   保持 2px），圆点用 HTML 绝对定位叠上去 —— 这样圆不会被非等比缩放压成椭圆。 */
 .line { display: flex; flex-direction: column; gap: var(--sp-1); }
 .line-canvas { position: relative; height: 170px; margin: var(--sp-2) var(--sp-3) 0; }
 .line-svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -692,7 +580,6 @@ defineExpose({
 @media (max-width: 900px) {
   .cosine { grid-template-columns: minmax(0, 1fr); }
 }
-/* 窄屏：10 个「0.0~0.1」挤不下，字号再收一档 */
 @media (max-width: 560px) {
   .hist-val, .h-lbl { font-size: 10px; }
 }

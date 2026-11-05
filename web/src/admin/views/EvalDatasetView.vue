@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 用例集详情 —— 看用例、改用例、删用例。
- *
- * <p>改一条不重建 key：case_key 是历史 run 与冻结版本的引用锚点，
- * 跟着问题文本改会把"这条用例以前怎么判的"整条断掉。
- */
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'

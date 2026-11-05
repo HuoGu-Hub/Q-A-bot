@@ -1,15 +1,4 @@
 <script setup lang="ts">
-/**
- * 「知识库 → 词条」面板。
- *
- * **一个词条 = 一个分块。** 跟从 wiki 清洗下来的语料同一个形状：有标题，只是多一个别名。
- *
- * 列表只读：别名是文本，不就地改。改内容要点「编辑」——那一行会向下展开一张
- * 工作台，别名与正文同时变成可编辑，一次保存。
- *
- * 分类只读分块符号里的标签：标签在分类清单里就归那个分类，认不出（或没标签）
- * 就是「未分类」。不做任何智能分类 —— 要新增/改名分类请去「分类」面板。
- */
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
@@ -33,7 +22,6 @@ import Modal from '@shared/ui/Modal.vue'
 import ActionOption from '@shared/ui/ActionOption.vue'
 import Empty from '@shared/ui/Empty.vue'
 
-/** 与后端 CategoryService.UNCATEGORIZED 一致 */
 const UNCATEGORIZED = '未分类'
 
 const loading = ref(false)
@@ -47,17 +35,10 @@ const uncategorizedCount = ref(0)
 const total = ref(0)
 const available = ref(true)
 
-/** 筛选 */
 const q = ref('')
 const view = ref('all')
 const category = ref('')
 
-/**
- * 一页 30 条。
- *
- * <p>原来 100 条：列表虽然只带标题/别名/分类，但 100 行一屏仍然是
- * 一大段 DOM，手机上很难滚动定位。30 条一页，翻页看后面的。
- */
 const PAGE = 30
 const offset = ref(0)
 
@@ -106,7 +87,6 @@ async function load() {
   }
 }
 
-/** 改筛选/翻页会把展开的编辑收起，先问一句，别让未保存的改动悄悄没了 */
 function guardDirty(): boolean {
   return !editDirty.value || window.confirm('还有未保存的改动，放弃并继续？')
 }
@@ -122,12 +102,6 @@ function goPage(delta: number) {
   load()
 }
 
-// ==================== 行内编辑 ====================
-
-/**
- * 同一时刻只展开一行。列表里那条词的别名与正文一起进编辑态，
- * 保存时才分别落到两个接口：别名零成本，正文会重算这一块的向量。
- */
 const editId = ref<string | null>(null)
 const editAlias = ref('')
 const editBody = ref('')
@@ -166,7 +140,6 @@ async function openEditor(e: KbEntryItem) {
   await loadBody(e)
 }
 
-/** 取这一块的正文。失败只影响正文那一格，别名照常能改 */
 async function loadBody(e: KbEntryItem) {
   editLoading.value = true
   editError.value = ''
@@ -190,12 +163,6 @@ function closeEditor() {
   closeEditorSilently()
 }
 
-/**
- * 下架 / 恢复一块。
- *
- * 下架**保留数据**，只是不再参与检索 —— 所以不用二次确认，随时能恢复。
- * 正在编辑这一条时先收起，免得改到一半的东西和"已下架"状态对不上。
- */
 async function toggleRetire(e: KbEntryItem) {
   const retire = !e.retired
   error.value = ''
@@ -234,8 +201,6 @@ async function saveEditor(e: KbEntryItem) {
     editSaving.value = false
   }
 }
-
-// ==================== 导出 / 导入（Excel 旁路）====================
 
 function queryString() {
   const p = new URLSearchParams()
@@ -322,17 +287,8 @@ async function clearAllAliases() {
   }
 }
 
-// ==================== 导出（选格式）====================
-
-/**
- * 「导出」是一个按钮：点开先选格式，再真的导出。
- *
- * 原来工具栏上并排两个导出按钮，占位却只差一个后缀；收成一个入口之后，
- * 工具栏腾出来的地方正好放筛选。
- */
 const exportOpen = ref(false)
 
-/** 家底读数 —— 原来那块独立的「筛选」面板删掉后，数字折成标题旁的一行，一条都不丢 */
 const ledgerText = computed(() => {
   const c = counts.value
   if (!c) return ''
@@ -351,14 +307,6 @@ async function chooseExport(format: 'xlsx' | 'tsv') {
   await exportTable(format)
 }
 
-// ==================== 新增词条 ====================
-
-/**
- * 手写一条词条 —— 一个词条就是一个块。
- *
- * id 由后端生成、docId 留空（手写词条之间不是"同一份资料"），所以表单里
- * 只有人真正知道的东西：标题、别名、分类、正文。
- */
 const createOpen = ref(false)
 const createSaving = ref(false)
 const createError = ref('')
@@ -405,7 +353,6 @@ async function saveCreate() {
     })
     createOpen.value = false
     ok.value = '已新增词条：' + createTitle.value.trim()
-    // 新词条按标题排序，未必落在第一页 —— 直接把搜索设成它，保证看得见
     q.value = createTitle.value.trim()
     offset.value = 0
     await load()
@@ -421,7 +368,6 @@ onMounted(load)
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
-  // 这几个按钮现在挂在页面顶栏（KbView），面板只保留动作
   openCreate,
   openExport,
   pickImport,
@@ -436,7 +382,6 @@ defineExpose({
 
     <Panel>
       <div class="toolbar">
-        <!-- 筛选控件顶替原来导入/导出按钮的位置，成为这一行的主角 -->
         <div class="tb-filters">
           <div class="f-view">
             <Select
@@ -512,8 +457,6 @@ defineExpose({
                 <span v-else class="faint">无别名</span>
               </td>
 
-              <!-- ⚠️ 标签必须包在 div 里，不能给 <th>/<td> 加 display:flex ——
-                   那会让单元格不再是 table-cell，表头那根线会断、列也跟标题对不上。 -->
               <td class="c-cat" data-label="分类">
                 <div class="cats">
                   <Tag v-if="e.uncategorized" tone="neutral">{{ UNCATEGORIZED }}</Tag>
@@ -540,7 +483,6 @@ defineExpose({
               </td>
             </tr>
 
-            <!-- 展开的工作台：别名与正文一起进编辑态 -->
             <tr v-if="isOpen(e)" :id="sheetId(e.id)" class="edit-row">
               <td class="sheet-cell" colspan="4">
                 <div class="sheet">
@@ -665,7 +607,6 @@ defineExpose({
 <style scoped>
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* ==================== 工具栏（筛选 + 翻页） ==================== */
 .toolbar {
   display: flex;
   align-items: center;
@@ -673,16 +614,12 @@ defineExpose({
   flex-wrap: wrap;
   margin-bottom: var(--sp-3);
 }
-/* 筛选控件是这一行的主角：占满左侧，翻页靠右 */
 .tb-filters { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; flex-wrap: wrap; }
 .f-view { flex: none; width: 140px; }
 .f-cat { flex: none; width: 176px; }
-/* 搜索框：宽度收窄，按钮内嵌在框里 —— 所以框要留出右侧的内边距 */
 .search { position: relative; flex: 0 1 300px; min-width: 190px; }
 .f-kw { width: 100%; }
 .search :deep(.inp) { padding-right: 66px; }
-/* 用负 margin 居中，不用 transform —— Button 的按下反馈会写 transform: translateY(1px)，
-   两者会互相覆盖，按钮一按就往下跳半格 */
 .search-go {
   position: absolute;
   right: 4px;
@@ -692,19 +629,15 @@ defineExpose({
 .tb-group { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .tb-right { margin-left: auto; }
 .page, .ledger { font-size: var(--fs-meta); }
-/* 窄屏时按钮的全局下限（38px）比输入框还高，会顶破框 —— 这里压回去 */
 @media (max-width: 760px) {
   .search-go { min-height: 30px; padding: 5px 10px; font-size: var(--fs-sm); margin-top: -15px; }
 }
 .hidden-file { display: none; }
 
-/* ==================== 导出格式选择 ==================== */
-/* 两个选项的样式在 shared/ui/ActionOption.vue —— 抓取页的「选一种方式」用的是同一个 */
 .export-lede { margin: 0 0 var(--sp-3); font-size: var(--fs-body); color: var(--ink-2); }
 .export-lede b { color: var(--ink); }
 .export-opts { display: flex; flex-direction: column; gap: var(--sp-2); }
 
-/* ==================== 表格 ==================== */
 .title { color: var(--ink); }
 .meta {
   display: flex;
@@ -717,21 +650,16 @@ defineExpose({
 }
 .doc { overflow-wrap: anywhere; }
 .alias { color: var(--ink-2); overflow-wrap: anywhere; }
-/* 分类是 flex 的容器放在单元格**里面**，绝不落到 th/td 上 —— 见模板注释 */
 .cats { display: flex; gap: 4px; flex-wrap: wrap; }
 
 .panel-wrap :deep(th.c-alias), .panel-wrap :deep(td.c-alias) { width: 280px; }
 .panel-wrap :deep(th.c-cat), .panel-wrap :deep(td.c-cat) { width: 190px; }
 .panel-wrap :deep(th.c-ops), .panel-wrap :deep(td.c-ops) { width: 168px; text-align: right; white-space: nowrap; }
-/* 按钮横排放进 div —— 不能给 td 加 display:flex，那会拆掉表格布局 */
 .ops { display: flex; gap: var(--sp-2); justify-content: flex-end; }
 
-/* 展开的那一行：给主行一条火焰左缘，让"正在改的是哪一条"一眼可见 */
 .panel-wrap :deep(tr.row-open td) { background: var(--surface-hover); }
 .panel-wrap :deep(tr.row-open td:first-child) { box-shadow: inset 2px 0 0 var(--ember); }
 
-/* ==================== 展开的工作台 ==================== */
-/* 深底 + 内衬刻痕 = "刻进去的操作台"，与全站"物件槽"语言一致 */
 .panel-wrap :deep(td.sheet-cell) {
   padding: 0;
   background: var(--surface-inset);

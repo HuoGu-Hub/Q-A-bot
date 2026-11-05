@@ -22,14 +22,10 @@ const q = ref(String(route.query.q ?? ''))
 const loading = ref(false)
 const error = ref('')
 
-/** 搜索结果 */
 const result = ref<KbSearchResult | null>(null)
-/** 分类浏览结果 */
 const browse = ref<KbBrowseResult | null>(null)
-/** 大类定义（含各自的热门标签） */
 const groups = ref<KbGroup[]>([])
 
-/** 当前选中的大类 / 标签 */
 const curGroup = computed(() => String(route.query.group ?? ''))
 const curTag = computed(() => String(route.query.tag ?? ''))
 const curPage = computed(() => Number(route.query.page ?? 0))
@@ -38,12 +34,6 @@ const isBrowsing = computed(() => !!curGroup.value || !!curTag.value)
 
 const groupOf = (key: string) => groups.value.find(g => g.key === key)
 
-/**
- * 分类索引：189 个 wiki 原始分类不可能一次摊开。
- *
- * 折叠时只给条目最多的 12 个，展开后是一个**自带筛选**的紧凑清单。
- * 上一版把 189 个全渲染成带图标的卡片，手机上要滚十几屏才看得到「大家常问」。
- */
 const CAT_TOP = 12
 const catsOpen = ref(false)
 const catFilter = ref('')
@@ -60,20 +50,12 @@ const filteredGroups = computed(() => {
     g.label.toLowerCase().includes(kw) || g.key.toLowerCase().includes(kw))
 })
 
-/**
- * 大类图标。
- *
- * ⚠️ 后端 Group.icon 里存的是 emoji，这里刻意不用它：emoji 在每个平台上长得都不一样、
- * 还自带高饱和配色，会把「全站只有一个暖色重点」的克制感直接抹掉。
- * 现在的分类是 wiki 原始分类，没有稳定的语义键，所以统一用书本图标，
- * 把辨识度交给标题本身 —— 统一比"每个都图个热闹"更像一个站。
- */
 function iconOf(_key: string) { return 'book' }
 
 async function loadGroups() {
   try {
     groups.value = await publicApi.get<KbGroup[]>('/kb/groups')
-  } catch { /* 拿不到就不显示分类 */ }
+  } catch {   }
 }
 
 async function search(kw: string) {
@@ -103,19 +85,11 @@ function submit() {
   router.push({ name: 'library', query: kw ? { q: kw } : {} })
 }
 
-/** 清空搜索：回到分类首页。输入框也要一起清 —— 否则地址栏清了、框里还留着旧词 */
 function clearAll() {
   q.value = ''
   router.push({ name: 'library' })
 }
 
-/**
- * 打开一个大类。
- *
- * ⚠️ 原来这里对空的「大佬攻略」有个特判：直接跳去一个叫 manage 的路由。
- * 而路由表里根本没有 manage —— 点了什么都不会发生（控制台一条红字而已）。
- * 空分组照常打开，由空态去承担「还没内容、等你来写」的表达。
- */
 function openGroup(g: KbGroup) {
   router.push({ name: 'library', query: { group: g.key } })
 }
@@ -129,7 +103,6 @@ function backToGroups() {
 function goPage(p: number) {
   router.push({ name: 'library', query: { ...route.query, page: String(p) } })
 }
-/** 分页信息 */
 const totalPages = computed(() =>
   browse.value ? Math.ceil(browse.value.total / browse.value.pageSize) : 0)
 
@@ -156,7 +129,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   <div class="page library">
     <PageHeader title="资料库" />
 
-    <!-- 手机上搜索条吸顶：翻到结果第 20 条时还能改词，不用滚回顶部 -->
     <div class="search-wrap">
       <SearchBar
         v-model="q"
@@ -169,7 +141,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 
     <Notice v-if="error" tone="error" class="err">{{ error }}</Notice>
 
-    <!-- ========== 搜索结果 ========== -->
     <template v-if="hasQuery">
       <div class="crumb">
         <button class="back" type="button" @click="backToGroups">
@@ -178,7 +149,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       </div>
       <p v-if="loading" class="muted center">查找中…</p>
       <template v-else-if="result">
-        <!-- h2 而不是 div：这一条是结果区块的标题，下面每条结果才是 h3 -->
         <h2 class="result-head">
           <span>找到 <b class="num">{{ result.count }}</b> 条与「{{ result.query }}」相关</span>
           <span v-if="result.mode === 'semantic'" class="mode-badge"
@@ -188,11 +158,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
         </h2>
         <Empty v-if="!result.entries.length" icon="search"
                :text="t('library.empty_title', '没找到相关资料')" />
-        <!--
-          ⚠️ 整行可点，但必须是真的链接。
-          上一版是 div + tabindex + @click —— 读屏念不出目的地、右键开不了新标签。
-          现在整行就是一个 RouterLink，没有第二个可聚焦元素。
-        -->
         <div v-else class="rowlist">
           <ListRow
             v-for="e in result.entries"
@@ -206,7 +171,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       </template>
     </template>
 
-    <!-- ========== 分类浏览 ========== -->
     <template v-else-if="isBrowsing">
       <div class="crumb">
         <button class="back" type="button" @click="backToGroups">
@@ -216,7 +180,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
         <span v-if="curTag" class="crumb-tag">{{ curTag }}</span>
       </div>
 
-      <!-- 该大类的标签云 -->
       <section v-if="curGroup && groupOf(curGroup) && !curTag && groupOf(curGroup)!.tags.length" class="block">
         <div class="block-head">
           <h2 class="block-title">细分标签</h2>
@@ -252,7 +215,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
       </template>
     </template>
 
-    <!-- ========== 首页 ========== -->
     <template v-else>
       <section class="block">
         <div class="block-head">
@@ -277,7 +239,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
             <Icon :name="catsOpen ? 'chevron-down' : 'chevron-right'" :size="15" />
             {{ catsOpen ? '收起分类' : '查看全部 ' + groups.length + ' 个分类' }}
           </button>
-          <!-- 展开后自带筛选：189 行里靠手滑找分类是不现实的 -->
           <input
             v-if="catsOpen"
             v-model="catFilter"
@@ -301,11 +262,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
         </div>
       </section>
 
-      <!--
-        ⚠️ 这里原来是一个指向 /manage 的按钮，而公开站没有这个路由：
-        点了要么静默报错、要么落到 404。一个"点了没用"的按钮比没有按钮更伤，
-        所以改成一句话说明该怎么提交，不装作站内有这个入口。
-      -->
       <section class="block contribute">
         <div class="contribute-text">
           <h2 class="block-title">发现内容有误或缺失？</h2>
@@ -319,15 +275,12 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 <style scoped>
 .library { max-width: 1040px; padding-top: var(--sp-5); padding-bottom: var(--sp-8); }
 
-/* ==================== 搜索条 ====================
-   手机上吸顶：翻到结果第 20 条时还能改词。桌面端不吸顶，避免压住页头。 */
 .search-wrap { margin-bottom: var(--sp-5); }
 @media (max-width: 760px) {
   .search-wrap {
     position: sticky;
     top: var(--header-h);
     z-index: 20;
-    /* 负外边距必须等于 .page 的左右内边距，否则 360px 下会多出 4px 横向滚动 */
     margin: 0 calc(var(--sp-4) * -1) var(--sp-4);
     padding: var(--sp-2) var(--sp-4);
     background: var(--stone-200);
@@ -341,9 +294,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 .center { text-align: center; }
 .err { margin-bottom: var(--sp-4); }
 
-/* ==================== 结果计数 ====================
-   语义是 h2，**样式上仍是一条元信息**。
-   ⚠️ 必须显式压回无衬线 + 常规字重：base.css 给 h1–h4 统一设了衬线体和 semibold。 */
 .result-head {
   display: flex;
   align-items: center;
@@ -357,7 +307,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   color: var(--ink-3);
 }
 .result-head b { color: var(--ink); }
-/* 检索模式标识：让用户知道这次是「懂人话的搜索」还是「只认名词的搜索」 */
 .mode-badge {
   font-size: var(--fs-xs);
   color: var(--ember);
@@ -367,7 +316,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 }
 .mode-badge.local { color: var(--ink-3); background: var(--stone-400); }
 
-/* ==================== 面包屑 ==================== */
 .crumb {
   display: flex;
   align-items: center;
@@ -398,9 +346,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   padding: 2px 10px;
 }
 
-/* ==================== 分类索引 ====================
-   一行一个分类，发丝线分隔。189 个分类如果都做成卡片，手机上就是一面英文墙；
-   紧凑行 + 折叠 + 自带筛选，才是「找得到」而不是「全给你」。 */
 .cats { columns: 1; }
 .cats-more { margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
 .more-btn {
@@ -432,7 +377,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   box-shadow: var(--bevel-inset);
 }
 .cat-filter:focus-visible { outline: none; border-color: var(--ember); box-shadow: var(--bevel-inset), var(--focus-ring); }
-/* 展开后的清单自己滚：不把整页撑长，也不会把下面的区块推到几屏之外 */
 .cat-scroll {
   max-height: 56vh;
   overflow-y: auto;
@@ -443,15 +387,12 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 }
 .empty-hint { padding: var(--sp-4) 0; }
 
-/* 两列：宽屏上把 12 行压成 6 行的高度。
-   ⚠️ 不能用 CSS columns —— .rowlist 是 flex 容器，columns 对 flex 无效，会静默退成单列。 */
 @media (min-width: 900px) {
   .cats {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--sp-5);
   }
-  /* 分列之后「上一行的下边框」会跑到右列第一项头上，所以改成每项自带底边 */
   .cats > * + * { border-top: 0; }
   .cats > * { border-bottom: 1px solid var(--hairline); }
 }
@@ -467,7 +408,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   font-size: var(--fs-sm);
 }
 
-/* ==================== 区块 ==================== */
 .block { margin-bottom: var(--sp-6); }
 .block-head {
   display: flex;
@@ -484,7 +424,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
   margin: 0;
 }
 
-/* 贡献入口：一块横向的落款区，不和上面的清单抢注意力 */
 .contribute {
   display: flex;
   align-items: center;
@@ -502,7 +441,6 @@ watch(() => route.query, () => { refresh(); window.scrollTo({ top: 0 }) })
 .contribute-text p { max-width: 52em; margin: 0; }
 
 @media (max-width: 380px) {
-  /* .page 在 380 以下收到 12px，这里跟着收，否则吸顶条会比版心宽 8px */
   .search-wrap { margin-left: calc(var(--sp-3) * -1); margin-right: calc(var(--sp-3) * -1); padding-left: var(--sp-3); padding-right: var(--sp-3); }
 }
 @media (max-width: 760px) {

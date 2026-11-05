@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 「Bot 配置 → 语音」面板。
- *
- * 素材库的日常操作都在这：拖拽上传、试听、改标签、启停、试发到群、删除。
- *
- * ⚠️ 上传必须用原生 fetch（同 CarouselPanel）：共享的 request() 会把 body
- *    JSON.stringify 并强塞 content-type: application/json，multipart 的 boundary
- *    会被它毁掉。整个面板只有这一处绕开 adminApi。
- */
 import { nextTick, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import Panel from '@shared/ui/Panel.vue'
@@ -56,37 +47,29 @@ const error = ref('')
 const items = ref<VoiceItem[]>([])
 const limits = ref({ maxSizeKb: 8192, maxSeconds: 300 })
 
-// ---------- 拖拽上传 ----------
 const fileInput = ref<HTMLInputElement | null>(null)
-/** 拖拽悬停高亮。dragenter/leave 会在子元素间反复触发，用计数抵消 */
 const dragDepth = ref(0)
 const dragging = ref(false)
-/** 正在上传的文件数；大于 0 时禁用再次投放 */
 const pending = ref(0)
 const total = ref(0)
-/** 拖进来的文件默认打这个标签，省得一个个改 */
 const defaultTags = ref('')
 
-// ---------- 编辑 ----------
 const editing = ref<VoiceItem | null>(null)
 const editTitle = ref('')
 const editAliases = ref('')
 const editTags = ref('')
 const savingEdit = ref(false)
 
-// ---------- 试发 ----------
 const sending = ref<VoiceItem | null>(null)
 const groupId = ref(localStorage.getItem('voice.lastGroup') ?? '')
 const sendingBusy = ref(false)
 
-// ---------- 触发词 ----------
 const triggers = ref<TriggerRule[]>([])
 const newKeyword = ref('')
 const newCooldown = ref('120')
 const newScope = ref('')
 const addingTrigger = ref(false)
 
-// ---------- TTS ----------
 const ttsText = ref('晚上八点集合，记得带上药水和火把。')
 const ttsVoice = ref('')
 const ttsVoices = ref<string[]>([])
@@ -172,7 +155,6 @@ async function loadTtsVoices() {
   }
 }
 
-/** 试听：合成后拿 blob 直接播，不落素材库 */
 async function previewTts() {
   if (!ttsText.value.trim()) {
     toast('先说点什么')
@@ -229,8 +211,6 @@ async function sendTts() {
   }
 }
 
-// ==================== 上传 ====================
-
 function onDragEnter(e: DragEvent) {
   e.preventDefault()
   dragDepth.value++
@@ -263,10 +243,6 @@ function pick(e: Event) {
   void uploadFiles(files)
 }
 
-/**
- * 逐个上传。串行而不是并发：一次拖十首歌时，
- * 并发会把内存和 NapCat 的上传通道一起顶住，失败还难定位。
- */
 async function uploadFiles(files: File[]) {
   if (files.length === 0 || pending.value > 0) return
   total.value = files.length
@@ -309,8 +285,6 @@ async function uploadFiles(files: File[]) {
     toast('已上传 ' + ok + ' 个' + (dup > 0 ? '，' + dup + ' 个已存在' : ''))
   }
 }
-
-// ==================== 行内操作 ====================
 
 async function toggle(item: VoiceItem, enabled: boolean) {
   try {

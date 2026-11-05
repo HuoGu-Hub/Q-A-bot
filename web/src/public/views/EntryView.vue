@@ -32,16 +32,11 @@ async function load(title: string) {
 
 onMounted(() => load(props.title))
 
-/**
- * ★ 必须有 watch —— Vue 会复用同一个组件实例，
- * 路由参数变了 onMounted 不会再触发，导致「点第二个词条没反应」。
- */
 watch(() => props.title, (t) => {
   load(t)
   window.scrollTo({ top: 0 })
 })
 
-/** 后端返回的正文是纯文本，按段落渲染 —— 不做 Markdown 解析（避免 XSS 面） */
 function paragraphs(text: string): string[] {
   return text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
 }
@@ -77,11 +72,6 @@ function lines(p: string): string[] {
         </div>
       </header>
 
-      <!--
-        正文不再套面板：这是一篇**要读的**东西，不是一块仪表盘。
-        面板的圆角与内边距只会把行宽压窄、把段落挤在一起；
-        阅读版心（.read = 760px）本身才是可读性的关键。
-      -->
       <div class="body">
         <template v-for="(p, i) in paragraphs(entry.text)" :key="i">
           <h2 v-if="p.startsWith('## ')" class="h2">{{ p.replace(/^##\s*/, '') }}</h2>
@@ -155,7 +145,6 @@ function lines(p: string): string[] {
 .nf-go:hover { background: var(--stone-500); border-color: var(--edge-hover); text-decoration: none; }
 
 .head { margin-bottom: var(--sp-5); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--hairline); }
-/* 阅读页的标题和页面标题同号，但不要左侧刻痕 —— 词条名本身已经够长 */
 .title { font-size: var(--fs-2xl); letter-spacing: .02em; margin: 0; line-height: 1.35; }
 .cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--sp-3); }
 .cat {
@@ -167,7 +156,6 @@ function lines(p: string): string[] {
 }
 
 .body { line-height: 1.9; overflow-wrap: break-word; }
-/* 行宽控制在 38 个汉字左右 —— 中文长行读到行尾会丢行 */
 .para { margin: 0 0 var(--sp-4); font-size: var(--fs-lg); color: var(--ink); }
 .h2 {
   font-family: var(--font-title);

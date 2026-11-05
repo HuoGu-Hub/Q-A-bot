@@ -1,16 +1,4 @@
 <script setup lang="ts">
-/**
- * 「指令」Tab 面板。
- *
- * 为什么是面板而不是页面：管理端要把「设置」和「指令」并进同一个「Bot 配置」页，
- * 页面内用二级目录切换。页面级外壳（AdminPage、Tabs、页面标题）由父页面提供，
- * 所以这里不接收 props、不 emit 事件，也不渲染 AdminPage ——
- * 只负责本 tab 的内容。页面栏上的「刷新」「+ 新建命令」由父页面
- * BotConfigView 渲染，动作经 defineExpose 抛出（按钮调的是面板内部状态，视图拿不到）。
- *
- * 板块和指令是同一件事的两种形态：对外只有一张命令表，类型列区分
- * 「板块 / 话术 / 问答 / 动作」；底层仍分两张表 —— 板块多一层投递与记录。
- */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
@@ -39,36 +27,24 @@ import { accessLabel, accessOptions, accessUsesAcl, loadAccessModes } from './ac
 const loading = ref(false)
 const error = ref('')
 const data = ref<CommandList | null>(null)
-/** 板块（含停用的）。与群里 /list 读同一个 BoardStore */
 const boards = ref<AdminBoard[]>([])
 const vars = ref<CommandVariables | null>(null)
 const stats = ref<CommandStats | null>(null)
-/** 已注册的动作：只有 action 类命令才用得上 */
 const actions = ref<CommandActions | null>(null)
 
-/** 编辑中的指令（null = 没在编辑） */
 const editing = ref<Partial<BotCommand> | null>(null)
-/** 板块编辑状态：undefined = 没在编辑，null = 新建，对象 = 编辑这一条 */
 const boardEditing = ref<AdminBoard | null | undefined>(undefined)
 const boardSaving = ref(false)
 const boardError = ref('')
-/** 正在看记录的板块；null = 弹窗关闭 */
 const recordsBoard = ref<AdminBoard | null>(null)
-/** /prompt 的自定义编辑器：不是普通命令表单 */
 const promptEditing = ref<BotCommand | null>(null)
-/** 全局 /list 或 /help 的回复编辑 */
 const systemReplyKind = ref<'list' | 'help' | null>(null)
 const aliasOpen = ref(false)
-/** 新建命令的类型选择弹窗 */
 const newOpen = ref(false)
-/** 命令表筛选 */
 const search = ref('')
 const kindFilter = ref('all')
-/** 使用情况统计范围（天） */
 const statsDays = ref(30)
-/** 实时预览结果 */
 const preview = ref('')
-/** 预览 {args} 用的示例参数 */
 const sampleArgs = ref('')
 
 const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -77,7 +53,6 @@ const RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '90', label: '近 90 天' },
 ]
 
-/** 统一命令表的一行：source 决定用哪个编辑器、有没有「记录」 */
 interface CommandRow {
   source: 'board' | 'command' | 'system' | 'prompt'
   key: string
@@ -92,7 +67,6 @@ interface CommandRow {
   command: BotCommand | null
 }
 
-/** 10 天统计里按命令路径查次数；日志里的 trigger 是小写 */
 const usageMap = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
   for (const item of stats.value?.usage ?? []) {
@@ -101,7 +75,6 @@ const usageMap = computed<Record<string, number>>(() => {
   return map
 })
 
-/** 全局系统命令：由路由层直接处理，不在 bot_command 里；回复内容可单独编辑 */
 const SYSTEM_ROWS: CommandRow[] = [
   {
     source: 'system', key: 'system-list', path: 'list', usage: '', kind: 'system',
@@ -115,7 +88,6 @@ const SYSTEM_ROWS: CommandRow[] = [
   },
 ]
 
-/** 系统命令在前，板块次之，普通指令最后；与群里 /list 的顺序一致 */
 const rows = computed<CommandRow[]>(() => [
   ...SYSTEM_ROWS,
   ...boards.value.map((b): CommandRow => ({
@@ -133,8 +105,6 @@ const rows = computed<CommandRow[]>(() => [
     }
   }),
 ])
-
-/** 指令类型的选项在 commandOptions.ts；准入档位由服务端下发，见 accessModes.ts */
 
 const FILTERS = [
   { value: 'all', label: '全部' },
@@ -171,18 +141,16 @@ const globalAclCount = computed(() => {
 
 const isAgent = computed(() => editing.value?.kind === 'agent')
 const isAction = computed(() => editing.value?.kind === 'action')
-/** 动作下拉：值是动作 id，直接存进库里那一列 */
 const actionOptions = computed(() =>
   (actions.value?.actions ?? []).map((a) => ({ value: a.id, label: a.label || a.id }))
 )
 
-/** 编辑中的参数表。新建时是空数组，模板里靠它渲染行 */
 const paramRows = computed<AdminParamSpec[]>(() => editing.value?.params ?? [])
 
 async function loadStats() {
   try {
     stats.value = await adminApi.get<CommandStats>('/commands/stats?days=' + statsDays.value)
-  } catch { /* 统计失败不挡配置 */ }
+  } catch {   }
 }
 
 watch(statsDays, loadStats)
@@ -195,7 +163,6 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    // 档位清单先到：列表标签与编辑器的下拉都读它，晚到会闪一下原始 code
     await loadAccessModes()
     data.value = await adminApi.get<CommandList>('/commands')
     try { boards.value = (await adminApi.get<AdminBoardList>('/boards')).boards }
@@ -223,7 +190,6 @@ function newCommand(kind = 'template') {
   acl.value = { whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' }
 }
 
-/** 页面栏的「+ 新建命令」：先选类型，再进对应编辑器 */
 function openNewMenu() {
   editing.value = null
   boardEditing.value = undefined
@@ -254,15 +220,13 @@ function edit(c: BotCommand) {
   }
   adminApi.get<CommandAcl>('/commands/' + c.id + '/acl')
     .then((a) => fillAcl(acl.value, a))
-    .catch(() => { /* 读不到名单不挡编辑 */ })
+    .catch(() => {   })
 }
 
-/** 用参数表的示例值拼一段示例参数，编辑时预览立刻有东西可看 */
 function sampleArgsOf(params: AdminParamSpec[]) {
   return params.map((p) => '#' + p.name + '-' + (p.example || p.name) + '#').join(' ')
 }
 
-/** 表格规则列：一句读完，不再堆标签 */
 function rowRuleText(row: CommandRow): string {
   if (row.source === 'system') return '所有人'
   if (row.source === 'board' && row.board) {
@@ -278,20 +242,11 @@ function rowRuleText(row: CommandRow): string {
   return '—'
 }
 
-/* ==================== 参数表编辑 ==================== */
-
 function setParams(list: AdminParamSpec[]) {
   patch({ params: list })
-  // 参数表的示例值会进 {arg.名字} 的预览，改完立刻重算
   updatePreview()
 }
 
-/**
- * 把选中动作声明的参数表抄进表单。
- *
- * 只覆盖名字与类型之外的空字段，不动用户已经填好的说明与示例 ——
- * "载入"是省事，不是重置。
- */
 function loadActionParams() {
   const id = editing.value?.action
   const found = (actions.value?.actions ?? []).find((a) => a.id === id)
@@ -299,11 +254,6 @@ function loadActionParams() {
   setParams(found.params.map((p) => ({ ...p })))
 }
 
-/**
- * 表单写入口。
- * editing 的类型是 Partial（新建时只有部分字段），模板里逐字段赋值要写一堆非空断言；
- * 集中成一次浅合并，模板只剩「改哪个字段」这一件事。
- */
 function patch(p: Partial<BotCommand>) {
   if (!editing.value) return
   editing.value = { ...editing.value, ...p }
@@ -318,16 +268,14 @@ async function updatePreview() {
       params: editing.value.params ?? [],
     })
     preview.value = r.rendered
-  } catch { /* 预览失败不阻塞 */ }
+  } catch {   }
 }
 
-/** 回复内容每次改动都重算预览（原来挂在 textarea 的 @input 上） */
 function onReplyInput(v: string) {
   patch({ reply: v })
   updatePreview()
 }
 
-/** 点击变量 → 插入到回复末尾（光标位置在 textarea 里比较麻烦，追加更直观） */
 const { insert: insertVariable } = useVariableInsert({
   reply: (value) => { patch({ reply: value }); updatePreview() },
   listReply: (value) => patch({ listReply: value }),
@@ -337,11 +285,9 @@ const { insert: insertVariable } = useVariableInsert({
 async function save() {
   if (!editing.value) return
   try {
-    // 旧字段 scope 由私聊开关推导，避免两个开关说同一件事
     const body = { ...editing.value, scope: policy.value.allowPrivate ? 'all' : 'group' }
     await adminApi.post('/commands', body)
 
-    // 命令刚建出来还没有 id，按触发词回头找一次
     const list = await adminApi.get<CommandList>('/commands')
     const saved = list.commands.find((c) => c.trigger === body.trigger)
     if (saved) {
@@ -375,8 +321,6 @@ async function toggle(c: BotCommand) {
   } catch (e) { error.value = describeError(e) }
 }
 
-// ==================== 板块编辑 ====================
-
 function editBoard(b: AdminBoard) {
   editing.value = null
   boardEditing.value = b
@@ -392,7 +336,6 @@ function openRecords(b: AdminBoard) {
   recordsBoard.value = b
 }
 
-/** 近 N 天被用了几次；0 显示破折号，避免整列都是 0 */
 function rowUsage(row: CommandRow) {
   const count = usageMap.value[row.path.toLowerCase()] ?? 0
   return count > 0 ? String(count) : '—'
@@ -437,7 +380,6 @@ async function saveBoard(draft: BoardDraft, acl: AclBody) {
   boardError.value = ''
   try {
     const res = await adminApi.post<{ board: AdminBoard }>('/boards', draft)
-    // 新建时草稿还没有 id，用后端回的那一条拿 id，再把名单落下去
     const savedId = res?.board?.id
     if (savedId) {
       await adminApi.post('/boards/' + savedId + '/acl', acl)
@@ -466,13 +408,9 @@ async function toggleBoard(b: AdminBoard) {
   } catch (e) { error.value = describeError(e) }
 }
 
-// ==================== 权限与名单 ====================
-
-/** 命令 id → 数据策略。没配过就没有这个键，读的时候回默认 */
 const policies = ref<Record<number, CommandPolicy>>({})
 const globalAcl = ref<CommandAcl>({ white: [], black: [] })
 
-/** 正在编辑的那条命令的策略与名单（保存时一起提交） */
 const policy = ref({ scope: 'GROUP', groups: '', showGroup: false, showUser: false, allowPrivate: false })
 const acl = ref({ whiteUsers: '', whiteGroups: '', blackUsers: '', blackGroups: '' })
 
@@ -484,11 +422,6 @@ function policyOf(id: number): CommandPolicy {
   return policies.value[id] ?? { id, scope: 'GROUP', groups: [], showGroup: false, showUser: false, allowPrivate: false }
 }
 
-/**
- * 这条命令比"最保守的默认"松在哪。
- *
- * 这是这一页的核心读数：20 条命令里有 18 条是默认的，眼睛应该只落在剩下的 2 条上。
- */
 function deviations(c: BotCommand): string[] {
   const p = policyOf(c.id)
   const out: string[] = []
@@ -502,7 +435,6 @@ function deviations(c: BotCommand): string[] {
   return out
 }
 
-/** 偏离里最"重"的那一档，决定标记的颜色 */
 function deviationTone(c: BotCommand) {
   const d = deviations(c)
   if (!d.length) return 'neutral'
@@ -510,22 +442,18 @@ function deviationTone(c: BotCommand) {
   return 'warn'
 }
 
-/** 勾选框的 change 事件要读 target.checked，模板里转型不好读，收成一个函数 */
 function onCheck(key: 'showGroup' | 'showUser' | 'allowPrivate', e: Event) {
   policy.value[key] = (e.target as HTMLInputElement).checked
 }
 
-/** 低频区块折叠：改回复的人不该被参数表和名单挡路 */
 const openBlocks = ref({ params: false, acl: false, list: false, help: false })
 const paramTableRef = ref<InstanceType<typeof ParamTable> | null>(null)
 const paramBlock = ref<HTMLElement | null>(null)
 
-/** “+ 参数”在参数标题行：展开后让参数表插入一行 */
 async function addParamRow() {
   openBlocks.value.params = true
   await nextTick()
   paramTableRef.value?.addParam()
-  // 等新行真正进 DOM 再滚，否则只能滚到参数块表头
   await nextTick()
   const row = paramBlock.value?.querySelector('.param-row:last-child')
   if (row instanceof HTMLElement) {
@@ -535,14 +463,12 @@ async function addParamRow() {
   }
 }
 
-/** 要不要露名单由档位自己说了算 —— 服务端下发的 usesAcl，不在前端写死那三个 code */
 const needsList = computed(() => accessUsesAcl(editing.value?.access ?? 'all'))
 
 function toggleBlock(key: 'params' | 'acl' | 'list' | 'help') {
   openBlocks.value[key] = !openBlocks.value[key]
 }
 
-/** 名单里一共填了几个号，折叠时也要能看出"这里动过" */
 const aclCount = computed(() => {
   const n = [acl.value.whiteUsers, acl.value.whiteGroups,
     acl.value.blackUsers, acl.value.blackGroups]
@@ -550,12 +476,6 @@ const aclCount = computed(() => {
   return n ? n + ' 条' : '空'
 })
 
-/**
- * 选了一个动作之后把能自动填的都填上。
- *
- * <p>新手不需要先搞懂"路径怎么分层""参数表怎么写"才能用上定时输出 ——
- * 选个动作，路径与参数就位，他只管写要发的话。填进去的都是可改的。
- */
 function onActionPicked(id: string) {
   patch({ action: id })
   const found = (actions.value?.actions ?? []).find((a) => a.id === id)
@@ -600,7 +520,7 @@ function fillAcl(target: { whiteUsers: string; whiteGroups: string; blackUsers: 
 }
 
 async function loadGlobalAcl() {
-  try { fillAcl(globalForm.value, await adminApi.get<CommandAcl>('/acl/global')) } catch { /* 读不到就留空 */ }
+  try { fillAcl(globalForm.value, await adminApi.get<CommandAcl>('/acl/global')) } catch {   }
 }
 
 async function saveGlobalAcl() {
@@ -624,11 +544,9 @@ const allVars = computed(() => {
   })
 })
 
-/** 页面栏上的「刷新」「+ 新建命令」—— 见文件头注释 */
 defineExpose({
   reload: load,
   openNewMenu,
-  /** 读数式暴露：视图在渲染时调用，读到 loading 变化会重渲染，按钮的禁用态才跟得上 */
   isLoading: () => loading.value,
 })
 
@@ -639,7 +557,6 @@ onMounted(load)
   <div class="panel-wrap">
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <!-- 编辑态：整块替换列表。表格上面压一个巨长表单，改一个字段要滚过一整屏 -->
     <CommandEditorShell
       v-if="editing"
       :open="true"
@@ -661,7 +578,6 @@ onMounted(load)
       <Notice v-if="error" tone="error">{{ error }}</Notice>
 
       <div class="editor-grid">
-        <!-- 左：这条命令说什么 -->
         <section class="editor-col">
           <div class="col-title">命令</div>
 
@@ -709,7 +625,6 @@ onMounted(load)
               <div class="preview-bubble">{{ preview || '—' }}</div>
             </div>
           </div>
-      <!-- 参数、list、help 都留在左栏，右侧设置与变量固定 -->
       <div ref="paramBlock" class="block">        <div class="block-head block-head--with-action">
           <button class="block-toggle" type="button" :aria-expanded="openBlocks.params" @click="toggleBlock('params')">
             <Icon name="chevron-right" :size="14" class="block-chev" :class="{ open: openBlocks.params }" />
@@ -781,7 +696,6 @@ onMounted(load)
       </div>
         </section>
 
-        <!-- 右：规则与变量，滚动时保持固定 -->
         <section class="editor-col editor-col--side">
           <div class="col-title">设置</div>
 
@@ -833,7 +747,6 @@ onMounted(load)
               <span>私聊</span>
             </label>
           </div>
-          <!-- 指令不读跨群数据，数据范围与来源显示对它没有意义，只放在板块编辑器 -->
 
           <div v-if="needsList" class="block">
             <button class="block-head" type="button" :aria-expanded="openBlocks.acl" @click="toggleBlock('acl')">
@@ -868,7 +781,6 @@ onMounted(load)
 
     </CommandEditorShell>
 
-
     <SystemReplyEditor
       v-if="systemReplyKind"
       :open="true"
@@ -877,7 +789,6 @@ onMounted(load)
       @changed="systemReplyKind = null"
     />
 
-    <!-- 板块编辑器：与指令编辑器互斥，都是"整块替换列表" -->
     <BoardEditor
       v-if="boardEditing !== undefined"
       :board="boardEditing"
@@ -917,12 +828,6 @@ onMounted(load)
 
       <div class="ledger-wrap" role="group" aria-label="命令表" tabindex="0">
         <table v-if="visibleRows.length" class="ledger">
-          <!--
-            列宽用 colgroup 定死，配合 CSS 的 table-layout: fixed。
-            上一版是自动布局：调用列被撑到 346px，说明反而只有 324px ——
-            真正要读的那一列最窄。现在调用 208、限制 132、使用 60、状态 104、操作 216，
-            剩下的全部给说明，它一定是最宽的那一列。
-          -->
           <colgroup>
             <col class="c-call">
             <col class="c-desc">
@@ -1097,15 +1002,12 @@ onMounted(load)
 </template>
 
 <style scoped>
-/* 宽度交给父页面的 AdminPage —— 面板自己定 max-width 会和页面容器打架 */
 .panel-wrap {
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
 }
 
-/* ==================== 命令索引 ====================
-   一页只留一个主角：命令账本。区块之间用横线和留白分，不再套卡片。 */
 .command-index { display: flex; flex-direction: column; gap: var(--sp-3); }
 .index-head {
   display: grid;
@@ -1172,10 +1074,8 @@ onMounted(load)
 .filter:focus-visible { outline: 2px solid var(--flame); outline-offset: 1px; }
 
 .ledger-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
-/* table-layout: fixed 让 colgroup 的列宽真正生效；自动布局会把长内容那列撑开 */
 .ledger { width: 100%; border-collapse: collapse; table-layout: fixed; }
 
-/* 列宽只有这六个数。说明列不写宽度 = 吃掉剩余空间，因此永远是最宽的一列 */
 .c-call { width: 208px; }
 .c-rule { width: 132px; }
 .c-use { width: 60px; }
@@ -1222,7 +1122,6 @@ onMounted(load)
 .cell-desc {
   color: var(--ink-2);
   font-size: var(--fs-sm);
-  /* 说明列吃掉剩余宽度，长句在单元格内换行，不要撑出表格 */
   overflow-wrap: anywhere;
   line-height: 1.6;
 }
@@ -1247,11 +1146,6 @@ onMounted(load)
 .state-dot.on { background: var(--vital); box-shadow: 0 0 0 3px var(--vital-veil); }
 .builtin { margin-left: 8px; color: var(--ink-4); font-size: 10.5px; letter-spacing: .08em; }
 .cell-ops { text-align: right; white-space: nowrap; }
-/*
- * 行内动作：上一版是「3px 内边距的灰字」，看着像表里的普通文字，
- * 用户根本不知道那三个词能点。现在给它们按钮的形：细边、浅底、26px 高。
- * 不给主色填充 —— 一行里有三四个按钮，全都点亮就等于没有重点。
- */
 .row-action {
   display: inline-flex;
   align-items: center;
@@ -1276,7 +1170,6 @@ onMounted(load)
   color: var(--ember-hot);
   background: var(--ember-veil);
 }
-/* 删除是唯一会掉数据的动作：悬停变红，和另外几个区分开 */
 .row-action.danger:hover {
   border-color: var(--blight);
   color: var(--blight-lift);
@@ -1391,22 +1284,13 @@ onMounted(load)
   .index-tools { grid-column: 1 / -1; justify-content: flex-start; }
 }
 @media (max-width: 900px) {
-  /* 窄屏收起「限制」和「使用」，留住调用、说明、状态与操作 ——
-     说明是这一页最该读的列，不能再像上一版那样被优先隐藏。
-
-     ⚠️ 这里必须把固定布局改回自动布局：fixed + colgroup 下隐藏两列，
-     列轨道还按原来的序号吃宽度，实测会错位成「状态 132px、操作 60px、说明 0」。
-     换成 auto 之后，隐藏的列真正消失，说明列重新吃到剩余宽度。 */
   .ledger { table-layout: auto; }
   .c-call, .c-rule, .c-use, .c-state, .c-ops { width: auto; }
-  /* 调用列给个下限：纯 auto 会被压到 64px，只剩一个「/li…」 */
   .cell-call { min-width: 96px; }
   .ledger th:nth-child(3), .ledger td:nth-child(3),
   .ledger th:nth-child(4), .ledger td:nth-child(4) { display: none; }
   .usage-grid { grid-template-columns: 1fr; gap: var(--sp-5); }
 }
-/* 手机上 6 列必然放不下。再收起「状态」—— 停用的行整行已经变淡，
-   状态信息并没有丢；剩下调用 / 说明 / 操作三列，说明才能真正读到。 */
 @media (max-width: 640px) {
   .ledger th:nth-child(5), .ledger td:nth-child(5) { display: none; }
   .row-action { min-width: 36px; padding: 0 6px; }

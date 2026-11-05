@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 「知识库 → 分类」面板。
- *
- * **分类是一份人工维护的平铺清单**：可以新增、改显示名、删除。
- * 词条的分块符号里带什么标签，它就归到什么分类；标签不在清单里（或压根没带标签）
- * 就归「未分类」。**不做任何智能分类** —— 这是重构掉整套自动归类规则之后的模型。
- *
- * wiki 清洗语料是例外：导入时来源名与页面分类会自动登记进清单，所以它们天然有分类。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { CategoryList, KbCategoryStat, CategoryEntry, CategoryEntryPage } from '@shared/api/types'
@@ -21,7 +12,6 @@ import Tag from '@shared/ui/Tag.vue'
 import Modal from '@shared/ui/Modal.vue'
 import Empty from '@shared/ui/Empty.vue'
 
-/** 与后端 CategoryService.UNCATEGORIZED 一致 */
 const UNCATEGORIZED = '未分类'
 
 const loading = ref(false)
@@ -32,11 +22,9 @@ const items = ref<KbCategoryStat[]>([])
 const uncategorized = ref(0)
 const available = ref(true)
 
-/** 新增分类 */
 const newName = ref('')
 const newLabel = ref('')
 
-/** 显示名草稿：只有改过的 name 才有条目 */
 const labelDrafts = ref<Record<string, string>>({})
 const labelOf = (c: KbCategoryStat) => labelDrafts.value[c.name] ?? c.label
 const isDirty = (c: KbCategoryStat) => c.name in labelDrafts.value && labelDrafts.value[c.name] !== c.label
@@ -110,23 +98,14 @@ async function removeCategory(c: KbCategoryStat) {
   }
 }
 
-// ==================== 分类穿透 ====================
-
 const entryOpen = ref(false)
 const entryCategory = ref('')
 const entryQ = ref('')
-/** 当前这批结果是用哪个搜索词查出来的 —— 输入框改了但没按搜索时，翻页不能拿新词去跳页 */
 const entryAppliedQ = ref('')
 const entryTotal = ref(0)
 const entryItems = ref<CategoryEntry[]>([])
 const entryLoading = ref(false)
 const entryError = ref('')
-/**
- * 一页 30 条。
- *
- * <p>原来一次拉 300 条，每条还带正文片段 —— 打开一个分类要等很久，
- * 长列表在手机上也会滚成上万像素。30 条一页，翻页看后面的。
- */
 const ENTRY_PAGE = 30
 const entryOffset = ref(0)
 
@@ -172,7 +151,6 @@ async function loadEntries() {
   }
 }
 
-/** 改搜索词等于换一批结果，必须回到第一页 */
 function searchEntries() {
   entryOffset.value = 0
   loadEntries()
@@ -180,7 +158,6 @@ function searchEntries() {
 
 function goEntryPage(delta: number) {
   if (entryLoading.value) return
-  // 输入框改了但还没点搜索：从第一页查新词，而不是接着旧结果的页码跳
   if (entryQ.value.trim() !== entryAppliedQ.value) {
     searchEntries()
     return

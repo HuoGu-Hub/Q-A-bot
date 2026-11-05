@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 动作卡片 —— 标题 + 一句说明，点一下直接执行。
- *
- * 用在「选一种方式」的弹窗里（导出格式、抓取方式）。两个以上选项时，
- * 光看按钮文字分不出差别，所以把差别写在标题下面；点哪个就做哪个，不设"确定"按钮。
- */
 withDefaults(defineProps<{
   title: string
   hint?: string

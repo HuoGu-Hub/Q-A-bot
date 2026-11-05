@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 成本价目 —— 评测里所有"多少钱"都由它换算。
- *
- * <p>口径写死在页面顶部：每百万 token 多少元。换算成微元在服务端做，
- * 前端只显示结果，避免两边各算一遍出现分位差异。
- */
 import { onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { EvalPrice } from '@shared/api/types'

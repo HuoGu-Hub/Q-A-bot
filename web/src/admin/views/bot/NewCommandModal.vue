@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 新建命令的类型选择。
- *
- * <p>板块和指令是同一张命令表里的不同形态，所以不再并排两个「新建」按钮；
- * 先选类型，再进对应编辑器。
- */
 import Modal from '@shared/ui/Modal.vue'
 import Icon from '@shared/ui/Icon.vue'
 

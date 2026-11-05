@@ -1,12 +1,4 @@
 <script setup lang="ts">
-/**
- * 搜索条。
- *
- * 整条做成一个刻进去的槽：图标在槽里、清空在槽里、提交按钮贴在右端。
- * 上一版是 input 与按钮两个独立圆角方块并排，圆角还不一样（6px 配 3px）。
- *
- * 手机上按钮收成纯图标方块，把宽度全让给输入框；文字用 sr-only 保住可读名。
- */
 import { ref } from 'vue'
 import Icon from './Icon.vue'
 import Button from './Button.vue'
@@ -14,12 +6,9 @@ import Button from './Button.vue'
 const props = withDefaults(defineProps<{
   modelValue: string
   placeholder?: string
-  /** 输入框的无障碍名，同时作为 label 文本 */
   label?: string
   busy?: boolean
-  /** 提交按钮文字；空字符串表示只用图标 */
   action?: string
-  /** 右侧是否显示清空按钮 */
   clearable?: boolean
 }>(), {
   placeholder: '',
@@ -35,7 +24,6 @@ const emit = defineEmits<{
   clear: []
 }>()
 
-// 不用 useId：同一页可能出现多条搜索，随机串足够避免冲突，且不依赖 Vue 版本能力
 const uid = 'sb-' + Math.random().toString(36).slice(2, 9)
 const el = ref<HTMLInputElement | null>(null)
 
@@ -98,7 +86,6 @@ function clear() {
 .inp {
   flex: 1;
   min-width: 0;
-  /* 手机端必须 ≥16px，否则 iOS 聚焦时会放大整页 */
   font-size: var(--fs-base);
   background: none;
   border: 0;
@@ -127,8 +114,6 @@ function clear() {
 
 @media (max-width: 760px) {
   .go { min-width: 44px; padding: 0 12px; }
-  /* ⚠️ 用 sr-only 而不是 display:none：
-     display:none 会把「搜索」从无障碍树里一起删掉，按钮只剩一个没有名字的图标。 */
   .go-txt {
     position: absolute;
     width: 1px; height: 1px;
@@ -139,7 +124,6 @@ function clear() {
     border: 0;
   }
   .go-ico { display: block; }
-  /* 手机上整条高一点，拇指更容易点中 */
   .search { padding-left: var(--sp-3); }
   .inp { min-height: 36px; }
 }

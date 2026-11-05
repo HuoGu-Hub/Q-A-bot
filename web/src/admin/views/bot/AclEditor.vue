@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 名单编辑器 —— 四个输入框，指令与板块共用。
- *
- * <p>只管形状，不负责读写：父组件拿 {@link AclForm} 去拼请求，
- * 这样"哪些档位需要名单"的规则仍然留在编辑器里。
- */
 import Input from '@shared/ui/Input.vue'
 import type { AclForm } from './aclForm'
 

@@ -1,28 +1,14 @@
 <script setup lang="ts">
-/**
- * 列表行 —— 搜索结果、热词、分类索引、后台清单共用。
- *
- * 整行就是那个链接，不再用「div 假装链接」或「链接套 ::after 铺满整行」：
- * 前者右键开不了新标签、读屏念不出目的地；后者在一行里有第二个可点元素时就打架。
- *
- * meta 放右侧的次要信息（次数、条目数、时间），sub 放标题下面的一行说明。
- */
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import Icon from './Icon.vue'
 
 withDefaults(defineProps<{
   title: string
-  /** 给了就渲染成 RouterLink；否则渲染成 button。
-      用对象形式传参，别自己拼 URL —— 词条名里可能有斜杠与空格 */
   to?: RouteLocationRaw | null
   sub?: string
-  /** 右侧次要信息 */
   meta?: string | number
-  /** 左侧图标 */
   icon?: string
-  /** 右侧箭头 */
   chevron?: boolean
-  /** 等宽显示 meta */
   monoMeta?: boolean
 }>(), {
   to: null,

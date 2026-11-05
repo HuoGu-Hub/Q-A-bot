@@ -4,10 +4,6 @@ import { renderInline } from '../renderInline'
 import { site, t } from '../useSiteText'
 import PageHeader from '@shared/ui/PageHeader.vue'
 
-/**
- * 「回答是怎么产生的」正文按换行拆成有序列表：一个文案块承载整段正文，
- * 后台是多行编辑框（一行一条）。默认值 = 原来的 4 条硬编码。
- */
 const HOW_STEPS_DEFAULT = [
   '把问题变成向量，在本地资料库里找最相关的几段',
   '同时用中英术语表做一次关键词匹配',
@@ -62,7 +58,6 @@ const howSteps = computed(() =>
 
     <section class="sec">
       <h2 class="h"><span v-html="renderInline(t('about.how_title', '回答是怎么产生的'))" /></h2>
-      <!-- 这是**真的流程**（先后有依赖关系），所以编号是有信息的，不是装饰 -->
       <ol class="steps">
         <li v-for="(step, i) in howSteps" :key="i">
           <span class="step-n num">{{ i + 1 }}</span>
@@ -83,8 +78,6 @@ const howSteps = computed(() =>
 <style scoped>
 .about { padding-top: var(--sp-5); padding-bottom: var(--sp-8); }
 
-/* 一节 = 一个 h2 + 正文。节与节之间只靠留白和一条发丝线分开，
-   不再给每一节套一个面板 —— 一整页面板会把"关于"读成仪表盘。 */
 .sec { padding: var(--sp-5) 0; border-top: 1px solid var(--hairline); scroll-margin-top: calc(var(--header-h) + 12px); }
 .sec.last { padding-bottom: 0; }
 .sec:first-of-type { border-top: 0; padding-top: 0; }
@@ -121,7 +114,6 @@ p { font-size: var(--fs-base); line-height: 1.9; }
 .group-value.num { color: var(--ember); }
 .join-hint { font-size: var(--fs-xs); margin-top: var(--sp-2); line-height: 1.8; }
 
-/* 流程：编号在这里是**信息**（第 2 步依赖第 1 步的结果），不是装饰 */
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
 .steps li { display: flex; gap: var(--sp-3); align-items: flex-start; font-size: var(--fs-base); color: var(--ink-2); line-height: 1.8; }
 .step-n {

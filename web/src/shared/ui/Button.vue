@@ -1,14 +1,4 @@
 <script setup lang="ts">
-/**
- * 按钮。
- *
- * 三档变体：primary 只给「这一屏最该做的事」，ghost 是默认，danger 只给删除。
- * 主按钮不再是「橙色渐变方块」—— 渐变在日间主题会变成一块脏棕色。
- * 现在用实色 + 上缘一道高光 + 外圈一圈热光表达「被点亮的石头」，
- * 两套主题下都是同一个物理逻辑。
- *
- * <p>给 <a> 留了出口：传 to 就渲染成 RouterLink，不要再用 RouterLink 套 Button。
- */
 import { RouterLink } from 'vue-router'
 
 withDefaults(defineProps<{
@@ -16,9 +6,7 @@ withDefaults(defineProps<{
   size?: 'sm' | 'md'
   disabled?: boolean
   type?: 'button' | 'submit'
-  /** 给了就渲染成路由链接 */
   to?: string | null
-  /** 满宽：移动端底部动作条、表单主按钮 */
   block?: boolean
 }>(), { variant: 'ghost', size: 'md', disabled: false, type: 'button', to: null, block: false })
 </script>
@@ -69,7 +57,6 @@ withDefaults(defineProps<{
   border-color: var(--edge-hover);
   color: var(--ink);
 }
-/* 按下：往回压一点，给「确实点到了」的触感 */
 .btn:active:not(:disabled):not(.is-disabled) {
   transform: translateY(1px);
   background: var(--stone-300);
@@ -77,8 +64,6 @@ withDefaults(defineProps<{
 }
 .btn:disabled, .btn.is-disabled { opacity: .42; cursor: not-allowed; }
 
-/* 主按钮：实色灵火 + 上缘高光 + 一圈热光。
-   ⚠️ 不用 linear-gradient —— 日间主题的 ember 是深赭，渐变会糊成一块脏棕色。 */
 .v-primary {
   background: var(--ember);
   border-color: transparent;
@@ -108,10 +93,7 @@ withDefaults(defineProps<{
 }
 
 @media (max-width: 760px) {
-  /* 拇指点得中的下限 */
   .s-md { min-height: 44px; padding: 10px 18px; }
-  /* 小号按钮在手机上更小一点，但高度仍守着 36：
-     吸顶栏里四颗按钮要挤进 366px，字号 15 会多出半颗的宽度 */
   .s-sm { min-height: 36px; padding: 6px 10px; font-size: var(--fs-sm); }
 }
 </style>

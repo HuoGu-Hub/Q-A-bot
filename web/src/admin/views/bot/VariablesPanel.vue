@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 变量页 —— 只读索引。
- *
- * 系统变量随版本增减，不做增删改；页面只回答「能写什么」与「值从哪来」。
- * 列表按来源分组，变量名可点击复制，方便直接粘进回复模板。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { CommandVariables, CommandVariable } from '@shared/api/types'
@@ -14,7 +8,6 @@ const loading = ref(false)
 const error = ref('')
 const data = ref<CommandVariables | null>(null)
 const keyword = ref('')
-/** 点过「当前值」之后显示真实值，之前显示示例值 */
 const showCurrent = ref(false)
 const copied = ref('')
 
@@ -75,13 +68,6 @@ async function copyVar(name: string) {
   }
 }
 
-/**
- * 页面栏要用的读数与动作。
- *
- * <p>搜索框与「看当前值 / 看示例值」已上移到 Bot 配置页的吸顶栏 ——
- * 变量页自己的标题行因此整个去掉。状态仍留在面板里，页面栏通过这几个函数读写，
- * 这样切到别的 tab 再切回来，关键词与显示模式都还在。
- */
 defineExpose({
   reload: load,
   isLoading: () => loading.value,
@@ -89,7 +75,6 @@ defineExpose({
   setKeyword: (v: string) => { keyword.value = v },
   showCurrent: () => showCurrent.value,
   toggleMode: () => { showCurrent.value = !showCurrent.value },
-  /** 高级变量指 {user.id} 与 {group.id}，服务端没开时这两个不可用 */
   advancedOff: () => !!data.value && !data.value.allowUserIds,
 })
 
@@ -139,7 +124,6 @@ onMounted(load)
 <style scoped>
 .var-page { display: flex; flex-direction: column; gap: var(--sp-5); }
 
-/* 标题行与「高级变量未启用」都已经上移到页面栏（BotConfigView 的 AdminPage#actions） */
 .rule-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

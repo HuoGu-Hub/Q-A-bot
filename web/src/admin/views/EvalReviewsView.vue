@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 复核队列 —— 自动判定出错时的人工出口。
- *
- * <p>只收质量类失败与不一致结论：检索没命中是机械结论，进队列只会耗人的注意力。
- * 提交后写一条 judge_type=human 的判定，汇总时覆盖自动结论，但两条都留着。
- */
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'

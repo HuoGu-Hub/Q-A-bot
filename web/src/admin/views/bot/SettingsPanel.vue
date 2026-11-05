@@ -1,14 +1,4 @@
 <script setup lang="ts">
-/**
- * 「Bot 配置 → 设置」面板。
- *
- * 从原来的独立页面 SettingsView 拆出来：外壳（AdminPage）与二级目录都交给
- * 父页面 BotConfigView，这里只负责这一个 tab 的内容。
- *
- * 操作按钮由父页面渲染在吸顶的页面栏里（「保存并生效」等），本面板通过
- * defineExpose 把这些动作抛出去 —— 按钮要调的是面板内部状态，
- * 视图拿不到，所以必须这样开口子。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import { reloadBotName } from '@shared/identity/botName'
@@ -25,27 +15,12 @@ const error = ref('')
 const ok = ref('')
 const groups = ref<Record<string, SettingsView['groups'][string]>>({})
 
-/** 改动缓冲：只有改过的项才会提交 */
 const changed = ref<Record<string, unknown>>({})
 
-/**
- * 不归 Bot 配置管的分组。
- *
- * <p>它们描述的是**公开站长什么样**（轮播怎么播、加群信息怎么写），与机器人怎么回答无关，
- * 已经搬到「页面信息」：轮播那 4 项在轮播面板里，站点信息是它的一个页签。
- * 两边都显示过一次 —— 改的人分不清哪边是真的，所以从这里摘掉。
- */
 const SITE_GROUPS = ['首页轮播', '站点信息']
 const botGroups = computed(() => Object.fromEntries(
   Object.entries(groups.value).filter(([name]) => !SITE_GROUPS.includes(name))))
 
-/**
- * 折叠状态：默认【全部收起】。
- *
- * 原来 12 个分组 53 个控件全部展开，页面长到要靠滚动找东西。
- * Panel 的展开态是它自己的内部状态，所以「全部展开/收起」用换 key 重挂载；
- * 未保存的改动存在 `changed` 里，重挂载不会丢。
- */
 const expandAll = ref<boolean | null>(null)
 const gen = ref(0)
 function setAll(open: boolean) {
@@ -70,7 +45,6 @@ function onEdit(item: SettingItem, value: unknown) {
   ok.value = ''
 }
 
-/** 列表类配置用多行文本编辑（一行一个） */
 function listText(item: SettingItem): string {
   const v = changed.value[item.key] ?? item.value
   return Array.isArray(v) ? v.join(String.fromCharCode(10)) : String(v ?? '')
@@ -95,13 +69,8 @@ async function save() {
 
 const changedCount = () => Object.keys(changed.value).length
 const isChanged = (k: string) => k in changed.value
-/** 该分组里改了几项 —— 收起状态下徽标仍可见，方便定位改动 */
 const changedIn = (items: SettingItem[]) => items.filter(i => isChanged(i.key)).length
 
-/**
- * 枚举选项表。
- * ⚠️ 兜底逻辑下沉在 Select 组件里：没有预置选项时展示当前值，不会写成空值。
- */
 const ENUM_OPTIONS: Array<[string, Array<{ value: string; label: string }>]> = [
   ['private-chat-policy', [
     { value: 'off', label: 'off — 不回私聊' },
@@ -121,20 +90,11 @@ const ENUM_OPTIONS: Array<[string, Array<{ value: string; label: string }>]> = [
 const enumOpts = (item: SettingItem) => ENUM_OPTIONS.find(([frag]) => item.key.includes(frag))?.[1]
 const val = (item: SettingItem) => String(changed.value[item.key] ?? item.value ?? '')
 
-/**
- * 父页面（BotConfigView）页面栏上的按钮要调这些动作。
- *
- * 全部以**函数**形式暴露（而不是 ref / computed）：
- * 视图在渲染时调用它们，读到的响应式依赖会计入视图的渲染副作用，
- * 所以「已改 N 项」这类数字照样会随面板内部状态更新，类型也是干净的。
- */
 defineExpose({
-  /** 放弃改动（重新拉取） */
   reload: load,
   save,
   setAll,
   changedCount,
-  /** 读数式暴露：视图在渲染时调用它，读到 loading 变化会重渲染，按钮禁用态才跟得上 */
   isLoading: () => loading.value,
 })
 

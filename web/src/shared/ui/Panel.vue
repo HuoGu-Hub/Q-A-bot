@@ -1,34 +1,18 @@
 <script setup lang="ts">
-/**
- * 面板 —— 基础容器。
- *
- * 视觉身份：默认不描边框，层级靠背景明度阶梯表达。盒子本体在 theme/texture.css 的 .panel。
- * 这里只管标题区与折叠。
- *
- * 折叠：collapsible + defaultOpen。默认收起时要给 hint 或 count，
- * 否则收起来只剩一个标题，用户不知道里面有什么。
- *
- * mobileCollapsed：手机端默认收起。管理端一屏十几个分组，全展开的结果是
- * 手机上一万四千像素的长页 —— 这不是「信息全」，是「什么都找不到」。
- */
 import { onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 
 const props = withDefaults(
   defineProps<{
     title?: string
-    /** 标题右侧的一句话说明 —— 收起状态下它仍然可见，所以很重要 */
     hint?: string
-    /** 条目数徽标，收起时可见 */
     count?: number | string
-    /** 内衬刻痕。⚠️ 只在页面级外壳用一次，每个面板都挂会重新变成视觉噪音 */
     corners?: boolean
     stone?: boolean
     sunken?: boolean
     glow?: boolean
     collapsible?: boolean
     defaultOpen?: boolean
-    /** 窄屏（≤760px）下初始为收起 */
     mobileCollapsed?: boolean
   }>(),
   {
@@ -98,7 +82,6 @@ function toggle() {
 <style scoped>
 .panel-title {
   font-family: var(--font-body);
-  /* 17px：和正文拉开一档。标题不成为标题，是「满屏线条框」观感的根源之一 */
   font-size: var(--fs-section);
   font-weight: var(--fw-semi);
   letter-spacing: .01em;
@@ -110,7 +93,6 @@ function toggle() {
 }
 .panel--collapsible .panel-title { margin-bottom: 0; }
 .panel--collapsible .panel-body { margin-top: var(--sp-4); }
-/* 收起时收窄内边距：展开态用 24px 是为了给内容呼吸，收起的行只有一行字 */
 .panel--closed { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
 
 .head {
@@ -120,7 +102,6 @@ function toggle() {
   flex: 1;
   min-width: 0;
 }
-/* 可点区域：整行都能点，且手机端够 44 */
 .head--btn {
   background: none;
   border: 0;
@@ -141,7 +122,6 @@ function toggle() {
 .head--btn:active { background: var(--surface-active); }
 .head--btn:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
 
-/* 余烬刻痕：区块标题的标识。全站只有它和页面标题用这道竖线。 */
 .head-text {
   position: relative;
   padding-left: var(--sp-4);
@@ -194,7 +174,6 @@ function toggle() {
 @media (max-width: 760px) {
   .panel { padding: var(--sp-4); }
   .head--btn { min-height: 44px; }
-  /* 手机上说明会挤掉标题：只保留标题与计数 */
   .head-hint { display: none; }
 }
 </style>

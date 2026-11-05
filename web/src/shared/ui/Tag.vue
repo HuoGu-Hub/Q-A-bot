@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/** 语义标签。颜色只表达「状态」，不表达「装饰」。 */
 withDefaults(defineProps<{
   tone?: 'good' | 'bad' | 'warn' | 'neutral' | 'flame'
 }>(), { tone: 'neutral' })

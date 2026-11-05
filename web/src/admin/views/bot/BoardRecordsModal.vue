@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 板块记录弹窗。
- *
- * <p>记录是群里产生的数据，后台只做「看、撤销、恢复」—— 改正文会让
- * 「谁发的」变得不可信。撤销是软删，行还在，勾上「显示已撤销」就能恢复。
- */
 import { computed, ref, watch } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { AdminBoard, AdminBoardRecord, AdminBoardRecordsResponse } from '@shared/api/types'

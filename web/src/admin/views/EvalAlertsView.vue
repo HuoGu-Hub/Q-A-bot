@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * 告警 —— 规则决定"什么情况要喊人"，事件记录"喊过几次、谁处置了"。
- *
- * <p>可配的指标只有汇总里真实存在的三个：通过率、单条成本、P95。
- * 不提供"配了也不会触发"的指标，避免把规则表做成许愿池。
- */
 import { onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type { EvalAlertEvent, EvalAlertRule } from '@shared/api/types'

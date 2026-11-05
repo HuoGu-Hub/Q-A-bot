@@ -1,19 +1,4 @@
 <script setup lang="ts">
-/**
- * 公开站地图查看器。
- *
- * <h2>这一页的一句话</h2>
- * "把 wiki 的地图变成能拖、能搜、能指着地图告诉你往哪走的一张图。"
- *
- * <h2>信息架构</h2>
- * 左边一条控制栏（换地图 / 找地方 / 开关图层），右边全是地图 ——
- * 地图是主角，控件只在需要时占据视线。窄屏时控制栏收成一条横向工具条。
- *
- * <h2>为什么"找地方"走 /map/locate 而不是前端过滤</h2>
- * 因为答案不是"匹配到哪些点"，而是"这些点在地图上哪儿、相对哪个地标"。
- * 那需要全量点位算最近地标 —— 前端只拿得到当前地图的点，而且会算重。
- * 放后端算还有一个好处：机器人在群里回答用的是同一段代码，网页上看到什么、群里就说什么。
- */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi, describeError } from '@shared/api/client'
@@ -45,20 +30,15 @@ const mapName = ref('')
 const markers = ref<Marker[]>([])
 const markersLoading = ref(false)
 
-/* ==================== 资源点位 ==================== */
-
 const resourceCategories = ref<ResourceCategory[]>([])
 const resourceVersion = ref('')
 const resourceMessage = ref('')
 const resourceMarkers = ref<Marker[]>([])
 const resourceAreas = ref<MapArea[]>([])
-/** 已经取过坐标的层；开关关掉再打开不重复请求 */
 const loadedResources = ref<Set<string>>(new Set())
 const loadingResources = ref<Set<string>>(new Set())
-/** 展开的资源分类；deep link 落到某一层时自动展开它所在的分区 */
 const openCategories = ref<Set<string>>(new Set())
 
-/** 当前打开的图层一共会画多少个点/林地块 —— 用来一眼核对"是不是多开了" */
 function sidebarIcon(icon: string): string {
   return '/api/public/v1/map/resource-icon?name=' + encodeURIComponent(icon)
 }
@@ -80,24 +60,10 @@ const shownResource = computed(() => {
 
 const visibleGroups = ref<Set<string>>(new Set())
 const visibleCategories = ref<Set<string>>(new Set())
-/**
- * 选中的点位**栈**：同一个像素上可能压着好几个点位。
- *
- * <p>为什么是栈而不是单个：wiki 上一个尖塔既是传送点、又是收集品、还可能是任务点，
- * 它们坐标完全相同。以前只取最近的那个，另外几个等于永远点不开。
- */
 const pickedStack = ref<Marker[]>([])
-/** 栈顶那张，也就是最近的那个 —— 高亮、详情里的"主"信息都用它 */
 const selected = computed(() => pickedStack.value[0] ?? null)
 const highlight = ref<{ toRef: string; relative: Relative } | null>(null)
 
-/**
- * 堆叠顺序：**最近的在最前**（i = 0）。
- *
- * <p>DOM 顺序保持"近的在前"，靠 z-index 决定谁压在上面 ——
- * 因为 CSS 要靠 :first-child 把栈顶那张留在正常流里撑住容器高度，
- * 否则整叠卡片都是绝对定位，容器高度塌成 0，鼠标就没有可悬停的面积。
- */
 const stackCards = computed(() =>
   pickedStack.value.map((m, i) => ({ m, i })),
 )
@@ -108,12 +74,6 @@ const located = ref<LocateResult | null>(null)
 
 const mapCanvas = ref<InstanceType<typeof MapCanvas> | null>(null)
 
-/**
- * 悬浮控制栏是否展开。
- *
- * <p>桌面默认展开：第一次进来必须看得见「哪里能搜、哪里能开关图层」。
- * 手机默认收起：一进来就展开会把地图盖掉六成，而这一页的主角是地图本身。
- */
 const railOpen = ref(
   typeof window === 'undefined' || !window.matchMedia('(max-width: 760px)').matches
 )
@@ -122,14 +82,12 @@ const currentMap = computed<MapSpec | null>(
   () => catalog.value?.maps.find((m) => m.map === mapName.value) ?? null,
 )
 
-/** 一张地图可能有多张画布。同一时间只显示一张，切画布等于切底图 */
 const canvasIndex = ref(0)
 const currentCanvas = computed(() => {
   const list = currentMap.value?.canvases ?? []
   return list[Math.min(canvasIndex.value, Math.max(0, list.length - 1))] ?? null
 })
 
-/** 当前画布上的点位 —— 跨画布的点不能一起画（坐标原点不同） */
 const markersOnCanvas = computed(() =>
   [...markers.value, ...resourceMarkers.value].filter(
     (m) => !currentCanvas.value || !m.canvas || m.canvas === currentCanvas.value.page,
@@ -158,8 +116,6 @@ const adminCategories = computed(() => {
   return [...seen].sort()
 })
 
-/* ==================== 装载 ==================== */
-
 async function boot() {
   loading.value = true
   error.value = ''
@@ -181,16 +137,8 @@ async function boot() {
   }
 }
 
-/** 换图任务。由 watcher 发起，boot 与命中跳转都等它 */
 let mapTask: Promise<void> | null = null
 
-/**
- * 换图：只改 mapName，点位交给 watcher 去拉。
- *
- * <p>⚠️ 为什么不能在这里顺便再拉一次：boot、命中跳转、watcher 三处各拉一次的话，
- * 同一张图会请求两遍。没有缓存时只是白跑一趟；有了缓存之后，第二遍会被
- * 当成「用户手动刷新」真的打到网络上 —— 表现就是来回切页时只有地图页还在发请求。
- */
 async function selectMap(name: string): Promise<void> {
   if (!name || name === mapName.value) return
   mapName.value = name
@@ -198,7 +146,6 @@ async function selectMap(name: string): Promise<void> {
   await mapTask
 }
 
-/** 同一张地图只跑一次加载：重复跑会把刚打开的层又关掉 */
 let loadingMap = ''
 let loadingPromise: Promise<void> | null = null
 
@@ -219,13 +166,8 @@ async function doLoadMarkers(map: string) {
     const groups = new Set<string>()
     const picked = currentMap.value?.defaultGroups
     if (picked) {
-      // 管理员在后台挑过：**完全按他的选择**，不再叠加经验值 ——
-      // 否则"我在后台关掉了收集品"这件事会在前端被悄悄推翻
       for (const k of picked) groups.add(k)
     } else {
-      // 还没配置过：用内置经验值兜底，别让新地图一上来是一片空白。
-      // 只开"找地方"用得上的 —— 收集品与世界观文本加起来五百多条，
-      // 全开会让总览糊成一片，而它们不是"资源在哪、敌营在哪"这类问题的答案。
       for (const g of currentMap.value?.groups ?? []) {
         if (g.category !== 'collection') groups.add(g.key)
       }
@@ -257,7 +199,6 @@ async function doLoadMarkers(map: string) {
   }
 }
 
-/** 资源目录只有图层与点数，坐标按层懒加载 */
 async function loadResourceCatalog(map: string) {
   resourceCategories.value = []
   resourceVersion.value = ''
@@ -316,7 +257,6 @@ async function toggleResource(layer: ResourceLayer) {
         color: layer.color,
         name: name || layer.name,
       }))
-      // 同一层重复加载时先替换旧数据，避免深链和手动点击叠加出两倍的点
       resourceAreas.value = resourceAreas.value.filter((a) => a.group !== layer.key).concat(add)
       const done = new Set(loadedResources.value)
       done.add(layer.key)
@@ -368,7 +308,6 @@ async function toggleResource(layer: ResourceLayer) {
 
 onMounted(boot)
 
-// 换图**唯一**的加载入口。地址栏里的 ?map= 也从这里写回去，可分享、刷新不回退
 watch(mapName, (next, prev) => {
   if (!next || next === prev) return
   canvasIndex.value = 0
@@ -382,10 +321,7 @@ watch(canvasIndex, () => {
   highlight.value = null
 })
 
-// 图标表与画布实例都可能在数据之后才就绪，两个都盯着才不会漏掉其中一次
 watch([groupIcons, mapCanvas], () => mapCanvas.value?.setGroupIcons(groupIcons.value), { flush: 'post' })
-
-/* ==================== 找地方 ==================== */
 
 async function locate() {
   const q = query.value.trim()
@@ -404,12 +340,6 @@ async function locate() {
   }
 }
 
-/**
- * 跳到一条命中：换地图 → 换画布 → 把锚点与目标同时框进视野。
- *
- * "同时框进"是刻意的：只说"在某某东北"而不把那个参照物一起显示出来，
- * 用户还得自己去搜参照物在哪 —— 那等于把计算过的信息又丢掉了。
- */
 async function focusHit(hit: LocateHit) {
   if (hit.map && hit.map !== mapName.value) {
     await selectMap(hit.map)
@@ -435,8 +365,6 @@ function onPick(list: Marker[]) {
   pickedStack.value = list
   if (!list.length) highlight.value = null
 }
-
-/* ==================== 图层 ==================== */
 
 function toggleGroup(key: string) {
   const next = new Set(visibleGroups.value)
@@ -523,10 +451,6 @@ function fmt(n: number): string {
 
         <aside id="map-rail" class="rail" :class="{ 'is-collapsed': !railOpen }" aria-label="地图控制">
           <div class="rail-head">
-            <!--
-              手机端整条标题栏就是开关：收起后只剩这 46px 的把手，
-              点它重新展开。上一版只有「收起」没有「展开」，收起之后再也叫不回来。
-            -->
             <button
               type="button"
               class="rail-handle"
@@ -688,11 +612,6 @@ function fmt(n: number): string {
 
         <p v-if="markersLoading" class="stage-loading">正在载入点位…</p>
 
-        <!--
-          详情卡：右下角。地图不被遮挡太多，又离手最近。
-          多个点位重合时叠成一副牌 —— 平时只露出每张的顶边，看得出"不止一张"，
-          悬停或键盘聚焦才摊开。摊开是**位移**而不是改布局，所以不会把地图推来推去。
-        -->
         <div
           v-if="stackCards.length"
           class="detail-stack"
@@ -745,26 +664,19 @@ function fmt(n: number): string {
 </template>
 
 <style scoped>
-/*
- * 地图页是**全屏页**：外壳去掉了页脚与留白（见 App.vue 的 is-full），
- * 这一层把自己撑满，并且自己**绝不滚动** —— 页面能滚的话，拖地图时会连带把页面拖动。
- */
 .map-page {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  /* 左右只留一道最小边距，真正的留白交给舞台自己的宽度上限 */
   padding: var(--sp-4) var(--sp-3);
   display: flex;
   justify-content: center;
 }
 @media (max-width: 760px) {
-  /* 手机上横向一寸都不能浪费；底部留给底栏的空白由外壳那层负责 */
   .map-page { padding: var(--sp-2); }
   .stage { width: 100%; }
 }
 
-/* 空态 / 加载 / 报错都浮在地图之上，而不是把地图顶下去 */
 .overlay {
   position: absolute;
   left: 50%;
@@ -802,9 +714,6 @@ function fmt(n: number): string {
 .empty-state h2 { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-lg); color: var(--ink); }
 .empty-state p { margin: 0 auto; max-width: 46ch; }
 
-/* ==================== 悬浮控制栏 ====================
-   面板**浮在地图上**，不再占一列：地图才是主角，控制栏不该永久吃掉 288px 的宽度。
-   收起之后只剩左上角一颗按钮，地图回到满宽。 */
 .rail {
   position: absolute;
   left: var(--sp-3);
@@ -818,16 +727,9 @@ function fmt(n: number): string {
   overflow-y: auto;
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-radius: var(--r-md);
-  /*
-   * 半透明 + 模糊。**别调回 92%**：那个浓度下底图完全看不见，
-   * 面板就变成一块贴在页面上的石板，失去了"浮在地图上"的意义。
-   * 76% 是实测还能看清面板里文字、同时底图的地形与颜色明显透出来的位置；
-   * 模糊保留一点，是为了让透出来的底图不至于干扰读字。
-   */
   background: color-mix(in srgb, var(--stone-300) 76%, transparent);
   box-shadow: var(--shadow-pop), var(--bevel-raised);
   backdrop-filter: blur(8px);
-  /* 面板自己滚到底时不要把页面一起带着滚 */
   overscroll-behavior: contain;
 }
 .rail-head {
@@ -839,7 +741,6 @@ function fmt(n: number): string {
   top: calc(var(--sp-3) * -1);
   margin: calc(var(--sp-3) * -1) calc(var(--sp-4) * -1) 0;
   padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
-  /* 标题栏比面板主体实一点：它是吸顶的，下面滚过的内容不能透上来 */
   background: color-mix(in srgb, var(--stone-300) 86%, transparent);
   border-bottom: 1px solid var(--edge-soft);
 }
@@ -887,14 +788,10 @@ function fmt(n: number): string {
   font-size: var(--fs-sm);
 }
 .rail-toggle:hover, .rail-collapse:hover { color: var(--ember-hot); border-color: var(--ember); }
-/* 桌面：收起时整块藏起来，左上角留一颗「面板」按钮 */
 @media (min-width: 761px) {
   .rail.is-collapsed { display: none; }
 }
 
-/* 手机上整块变成底部弹层：
-   收起时只剩一条 46px 的把手，地图可见面积从「六成被盖住」变成「九成可见」。
-   这是这一页移动端最重要的一个改动 —— 上一版控制栏浮在左上，一进来就遮掉 62% 的图。 */
 @media (max-width: 760px) {
   .rail {
     left: 0;
@@ -910,7 +807,6 @@ function fmt(n: number): string {
     gap: 0;
     overflow: hidden;
   }
-  /* 收起：只留把手。不再整块消失，否则总要回左上角找那个「面板」按钮 */
   .rail.is-collapsed { max-height: 46px; }
   .rail.is-collapsed .rail-body { display: none; }
   .rail-head {
@@ -922,7 +818,6 @@ function fmt(n: number): string {
     background: var(--stone-300);
     border-bottom: 1px solid var(--hairline);
   }
-  /* 把手：40×4 的短横，告诉用户这张纸可以推上来 */
   .rail-head::before {
     content: '';
     position: absolute;
@@ -935,14 +830,12 @@ function fmt(n: number): string {
     background: var(--edge-hover);
   }
   .rail-handle { padding-top: 6px; }
-  /* 手机端收起就是「把手」，不需要额外的关闭按钮：留着它也关不掉什么 */
   .rail-collapse { display: none; }
   .rail-body {
     padding: var(--sp-2) var(--sp-4) var(--sp-5);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  /* 浮动的「面板」按钮只服务桌面；手机上收起是把手的事 */
   .rail-toggle { display: none; }
 
 }
@@ -959,7 +852,6 @@ function fmt(n: number): string {
 .mini {
   background: none;
   border: none;
-  /* 行内文字按钮，但命中区要够：加内边距把高度撑到 28，不改变观感 */
   padding: 3px 4px;
   min-height: 28px;
   color: var(--ink-3);
@@ -1019,7 +911,6 @@ function fmt(n: number): string {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  /* 整行可点，命中高度 36：原生复选框只有 13px，但它不是唯一的点击面 */
   min-height: 36px;
   padding: 4px 6px;
   border-radius: var(--r-xs);
@@ -1082,30 +973,14 @@ function fmt(n: number): string {
 .dot.d-poi { background: var(--ink-3); }
 .dot.d-custom { background: var(--ember-hot); }
 
-/* ==================== 舞台 ==================== */
 .stage {
   position: relative;
-  /*
-   * 只占视口宽度的 75%，居中。
-   *
-   * 为什么是 min(100%, max(680px, 75vw)) 而不是一个百分比：手机上 75vw 只有两百多像素，
-   * 地图会窄到没法看。这样写等于"宽屏按比例留白、窄屏自动吃满可用宽度"，
-   * 一个表达式覆盖两头，不需要再写一套媒体查询。
-   */
   width: min(100%, max(680px, 75vw));
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  /*
-   * 这里**不铺任何底色、不加投影**。
-   *
-   * 之前用的是 wiki 给的 backdrop 色（#2e2e2c）加一层深底 —— 结果画布区域是一块
-   * 比页面更亮的方块，四周留白一放大就非常明显，看着像盖了张蒙版。
-   * 现在画布与页面同底：瓦片没盖到的地方直接露出页面背景，边界由地图自身决定。
-   */
   border-radius: var(--r-md);
 }
-/* 缩放按钮放左下：左上留给控制栏，右下留给详情卡 */
 .stage-tools {
   position: absolute;
   left: var(--sp-3);
@@ -1142,8 +1017,6 @@ function fmt(n: number): string {
   font-size: var(--fs-xs);
 }
 
-/* ==================== 详情 ==================== */
-/* ==================== 详情卡（可堆叠） ==================== */
 .detail-stack {
   position: absolute;
   z-index: 2;
@@ -1163,36 +1036,20 @@ function fmt(n: number): string {
   box-shadow: var(--shadow-pop), var(--bevel-raised);
   backdrop-filter: blur(8px);
 }
-/*
- * 多张重合：叠成一副牌，每张只往上露出 16px 的顶边。
- * 用绝对定位 + 位移，不改布局 —— 改布局会让整叠卡片的尺寸随悬停跳动。
- */
 .detail-stack.many .detail {
   position: absolute;
   left: 0;
   right: 0;
-  /*
-   * 对齐的是**顶边**不是底边。
-   * 底对齐 + 上移会让比栈顶矮的卡片整个藏到它后面（矮的那张顶边更低），
-   * 看上去还是只有一张；顶对齐则不论高矮都稳定露出 i×16px 的一条边。
-   */
   top: 0;
-  /* 越靠前的越在上面：栈顶那张要压住后面露出来的边 */
   z-index: calc(20 - var(--i));
   transform: translateY(calc(var(--i) * -16px));
   transition: transform var(--dur) var(--ease);
 }
-/*
- * 栈顶那张留在正常流里，把容器撑到它自己的高度。
- * 不给它这个位置的话，整叠卡片全是绝对定位，容器高度是 0 ——
- * 视觉上照常显示，但鼠标找不到可悬停的面积，摊开就永远触发不了。
- */
 .detail-stack.many .detail:first-child {
   position: relative;
   z-index: 20;
 }
 
-/* 悬停或键盘聚焦才摊开：每张按自身高度让开，露出完整内容 */
 .detail-stack.many:hover .detail,
 .detail-stack.many:focus-within .detail {
   transform: translateY(calc(var(--i) * -1 * (100% + 8px)));
@@ -1215,11 +1072,7 @@ function fmt(n: number): string {
 .detail a { color: var(--ember); display: inline-flex; align-items: center; gap: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-/* ==================== 窄屏收尾 ====================
-   ⚠️ 这两条必须放在文件最后：.stage-tools 与 .detail-stack 的基础规则在上面，
-   同权重下后写的那条胜出，写早了会被基础规则覆盖。 */
 @media (max-width: 760px) {
-  /* 缩放按钮挪到右上，避开底部的弹层与详情卡 */
   .stage-tools {
     left: auto;
     right: var(--sp-2);
@@ -1227,9 +1080,7 @@ function fmt(n: number): string {
     top: var(--sp-2);
     flex-direction: row;
   }
-  /* 手机上缩放按钮放大到 40：悬在地图上的小按钮最容易点空 */
   .tool { width: 40px; height: 40px; }
-  /* 详情卡：贴在弹层之上，通栏。只留 8px 边距，手指点得到关闭 */
   .detail-stack {
     left: var(--sp-2);
     right: var(--sp-2);

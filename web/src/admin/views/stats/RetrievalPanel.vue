@@ -9,16 +9,6 @@ import DataTable from '@shared/ui/DataTable.vue'
 import Notice from '@shared/ui/Notice.vue'
 import Tag from '@shared/ui/Tag.vue'
 
-/**
- * 「统计 → 检索」面板。
- *
- * <p>从总览里搬出来的两块：未命中告诉你"该补什么"，
- * 来源告诉你"答案是从哪条路找出来的"。它们回答的是**检索质量**，
- * 而总览回答的是"用得怎么样" —— 混在一屏里，前者永远被后者的数字压住。
- *
- * <p>没有自动刷新：这两个表看的是补数据的线索，不是时间敏感的读数。
- * 切走时记一笔脏标记，切回来补拉一次，和总览的做法一致。
- */
 const props = defineProps<{ days: number }>()
 
 const loading = ref(false)
@@ -50,8 +40,6 @@ async function load() {
   const q = '?days=' + props.days
   try {
     const [m, s] = await Promise.all([
-      // 各取前 10 条：这两张表是「该补什么」的线索，不是完整清单。
-      // 一次拉 20+20 条会让面板变长，也对排查没有额外帮助。
       adminApi.get<MissResponse>('/misses' + q + '&limit=10'),
       adminApi.get<SourcesResponse>('/sources' + q),
     ])
@@ -138,14 +126,11 @@ defineExpose({
 <style scoped>
 .wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* 两栏的下限必须写 minmax(0, …)：右边那张表的"问题"单元格
-   min-content 能撑到 900px，只写 1fr 会把整页顶出横向滚动条。 */
 .miss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-5); }
 
 .sub { font-size: var(--fs-meta); letter-spacing: var(--tracking-label); margin-bottom: var(--sp-2); }
 .sub--gap { margin-top: var(--sp-4); }
 
-/* 「差一点被 min-score 挡住」—— 明显到值得你动手调阈值的那种 */
 .near { color: var(--rust); }
 .nowrap { white-space: nowrap; }
 .q { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

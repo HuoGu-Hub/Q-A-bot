@@ -1,11 +1,4 @@
 <script setup lang="ts">
-/**
- * 评测 —— 批次与用例集。
- *
- * <p>一屏只回答两个问题：跑过哪些批次、它们的结论是什么；用例集有多少条、冻到第几版。
- * 单条用例的过程不在这里展开，点进去看 Trace —— 那是另一个问题，
- * 混在同一屏会让"这一批整体怎么样"永远被单条明细挤下去。
- */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
@@ -51,7 +44,6 @@ const calibGrader = ref('relevance')
 const calibTsv = ref('')
 const history = ref<EvalCalibrationHistory[]>([])
 
-/** 折线图：把最近十次按时间正序摊在 560×160 的坐标系里，80% 处画阈值线 */
 const chart = computed(() => {
   const rows = [...history.value].reverse()
   if (rows.length < 2) return null

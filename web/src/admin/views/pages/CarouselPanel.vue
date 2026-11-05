@@ -1,15 +1,4 @@
 <script setup lang="ts">
-/**
- * 「页面信息 → 首页轮播」面板。
- *
- * 公开站首页那块轮播的增删改：上传 / 排序 / 启停 / 配链接与说明。
- *
- * ⚠️ **上传必须用原生 fetch**，不能用 adminApi.post：共享的 request() 会把 body
- *    JSON.stringify 并强行带上 content-type: application/json，FormData 会被它毁掉，
- *    而且 multipart 的 boundary 必须由浏览器自己生成。整个文件里只有这一处绕开 adminApi。
- *
- * 设置那 4 项走的是现成的 /admin/api/settings（和白名单同一套），不另造接口。
- */
 import { computed, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import type {
@@ -29,45 +18,37 @@ import DataTable from '@shared/ui/DataTable.vue'
 import Modal from '@shared/ui/Modal.vue'
 import { toast } from '@shared/ui/toast'
 
-/** 设置项的 key。四项都在后端白名单里，这里只负责挑出来展示 */
 const K_ENABLED = 'app.site.carousel.enabled'
 const K_INTERVAL = 'app.site.carousel.interval-ms'
 const K_MAX_COUNT = 'app.site.carousel.max-count'
 const K_MAX_SIZE = 'app.site.carousel.max-size-kb'
-/** 展示顺序：先开关，再数值。后端分组顺序不保证，所以这里定死 */
 const SETTING_ORDER = [K_ENABLED, K_INTERVAL, K_MAX_COUNT, K_MAX_SIZE]
 
 const loading = ref(false)
 const error = ref('')
-/** 行内操作（上移/下移/启停/删除）进行中 —— 期间把所有按钮禁掉，避免连点 */
 const busy = ref(false)
 
 const items = ref<CarouselItem[]>([])
 const list = ref<CarouselListResponse | null>(null)
 
-// ---------- 上传 ----------
 const fileInput = ref<HTMLInputElement | null>(null)
 const newLink = ref('')
 const newCaption = ref('')
 const uploading = ref(false)
 const uploadErr = ref('')
 
-// ---------- 编辑弹窗 ----------
 const editing = ref<CarouselItem | null>(null)
 const editLink = ref('')
 const editCaption = ref('')
 const savingEdit = ref(false)
 
-// ---------- 设置 ----------
 const settingItems = ref<SettingItem[]>([])
 const changed = ref<Record<string, unknown>>({})
 const savingSettings = ref(false)
 const settingsOk = ref('')
 const settingsErr = ref('')
-/** 设置拉过一次没有 —— 用来区分「还在读」和「后端根本没有这几项」 */
 const settingsLoaded = ref(false)
 
-// ==================== 读 ====================
 
 async function load() {
   loading.value = true
@@ -83,11 +64,6 @@ async function load() {
   }
 }
 
-/**
- * 设置单独拉：它挂了不该把下面的图片列表一起藏起来。
- *
- * 按 key 从全部分组里找，**不按分组名找** —— 分组名是后端文案，写死在这里迟早对不上。
- */
 async function loadSettings() {
   settingsErr.value = ''
   try {
@@ -110,11 +86,9 @@ onMounted(() => {
   void loadSettings()
 })
 
-// ==================== 限额（决定上传能不能点）====================
 
 const settingOf = (key: string) => settingItems.value.find((i) => i.key === key)
 
-/** 改过的值优先（还没保存也能立刻反映到限额上），最后退回列表接口给的值 */
 function limitOf(key: string, fallback: number): number {
   const it = settingOf(key)
   const v = it ? Number(changed.value[it.key] ?? it.value) : NaN
@@ -124,15 +98,10 @@ function limitOf(key: string, fallback: number): number {
 
 const maxCount = computed(() => limitOf(K_MAX_COUNT, list.value?.maxCount ?? 0))
 const maxSizeKb = computed(() => limitOf(K_MAX_SIZE, list.value?.maxSizeKb ?? 0))
-/**
- * 容器的接收上限（KB）。它比业务上限宽 —— 超过它请求会被中途掐断，
- * 浏览器只会说 "Failed to fetch"，所以先在前端挡一道、把话说清楚。
- */
 const ceilingKb = computed(() => list.value?.uploadCeilingKb ?? 0)
 const atMax = computed(() => maxCount.value > 0 && items.value.length >= maxCount.value)
 const canUpload = computed(() => !uploading.value && !atMax.value)
 
-/** 「单张 ≤ 2 MB」这种好读的写法 */
 function sizeText(kb: number): string {
   if (kb <= 0) return '大小不限'
   if (kb < 1024) return '单张 ≤ ' + kb + ' KB'
@@ -154,7 +123,6 @@ const listCount = computed(() => {
 const dimsText = (it: CarouselItem) =>
   (it.width && it.height ? it.width + '×' + it.height : '尺寸未知')
 
-// ==================== 写：上传 ====================
 
 function pickFile() {
   if (!canUpload.value) return
@@ -162,7 +130,6 @@ function pickFile() {
   fileInput.value?.click()
 }
 
-/** 「12 MB」这种写法（接收上限用；业务上限走 sizeText） */
 function ceilingText(kb: number): string {
   if (kb <= 0) return '未知'
   const mb = kb / 1024
@@ -171,12 +138,6 @@ function ceilingText(kb: number): string {
 
 const fileMb = (f: File) => (f.size / 1024 / 1024).toFixed(1)
 
-/**
- * 把「请求没拿到响应」翻译成人话。
- *
- * <p>浏览器对这种情况只说一句 {@code Failed to fetch}，没有状态码、没有原因 ——
- * 这张提示的职责就是列出最可能的几种，并带上这张图有多大，让人能自己往下查。
- */
 function uploadFailText(file: File, e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e)
   const ce = ceilingKb.value
@@ -190,12 +151,10 @@ function uploadFailText(file: File, e: unknown): string {
 async function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
-  // 立刻清空：不然同一个文件连选两次不会再触发 change
   input.value = ''
   if (!file) return
 
   uploadErr.value = ''
-  // 前端先挡两道，不用等传完再被拒（后端仍会再校验一次）
   if (maxSizeKb.value > 0 && file.size > maxSizeKb.value * 1024) {
     uploadErr.value = '这个文件 ' + fileMb(file) + ' MB，超过业务上限（' + sizeText(maxSizeKb.value)
       + '）—— 压小一点，或者到下面「轮播设置」里把上限调大'
@@ -213,7 +172,6 @@ async function onFile(ev: Event) {
     fd.append('file', file)
     fd.append('link', newLink.value.trim())
     fd.append('caption', newCaption.value.trim())
-    // 不要手动设 content-type：浏览器要自己带 multipart 的 boundary
     const res = await fetch('/admin/api/carousel', {
       method: 'POST',
       credentials: 'same-origin',
@@ -221,7 +179,6 @@ async function onFile(ev: Event) {
     })
     const body = await res.json().catch(() => null)
     if (!res.ok) {
-      // 状态码能告诉我们不少事，别浪费
       if (res.status === 401) throw new Error('登录已过期 —— 重新登录后再传')
       if (res.status === 413) {
         throw new Error('图片太大：服务器接收上限是 ' + ceilingText(ceilingKb.value)
@@ -238,8 +195,6 @@ async function onFile(ev: Event) {
     toast('已上传，公开站刷新即生效')
     await load()
   } catch (e) {
-    // fetch 的两种失败在这里汇合：拿到了响应但状态不对（上面的 Error），
-    // 以及**根本没拿到响应**（TypeError: Failed to fetch）—— 后者要说清可能的原因
     uploadErr.value = e instanceof TypeError ? uploadFailText(file, e)
       : (e instanceof Error ? e.message : String(e))
   } finally {
@@ -247,9 +202,7 @@ async function onFile(ev: Event) {
   }
 }
 
-// ==================== 写：行内操作 ====================
 
-/** 后端返回整份新列表，直接替换 —— 顺序不在前端猜 */
 function applyItems(r: CarouselItemsResponse) {
   items.value = r.items ?? []
 }
@@ -321,7 +274,6 @@ async function saveEdit() {
   }
 }
 
-// ==================== 写：设置 ====================
 
 const settingsDirty = computed(() => Object.keys(changed.value).length > 0)
 const sVal = (it: SettingItem) => String(changed.value[it.key] ?? it.value ?? '')
@@ -352,7 +304,6 @@ async function saveSettings() {
       return
     }
     settingsOk.value = '已保存并立即生效（' + r.applied.length + ' 项）'
-    // 重新拉：限额可能被改动了，上传按钮的可用性要跟着变
     await Promise.all([loadSettings(), load()])
   } catch (e) {
     settingsErr.value = describeError(e)
@@ -370,7 +321,6 @@ async function saveSettings() {
       <div v-if="loading" class="muted">读取中…</div>
 
       <template v-else>
-        <!-- ---------- 上传 ---------- -->
         <div class="upload">
           <Field label="跳转链接" hint="站内写 /library，外链写全 https://">
             <Input
@@ -391,9 +341,6 @@ async function saveSettings() {
           </Field>
 
           <div class="upload-bar">
-            <!-- 真 input 藏起来，样式交给共享 Button；accept 只管选择器，真正的类型校验在后端 -->
-            <!-- sr-only 也是"存在但看不见"：它仍然是表单控件，必须有名字，
-                 否则读屏与自动化检查都只会看到一个无名的"选择文件"按钮。 -->
             <input
               ref="fileInput"
               class="sr-only"
@@ -411,7 +358,6 @@ async function saveSettings() {
           <Notice v-if="uploadErr" tone="error">{{ uploadErr }}</Notice>
         </div>
 
-        <!-- ---------- 列表 ---------- -->
         <Empty v-if="!items.length" text="还没有图" />
 
         <DataTable v-else :rows="items.length">
@@ -428,8 +374,6 @@ async function saveSettings() {
             <tr v-for="(it, i) in items" :key="it.id">
               <td class="num">{{ i + 1 }}</td>
               <td>
-                <!-- width/height 让浏览器提前留好位置：不写的话图片到位前缩略图高度是 0，
-                     表格会"塌一下再撑开"（CLS）。后端读不出尺寸时是 0 → undefined，交给 CSS。 -->
                 <img
                   class="thumb"
                   :src="it.imageUrl"
@@ -465,18 +409,14 @@ async function saveSettings() {
       </template>
     </Panel>
 
-    <!-- ---------- 设置 ---------- -->
     <Panel title="轮播设置">
       <Notice v-if="settingsErr" tone="error">{{ settingsErr }}</Notice>
       <Notice v-if="settingsOk" tone="ok">{{ settingsOk }}</Notice>
 
-      <!-- 「单张大小上限」填得比服务器接收上限还大是没用的（请求会被容器掐断），
-           所以把那道上限直接显示出来，省得人以为改大了就一定能传 -->
       <p v-if="ceilingKb > 0" class="cap-note faint">
         服务器接收上限 <b>{{ ceilingText(ceilingKb) }}</b>
       </p>
 
-      <!-- 三种状态要分得开：还在读 / 读失败（上面的 Notice）/ 读到了但一项都没有 -->
       <div v-if="!settingItems.length && !settingsErr" class="muted">
         {{ settingsLoaded ? '后端白名单里没有 app.site.carousel.* 这几项' : '读取中…' }}
       </div>
@@ -513,7 +453,6 @@ async function saveSettings() {
       </template>
     </Panel>
 
-    <!-- ---------- 编辑弹窗 ---------- -->
     <Modal :open="!!editing" title="编辑这张图" @close="editing = null">
       <div class="edit-form">
         <Field label="跳转链接" hint="站内写 /library，外链写全 https://">
@@ -546,12 +485,9 @@ async function saveSettings() {
 <style scoped>
 .wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-/* 「服务器接收上限」那句提示：是说明不是警告，压低存在感 */
 .cap-note { font-size: var(--fs-meta); line-height: var(--lh-normal); margin: 0 0 var(--sp-3); }
 .cap-note b { font-family: var(--font-mono); color: var(--ink); }
 
-/* ---------- 上传区 ---------- */
-/* 上传是这个页面的主要动作，所以给它一块抬升面，和下面的列表分开 */
 .upload {
   background: var(--surface-inset);
   border: 1px solid var(--edge-soft);
@@ -564,8 +500,6 @@ async function saveSettings() {
 }
 .upload-bar { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 
-/* ---------- 列表 ---------- */
-/* 缩略图定死一个 16:9 的框：不这样的话每行高度会随图片比例跳 */
 .thumb {
   width: 96px;
   height: 54px;
@@ -580,7 +514,6 @@ async function saveSettings() {
 
 .ops { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 
-/* ---------- 设置区 ---------- */
 .settings-bar {
   display: flex;
   align-items: center;
@@ -591,7 +524,6 @@ async function saveSettings() {
   border-top: 1px solid var(--hairline);
 }
 
-/* ---------- 弹窗 ---------- */
 .edit-form { display: flex; flex-direction: column; }
 .edit-bar {
   display: flex;

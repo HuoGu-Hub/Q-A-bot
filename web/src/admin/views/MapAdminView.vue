@@ -1,24 +1,4 @@
 <script setup lang="ts">
-/**
- * 管理端 · 地图。
- *
- * <h2>它要解决的事</h2>
- * wiki 上的点位只有"官方内容"（尖塔、神龛、收集品），而群友真正会问的
- * 「铁矿在哪」「树脂在哪」一个都没有。所以这一页的核心动作只有一个：
- * <b>在地图上点一下，起个名，写句备注。</b>
- *
- * <h2>三种点，三个动作</h2>
- * <ul>
- *   <li>点<b>空白处</b> → 新建本地点位（坐标已经填好，只需要起名）；</li>
- *   <li>点<b>本地点位</b> → 编辑/删除它；</li>
- *   <li>点<b>wiki 点位</b> → 加备注：中文别名、说明、是否可作方位参照、是否隐藏。
- *       备注写在另一张表里，地图同步刷不掉它。</li>
- * </ul>
- *
- * <h2>为什么编辑表单在左侧而不是弹窗</h2>
- * 标注是"边看地图边填"的活：弹窗会挡住地图，而你要反复对照位置。
- * 固定在侧栏就能一边看图一边改字段，而且切点位时表单原地刷新，不用开关弹窗。
- */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { adminApi, describeError, publicApi } from '@shared/api/client'
 import AdminPage from '@shared/ui/AdminPage.vue'
@@ -34,17 +14,9 @@ import MapCanvas from '@shared/map/MapCanvas.vue'
 import type { AnchorReport, AnchorReview, Catalog, JobState, LocateHit, LocateResult, MapCandidate, MapCandidates, MapSpec, MapStatus, Marker, PlaceInput, Relative } from '@shared/map/types'
 import Bar from '@shared/ui/Bar.vue'
 
-/** 与 MapCanvas 的 mode 取值保持一致 —— 用同一个词，省得在中间做一层映射 */
 type Mode = 'edit' | 'view'
 
 const tab = ref('mark')
-/*
- * 初始必须是 view。
- *
- * 写成 edit 的话，一进页面就已经是"新增点位模式"了 —— 而那个模式会关掉点位的点击，
- * 于是刷新之后点任何图标都没反应，看起来像"编辑功能坏了"。
- * 进这个模式只有一个入口：点右上角的「新增点位」。
- */
 const mode = ref<Mode>('view')
 const loading = ref(true)
 const error = ref('')
@@ -57,14 +29,11 @@ const canvasIndex = ref(0)
 
 const selected = ref<Marker | null>(null)
 const draft = ref<{ x: number; y: number } | null>(null)
-/** 方位线。管理端目前不主动画，但组件接口需要它 —— 保留以便后续从列表直接"看方位" */
 const highlight = ref<{ toRef: string; relative: Relative } | null>(null)
 
-/** 表单。新建与编辑共用一份，靠 id 区分 */
 const form = ref<PlaceInput & { id: number }>(blankForm())
 const saving = ref(false)
 
-/** wiki 点位的备注表单 */
 const noteForm = ref({
   alias: '', note: '', category: '', landmark: false, priority: 0, hidden: false,
 })
@@ -72,11 +41,6 @@ const noteSaving = ref(false)
 
 const mapCanvas = ref<InstanceType<typeof MapCanvas> | null>(null)
 
-/* ==================== 找点位 ====================
- * 复用公开站那一套（同一个 /map/locate 接口、同一份命中结构）：
- * 标注时"我要改某个点"和浏览时"我要找某个点"是同一件事，
- * 各写一套搜索只会两处结果不一致。
- */
 const findQuery = ref('')
 const finding = ref(false)
 const found = ref<LocateResult | null>(null)
@@ -86,7 +50,6 @@ async function findPoint() {
   if (!q || finding.value) return
   finding.value = true
   try {
-    // 这个接口在公开侧，管理端直接调即可 —— 它本来就不需要登录
     found.value = await publicApi.get<LocateResult>('/map/locate?q=' + encodeURIComponent(q))
   } catch (e) {
     error.value = describeError(e)
@@ -95,12 +58,6 @@ async function findPoint() {
   }
 }
 
-/**
- * 跳到一条命中。
- *
- * <p>先在本地点位表里把它认出来 —— 认得出来就走 {@link jumpTo}，
- * 那样才会切画布、选中并**带出编辑面板**；认不出来就只把视野挪过去。
- */
 function focusHit(hit: LocateHit) {
   const m = markers.value.find((x) => x.id === hit.ref)
     ?? markers.value.find((x) => Math.abs(x.x - hit.x) < 0.5 && Math.abs(x.y - hit.y) < 0.5)
@@ -122,12 +79,6 @@ const currentCanvas = computed(() => {
 const markersOnCanvas = computed(() =>
   markers.value.filter((m) => !currentCanvas.value || !m.canvas || m.canvas === currentCanvas.value.page),
 )
-/**
- * 管理端显示的图层。
- *
- * <p>和公开站**用同一份默认**：管理员标注时看到的应该就是访客看到的那张图。
- * 这里若全开、公开站只开几个，就会出现"在访客根本看不见的图层旁边插点位"的情况。
- */
 const visibleGroups = ref<Set<string>>(new Set())
 
 function syncVisibleGroups() {
@@ -150,16 +101,8 @@ const groupIcons = computed(() => {
 const categoryOptions = computed(() =>
   (catalog.value?.categories ?? []).map((c) => ({ value: c.key, label: c.label })),
 )
-/**
- * 点位列表的数据源 = **当前地图的全部点位**，不只是本地补充点。
- *
- * <p>上一版只列 source === 'admin' 的点，而这个库里一条本地补充都没有：
- * 地图上画着 1064 个 wiki 点位，列表却是空的 —— 名字叫「点位列表」，
- * 读起来就是"地图上这些点的清单"，空着只会让人以为数据丢了。
- */
 const mapPlaces = computed(() => markers.value)
 
-/** 列表筛选：名字、分类、备注都能命中 */
 const placeKw = ref('')
 const placeLimit = ref(200)
 const PLACE_STEP = 200
@@ -172,49 +115,19 @@ const filteredPlaces = computed(() => {
     || p.category.toLowerCase().includes(kw)
     || (p.note ?? '').toLowerCase().includes(kw))
 })
-/** 一次最多渲染 200 行：1064 行全铺进 DOM 会拖慢整页，而这一页刚做过加载优化 */
 const shownPlaces = computed(() => filteredPlaces.value.slice(0, placeLimit.value))
 watch(placeKw, () => { placeLimit.value = PLACE_STEP })
 
-/**
- * 底图变过、需要人复核的点位。
- *
- * <p>坐标不会自己变，变的是"世界坐标落在底图的哪个像素上"。所以它不会报错、
- * 不会消失 —— 只会悄悄指错地方。这个清单就是让那件事**可见**。
- */
 const anchor = ref<AnchorReport | null>(null)
 
-/**
- * 候选地图列表。
- *
- * <p>同步**不筛地图**（命名空间里有什么就拉什么，谁也不丢），用哪几张在这里定。
- * 这样 wiki 哪天换了新地图，它会自己出现在列表里等人决定 —— 而不是被静默跳过。
- */
 const mapList = ref<MapCandidates | null>(null)
 
-/* ==================== 同步与状态：这一页的叙事 ==================== */
-
-/**
- * 报头里的"当前世界" —— 目录按点位数排序，取第一张。
- *
- * <p>这正是公开站实际显示的那张（{@code MapView.vue} 取 {@code maps[0]}），
- * 而目录已经按启用范围过滤过，所以这里说的就是访客看到的东西。
- */
 const primarySpec = computed(() => catalog.value?.maps?.[0] ?? null)
 
-/** 现在对外显示的到底哪一张 —— 候选表标题行用它，省掉一整块报头 */
 const displayMap = computed(() =>
   primarySpec.value?.map ?? mapList.value?.candidates?.find((c) => c.active)?.map ?? '—'
 )
 
-/**
- * 某张地图的底图情况 —— 候选表的「底图 / 可渲染」两列。
- *
- * <p>这两列原本在下面那张「画布」表里，10 行里 5 行永远不可渲染、3 行是 {@code Tabs/*}
- * 指向同一张底图的重复页，真正在用的只有 2 行。而它要回答的问题——
- * "这张图能不能渲染"——恰恰是**决定要不要启用它**时的判断材料，
- * 所以并到候选表里，而不是单独占一张表。
- */
 function canvasOf(map: string): { label: string; renderable: boolean } {
   const list = (status.value?.canvases ?? []).filter((c) => c.map === map)
   const ok = list.filter((c) => c.renderable)
@@ -225,22 +138,8 @@ function canvasOf(map: string): { label: string; renderable: boolean } {
   return { label: list.find((c) => c.background)?.background || '—', renderable: false }
 }
 
-/** 解析失败的页。同步页那张表只在有它们时才值得展开 */
 const failedPages = computed(() => (status.value?.pages ?? []).filter((p) => p.error))
 
-/**
- * 长任务**按任务**组织，而不是按按钮。
- *
- * <p>上一版把任务状态放在卡片上半、把五个按钮放在下半，中间夹一段说明文章 ——
- * 于是"这个按钮是干什么的、上次跑成什么样"要在屏幕上跳两次才连得起来。
- * 一个任务的状态与它的触发方式必须待在一起。
- */
-/**
- * 每个任务在**库/磁盘上**留下了什么。
- *
- * <p>这是这一块的主角：任务是本进程的状态，重启之后就"没跑过"，而数据一直在库里。
- * 重启后想知道"要不要重新同步 / 重新预热"，看的是这一行，不是任务状态。
- */
 const jobFacts = computed<Record<string, string>>((): Record<string, string> => {
   const s = status.value
   if (!s) return {}
@@ -261,12 +160,6 @@ const jobFacts = computed<Record<string, string>>((): Record<string, string> => 
 interface CoverCell { have: number; need: number }
 interface CoverRow { key: string; label: string; title: string; cells: Record<string, CoverCell | undefined> }
 
-/**
- * 分单位覆盖：行 = 画布（含分组图标），列 = 档位。
- *
- * <p>列顺序取自后端返回的顺序（后端按档位从细到粗发），前端不猜 —— 档位是配置项，
- * 写死五列迟早会和配置对不上。
- */
 const warmCover = computed(() => {
   const units = status.value?.warmCoverage ?? []
   const tiers: string[] = []
@@ -292,7 +185,6 @@ const warmCover = computed(() => {
   return { tiers, rows }
 })
 
-/** 补齐的格子要静，缺的格子要响 —— 一屏里只有缺的那几格该被眼睛抓到 */
 function coverTone(cell?: CoverCell): string {
   if (!cell) return 't-none'
   return cell.have >= cell.need ? 't-ok' : 't-short'
@@ -305,8 +197,6 @@ function coverText(cell?: CoverCell): string {
 const jobRows = computed(() => {
   const j = (status.value?.jobs ?? {}) as Record<string, JobState | undefined>
   const facts = jobFacts.value
-  // 一行 = 一个数据对象 + 它的现状 + 触发方式。每个按钮花多少钱写在按钮自己的 title 里 ——
-  // 那是看过一次就记住的东西，不该天天占着页面
   return [
     { key: 'sync', label: '同步 wiki 地图', state: j.sync },
     { key: 'warm', label: '底图缓存', state: j.warm },
@@ -320,11 +210,6 @@ const jobRows = computed(() => {
   }))
 })
 
-/**
- * 任务的标签。**「成功」与「没跑过」都不给标签** ——
- * 它们回答的是"本进程跑过没有"，而这一页要回答的是"库里现在有什么"，那由数据行说。
- * 标签只留给两种情况：正在跑，以及真的失败了（后者要人去看一眼）。
- */
 function jobTag(j?: JobState): { tone: 'warn' | 'bad'; text: string } | null {
   if (!j) return null
   if (j.running) return { tone: 'warn', text: '运行中' }
@@ -332,13 +217,6 @@ function jobTag(j?: JobState): { tone: 'warn' | 'bad'; text: string } | null {
   return null
 }
 
-/**
- * 清空同步进来的地图数据。
- *
- * <p>确认框里必须写清**删什么、不删什么、代价是什么**：这是一个点错了就恢复不了的动作，
- * 而其中"不删你自己建的点位、备注、图层配置"才是让人敢按下去的那一句。
- * 它和上面三个任务一样有回执 —— 删了多少页/点位/瓦片，看「地图数据」那一行。
- */
 async function runReset() {
   const st = status.value
   const markers = (st?.pages ?? []).reduce((n, p) => n + p.markerCount, 0)
@@ -376,12 +254,6 @@ interface Todo {
   action: string
 }
 
-/**
- * 待办 —— 这一页唯一配得上暖色的东西。
- *
- * <p>没有待办时整块不出现，整页就只剩灰阶：**"没有颜色"本身就是"没事"的信号**。
- * 项目的设计令牌里写着"灵火一屏之内只给最该先看一眼的东西"，这里就是那句话的落点。
- */
 const todos = computed<Todo[]>(() => {
   const out: Todo[] = []
   const s = status.value
@@ -408,7 +280,6 @@ const todos = computed<Todo[]>(() => {
       detail: anchor.value?.items?.[0]?.reason ?? '底图变过，落点可能偏了',
       action: '去复核' })
   }
-  // wiki 上出现了点数更多的地图而当前用的不是它 —— 这正是"改名换图"落地时的样子
   const top = mapList.value?.candidates?.[0]
   const active = mapList.value?.candidates?.find((c) => c.active)
   if (top && !top.active && top.markers > (active?.markers ?? 0)) {
@@ -423,7 +294,6 @@ const mapsDetails = ref<HTMLDetailsElement | null>(null)
 const pagesDetails = ref<HTMLDetailsElement | null>(null)
 const healthDetails = ref<HTMLDetailsElement | null>(null)
 
-/** 展开一块诊断并把它滚进视野。长页面里瞬移会迷路，但动效要克制且尊重 reduced-motion */
 function reveal(el: HTMLDetailsElement | null) {
   if (!el) {
     return
@@ -446,11 +316,6 @@ function todoAction(id: string) {
   }
 }
 
-/**
- * ISO 瞬时 → "刚刚 / 12 分钟前 / 3 小时前 / 10-14 17:37"。
- *
- * <p>这一页问的是"数据还新不新"，先回答"多久以前"；精确时刻留在 title 里。
- */
 function since(iso?: string): string {
   if (!iso) {
     return '—'
@@ -468,7 +333,6 @@ function since(iso?: string): string {
   return days < 7 ? days + ' 天前' : stamp(iso)
 }
 
-/** ISO 瞬时 → 本地 MM-DD HH:mm。管理端看的是"什么时候跑完的"，时区不该由读者换算 */
 function stamp(iso?: string): string {
   if (!iso) {
     return '—'
@@ -488,25 +352,13 @@ function blankForm(): PlaceInput & { id: number } {
   }
 }
 
-/* ==================== 装载 ==================== */
-
 async function boot() {
   loading.value = true
   error.value = ''
   try {
-    // 画地图只需要目录 + 点位。状态、待复核、候选地图都是「补信息」，
-    // 让它们挡在地图的 loading 后面，等于每次打开都要多等一次 status 的往返。
     catalog.value = await adminApi.get<Catalog>('/map/catalog')
     const first = catalog.value.maps[0]
     await selectMap(first ? first.map : '', true)
-    /*
-     * 数据齐了**直接灌一次**图标表，不等 watcher。
-     *
-     * 实测这里会漏：画布是 v-if 挂载的，图标表在 catalog 到手那一刻就变了，
-     * 而 watcher（post flush）跑的时候画布实例可能还没绑上 ref ——
-     * 于是 setGroupIcons 一次都没被调用，画布里 groupIcons 是空 Map，
-     * 结果不是"图标画不出来"，而是**连一张图标的请求都没发**，地图上只剩空心圈。
-     */
     await nextTick()
     mapCanvas.value?.setGroupIcons(groupIcons.value)
   } catch (e) {
@@ -514,28 +366,13 @@ async function boot() {
   } finally {
     loading.value = false
   }
-  // 地图已经能看了，剩下的状态栏在后台补 —— 不 await，慢的只有它自己。
-  // 标注页用不到这三份数据，所以按当前 tab 决定要不要拉，见 ensureExtras
   if (tab.value !== 'mark') void loadExtras()
 }
 
-/**
- * 状态栏的三份数据：运行状态、待复核点位、候选地图。
- *
- * <p>并发拉取，且互不影响：任何一份失败只让对应的面板空着，不把整页打回错误态。
- * 这三份都不参与首屏绘制，所以放在 {@link boot} 的 loading 之外。
- */
 async function loadExtras() {
   await Promise.allSettled([loadStatus(), loadAnchor(), loadMaps()])
 }
 
-/**
- * 三份数据只在「点位列表」（待复核）与「同步与状态」（读数、候选地图）里出现，
- * 标注页一样都不显示。所以按 tab 懒加载：进来只看一眼点位再切走，这三条请求一条都不发。
- *
- * <p>只加载一次。之后再进这两个 tab 用的是缓存层，十秒内不会重新请求；
- * 点「重新载入」会走 boot()，那里按 tab 重新拉一遍。
- */
 let extrasLoaded = false
 
 function ensureExtras(): void {
@@ -555,18 +392,8 @@ async function loadMarkers() {
   selected.value = null
 }
 
-/** 换图任务。由 watcher 发起，boot 与跳转都等它 */
 let mapTask: Promise<void> | null = null
 
-/**
- * 换图：只改 mapName，点位交给 watcher 去拉。
- *
- * <p>⚠️ 为什么不能在这里顺便再拉一次：boot 与 watcher 各拉一次的话，同一张图
- * 会请求两遍。没有缓存时只是白跑一趟；有了缓存之后，第二遍会被当成
- * 「用户手动刷新」真的打到网络上 —— 表现就是来回切页时只有地图页还在发请求。
- *
- * @param force 值没变也要重新拉。给「重新载入」用：那时 watcher 不会触发
- */
 async function selectMap(name: string, force = false): Promise<void> {
   if (!name) return
   if (name === mapName.value) {
@@ -598,7 +425,6 @@ async function toggleMap(m: MapCandidate) {
   try {
     await adminApi.put('/map/maps/active', { map: m.map, active: !m.active })
     toast((m.active ? '已停用 ' : '已启用 ') + m.map)
-    // 启用状态一变，目录/图层/问答全都跟着变 —— 重新拉一遍
     await loadMaps()
     await boot()
   } catch (e) {
@@ -610,12 +436,10 @@ async function loadAnchor() {
   try {
     anchor.value = await adminApi.get<AnchorReport>('/map/anchor')
   } catch {
-    // 读不到就当没有 —— 它是一个提示，不该让整页打不开
     anchor.value = null
   }
 }
 
-/** 跳到某条待复核的点位：换地图 → 换画布 → 选中它，面板自己会展开 */
 async function jumpToAnchor(a: AnchorReview) {
   if (a.map !== mapName.value) {
     await selectMap(a.map)
@@ -627,7 +451,6 @@ async function jumpToAnchor(a: AnchorReview) {
   if (m) onPick([m])
 }
 
-/** 「位置我看过了，没错」—— 只接受当前底图，不动坐标 */
 async function confirmAnchor(id: number) {
   try {
     await adminApi.post('/map/places/' + id + '/confirm-anchor')
@@ -640,28 +463,16 @@ async function confirmAnchor(id: number) {
 
 onMounted(boot)
 
-// 换图**唯一**的加载入口，见 selectMap 的注释
 watch(mapName, (next, prev) => {
   if (!next || next === prev) return
   canvasIndex.value = 0
   mapTask = loadMarkers()
 })
 
-// 图标表与画布实例都可能在数据之后才就绪，两个都盯着才不会漏掉其中一次。
-// 只盯图标表的话，画布晚一步挂载就永远拿不到图标 —— 表现是"地图上只有空心圈，一直不变成图标"
 watch([groupIcons, mapCanvas], () => mapCanvas.value?.setGroupIcons(groupIcons.value), { flush: 'post' })
 
-/* ==================== 地图交互 ==================== */
-
-/**
- * 侧栏是否展开。**默认收起**。
- *
- * <p>标注是"偶尔做一次"的活，常驻侧栏等于天天占着四分之一屏幕看一个空表单。
- * 收起之后地图是主角，要标点时才把面板拉出来 —— 和公开站的侧栏同一套逻辑。
- */
 const panelOpen = ref(false)
 
-/** 从顶部按钮进来：清空表单，进入待落点状态 */
 function startNewPlace() {
   selected.value = null
   draft.value = null
@@ -671,25 +482,12 @@ function startNewPlace() {
   mode.value = 'edit'
 }
 
-/**
- * 面板里该显示哪个表单。
- *
- * <p>三种互斥的情况，**不能同时摆出来**：
- * <ul>
- *   <li>{@code new} —— 新增点位模式：只给"新增点位"表单；</li>
- *   <li>{@code place} —— 选中了自定义点位：给它的编辑表单；</li>
- *   <li>{@code note} —— 选中了 wiki 点位：给备注表单。</li>
- * </ul>
- * 以前三张卡片一直摆着，想改一个已有点位时还得先在心里跳过那张"新增"表 ——
- * 那不是并列的功能，是同一个位置的不同状态。
- */
 const panelKind = computed<'new' | 'place' | 'note' | null>(() => {
   if (mode.value === 'edit') return 'new'
   if (!selected.value) return null
   return selected.value.source === 'admin' ? 'place' : 'note'
 })
 
-/** 收起面板：顺手退回浏览模式，免得收起后点空白还在悄悄落点 */
 function closePanel() {
   panelOpen.value = false
   mode.value = 'view'
@@ -697,23 +495,9 @@ function closePanel() {
   draft.value = null
 }
 
-/**
- * 选中点位。画布给的是**数组**（同一处可能压着好几个），管理端只关心最近的那个。
- *
- * <p>管理端不做堆叠展开：标注时你要改的是一个确定的点位，
- * 把重合的几个摊开反而要你多选一次。
- */
 function onPick(list: Marker[]) {
   const m = list[0] ?? null
   if (!m) {
-    /*
-     * 点到空白处 = "我不改这个了"。
-     *
-     * 这里以前只清了 selected、**没关面板**，于是 panelKind 变成 null：
-     * 面板还开着，但里面一张卡片都不渲染，标题又退回"新增点位" ——
-     * 看到的就是一块空白、标题写着新增、点 × 也说不清该不该关的面板。
-     * 收起面板（顺带退回浏览模式）才是"点空白处"该有的结果。
-     */
     selected.value = null
     panelOpen.value = false
     mode.value = 'view'
@@ -721,7 +505,6 @@ function onPick(list: Marker[]) {
   }
   selected.value = m
   highlight.value = null
-  // 点到点位就把面板拉出来：这时候用户要看/改的就是它
   panelOpen.value = true
   if (m.source === 'admin') {
     form.value = {
@@ -741,7 +524,6 @@ function onPick(list: Marker[]) {
   }
 }
 
-/** 点空白处：进入"待落点"状态，坐标已定，只差起名 */
 function onPickedPoint(x: number, y: number) {
   draft.value = { x, y }
   form.value = { ...blankForm(), map: mapName.value, page: currentCanvas.value?.page ?? '', x, y }
@@ -749,7 +531,6 @@ function onPickedPoint(x: number, y: number) {
   panelOpen.value = true
 }
 
-/** 从列表跳到一个点位：先切到它所在的画布，再选中它 */
 function jumpTo(m: Marker) {
   const list = currentMap.value?.canvases ?? []
   const idx = list.findIndex((c) => c.page === m.canvas)
@@ -758,8 +539,6 @@ function jumpTo(m: Marker) {
   onPick([m])
   mapCanvas.value?.focus(m.x, m.y, Math.max(mapCanvas.value?.scale() ?? 0.5, 0.6))
 }
-
-/* ==================== 保存 ==================== */
 
 async function savePlace() {
   if (saving.value) return
@@ -770,7 +549,6 @@ async function savePlace() {
   saving.value = true
   try {
     const body = { ...form.value }
-    // 保存前先抓一份"它原来在哪"：保存后待复核清单会刷新，那份就没了
     const before = anchor.value?.items.find((a) => a.id === body.id) ?? null
     if (body.id > 0) {
       await adminApi.put('/map/places/' + body.id, body)
@@ -791,12 +569,6 @@ async function savePlace() {
   }
 }
 
-/**
- * 把刚修正好的那个点当作基准，问一句"其余待复核的点要不要一起搬"。
- *
- * <p>新旧坐标之间的对应关系**只有人知道**，而人已经用一个点表达过了 ——
- * 就是他把它从哪拖到了哪。剩下的点照搬这个偏移即可，不用逐个再拖一遍。
- */
 async function offerBatchShift(before: AnchorReview, x: number, y: number) {
   const dx = x - before.x
   const dy = y - before.y
@@ -841,7 +613,6 @@ async function saveNote() {
   if (!selected.value || selected.value.source !== 'wiki' || noteSaving.value) return
   noteSaving.value = true
   try {
-    // markerId 就是 id 里 # 之后那一段
     const markerId = markerIdOf(selected.value)
     await adminApi.post('/map/notes', {
       map: selected.value.map,
@@ -863,7 +634,6 @@ async function saveNote() {
   }
 }
 
-/** 备注表的主键是 (map, page, markerId)，而点位 id 是 "page#markerId" —— 拆回来 */
 function markerIdOf(m: Marker): string {
   const hash = m.id.indexOf('#')
   return hash >= 0 ? m.id.slice(hash + 1) : m.id
@@ -884,15 +654,11 @@ async function clearNote() {
   }
 }
 
-/* ==================== 长任务 ==================== */
-
 async function runSync() {
   try {
     await adminApi.post('/map/sync')
     toast('同步已开始，稍后看状态')
     await pollStatus()
-    // 首次同步之前这一页是空的；同步完自动把地图目录拉回来，
-    // 省得管理员还要自己找「重新载入」——那正是他刚做完一件长任务之后最不想找的东西
     if (!catalog.value || !catalog.value.maps.length) {
       await boot()
     }
@@ -911,8 +677,6 @@ async function runWarm() {
   }
 }
 
-// 全量预热比轻量多拉原图档，第一次要十几分钟 —— 出站请求是串行节流的，
-// 建议放在非高峰点，或者交给后端凌晨那个定时任务
 async function runWarmFull() {
   try {
     await adminApi.post('/map/warm-full')
@@ -924,7 +688,6 @@ async function runWarmFull() {
 }
 
 async function runCorpus(purge: boolean) {
-  // 清除不可撤销：派生块一删，地点问答立刻答不出来，只能重新调向量接口再派一遍
   if (purge && !window.confirm('清除全部派生地点语料？这一步不可撤销，之后要重新派生一次（要调向量接口，较慢）。')) {
     return
   }
@@ -937,18 +700,16 @@ async function runCorpus(purge: boolean) {
   }
 }
 
-/** 任务是在后台跑的，状态得回来问 —— 问几次就够，避免把页面变成轮询器 */
 async function pollStatus() {
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 1500))
     try {
       await loadStatus()
-    } catch { /* 状态查失败不该打断轮询本身 */ }
+    } catch {   }
     const jobs = status.value?.jobs ?? {}
     const running = Object.values(jobs).some((j) => j.running)
-    if (!running) break            // ⚠️ 不能 return：下面那步刷新就永远跑不到
+    if (!running) break
   }
-  // 同步可能把画布定义换掉了，也可能带来了新地图 —— 两样都刷新一次
   await loadAnchor()
   await loadMaps()
 }
@@ -962,14 +723,6 @@ function fmtBytes(n: number): string {
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('zh-CN')
 }
-
-/* ==================== 默认显示的分组 ====================
- *
- * 公开地图页首屏开哪些分组，由这里决定。
- * 为什么放在后台而不是写死在前端：余烬谷有 43 个分组、一千多个点位，
- * 全开就是密密麻麻一片；该开哪几个是**审美与用途**的判断，
- * 只有管理员说得准，而写死意味着改一次默认值就要重新发一版。
- */
 
 interface LayerGroup {
   key: string
@@ -996,12 +749,6 @@ const layerSaving = ref(false)
 
 const layerCurrent = computed(() => layerMaps.value.find((m) => m.map === layerMap.value) ?? null)
 
-/**
- * 加载失败的图标。
- *
- * <p>图标要走 wiki 取，取不到时接口返回 404 —— 浏览器会画一个"破图"占位。
- * 四十多个分组排下来就是一列破图框，比不显示图标难看得多，所以失败的直接不渲染。
- */
 const layerIconFailed = ref<Set<string>>(new Set())
 
 function onLayerIconError(name: string) {
@@ -1010,13 +757,11 @@ function onLayerIconError(name: string) {
   layerIconFailed.value = next
 }
 
-/** 当前地图的图标地址。图标挂在 /api/public 下，管理端不需要额外鉴权 */
 function layerIconUrl(name: string): string {
   return '/api/public/v1/map/tile?map=' + encodeURIComponent(layerMap.value)
     + '&name=' + encodeURIComponent(name)
 }
 
-/** 把已保存的选择读进勾选状态 */
 function syncLayerSelection() {
   const cur = layerCurrent.value
   layerOn.value = new Set(cur ? cur.groups.filter((g) => g.on).map((g) => g.key) : [])
@@ -1038,7 +783,6 @@ async function loadLayers() {
   }
 }
 
-/** 打开弹窗就重新拉一次：刚同步过的话，分组清单可能已经变了 */
 function openDefaults() {
   defaultsOpen.value = true
   void loadLayers()
@@ -1055,7 +799,6 @@ function toggleLayer(key: string) {
   layerOn.value = next
 }
 
-/** @param keys null = 恢复"未配置"，与"全关"是两件事 */
 async function saveLayers(keys: string[] | null) {
   const cur = layerCurrent.value
   if (!cur) return
@@ -1064,13 +807,6 @@ async function saveLayers(keys: string[] | null) {
     await adminApi.put('/map/layers', { map: cur.map, groups: keys })
     toast(keys === null ? '已恢复为未配置' : '已保存，公开地图页下次打开就按这个显示')
     await loadLayers()
-    /*
-     * 重拉目录，再按新的默认图层刷新。
-     *
-     * 顺序很关键：syncVisibleGroups() 读的是 catalog 里的 defaultGroups，
-     * 不先重拉的话它读到的还是保存前的旧值 ——
-     * 表现就是"保存了但地图没变，还得手动刷新一次"。
-     */
     catalog.value = await adminApi.get<Catalog>('/map/catalog')
     syncVisibleGroups()
     await nextTick()
@@ -1108,7 +844,6 @@ async function saveLayers(keys: string[] | null) {
       <Button size="sm" @click="boot"><Icon name="refresh" :size="14" />重新载入</Button>
     </template>
 
-    <!-- 命中列表：浮在页头下面。点一条就跳过去并带出它的编辑面板 -->
     <div v-if="found" class="find-hits">
       <div class="find-hits-head">
         <span class="hint">「{{ found.q }}」找到 {{ found.hits.length }} 个</span>
@@ -1135,14 +870,7 @@ async function saveLayers(keys: string[] | null) {
     <p v-if="loading" class="muted">正在载入…</p>
 
     <template v-else>
-      <!-- ==================== 标注 ==================== -->
       <div v-show="tab === 'mark'">
-        <!--
-          ⚠️ 空态**只挡住标注这一页**，不能挡住整个页面。
-          上一版把空态写成整页的 v-else，于是"还没有地图数据"时连「同步与状态」也一起消失 ——
-          而那个页正是唯一能把地图数据弄出来的地方。管理员看到的是一个死循环：
-          提示他去点同步，但同步按钮不见了。
-        -->
         <div v-if="!catalog || !catalog.maps.length" class="empty-state">
           <h2>还没有地图数据</h2>
           <p>切到上面的「同步与状态」，点一次「同步 wiki 地图」。同步完成后这一页会自己刷新。</p>
@@ -1167,7 +895,6 @@ async function saveLayers(keys: string[] | null) {
             @picked-point="onPickedPoint"
           />
 
-          <!-- 收起状态：只剩一颗按钮，地图满宽 -->
           <button v-if="!panelOpen" type="button" class="panel-toggle" @click="startNewPlace">
             <Icon name="plus" :size="16" />
             新增点位
@@ -1175,8 +902,6 @@ async function saveLayers(keys: string[] | null) {
 
           <aside v-show="panelOpen" id="mark-panel" class="panel" aria-label="点位编辑">
             <div class="panel-head">
-              <!-- 标题跟着 panelKind 走，和"显示哪张卡片"用同一个判据 ——
-                   各写一套的话，两边一旦不一致就会出现"标题说新增、内容是空的" -->
               <span class="panel-title">
                 {{ panelKind === 'note' ? 'wiki 点位备注'
                   : panelKind === 'place' ? '编辑点位' : '新增点位' }}
@@ -1186,7 +911,6 @@ async function saveLayers(keys: string[] | null) {
               </button>
             </div>
 
-          <!-- 新建 / 编辑本地点位 -->
           <div v-if="panelKind === 'new' || panelKind === 'place'" class="card">
             <h2 class="card-title">
               {{ form.id > 0 ? '编辑点位' : '新增点位' }}
@@ -1248,10 +972,8 @@ async function saveLayers(keys: string[] | null) {
             </div>
           </div>
 
-          <!-- wiki 点位备注：只有选中 wiki 点位时才出现 -->
           <div v-else-if="panelKind === 'note'" class="card">
             <h2 class="card-title">wiki 点位备注</h2>
-            <!-- v-if="selected" 不只是防御：它让 TS 在模板里把 selected 收窄成非空 -->
             <template v-if="selected">
               <p class="picked">
                 <Icon name="map-pin" :size="14" />
@@ -1300,15 +1022,7 @@ async function saveLayers(keys: string[] | null) {
         </div>
       </div>
 
-      <!-- ==================== 点位列表 ====================
-           ⚠️ 用 v-if 而不是 v-show：这张表现在是全图点位（四位数），
-           v-show 会在打开页面时就把它渲染进 DOM，等于把刚省下的加载时间又还回去。
-           只在切到这个 tab 时才挂载。 -->
       <div v-if="tab === 'places'" class="table-wrap">
-        <!--
-          底图变了导致点位可能整体偏移。
-          **坐标不会变、也不会报错**，只会悄悄指错地方 —— 所以这里必须主动喊一声。
-        -->
         <div v-if="anchor && anchor.pending > 0" class="anchor-warn">
           <div class="anchor-head">
             <Icon name="alert" :size="16" />
@@ -1334,8 +1048,6 @@ async function saveLayers(keys: string[] | null) {
         </div>
 
         <table class="tbl places-tbl">
-          <!-- 列宽：名称给 38%，其余按内容定宽，备注吃掉剩余 —— 否则名称列会撑到 800px，
-               分类被推到屏幕右侧，看起来像两组互不相干的字段 -->
           <colgroup>
             <col class="c-name">
             <col class="c-cat">
@@ -1350,11 +1062,6 @@ async function saveLayers(keys: string[] | null) {
             </tr>
           </thead>
           <tbody>
-            <!--
-              ⚠️ 类名不能叫 row：base.css 里的 .row 是 display:flex，
-              落在 <tr> 上会把表格行拆成 flex 容器 —— 单元格不再对齐表头，
-              实测表头在右边、值在左边。这里用 place-row。
-            -->
             <tr v-for="p in shownPlaces" :key="p.id" class="place-row" @click="jumpTo(p)">
               <td>
                 <span class="name-cell">
@@ -1382,17 +1089,12 @@ async function saveLayers(keys: string[] | null) {
         </div>
       </div>
 
-      <!-- ==================== 状态 ==================== -->
-      <!-- ==================== 默认显示（弹窗） ====================
-           从独立的标签页搬到了这里：它改的是"公开站默认显示什么"，
-           和标注是同一件事的两面，分开两页只会让人来回切。 -->
       <Modal
         :open="defaultsOpen"
         title="设置默认显示"
         width="720px"
         @close="defaultsOpen = false"
       >
-        <!-- 动作放标题栏：分组有 43 条，放内容底部就得滚到底才点得到保存 -->
         <template #actions>
           <Button
             variant="primary"
@@ -1410,11 +1112,6 @@ async function saveLayers(keys: string[] | null) {
         <p v-if="layerLoading" class="muted">正在载入…</p>
 
         <template v-else-if="layerMaps.length">
-          <!--
-            只有一张地图时不渲染切换条：一颗孤零零的 chip 既点不动也占地方，
-            而它的存在只是因为"当年同步把 wiki 上 6 张地图全拉进来了"。
-            见 MapSync.maps（白名单）与 MapResidueCleaner（清存量）。
-          -->
           <div v-if="layerMaps.length > 1" class="chips">
             <button
               v-for="m in layerMaps"
@@ -1484,11 +1181,6 @@ async function saveLayers(keys: string[] | null) {
 
       <div v-show="tab === 'status'" class="status">
 
-
-
-        <!-- ══════════ 待办 ══════════
-             只在该出现时出现。它是全页唯一配用暖色的东西 —— 没有它时整页是灰阶，
-             而"没有颜色"本身就是"没事"的信号。 -->
         <section v-if="todos.length" class="todo">
           <h3 class="sect">待办</h3>
           <ul class="todo-list">
@@ -1505,10 +1197,6 @@ async function saveLayers(keys: string[] | null) {
           没有待办。
         </p>
 
-        <!-- ══════════ 用哪几张地图 ══════════
-             标题行直接给出"现在显示哪张"，展开才是可切换的列表 ——
-             所以不需要再来一块报头说同一件事。
-             wiki 换了新图时这里会自己多出一行，这是整套设计的落点。 -->
         <details ref="mapsDetails" class="diag">
           <summary>
             <Icon name="chevron-right" :size="14" class="caret" />
@@ -1546,8 +1234,6 @@ async function saveLayers(keys: string[] | null) {
           <p v-else class="hint">还没有地图数据。</p>
         </details>
 
-        <!-- ══════════ 长任务 ══════════
-             按**任务**组织：一个任务的状态与它的触发方式必须待在一起。 -->
         <section class="ops">
           <h3 class="sect">任务</h3>
           <ul class="op-list">
@@ -1558,7 +1244,6 @@ async function saveLayers(keys: string[] | null) {
                   <Tag v-if="row.tag" :tone="row.tag.tone">{{ row.tag.text }}</Tag>
                 </div>
 
-                <!-- 跑着：进度条就是这一行的状态，数字由它自己带 -->
                 <Bar
                   v-if="row.state?.running && row.state.total > 0"
                   class="op-bar"
@@ -1568,10 +1253,8 @@ async function saveLayers(keys: string[] | null) {
                   :show-value="false"
                 />
 
-                <!-- 主语是**库里现在有什么**（跨重启），不是"任务跑没跑过"（只属于本进程） -->
                 <p v-if="row.facts" class="op-result">{{ row.facts }}</p>
 
-                <!-- 分单位覆盖：出图要的是**某一档**拉齐，总文件数看不出缺在哪一格 -->
                 <div
                   v-if="row.key === 'warm' && status?.tileCache?.enabled && warmCover.rows.length"
                   class="cover"
@@ -1590,7 +1273,6 @@ async function saveLayers(keys: string[] | null) {
                     >{{ coverText(r.cells[t]) }}</span>
                   </div>
                 </div>
-                <!-- 失败才多说一句：为什么失败、缺了多少 —— 那是唯一需要人去处理的情况 -->
                 <p v-if="row.fail" class="op-fail">{{ row.fail }}</p>
               </div>
               <div class="op-actions">
@@ -1615,8 +1297,6 @@ async function saveLayers(keys: string[] | null) {
           </ul>
         </section>
 
-        <!-- ══════════ 诊断 ══════════
-             日常不用看。以前三块并排常驻展开，把页面后 2/3 变成两张几十行的表。 -->
         <section class="diag-zone">
           <h3 class="sect">诊断</h3>
 
@@ -1626,8 +1306,6 @@ async function saveLayers(keys: string[] | null) {
               <span class="diag-name">存储与路径</span>
             </summary>
             <dl class="facts">
-              <!-- 这里**故意不列**"地图库/点位/备注 可用吗"：不可用时顶部的「待办」
-                   已经点名喊过了，列在这里只在一切正常时出现 —— 那时它是噪声 -->
               <div><dt>问答库</dt><dd class="mono">{{ status?.directory }}</dd></div>
               <div>
                 <dt>待复核点位</dt>
@@ -1651,13 +1329,6 @@ async function saveLayers(keys: string[] | null) {
             </dl>
           </details>
 
-          <!--
-            同步页：正常时**只有一行**。
-            以前它是 12 行 × 4 列的常驻表，而健康状态下整张表的信息量是一个 bit（"0 错误"）——
-            12 页里有 7 页是 0 点位的容器页，列出来只是占地方。
-            有失败页时才变成可展开的表，而且**只列失败的那几页**：
-            失败页故意不推进 revid，下一轮同步会自动重试它，这里要回答的是"哪几页、为什么"。
-          -->
           <div v-if="status && !failedPages.length" class="diag diag-flat">
             <Icon name="check" :size="14" class="ok" />
             <span class="diag-name">同步页</span>
@@ -1682,12 +1353,6 @@ async function saveLayers(keys: string[] | null) {
             </table>
           </details>
 
-          <!--
-            这里原本还有一张「画布」表：10 行里 5 行永远不可渲染，3 行是 Tabs/* 指向同一张
-            底图的重复页，真正在用的只有 2 行。它要回答的"这张图能不能渲染、底图是什么"
-            是**决定要不要启用一张新地图**时的判断材料 —— 所以那两列已经并进上面的「地图」表，
-            这块独立表格没有继续存在的理由。
-          -->
         </section>
       </div>
 
@@ -1714,27 +1379,10 @@ async function saveLayers(keys: string[] | null) {
 }
 .empty-state h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); }
 
-/* ==================== 舞台与悬浮面板 ====================
-   和公开站同一套：地图居中占满，侧栏浮在它上面，收起后只剩一颗按钮。 */
-/*
- * 地图要贴到接近视口底部。.page 默认 76px 的页脚留白会把地图往上顶，留出一条空带。
- *
- * ⚠️ 这里**不能写 :deep(.page)**：AdminPage 的根元素本身就带本组件的 scope 标记，
- * 而 :deep() 编译成的是**后代**选择器，永远匹配不到它自己 ——
- * 表现为"改了内边距但页面纹丝不动、还多出 56px 滚动"。直接写 .page 才是对的。
- */
 .page { padding-bottom: 20px; }
 
 .stage {
   position: relative;
-  /*
-   * 高度 = 视口 - 顶端导航 - 其余外壳。
-   * 顶端导航那 56 由变量给出；剩下的 92 = 页面栏 56 + 上下两处 gap 16 + 底部留白 20。
-   *
-   * 底部留白本来是 .page 的 76px 页脚内边距，会把地图往上顶、下面空出一条带子，
-   * 整体看着像一根长条 —— 所以这里把 .page 的内边距压到 20px（见下面的 :deep(.page)）。
-   * 这个数只能量、不能推：实测 100dvh 解析出来比 innerHeight 小几像素，宁可让地图短几像素。
-   */
   height: calc(100dvh - var(--admin-bar-h, 56px) - 92px);
   min-height: 420px;
   border-radius: var(--r-md);
@@ -1754,7 +1402,6 @@ async function saveLayers(keys: string[] | null) {
   overflow-y: auto;
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-radius: var(--r-md);
-  /* 比公开站实一点：这里是表单，读字比看地图重要 */
   background: color-mix(in srgb, var(--stone-300) 90%, transparent);
   box-shadow: var(--shadow-pop), var(--bevel-raised);
   backdrop-filter: blur(10px);
@@ -1855,8 +1502,6 @@ async function saveLayers(keys: string[] | null) {
 
 .table-wrap { overflow-x: auto; background: var(--stone-300); border-radius: var(--r-md); box-shadow: var(--bevel-raised); }
 
-/* ---------- 待复核点位：底图变了导致点位可能偏移 ---------- */
-
 .anchor-warn {
   margin-bottom: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
@@ -1900,8 +1545,6 @@ async function saveLayers(keys: string[] | null) {
 
 .anchor-why { flex: 1; color: var(--ink-3); font-size: var(--fs-xs); }
 
-/* 点位列表：筛选条与「继续显示」
-   1064 个点位一次铺开会把这一页拖慢，所以默认只渲染 200 行，靠筛选缩小范围 */
 .place-tools {
   display: flex;
   align-items: center;
@@ -1913,10 +1556,8 @@ async function saveLayers(keys: string[] | null) {
 
 .name-cell { display: inline-flex; align-items: center; gap: var(--sp-2); }
 
-/* 手写表格：行必须是 table-row。即使调用方误写了别的类，也不能把表格拆掉 */
 .tbl tr { display: table-row; }
 
-/* 点位列表的列宽。名称 38%、备注吃剩余，其余定宽 */
 .places-tbl { table-layout: fixed; }
 .places-tbl .c-name { width: 38%; }
 .places-tbl .c-cat { width: 120px; }
@@ -1926,16 +1567,9 @@ async function saveLayers(keys: string[] | null) {
 .places-tbl td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .places-tbl .note-cell { white-space: normal; }
 
-/* 手机上六列必然放不下：固定列宽会按比例压缩，名称列被压到 40px、表头竖排。
-   这里改回自动布局，只留名称 / 分类 / 坐标三列，名称拿 42%。 */
 @media (max-width: 760px) {
-  /* 手机上把 colgroup 整个去掉：留着它，被隐藏的列仍会按 col 宽度占轨道，
-     实测表格被撑到 726px，名称之外的列全跑到屏幕外。 */
   .places-tbl { table-layout: auto; }
   .places-tbl colgroup { display: none; }
-  /* ⚠️ 必须允许换行：桌面上为了单行整洁给 td 设了 nowrap，
-     自动布局下 nowrap 会把「最长那个名字」当成列的最小宽度 ——
-     实测有一行名字把名称列撑到 527px，整张表溢出到 726。 */
   .places-tbl td { white-space: normal; overflow-wrap: anywhere; }
   .places-tbl td:nth-child(3) { white-space: nowrap; }
   .places-tbl th:nth-child(1), .places-tbl td:nth-child(1) { width: 44%; }
@@ -1967,41 +1601,15 @@ async function saveLayers(keys: string[] | null) {
 .note-cell { max-width: 360px; color: var(--ink-2); }
 .err { color: var(--blight-lift); }
 
-/* ══════════ 同步与状态 ══════════
-
-   这一页是**一张检修单，不是一排卡片**。
-
-   上一版是 auto-fit 网格：两行的键值列表和三四十行的表格被并排拼贴，
-   读一页要在屏幕上来回跳；而"待办"和"长任务状态"沉在两张同样大小的卡片里，
-   跟存储可用性长得一模一样 —— 于是没人知道该先看哪儿。
-
-   这一版的规矩：
-   ① 一列，宽度锁住。信息按「先结论 → 再待办 → 再动作 → 最后诊断」排；
-   ② **暖色只给待办**。没有待办时整页是灰阶，而"没有颜色"本身就是"没事"的信号
-      （设计令牌里写着：灵火一屏之内只给最该先看一眼的东西）；
-   ③ 状态与它的触发方式必须挨在一起。 */
-
-/*
-  宽度：这一页是"一列文档"，而外壳是 1400 的宽版（标注那页的地图要占满，所以不能改成
-  narrow）。因此这里自己收窄并**居中** —— 少了 margin:auto 的话，这一列会贴在 1400 的左边、
-  右边空出一大片，跟上面的吸顶栏对不上。留窄是必要的：长任务的按钮在最右，
-  撑满 1350px 会让名字和按钮之间空出一大块。 */
 .status {
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
-  /*
-   * ⚠️ width 必须显式写。这一列是列向 flex 的项，而**交叉轴上的 auto 外边距会取消拉伸** ——
-   * 只写 max-width + margin:auto 时它的宽度是 fit-content：展开「候选地图」那张表，
-   * 表格的最大内容宽度就把它撑开，整列跟着变宽（表现为"点开宽度就变来变去"）。
-   * width:100% 把宽度定死成"容器宽，封顶 1120"，内容再宽也只影响表自己。
-   */
   width: 100%;
   max-width: 1120px;
   margin-inline: auto;
 }
 
-/* 区块标签：中文小字 + 刻字间距。结构靠它分段，不靠再加一层框 */
 .sect {
   margin: 0 0 var(--sp-3);
   font-size: var(--fs-xs);
@@ -2010,9 +1618,6 @@ async function saveLayers(keys: string[] | null) {
   color: var(--ink-3);
 }
 
-
-
-/* ---------- 待办：全页唯一配用暖色的地方 ---------- */
 .todo-list {
   list-style: none;
   margin: 0;
@@ -2048,14 +1653,12 @@ async function saveLayers(keys: string[] | null) {
 }
 .todo-quiet { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-sm); color: var(--ink-3); }
 
-/* ---------- 长任务：一行一个任务，状态与按钮挨着 ---------- */
 .op-list { list-style: none; margin: 0; padding: 0; }
 .op { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) 0; border-top: 1px solid var(--hairline); }
 .op:first-child { border-top: none; padding-top: 0; }
 .op-main { flex: 1; min-width: 0; }
 .op-head { display: flex; align-items: center; gap: var(--sp-2); }
 .op-name { font-size: var(--fs-md); font-weight: var(--fw-medium); color: var(--ink); }
-/* 结果比说明亮：说明是静态的，结果是刚发生的事 */
 .op-result {
   margin: var(--sp-1) 0 0;
   font-family: var(--font-mono);
@@ -2063,10 +1666,7 @@ async function saveLayers(keys: string[] | null) {
   color: var(--ink-2);
   word-break: break-word;
 }
-/* 进度：任务要能"看见在动"，不然几十分钟的预热与卡死没有区别。
-   条子用设计系统里的 Bar（与抓取作业同一套），这里只管摆放 */
 .op-bar { margin-top: var(--sp-2); max-width: 420px; }
-/* 覆盖矩阵：行 = 画布，列 = 档位。补齐的格子是灰的，缺的格子用暖色喊一声 */
 .cover { margin-top: var(--sp-2); max-width: 520px; display: flex; flex-direction: column; gap: 2px; }
 .cover-line { display: flex; align-items: center; gap: var(--sp-2); }
 .cover-name {
@@ -2083,7 +1683,6 @@ async function saveLayers(keys: string[] | null) {
 .t-ok { color: var(--ink-3); }
 .t-short { color: var(--ember); }
 .t-none { color: var(--ink-4); }
-/* 失败才多说一句：为什么失败、缺了多少。它是全页唯一需要人去处理的那类信息 */
 .op-fail {
   margin: var(--sp-1) 0 0;
   font-family: var(--font-mono);
@@ -2093,7 +1692,6 @@ async function saveLayers(keys: string[] | null) {
 }
 .op-actions { flex: none; display: flex; gap: var(--sp-2); }
 
-/* ---------- 诊断：默认折叠 ---------- */
 .diag-zone { display: flex; flex-direction: column; gap: var(--sp-2); }
 .diag { border-radius: var(--r-sm); background: var(--stone-300); box-shadow: var(--bevel-raised); }
 .diag > summary {
@@ -2120,7 +1718,6 @@ async function saveLayers(keys: string[] | null) {
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }
-/* 健康时的一行：与可展开的行同款石板，但没有箭头、不可点 —— 它只是告诉你"这没事" */
 .diag-flat { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); cursor: default; }
 .ok { color: var(--vital); }
 .diag-ok { font-size: var(--fs-xs); color: var(--ink-3); }
@@ -2146,7 +1743,6 @@ async function saveLayers(keys: string[] | null) {
   .todo-detail { white-space: normal; }
 }
 
-/* ==================== 默认显示 ==================== */
 .defaults { max-width: 720px; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
 .chip-n { color: var(--ink-4); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
@@ -2170,10 +1766,6 @@ async function saveLayers(keys: string[] | null) {
 }
 .mini:hover { color: var(--ember); }
 
-/*
- * 分组清单：单列、每行一个开关。
- * 用两列的话 43 个分组会横向跳着读，而"哪些开了"要能一眼扫完。
- */
 .layer-list {
   list-style: none;
   margin: var(--sp-3) 0 0;
@@ -2192,15 +1784,9 @@ async function saveLayers(keys: string[] | null) {
   font-size: var(--fs-sm);
 }
 .layer-row:hover { background: var(--stone-400); }
-/* ==================== 找点位 ==================== */
 .find { display: flex; align-items: center; gap: var(--sp-2); min-width: 260px; }
 .find :deep(input) { min-width: 180px; }
 
-/*
- * 命中列表浮在页头下面，不挤占版面。
- * 用 fixed 而不是 absolute：它挂在 AdminPage 的内容流里，而页头是 sticky 的，
- * absolute 会跟着内容滚走。
- */
 .find-hits {
   position: fixed;
   top: calc(var(--admin-bar-h, 56px) + 62px);
