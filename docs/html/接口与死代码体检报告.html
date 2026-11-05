@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>接口与死代码体检报告</title>
+<style>
+:root {
+  --bg:#ffffff; --bg-soft:#f7f8fa; --bg-code:#f4f6f8;
+  --fg:#1f2328; --fg-soft:#57606a; --fg-faint:#8b949e;
+  --border:#d8dee4; --border-soft:#e6eaef;
+  --accent:#2563eb; --accent-soft:#eff4ff;
+  --warn:#b45309; --warn-bg:#fffbeb; --danger:#b91c1c; --danger-bg:#fef2f2;
+  --ok:#15803d; --ok-bg:#f0fdf4;
+  --radius:10px; --content:900px; --sidebar:250px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0d1117; --bg-soft:#161b22; --bg-code:#161b22;
+    --fg:#e6edf3; --fg-soft:#9198a1; --fg-faint:#6e7681;
+    --border:#30363d; --border-soft:#21262d;
+    --accent:#6ea8fe; --accent-soft:#16233a;
+    --warn:#f0b429; --warn-bg:#2a2109; --danger:#f87171; --danger-bg:#2a1214;
+    --ok:#4ade80; --ok-bg:#0f2417;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16.5px; line-height:1.85; -webkit-font-smoothing:antialiased;
+}
+.layout { display:flex; align-items:flex-start; gap:40px; max-width:1240px; margin:0 auto; padding:40px 28px 96px; }
+.toc { position:sticky; top:28px; flex:0 0 var(--sidebar); width:var(--sidebar); max-height:calc(100vh - 56px); overflow-y:auto; font-size:13.5px; line-height:1.6; border-right:1px solid var(--border-soft); padding-right:18px; }
+.toc-title { font-weight:700; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-faint); margin:0 0 12px; }
+.toc ol { list-style:none; margin:0; padding:0; }
+.toc a { display:block; padding:5px 10px; border-radius:6px; color:var(--fg-soft); text-decoration:none; border-left:2px solid transparent; }
+.toc a:hover { background:var(--accent-soft); color:var(--accent); }
+.toc details { display:none; }
+main { flex:1 1 auto; min-width:0; max-width:var(--content); }
+h1,h2,h3 { line-height:1.4; font-weight:700; scroll-margin-top:20px; }
+h1 { font-size:1.85em; margin:0 0 .8em; letter-spacing:-.015em; padding-bottom:.4em; border-bottom:2px solid var(--border); }
+h2 { font-size:1.34em; margin:2.3em 0 .75em; padding-left:.55em; border-left:4px solid var(--accent); }
+h3 { font-size:1.04em; margin:1.7em 0 .5em; }
+p { margin:0 0 1em; }
+a { color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+a:hover { border-bottom-color:var(--accent); }
+ul,ol { margin:0 0 1em; padding-left:1.5em; }
+li { margin:.3em 0; }
+blockquote { margin:1.3em 0; padding:.8em 1.1em; background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; }
+blockquote > :last-child { margin-bottom:0; }
+blockquote p { margin:.3em 0; }
+.warn { background:var(--warn-bg); border-left-color:var(--warn); }
+.danger { background:var(--danger-bg); border-left-color:var(--danger); }
+.ok { background:var(--ok-bg); border-left-color:var(--ok); }
+code { font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; font-size:.875em; background:var(--bg-code); border:1px solid var(--border-soft); border-radius:5px; padding:.14em .38em; word-break:break-word; }
+pre { margin:1.2em 0; padding:1em 1.15em; background:var(--bg-code); border:1px solid var(--border); border-radius:var(--radius); overflow-x:auto; line-height:1.65; }
+pre code { background:none; border:0; padding:0; font-size:.85em; }
+.table-wrap { margin:1.3em 0; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:.9em; margin:0; }
+thead th { background:var(--bg-soft); text-align:left; font-weight:700; padding:.6em .8em; border-bottom:2px solid var(--border); white-space:nowrap; }
+tbody td { padding:.6em .8em; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg-soft) 55%, transparent); }
+tbody tr:last-child td { border-bottom:0; }
+.pill { display:inline-block; font-size:.78em; font-weight:700; padding:.1em .5em; border-radius:999px; border:1px solid var(--border); background:var(--bg-soft); color:var(--fg-soft); white-space:nowrap; }
+.pill.hi { color:var(--danger); border-color:color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.pill.mid { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.pill.lo { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.footer { margin-top:3.6em; padding-top:1.1em; border-top:1px solid var(--border-soft); font-size:.85em; color:var(--fg-faint); }
+@media (max-width:1000px) {
+  .layout { flex-direction:column; gap:0; padding:22px 18px 72px; }
+  .toc { position:static; flex:none; width:auto; max-height:none; border-right:0; border-bottom:1px solid var(--border); padding:0 0 14px; margin-bottom:26px; }
+  .toc > ol, .toc > .toc-title { display:none; }
+  .toc details { display:block; }
+  .toc summary { cursor:pointer; font-weight:700; color:var(--accent); padding:6px 0; }
+  body { font-size:16px; line-height:1.8; }
+}
+@media print {
+  .toc { display:none; }
+  .layout { display:block; max-width:none; padding:0; }
+  main { max-width:none; }
+  body { font-size:11.5pt; line-height:1.6; background:#fff; color:#000; }
+  h2 { page-break-after:avoid; }
+  pre, table, blockquote { page-break-inside:avoid; }
+  a { color:#000; border:0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <p class="toc-title">目录</p>
+  <ol>
+    <li><a href="#scope">结论</a></li>
+    <li><a href="#be">后端：接口对账</a></li>
+    <li><a href="#keep">留着没删的</a></li>
+    <li><a href="#fe">前端：死代码与注释</a></li>
+    <li><a href="#db">数据库</a></li>
+    <li><a href="#a11y">界面规范走查</a></li>
+    <li><a href="#run">验证与提交</a></li>
+    <li><a href="#gap">没查的和要知道的</a></li>
+  </ol>
+  <details>
+    <summary>目录</summary>
+    <ol>
+    <li><a href="#scope">结论</a></li>
+    <li><a href="#be">后端：接口对账</a></li>
+    <li><a href="#keep">留着没删的</a></li>
+    <li><a href="#fe">前端：死代码与注释</a></li>
+    <li><a href="#db">数据库</a></li>
+    <li><a href="#a11y">界面规范走查</a></li>
+    <li><a href="#run">验证与提交</a></li>
+    <li><a href="#gap">没查的和要知道的</a></li>
+    </ol>
+  </details>
+</nav>
+
+<main>
+
+<h1>接口与死代码体检报告</h1>
+
+<p>范围是这个仓库上线前的两件事：后端有没有没人调的接口、前端有没有对不上的代码与注释。按单机部署判：一个机器人进程、一个管理后台、并发个位数。</p>
+
+<h2 id="scope">结论</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>项</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>前端调到后端没有的接口</td><td><span class="pill lo">0 条</span> 221 个调用点全部能对上</td></tr>
+<tr><td>没人调的后端接口</td><td><span class="pill hi">16 条已删</span> 另有 5 条有明确理由留着</td></tr>
+<tr><td>合同同步</td><td>契约从 229 个操作降到 213，<code>docs/openapi.json</code> 与基线一起更新</td></tr>
+<tr><td>前端零引用导出</td><td><span class="pill hi">12 个已删</span>，组件与视图没有一个是死的</td></tr>
+<tr><td>注释掉的代码</td><td><span class="pill lo">0 处</span></td></tr>
+<tr><td>过期注释</td><td>3 处，已改</td></tr>
+<tr><td>孤儿表</td><td>1 张 <code>bot_schedule</code>，空表且无代码引用，已删除</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="be">后端：接口对账</h2>
+
+<p>做法是把两边的路径都抽出来做减法，不靠人眼扫。</p>
+
+<ul>
+<li>后端：<code>docs/openapi.json</code> 里 229 个操作，另从 236 处 mapping 注解抽一份带 <code>类名#方法名:行号</code> 的路由表，两边先对齐，避免拿过期契约判死。</li>
+<li>前端：<code>web/src</code> 里 221 个调用点，模板串里的 <code>${...}</code> 归一成 <code>{}</code>，补上 <code>/admin/api</code> 与 <code>/api/public/v1</code> 前缀。</li>
+<li>外部入口单独算：<code>/onebot/event</code> 由 NapCat 回调，本来就不该出现在前端。</li>
+</ul>
+
+<blockquote>
+<p>第一遍跑出 32 条「前端调了但后端没有」，逐条看完全是对账脚本的问题：一类是把查询串 <code>${q}</code> 当成了路径段，一类是把注释里的 <code>adminApi.post</code> 当成了调用。修正后是 0 条。</p>
+</blockquote>
+
+<p>反方向剩 37 条孤儿。逐条确认调用方之后，16 条删除，21 条其实有人用 —— 图片、SSE、下载这类地址不是通过 <code>adminApi</code> 发的，靠字符串匹配看不见。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>已删除</th><th>位置</th></tr></thead>
+<tbody>
+<tr><td><code>POST /admin/api/pages/actions/reset</code></td><td><code>SiteTextController</code>，页面用「保存空串」代替了</td></tr>
+<tr><td><code>POST /admin/api/map/resources/import</code></td><td><code>AdminMapController</code>，启动时自动导入</td></tr>
+<tr><td><code>GET /admin/api/map/resources/status</code></td><td>状态由 <code>/map/status</code> 提供</td></tr>
+<tr><td><code>GET /admin/api/map/places</code></td><td>后台用 <code>/map/markers</code> 渲染</td></tr>
+<tr><td><code>GET /admin/api/map/notes</code></td><td>备注跟随点位下发</td></tr>
+<tr><td><code>GET /admin/api/map/icons</code></td><td>图标清单由 <code>/map/catalog</code> 带出</td></tr>
+<tr><td><code>POST /admin/api/eval/datasets</code></td><td>用例集只从导入进入</td></tr>
+<tr><td><code>GET /admin/api/eval/baselines</code></td><td>页面只做提升，不列基线</td></tr>
+<tr><td><code>POST /admin/api/distill/jobs</code></td><td>任务由导入触发</td></tr>
+<tr><td><code>POST /admin/api/distill/jobs/preview</code></td><td>同上</td></tr>
+<tr><td><code>POST /admin/api/distill/import/preview</code></td><td>页面直接用 <code>/distill/import</code></td></tr>
+<tr><td><code>GET /admin/api/distill/messages</code></td><td>采集排查走 <code>/distill/stats</code></td></tr>
+<tr><td><code>GET /admin/api/distill/messages/{id}</code></td><td>同上</td></tr>
+<tr><td><code>GET /admin/api/distill/imports</code></td><td>导入列表没用上</td></tr>
+<tr><td><code>DELETE /admin/api/kb/terms/aliases</code></td><td>页面用 <code>/aliases/all</code></td></tr>
+<tr><td><code>GET /admin/api/commands/catalog</code></td><td>后台读 <code>/commands</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="keep">留着没删的</h2>
+
+<p>这 5 条也没人调，但删掉等于砍掉一项能力，先留着等你定。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>接口</th><th>为什么留</th><th>要动的话</th></tr></thead>
+<tbody>
+<tr><td><code>POST /admin/api/password</code></td><td>管理员自助改密，后台没有入口</td><td>补一个「账号」页，或删掉这条能力</td></tr>
+<tr><td><code>POST /admin/api/logout-all</code></td><td>撤销所有会话与信任设备，属于安全兜底</td><td>同上</td></tr>
+<tr><td><code>GET /admin/api/guard/metrics</code></td><td>Guard 预算与拦截计数，运维排查用</td><td>接进统计页</td></tr>
+<tr><td><code>GET /admin/api/commands/{id}/policy</code></td><td>有单条策略的测试覆盖，批量接口才是页面在用</td><td>删的话连测试一起删</td></tr>
+<tr><td><code>GET /api/public/v1/map/search</code></td><td>公开接口，项目内没人调；外部脚本看不到</td><td>确认无人调用后删</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="fe">前端：死代码与注释</h2>
+
+<p>81 个 <code>.vue</code>，逐个统计被谁引用。视图与组件没有一个是零引用，死的地方集中在导出层。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>删除的导出</th><th>文件</th></tr></thead>
+<tbody>
+<tr><td><code>useIsAdmin</code></td><td><code>admin/useAuth.ts</code></td></tr>
+<tr><td><code>peek</code></td><td><code>shared/api/cache.ts</code></td></tr>
+<tr><td><code>KbCategory</code>、<code>ScheduleList</code>、<code>CommandCatalog</code>、<code>CommandUsage</code></td><td><code>shared/api/types.ts</code></td></tr>
+<tr><td><code>Place</code>、<code>NoteInput</code></td><td><code>shared/map/types.ts</code></td></tr>
+<tr><td><code>dateOnly</code></td><td><code>shared/utils/format.ts</code></td></tr>
+<tr><td><code>GuardAction</code>、<code>guardHint</code></td><td><code>shared/utils/guard.ts</code></td></tr>
+<tr><td><code>HitSource</code></td><td><code>shared/utils/source.ts</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<p><code>CommandCatalog</code> 是这次删接口带出来的：接口没了，类型还留着。</p>
+
+<p>注释掉的可执行代码是 0 处，这个仓库在这点上很干净。查到 3 处与现状不符的注释，已改：</p>
+
+<ul>
+<li><code>shared/api/types.ts</code> 轮播图注释写的是 <code>/api/public/v1/site/image/3</code>，真实路径是 <code>/carousel/image/{id}</code>。</li>
+<li><code>shared/api/types.ts</code> 块模型注释说「与旧的行号模型并存到切换为止」，而迁移早已完成，旧实现连语料一起删了。</li>
+<li><code>admin/views/kb/DocPanel.vue</code> 文件头说「两套存储：词条按行号操作 chunks.jsonl」，同一个原因，改成现状。</li>
+</ul>
+
+<p>另有 21 个 CSS 变量定义了没用过（<code>--map-label-*</code>、<code>--z-modal</code>、<code>--sp-9</code> 等）。没动：一部分是给内联样式用的，逐个确认的成本高于收益，列在这里备查。</p>
+
+<h2 id="db">数据库</h2>
+
+<p>库里有 56 张表，逐个对代码引用。其中 27 张只被一个 Java 文件引用，26 张就是它们自己的 Repository —— 正常。</p>
+
+<p>真正没人管的是 <code>bot_schedule</code>：0 行数据，没有任何代码建表、读写，是一次没落地的定时消息功能留下的。已从本地库删除。生产库如果也有，需要执行同一条语句：</p>
+
+<pre><code>DROP TABLE bot_schedule;</code></pre>
+
+<h2 id="a11y">界面规范走查</h2>
+
+<p>按 Web 界面规范做了静态检查：图片缺 <code>alt</code>、可点区域没有语义、<code>outline: none</code> 没有焦点环兜底、正整数 <code>tabindex</code>、<code>transition: all</code>、<code>prefers-reduced-motion</code> 降级。</p>
+
+<p>没有查出真问题。命中的几处都是有意为之并写了原因：弹窗遮罩的点击关闭、开关外壳包着原生 checkbox、<code>Input</code> 与 <code>Select</code> 的 <code>outline: none</code> 后面紧跟自定义焦点环。</p>
+
+<blockquote class="warn">
+<p>规范原文没拉到：<code>raw.githubusercontent.com</code> 与 <code>github.com</code> 在这台机器上都解析不到公网地址。这轮用的是内置规则集，联网后建议按原文再补一遍。</p>
+</blockquote>
+
+<h2 id="run">验证与提交</h2>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>检查</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>后端编译</td><td>通过，在隔离副本里编，没碰 <code>server/target</code></td></tr>
+<tr><td>后端测试</td><td>1341 个，1 个失败：<code>RetrievalGoldenTest</code> 的实体召回低于底线</td></tr>
+<tr><td>前端类型检查</td><td>通过</td></tr>
+<tr><td>前端构建</td><td>通过</td></tr>
+<tr><td>契约生成</td><td>删除的 16 个操作与新契约逐条对上，没有多删</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>两个提交：</p>
+
+<pre><code>822cebb 删除无调用方的 16 个管理端接口并同步接口契约
+fa156d9 清掉前端零引用的导出类型与工具函数，修正过期的存储与图片路径注释</code></pre>
+
+<h2 id="gap">没查的和要知道的</h2>
+
+<ul>
+<li><code>RetrievalGoldenTest</code> 的失败要在真实语料上复跑再下结论。隔离副本里没有正式知识库数据，这条大概率是环境差异，但上线前必须确认。</li>
+<li>浏览器端的界面走查没跑：<code>tests/ui/audit.mjs</code> 需要先起 <code>pnpm dev</code> 并登录后台，这轮只做了静态检查与构建。</li>
+<li>公开接口的外部脚本调用看不到。项目内已确认无人调用，仓库外无法验证。</li>
+<li>删接口是破坏性变更，<code>docs/openapi.baseline.json</code> 已整体更新；旧基线是 158 条路径，这次一并接受此前积压的变更。</li>
+</ul>
+
+<p class="footer">数据取自当前工作区：后端 31 个 controller、229 个操作；前端 81 个 vue、221 个调用点。</p>
+
+</main>
+</div>
+</body>
+</html>
