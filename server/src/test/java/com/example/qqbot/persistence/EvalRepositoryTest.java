@@ -123,6 +123,23 @@ class EvalRepositoryTest {
     }
 
     @Test
+    @DisplayName("校准结果按判定器留存，最新的排前面")
+    void storesCalibrationHistory() {
+        repo.insertCalibration("relevance", 1, 20, 15, 0.75, 4.1, 1.8, 2.3, "",
+                "2026-11-05T10:00:00Z");
+        repo.insertCalibration("relevance", 2, 20, 18, 0.9, 4.3, 1.5, 2.8, "",
+                "2026-11-05T11:00:00Z");
+        repo.insertCalibration("groundedness", 1, 10, 8, 0.8, 4.0, 2.0, 2.0, "",
+                "2026-11-05T11:30:00Z");
+
+        assertThat(repo.calibrations("relevance", 10)).hasSize(2)
+                .extracting(EvalRepository.CalibrationRow::agreement)
+                .containsExactly(0.9, 0.75);
+        assertThat(repo.calibrations("groundedness", 10)).hasSize(1);
+        assertThat(repo.calibrations(null, 10)).hasSize(3);
+    }
+
+    @Test
     @DisplayName("批次进度：按 run 汇总，标签按次数排序")
     void batchReads() {
         long runId = seedRun();

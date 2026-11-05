@@ -1058,3 +1058,17 @@ export interface EvalCalibrationReport {
   separation: number
   rows: EvalCalibrationRow[]
 }
+
+export interface EvalCalibrationHistory {
+  id: number
+  grader: string
+  graderVersion: number
+  total: number
+  agreed: number
+  agreement: number
+  passMean: number
+  failMean: number
+  separation: number
+  provider: string | null
+  createdAt: string
+}

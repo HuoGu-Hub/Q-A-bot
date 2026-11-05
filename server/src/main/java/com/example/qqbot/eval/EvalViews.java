@@ -65,6 +65,11 @@ public final class EvalViews {
                                 List<CompareCase> changes) {
     }
 
+    public record Calibration(long id, String grader, int graderVersion, int total, int agreed,
+                              double agreement, double passMean, double failMean, double separation,
+                              String provider, String createdAt) {
+    }
+
     public record AlertRule(long id, String name, String metric, String comparator, double threshold,
                             String severity, boolean enabled, String createdAt) {
     }

@@ -272,9 +272,18 @@ public class EvalController {
         if (report == null) {
             throw ApiException.badRequest("没有找到校准集，或判定器不存在：" + grader);
         }
+        service.saveCalibration(report, provider);
         audit(request, "judge.calibrate", "grader=" + report.grader() + " total=" + report.total()
                 + " agreement=" + report.agreement());
         return report;
+    }
+
+    /** 校准历史，按判定器过滤；页面用它画趋势 */
+    @GetMapping("/judges/calibrations")
+    public List<EvalViews.Calibration> calibrations(
+            @RequestParam(required = false) String grader,
+            @RequestParam(defaultValue = "20") int limit) {
+        return service.calibrations(grader, limit);
     }
 
     /** 导出最近有回答的 run 作为待标注校准候选，期望结论留空 */

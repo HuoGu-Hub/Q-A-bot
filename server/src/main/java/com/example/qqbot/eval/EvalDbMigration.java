@@ -39,7 +39,7 @@ public class EvalDbMigration implements ApplicationRunner {
             "eval_dataset", "eval_dataset_version", "eval_case", "eval_batch", "eval_item",
             "eval_run", "eval_span", "eval_retrieval", "eval_judge", "eval_failure",
             "eval_tool_call", "eval_citation", "eval_review_task", "eval_baseline", "eval_price",
-            "eval_alert_rule", "eval_alert_event");
+            "eval_alert_rule", "eval_alert_event", "eval_calibration");
 
     private final Jdbc jdbc;
     private final EvalRepository repo;

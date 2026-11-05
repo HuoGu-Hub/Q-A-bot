@@ -6,12 +6,12 @@
  * 单条用例的过程不在这里展开，点进去看 Trace —— 那是另一个问题，
  * 混在同一屏会让"这一批整体怎么样"永远被单条明细挤下去。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi, describeError } from '@shared/api/client'
 import { useAuth } from '../useAuth'
 import type {
-  EvalBatch, EvalCalibrationReport, EvalDataset, EvalImportResult,
+  EvalBatch, EvalCalibrationHistory, EvalCalibrationReport, EvalDataset, EvalImportResult,
 } from '@shared/api/types'
 import AdminPage from '@shared/ui/AdminPage.vue'
 import Tabs from '@shared/ui/Tabs.vue'
@@ -49,6 +49,7 @@ const calibration = ref<EvalCalibrationReport | null>(null)
 const calibrating = ref(false)
 const calibGrader = ref('relevance')
 const calibTsv = ref('')
+const history = ref<EvalCalibrationHistory[]>([])
 const CALIB_GRADERS = [
   { value: 'relevance', label: '相关性' },
   { value: 'groundedness', label: '忠实度' },
@@ -80,7 +81,21 @@ async function refresh() {
   }
 }
 
-onMounted(refresh)
+onMounted(() => {
+  refresh()
+  loadHistory()
+})
+
+async function loadHistory() {
+  try {
+    history.value = await adminApi.get<EvalCalibrationHistory[]>(
+      `/eval/judges/calibrations?grader=${calibGrader.value}&limit=10`)
+  } catch {
+    history.value = []
+  }
+}
+
+watch(calibGrader, loadHistory)
 
 function exportCandidates() {
   window.location.href =
@@ -95,6 +110,7 @@ async function calibrateWithPasted() {
       `/eval/judges/actions/calibrate?grader=${calibGrader.value}`,
       { tsv: calibTsv.value })
     notice.value = '用自定义校准集跑完，结果见下方'
+    await loadHistory()
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -108,6 +124,7 @@ async function calibrate() {
     calibration.value = await adminApi.post<EvalCalibrationReport>(
       `/eval/judges/actions/calibrate?grader=${calibGrader.value}`)
     notice.value = '校准完成，结果见下方'
+    await loadHistory()
   } catch (e) {
     error.value = describeError(e)
   } finally {
@@ -360,6 +377,25 @@ function when(value: string | null): string {
         </DataTable>
       </template>
       <p v-else class="calib-hint">还没有跑过。一致率低于 80% 时先改 rubric，别急着开自动判定。</p>
+
+      <DataTable v-if="history.length" :rows="history.length" label="校准历史" empty="">
+        <thead>
+          <tr><th>时间</th><th>版本</th><th class="num">样本</th><th class="num">一致率</th>
+            <th class="num">PASS 均分</th><th class="num">FAIL 均分</th><th class="num">分档差</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="h in history" :key="h.id">
+            <td>{{ h.createdAt?.slice(0, 16).replace('T', ' ') }}</td>
+            <td>v{{ h.graderVersion }}</td>
+            <td class="num">{{ h.total }}</td>
+            <td class="num">{{ (h.agreement * 100).toFixed(1) }}%</td>
+            <td class="num">{{ h.passMean }}</td>
+            <td class="num">{{ h.failMean }}</td>
+            <td class="num">{{ h.separation }}</td>
+          </tr>
+        </tbody>
+      </DataTable>
+
     </Panel>
 
     <Empty v-if="!loading && tab === 'batches' && batches.length === 0 && datasets.length === 0"

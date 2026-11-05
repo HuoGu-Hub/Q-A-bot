@@ -242,6 +242,27 @@ public class EvalService {
                 b.status(), b.createdAt(), b.promotedBy(), b.promotedAt());
     }
 
+    /* ==================== 校准历史 ==================== */
+
+    /** 每次校准落一行：版本记的是 grader 的代码版本，改 rubric 时要同步升版本 */
+    public void saveCalibration(JudgeCalibration.Report report, String provider) {
+        RubricJudge.Grader grader = RubricJudge.graderById(report.grader());
+        repo.insertCalibration(report.grader(), grader == null ? 0 : grader.version(),
+                report.total(), report.agreed(), report.agreement(), report.passMean(),
+                report.failMean(), report.separation(), provider, Instant.now().toString());
+    }
+
+    public List<EvalViews.Calibration> calibrations(String grader, int limit) {
+        List<EvalViews.Calibration> out = new ArrayList<>();
+        for (EvalRepository.CalibrationRow c : repo.calibrations(grader,
+                Math.max(1, Math.min(50, limit)))) {
+            out.add(new EvalViews.Calibration(c.id(), c.grader(), c.graderVersion(), c.total(),
+                    c.agreed(), c.agreement(), c.passMean(), c.failMean(), c.separation(),
+                    c.provider(), c.createdAt()));
+        }
+        return out;
+    }
+
     /* ==================== 校准候选 ==================== */
 
     /**

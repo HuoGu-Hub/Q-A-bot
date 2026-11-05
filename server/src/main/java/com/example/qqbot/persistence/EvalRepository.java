@@ -259,6 +259,20 @@ public class EvalRepository {
                 + " note TEXT)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_alert_event_status"
                 + " ON eval_alert_event(status, created_at)");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS eval_calibration ("
+                + " id INTEGER PRIMARY KEY,"
+                + " grader TEXT NOT NULL,"
+                + " grader_version INTEGER NOT NULL,"
+                + " total INTEGER NOT NULL,"
+                + " agreed INTEGER NOT NULL,"
+                + " agreement REAL NOT NULL,"
+                + " pass_mean REAL NOT NULL,"
+                + " fail_mean REAL NOT NULL,"
+                + " separation REAL NOT NULL,"
+                + " provider TEXT,"
+                + " created_at TEXT NOT NULL)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_eval_calibration_grader"
+                + " ON eval_calibration(grader, id DESC)");
 
         // 老库补列：CREATE TABLE IF NOT EXISTS 对已存在的表什么都不做
         ensureColumn("eval_batch", "gate_reason", "gate_reason TEXT");
@@ -977,6 +991,37 @@ public class EvalRepository {
                         rs.str("quality"),
                         rs.str("rag"), rs.str("safety"), rs.str("evidence"), rs.str("agent"),
                         rs.str("tag"), rs.longOf("run_id")), batchId);
+    }
+
+    /* ==================== 校准历史 ==================== */
+
+    public record CalibrationRow(long id, String grader, int graderVersion, int total, int agreed,
+                                 double agreement, double passMean, double failMean,
+                                 double separation, String provider, String createdAt) {
+    }
+
+    public long insertCalibration(String grader, int graderVersion, int total, int agreed,
+                                  double agreement, double passMean, double failMean,
+                                  double separation, String provider, String now) {
+        return jdbc.insert("INSERT INTO eval_calibration (grader, grader_version, total, agreed,"
+                        + " agreement, pass_mean, fail_mean, separation, provider, created_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                grader, graderVersion, total, agreed, agreement, passMean, failMean, separation,
+                provider, now);
+    }
+
+    public List<CalibrationRow> calibrations(String grader, int limit) {
+        String where = grader == null || grader.isBlank() ? "" : " WHERE grader=?";
+        String sql = "SELECT id, grader, grader_version, total, agreed, agreement, pass_mean,"
+                + " fail_mean, separation, provider, created_at FROM eval_calibration" + where
+                + " ORDER BY id DESC LIMIT ?";
+        Jdbc.RowMapper<CalibrationRow> mapper = rs -> new CalibrationRow(rs.longOf("id"),
+                rs.str("grader"), rs.intOf("grader_version"), rs.intOf("total"), rs.intOf("agreed"),
+                rs.dbl("agreement"), rs.dbl("pass_mean"), rs.dbl("fail_mean"), rs.dbl("separation"),
+                rs.str("provider"), rs.str("created_at"));
+        return grader == null || grader.isBlank()
+                ? jdbc.query(sql, mapper, limit)
+                : jdbc.query(sql, mapper, grader, limit);
     }
 
     /* ==================== 告警 ==================== */
