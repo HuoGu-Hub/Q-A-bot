@@ -31,11 +31,6 @@ export type KbSearchResult = {
   entries: KbEntry[]
 }
 
-export interface KbCategory {
-  name: string
-  count: number
-}
-
 /* ==================== 公开统计 ==================== */
 
 /** 公开统计：刻意不含用户数/群数等内部指标 */
@@ -341,13 +336,6 @@ export interface CommandAcl {
   black: AclItem[]
 }
 
-export interface ScheduleList {
-  available: boolean
-  /** 各状态条数，键就是状态名 */
-  counts: Record<string, number>
-  tasks: AdminScheduleTask[]
-}
-
 /** 命令目录的一条：板块或普通指令。后台列表与 QQ 的 /list 共用这一份数据 */
 export interface CommandCatalogEntry {
   source: 'board' | 'command'
@@ -371,10 +359,6 @@ export interface CommandCatalogEntry {
   builtin: boolean
   /** 板块支持的四个动作；指令为空 */
   actions: string[]
-}
-
-export interface CommandCatalog {
-  entries: CommandCatalogEntry[]
 }
 
 /** 后台编辑用的一条板块（/admin/api/boards） */
@@ -478,16 +462,11 @@ export interface CommandVariables {
   allowUserIds: boolean
 }
 
-export interface CommandUsage {
-  trigger: string
-  count: number
-}
-
 export type CommandStats = DeepRequired<Schemas['CommandStats']>
 
-/* ==================== 知识库块（文档导入之后的新模型） ====================
-   与旧的「词条 / 文本块（按行号操作）」并存到切换为止。
-   这里全部按 **块 id** 操作 —— 行号那套是旧存储的产物，切过去就退休。 */
+/* ==================== 知识库块 ====================
+   块是知识库唯一的存储单位，全部按 **块 id** 操作。
+   旧的 chunks.jsonl + 行号那套已经删除，不要再按行号想问题。 */
 
 /** 块存储概览 */
 export interface KbBlockStats {
@@ -649,7 +628,7 @@ export type KbBrowseResult = {
  */
 export interface CarouselItem {
   id: number
-  /** 直接能放进 <img src>（形如 /api/public/v1/site/image/3），长缓存 */
+  /** 直接能放进 <img src>（形如 /api/public/v1/carousel/image/3），长缓存 */
   imageUrl: string
   /** 点击跳转地址，可空 */
   link: string

@@ -110,7 +110,3 @@ export const ADMIN_ROLES: { value: AdminRoleId; label: string }[] = [
   { value: 'admin', label: '管理' },
 ]
 
-/** 当前登录者是不是管理员（模板里用起来比 auth.can 顺手） */
-export function useIsAdmin() {
-  return computed(() => useAuth().can('admin'))
-}

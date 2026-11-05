@@ -8,8 +8,6 @@
  * ⚠️ 只在**一个地方**定义这套映射：记录页、看板都要用，
  * 分别写一遍迟早会不一致（项目里已经因为"同一个东西多处各写一份"吃过亏）。
  */
-export type HitSource = 'vector' | 'keyword' | 'both' | 'none'
-
 interface SourceMeta {
   /** 中文说法 */
   label: string

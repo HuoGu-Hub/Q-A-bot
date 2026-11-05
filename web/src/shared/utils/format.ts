@@ -25,11 +25,6 @@ export function shortTime(iso: string | null | undefined): string {
   return s.slice(5, 10) + ' ' + s.slice(11, 16)
 }
 
-export function dateOnly(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  return String(iso).slice(0, 10)
-}
-
 /** 余弦相似度：三位小数，便于横向比较 */
 export function cosine(x: number | null | undefined): string {
   if (x == null || !Number.isFinite(x)) return '—'

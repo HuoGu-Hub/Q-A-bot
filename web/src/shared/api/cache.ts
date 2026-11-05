@@ -57,11 +57,6 @@ export function beginVisit(): void {
   visit += 1
 }
 
-/** 同步读一条缓存，不做新鲜度判断；给需要同步初值的地方用 */
-export function peek<T>(key: string): T | undefined {
-  return store.get(key)?.data as T | undefined
-}
-
 /**
  * 取数据：新鲜且本次停留没读过 → 直接给；否则发请求。
  *

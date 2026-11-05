@@ -9,8 +9,6 @@
  * 只有 `pass` 是「未被拦截的有效回应」，也只有它算**提问**。
  * 两边口径必须对齐，否则同一屏上「拦截率」和「提问量」会互相打架。
  */
-export type GuardAction = 'pass' | 'drop' | 'fixed_reply' | 'command'
-
 interface GuardMeta {
   /** 中文名 */
   label: string
@@ -54,6 +52,3 @@ export function guardLabel(action: string): string {
   return GUARD_META[action]?.label ?? action
 }
 
-export function guardHint(action: string): string {
-  return GUARD_META[action]?.hint ?? ''
-}

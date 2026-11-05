@@ -194,24 +194,6 @@ export interface PlaceInput {
   visible: boolean
 }
 
-export interface Place extends PlaceInput {
-  id: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface NoteInput {
-  map: string
-  page: string
-  markerId: string
-  alias: string
-  note: string
-  category: string
-  landmark: boolean
-  priority: number
-  hidden: boolean
-}
-
 export interface JobState {
   name: string
   label: string
