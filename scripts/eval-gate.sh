@@ -13,12 +13,16 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# 评测库是独立文件（默认与主库同目录的 eval.sqlite）
-DB="${EVAL_DB:-$ROOT/server/data/eval/eval.sqlite}"
+# 评测库是独立文件，默认和主库同目录（app.eval.db 留空时的约定）
+DB="${EVAL_DB:-$ROOT/server/data/qa/eval.sqlite}"
 BATCH="${1:-}"
 
-# 取最新那个 jar：target 里可能同时躺着旧版本
-JAR="$(ls -t "$ROOT"/server/target/qqbot-server-*.jar 2>/dev/null | head -n 1 || true)"
+# jar 可能在 server/target，也可能在 preflight 的隔离副本 .toolchain/server-ci/target
+JAR="${EVAL_JAR:-}"
+if [ -z "$JAR" ]; then
+  JAR="$(ls -t "$ROOT"/server/target/qqbot-server-*.jar \
+    "$ROOT"/.toolchain/server-ci/target/qqbot-server-*.jar 2>/dev/null | head -n 1 || true)"
+fi
 if [ -z "$JAR" ]; then
   echo "找不到 server/target/qqbot-server-*.jar，先执行 (cd server && mvn -DskipTests package)" >&2
   exit 3

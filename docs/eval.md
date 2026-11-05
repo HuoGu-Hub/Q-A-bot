@@ -205,17 +205,26 @@ eval
 | 2 | 阻断：较活动基线回退超过 3 个百分点 |
 | 3 | 无法判定：批次不存在、没跑完、没有判定结果 |
 
-不传批次 id 时取最近一个已完成批次；`EVAL_DB` 可指定数据库路径。
+不传批次 id 时取最近一个已完成批次。评测库默认在 `server/data/qa/eval.sqlite`，
+与主库同目录；用 `EVAL_DB` 覆盖。jar 依次找 `server/target` 与 preflight 的隔离副本
+`.toolchain/server-ci/target`，也可以用 `EVAL_JAR` 指定。
 
 判定器一致率也可以进门禁：设 `EVAL_MIN_AGREEMENT=0.8` 与可选的 `EVAL_JUDGE_GRADER=relevance`，
 脚本会读最近一次校准，低于阈值按阻断退出，没有校准历史按无法判定退出。
 仓库的 `.github/workflows/ci.yml` 已经把这两个变量写成工作流默认值，部署脚本直接继承。
+
+真正执行门禁的有两处：
+
+- `scripts/preflight.sh` 的第六步：发版前本地跑，缺评测库或无法判定都算失败，
+  可用 `--skip-eval` 显式跳过；
+- `.github/workflows/deploy-gate.yml`：手动触发或由部署流水线 `workflow_call`，
+  跑在带 `[self-hosted, qqbot]` 标签的 runner 上，结果写进 job summary。
 脚本要求先 `mvn -DskipTests package`，它用 Spring Boot 的 `PropertiesLauncher`
 调 `com.example.qqbot.EvalGateCli`，判定口径与页面一致。
 
 ## 7. 已知缺口
 
-这张表是评测中台的能力边界，共 24 条：P1 0 条、P2 17 条、P3 7 条。
+这张表是评测中台的能力边界，共 23 条：P1 0 条、P2 16 条、P3 7 条。
 优先级按"补齐顺序"排，不按缺陷严重度：P1 影响结论可信度或发版判断，P2 影响覆盖与效率，
 P3 是体验与远期。已实现的部分不在这里重复。
 
@@ -236,7 +245,6 @@ P3 是体验与远期。已实现的部分不在这里重复。
 | 复核 SLA 没有执行者 | `due_at` 只记录，没有调度器提醒或升级 | 超时任务不会自己冒出来 | 定时扫描 + 到期提醒 + 升级 | P2 |
 | 成本维度没有单条判定 | 只有批次级成本对比与单条展示 | 单条超支不会单独报 | 定单条预算后再加判定 | P2 |
 | 判定器覆盖仍少 | 只有相关性、忠实度、工具选择三个 rubric，代码、数学、多轮、多模态未覆盖 | 通过率主要看这三维 | 按需增加 rubric | P2 |
-| 门禁没有真正跑在 CI 里 | 阈值默认值已写进 `ci.yml`，定时校准也有了，但没有任何 CI 任务调用 `eval-gate.sh` | 流水线仍靠部署脚本自觉 | 加一个部署前 gate job | P2 |
 | 稳定性只有一个一致性结论 | 有 `attempts` 与 `STB_FLAKY`，汇总不给 flaky 率 | 只能逐条看，看不出"这一批有多飘" | 汇总加 flaky 率与不一致明细 | P2 |
 
 ### 7.3 执行与编排

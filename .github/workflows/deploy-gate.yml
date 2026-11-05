@@ -1,0 +1,71 @@
+name: 部署前评测门禁
+
+# 为什么单独一个工作流：
+#   评测库在部署机上，不在仓库里。放到 ci.yml 会让每个 PR 都排队等一台
+#   只该在发版时用的机器。这里只手动触发，或由部署流水线 workflow_call。
+#
+# 运行机器：需要一台带 [self-hosted, qqbot] 标签的 runner，
+#   并且 EVAL_DB 指向评测库文件。没配 runner 时任务会一直排队，这是预期行为。
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: 批次 id，留空取最近一个已完成批次
+        required: false
+        default: ""
+      eval_db:
+        description: 评测库路径，留空用仓库变量 EVAL_DB；再留空用默认路径
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      batch_id:
+        type: string
+        required: false
+        default: ""
+      eval_db:
+        type: string
+        required: false
+        default: ""
+
+env:
+  EVAL_MIN_AGREEMENT: "0.8"
+  EVAL_JUDGE_GRADER: "relevance"
+
+jobs:
+  gate:
+    name: 评测结论与一致率
+    runs-on: [self-hosted, qqbot]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 装 JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: server/pom.xml
+
+      # 测试由 ci.yml 负责，这里只打包，避免发版前重复跑一遍全量
+      - name: 打包
+        working-directory: server
+        run: mvn -B -DskipTests package
+
+      - name: 评测门禁
+        shell: bash
+        env:
+          EVAL_DB_INPUT: ${{ inputs.eval_db || vars.EVAL_DB }}
+          BATCH_INPUT: ${{ inputs.batch_id }}
+        run: |
+          set -o pipefail
+          if [ -n "${EVAL_DB_INPUT:-}" ]; then export EVAL_DB="$EVAL_DB_INPUT"; fi
+          ./scripts/eval-gate.sh ${BATCH_INPUT:+"$BATCH_INPUT"} | tee /tmp/eval-gate.log
+          rc=${PIPESTATUS[0]}
+          echo "### 评测门禁" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/eval-gate.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
