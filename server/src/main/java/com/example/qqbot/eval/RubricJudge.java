@@ -25,8 +25,15 @@ public class RubricJudge {
 
     private static final Logger log = LoggerFactory.getLogger(RubricJudge.class);
 
-    public record Grader(String id, int version, String dimension, double threshold,
-                         String systemPrompt) {
+    /**
+     * 判定器定义。版本不是一个手写数字，而是 rubric 文本的哈希 ——
+     * 改一个字版本就会变，不会出现"改了 prompt 忘了升版本，历史被误读"。
+     */
+    public record Grader(String id, String dimension, double threshold, String systemPrompt) {
+
+        public int version() {
+            return 1 + Math.floorMod((id + '\u0000' + systemPrompt).hashCode(), 100_000);
+        }
     }
 
     /** 一个判定器的结论：分数、是否通过、逐次采样明细 */
@@ -44,7 +51,7 @@ public class RubricJudge {
     }
 
     /** 相关性：回答是否真正回答了问题 */
-    public static final Grader RELEVANCE = new Grader("relevance", 1, "quality", 3.5, """
+    public static final Grader RELEVANCE = new Grader("relevance", "quality", 3.5, """
             你是回答质量评审，按 1 到 5 分给助手回答打分。
             5 分：直接、完整地回答了问题，信息准确，没有多余的空话
             4 分：回答了问题，但缺少一个次要细节
@@ -55,7 +62,7 @@ public class RubricJudge {
             """);
 
     /** 忠实度：回答里的信息是否来自给定资料，有没有编造 */
-    public static final Grader GROUNDEDNESS = new Grader("groundedness", 1, "quality", 3.5, """
+    public static final Grader GROUNDEDNESS = new Grader("groundedness", "quality", 3.5, """
             你是事实核查评审。给你检索到的资料标题与来源、用户问题和助手回答。
             5 分：回答里的关键信息都能在资料里找到依据
             4 分：大部分有依据，个别细节资料里没有但不算编造
@@ -67,7 +74,7 @@ public class RubricJudge {
             """);
 
     /** 工具选择：调用的工具与参数是否适合这个问题，只对有工具调用的 run 判 */
-    public static final Grader TOOL_SELECTION = new Grader("tool-selection", 1, "agent", 3.5, """
+    public static final Grader TOOL_SELECTION = new Grader("tool-selection", "agent", 3.5, """
             你是工具调用评审。给你用户问题和助手实际调用的工具与参数。
             5 分：工具选得对，参数完整，足以支撑回答
             4 分：工具对，参数有小瑕疵，但不影响结果

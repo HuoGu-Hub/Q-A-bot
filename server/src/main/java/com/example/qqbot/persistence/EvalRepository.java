@@ -740,10 +740,12 @@ public class EvalRepository {
     }
 
     public List<CalibrationCandidate> recentAnsweredRuns(int limit) {
+        // 失败样本优先：校准最该覆盖的就是"判错了会被发版门禁放过"的那些
         return jdbc.query("SELECT r.id, c.question, r.answer, r.status FROM eval_run r"
                         + " JOIN eval_case c ON c.id=r.case_id"
                         + " WHERE r.answer IS NOT NULL AND TRIM(r.answer) <> ''"
-                        + " ORDER BY r.id DESC LIMIT ?",
+                        + " ORDER BY (SELECT COUNT(*) FROM eval_failure f WHERE f.run_id=r.id) DESC,"
+                        + " r.id DESC LIMIT ?",
                 rs -> new CalibrationCandidate(rs.longOf("id"), rs.str("question"),
                         rs.str("answer"), rs.str("status")), limit);
     }

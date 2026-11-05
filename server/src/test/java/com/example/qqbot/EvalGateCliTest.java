@@ -45,6 +45,17 @@ class EvalGateCliTest {
     }
 
     @Test
+    @DisplayName("校准一致率：无历史算无法判定，低于阈值阻断")
+    void calibrationGate() {
+        assertThat(EvalGateCli.calibrationDecision(null, 0.8, "relevance").exitCode())
+                .isEqualTo(3);
+        assertThat(EvalGateCli.calibrationDecision(0.62, 0.8, "relevance"))
+                .extracting(EvalGateCli.Decision::status, EvalGateCli.Decision::exitCode)
+                .containsExactly("BLOCKED", 2);
+        assertThat(EvalGateCli.calibrationDecision(0.9, 0.8, "relevance").exitCode()).isZero();
+    }
+
+    @Test
     @DisplayName("没有判定结果时无法判定，退出码 3")
     void unknownWhenNothingJudged() {
         EvalGateCli.Decision unknown = EvalGateCli.decide(summary(0, 0, 5), 0.9);

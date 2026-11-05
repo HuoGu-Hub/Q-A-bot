@@ -32,6 +32,11 @@ ARGS=(--db "$DB")
 if [ -n "$BATCH" ]; then
   ARGS+=(--batch "$BATCH")
 fi
+# 判定器一致率门禁：设了阈值就必须有校准历史，低于阈值直接阻断
+if [ -n "${EVAL_MIN_AGREEMENT:-}" ]; then
+  ARGS+=(--min-agreement "$EVAL_MIN_AGREEMENT")
+  ARGS+=(--grader "${EVAL_JUDGE_GRADER:-relevance}")
+fi
 
 java -Dloader.main=com.example.qqbot.EvalGateCli -cp "$JAR" \
   org.springframework.boot.loader.launch.PropertiesLauncher "${ARGS[@]}"

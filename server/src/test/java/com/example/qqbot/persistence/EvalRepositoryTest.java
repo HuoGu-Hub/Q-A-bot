@@ -123,6 +123,24 @@ class EvalRepositoryTest {
     }
 
     @Test
+    @DisplayName("校准候选优先失败样本，哪怕它更早")
+    void calibrationCandidatesFailFirst() {
+        long failed = seedRun();
+        long itemId = repo.findRun(failed).itemId();
+        long batchId = repo.findRun(failed).batchId();
+        repo.saveExecution(failed, List.of(), null, List.of(),
+                List.of(new EvalRepository.FailureWrite("quality", "STB_EMPTY", "空返回")),
+                List.of(), "2026-11-05T10:01:00Z");
+        long good = repo.insertRun(itemId, batchId, repo.findRun(failed).caseId(), 2, "succeeded",
+                "trace-good", "这是一个正常回答", 100, 1, 0.9, true, "mock", 10, 5, 0,
+                null, "2026-11-05T10:02:00Z");
+
+        assertThat(repo.recentAnsweredRuns(2))
+                .extracting(EvalRepository.CalibrationCandidate::runId)
+                .containsExactly(failed, good);
+    }
+
+    @Test
     @DisplayName("校准结果按判定器留存，最新的排前面")
     void storesCalibrationHistory() {
         repo.insertCalibration("relevance", 1, 20, 15, 0.75, 4.1, 1.8, 2.3, "",
