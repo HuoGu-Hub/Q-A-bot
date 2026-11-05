@@ -158,7 +158,9 @@ eval
   失败样本排在前面 —— 校准最该覆盖的就是会被门禁放过的那些。
   期望结论留空，人工填 PASS 或 FAIL 后粘回校准面板即可，不必改仓库文件。
 - 校准历史：每次校准落 `eval_calibration`，记判定器、版本、样本数、一致率与分档差；
-  页面按判定器展示最近十次。版本是 rubric 文本的哈希，改一个字就会变，不依赖手工升版本。
+  页面按判定器画最近十次的折线，80% 处有阈值线。版本是 rubric 文本的哈希，改一个字就会变。
+- 定时校准：`app.eval.calibration.enabled=true` 后每天 04:30 自动跑配置的判定器并落库，
+  避免"改完判定器忘了看一致率"。判定开关没开时直接跳过，不花 token。
 - 失败归因：失败标签落在 `eval_failure`，批次页按标签点开可看到受影响的用例与原因。
 - 重复运行：每条用例跑 N 次，N 大于 1 时稳定性由跑完之后的一致性判定给出，
   一致性比较的是质量与检索两维的结论，不看分数。
@@ -187,6 +189,9 @@ eval
 | `app.eval.judge.samples` | 3 | 每条判定重复几次，1 到 5 |
 | `app.eval.judge.strategy` | average | average 取均值、vote 取多数票 |
 | `app.eval.judge.provider` | 空 | 判定模型优先用的 provider |
+| `app.eval.calibration.enabled` | false | 是否定时校准；要求判定开关同时打开 |
+| `app.eval.calibration.cron` | 0 30 4 * * * | 定时校准的 cron |
+| `app.eval.calibration.graders` | relevance | 要校准的判定器，逗号分隔 |
 | `app.eval.alerts.qq` | 空 | 告警私聊的 QQ 号，逗号分隔；空 = 只落事件 |
 
 ### 6.1 CI 门禁
@@ -204,6 +209,7 @@ eval
 
 判定器一致率也可以进门禁：设 `EVAL_MIN_AGREEMENT=0.8` 与可选的 `EVAL_JUDGE_GRADER=relevance`，
 脚本会读最近一次校准，低于阈值按阻断退出，没有校准历史按无法判定退出。
+仓库的 `.github/workflows/ci.yml` 已经把这两个变量写成工作流默认值，部署脚本直接继承。
 脚本要求先 `mvn -DskipTests package`，它用 Spring Boot 的 `PropertiesLauncher`
 调 `com.example.qqbot.EvalGateCli`，判定口径与页面一致。
 
@@ -230,7 +236,7 @@ P3 是体验与远期。已实现的部分不在这里重复。
 | 复核 SLA 没有执行者 | `due_at` 只记录，没有调度器提醒或升级 | 超时任务不会自己冒出来 | 定时扫描 + 到期提醒 + 升级 | P2 |
 | 成本维度没有单条判定 | 只有批次级成本对比与单条展示 | 单条超支不会单独报 | 定单条预算后再加判定 | P2 |
 | 判定器覆盖仍少 | 只有相关性、忠实度、工具选择三个 rubric，代码、数学、多轮、多模态未覆盖 | 通过率主要看这三维 | 按需增加 rubric | P2 |
-| 校准默认不进门禁 | 门禁支持 `EVAL_MIN_AGREEMENT`，但流水线默认不设，也没有定时校准 | 改完判定器可能忘了看一致率 | 在 CI 里默认打开并加定时校准 | P2 |
+| 门禁没有真正跑在 CI 里 | 阈值默认值已写进 `ci.yml`，定时校准也有了，但没有任何 CI 任务调用 `eval-gate.sh` | 流水线仍靠部署脚本自觉 | 加一个部署前 gate job | P2 |
 | 稳定性只有一个一致性结论 | 有 `attempts` 与 `STB_FLAKY`，汇总不给 flaky 率 | 只能逐条看，看不出"这一批有多飘" | 汇总加 flaky 率与不一致明细 | P2 |
 
 ### 7.3 执行与编排
@@ -287,6 +293,7 @@ P3 是体验与远期。已实现的部分不在这里重复。
 | `RubricJudgeTest` | 1-5 分解析、均值与投票策略、解析失败不猜 |
 | `JudgeCalibrationTest` | 一致率、两类均值与分档差的口径 |
 | `CalibrationExportTest` | 导出候选的列数、空 expected 与超长截断 |
+| `EvalCalibrationJobTest` | 开关语义、逐个判定器校准、空样本不落库 |
 | `AgentLoopJudgeTest` | 两次算重试、三次算循环，拒绝调用不计 |
 | `ToolCallTraceTest` | 工具成功、失败、拒绝三种记录 |
 | `LlmUsageTest` | 用量收集只在打开时记 |

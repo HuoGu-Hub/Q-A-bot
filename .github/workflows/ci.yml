@@ -13,6 +13,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# 发版门禁默认值：部署脚本与 eval-gate.sh 会继承这两个变量。
+# 没有校准历史时门禁会判"无法判定"，所以先跑一次校准再依赖它。
+env:
+  EVAL_MIN_AGREEMENT: "0.8"
+  EVAL_JUDGE_GRADER: "relevance"
+
 jobs:
   # ---------------------------------------------------------------- 后端
   server:

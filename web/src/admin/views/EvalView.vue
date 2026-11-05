@@ -50,6 +50,29 @@ const calibrating = ref(false)
 const calibGrader = ref('relevance')
 const calibTsv = ref('')
 const history = ref<EvalCalibrationHistory[]>([])
+
+/** 折线图：把最近十次按时间正序摊在 560×160 的坐标系里，80% 处画阈值线 */
+const chart = computed(() => {
+  const rows = [...history.value].reverse()
+  if (rows.length < 2) return null
+  const w = 560
+  const h = 160
+  const padX = 34
+  const padY = 22
+  const step = (w - padX * 2) / (rows.length - 1)
+  const y = (v: number) => h - padY - v * (h - padY * 2)
+  const pts = rows.map((r, i) => ({
+    x: padX + i * step,
+    y: y(r.agreement),
+    v: r.agreement,
+    t: r.createdAt,
+  }))
+  return {
+    w, h, padX, padY, pts,
+    line: pts.map(p => `${p.x},${p.y}`).join(" "),
+    thresholdY: y(0.8),
+  }
+})
 const CALIB_GRADERS = [
   { value: 'relevance', label: '相关性' },
   { value: 'groundedness', label: '忠实度' },
@@ -378,23 +401,27 @@ function when(value: string | null): string {
       </template>
       <p v-else class="calib-hint">还没有跑过。一致率低于 80% 时先改 rubric，别急着开自动判定。</p>
 
-      <DataTable v-if="history.length" :rows="history.length" label="校准历史" empty="">
-        <thead>
-          <tr><th>时间</th><th>版本</th><th class="num">样本</th><th class="num">一致率</th>
-            <th class="num">PASS 均分</th><th class="num">FAIL 均分</th><th class="num">分档差</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="h in history" :key="h.id">
-            <td>{{ h.createdAt?.slice(0, 16).replace('T', ' ') }}</td>
-            <td>v{{ h.graderVersion }}</td>
-            <td class="num">{{ h.total }}</td>
-            <td class="num">{{ (h.agreement * 100).toFixed(1) }}%</td>
-            <td class="num">{{ h.passMean }}</td>
-            <td class="num">{{ h.failMean }}</td>
-            <td class="num">{{ h.separation }}</td>
-          </tr>
-        </tbody>
-      </DataTable>
+      <div v-if="chart" class="chart-wrap">
+        <svg class="chart" :viewBox="`0 0 ${chart.w} ${chart.h}`" role="img"
+             aria-label="判定器一致率趋势">
+          <line :x1="chart.padX" :y1="chart.thresholdY" :x2="chart.w - chart.padX"
+                :y2="chart.thresholdY" class="threshold" />
+          <text :x="2" :y="chart.thresholdY - 4" class="tick">80%</text>
+          <text :x="2" :y="chart.padY + 4" class="tick">100%</text>
+          <polyline :points="chart.line" class="line" />
+          <circle v-for="(p, i) in chart.pts" :key="i" :cx="p.x" :cy="p.y" r="3.5" class="dot">
+            <title>{{ p.t?.slice(0, 16).replace('T', ' ') }} · {{ (p.v * 100).toFixed(1) }}%</title>
+          </circle>
+        </svg>
+        <p class="calib-hint">
+          最近一次 {{ (history[0].agreement * 100).toFixed(1) }}% ·
+          样本 {{ history[0].total }} 条 · 版本 {{ history[0].graderVersion }}
+        </p>
+      </div>
+
+      <div v-else-if="history.length" class="calib-hint">
+        再跑一次才能画出趋势；当前 {{ (history[0].agreement * 100).toFixed(1) }}%
+      </div>
 
     </Panel>
 
@@ -408,6 +435,12 @@ function when(value: string | null): string {
 .calib { margin: var(--sp-3) 0; font-size: var(--fs-sm); color: var(--ink-2); }
 .calib b { color: var(--ink); }
 .calib-hint { font-size: var(--fs-sm); color: var(--ink-3); }
+.chart-wrap { margin: var(--sp-3) 0; }
+.chart { width: 100%; max-width: 560px; height: auto; display: block; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.chart .dot { fill: var(--accent); }
+.chart .threshold { stroke: var(--warn); stroke-dasharray: 4 4; stroke-width: 1; }
+.chart .tick { font-size: 9px; fill: var(--ink-3); }
 .calib-tsv {
   width: 100%;
   margin: var(--sp-2) 0;

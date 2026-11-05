@@ -477,6 +477,13 @@ app:
       strategy: average
       # 判定模型优先用哪个 provider，留空走默认降级链
       provider: ""
+    # 定时校准：让一致率曲线不断档；默认关，打开前先把判定开关打开
+    calibration:
+      enabled: false
+      # 每天 04:30，避开清理任务
+      cron: "0 30 4 * * *"
+      # 要校准的判定器，逗号分隔
+      graders: relevance
     # 告警命中后私聊的 QQ 号，逗号分隔；留空只落事件不通知
     alerts:
       qq: ""
