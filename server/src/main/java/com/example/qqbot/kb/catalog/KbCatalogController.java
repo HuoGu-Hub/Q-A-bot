@@ -91,18 +91,6 @@ public class KbCatalogController {
         return ResponseEntity.ok(new AliasResult(view));
     }
 
-    /** 清掉一条的别名（回到标题派生） */
-    @DeleteMapping("/aliases")
-    public ResponseEntity<Void> clear(@RequestParam("id") String id) {
-        if (id == null || id.isBlank()) {
-            throw ApiException.badRequest("需要 id");
-        }
-        if (blockAdmin.updateAlias(id, "") == null) {
-            throw ApiException.notFound("没有这个块：" + id);
-        }
-        return ResponseEntity.noContent().build();
-    }
-
     /** 清空**全部**别名 —— 不可逆，删的是纯人工成果 */
     @DeleteMapping("/aliases/all")
     public ResponseEntity<Cleared> clearAll(@RequestParam(name = "confirm", defaultValue = "false") boolean confirm) {

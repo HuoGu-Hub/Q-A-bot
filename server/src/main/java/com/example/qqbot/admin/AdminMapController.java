@@ -73,14 +73,10 @@ public class AdminMapController {
      */
     private final LocationCorpusBuilder corpus;
 
-    private final MapResourceImporter resourceImporter;
-    private final MapResourceService resources;
-
     public AdminMapController(MapViewService view, MapPlaceService places, MapNoteService notes,
                               KbMapStore mapStore, MapImageCache images, MapJobs jobs,
                               MapOptions options, MapLayerService layers, MapScope scope,
-                              LocationCorpusBuilder corpus, MapResourceImporter resourceImporter,
-                              MapResourceService resources) {
+                              LocationCorpusBuilder corpus) {
         this.view = view;
         this.places = places;
         this.notes = notes;
@@ -91,31 +87,9 @@ public class AdminMapController {
         this.layers = layers;
         this.scope = scope;
         this.corpus = corpus;
-        this.resourceImporter = resourceImporter;
-        this.resources = resources;
     }
 
     /* ==================== 资源点位 ==================== */
-
-    /** 资源点位的快照状态：版本、点数、图层数 */
-    @GetMapping("/resources/status")
-    public ResourceStatus resourceStatus() {
-        MapResourceService.CatalogView catalog = resources.catalog("Embervale");
-        int layers = catalog.categories().stream().mapToInt(c -> c.layers().size()).sum();
-        return new ResourceStatus(true, catalog.imported(), catalog.version(),
-                catalog.importedAt(), catalog.message(), layers, catalog.categories().size());
-    }
-
-    /** 强制重导资源点位；文件没变时它会跳过，除非 force=true */
-    @PostMapping("/resources/import")
-    public ResourceImportResult importResources(
-            @RequestParam(name = "force", defaultValue = "false") boolean force) {
-        MapResourceImporter.ImportReport report = force
-                ? resourceImporter.importNow() : resourceImporter.ensureLoaded();
-        return new ResourceImportResult(true, report.imported(), report.found(),
-                report.version(), report.layers(), report.points(), report.areas(),
-                report.message());
-    }
 
     /* ==================== 状态 ==================== */
 
@@ -245,22 +219,7 @@ public class AdminMapController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/icons")
-    public IconsView icons() {
-        List<String> icons = new ArrayList<>(view.allIcons());
-        icons.sort(String::compareTo);
-        return new IconsView(true, icons);
-    }
-
     /* ==================== 自定义点位 ==================== */
-
-    @GetMapping("/places")
-    public PlacesView listPlaces(@RequestParam(name = "map", required = false) String map,
-                                 @RequestParam(name = "visibleOnly", defaultValue = "false")
-                                 boolean visibleOnly) {
-        return new PlacesView(true, places.list(map, visibleOnly),
-                MapViewService.categoryLabels());
-    }
 
     /** 新增点位的请求体。字段全部用包装类型：缺省与"显式给了 0"必须能区分 */
     @JsonIgnoreProperties(ignoreUnknown = false)
@@ -353,12 +312,6 @@ public class AdminMapController {
     }
 
     /* ==================== wiki 点位备注 ==================== */
-
-    @GetMapping("/notes")
-    public NotesView listNotes(@RequestParam(name = "map", required = false) String map) {
-        return new NotesView(true, map == null || map.isBlank()
-                ? notes.all() : new ArrayList<>(notes.byMap(map).values()));
-    }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
 
@@ -505,15 +458,6 @@ public class AdminMapController {
             throw ApiException.internal("操作失败：" + e.getMessage());
         }
     }
-
-    public record ResourceStatus(boolean ok, boolean imported, String version, String importedAt,
-                                 String message, int layers, int categories) {
-    }
-
-    public record ResourceImportResult(boolean ok, boolean imported, boolean found, String version,
-                                       int layers, int points, int areas, String message) {
-    }
-
     public record TileCache(boolean enabled, String root, long files, long bytes, String latestAt) {
     }
 
@@ -554,21 +498,9 @@ public class AdminMapController {
 
     public record MapsView(boolean ok, List<String> active, List<MapScope.Candidate> candidates) {
     }
-
-    public record IconsView(boolean ok, List<String> icons) {
-    }
-
-    public record PlacesView(boolean ok, List<MapPlaceService.Place> places,
-                             List<MapViewService.CategoryLabel> categories) {
-    }
-
     public record AnchorView(boolean ok, long total, int pending,
                              List<MapPlaceService.Review> items) {
     }
-
-    public record NotesView(boolean ok, List<MapNoteService.Note> notes) {
-    }
-
     public record MarkersView(boolean ok, String map, List<MapViewService.MarkerView> markers) {
     }
 

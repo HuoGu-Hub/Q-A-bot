@@ -88,45 +88,6 @@ public class DistillAdminController {
                 notes.count("draft"), notes.count("published"));
     }
 
-    /** 最近采集到的消息，用来确认采集是否真的通 */
-    @GetMapping("/messages")
-    public MessageList messages(@RequestParam(defaultValue = "50") int limit) {
-        List<MessageRow> rows = new ArrayList<>();
-        for (ChatRepository.Message m : chat.recentMessages(limit)) {
-            rows.add(new MessageRow(m.id(), m.ts(), m.groupId(), m.senderName(), m.text(),
-                    m.text() == null ? 0 : m.text().length(), m.imageCount(),
-                    m.source(), m.importId()));
-        }
-        return new MessageList(rows, rows.size());
-    }
-
-    /** 一条消息与它的图片元数据 */
-    @GetMapping("/messages/{id}")
-    public ResponseEntity<MessageDetail> message(@PathVariable long id) {
-        ChatRepository.Message m = chat.findMessage(id);
-        if (m == null) {
-            throw ApiException.notFound("资源不存在");
-        }
-        List<ImageRow> images = new ArrayList<>();
-        for (ChatRepository.Image img : chat.imagesOfMessage(id)) {
-            images.add(new ImageRow(img.id(), img.md5(), img.mime(), img.bytes(),
-                    img.caption()));
-        }
-        return ResponseEntity.ok(new MessageDetail(m.id(), m.ts(), m.groupId(),
-                m.senderName(), m.text(), m.imageCount(), m.source(), images));
-    }
-
-    /** 导入预览：只解析，不写库 */
-    @PostMapping(value = "/import/preview", consumes = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<ChatImportService.Preview> previewImport(@RequestParam(defaultValue = "chat.txt") String filename,
-                                           @RequestBody String content) {
-        try {
-            return ResponseEntity.ok(imports.preview(filename, content));
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest(e.getMessage());
-        }
-    }
-
     /** 导入聊天文件；请求体就是文件原文 */
     @PostMapping(value = "/import", consumes = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<ChatImportService.ImportResult> importFile(@RequestParam(defaultValue = "chat.txt") String filename,
@@ -138,36 +99,6 @@ public class DistillAdminController {
             throw ApiException.badRequest(e.getMessage());
         } catch (Exception e) {
             log.warn("[DISTILL] 导入失败：{}", e.getMessage());
-            throw ApiException.internal(e.getMessage());
-        }
-    }
-
-    @GetMapping("/imports")
-    public ImportList imports(@RequestParam(defaultValue = "50") int limit) {
-        List<ChatRepository.ImportRow> rows = chat.recentImports(limit);
-        return new ImportList(rows, rows.size());
-    }
-
-    /** 分批预览：算批次数与 token 估算，不建任务 */
-    @PostMapping("/jobs/preview")
-    public ResponseEntity<DistillJobService.Preview> previewJob(@RequestBody DistillJobService.JobRequest request) {
-        try {
-            return ResponseEntity.ok(jobs.preview(request));
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest(e.getMessage());
-        }
-    }
-
-    /** 创建任务与批次 */
-    @PostMapping("/jobs")
-    public ResponseEntity<JobCreated> createJob(@RequestBody DistillJobService.JobRequest request) {
-        try {
-            long id = jobs.create(request);
-            return ResponseEntity.ok(new JobCreated(true, id));
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest(e.getMessage());
-        } catch (Exception e) {
-            log.warn("[DISTILL] 建任务失败：{}", e.getMessage());
             throw ApiException.internal(e.getMessage());
         }
     }
@@ -514,17 +445,6 @@ public class DistillAdminController {
                                long images, long imports, long jobs, long batches, long notes,
                                long drafts, long publishedNotes) {
     }
-
-    public record MessageRow(long id, String ts, long groupId, String senderName, String text,
-                             int textLength, int imageCount, String source, long importId) {
-    }
-
-    public record MessageList(List<MessageRow> rows, int count) {
-    }
-
-    public record ImportList(List<ChatRepository.ImportRow> rows, int count) {
-    }
-
     public record JobPage(List<DistillJobRepository.Job> rows, long total, int page,
                           int size, long pages) {
     }
@@ -542,15 +462,6 @@ public class DistillAdminController {
 
     public record ImageRow(long id, String md5, String mime, int bytes, String caption) {
     }
-
-    public record MessageDetail(long id, String ts, long groupId, String senderName,
-                                String text, int imageCount, String source,
-                                List<ImageRow> images) {
-    }
-
-    public record JobCreated(boolean ok, long id) {
-    }
-
     public record StartedResult(boolean ok, boolean started) {
     }
 

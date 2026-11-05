@@ -73,26 +73,6 @@ public class SiteTextController {
         return ResponseEntity.noContent().build();
     }
 
-    /** 恢复一块文案的默认值 */
-    @PostMapping("/actions/reset")
-    public ResponseEntity<Void> reset(@RequestBody ResetTextRequest body) {
-        String page = trim(body.page());
-        String key = trim(body.key());
-        if (page == null || key == null) {
-            throw ApiException.badRequest("需要 page 和 key");
-        }
-        boolean ok;
-        try {
-            ok = service.reset(page, key);
-        } catch (Exception e) {
-            throw ApiException.internal(e.getMessage());
-        }
-        if (!ok) {
-            throw ApiException.badRequest("没有这个文案块：" + page + "." + key);
-        }
-        return ResponseEntity.noContent().build();
-    }
-
     public record SiteTextList(Map<String, List<SiteTextService.BlockView>> pages,
                                Map<String, String> pageLabels) {
     }
@@ -101,12 +81,6 @@ public class SiteTextController {
 
     public record SaveTextRequest(String page, String key, String text) {
     }
-
-    @JsonIgnoreProperties(ignoreUnknown = false)
-
-    public record ResetTextRequest(String page, String key) {
-    }
-
     private static String trim(String value) {
         if (value == null) {
             return null;

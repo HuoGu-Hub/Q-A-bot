@@ -1295,6 +1295,157 @@
         } ]
       }
     },
+    "/admin/api/eval/prices" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "prices",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Price"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "upsertPrice",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpsertPrice"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Price"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
     "/admin/api/distill/settings" : {
       "get" : {
         "tags" : [ "Admin" ],
@@ -3958,109 +4109,6 @@
         } ]
       }
     },
-    "/admin/api/pages/actions/reset" : {
-      "post" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "reset",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/ResetTextRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "204" : {
-            "description" : "无内容"
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
     "/admin/api/models/{provider}/actions/test" : {
       "post" : {
         "tags" : [ "Admin" ],
@@ -4679,230 +4727,7 @@
         } ]
       }
     },
-    "/admin/api/map/resources/import" : {
-      "post" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "importResources",
-        "parameters" : [ {
-          "name" : "force",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "boolean",
-            "default" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ResourceImportResult"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
     "/admin/api/map/places" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "listPlaces",
-        "parameters" : [ {
-          "name" : "map",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "name" : "visibleOnly",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "boolean",
-            "default" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/PlacesView"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      },
       "post" : {
         "tags" : [ "Admin" ],
         "operationId" : "createPlace",
@@ -5115,112 +4940,6 @@
       }
     },
     "/admin/api/map/notes" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "listNotes",
-        "parameters" : [ {
-          "name" : "map",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/NotesView"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      },
       "post" : {
         "tags" : [ "Admin" ],
         "operationId" : "upsertNote",
@@ -7351,6 +7070,1311 @@
         } ]
       }
     },
+    "/admin/api/eval/runs/{id}/actions/review" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "requestReview",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviewRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/reviews/{id}/actions/submit" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "submitReview",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubmitReview"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/reviews/{id}/actions/claim" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "claimReview",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/judges/actions/calibrate" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "calibrateJudges",
+        "parameters" : [ {
+          "name" : "grader",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CalibrateBody"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Report"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/datasets/{id}/cases" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "addCase",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddCase"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseView"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/datasets/{id}/actions/import" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "importTsv",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/datasets/{id}/actions/freeze" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "freeze",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Version"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/batches" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "batches",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        }, {
+          "name" : "offset",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Batch"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "createBatch",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateBatch"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/batches/{id}/actions/{verb}" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "batchAction",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "verb",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IdResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/baselines" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "createBaseline",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateBaseline"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Baseline"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/baselines/{id}/actions/promote" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "promoteBaseline",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/alerts/rules" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "alertRules",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/AlertRule"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "createAlertRule",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateAlertRule"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AlertRule"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/alerts/rules/{id}/actions/{verb}" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "alertRuleAction",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "verb",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/alerts/events/{id}/actions/ack" : {
+      "post" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "ackAlert",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AckAlert"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
     "/admin/api/distill/settings/run-now" : {
       "post" : {
         "tags" : [ "Admin" ],
@@ -7778,233 +8802,6 @@
         } ]
       }
     },
-    "/admin/api/distill/jobs" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "jobs",
-        "parameters" : [ {
-          "name" : "page",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int32",
-            "default" : 1
-          }
-        }, {
-          "name" : "size",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int32",
-            "default" : 20
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/JobPage"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      },
-      "post" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "createJob",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/JobRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/JobCreated"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
     "/admin/api/distill/jobs/{id}/start" : {
       "post" : {
         "tags" : [ "Admin" ],
@@ -8325,116 +9122,6 @@
         } ]
       }
     },
-    "/admin/api/distill/jobs/preview" : {
-      "post" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "previewJob",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/JobRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Preview"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
     "/admin/api/distill/import" : {
       "post" : {
         "tags" : [ "Admin" ],
@@ -8474,125 +9161,6 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ImportResult"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
-    "/admin/api/distill/import/preview" : {
-      "post" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "previewImport",
-        "parameters" : [ {
-          "name" : "filename",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "default" : "chat.txt"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "text/plain" : {
-              "schema" : {
-                "type" : "string"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Preview"
                 }
               }
             }
@@ -11632,105 +12200,6 @@
       }
     },
     "/admin/api/kb/terms/aliases" : {
-      "delete" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "clear",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "204" : {
-            "description" : "无内容"
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      },
       "patch" : {
         "tags" : [ "Admin" ],
         "operationId" : "saveAlias",
@@ -12256,6 +12725,181 @@
           },
           "503" : {
             "description" : "后台未启用或 OneBot Token 未配置",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/datasets/{id}/cases/{caseId}" : {
+      "delete" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "deleteCase",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "caseId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "无内容"
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "updateCase",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "caseId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCase"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseView"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
             "content" : {
               "application/problem+json" : {
                 "schema" : {
@@ -15875,106 +16519,6 @@
         } ]
       }
     },
-    "/admin/api/map/resources/status" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "resourceStatus",
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ResourceStatus"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
     "/admin/api/map/markers" : {
       "get" : {
         "tags" : [ "Admin" ],
@@ -16094,106 +16638,6 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/MapsView"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
-    "/admin/api/map/icons" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "icons",
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/IconsView"
                 }
               }
             }
@@ -18075,6 +18519,1047 @@
         } ]
       }
     },
+    "/admin/api/eval/trends" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "trends",
+        "parameters" : [ {
+          "name" : "datasetId",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/TrendPoint"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/runs/{id}" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "run",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RunDetail"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/reviews" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "reviews",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Review"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/judges/calibrations" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "calibrations",
+        "parameters" : [ {
+          "name" : "grader",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Calibration"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/judges/calibration/export" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "exportCalibration",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        }, {
+          "name" : "grader",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "relevance"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "text/tab-separated-values;charset=UTF-8" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/datasets" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "datasets",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Dataset"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/datasets/{id}" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "dataset",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "caseLimit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 200
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DatasetDetail"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/compare" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "compare",
+        "parameters" : [ {
+          "name" : "left",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "right",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CompareResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/batches/{id}" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "batch",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "itemLimit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 200
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchDetail"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/batches/{id}/report" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "report",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "text/html;charset=UTF-8" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/batches/{id}/failures" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "failures",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "tag",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 200
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/FailureCase"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
+    "/admin/api/eval/alerts/events" : {
+      "get" : {
+        "tags" : [ "Eval" ],
+        "operationId" : "alertEvents",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/AlertEvent"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
     "/admin/api/distill/stats" : {
       "get" : {
         "tags" : [ "Admin" ],
@@ -18301,127 +19786,27 @@
         } ]
       }
     },
-    "/admin/api/distill/messages" : {
+    "/admin/api/distill/jobs" : {
       "get" : {
         "tags" : [ "Admin" ],
-        "operationId" : "messages",
+        "operationId" : "jobs",
         "parameters" : [ {
-          "name" : "limit",
+          "name" : "page",
           "in" : "query",
           "required" : false,
           "schema" : {
             "type" : "integer",
             "format" : "int32",
-            "default" : 50
+            "default" : 1
           }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/MessageList"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
-    "/admin/api/distill/messages/{id}" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "message",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "path",
-          "required" : true,
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
           "schema" : {
             "type" : "integer",
-            "format" : "int64"
+            "format" : "int32",
+            "default" : 20
           }
         } ],
         "responses" : {
@@ -18430,7 +19815,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/MessageDetail"
+                  "$ref" : "#/components/schemas/JobPage"
                 }
               }
             }
@@ -18540,116 +19925,6 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/JobDetail"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
-    "/admin/api/distill/imports" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "imports",
-        "parameters" : [ {
-          "name" : "limit",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int32",
-            "default" : 50
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ImportList"
                 }
               }
             }
@@ -19272,115 +20547,6 @@
         } ]
       }
     },
-    "/admin/api/commands/catalog" : {
-      "get" : {
-        "tags" : [ "Admin" ],
-        "operationId" : "catalog_3",
-        "parameters" : [ {
-          "name" : "includeDisabled",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "boolean",
-            "default" : true
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CatalogEntries"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "请求参数或请求体不合法",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "资源或接口不存在",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "429" : {
-            "description" : "请求过于频繁，按 Retry-After 重试",
-            "headers" : {
-              "Retry-After" : {
-                "description" : "多少秒后可以重试",
-                "schema" : {
-                  "type" : "integer",
-                  "format" : "int32"
-                }
-              }
-            },
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "服务端处理失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "未登录、会话过期或鉴权失败",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "当前账号没有权限",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "503" : {
-            "description" : "后台未启用或 OneBot Token 未配置",
-            "content" : {
-              "application/problem+json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "adminSession" : [ ]
-        } ]
-      }
-    },
     "/admin/api/commands/actions" : {
       "get" : {
         "tags" : [ "Admin" ],
@@ -19820,7 +20986,7 @@
     "/admin/api/map/cache" : {
       "delete" : {
         "tags" : [ "Admin" ],
-        "operationId" : "reset_1",
+        "operationId" : "reset",
         "parameters" : [ {
           "name" : "tiles",
           "in" : "query",
@@ -19922,7 +21088,7 @@
     "/admin/api/logs" : {
       "delete" : {
         "tags" : [ "Admin" ],
-        "operationId" : "clear_1",
+        "operationId" : "clear",
         "responses" : {
           "204" : {
             "description" : "无内容"
@@ -20124,7 +21290,7 @@
     "/admin/api/kb/blocks/all" : {
       "delete" : {
         "tags" : [ "Admin" ],
-        "operationId" : "clear_2",
+        "operationId" : "clear_1",
         "responses" : {
           "204" : {
             "description" : "无内容"
@@ -20888,6 +22054,57 @@
           }
         }
       },
+      "UpsertPrice" : {
+        "type" : "object",
+        "properties" : {
+          "provider" : {
+            "type" : "string"
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "inputPerMillion" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "outputPerMillion" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "currency" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Price" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "inputPerMillion" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "outputPerMillion" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
       "DistillSettingsRequest" : {
         "type" : "object",
         "properties" : {
@@ -21453,17 +22670,6 @@
           }
         }
       },
-      "ResetTextRequest" : {
-        "type" : "object",
-        "properties" : {
-          "page" : {
-            "type" : "string"
-          },
-          "key" : {
-            "type" : "string"
-          }
-        }
-      },
       "TestModelRequest" : {
         "type" : "object",
         "properties" : {
@@ -21522,38 +22728,6 @@
             "type" : "string"
           },
           "qq" : {
-            "type" : "string"
-          }
-        }
-      },
-      "ResourceImportResult" : {
-        "type" : "object",
-        "properties" : {
-          "ok" : {
-            "type" : "boolean"
-          },
-          "imported" : {
-            "type" : "boolean"
-          },
-          "found" : {
-            "type" : "boolean"
-          },
-          "version" : {
-            "type" : "string"
-          },
-          "layers" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "points" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "areas" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "message" : {
             "type" : "string"
           }
         }
@@ -21977,6 +23151,319 @@
           }
         }
       },
+      "ReviewRequest" : {
+        "type" : "object",
+        "properties" : {
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "IdResult" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "SubmitReview" : {
+        "type" : "object",
+        "properties" : {
+          "verdict" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CalibrateBody" : {
+        "type" : "object",
+        "properties" : {
+          "tsv" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Report" : {
+        "type" : "object",
+        "properties" : {
+          "grader" : {
+            "type" : "string"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "agreed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "agreement" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "passMean" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "failMean" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "separation" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Row"
+            }
+          }
+        }
+      },
+      "Row" : {
+        "type" : "object",
+        "properties" : {
+          "grader" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "expected" : {
+            "type" : "string"
+          },
+          "actual" : {
+            "type" : "string"
+          },
+          "score" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "agreed" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AddCase" : {
+        "type" : "object",
+        "properties" : {
+          "caseKey" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "expected" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CaseView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "caseKey" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "expected" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "dimension" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Version" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "caseCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "checksum" : {
+            "type" : "string"
+          },
+          "frozenAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateBatch" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "datasetId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "versionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "repeatTimes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "concurrency" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "sampleRate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "CreateBaseline" : {
+        "type" : "object",
+        "properties" : {
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Baseline" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "datasetVersionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "passRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "promotedBy" : {
+            "type" : "string"
+          },
+          "promotedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateAlertRule" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "metric" : {
+            "type" : "string"
+          },
+          "comparator" : {
+            "type" : "string"
+          },
+          "threshold" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "severity" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AlertRule" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "metric" : {
+            "type" : "string"
+          },
+          "comparator" : {
+            "type" : "string"
+          },
+          "threshold" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AckAlert" : {
+        "type" : "object",
+        "properties" : {
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
       "RunNowResult" : {
         "type" : "object",
         "properties" : {
@@ -22017,58 +23504,6 @@
           }
         }
       },
-      "JobRequest" : {
-        "type" : "object",
-        "properties" : {
-          "source" : {
-            "type" : "string"
-          },
-          "groupIds" : {
-            "type" : "array",
-            "items" : {
-              "type" : "integer",
-              "format" : "int64"
-            }
-          },
-          "timeFrom" : {
-            "type" : "string"
-          },
-          "timeTo" : {
-            "type" : "string"
-          },
-          "importId" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "batchMode" : {
-            "type" : "string"
-          },
-          "batchSize" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "overlap" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "maxGapMinutes" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        }
-      },
-      "JobCreated" : {
-        "type" : "object",
-        "properties" : {
-          "ok" : {
-            "type" : "boolean"
-          },
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
-          }
-        }
-      },
       "StartedResult" : {
         "type" : "object",
         "properties" : {
@@ -22092,58 +23527,6 @@
           },
           "started" : {
             "type" : "boolean"
-          }
-        }
-      },
-      "BatchView" : {
-        "type" : "object",
-        "properties" : {
-          "seq" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "messageFrom" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "messageTo" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "messageCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "charCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        }
-      },
-      "Preview" : {
-        "type" : "object",
-        "properties" : {
-          "messageCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "charCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "batchCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "estimatedTokens" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "batches" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/BatchView"
-            }
           }
         }
       },
@@ -22801,6 +24184,23 @@
           },
           "message" : {
             "type" : "string"
+          }
+        }
+      },
+      "UpdateCase" : {
+        "type" : "object",
+        "properties" : {
+          "question" : {
+            "type" : "string"
+          },
+          "expected" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
           }
         }
       },
@@ -24447,68 +25847,6 @@
           }
         }
       },
-      "ResourceStatus" : {
-        "type" : "object",
-        "properties" : {
-          "ok" : {
-            "type" : "boolean"
-          },
-          "imported" : {
-            "type" : "boolean"
-          },
-          "version" : {
-            "type" : "string"
-          },
-          "importedAt" : {
-            "type" : "string"
-          },
-          "message" : {
-            "type" : "string"
-          },
-          "layers" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "categories" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        }
-      },
-      "PlacesView" : {
-        "type" : "object",
-        "properties" : {
-          "ok" : {
-            "type" : "boolean"
-          },
-          "places" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/Place"
-            }
-          },
-          "categories" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/CategoryLabel"
-            }
-          }
-        }
-      },
-      "NotesView" : {
-        "type" : "object",
-        "properties" : {
-          "ok" : {
-            "type" : "boolean"
-          },
-          "notes" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/Note"
-            }
-          }
-        }
-      },
       "MarkersView" : {
         "type" : "object",
         "properties" : {
@@ -24628,20 +25966,6 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/LayerMap"
-            }
-          }
-        }
-      },
-      "IconsView" : {
-        "type" : "object",
-        "properties" : {
-          "ok" : {
-            "type" : "boolean"
-          },
-          "icons" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string"
             }
           }
         }
@@ -25302,6 +26626,730 @@
           }
         }
       },
+      "TrendPoint" : {
+        "type" : "object",
+        "properties" : {
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "datasetVersionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "gateStatus" : {
+            "type" : "string"
+          },
+          "gateReason" : {
+            "type" : "string"
+          },
+          "passRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "judged" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "costMicro" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "pricedRuns" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "p95Ms" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Citation" : {
+        "type" : "object",
+        "properties" : {
+          "sentenceIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sentence" : {
+            "type" : "string"
+          },
+          "blockIds" : {
+            "type" : "string"
+          },
+          "chars" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Judge" : {
+        "type" : "object",
+        "properties" : {
+          "dimension" : {
+            "type" : "string"
+          },
+          "judgeType" : {
+            "type" : "string"
+          },
+          "verdict" : {
+            "type" : "string"
+          },
+          "score" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Retrieval" : {
+        "type" : "object",
+        "properties" : {
+          "query" : {
+            "type" : "string"
+          },
+          "terms" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "vectorCandidates" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "keywordCandidates" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "bestCosine" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "bestCosineRaw" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "hits" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object"
+              }
+            }
+          },
+          "sources" : {
+            "type" : "string"
+          },
+          "emptyReason" : {
+            "type" : "string"
+          },
+          "latencyMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "RunDetail" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "itemId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "answer" : {
+            "type" : "string"
+          },
+          "latencyMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hitCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "kbEnabled" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "costMicro" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "spans" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Span"
+            }
+          },
+          "retrieval" : {
+            "$ref" : "#/components/schemas/Retrieval"
+          },
+          "judges" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Judge"
+            }
+          },
+          "caseKey" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "toolCalls" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolCall"
+            }
+          },
+          "citations" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Citation"
+            }
+          }
+        }
+      },
+      "Span" : {
+        "type" : "object",
+        "properties" : {
+          "seq" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "parentSeq" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "startOffsetMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "durationMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "attrs" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object"
+            }
+          },
+          "errorCode" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ToolCall" : {
+        "type" : "object",
+        "properties" : {
+          "callIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "args" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "latencyMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "resultChars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "error" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Calibration" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "grader" : {
+            "type" : "string"
+          },
+          "graderVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "agreed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "agreement" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "passMean" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "failMean" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "separation" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Dataset" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "caseCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "versionCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "DatasetDetail" : {
+        "type" : "object",
+        "properties" : {
+          "dataset" : {
+            "$ref" : "#/components/schemas/Dataset"
+          },
+          "versions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Version"
+            }
+          },
+          "cases" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CaseView"
+            }
+          },
+          "totalCases" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "CompareCase" : {
+        "type" : "object",
+        "properties" : {
+          "caseKey" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "left" : {
+            "type" : "string"
+          },
+          "right" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "leftRunId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rightRunId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "CompareResult" : {
+        "type" : "object",
+        "properties" : {
+          "left" : {
+            "$ref" : "#/components/schemas/CompareSide"
+          },
+          "right" : {
+            "$ref" : "#/components/schemas/CompareSide"
+          },
+          "sameDataset" : {
+            "type" : "boolean"
+          },
+          "sameVersion" : {
+            "type" : "boolean"
+          },
+          "improved" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "regressed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "same" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "changes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CompareCase"
+            }
+          }
+        }
+      },
+      "CompareSide" : {
+        "type" : "object",
+        "properties" : {
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "datasetVersionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "passRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "judged" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "costMicro" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p95Ms" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Batch" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "datasetId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "datasetVersionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "gateStatus" : {
+            "type" : "string"
+          },
+          "gateReason" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "itemTotal" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "repeatTimes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BatchDetail" : {
+        "type" : "object",
+        "properties" : {
+          "batch" : {
+            "$ref" : "#/components/schemas/Batch"
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/Summary"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Item"
+            }
+          }
+        }
+      },
+      "DimStat" : {
+        "type" : "object",
+        "properties" : {
+          "dimension" : {
+            "type" : "string"
+          },
+          "pass" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "fail" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skip" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Summary" : {
+        "type" : "object",
+        "properties" : {
+          "runs" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "judged" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pass" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "fail" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "skip" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "passRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "p50Ms" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "p95Ms" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "costMicro" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "pricedRuns" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "dimensions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DimStat"
+            }
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TagStat"
+            }
+          }
+        }
+      },
+      "TagStat" : {
+        "type" : "object",
+        "properties" : {
+          "tag" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "FailureCase" : {
+        "type" : "object",
+        "properties" : {
+          "runId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "caseKey" : {
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          },
+          "dimension" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AlertEvent" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ruleId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ruleName" : {
+            "type" : "string"
+          },
+          "batchId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "metricValue" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "threshold" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "ackedAt" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
       "CaptureStatus" : {
         "type" : "object",
         "properties" : {
@@ -25434,115 +27482,6 @@
           }
         }
       },
-      "MessageList" : {
-        "type" : "object",
-        "properties" : {
-          "rows" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/MessageRow"
-            }
-          },
-          "count" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        }
-      },
-      "MessageRow" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "ts" : {
-            "type" : "string"
-          },
-          "groupId" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "senderName" : {
-            "type" : "string"
-          },
-          "text" : {
-            "type" : "string"
-          },
-          "textLength" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "imageCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "source" : {
-            "type" : "string"
-          },
-          "importId" : {
-            "type" : "integer",
-            "format" : "int64"
-          }
-        }
-      },
-      "ImageRow" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "md5" : {
-            "type" : "string"
-          },
-          "mime" : {
-            "type" : "string"
-          },
-          "bytes" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "caption" : {
-            "type" : "string"
-          }
-        }
-      },
-      "MessageDetail" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "ts" : {
-            "type" : "string"
-          },
-          "groupId" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "senderName" : {
-            "type" : "string"
-          },
-          "text" : {
-            "type" : "string"
-          },
-          "imageCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "source" : {
-            "type" : "string"
-          },
-          "images" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ImageRow"
-            }
-          }
-        }
-      },
       "Job" : {
         "type" : "object",
         "properties" : {
@@ -25637,69 +27576,6 @@
           }
         }
       },
-      "Batch" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "jobId" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "seq" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "messageFrom" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "messageTo" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "messageCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "charCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "attempts" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "error" : {
-            "type" : "string"
-          },
-          "model" : {
-            "type" : "string"
-          },
-          "tokensIn" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "tokensOut" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "createdAt" : {
-            "type" : "string"
-          },
-          "startedAt" : {
-            "type" : "string"
-          },
-          "finishedAt" : {
-            "type" : "string"
-          }
-        }
-      },
       "JobDetail" : {
         "type" : "object",
         "properties" : {
@@ -25711,53 +27587,6 @@
             "items" : {
               "$ref" : "#/components/schemas/Batch"
             }
-          }
-        }
-      },
-      "ImportList" : {
-        "type" : "object",
-        "properties" : {
-          "rows" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ImportRow"
-            }
-          },
-          "count" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        }
-      },
-      "ImportRow" : {
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "filename" : {
-            "type" : "string"
-          },
-          "format" : {
-            "type" : "string"
-          },
-          "groupId" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "messageCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "error" : {
-            "type" : "string"
-          },
-          "createdAt" : {
-            "type" : "string"
           }
         }
       },
@@ -26048,17 +27877,6 @@
           },
           "allowPrivate" : {
             "type" : "boolean"
-          }
-        }
-      },
-      "CatalogEntries" : {
-        "type" : "object",
-        "properties" : {
-          "entries" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/Entry"
-            }
           }
         }
       },

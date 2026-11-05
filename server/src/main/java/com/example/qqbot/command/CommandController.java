@@ -46,19 +46,17 @@ public class CommandController {
     private final CommandPolicy props;
     private final ActionRegistry actionRegistry;
     private final CommandPolicyStore policyStore;
-    private final CommandCatalog catalog;
     private final BoardStore boards;
     private final CommandHelp commandHelp;
 
     public CommandController(CommandStore store, VariableRenderer renderer, CommandPolicy props,
                              ActionRegistry actionRegistry, CommandPolicyStore policyStore,
-                             CommandCatalog catalog, BoardStore boards, CommandHelp commandHelp) {
+                             BoardStore boards, CommandHelp commandHelp) {
         this.store = store;
         this.renderer = renderer;
         this.props = props;
         this.actionRegistry = actionRegistry;
         this.policyStore = policyStore;
-        this.catalog = catalog;
         this.boards = boards;
         this.commandHelp = commandHelp;
     }
@@ -72,17 +70,6 @@ public class CommandController {
         }
         return new CommandList(store.isAvailable(), views,
                 props.getRateLimitPerMinute(), props.isAllowUserIds());
-    }
-
-    /**
-     * 全部命令目录：板块 + 指令。
-     *
-     * <p>后台的列表与群里的 {@code /list} 读同一份条目 —— 这里是"两边看到的东西
-     * 必须一样"的落点。{@code includeDisabled=true} 供后台显示停用项。
-     */
-    @GetMapping("/catalog")
-    public CatalogEntries catalog(@RequestParam(defaultValue = "true") boolean includeDisabled) {
-        return new CatalogEntries(catalog.entries(includeDisabled));
     }
 
     /**
@@ -486,10 +473,6 @@ public class CommandController {
     public record CommandList(boolean available, List<CommandView> commands,
                               int rateLimitPerMinute, boolean allowUserIds) {
     }
-
-    public record CatalogEntries(List<CommandCatalog.Entry> entries) {
-    }
-
     public record CommandPolicyView(long id, String scope, List<Long> groups,
                                     boolean showGroup, boolean showUser, boolean allowPrivate) {
     }

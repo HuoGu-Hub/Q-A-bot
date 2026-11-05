@@ -50,7 +50,7 @@ class CommandAccessTest {
         BoardStore boards = new BoardStore(new BoardRepository(jdbc), mapper);
         boards.init();
         // 这一轮只走 upsert 与 accessModes，其余协作者用不到，传 null
-        controller = new CommandController(store, null, policy(), null, null, null, boards, null);
+        controller = new CommandController(store, null, policy(), null, null, boards, null);
     }
 
     @AfterEach

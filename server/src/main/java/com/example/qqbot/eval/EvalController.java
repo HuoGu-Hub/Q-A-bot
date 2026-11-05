@@ -87,16 +87,6 @@ public class EvalController {
         return datasets.list();
     }
 
-    @PostMapping("/datasets")
-    public ResponseEntity<EvalViews.IdResult> createDataset(@RequestBody CreateDataset body) {
-        if (body.name() == null || body.name().isBlank()) {
-            throw ApiException.badRequest("需要用例集名称");
-        }
-        EvalViews.Dataset created = service.createDataset(body.slug(), body.name(),
-                body.description(), ACTOR);
-        return ResponseEntity.status(HttpStatus.CREATED).body(new EvalViews.IdResult(created.id()));
-    }
-
     @GetMapping("/datasets/{id}")
     public EvalViews.DatasetDetail dataset(@PathVariable long id,
                                            @RequestParam(defaultValue = "200") int caseLimit) {
@@ -377,13 +367,6 @@ public class EvalController {
 
     /* ==================== 基线 ==================== */
 
-    @GetMapping("/baselines")
-    public List<EvalViews.Baseline> baselines(@RequestParam(required = false) Long datasetVersionId,
-                                              @RequestParam(required = false) String status,
-                                              @RequestParam(defaultValue = "20") int limit) {
-        return service.baselines(datasetVersionId, status, limit);
-    }
-
     @PostMapping("/baselines")
     public ResponseEntity<EvalViews.Baseline> createBaseline(@RequestBody CreateBaseline body,
                                                              HttpServletRequest request) {
@@ -441,11 +424,6 @@ public class EvalController {
     }
 
     /* ==================== 请求体 ==================== */
-
-    @JsonIgnoreProperties(ignoreUnknown = false)
-    public record CreateDataset(String slug, String name, String description) {
-    }
-
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record AddCase(String caseKey, String category, String question, String expected,
                           String note) {
