@@ -15,7 +15,7 @@
 | 位置 | 内容 |
 |---|---|
 | `server/src/main/java/com/example/qqbot/eval` | 用例集、执行器、判定、聚合、接口 |
-| `server/src/main/java/com/example/qqbot/persistence/EvalRepository.java` | 十七张表的 SQL |
+| `server/src/main/java/com/example/qqbot/persistence/EvalRepository.java` | 十八张表的 SQL |
 | `web/src/admin/views/EvalView.vue` | 批次与用例集 |
 | `web/src/admin/views/EvalDatasetView.vue` | 用例集详情与用例维护 |
 | `web/src/admin/views/EvalBatchView.vue` | 单批次结果 |
@@ -201,9 +201,9 @@ eval
 | 退出码 | 含义 |
 |---|---|
 | 0 | 通过 |
-| 1 | 警告：低于默认阈值，但没有基线或未回退 |
-| 2 | 阻断：较活动基线回退超过 3 个百分点 |
-| 3 | 无法判定：批次不存在、没跑完、没有判定结果 |
+| 1 | 警告：低于默认阈值、单维度回退 5 到 10 个百分点，或成本上涨超过 30% |
+| 2 | 阻断：较基线回退超过 3 个百分点、单维度回退超过 10 个百分点、安全用例失败，或判定器一致率低于阈值 |
+| 3 | 无法判定：批次不存在、没跑完、没有判定结果，或没有校准历史 |
 
 不传批次 id 时取最近一个已完成批次。评测库默认在 `server/data/qa/eval.sqlite`，
 与主库同目录；用 `EVAL_DB` 覆盖。jar 依次找 `server/target` 与 preflight 的隔离副本

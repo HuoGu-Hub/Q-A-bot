@@ -149,8 +149,8 @@ table.decision tbody td { vertical-align:top; }
 
 <div class="kpi">
   <div><b>8</b><span>后台页面</span></div>
-  <div><b>31</b><span>HTTP 接口</span></div>
-  <div><b>17</b><span>评测表</span></div>
+  <div><b>34</b><span>HTTP 接口</span></div>
+  <div><b>18</b><span>评测表</span></div>
   <div><b>7</b><span>判定维度</span></div>
   <div><b>4</b><span>门禁退出码</span></div>
 </div>
@@ -192,11 +192,11 @@ table.decision tbody td { vertical-align:top; }
 <table>
 <thead><tr><th>维度</th><th>看什么</th><th>判定方式</th><th>典型失败标签</th></tr></thead>
 <tbody>
-<tr><td>结果质量</td><td>回答的结构、长度与事实</td><td>规则先判空返回、兜底话术、协议标记、过短过长；开启后按比例调模型打分，模型结论替换规则结论</td><td><code>STB_EMPTY</code> <code>ANS_FORMAT</code> <code>ANS_THIN</code> <code>ANS_LLM_LOW</code></td></tr>
+<tr><td>结果质量</td><td>回答的结构、长度与事实</td><td>规则先判空返回、兜底话术、协议标记、过短过长；开启后跑 rubric：相关性、忠实度各 1–5 分，多次采样取均值或投票，任一不过就算不过</td><td><code>STB_EMPTY</code> <code>ANS_FORMAT</code> <code>ANS_THIN</code> <code>ANS_LOW_SCORE</code></td></tr>
 <tr><td>RAG 检索</td><td>期望块在结果里的名次</td><td>第 1 名满分，第 N 名按 1/N 计分，未出现判失败</td><td><code>RET_MISS</code> <code>RET_NO_CANDIDATE</code> <code>RET_NOISE</code></td></tr>
 <tr><td>证据链</td><td>回答有没有引用检索到的资料</td><td>按句切开，句子出现某块资料的标题就算该句引用；至少一半句子有标注判通过</td><td><code>CIT_NONE</code> <code>CIT_PARTIAL</code></td></tr>
 <tr><td>安全限制</td><td>该拦的拦没拦、该拒的拒没拒、有没有泄漏</td><td>安全用例先过护栏，再按期望词 block、no-leak、refuse 判</td><td><code>SEC_BYPASS</code> <code>SEC_LEAK</code> <code>SEC_HARM</code> <code>SEC_OVERBLOCK</code></td></tr>
-<tr><td>Agent 过程</td><td>工具调用的选择、参数、返回与耗时</td><td>只记录，不出通过结论：名称、参数、状态、耗时、返回长度、失败原因</td><td>—</td></tr>
+<tr><td>Agent 过程</td><td>工具调用的选择、参数、返回与耗时</td><td>代码判循环：同一工具同样参数 3 次以上失败；无循环时抽样跑工具选择 rubric，判工具与参数是否合适</td><td><code>AGENT_LOOP</code> <code>AGENT_TOOL_WRONG</code></td></tr>
 <tr><td>稳定性</td><td>超时与重复运行一致性</td><td>单次超时判失败；重复运行结论不一致打 flaky</td><td><code>STB_TIMEOUT</code> <code>STB_FLAKY</code></td></tr>
 <tr><td>成本效率</td><td>token 与钱</td><td>单次只记录；批次与基线比较单条平均成本，涨过 30% 判警告</td><td>—</td></tr>
 </tbody>
@@ -225,6 +225,7 @@ table.decision tbody td { vertical-align:top; }
 <pre><code>./scripts/eval-gate.sh 12
 # EVAL-GATE: PASS 较基线 +2.1 个百分点</code></pre>
 <p>退出码 0 通过、1 警告、2 阻断、3 无法判定。流水线按退出码决定放行、告警或停下。</p>
+<p>判定器一致率也能进门禁：设 <code>EVAL_MIN_AGREEMENT=0.8</code>，读最近一次校准，低于阈值阻断，没有历史算无法判定。发版前跑 <code>scripts/preflight.sh</code> 的第六步，或走 <code>deploy-gate.yml</code> 工作流。</p>
 
 <h2 id="s5">五、页面逐页说明</h2>
 
@@ -310,18 +311,23 @@ table.decision tbody td { vertical-align:top; }
 
 # 3. 建批次并跑完，在批次页看结论
 
-# 4. 想接入模型判定，打开开关
-#    app.eval.llm-judge.enabled=true
-#    app.eval.llm-judge.sample-rate=0.1
+# 4. 想接入 rubric 判定，打开开关
+#    app.eval.judge.enabled=true
+#    app.eval.judge.sample-rate=0.1
+#    app.eval.judge.samples=3
 
-# 5. 想让告警出声，填收件人
+# 5. 想每天自动校准，再开一层
+#    app.eval.calibration.enabled=true
+
+# 6. 想让告警出声，填收件人
 #    app.eval.alerts.qq=10001,10002</code></pre>
 
-<p>CI 里用门禁脚本。它要求先打包，jar 取 <code>target</code> 下最新的那个。</p>
+<p>门禁要求先打包，jar 从 <code>server/target</code> 或 <code>.toolchain/server-ci/target</code> 取最新的那个。</p>
 <pre><code>cd server &amp;&amp; mvn -DskipTests package
 ./scripts/eval-gate.sh            # 最近一个已完成批次
 ./scripts/eval-gate.sh 12         # 指定批次
-EVAL_DB=/opt/qqbot/data/eval.sqlite ./scripts/eval-gate.sh</code></pre>
+EVAL_MIN_AGREEMENT=0.8 ./scripts/eval-gate.sh   # 同时检查判定器一致率
+./scripts/preflight.sh            # 发版前六步全跑，含评测门禁</code></pre>
 
 <h2 id="s10">十、文件与命令索引</h2>
 
@@ -338,6 +344,8 @@ EVAL_DB=/opt/qqbot/data/eval.sqlite ./scripts/eval-gate.sh</code></pre>
 <tr><td>页面</td><td><code>web/src/admin/views/Eval*.vue</code></td></tr>
 <tr><td>门禁</td><td><code>scripts/eval-gate.sh</code>、<code>EvalGateCli.java</code></td></tr>
 <tr><td>安全语料</td><td><code>tests/golden/safety-golden.tsv</code></td></tr>
+<tr><td>校准集与校准任务</td><td><code>tests/golden/judge-calibration.tsv</code>、<code>EvalCalibrationJob.java</code></td></tr>
+<tr><td>部署门禁</td><td><code>scripts/preflight.sh</code>、<code>.github/workflows/deploy-gate.yml</code></td></tr>
 </tbody>
 </table>
 </div>
