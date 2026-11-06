@@ -101,6 +101,11 @@ public class GuardPipeline {
         log.info("[GUARD]   应急开关    ：{}", guardSwitch.isKillSwitch() ? "【已打开，机器人不回复】" : "正常");
     }
 
+    /** 安全中间层是否开启。概率回复是它的一个阶段，关闭时不应绕过它单独生效。 */
+    public boolean isEnabled() {
+        return guardSwitch.isEnabled();
+    }
+
     /**
      * 入站判定。
      *

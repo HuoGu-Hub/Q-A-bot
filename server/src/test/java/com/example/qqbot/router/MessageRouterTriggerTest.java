@@ -99,6 +99,7 @@ class MessageRouterTriggerTest {
 
         when(commandHandler.tryCommand(any(), anyString(), anyLong()))
                 .thenReturn(CommandHandler.Outcome.NOT_COMMAND);
+        when(guardPipeline.isEnabled()).thenReturn(true);
         when(guardPipeline.check(any())).thenReturn(GuardResult.pass());
         when(budgetGuard.check(anyLong(), anyLong(), anyBoolean()))
                 .thenReturn(new BudgetGuard.Decision(BudgetGuard.Verdict.OK, null));
@@ -172,6 +173,24 @@ class MessageRouterTriggerTest {
                 any(ReplyMode.class), eq(false), any());
         assertThat(quote.getValue().text()).isEqualTo("旧回答");
         assertThat(quote.getValue().fromSelf()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Guard 关闭：概率判定不生效，仍按普通回答处理")
+    void guardDisabledDisablesChime() {
+        when(guardPipeline.isEnabled()).thenReturn(false);
+        OneBotEvent event = groupEvent("雾锁的钥匙怎么拿");
+        when(replyTrigger.decide(eq(GROUP), eq(USER), eq("雾锁的钥匙怎么拿"), eq(false), eq(false)))
+                .thenReturn(TriggerDecision.yes(ReplyIntent.QUESTION, 0.3, 0.1));
+
+        router.handle(event);
+
+        ArgumentCaptor<TurnPlan> plan = ArgumentCaptor.forClass(TurnPlan.class);
+        verify(chatService).reply(eq(event), eq("雾锁的钥匙怎么拿"), any(), any(),
+                any(ReplyMode.class), eq(false), plan.capture());
+        assertThat(plan.getValue().chimeIn()).isFalse();
+        verify(qaCollector).collect(eq(event), eq("雾锁的钥匙怎么拿"), any(), eq(0),
+                eq("pass"), any(), any(), anyLong(), anyLong(), eq(true));
     }
 
     private OneBotEvent groupEvent(String text) {

@@ -324,14 +324,16 @@ public class MessageRouter {
         //    @、文本 @、正文昵称、引用机器人都是「呼叫」，不受概率影响。
         //    引用必须在这里取一次：引用段只有 ID，要 get_msg 才知道是不是机器人。
         boolean probabilityMode = event.isGroupMessage() && !guardAccess.isRequireMentionInGroup();
+        // Guard 关闭时整套触发都不跑：既不抢答，也不消耗节奏额度
+        boolean triggerEnabled = guardPipeline != null && guardPipeline.isEnabled();
         String selfName = identity.getSelfName();
         boolean nameCalled = probabilityMode && ReplySignals.mentionsName(text, selfName);
         QuotedContent quoted = null;
-        if (probabilityMode && !mentioned && !nameCalled && hasQuote) {
+        if (probabilityMode && triggerEnabled && !mentioned && !nameCalled && hasQuote) {
             quoted = resolveQuote(event);
         }
         TriggerDecision trigger = null;
-        if (probabilityMode && replyTrigger != null) {
+        if (probabilityMode && triggerEnabled && replyTrigger != null) {
             if (nameCalled) {
                 trigger = TriggerDecision.call("正文昵称");
             } else if (quoted != null && quoted.quote().fromSelf()) {
@@ -413,7 +415,8 @@ public class MessageRouter {
         OneBotEvent event = req.event();
 
         // 主动接话：呼叫之外、判定通过的那些。闲聊不检索，疑问保留正常检索。
-        boolean chime = trigger != null && trigger.reply() && !trigger.isCall();
+        boolean chime = guardPipeline != null && guardPipeline.isEnabled()
+                && trigger != null && trigger.reply() && !trigger.isCall();
         TurnPlan plan;
         if (chime) {
             plan = trigger.intent() == ReplyIntent.CHAT
