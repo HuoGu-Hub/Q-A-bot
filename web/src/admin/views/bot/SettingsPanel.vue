@@ -4,11 +4,11 @@ import { adminApi, describeError } from '@shared/api/client'
 import { reloadBotName } from '@shared/identity/botName'
 import type { SettingsView, SettingItem } from '@shared/api/types'
 import Panel from '@shared/ui/Panel.vue'
-import Field from '@shared/ui/Field.vue'
 import Input from '@shared/ui/Input.vue'
 import Select from '@shared/ui/Select.vue'
 import Switch from '@shared/ui/Switch.vue'
 import Notice from '@shared/ui/Notice.vue'
+import SettingField from './SettingField.vue'
 
 const loading = ref(false)
 const error = ref('')
@@ -115,69 +115,125 @@ onMounted(load)
 
     <div v-if="loading" class="muted">读取中…</div>
 
-    <template v-else>
+    <div v-else class="settings-board">
       <Panel
         v-for="(items, group) in botGroups"
         :key="group + '-' + gen"
+        class="group-card"
         :title="String(group)"
         :count="items.length + ' 项'"
         :hint="changedIn(items) ? '已改 ' + changedIn(items) + ' 项' : ''"
         collapsible
-        :default-open="expandAll === true"
+        dense
+        :default-open="expandAll !== false"
       >
-        <Field
-          v-for="item in items"
-          :key="item.key"
-          :label="item.label"
-          :hint="item.hint"
-          :changed="isChanged(item.key)"
-          :control-width="item.type === 'bool' ? '80px' : '320px'"
-        >
-          <Switch
-            v-if="item.type === 'bool'"
-            :model-value="Boolean(changed[item.key] ?? item.value)"
-            :aria-label="item.label"
-            @update:model-value="onEdit(item, $event)"
-          />
-          <Input
-            v-else-if="item.type === 'int' || (item.type === 'string' && typeof item.value === 'number')"
-            :model-value="val(item)"
-            mono
-            @update:model-value="onEdit(item, $event)"
-          />
-          <Select
-            v-else-if="item.type === 'enum'"
-            :model-value="val(item)"
-            :options="enumOpts(item)"
-            :aria-label="item.label"
-            @update:model-value="onEdit(item, $event)"
-          />
-          <Input
-            v-else-if="item.type === 'list'"
-            :model-value="listText(item)"
-            multiline
-            :rows="3"
-            placeholder="一行一个"
-            @update:model-value="onListEdit(item, $event)"
-          />
-          <Input
-            v-else-if="item.type === 'text'"
-            :model-value="val(item)"
-            multiline
-            :rows="2"
-            @update:model-value="onEdit(item, $event)"
-          />
-          <Input v-else :model-value="val(item)" @update:model-value="onEdit(item, $event)" />
-        </Field>
+        <div class="setting-grid">
+          <SettingField
+            v-for="item in items"
+            :key="item.key"
+            :label="item.label"
+            :hint="item.hint"
+            :changed="isChanged(item.key)"
+            :inline="item.type === 'bool'"
+          >
+            <Switch
+              v-if="item.type === 'bool'"
+              :model-value="Boolean(changed[item.key] ?? item.value)"
+              :aria-label="item.label"
+              @update:model-value="onEdit(item, $event)"
+            />
+            <Input
+              v-else-if="item.type === 'int' || (item.type === 'string' && typeof item.value === 'number')"
+              :model-value="val(item)"
+              mono
+              @update:model-value="onEdit(item, $event)"
+            />
+            <Select
+              v-else-if="item.type === 'enum'"
+              :model-value="val(item)"
+              :options="enumOpts(item)"
+              :aria-label="item.label"
+              @update:model-value="onEdit(item, $event)"
+            />
+            <div v-else-if="item.type === 'ratio'" class="ratio">
+              <input
+                class="ratio-range"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                :value="ratioValue(item)"
+                :aria-label="item.label"
+                @input="onRatio(item, $event)"
+              >
+              <span class="ratio-val num">{{ ratioValue(item).toFixed(2) }}</span>
+            </div>
+            <Input
+              v-else-if="item.type === 'list'"
+              :model-value="listText(item)"
+              multiline
+              :rows="3"
+              placeholder="一行一个"
+              @update:model-value="onListEdit(item, $event)"
+            />
+            <Input
+              v-else-if="item.type === 'text'"
+              :model-value="val(item)"
+              multiline
+              :rows="2"
+              @update:model-value="onEdit(item, $event)"
+            />
+            <Input v-else :model-value="val(item)" @update:model-value="onEdit(item, $event)" />
+          </SettingField>
+        </div>
       </Panel>
-
-    </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
-.ratio { display: flex; align-items: center; gap: var(--sp-3); width: 100%; }
+.panel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* 两列卡片，卡片内再两列字段：一屏能看到更多配置 */
+.settings-board {
+  columns: 2;
+  column-gap: var(--sp-3);
+}
+.group-card {
+  break-inside: avoid;
+  margin: 0 0 var(--sp-3);
+}
+
+.setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.ratio {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 38px;
+}
 .ratio-range { flex: 1; accent-color: var(--flame); }
-.ratio-val { width: 42px; text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ratio-val {
+  width: 42px;
+  text-align: right;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1180px) {
+  .settings-board { columns: 1; }
+}
+
+@media (max-width: 720px) {
+  .setting-grid { grid-template-columns: minmax(0, 1fr); }
+}
 </style>

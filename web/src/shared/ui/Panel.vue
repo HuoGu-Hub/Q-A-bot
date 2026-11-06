@@ -14,6 +14,7 @@ const props = withDefaults(
     collapsible?: boolean
     defaultOpen?: boolean
     mobileCollapsed?: boolean
+    dense?: boolean
   }>(),
   {
     corners: false,
@@ -23,6 +24,7 @@ const props = withDefaults(
     collapsible: false,
     defaultOpen: true,
     mobileCollapsed: false,
+    dense: false,
   }
 )
 
@@ -49,6 +51,7 @@ function toggle() {
       glow ? 'glow-flame' : '',
       collapsible ? 'panel--collapsible' : '',
       collapsible && !open ? 'panel--closed' : '',
+      dense ? 'panel--dense' : '',
     ]"
   >
     <h2 v-if="title" class="panel-title">
@@ -170,6 +173,20 @@ function toggle() {
   padding: 1px 9px;
   box-shadow: var(--bevel-inset);
 }
+
+/* dense：设置页的卡片，压低标题与内边距，给网格让位 */
+.panel--dense { padding: 14px 16px; border-radius: var(--r-sm); }
+.panel--dense .panel-title {
+  margin-bottom: var(--sp-3);
+  min-height: 22px;
+  font-size: var(--fs-base);
+}
+.panel--dense.panel--collapsible .panel-title { margin-bottom: 0; }
+.panel--dense.panel--collapsible .panel-body { margin-top: var(--sp-3); }
+.panel--dense.panel--closed { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
+.panel--dense .head-text { padding-left: var(--sp-3); }
+.panel--dense .head-text::before { height: 12px; }
+.panel--dense .head-count { font-size: var(--fs-micro); padding: 0 7px; }
 
 @media (max-width: 760px) {
   .panel { padding: var(--sp-4); }
