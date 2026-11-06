@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { adminApi, describeError } from '@shared/api/client'
 import { reloadBotName } from '@shared/identity/botName'
 import type { SettingsView, SettingItem } from '@shared/api/types'
@@ -90,6 +90,33 @@ const ENUM_OPTIONS: Array<[string, Array<{ value: string; label: string }>]> = [
 const isTall = (item: SettingItem) => item.type === 'list' || item.type === 'text'
 const shortItems = (items: SettingItem[]) => items.filter(i => !isTall(i))
 const tallItems = (items: SettingItem[]) => items.filter(isTall)
+
+// 当前一行最多几格：窗口变窄时整组重新分行，最后一格不会被单独剩在一边
+const maxCols = ref(5)
+function updateMaxCols() {
+  const w = window.innerWidth
+  maxCols.value = w >= 1400 ? 5 : w >= 1100 ? 4 : w >= 850 ? 3 : w >= 600 ? 2 : 1
+}
+
+/**
+ * 把一组字段均分成若干行：每行都填满，行内等宽。
+ * 例：5 个字段、最多 4 列 → 3 + 2，而不是 4 + 1 留下一个空洞。
+ */
+function chunkRows<T>(items: T[]): T[][] {
+  const n = items.length
+  if (!n) return []
+  const rows = Math.ceil(n / maxCols.value)
+  const base = Math.floor(n / rows)
+  const extra = n % rows
+  const out: T[][] = []
+  let at = 0
+  for (let r = 0; r < rows; r++) {
+    const size = base + (r < extra ? 1 : 0)
+    out.push(items.slice(at, at + size))
+    at += size
+  }
+  return out
+}
 const enumOpts = (item: SettingItem) => ENUM_OPTIONS.find(([frag]) => item.key.includes(frag))?.[1]
 const val = (item: SettingItem) => String(changed.value[item.key] ?? item.value ?? '')
 const ratioValue = (item: SettingItem) => {
@@ -108,7 +135,12 @@ defineExpose({
   isLoading: () => loading.value,
 })
 
-onMounted(load)
+onMounted(() => {
+  updateMaxCols()
+  window.addEventListener('resize', updateMaxCols)
+  load()
+})
+onBeforeUnmount(() => window.removeEventListener('resize', updateMaxCols))
 </script>
 
 <template>
@@ -130,75 +162,89 @@ onMounted(load)
         dense
         :default-open="expandAll === true"
       >
-        <div v-if="shortItems(items).length" class="setting-grid setting-grid--short">
-          <SettingField
-            v-for="item in shortItems(items)"
-            :key="item.key"
-            :label="item.label"
-            :hint="item.hint"
-            :changed="isChanged(item.key)"
+        <div v-if="shortItems(items).length" class="setting-block">
+          <div
+            v-for="(row, ri) in chunkRows(shortItems(items))"
+            :key="'s' + ri"
+            class="setting-row setting-row--short"
+            :style="{ gridTemplateColumns: 'repeat(' + row.length + ', minmax(0, 1fr))' }"
           >
-            <div v-if="item.type === 'bool'" class="ctrl-line">
-              <Switch
-                :model-value="Boolean(changed[item.key] ?? item.value)"
+            <SettingField
+              v-for="item in row"
+              :key="item.key"
+              :label="item.label"
+              :hint="item.hint"
+              :changed="isChanged(item.key)"
+            >
+              <div v-if="item.type === 'bool'" class="ctrl-line">
+                <Switch
+                  :model-value="Boolean(changed[item.key] ?? item.value)"
+                  :aria-label="item.label"
+                  @update:model-value="onEdit(item, $event)"
+                />
+              </div>
+              <Input
+                v-else-if="item.type === 'int' || (item.type === 'string' && typeof item.value === 'number')"
+                :model-value="val(item)"
+                mono
+                @update:model-value="onEdit(item, $event)"
+              />
+              <Select
+                v-else-if="item.type === 'enum'"
+                :model-value="val(item)"
+                :options="enumOpts(item)"
                 :aria-label="item.label"
                 @update:model-value="onEdit(item, $event)"
               />
-            </div>
-            <Input
-              v-else-if="item.type === 'int' || (item.type === 'string' && typeof item.value === 'number')"
-              :model-value="val(item)"
-              mono
-              @update:model-value="onEdit(item, $event)"
-            />
-            <Select
-              v-else-if="item.type === 'enum'"
-              :model-value="val(item)"
-              :options="enumOpts(item)"
-              :aria-label="item.label"
-              @update:model-value="onEdit(item, $event)"
-            />
-            <div v-else-if="item.type === 'ratio'" class="ratio">
-              <input
-                class="ratio-range"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                :value="ratioValue(item)"
-                :aria-label="item.label"
-                @input="onRatio(item, $event)"
-              >
-              <span class="ratio-val num">{{ ratioValue(item).toFixed(2) }}</span>
-            </div>
-            <Input v-else :model-value="val(item)" @update:model-value="onEdit(item, $event)" />
-          </SettingField>
+              <div v-else-if="item.type === 'ratio'" class="ratio">
+                <input
+                  class="ratio-range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  :value="ratioValue(item)"
+                  :aria-label="item.label"
+                  @input="onRatio(item, $event)"
+                >
+                <span class="ratio-val num">{{ ratioValue(item).toFixed(2) }}</span>
+              </div>
+              <Input v-else :model-value="val(item)" @update:model-value="onEdit(item, $event)" />
+            </SettingField>
+          </div>
         </div>
 
-        <div v-if="tallItems(items).length" class="setting-grid setting-grid--tall">
-          <SettingField
-            v-for="item in tallItems(items)"
-            :key="item.key"
-            :label="item.label"
-            :hint="item.hint"
-            :changed="isChanged(item.key)"
+        <div v-if="tallItems(items).length" class="setting-block">
+          <div
+            v-for="(row, ri) in chunkRows(tallItems(items))"
+            :key="'t' + ri"
+            class="setting-row setting-row--tall"
+            :style="{ gridTemplateColumns: 'repeat(' + row.length + ', minmax(0, 1fr))' }"
           >
-            <Input
-              v-if="item.type === 'list'"
-              :model-value="listText(item)"
-              multiline
-              :rows="4"
-              placeholder="一行一个"
-              @update:model-value="onListEdit(item, $event)"
-            />
-            <Input
-              v-else
-              :model-value="val(item)"
-              multiline
-              :rows="4"
-              @update:model-value="onEdit(item, $event)"
-            />
-          </SettingField>
+            <SettingField
+              v-for="item in row"
+              :key="item.key"
+              :label="item.label"
+              :hint="item.hint"
+              :changed="isChanged(item.key)"
+            >
+              <Input
+                v-if="item.type === 'list'"
+                :model-value="listText(item)"
+                multiline
+                :rows="4"
+                placeholder="一行一个"
+                @update:model-value="onListEdit(item, $event)"
+              />
+              <Input
+                v-else
+                :model-value="val(item)"
+                multiline
+                :rows="4"
+                @update:model-value="onEdit(item, $event)"
+              />
+            </SettingField>
+          </div>
         </div>
       </Panel>
     </div>
@@ -222,13 +268,15 @@ onMounted(load)
   margin: 0;
 }
 
-.setting-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px 8px;
+.setting-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.setting-grid--short { grid-auto-rows: 118px; }
-.setting-grid--tall { grid-auto-rows: 196px; }
+.setting-block + .setting-block { margin-top: 4px; }
+.setting-row { display: grid; gap: 4px 8px; }
+.setting-row--short { grid-auto-rows: 118px; }
+.setting-row--tall { grid-auto-rows: 196px; }
 .ctrl-line {
   display: flex;
   align-items: center;
@@ -250,15 +298,5 @@ onMounted(load)
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 1200px) {
-  .setting-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 
-@media (max-width: 900px) {
-  .setting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 680px) {
-  .setting-grid { grid-template-columns: minmax(0, 1fr); }
-}
 </style>
