@@ -125,7 +125,7 @@ onMounted(load)
         :hint="changedIn(items) ? '已改 ' + changedIn(items) + ' 项' : ''"
         collapsible
         dense
-        :default-open="expandAll !== false"
+        :default-open="expandAll === true"
       >
         <div class="setting-grid">
           <SettingField
