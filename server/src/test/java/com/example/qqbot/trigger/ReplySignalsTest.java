@@ -25,6 +25,22 @@ class ReplySignalsTest {
     }
 
     @Test
+    @DisplayName("严格疑问：问号、句末语气或句首疑问；埋在句中只算宽松")
+    void strictQuestions() {
+        assertThat(ReplySignals.isStrictQuestion("有没有人知道煤矿在哪里啊")).isTrue();
+        assertThat(ReplySignals.isStrictQuestion("今天开服吗？")).isTrue();
+        assertThat(ReplySignals.isStrictQuestion("今天开服吗")).isTrue();
+        assertThat(ReplySignals.isStrictQuestion("请问钥匙在哪")).isTrue();
+        assertThat(ReplySignals.isStrictQuestion("帮我看看这个")).isTrue();
+        assertThat(ReplySignals.isStrictQuestion("怎么拿钥匙")).isTrue();
+
+        assertThat(ReplySignals.isStrictQuestion("这个钥匙哪里拿")).isFalse();
+        assertThat(ReplySignals.isStrictQuestion("煤矿在哪里啊")).isFalse();
+        assertThat(ReplySignals.isStrictQuestion("怎么又卡了")).isFalse();
+        assertThat(ReplySignals.isStrictQuestion("不是应该这样吗")).isFalse();
+    }
+
+    @Test
     @DisplayName("反问与吐槽不当疑问：怎么会、没什么、不是…吗")
     void rhetoricalIsChat() {
         assertThat(ReplySignals.classify("怎么会这样", false, false)).isEqualTo(ReplyIntent.CHAT);

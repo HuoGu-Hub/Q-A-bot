@@ -34,10 +34,12 @@ public class SettingsWhitelist {
      */
     public static final List<Item> ITEMS = List.of(
             // ---------- 回复行为 ----------
-            // p 是回复方式的唯一开关：0 = 只回呼叫，0~1 = 呼叫之外按概率主动接话。
+            // p 是回复档位的唯一开关：0 = 只回呼叫，0~1 分四档逐步放宽。
             // 频率不在这里配 —— 主动回复与普通提问共用「频率限制」。
             new Item("app.reply.probability", "主动回复概率", "回复行为",
-                    "ratio", "0 = 只回呼叫；>0 = 疑问必答；0.5~1 逐步参与闲聊", 0.0),
+                    "ratio", "0=只回呼叫；<0.3=关键词/严格疑问；<0.6=疑问；<0.8=低频闲聊；≥0.8=高频", 0.0),
+            new Item("app.reply.keywords", "触发关键词", "回复行为",
+                    "list", "一行一个词；命中任意词即回复，p=0 时仍只回呼叫", List.of()),
             new Item("app.reply.enabled-groups", "主动回复的群", "回复行为",
                     "list", "一行一个群号；留空 = 所有群都不主动回复，呼叫不受影响", List.of()),
             new Item("app.reply.daily-max-per-group", "每群每日主动回复上限", "回复行为",

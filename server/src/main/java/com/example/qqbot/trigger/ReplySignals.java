@@ -26,8 +26,8 @@ public final class ReplySignals {
 
     /** 反问、吐槽、否定：形式像问句，实际不是在提问 */
     private static final List<Pattern> NOT_QUESTION = List.of(
-            Pattern.compile("怎么会|怎么就|怎么这么|怎么那么|怎么这样"),
-            Pattern.compile("没什么|没啥|有什么好|哪怕"),
+            Pattern.compile("怎么会|怎么就|怎么又|怎么这么|怎么那么|怎么这样"),
+            Pattern.compile("没什么|没啥|有什么好|什么鬼|哪怕"),
             Pattern.compile("不是.{0,12}[吗嘛]"));
 
     /** 疑问词。只收高置信词形，不收单独的「谁」 */
@@ -43,6 +43,16 @@ public final class ReplySignals {
 
     /** 句末「吗 / 嘛 / 呢」 */
     private static final Pattern QUESTION_PARTICLE = Pattern.compile("(吗|嘛|呢)\\s*$");
+
+    /**
+     * 严格疑问的开头：疑问词/求助词必须出现在句首。
+     * 低概率档只认这种，避免「煤矿在哪里啊」这种把疑问词埋在陈述句里的消息被抢答。
+     */
+    private static final Pattern STRICT_LEAD = Pattern.compile(
+            "^(请问|求问|求教|求助|求带|求组|求推荐|有人知道|有没有人|谁知道|谁懂|"
+                    + "怎么|为什么|为啥|如何|哪(里|儿|个|些|边)|多少|几点|几个|多大|多久|"
+                    + "什么|啥|咋|是不是|有没有|能不能|可不可以|要不要|会不会|行不行|对不对|"
+                    + "帮我看看|帮忙看|查一下|找一下)");
 
     /**
      * 判一条消息的形态。
@@ -77,6 +87,21 @@ public final class ReplySignals {
             return ReplyIntent.QUESTION;
         }
         return hasImage ? ReplyIntent.NOISE : ReplyIntent.CHAT;
+    }
+
+    /**
+     * 严格疑问：句末问号/吗嘛呢，或疑问词出现在句首。
+     *
+     * <p>「这个钥匙哪里拿」是宽松疑问，不是严格疑问；低概率档不接。
+     */
+    public static boolean isStrictQuestion(String text) {
+        String t = text == null ? "" : text.strip();
+        if (t.isEmpty() || t.codePointCount(0, t.length()) < 3 || isNotQuestion(t)) {
+            return false;
+        }
+        return QUESTION_TAIL.matcher(t).find()
+                || QUESTION_PARTICLE.matcher(t).find()
+                || STRICT_LEAD.matcher(t).find();
     }
 
     private static boolean isQuestion(String t) {

@@ -118,6 +118,7 @@ defineExpose({
 
 const INTENT_LABEL: Record<string, string> = {
   CALL: '呼叫',
+  KEYWORD: '关键词',
   QUESTION: '疑问',
   CHAT: '闲聊',
   NOISE: '噪音',
@@ -132,6 +133,7 @@ const scopeNote = computed(() => {
 function triggerSummary(r: RecordRow): string {
   if (!r.triggerIntent) return '—'
   if (r.triggerIntent === 'CALL') return '呼叫 · 必回'
+  if (r.triggerIntent === 'KEYWORD') return '关键词 · 命中'
   const chance = Math.round((r.triggerChance || 0) * 100) + '%'
   const roll = r.triggerRoll > 0 ? ' · 掷 ' + r.triggerRoll.toFixed(2) : ''
   const label = INTENT_LABEL[r.triggerIntent] ?? r.triggerIntent

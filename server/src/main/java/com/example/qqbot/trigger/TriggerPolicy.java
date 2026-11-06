@@ -20,6 +20,11 @@ public interface TriggerPolicy {
     /** 每个群每天主动回复上限，0 = 不限 */
     int dailyMaxPerGroup();
 
+    /** 低概率档的关键词；命中任意一个就回复 */
+    default List<String> keywords() {
+        return List.of();
+    }
+
     /** 只记日志，不发送 */
     boolean shadowMode();
 

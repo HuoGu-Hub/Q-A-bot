@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.DoubleSupplier;
@@ -12,7 +13,8 @@ import java.util.function.DoubleSupplier;
 /**
  * 概率回复的判定器。
  *
- * <p>顺序固定：群白名单 → 意图分类 → 概率 → 每日上限 → 抽样 → 占位。
+ * <p>顺序固定：群白名单 → 关键词 → 概率档位 → 意图与严格度 → 闲聊抽样
+ * → 每日上限 → 影子 / 占位。
  * 任何一步不通过都返回 {@code reply=false}，由 Guard 的 trigger 阶段静默丢弃。
  * **保证不抛异常**：判定挂掉时按噪音处理，绝不能因为判定影响正常提问。
  */
@@ -21,8 +23,14 @@ public class ReplyTrigger {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyTrigger.class);
 
-    /** 闲聊从 p=0.5 开始解禁 */
-    private static final double CHAT_THRESHOLD = 0.5;
+    /** 0 < p < 0.3：只接关键词或严格疑问 */
+    private static final double STRICT_MAX = 0.3;
+
+    /** 0.3 <= p < 0.6：接所有疑问 */
+    private static final double QUESTION_MAX = 0.6;
+
+    /** 0.6 <= p < 0.8：低频闲聊；0.8 起高频 */
+    private static final double LOW_CHAT_MAX = 0.8;
 
     private final TriggerPolicy policy;
     private final ReplyPacer pacer;
@@ -41,9 +49,9 @@ public class ReplyTrigger {
 
     @PostConstruct
     void logConfig() {
-        log.info("[TRIGGER] 概率回复：p={} groups={} dailyMax={} shadow={}",
+        log.info("[TRIGGER] 概率回复：p={} groups={} dailyMax={} shadow={} keywords={}",
                 policy.probability(), policy.enabledGroups(), policy.dailyMaxPerGroup(),
-                policy.shadowMode());
+                policy.shadowMode(), policy.keywords());
     }
 
     public TriggerDecision decide(long groupId, long userId, String text,
@@ -52,66 +60,126 @@ public class ReplyTrigger {
             if (!policy.enabledForGroup(groupId)) {
                 return TriggerDecision.no(ReplyIntent.NOISE, "群未启用");
             }
-            ReplyIntent intent = ReplySignals.classify(text, hasImage, atOther);
-            if (intent == ReplyIntent.NOISE) {
-                return TriggerDecision.no(intent, "噪音");
+            double p = clamp(policy.probability());
+            if (p <= 0) {
+                return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0, "概率为 0");
             }
-            double chance = chance(policy.probability(), intent);
+
+            // 关键词是低概率档唯一的非疑问入口；p=0 时仍只回呼叫
+            if (keywordHit(text)) {
+                return accept(groupId, userId, text, ReplyIntent.KEYWORD, 1.0, 0.0, "关键词");
+            }
+
+            ReplyIntent intent = ReplySignals.classify(text, hasImage, atOther);
+
+            if (intent == ReplyIntent.QUESTION) {
+                boolean strict = ReplySignals.isStrictQuestion(text);
+                if (p < STRICT_MAX && !strict) {
+                    return TriggerDecision.no(intent, 0.0, 0.0, "低概率只回关键词或严格疑问");
+                }
+                return accept(groupId, userId, text, intent, 1.0, 0.0,
+                        strict ? "严格疑问" : "疑问");
+            }
+
+            if (p < STRICT_MAX) {
+                return TriggerDecision.no(intent, 0.0, 0.0, "低概率只回关键词或严格疑问");
+            }
+            if (p < QUESTION_MAX) {
+                return TriggerDecision.no(intent, 0.0, 0.0, "该档只回疑问");
+            }
+            if (intent == ReplyIntent.NOISE) {
+                return TriggerDecision.no(intent, 0.0, 0.0, "噪音");
+            }
+
+            double chance = chance(p, ReplyIntent.CHAT);
             if (chance <= 0) {
-                return TriggerDecision.no(intent, chance, 0.0, "概率为 0");
+                return TriggerDecision.no(intent, 0.0, 0.0, "闲聊未解禁");
             }
             if (!pacer.allows(groupId)) {
                 return TriggerDecision.no(intent, chance, 0.0, "今日额度用完");
             }
-            // 必答时不再掷点：记录里 chance=1、roll=0，避免"明明 100% 还没中"的误解
-            double roll = chance >= 1.0 ? 0.0 : random.getAsDouble();
+            double roll = random.getAsDouble();
             if (roll >= chance) {
-                TriggerDecision miss = TriggerDecision.no(intent, chance, roll, "未命中");
                 log.debug("[TRIGGER] 未命中 group={} user={} intent={} chance={} roll={} | {}",
                         groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
-                return miss;
+                return TriggerDecision.no(intent, chance, roll, "未命中");
             }
-            if (policy.shadowMode()) {
-                TriggerDecision would = TriggerDecision.would(intent, chance, roll);
-                log.info("[TRIGGER] shadow=1 group={} user={} intent={} chance={} roll={} would=reply | {}",
-                        groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
-                return would;
-            }
-            if (!pacer.tryReserve(groupId)) {
-                return TriggerDecision.no(intent, chance, roll, "并发占位失败");
-            }
-            TriggerDecision yes = TriggerDecision.yes(intent, chance, roll);
-            log.info("[TRIGGER] group={} user={} intent={} chance={} roll={} -> reply | {}",
-                    groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
-            return yes;
+            return accept(groupId, userId, text, intent, chance, roll, "闲聊命中");
         } catch (Exception e) {
             log.warn("[TRIGGER] 判定失败，按噪音处理：{}", e.getMessage());
             return TriggerDecision.no(ReplyIntent.NOISE, "判定失败");
         }
     }
 
+    /** 判定通过后的公共收口：额度、影子、并发占位、日志 */
+    private TriggerDecision accept(long groupId, long userId, String text, ReplyIntent intent,
+                                   double chance, double roll, String reason) {
+        if (!pacer.allows(groupId)) {
+            return TriggerDecision.no(intent, chance, roll, "今日额度用完");
+        }
+        if (policy.shadowMode()) {
+            TriggerDecision would = TriggerDecision.would(intent, chance, roll, "影子模式：" + reason);
+            log.info("[TRIGGER] shadow=1 group={} user={} intent={} chance={} roll={} would=reply reason={} | {}",
+                    groupId, userId, intent, fmt(chance), fmt(roll), reason, brief(text));
+            return would;
+        }
+        if (!pacer.tryReserve(groupId)) {
+            return TriggerDecision.no(intent, chance, roll, "并发占位失败");
+        }
+        log.info("[TRIGGER] group={} user={} intent={} chance={} roll={} -> reply reason={} | {}",
+                groupId, userId, intent, fmt(chance), fmt(roll), reason, brief(text));
+        return TriggerDecision.yes(intent, chance, roll, reason);
+    }
+
+    /** 关键词命中：大小写不敏感，空白词忽略 */
+    private boolean keywordHit(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        List<String> keywords = policy.keywords();
+        if (keywords == null || keywords.isEmpty()) {
+            return false;
+        }
+        String t = text.toLowerCase(Locale.ROOT);
+        for (String k : keywords) {
+            if (k != null && !k.isBlank() && t.contains(k.trim().toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
-     * 概率曲线。
+     * 概率档位与闲聊曲线。
      *
      * <pre>
-     *   呼叫 = 1，不走这里
-     *   疑问 = p > 0 ? 1 : 0，明确的提问不参与掷点
-     *   闲聊 = p × max(0, (p - 0.5) / 0.5)
-     *   噪音 = 0
+     *   p = 0          只回呼叫，不进入这里
+     *   0 < p < 0.3    关键词、严格疑问
+     *   0.3 <= p < 0.6 所有疑问
+     *   0.6 <= p < 0.8 疑问 + 低频闲聊 10%~30%
+     *   0.8 <= p <= 1  疑问 + 高频闲聊 50%~100%
      * </pre>
      */
     public static double chance(double p, ReplyIntent intent) {
-        double safe = Math.max(0.0, Math.min(1.0, p));
-        if (intent == ReplyIntent.QUESTION) {
+        double safe = clamp(p);
+        if (intent == ReplyIntent.CALL || intent == ReplyIntent.KEYWORD
+                || intent == ReplyIntent.QUESTION) {
             return safe > 0 ? 1.0 : 0.0;
         }
         if (intent == ReplyIntent.CHAT) {
-            if (safe <= CHAT_THRESHOLD) {
+            if (safe < QUESTION_MAX) {
                 return 0.0;
             }
-            return safe * ((safe - CHAT_THRESHOLD) / (1 - CHAT_THRESHOLD));
+            if (safe < LOW_CHAT_MAX) {
+                return 0.10 + (safe - QUESTION_MAX) / (LOW_CHAT_MAX - QUESTION_MAX) * 0.20;
+            }
+            return 0.50 + (safe - LOW_CHAT_MAX) / (1.0 - LOW_CHAT_MAX) * 0.50;
         }
         return 0.0;
+    }
+
+    private static double clamp(double p) {
+        return Math.max(0.0, Math.min(1.0, p));
     }
 
     private static String fmt(double v) {

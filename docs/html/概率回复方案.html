@@ -163,7 +163,7 @@ tbody tr:last-child td { border-bottom:0; }
 </ul>
 
 <blockquote class="ok">
-<p><b>一句话</b>：把「回不回」从布尔开关变成三段式判定，呼叫直通，疑问必答，闲聊从 0.5 开始逐步解禁。</p>
+<p><b>一句话</b>：把「回不回」从布尔开关变成四档判定，呼叫直通，0.3 起疑问、0.6 起闲聊，低档只认关键词或严格疑问。</p>
 </blockquote>
 
 <h2 id="now">现在的链路</h2>
@@ -189,7 +189,7 @@ tbody tr:last-child td { border-bottom:0; }
 <h3>目标</h3>
 <ul>
 <li>p=0 时群聊只回应三种呼叫：@、正文含「飘雪喵」、引用机器人，其余一律不回；私聊仍按私聊策略。</li>
-<li>p 大于 0 时疑问必答；p 到 0.5 以后才逐步参与闲聊。</li>
+<li>p 分成四档：低档只接关键词或严格疑问，中档接所有疑问，高档逐步参与闲聊。</li>
 <li>任何一条被忽略的消息都不产生提示、不消耗 token、不写模型请求。</li>
 <li>默认关闭，对「必须 @」的部署行为与现在完全一致。</li>
 <li>概率、节奏、白名单都能在后台热改，改完下一条消息就生效。</li>
@@ -212,8 +212,8 @@ tbody tr:last-child td { border-bottom:0; }
 <thead><tr><th>通道</th><th>识别</th><th>回复概率</th><th>例子</th></tr></thead>
 <tbody>
 <tr><td><b>呼叫</b></td><td>@ 段、文本 <code>@飘雪喵</code>、正文包含「飘雪喵」三个字、引用机器人；私聊按策略直通</td><td>1</td><td>「@飘雪喵 这个在哪」</td></tr>
-<tr><td><b>疑问</b></td><td>问号结尾、疑问词、求助词，且不是问别人</td><td>p &gt; 0 时 1</td><td>「雾锁的钥匙怎么拿」</td></tr>
-<tr><td><b>闲聊</b></td><td>有文字，但不像在提问</td><td>p × ramp</td><td>「今天又卡bug了」</td></tr>
+<tr><td><b>疑问</b></td><td>问号结尾、疑问词、求助词，且不是问别人</td><td>0.3 起 1；0.1-0.3 只认严格疑问</td><td>「雾锁的钥匙怎么拿」</td></tr>
+<tr><td><b>闲聊</b></td><td>有文字，但不像在提问</td><td>0.6 起 10%~100%</td><td>「今天又卡bug了」</td></tr>
 <tr><td><b>噪音</b></td><td>没有文字、纯图片、纯链接、两个字以内、纯复读</td><td>0</td><td>「hhh」「？」「[图片]」</td></tr>
 </tbody>
 </table>
@@ -221,27 +221,32 @@ tbody tr:last-child td { border-bottom:0; }
 
 <h3>概率曲线</h3>
 
-<pre class="formula"><code>t = 0.5
+<pre class="formula"><code>mode(p) =
+  0            只回呼叫
+  0 &lt; p &lt; 0.3    关键词、严格疑问
+  0.3 ≤ p &lt; 0.6  所有疑问
+  0.6 ≤ p &lt; 0.8  疑问 + 低频闲聊 10%~30%
+  0.8 ≤ p ≤ 1    疑问 + 高频闲聊 50%~100%
 
-chance(呼叫) = 1
-chance(疑问) = p > 0 ? 1 : 0
-chance(闲聊) = p × max(0, (p - t) / (1 - t))
+chance(呼叫 / 关键词 / 疑问) = 1
+chance(闲聊) = 低频 10%~30%，高频 50%~100%
 chance(噪音) = 0</code></pre>
 
 <div class="table-wrap">
 <table>
-<thead><tr><th>p</th><th>疑问</th><th>闲聊</th><th>读法</th></tr></thead>
+<thead><tr><th>p</th><th>走哪条通道</th><th>闲聊概率</th><th>读法</th></tr></thead>
 <tbody>
-<tr><td>0</td><td>0</td><td>0</td><td>只回应呼叫，含昵称与引用</td></tr>
-<tr><td>0.2</td><td>100%</td><td>0</td><td>明确提问都答，不接闲聊</td></tr>
-<tr><td>0.5</td><td>100%</td><td>0</td><td>提问都答，仍不闲聊</td></tr>
-<tr><td>0.8</td><td>100%</td><td>48%</td><td>提问都答，开始接话</td></tr>
-<tr><td>1.0</td><td>100%</td><td>100%</td><td>最活跃，仍受每日上限限制</td></tr>
+<tr><td>0</td><td>呼叫</td><td>0</td><td>必须 @、正文昵称或引用机器人</td></tr>
+<tr><td>0.2</td><td>关键词 + 严格疑问</td><td>0</td><td>只接明确问句和配置词，不接宽松疑问</td></tr>
+<tr><td>0.4</td><td>所有疑问</td><td>0</td><td>疑问词埋在句中也会接</td></tr>
+<tr><td>0.7</td><td>疑问 + 低频闲聊</td><td>10%~30%</td><td>开始接话，偶尔插一句</td></tr>
+<tr><td>0.9</td><td>疑问 + 高频闲聊</td><td>50%~100%</td><td>大部分有内容的聊天都会接</td></tr>
+<tr><td>1.0</td><td>疑问 + 全部闲聊</td><td>100%</td><td>有内容就接，纯图/复读/链接仍不接</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>0.5 是闲聊的解禁点。低于 0.5 时闲聊概率为 0，但明确提问仍必答；高于 0.5 后，闲聊概率随 p 线性上升，越接近 1 越愿意接话。只引入一个拐点，不再多一个「闲聊权重」旋钮。</p>
+<p>0.6 是闲聊的起点：0.6-0.8 只低频插话，0.8 起进入高频。0.3 是疑问的放宽点：低于 0.3 只认句首疑问或问号，0.3 起句中的疑问词也算。每一档都包含低档的全部条件。</p>
 
 <p>p=0 不等于完全静默。它的语义是「只回应呼叫」：@、正文包含「飘雪喵」、引用机器人。私聊不走这套判定，仍按私聊策略。p=0 就是唯一的呼叫模式，不再依赖「必须 @」开关。</p>
 
@@ -338,7 +343,8 @@ chance(噪音) = 0</code></pre>
 <table>
 <thead><tr><th>配置</th><th>默认</th><th>作用</th></tr></thead>
 <tbody>
-<tr><td><code>app.reply.probability</code></td><td>0</td><td>主动参与度，0 到 1</td></tr>
+<tr><td><code>app.reply.probability</code></td><td>0</td><td>参与档位，0 到 1</td></tr>
+<tr><td><code>app.reply.keywords</code></td><td>空</td><td>低概率档的关键词；命中任意一个就回复</td></tr>
 <tr><td><code>app.reply.enabled-groups</code></td><td>空</td><td>只在列出的群做概率回复，空 = 所有群都不做；本机填 <code>209127588</code>。呼叫不受白名单限制</td></tr>
 <tr><td><code>app.reply.shadow-mode</code></td><td>false</td><td>只记日志，不发送</td></tr>
 </tbody>
@@ -350,6 +356,7 @@ chance(噪音) = 0</code></pre>
 <pre><code>app:
   reply:
     probability: 0.0
+    keywords: []
     enabled-groups: [209127588]
     daily-max-per-group: 40
     shadow-mode: false</code></pre>
@@ -596,7 +603,7 @@ reply(req, question, replyMode, trigger, quoted);</code></pre>
 
 <ul>
 <li><code>ReplySignalsTest</code>：表驱动，覆盖疑问、反问、问别人、纯图、复读、正文含「飘雪喵」。反例直接取自线上聊天。</li>
-<li><code>ReplyTriggerTest</code>：p 取 0、0.3、0.5、0.8、1，配合四档意图；群未启用直接拒绝；注入固定随机序列，断言结果与 reason；规则异常时回噪音。</li>
+<li><code>ReplyTriggerTest</code>：p 取 0、0.2、0.4、0.7、0.9、1，覆盖关键词、严格疑问、宽松疑问、低频与高频闲聊；群未启用直接拒绝；注入固定随机序列，断言结果与 reason。</li>
 <li><code>ReplyPacerTest</code>：间隔、用户冷却、跨天重置、0 表示不限、并发只放一条。</li>
 <li><code>MessageRouterTriggerTest</code>：开关组合、@ 与昵称与引用三种呼叫直通、白名单外的群只回呼叫、引用别人按文本判、<code>get_msg</code> 每条引用只取一次、忽略时记 <code>drop</code>、呼叫记 <code>pass</code>、主动回复记 <code>auto</code>、限流提示被降级。</li>
 <li><code>ArchitectureTest</code>：<code>trigger</code> 不依赖 <code>kb</code>、<code>llm</code>、<code>onebot.client</code>、<code>config</code>；把 <code>..trigger..</code> 加进「业务包不得依赖 config」的名单。</li>

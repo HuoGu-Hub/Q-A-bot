@@ -20,12 +20,22 @@ public record TriggerDecision(boolean reply, boolean wouldReply, ReplyIntent int
 
     /** 判定通过，真的回复 */
     public static TriggerDecision yes(ReplyIntent intent, double chance, double roll) {
-        return new TriggerDecision(true, true, intent, chance, roll, "命中");
+        return yes(intent, chance, roll, "命中");
+    }
+
+    /** 判定通过，带具体原因 —— 记录里要能区分关键词、严格疑问、闲聊 */
+    public static TriggerDecision yes(ReplyIntent intent, double chance, double roll, String reason) {
+        return new TriggerDecision(true, true, intent, chance, roll, reason);
     }
 
     /** 判定通过，但影子模式只记日志 */
     public static TriggerDecision would(ReplyIntent intent, double chance, double roll) {
-        return new TriggerDecision(false, true, intent, chance, roll, "影子模式");
+        return would(intent, chance, roll, "影子模式");
+    }
+
+    /** 影子模式，带具体原因 */
+    public static TriggerDecision would(ReplyIntent intent, double chance, double roll, String reason) {
+        return new TriggerDecision(false, true, intent, chance, roll, reason);
     }
 
     /** 判定不通过 */

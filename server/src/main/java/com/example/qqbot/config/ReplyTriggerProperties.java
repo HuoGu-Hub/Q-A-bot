@@ -21,6 +21,9 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 只在哪些群做概率回复，空表示所有群都不做；呼叫不受它限制 */
     private List<Long> enabledGroups = new ArrayList<>();
 
+    /** 低概率档的关键词；命中任意一个就回复 */
+    private List<String> keywords = new ArrayList<>();
+
     /** 每群每日主动回复上限，0 = 不限 */
     private int dailyMaxPerGroup = 40;
 
@@ -43,6 +46,15 @@ public class ReplyTriggerProperties implements TriggerPolicy {
 
     public void setEnabledGroups(List<Long> enabledGroups) {
         this.enabledGroups = enabledGroups == null ? new ArrayList<>() : enabledGroups;
+    }
+
+    @Override
+    public List<String> keywords() {
+        return keywords;
+    }
+
+    public void setKeywords(List<String> keywords) {
+        this.keywords = keywords == null ? new ArrayList<>() : keywords;
     }
 
     @Override
