@@ -35,6 +35,11 @@ public record QaRecord(
         String sources,
         String retrievedJson,
         String guardAction,
+        /** 触发阶段：CALL / QUESTION / CHAT / NOISE；没走触发时为空 */
+        String triggerIntent,
+        double triggerChance,
+        double triggerRoll,
+        String triggerReason,
         long retrieveMs,
         long llmMs,
         long totalMs,
@@ -53,5 +58,18 @@ public record QaRecord(
      *             "术语表里有但知识库没检索到"和"检索到了但没答好"
      */
     public record Keyword(String zh, String en, boolean inKb) {
+    }
+
+    /** 兼容旧调用：没有触发信息的记录按"未走触发"落库 */
+    public QaRecord(String ts, long groupId, long userId, long messageId,
+                    String question, String quoteText, String answer,
+                    int imageCount, boolean kbEnabled, int hitCount, double topScore,
+                    double bestCosine, double bestCosineRaw, String sources, String retrievedJson,
+                    String guardAction, long retrieveMs, long llmMs, long totalMs, String model,
+                    List<Keyword> keywords) {
+        this(ts, groupId, userId, messageId, question, quoteText, answer,
+                imageCount, kbEnabled, hitCount, topScore, bestCosine, bestCosineRaw, sources,
+                retrievedJson, guardAction, "", 0.0, 0.0, "", retrieveMs, llmMs, totalMs, model,
+                keywords);
     }
 }

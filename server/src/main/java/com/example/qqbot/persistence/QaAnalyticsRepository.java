@@ -118,6 +118,8 @@ public class QaAnalyticsRepository {
     /** 一条问答记录 */
     public record RecordRow(long id, String ts, long groupId, long userId,
                             int hitCount, double bestCosine, String sources, String guardAction,
+                            String triggerIntent, double triggerChance, double triggerRoll,
+                            String triggerReason,
                             long retrieveMs, long totalMs, String question, String answer,
                             String verdict) {
     }
@@ -300,37 +302,44 @@ public class QaAnalyticsRepository {
      * 列出的 93%（1194/1279）是群里没 @ 机器人的闲聊，页面却顶着一个
      * 「还没有记录？去群里 @ 机器人问几个问题」的提示语 —— 自相矛盾。
      *
-     * @param onlyQuestions true = 只看真正的提问（{@code guard_action='pass'}）；
-     *                      false = 看全部消息，用于排查"为什么没回我"
+     * @param scope replied = 已回复（提问 + 主动接话）；dropped = 未触发；
+     *              all = 全部消息，用于排查"为什么没回我"
      */
-    public List<RecordRow> recentRecords(String cutoff, int limit, int offset, boolean onlyQuestions) {
+    public List<RecordRow> recentRecords(String cutoff, int limit, int offset, String scope) {
         String sql = "SELECT s.id, s.ts, s.group_id, s.user_id, s.hit_count, s.best_cosine,"
-                + " s.sources, s.guard_action, s.retrieve_ms, s.total_ms, r.question, r.answer,"
-                + " s.verdict"
+                + " s.sources, s.guard_action, s.trigger_intent, s.trigger_chance,"
+                + " s.trigger_roll, s.trigger_reason, s.retrieve_ms, s.total_ms,"
+                + " r.question, r.answer, s.verdict"
                 + " FROM qa_stat s LEFT JOIN qa_raw r ON r.id = s.id"
-                + recordWhere(cutoff, onlyQuestions) + " ORDER BY s.id DESC LIMIT ? OFFSET ?";
+                + recordWhere(cutoff, scope) + " ORDER BY s.id DESC LIMIT ? OFFSET ?";
         return jdbc.query(sql,
                 r -> new RecordRow(r.longOf("id"), r.str("ts"), r.longOf("group_id"),
                         r.longOf("user_id"), r.intOf("hit_count"), r.dbl("best_cosine"),
-                        r.str("sources"), r.str("guard_action"), r.longOf("retrieve_ms"),
-                        r.longOf("total_ms"), r.str("question"), r.str("answer"), r.str("verdict")),
+                        r.str("sources"), r.str("guard_action"),
+                        r.str("trigger_intent"), r.dbl("trigger_chance"), r.dbl("trigger_roll"),
+                        r.str("trigger_reason"),
+                        r.longOf("retrieve_ms"), r.longOf("total_ms"),
+                        r.str("question"), r.str("answer"), r.str("verdict")),
                 args(cutoff, limit, offset));
     }
 
     /** 记录总数 —— 与 {@link #recentRecords} 用**同一套过滤**，供分页用 */
-    public long countRecords(String cutoff, boolean onlyQuestions) {
-        return jdbc.count("SELECT COUNT(*) FROM qa_stat" + recordWhere(cutoff, onlyQuestions),
+    public long countRecords(String cutoff, String scope) {
+        return jdbc.count("SELECT COUNT(*) FROM qa_stat" + recordWhere(cutoff, scope),
                 ts(cutoff));
     }
 
     /** ⚠️ 过滤条件只此一处 —— 列表与计数分头写就会分页错位 */
-    private static String recordWhere(String cutoff, boolean onlyQuestions) {
+    private static String recordWhere(String cutoff, String scope) {
         StringBuilder w = new StringBuilder();
         if (cutoff != null) {
             w.append(" WHERE ts >= ?");
         }
-        if (onlyQuestions) {
-            w.append(cutoff == null ? " WHERE" : " AND").append(" guard_action = ").append(ACTION_PASS);
+        String filter = "replied".equals(scope)
+                ? "guard_action IN ('pass','auto')"
+                : "dropped".equals(scope) ? "guard_action = 'drop'" : null;
+        if (filter != null) {
+            w.append(cutoff == null ? " WHERE" : " AND").append(" ").append(filter);
         }
         return w.toString();
     }

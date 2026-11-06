@@ -15783,7 +15783,7 @@
           "required" : false,
           "schema" : {
             "type" : "string",
-            "default" : "questions"
+            "default" : "replied"
           }
         } ],
         "responses" : {
@@ -25341,6 +25341,20 @@
             "type" : "string"
           },
           "guardAction" : {
+            "type" : "string"
+          },
+          "triggerIntent" : {
+            "type" : "string"
+          },
+          "triggerChance" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "triggerRoll" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "triggerReason" : {
             "type" : "string"
           },
           "retrieveMs" : {

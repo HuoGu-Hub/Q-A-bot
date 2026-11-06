@@ -49,7 +49,8 @@ class QaStoreTest {
                 question, null, answer,
                 0, true, 3, 0.18, 0.53, 0.53, "both",
                 "[{\"i\":12,\"title\":\"Scrap Cup\",\"score\":0.53,\"src\":\"both\"}]",
-                "pass", 120, 3400, 3600, "deepseek-v4.1-flash",
+                "pass", "QUESTION", 0.3, 0.1, "未命中", 120, 3400, 3600,
+                "deepseek-v4.1-flash",
                 List.of(new QaRecord.Keyword("废料杯", "Scrap Cup", true)));
     }
 
@@ -65,6 +66,25 @@ class QaStoreTest {
 
         assertThat(store.countStat()).isEqualTo(1);
         assertThat(store.countRaw()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("触发审计字段随记录一起落库")
+    void storesTriggerAudit() {
+        store.insertBatch(List.of(record(Instant.now().toString(), "这个在哪", "在那边")));
+
+        try (var st = db.connection().createStatement();
+             var rs = st.executeQuery("SELECT guard_action, trigger_intent, trigger_chance,"
+                     + " trigger_roll, trigger_reason FROM qa_stat WHERE id=1")) {
+            rs.next();
+            assertThat(rs.getString(1)).isEqualTo("pass");
+            assertThat(rs.getString(2)).isEqualTo("QUESTION");
+            assertThat(rs.getDouble(3)).isEqualTo(0.3);
+            assertThat(rs.getDouble(4)).isEqualTo(0.1);
+            assertThat(rs.getString(5)).isEqualTo("未命中");
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
     }
 
     @Test

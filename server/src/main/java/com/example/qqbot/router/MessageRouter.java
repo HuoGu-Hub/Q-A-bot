@@ -296,7 +296,7 @@ public class MessageRouter {
         // ① 准入控制（黑名单 / 私聊策略）—— 唯一在指令之前跑的一层。
         //    被拉黑的人不该能触发指令，但除此之外指令不该受任何 Guard 限制。
         if (!accessAllowed(event)) {
-            record(req, "drop", null);
+            record(req, "drop", null, null);
             return;
         }
 
@@ -334,7 +334,9 @@ public class MessageRouter {
         }
         TriggerDecision trigger = null;
         if (probabilityMode && triggerEnabled && replyTrigger != null) {
-            if (nameCalled) {
+            if (mentioned) {
+                trigger = TriggerDecision.call("呼叫");
+            } else if (nameCalled) {
                 trigger = TriggerDecision.call("正文昵称");
             } else if (quoted != null && quoted.quote().fromSelf()) {
                 trigger = TriggerDecision.call("引用机器人");
@@ -373,13 +375,13 @@ public class MessageRouter {
         GuardResult result = guardPipeline.check(ctx);
         if (result instanceof GuardResult.Drop) {
             // 被 Guard 拦下的也记一笔 —— "多少消息被限流/拦下"本身就是运营数据
-            record(req, "drop", null);
+            record(req, "drop", null, trigger);
             return true;
         }
         if (result instanceof GuardResult.Reply reply) {
             log.info("走固定话术（stage 拦截）：{}", reply.reason());
             outboundSender.send(event, reply.text());
-            record(req, "fixed_reply", reply.text());
+            record(req, "fixed_reply", reply.text(), trigger);
             return true;
         }
 
@@ -389,14 +391,14 @@ public class MessageRouter {
         BudgetGuard.Decision budget = budgetGuard.check(event.getUserId(), event.getGroupId(), !unsolicited);
         if (budget.verdict() == BudgetGuard.Verdict.USER_LIMIT) {
             outboundSender.send(event, budget.text());
-            record(req, "fixed_reply", budget.text());
+            record(req, "fixed_reply", budget.text(), trigger);
             return true;
         }
         if (budget.verdict() != BudgetGuard.Verdict.OK) {
             // 群级超限 = 该群静默；全局熔断 = 谁都不回（BudgetGuard 里已经 ERROR 告警过）
             log.info("[BUDGET] 丢弃消息：verdict={} group={} user={}",
                     budget.verdict(), event.getGroupId(), event.getUserId());
-            record(req, "drop", null);
+            record(req, "drop", null, trigger);
             return true;
         }
         budgetGuard.recordCall(event.getUserId(), event.getGroupId(), !unsolicited);
@@ -465,7 +467,7 @@ public class MessageRouter {
         // ⚠️ 记的是 question 不是 text：agent 指令的原始文本是 "/联网 …"，
         //    记进去会让「未命中·该补什么」里全是命令前缀。
         // 主动接话记 auto，不参与提问口径，也不参与追问检测。
-        qaCollector.collect(event, question, quoted.quote().text(), req.imageCount(),
+        qaCollector.collect(event, question, quoted.quote().text(), req.imageCount(), trigger,
                 chime ? "auto" : "pass", safe, result.kb(), result.llmMs(), req.elapsedMs(), !chime);
     }
 
@@ -475,9 +477,9 @@ public class MessageRouter {
      * <p>以前 "drop" 写了三遍、"fixed_reply" 写了两遍，每一处都把同样的 9 个参数抄一次 ——
      * 加一个统计字段要改五处，漏一处就是"某条路径没记账"。
      */
-    private void record(RoutedRequest req, String kind, String replyText) {
-        qaCollector.collect(req.event(), req.text(), null, req.imageCount(), kind, replyText,
-                KbTrace.disabled(), 0, req.elapsedMs());
+    private void record(RoutedRequest req, String kind, String replyText, TriggerDecision trigger) {
+        qaCollector.collect(req.event(), req.text(), null, req.imageCount(), trigger, kind,
+                replyText, KbTrace.disabled(), 0, req.elapsedMs(), true);
     }
 
     /** 取出被引用消息的文字、作者和图片。失败不影响正常回复。 */

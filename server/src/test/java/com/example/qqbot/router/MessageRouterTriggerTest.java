@@ -129,7 +129,7 @@ class MessageRouterTriggerTest {
         assertThat(plan.getValue().retrieve()).isTrue();
 
         verify(qaCollector).collect(eq(event), eq("雾锁的钥匙怎么拿"), any(), eq(0),
-                eq("auto"), any(), any(), anyLong(), anyLong(), eq(false));
+                any(), eq("auto"), any(), any(), anyLong(), anyLong(), eq(false));
         verify(outboundSender).send(eq(event), eq("好"));
     }
 
@@ -148,7 +148,7 @@ class MessageRouterTriggerTest {
         assertThat(ctx.getValue().trigger().reason()).isEqualTo("正文昵称");
 
         verify(qaCollector).collect(eq(event), eq("飘雪喵 这个在哪"), any(), eq(0),
-                eq("pass"), any(), any(), anyLong(), anyLong(), eq(true));
+                any(), eq("pass"), any(), any(), anyLong(), anyLong(), eq(true));
     }
 
     @Test
@@ -189,7 +189,7 @@ class MessageRouterTriggerTest {
                 any(ReplyMode.class), eq(false), plan.capture());
         assertThat(plan.getValue().chimeIn()).isFalse();
         verify(qaCollector).collect(eq(event), eq("雾锁的钥匙怎么拿"), any(), eq(0),
-                eq("pass"), any(), any(), anyLong(), anyLong(), eq(true));
+                any(), eq("pass"), any(), any(), anyLong(), anyLong(), eq(true));
     }
 
     private OneBotEvent groupEvent(String text) {

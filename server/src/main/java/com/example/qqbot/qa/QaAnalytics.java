@@ -121,6 +121,8 @@ public class QaAnalytics {
     /** 最近问答记录（后台列表用）。question/answer 可能因原文清理而为空 */
     public record RecordRow(long id, String ts, long groupId, long userId,
                             int hitCount, double bestCosine, String sources, String guardAction,
+                            String triggerIntent, double triggerChance, double triggerRoll,
+                            String triggerReason,
                             long retrieveMs, long totalMs, String question, String answer,
                             String verdict) {
     }
@@ -282,22 +284,23 @@ public class QaAnalytics {
     }
 
     /** 最近的问答记录（后台列表） */
-    public List<RecordRow> recentRecords(int days, int limit, int offset, boolean onlyQuestions) {
+    public List<RecordRow> recentRecords(int days, int limit, int offset, String scope) {
         return query(List.of(), () -> {
             List<RecordRow> out = new ArrayList<>();
             for (QaAnalyticsRepository.RecordRow r
-                    : repo.recentRecords(cutoff(days), limit, offset, onlyQuestions)) {
+                    : repo.recentRecords(cutoff(days), limit, offset, scope)) {
                 out.add(new RecordRow(r.id(), r.ts(), r.groupId(), r.userId(), r.hitCount(),
-                        r.bestCosine(), r.sources(), r.guardAction(), r.retrieveMs(), r.totalMs(),
-                        r.question(), r.answer(), r.verdict()));
+                        r.bestCosine(), r.sources(), r.guardAction(),
+                        r.triggerIntent(), r.triggerChance(), r.triggerRoll(), r.triggerReason(),
+                        r.retrieveMs(), r.totalMs(), r.question(), r.answer(), r.verdict()));
             }
             return out;
         });
     }
 
     /** 记录总数 —— 与 {@link #recentRecords} 用同一套过滤，供分页用 */
-    public long countRecords(int days, boolean onlyQuestions) {
-        return query(0L, () -> repo.countRecords(cutoff(days), onlyQuestions));
+    public long countRecords(int days, String scope) {
+        return query(0L, () -> repo.countRecords(cutoff(days), scope));
     }
 
     /** 管理后台的访问统计 */

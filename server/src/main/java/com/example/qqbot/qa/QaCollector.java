@@ -3,6 +3,7 @@ package com.example.qqbot.qa;
 import com.example.qqbot.llm.LlmPolicy;
 import com.example.qqbot.llm.Provider;
 import com.example.qqbot.trace.KbTrace;
+import com.example.qqbot.trigger.TriggerDecision;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -61,7 +62,7 @@ public class QaCollector {
 
     public void collect(OneBotEvent event, String question, String quoteText, int imageCount,
                         String guardAction, String answer, KbTrace kb, long llmMs, long totalMs) {
-        collect(event, question, quoteText, imageCount, guardAction, answer, kb, llmMs, totalMs, true);
+        collect(event, question, quoteText, imageCount, null, guardAction, answer, kb, llmMs, totalMs, true);
     }
 
     /**
@@ -71,6 +72,17 @@ public class QaCollector {
     public void collect(OneBotEvent event, String question, String quoteText, int imageCount,
                         String guardAction, String answer, KbTrace kb, long llmMs, long totalMs,
                         boolean countsAsAsk) {
+        collect(event, question, quoteText, imageCount, null, guardAction, answer, kb, llmMs,
+                totalMs, countsAsAsk);
+    }
+
+    /**
+     * @param trigger 触发判定；没走概率触发时传 null。记录意图/概率/掷点/原因，
+     *                这样"为什么没回"不需要翻日志
+     */
+    public void collect(OneBotEvent event, String question, String quoteText, int imageCount,
+                        TriggerDecision trigger, String guardAction, String answer, KbTrace kb,
+                        long llmMs, long totalMs, boolean countsAsAsk) {
         if (!props.isEnabled()) {
             return;
         }
@@ -88,6 +100,10 @@ public class QaCollector {
                     trace.bestCosine(), trace.bestCosineRaw(), trace.sources(),
                     serializeHits(trace),
                     guardAction,
+                    trigger == null ? "" : trigger.intent().name(),
+                    trigger == null ? 0.0 : trigger.chance(),
+                    trigger == null ? 0.0 : trigger.roll(),
+                    trigger == null ? "" : trigger.reason(),
                     trace.retrieveMs(), llmMs, totalMs,
                     currentModel(),
                     keywords(question, trace)));

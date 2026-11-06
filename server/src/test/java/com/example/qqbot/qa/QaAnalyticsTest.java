@@ -90,6 +90,35 @@ class QaAnalyticsTest {
         store.close();
     }
 
+    private QaRecord recTrigger(String guard, String intent, double chance, double roll, String reason) {
+        return new QaRecord(Instant.now().toString(), 1L, 1L, 1L,
+                "触发范围用例", null, "答案",
+                0, true, 0, 0.0, 0.0, 0.0, "none", "[]",
+                guard, intent, chance, roll, reason, 10, 20, 30, "m", List.of());
+    }
+
+    @Test
+    @DisplayName("记录范围：已回复含主动接话，未触发单独")
+    void recordScopes() {
+        store.insertBatch(List.of(
+                recTrigger("pass", "CALL", 1.0, 0.0, "呼叫"),
+                recTrigger("auto", "QUESTION", 1.0, 0.0, "命中"),
+                recTrigger("drop", "CHAT", 0.48, 0.72, "未命中")));
+
+        assertThat(analytics.recentRecords(0, 10, 0, "replied"))
+                .extracting(QaAnalytics.RecordRow::guardAction)
+                .containsExactlyInAnyOrder("pass", "auto");
+        assertThat(analytics.countRecords(0, "replied")).isEqualTo(2);
+
+        List<QaAnalytics.RecordRow> dropped = analytics.recentRecords(0, 10, 0, "dropped");
+        assertThat(dropped).hasSize(1);
+        assertThat(dropped.get(0).triggerIntent()).isEqualTo("CHAT");
+        assertThat(dropped.get(0).triggerReason()).isEqualTo("未命中");
+        assertThat(dropped.get(0).triggerRoll()).isEqualTo(0.72);
+
+        assertThat(analytics.countRecords(0, "all")).isEqualTo(3);
+    }
+
     @Test
     @DisplayName("★ 每日分桶按东八区：UTC 20:30 属于次日，不是当天")
     void dailyBucketsUseLocalZone() {

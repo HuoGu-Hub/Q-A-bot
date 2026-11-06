@@ -12,6 +12,12 @@ export const GUARD_META: Record<string, GuardMeta> = {
     blocked: false,
     question: true,
   },
+  auto: {
+    label: '主动接话',
+    hint: '没有点名，但按意图和概率接了一条',
+    blocked: false,
+    question: false,
+  },
   drop: {
     label: '未响应',
     hint: '没 @ 机器人 / 黑名单 / 被 Guard 拦下 / 预算超限',

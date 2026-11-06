@@ -37,6 +37,8 @@ public class QaStoreRepository {
                           boolean kbEnabled, int hitCount, double topScore, double bestCosine,
                           double bestCosineRaw, String sources, String retrievedJson,
                           int answerLen, boolean answerEmpty, String guardAction,
+                          String triggerIntent, double triggerChance, double triggerRoll,
+                          String triggerReason,
                           long retrieveMs, long llmMs, long totalMs, String model) {
     }
 
@@ -57,8 +59,9 @@ public class QaStoreRepository {
                     + " kb_enabled, hit_count, top_score, best_cosine, best_cosine_raw,"
                     + " sources, retrieved,"
                     + " answer_len, answer_empty, guard_action,"
+                    + " trigger_intent, trigger_chance, trigger_roll, trigger_reason,"
                     + " retrieve_ms, llm_ms, total_ms, model)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     private static final String INSERT_RAW =
             "INSERT INTO qa_raw (id, question, quote_text, answer) VALUES (?,?,?,?)";
@@ -100,6 +103,10 @@ public class QaStoreRepository {
                 + " answer_len   INTEGER,"
                 + " answer_empty INTEGER,"
                 + " guard_action TEXT,"
+                + " trigger_intent TEXT,"
+                + " trigger_chance REAL,"
+                + " trigger_roll REAL,"
+                + " trigger_reason TEXT,"
                 + " retrieve_ms  INTEGER,"
                 + " llm_ms       INTEGER,"
                 + " total_ms     INTEGER,"
@@ -147,6 +154,11 @@ public class QaStoreRepository {
         // 但老库里可能还有 source='plaza' 的行，列保留用于历史统计；
         // 全新库没有这一列时补上，避免写问答行报 no such column。
         addColumnIfMissing("qa_stat", "source", "TEXT DEFAULT 'chat'");
+        // 2026-11-06：触发审计。老库自动补列，记录页才能回答"为什么没回"
+        addColumnIfMissing("qa_stat", "trigger_intent", "TEXT");
+        addColumnIfMissing("qa_stat", "trigger_chance", "REAL");
+        addColumnIfMissing("qa_stat", "trigger_roll", "REAL");
+        addColumnIfMissing("qa_stat", "trigger_reason", "TEXT");
 
         jdbc.execute("PRAGMA user_version = 1");
     }
@@ -175,7 +187,8 @@ public class QaStoreRepository {
                         s.ts(), s.groupId(), s.userId(), s.messageId(), s.imageCount(),
                         s.kbEnabled(), s.hitCount(), s.topScore(), s.bestCosine(), s.bestCosineRaw(),
                         s.sources(), s.retrievedJson(), s.answerLen(), s.answerEmpty(),
-                        s.guardAction(), s.retrieveMs(), s.llmMs(), s.totalMs(), s.model());
+                        s.guardAction(), s.triggerIntent(), s.triggerChance(), s.triggerRoll(),
+                        s.triggerReason(), s.retrieveMs(), s.llmMs(), s.totalMs(), s.model());
 
                 RawRow raw = rec.raw();
                 jdbc.update(INSERT_RAW, id, raw.question(), raw.quoteText(), raw.answer());

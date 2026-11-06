@@ -44,7 +44,8 @@ function onDays(v: string) {
 }
 
 const SCOPE_OPTIONS = [
-  { value: 'questions', label: '只看提问' },
+  { value: 'replied', label: '已回复' },
+  { value: 'dropped', label: '未触发' },
   { value: 'all', label: '全部消息' },
 ]
 
@@ -61,7 +62,7 @@ const recordsLoading = computed(() => records.value?.isLoading() ?? false)
 const retrievalLoading = computed(() => retrieval.value?.isLoading() ?? false)
 const autoOn = computed(() => overview.value?.autoValue() ?? false)
 const updatedAt = computed(() => overview.value?.updatedAt() ?? '')
-const scope = computed(() => records.value?.scopeValue() ?? 'questions')
+const scope = computed(() => records.value?.scopeValue() ?? 'replied')
 </script>
 
 <template>

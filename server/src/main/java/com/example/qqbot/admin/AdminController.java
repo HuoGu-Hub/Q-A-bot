@@ -400,21 +400,24 @@ public class AdminController {
     /**
      * 记录列表。
      *
-     * @param scope {@code questions}（默认）= 只看真正的提问（{@code guard_action='pass'}）；
-     *              {@code all} = 看全部消息（含没 @ 的闲聊），用于排查"为什么没回我"。
-     *              ⚠️ 原来这个端点没有任何 guard 过滤，于是「问答记录」页里 93%
-     *              是没 @ 机器人的闲聊，却挂着"去群里 @ 机器人问几个问题"的提示语。
+     * @param scope {@code replied}（默认）= 已回复，含提问与主动接话；
+     *              {@code dropped} = 未触发；{@code all} = 全部消息。
+     *              {@code questions} 是旧参数，按 replied 处理。
      */
     @GetMapping("/records")
     public RecordsView records(@RequestParam(defaultValue = "30") int days,
                                @RequestParam(defaultValue = "50") int limit,
                                @RequestParam(defaultValue = "0") int offset,
-                               @RequestParam(defaultValue = "questions") String scope) {
-        boolean onlyQuestions = !"all".equalsIgnoreCase(scope);
+                               @RequestParam(defaultValue = "replied") String scope) {
+        String mode = switch (scope == null ? "" : scope.toLowerCase(java.util.Locale.ROOT)) {
+            case "all" -> "all";
+            case "dropped" -> "dropped";
+            default -> "replied";
+        };
         return new RecordsView(
-                analytics.recentRecords(days, Math.min(limit, 500), Math.max(0, offset), onlyQuestions),
-                analytics.countRecords(days, onlyQuestions),
-                onlyQuestions ? "questions" : "all");
+                analytics.recentRecords(days, Math.min(limit, 500), Math.max(0, offset), mode),
+                analytics.countRecords(days, mode),
+                mode);
     }
 
     @GetMapping("/visits")
