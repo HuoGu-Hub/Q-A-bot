@@ -271,12 +271,12 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateMaxCols))
 .setting-block {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
-.setting-block + .setting-block { margin-top: 4px; }
-.setting-row { display: grid; gap: 4px 8px; }
-.setting-row--short { grid-auto-rows: 118px; }
-.setting-row--tall { grid-auto-rows: 196px; }
+.setting-block + .setting-block { margin-top: 8px; }
+.setting-row { display: grid; gap: 8px; }
+.setting-row--short { grid-auto-rows: 120px; }
+.setting-row--tall { grid-auto-rows: 200px; }
 .ctrl-line {
   display: flex;
   align-items: center;

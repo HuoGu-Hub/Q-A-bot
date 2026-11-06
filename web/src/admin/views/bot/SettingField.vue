@@ -34,11 +34,18 @@ withDefaults(
   box-sizing: border-box;
   padding: 10px 12px;
   border-radius: var(--r-sm);
-  transition: background var(--dur-fast) var(--ease);
+  background: var(--stone-400);
+  border: 1px solid var(--edge-soft);
+  box-shadow: var(--bevel-shelf);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
 }
+.sf:hover { border-color: var(--edge); }
+.sf:focus-within { border-color: var(--hairline-lit); }
 .sf.changed {
-  background: var(--ember-veil);
-  box-shadow: inset 2px 0 0 var(--ember);
+  background: linear-gradient(var(--ember-veil), var(--ember-veil)), var(--stone-400);
+  border-color: var(--hairline-lit);
+  box-shadow: inset 2px 0 0 var(--ember), var(--bevel-shelf);
 }
 .sf-copy { min-width: 0; }
 .sf-label {
