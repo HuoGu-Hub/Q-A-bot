@@ -10,6 +10,7 @@ import java.util.List;
  * 概率回复配置 —— 对应 {@code app.reply.*}。
  *
  * <p>全部热生效：{@link com.example.qqbot.trigger.ReplyTrigger} 每轮现读。
+ * 频率交给 {@code app.guard.rate-limit.*}，这里只留概率、群白名单与每日上限。
  */
 @ConfigurationProperties(prefix = "app.reply")
 public class ReplyTriggerProperties implements TriggerPolicy {
@@ -20,13 +21,7 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 只在哪些群做概率回复，空表示所有群都不做；呼叫不受它限制 */
     private List<Long> enabledGroups = new ArrayList<>();
 
-    /** 同群最小间隔，0 = 不限 */
-    private int minGapSeconds = 0;
-
-    /** 同一人冷却，0 = 不限 */
-    private int userCooldownSeconds = 0;
-
-    /** 每群每日上限，0 = 不限 */
+    /** 每群每日主动回复上限，0 = 不限 */
     private int dailyMaxPerGroup = 40;
 
     /** 只记日志，不发送 */
@@ -48,24 +43,6 @@ public class ReplyTriggerProperties implements TriggerPolicy {
 
     public void setEnabledGroups(List<Long> enabledGroups) {
         this.enabledGroups = enabledGroups == null ? new ArrayList<>() : enabledGroups;
-    }
-
-    @Override
-    public int minGapSeconds() {
-        return minGapSeconds;
-    }
-
-    public void setMinGapSeconds(int minGapSeconds) {
-        this.minGapSeconds = minGapSeconds;
-    }
-
-    @Override
-    public int userCooldownSeconds() {
-        return userCooldownSeconds;
-    }
-
-    public void setUserCooldownSeconds(int userCooldownSeconds) {
-        this.userCooldownSeconds = userCooldownSeconds;
     }
 
     @Override

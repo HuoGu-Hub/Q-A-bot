@@ -86,7 +86,6 @@ class MessageRouterTriggerTest {
         replyTrigger = mock(ReplyTrigger.class);
 
         access = new Access();
-        access.setRequireMentionInGroup(false);
 
         when(identity.isSelf(any())).thenReturn(false);
         when(identity.getSelfId()).thenReturn(999L);

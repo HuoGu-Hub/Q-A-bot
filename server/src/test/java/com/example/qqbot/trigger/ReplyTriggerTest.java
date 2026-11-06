@@ -51,7 +51,7 @@ class ReplyTriggerTest {
         assertThat(t.decide(GROUP, USER, "这个在哪", false, false).reply()).isTrue();
         TriggerDecision second = t.decide(GROUP, USER + 1, "那个在哪", false, false);
         assertThat(second.reply()).isFalse();
-        assertThat(second.reason()).isEqualTo("节奏未到");
+        assertThat(second.reason()).isEqualTo("今日额度用完");
     }
 
     @Test
@@ -97,8 +97,7 @@ class ReplyTriggerTest {
         policy.probability = p;
         policy.shadow = shadow;
         policy.dailyMax = dailyMax;
-        ReplyPacer pacer = new ReplyPacer(policy, () -> 0L);
-        return new ReplyTrigger(policy, pacer, () -> roll);
+        return new ReplyTrigger(policy, new ReplyPacer(policy), () -> roll);
     }
 
     private static final class Policy implements TriggerPolicy {
@@ -108,8 +107,6 @@ class ReplyTriggerTest {
 
         @Override public double probability() { return probability; }
         @Override public List<Long> enabledGroups() { return List.of(GROUP); }
-        @Override public int minGapSeconds() { return 0; }
-        @Override public int userCooldownSeconds() { return 0; }
         @Override public int dailyMaxPerGroup() { return dailyMax; }
         @Override public boolean shadowMode() { return shadow; }
     }

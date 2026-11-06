@@ -141,10 +141,14 @@ tbody tr:last-child td { border-bottom:0; }
 
 <h1>概率回复方案</h1>
 
-<p class="lead">现在的回复只有两档：必须被 @，或者每条都回。概率回复补上中间那段：先判意图，再按概率决定要不要接话，最后用节奏闸限住频率。概率管愿不愿意，节奏管实际多快。</p>
+<p class="lead">现在的回复只有两档：必须被 @，或者每条都回。概率回复补上中间那段：先判意图，再按概率决定要不要接话，最后用每日上限兜住总量。概率管愿不愿意，频率交给现有的频率限制。</p>
 
 <blockquote class="ok">
 <p><b>已落地</b>：2026-11-06。下面保留设计取舍与默认值，具体行为以代码为准。</p>
+</blockquote>
+
+<blockquote class="warn">
+<p><b>2026-11-06 二次简化</b>：「群里必须 @」已删除，p=0 就是只回呼叫；同群间隔与用户冷却已删除，频率统一由「频率限制」管；「概率回复」组并入「回复行为」。</p>
 </blockquote>
 
 <h2 id="conclusion">先说结论</h2>
@@ -153,7 +157,7 @@ tbody tr:last-child td { border-bottom:0; }
 <li>新增 <code>app.reply.probability</code>，取值 0 到 1，默认 0，后台改完立即生效。</li>
 <li>它只在「群里必须 @」关闭后生效。@、正文含「飘雪喵」、引用机器人、私聊仍然直通，不受概率影响。</li>
 <li>概率不是逐条掷骰子：疑问按 p 回复，闲聊按 p 的二次曲线解禁，噪音永不回复。</li>
-<li>另加三道节奏闸，默认只启用每群每日上限；间隔与用户冷却保留为可调项，默认关闭。</li>
+<li>另加每群每日上限；频率不再单独配，统一由「频率限制」管。</li>
 <li>意图判定用本地关键词规则，不调模型。只有判定通过的消息才调模型。</li>
 <li>对当前「必须 @」的部署，默认 p=0，升级后行为不变。已经关闭「必须 @」、走「每条都回」的部署要先读迁移一节。</li>
 </ul>
@@ -232,14 +236,14 @@ chance(噪音) = 0</code></pre>
 <tr><td>0.2</td><td>20%</td><td>0</td><td>偶尔答一下问题</td></tr>
 <tr><td>0.5</td><td>50%</td><td>0</td><td>答一半问题，仍不闲聊</td></tr>
 <tr><td>0.8</td><td>80%</td><td>48%</td><td>开始接话</td></tr>
-<tr><td>1.0</td><td>100%</td><td>100%</td><td>最活跃，仍受节奏闸限制</td></tr>
+<tr><td>1.0</td><td>100%</td><td>100%</td><td>最活跃，仍受每日上限限制</td></tr>
 </tbody>
 </table>
 </div>
 
 <p>0.5 是闲聊的解禁点。低于 0.5 时闲聊概率为 0，正好对上「概率低只回疑问」；高于 0.5 后，闲聊概率随 p 线性上升，越接近 1 越愿意接话。只引入一个拐点，不再多一个「闲聊权重」旋钮。</p>
 
-<p>p=0 不等于完全静默。它的语义是「只回应呼叫」，具体是三种群聊呼叫：@、正文包含「飘雪喵」、引用机器人。私聊不走这套判定，仍按私聊策略。当你关掉「必须 @」、把 p 设 0 时，它相比原来的必须 @ 模式多了正文昵称与引用机器人两条呼叫路径。要完全静默，继续用「群里必须 @」。两个开关各管一件事：@ 开关管机器人存不存在，概率管它主动到什么程度。</p>
+<p>p=0 不等于完全静默。它的语义是「只回应呼叫」：@、正文包含「飘雪喵」、引用机器人。私聊不走这套判定，仍按私聊策略。p=0 就是唯一的呼叫模式，不再依赖「必须 @」开关。</p>
 
 <p>昵称为空时跳过包含判定，否则 <code>contains("")</code> 会把每条消息都当成呼叫。
 
@@ -265,8 +269,8 @@ chance(噪音) = 0</code></pre>
 <li><b>指令</b>：斜杠开头先走指令，不受概率影响。指令本来就该秒回。</li>
 <li><b>呼叫判定</b>：@、文本 @、正文含「飘雪喵」先在本地判掉，命中直接放行到 Guard。私聊在准入阶段按策略处理，不进入这套判定。</li>
 <li><b>引用解析</b>：还没命中呼叫、且消息带引用时，取一次被引用消息；引用的是机器人直接放行，结果留给后面的回复复用。</li>
-<li><b>触发判定</b>：意图分类 → 概率抽样 → 节奏闸。任一步不通过就静默 <code>drop</code>。</li>
-<li><b>影子模式</b>：判定通过也只记日志，不发送。仍然走节奏闸，统计的是真实会发出去的条数。</li>
+<li><b>触发判定</b>：意图分类 → 概率抽样 → 每日上限。任一步不通过就静默 <code>drop</code>。</li>
+<li><b>影子模式</b>：判定通过也只记日志，不发送。仍然走每日上限，统计的是真实会发出去的条数。</li>
 <li><b>Guard 五层 + 预算</b>：顺序不变，仍然在调模型之前。</li>
 <li><b>生成与发送</b>：闲聊不检索，疑问照常检索，回复走同一个出站口。</li>
 </ol>
@@ -347,33 +351,29 @@ chance(噪音) = 0</code></pre>
   reply:
     probability: 0.0
     enabled-groups: [209127588]
-    min-gap-seconds: 0
-    user-cooldown-seconds: 0
     daily-max-per-group: 40
     shadow-mode: false</code></pre>
 
-<h3>三道闸</h3>
+<h3>每日上限</h3>
 
 <div class="table-wrap">
 <table>
 <thead><tr><th>配置</th><th>默认</th><th>作用</th><th>0 的含义</th></tr></thead>
 <tbody>
-<tr><td><code>app.reply.min-gap-seconds</code></td><td>0</td><td>同一个群两条主动回复之间的最小间隔</td><td>不限</td></tr>
-<tr><td><code>app.reply.user-cooldown-seconds</code></td><td>0</td><td>同一个人两次主动回复之间的间隔</td><td>不限</td></tr>
 <tr><td><code>app.reply.daily-max-per-group</code></td><td>40</td><td>每个群每天主动回复的上限</td><td>不限</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>这三项独立于限流，不是重复造轮子。限流是安全网，触发时会回「别急呀」；对于一条不是呼叫的消息，收到限流提示本身就是骚扰。节奏闸只做一件事：不满足就静默丢弃，不让用户看到任何提示。</p>
+<p>每日上限独立于限流：限流是安全网，触发时会回「别急呀」；对于一条不是呼叫的消息，收到限流提示本身就是骚扰。每日上限只做一件事：超了就静默丢弃，不让用户看到任何提示。</p>
 
-<p>间隔与用户冷却默认 0，等于不做额外限制。实际下限仍由限流兜住：每群每分钟 10 条，每人每 60 秒 1 条。觉得回复太集中，后台把这两项调回来即可，不需要改代码。</p>
+
 
 <p>白名单管的是主动概率回复，不管呼叫。@、正文昵称、引用机器人在任何群都照常回应；没列进白名单的群，非呼叫消息一律静默。所以空列表的效果是「所有群都只回呼叫」，不是「所有群都不理人」。</p>
 
-<p>判定器先看群是否在白名单里。不在就按「群未启用」静默丢弃，不做分类、不做抽样、不占节奏额度。</p>
+<p>判定器先看群是否在白名单里。不在就按「群未启用」静默丢弃，不做分类、不做抽样、不占每日额度。</p>
 
-<p>呼叫不占用节奏闸，也不更新时间戳。否则会出现「@ 了机器人，却因为它刚随机插过话而被挡」这种荒唐情况。只有主动回复会更新时间戳和每日计数。</p>
+<p>呼叫不占用每日额度，也不更新计数。否则会出现「@ 了机器人，却因为它刚随机插过话而被挡」这种荒唐情况。只有主动回复会更新每日计数。</p>
 
 <p>并发下用一次原子占位完成「检查 + 记录」。多个线程同时判定时，最多多回一条，不会超发。代价是判定通过但后续被 Guard 拦下的那条也占了一个名额，这个损耗可以接受，因为主动回复被 Guard 拦下的概率很低。</p>
 
@@ -390,7 +390,7 @@ chance(噪音) = 0</code></pre>
 <thead><tr><th>层</th><th>文件</th><th>改动</th></tr></thead>
 <tbody>
 <tr><td>判定内核</td><td><code>trigger/ReplyIntent.java</code><br><code>trigger/ReplySignals.java</code><br><code>trigger/TriggerDecision.java</code></td><td>新增。纯函数、无 Spring、无 IO</td></tr>
-<tr><td>判定器</td><td><code>trigger/ReplyTrigger.java</code><br><code>trigger/ReplyPacer.java</code><br><code>trigger/TriggerPolicy.java</code></td><td>新增。概率曲线、抽样、节奏闸、只读配置视图</td></tr>
+<tr><td>判定器</td><td><code>trigger/ReplyTrigger.java</code><br><code>trigger/ReplyPacer.java</code><br><code>trigger/TriggerPolicy.java</code></td><td>新增。概率曲线、抽样、每日上限、只读配置视图</td></tr>
 <tr><td>配置</td><td><a href="../../server/src/main/java/com/example/qqbot/config/SettingsConfig.java">SettingsConfig</a><br><a href="../../server/src/main/java/com/example/qqbot/QqbotServerApplication.java">QqbotServerApplication</a></td><td>注册 <code>app.reply</code> 根，启用 <code>ReplyTriggerProperties</code></td></tr>
 <tr><td>配置中心</td><td><a href="../../server/src/main/java/com/example/qqbot/settings/SettingsWhitelist.java">SettingsWhitelist</a><br><a href="../../server/src/main/java/com/example/qqbot/settings/SettingsService.java">SettingsService</a></td><td>新增「概率回复」一组，概率限 0 到 1</td></tr>
 <tr><td>后台界面</td><td><a href="../../web/src/admin/views/bot/SettingsPanel.vue">SettingsPanel.vue</a></td><td>新增 <code>ratio</code> 类型：滑块加两位小数</td></tr>
@@ -423,7 +423,7 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     private boolean shadowMode = false;
 }</code></pre>
 
-<p>后台的「回复行为」分组旁边新增「概率回复」分组，六项可写。概率项的提示写明「仅当群里必须 @ 关闭时生效」，避免改完没反应。概率用 <code>ratio</code> 类型渲染成滑块，前端显示两位小数；服务端再做一次 0 到 1 的校验，越界直接拒绝并返回错误文案。</p>
+<p>后台「回复行为」分组里新增四个主动回复项。概率用 <code>ratio</code> 类型渲染成滑块，前端显示两位小数；服务端再做一次 0 到 1 的校验，越界直接拒绝并返回错误文案。频率不再单独配：主动回复与普通提问共用「频率限制」。</p>
 
 <blockquote class="warn">
 <p><b>列表类型有个现成的坑</b>：<code>SettingsService.convert</code> 把列表统一转成 <code>List&lt;String&gt;</code>，反射写进 <code>List&lt;Long&gt;</code> 字段不会报错，但之后 <code>contains(Long)</code> 永远为 false。私聊白名单已经是这个形状。群白名单要么声明成 <code>List&lt;String&gt;</code> 并在判定侧按字符串比较，要么把 <code>convert</code> 改成按字段泛型转换。这次必须选后者，否则填了 <code>209127588</code> 也不会命中，白名单看起来生效、实际一条都放不进来。</p>
@@ -540,11 +540,11 @@ reply(req, question, replyMode, trigger, quoted);</code></pre>
 
 <p><code>app.guard.enabled=false</code> 时整条 Guard 管线跳过，概率判定也不生效，等于回复全部。概率寄居在管线里，这是它的边界；要概率生效，保持安全中间层开启。</p>
 
-<p>「回」表示通过概率判定，仍然要过节奏闸、Guard 和预算。p=1 不是「每条都回」，而是「每条都参与抽样」，实际频率由节奏闸决定。把三道闸都设 0，p=1 才接近原来的「每条都回」。</p>
+<p>「回」表示通过概率判定，仍然要过每日上限、Guard 和预算。p=1 不是「每条都回」，而是「每条都参与抽样」，实际频率由频率限制与每日上限决定。</p>
 
 <h3>迁移</h3>
 
-<p>默认 p=0 只对「必须 @」的部署是无行为变化。如果某个部署已经关闭「必须 @」、走「每条都回」，升级后会从「每条都回」变成「只回呼叫」。升级前把 p 设成 1，三道闸都设 0，并把原来走「每条都回」的群填进 <code>enabled-groups</code>，才接近原来的行为。空列表等于所有群都不做概率回复。</p>
+<p>升级后 p=0 就是只回呼叫。如果某个部署原来走「每条都回」，升级前把 p 设成 1，并把群填进 <code>enabled-groups</code>；每日上限设 0 才接近原来的行为。空列表等于所有群都不主动回复。</p>
 
 <p>差异在噪音档：纯图片、纯表情、两个字以内不再触发兜底话术，而是直接静默。这是有意的，旧行为在 「每条都回」 下会给每张图回一句「看不了图」，本身就是噪音。</p>
 
@@ -582,7 +582,7 @@ reply(req, question, replyMode, trigger, quoted);</code></pre>
 <tr><td>统计污染</td><td>主动回复不是提问</td><td><code>auto</code> 口径；提问指标继续只看 <code>pass</code></td></tr>
 <tr><td>限流话术误发</td><td>不是呼叫的消息收到「别急呀」</td><td>Guard 的 <code>Reply</code> 对插话统一降级为 <code>Drop</code></td></tr>
 <tr><td>排队提示误发</td><td>队列超时与拒绝发生在触发判定之前</td><td>极端拥塞才会发生；后续可在 <code>notifyOverload</code> 前补一次呼叫判定</td></tr>
-<tr><td>并发超发</td><td>多线程同时判定</td><td>节奏闸原子占位；最多多一条</td></tr>
+<tr><td>并发超发</td><td>多线程同时判定</td><td>每日上限原子占位；最多多一条</td></tr>
 <tr><td>判定误伤</td><td>关键词规则不认识反讽</td><td>失败关闭；影子模式抽查；p 低时误伤代价小</td></tr>
 </tbody>
 </table>

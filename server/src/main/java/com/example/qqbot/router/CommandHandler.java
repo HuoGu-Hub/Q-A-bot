@@ -51,7 +51,7 @@ import java.util.Map;
  * </ul>
  *
  * <h2>群里 @ 与否不在这里判</h2>
- * 那件事只有一处实现：准入设置 {@code app.guard.access.require-mention-in-group}。
+ * 那件事只有一处实现：{@code guard.Access.mentionSatisfied}。
  * 路由层先按它决定要不要调用本类，所以这里不再自带一份判断 ——
  * 同一个语义留两个开关，就会出现「问答回了、指令没回」这种自相矛盾的状态。
  */

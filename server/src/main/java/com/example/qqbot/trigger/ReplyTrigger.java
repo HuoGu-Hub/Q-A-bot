@@ -12,7 +12,7 @@ import java.util.function.DoubleSupplier;
 /**
  * 概率回复的判定器。
  *
- * <p>顺序固定：群白名单 → 意图分类 → 概率 → 节奏 → 抽样 → 占位。
+ * <p>顺序固定：群白名单 → 意图分类 → 概率 → 每日上限 → 抽样 → 占位。
  * 任何一步不通过都返回 {@code reply=false}，由 Guard 的 trigger 阶段静默丢弃。
  * **保证不抛异常**：判定挂掉时按噪音处理，绝不能因为判定影响正常提问。
  */
@@ -41,9 +41,9 @@ public class ReplyTrigger {
 
     @PostConstruct
     void logConfig() {
-        log.info("[TRIGGER] 概率回复：p={} groups={} minGap={}s userCooldown={}s dailyMax={} shadow={}",
-                policy.probability(), policy.enabledGroups(), policy.minGapSeconds(),
-                policy.userCooldownSeconds(), policy.dailyMaxPerGroup(), policy.shadowMode());
+        log.info("[TRIGGER] 概率回复：p={} groups={} dailyMax={} shadow={}",
+                policy.probability(), policy.enabledGroups(), policy.dailyMaxPerGroup(),
+                policy.shadowMode());
     }
 
     public TriggerDecision decide(long groupId, long userId, String text,
@@ -60,8 +60,8 @@ public class ReplyTrigger {
             if (chance <= 0) {
                 return TriggerDecision.no(intent, "概率为 0");
             }
-            if (!pacer.allows(groupId, userId)) {
-                return TriggerDecision.no(intent, "节奏未到");
+            if (!pacer.allows(groupId)) {
+                return TriggerDecision.no(intent, "今日额度用完");
             }
             double roll = random.getAsDouble();
             if (roll >= chance) {
@@ -76,7 +76,7 @@ public class ReplyTrigger {
                         groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
                 return would;
             }
-            if (!pacer.tryReserve(groupId, userId)) {
+            if (!pacer.tryReserve(groupId)) {
                 return TriggerDecision.no(intent, "并发占位失败");
             }
             TriggerDecision yes = TriggerDecision.yes(intent, chance, roll);

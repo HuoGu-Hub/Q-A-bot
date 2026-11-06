@@ -81,9 +81,9 @@ flowchart TD
 |---|---|---|
 | 接入 | `OneBotEventController` | 去重后立即返回 204，处理放线程池 |
 | 分诊 | `EventDispatcher` | 正文以 `/` 开头进命令池，其余进问答池 |
-| 准入 | `Access` | 群聊必须 @、私聊策略、群与用户黑名单 |
+| 准入 | `Access` | 私聊策略、群与用户黑名单；指令在群里的 @ 判定 |
 | 命令 | `CommandHandler` | 话术、动作、智能问答三类分流 |
-| 触发 | `ReplyTriggerStage` + `ReplyTrigger` | 呼叫直通；疑问按 p、闲聊从 0.5 解禁；节奏闸与影子模式 |
+| 触发 | `ReplyTriggerStage` + `ReplyTrigger` | 呼叫直通；疑问按 p、闲聊从 0.5 解禁；每日上限与影子模式 |
 | 安全 | `GuardPipeline` | access → trigger → rate-limit → content-gate → inbound-words |
 | 预算 | `BudgetGuard` | 用户、群、全局每日额度与 token 上限 |
 | 意图 | `IntentPlanner` | 社交、元问题、边界外跳过检索；纠正标记；失败回默认 |

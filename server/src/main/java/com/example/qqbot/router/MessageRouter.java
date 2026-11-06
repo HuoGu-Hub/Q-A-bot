@@ -305,7 +305,7 @@ public class MessageRouter {
         //      理由：/help 不该等模型 3 秒，也不该受"每分钟只能问一次"的限流。
         //    · 智能问答类**只登记**，继续往下走 Guard 与成本预算（它会真的调模型）。
         //
-        //    ⚠️ @ 判定复用准入那一份设置，指令不再自带 require-mention：
+        //    ⚠️ @ 判定复用准入那一份设置，指令在群里必须 @：
         //    同一个语义留两个开关，会出现「问答回了、指令没回」这种自相矛盾的状态。
         boolean mentioned = !event.isGroupMessage()
                 || textMention
@@ -323,7 +323,7 @@ public class MessageRouter {
         // ③ 触发判定（在 Guard 之前，只读）
         //    @、文本 @、正文昵称、引用机器人都是「呼叫」，不受概率影响。
         //    引用必须在这里取一次：引用段只有 ID，要 get_msg 才知道是不是机器人。
-        boolean probabilityMode = event.isGroupMessage() && !guardAccess.isRequireMentionInGroup();
+        boolean probabilityMode = event.isGroupMessage();
         // Guard 关闭时整套触发都不跑：既不抢答，也不消耗节奏额度
         boolean triggerEnabled = guardPipeline != null && guardPipeline.isEnabled();
         String selfName = identity.getSelfName();

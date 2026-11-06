@@ -30,9 +30,8 @@ package com.example.qqbot.command;
  * 拆成 3 个接口只会让 {@code CommandController}（后台要展示全部）拿 3 个参数。
  *
  * <h2>为什么这里没有"群里是否必须 @"</h2>
- * 那条规则属于<b>准入</b>，与普通问答共用一份实现：
- * {@code app.guard.access.require-mention-in-group}，判法在 {@code guard.Access}。
- * 指令不再自带第二份开关。</p>
+ * 那条规则属于<b>准入</b>，判法在 {@code guard.Access}：
+ * 指令在群里必须 @，不再自带第二份开关。</p>
  * 将来某个消费者只用一两项、而字段继续膨胀时再拆：那时是加一个接口 + 改一个构造器。
  *
  * <p><b>方法名保留 {@code isXxx}/{@code getXxx}</b>：这样 {@code CommandProperties}

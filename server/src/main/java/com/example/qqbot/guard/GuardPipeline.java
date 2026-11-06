@@ -81,10 +81,6 @@ public class GuardPipeline {
         }
         log.info("[GUARD] 安全中间层已启用");
         log.info("[GUARD]   顺序        ：access -> trigger -> rate-limit -> content-gate -> inbound-words");
-        log.info("[GUARD]   群聊必须 @  ：{}", access.isRequireMentionInGroup());
-        log.info("[GUARD]   概率回复    ：{}", access.isRequireMentionInGroup()
-                ? "关闭（仍按必须 @ 处理）"
-                : "见 [TRIGGER] 启动日志");
         log.info("[GUARD]   私聊策略    ：{}", access.getPrivateChatPolicy());
         log.info("[GUARD]   限流        ：每群 {} 条/分钟，每人在群内 {} 次/{} 秒，超限处理={}",
                 rateLimit.getPerGroupPerMinute(), rateLimit.getPerUserPerMinute(),

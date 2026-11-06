@@ -199,8 +199,7 @@ app:
 
   # ============================ 指令系统 ============================
   # 命令一律以 "/" 开头，命令名就是路径：/set /output。
-  # 群里是否必须 @ 机器人【不在这里配】—— 见 app.guard.access.require-mention-in-group，
-  # 指令与普通问答共用那一份判定，不留第二个开关。
+  # 指令在群里必须 @ 机器人，由 Access 统一判定，不单独配开关。
   # ⚠️ 这些配置都是【热生效】的 —— 后台改完立即起作用，不用重启。
   commands:
     enabled: true
@@ -283,7 +282,7 @@ app:
     request-timeout-ms: 10000
 
   # ============================ 安全中间层 ============================
-  # 判定顺序：access -> mention -> rate-limit -> content-gate -> inbound-words -> 大模型
+  # 判定顺序：access -> trigger -> rate-limit -> content-gate -> inbound-words -> 大模型
   # 前五层全部零成本，跑完才轮到花钱的模型。
   guard:
     # 总开关：关掉后所有限制失效（仅调试用）
@@ -293,8 +292,8 @@ app:
 
     # ---------- 准入控制：谁有资格触发 ----------
     access:
-      # 群里必须 @ 机器人才响应（防炸群的关键）
-      require-mention-in-group: true
+      # 群聊能不能回由 app.reply.probability 决定：0 = 只回呼叫。
+      # 指令在群里仍然必须 @，由 Access.mentionSatisfied 统一判定。
       # 私聊策略：all / whitelist / off
       # ⚠️ 必须加引号！YAML 会把不加引号的 off 解析成布尔 false，而不是字符串 "off"
       private-chat-policy: "off"
@@ -306,6 +305,7 @@ app:
       user-blacklist: []
 
     # ---------- 频率限制：多久能回一次 ----------
+    # 提问与主动回复共用这一套；主动回复没有单独的间隔/冷却。
     rate-limit:
       enabled: true
       # 同一个群每分钟最多被回复几条

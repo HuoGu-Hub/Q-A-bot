@@ -17,12 +17,6 @@ public interface TriggerPolicy {
     /** 只在哪些群做概率回复；空表示所有群都不做 */
     List<Long> enabledGroups();
 
-    /** 同一个群两条主动回复的最小间隔，0 = 不限 */
-    int minGapSeconds();
-
-    /** 同一个人两次主动回复的最小间隔，0 = 不限 */
-    int userCooldownSeconds();
-
     /** 每个群每天主动回复上限，0 = 不限 */
     int dailyMaxPerGroup();
 

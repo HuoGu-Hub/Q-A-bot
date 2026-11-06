@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 准入规则 —— **谁能用、在哪儿能用**。群聊是否必须 @、私聊策略、三张黑/白名单。
+ * 准入规则 —— **谁能用、在哪儿能用**。私聊策略、三张黑/白名单，以及指令在群里的 @ 判定。
  *
  * <h2>为什么不在 {@code config} 包里（2026-10-02 挪过来）</h2>
  * 它是<b>安全中间层的领域词汇</b>，只是碰巧从 {@code app.guard.*} 绑定过来。
@@ -27,9 +27,6 @@ public class Access {
     /** 明确表示关闭的值。注意 "false" 是必须的：YAML 里写 off 会被解析成布尔 false */
     private static final Set<String> PRIVATE_OFF = Set.of("off", "false", "no", "none", "disabled", "close", "");
 
-    /** 群聊里是否必须 @ 机器人才响应 */
-    private boolean requireMentionInGroup = true;
-
     /** 私聊策略：all / whitelist / off。默认 off —— 只允许在群里聊 */
     private String privateChatPolicy = "off";
 
@@ -41,14 +38,6 @@ public class Access {
 
     /** 用户黑名单：这些人永不响应 */
     private List<Long> userBlacklist = new ArrayList<>();
-
-    public boolean isRequireMentionInGroup() {
-        return requireMentionInGroup;
-    }
-
-    public void setRequireMentionInGroup(boolean requireMentionInGroup) {
-        this.requireMentionInGroup = requireMentionInGroup;
-    }
 
     public String getPrivateChatPolicy() {
         return privateChatPolicy;
@@ -125,18 +114,16 @@ public class Access {
     }
 
     /**
-     * 群聊里这条消息是否满足 @ 要求。
+     * 指令在群里是否满足 @ 要求。
      *
-     * <h2>为什么要有这个方法</h2>
-     * 指令跑在 Guard 之前，拿不到 {@code ReplyTriggerStage} 的判定结果，
-     * 又必须和它得出同一个结论。抽成一个方法给两边共用，
-     * 总比在两个地方各读一次开关强 —— 那正是「同一条消息两个结论」的来源。
+     * <p>指令跑在 Guard 之前，不能等 {@code ReplyTriggerStage} 的判定；这里只认
+     * @ 或正文 @，不认昵称与引用。普通回复由 trigger 阶段统一判定，两边各管各的。
      *
      * @param inGroup   是不是群聊；私聊恒为满足
      * @param mentioned 群里是否 @ 了机器人
      */
     public boolean mentionSatisfied(boolean inGroup, boolean mentioned) {
-        return !inGroup || !requireMentionInGroup || mentioned;
+        return !inGroup || mentioned;
     }
 
     /** 私聊策略是不是一个认识的值。不认识的会在启动时告警，行为按【关闭私聊】 */
