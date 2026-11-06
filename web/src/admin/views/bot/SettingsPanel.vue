@@ -198,19 +198,19 @@ onMounted(load)
   gap: var(--sp-3);
 }
 
-/* 两列卡片，卡片内再两列字段：一屏能看到更多配置 */
+/* 一组一行；展开后组内三列字段，横向吃满，纵向更短 */
 .settings-board {
-  columns: 2;
-  column-gap: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 .group-card {
-  break-inside: avoid;
-  margin: 0 0 var(--sp-3);
+  margin: 0;
 }
 
 .setting-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px 8px;
 }
 
@@ -229,8 +229,8 @@ onMounted(load)
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 1180px) {
-  .settings-board { columns: 1; }
+@media (max-width: 1100px) {
+  .setting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
