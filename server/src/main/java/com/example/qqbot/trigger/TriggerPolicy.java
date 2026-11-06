@@ -20,6 +20,11 @@ public interface TriggerPolicy {
     /** 每个群每天主动回复上限，0 = 不限 */
     int dailyMaxPerGroup();
 
+    /** 主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @ */
+    default double mentionFreeThreshold() {
+        return 0.0;
+    }
+
     /** 低概率档的关键词；命中任意一个就回复 */
     default List<String> keywords() {
         return List.of();

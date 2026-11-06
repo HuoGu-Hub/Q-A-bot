@@ -38,6 +38,8 @@ public class SettingsWhitelist {
             // 频率不在这里配 —— 主动回复与普通提问共用「频率限制」。
             new Item("app.reply.probability", "主动回复概率", "回复行为",
                     "ratio", "0=只回呼叫；<0.3=关键词/严格疑问；<0.6=疑问；<0.8=低频闲聊；≥0.8=高频", 0.0),
+            new Item("app.reply.mention-free-threshold", "免 @ 阈值", "回复行为",
+                    "ratio", "主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @", 0.0),
             new Item("app.reply.keywords", "触发关键词", "回复行为",
                     "list", "一行一个词；命中任意词即回复，p=0 时仍只回呼叫", List.of()),
             new Item("app.reply.enabled-groups", "主动回复的群", "回复行为",

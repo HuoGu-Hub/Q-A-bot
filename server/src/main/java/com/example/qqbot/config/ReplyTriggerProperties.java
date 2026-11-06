@@ -21,6 +21,9 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 只在哪些群做概率回复，空表示所有群都不做；呼叫不受它限制 */
     private List<Long> enabledGroups = new ArrayList<>();
 
+    /** 主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @ */
+    private double mentionFreeThreshold = 0.0;
+
     /** 低概率档的关键词；命中任意一个就回复 */
     private List<String> keywords = new ArrayList<>();
 
@@ -46,6 +49,15 @@ public class ReplyTriggerProperties implements TriggerPolicy {
 
     public void setEnabledGroups(List<Long> enabledGroups) {
         this.enabledGroups = enabledGroups == null ? new ArrayList<>() : enabledGroups;
+    }
+
+    @Override
+    public double mentionFreeThreshold() {
+        return mentionFreeThreshold;
+    }
+
+    public void setMentionFreeThreshold(double mentionFreeThreshold) {
+        this.mentionFreeThreshold = Math.max(0.0, Math.min(1.0, mentionFreeThreshold));
     }
 
     @Override

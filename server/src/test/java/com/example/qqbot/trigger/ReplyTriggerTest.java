@@ -98,6 +98,22 @@ class ReplyTriggerTest {
     }
 
     @Test
+    @DisplayName("免@阈值：p 低于阈值时非呼叫消息一律不回")
+    void mentionThreshold() {
+        ReplyTrigger low = triggerAt(0.2, 0.5, false, 0, 0.1);
+        TriggerDecision d = low.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false);
+        assertThat(d.reply()).isFalse();
+        assertThat(d.reason()).isEqualTo("低于免@阈值");
+        assertThat(d.intent()).isEqualTo(ReplyIntent.QUESTION);
+
+        ReplyTrigger at = triggerAt(0.5, 0.5, false, 0, 0.1);
+        assertThat(at.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false).reply()).isTrue();
+
+        ReplyTrigger keyword = triggerAt(0.2, 0.5, false, 0, 0.1, "煤矿");
+        assertThat(keyword.decide(GROUP, USER, "煤矿", false, false).reply()).isFalse();
+    }
+
+    @Test
     @DisplayName("p=1：闲聊也必回，仍受每日上限")
     void pOne() {
         ReplyTrigger t = trigger(1.0, false, 1, 0.99);
@@ -154,8 +170,14 @@ class ReplyTriggerTest {
 
     private static ReplyTrigger trigger(double p, boolean shadow, int dailyMax, double roll,
                                         String... keywords) {
+        return triggerAt(p, 0.0, shadow, dailyMax, roll, keywords);
+    }
+
+    private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
+                                          int dailyMax, double roll, String... keywords) {
         Policy policy = new Policy();
         policy.probability = p;
+        policy.mentionFree = threshold;
         policy.shadow = shadow;
         policy.dailyMax = dailyMax;
         policy.keywords = List.of(keywords);
@@ -166,12 +188,14 @@ class ReplyTriggerTest {
         double probability;
         boolean shadow;
         int dailyMax;
+        double mentionFree;
         List<String> keywords = List.of();
 
         @Override public double probability() { return probability; }
         @Override public List<Long> enabledGroups() { return List.of(GROUP); }
         @Override public int dailyMaxPerGroup() { return dailyMax; }
         @Override public boolean shadowMode() { return shadow; }
+        @Override public double mentionFreeThreshold() { return mentionFree; }
         @Override public List<String> keywords() { return keywords; }
     }
 }

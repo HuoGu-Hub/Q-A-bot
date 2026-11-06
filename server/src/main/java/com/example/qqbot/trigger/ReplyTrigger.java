@@ -13,8 +13,8 @@ import java.util.function.DoubleSupplier;
 /**
  * 概率回复的判定器。
  *
- * <p>顺序固定：群白名单 → 关键词 → 概率档位 → 意图与严格度 → 闲聊抽样
- * → 每日上限 → 影子 / 占位。
+ * <p>顺序固定：群白名单 → 免@阈值 → 关键词 → 概率档位 → 意图与严格度
+ * → 闲聊抽样 → 每日上限 → 影子 / 占位。
  * 任何一步不通过都返回 {@code reply=false}，由 Guard 的 trigger 阶段静默丢弃。
  * **保证不抛异常**：判定挂掉时按噪音处理，绝不能因为判定影响正常提问。
  */
@@ -49,9 +49,9 @@ public class ReplyTrigger {
 
     @PostConstruct
     void logConfig() {
-        log.info("[TRIGGER] 概率回复：p={} groups={} dailyMax={} shadow={} keywords={}",
-                policy.probability(), policy.enabledGroups(), policy.dailyMaxPerGroup(),
-                policy.shadowMode(), policy.keywords());
+        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={}",
+                policy.probability(), policy.mentionFreeThreshold(), policy.enabledGroups(),
+                policy.dailyMaxPerGroup(), policy.shadowMode(), policy.keywords());
     }
 
     public TriggerDecision decide(long groupId, long userId, String text,
@@ -65,12 +65,17 @@ public class ReplyTrigger {
                 return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0, "概率为 0");
             }
 
+            ReplyIntent intent = ReplySignals.classify(text, hasImage, atOther);
+
+            // 主动回复概率没到阈值时，只有 @ / 昵称 / 引用这类呼叫能触发
+            if (p < clamp(policy.mentionFreeThreshold())) {
+                return TriggerDecision.no(intent, 0.0, 0.0, "低于免@阈值");
+            }
+
             // 关键词是低概率档唯一的非疑问入口；p=0 时仍只回呼叫
             if (keywordHit(text)) {
                 return accept(groupId, userId, text, ReplyIntent.KEYWORD, 1.0, 0.0, "关键词");
             }
-
-            ReplyIntent intent = ReplySignals.classify(text, hasImage, atOther);
 
             if (intent == ReplyIntent.QUESTION) {
                 boolean strict = ReplySignals.isStrictQuestion(text);

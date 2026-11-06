@@ -248,6 +248,8 @@ chance(噪音) = 0</code></pre>
 
 <p>0.6 是闲聊的起点：0.6-0.8 只低频插话，0.8 起进入高频。0.3 是疑问的放宽点：低于 0.3 只认句首疑问或问号，0.3 起句中的疑问词也算。每一档都包含低档的全部条件。</p>
 
+<p>免@阈值是另一道门：主动回复概率低于它时，所有非呼叫消息都要求 @，档位不生效；概率达到阈值后，上面的档位才会放行。默认 0，表示始终允许免 @。</p>
+
 <p>p=0 不等于完全静默。它的语义是「只回应呼叫」：@、正文包含「飘雪喵」、引用机器人。私聊不走这套判定，仍按私聊策略。p=0 就是唯一的呼叫模式，不再依赖「必须 @」开关。</p>
 
 <p>昵称为空时跳过包含判定，否则 <code>contains("")</code> 会把每条消息都当成呼叫。
@@ -344,6 +346,7 @@ chance(噪音) = 0</code></pre>
 <thead><tr><th>配置</th><th>默认</th><th>作用</th></tr></thead>
 <tbody>
 <tr><td><code>app.reply.probability</code></td><td>0</td><td>参与档位，0 到 1</td></tr>
+<tr><td><code>app.reply.mention-free-threshold</code></td><td>0</td><td>主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @</td></tr>
 <tr><td><code>app.reply.keywords</code></td><td>空</td><td>低概率档的关键词；命中任意一个就回复</td></tr>
 <tr><td><code>app.reply.enabled-groups</code></td><td>空</td><td>只在列出的群做概率回复，空 = 所有群都不做；本机填 <code>209127588</code>。呼叫不受白名单限制</td></tr>
 <tr><td><code>app.reply.shadow-mode</code></td><td>false</td><td>只记日志，不发送</td></tr>
@@ -356,6 +359,7 @@ chance(噪音) = 0</code></pre>
 <pre><code>app:
   reply:
     probability: 0.0
+    mention-free-threshold: 0.0
     keywords: []
     enabled-groups: [209127588]
     daily-max-per-group: 40
