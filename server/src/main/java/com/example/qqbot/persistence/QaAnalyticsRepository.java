@@ -306,12 +306,18 @@ public class QaAnalyticsRepository {
      *              all = 全部消息，用于排查"为什么没回我"
      */
     public List<RecordRow> recentRecords(String cutoff, int limit, int offset, String scope) {
+        return recentRecords(cutoff, limit, offset, scope, "");
+    }
+
+    /** @param q 消息原文关键词；空 = 不筛 */
+    public List<RecordRow> recentRecords(String cutoff, int limit, int offset, String scope, String q) {
         String sql = "SELECT s.id, s.ts, s.group_id, s.user_id, s.hit_count, s.best_cosine,"
                 + " s.sources, s.guard_action, s.trigger_intent, s.trigger_chance,"
                 + " s.trigger_roll, s.trigger_reason, s.retrieve_ms, s.total_ms,"
                 + " r.question, r.answer, s.verdict"
                 + " FROM qa_stat s LEFT JOIN qa_raw r ON r.id = s.id"
-                + recordWhere(cutoff, scope) + " ORDER BY s.id DESC LIMIT ? OFFSET ?";
+                + recordWhere(cutoff, scope, q) + " ORDER BY s.id DESC LIMIT ? OFFSET ?";
+        Object[] params = queryArgs(cutoff, q, limit, offset);
         return jdbc.query(sql,
                 r -> new RecordRow(r.longOf("id"), r.str("ts"), r.longOf("group_id"),
                         r.longOf("user_id"), r.intOf("hit_count"), r.dbl("best_cosine"),
@@ -320,17 +326,21 @@ public class QaAnalyticsRepository {
                         r.str("trigger_reason"),
                         r.longOf("retrieve_ms"), r.longOf("total_ms"),
                         r.str("question"), r.str("answer"), r.str("verdict")),
-                args(cutoff, limit, offset));
+                params);
     }
 
     /** 记录总数 —— 与 {@link #recentRecords} 用**同一套过滤**，供分页用 */
     public long countRecords(String cutoff, String scope) {
-        return jdbc.count("SELECT COUNT(*) FROM qa_stat" + recordWhere(cutoff, scope),
-                ts(cutoff));
+        return countRecords(cutoff, scope, "");
+    }
+
+    public long countRecords(String cutoff, String scope, String q) {
+        return jdbc.count("SELECT COUNT(*) FROM qa_stat s LEFT JOIN qa_raw r ON r.id = s.id"
+                + recordWhere(cutoff, scope, q), queryArgs(cutoff, q));
     }
 
     /** ⚠️ 过滤条件只此一处 —— 列表与计数分头写就会分页错位 */
-    private static String recordWhere(String cutoff, String scope) {
+    private static String recordWhere(String cutoff, String scope, String q) {
         StringBuilder w = new StringBuilder();
         if (cutoff != null) {
             w.append(" WHERE ts >= ?");
@@ -341,7 +351,31 @@ public class QaAnalyticsRepository {
         if (filter != null) {
             w.append(cutoff == null ? " WHERE" : " AND").append(" ").append(filter);
         }
+        if (q != null && !q.isBlank()) {
+            w.append(w.length() == 0 ? " WHERE" : " AND").append(" r.question LIKE ? ESCAPE '\\'");
+        }
         return w.toString();
+    }
+
+    private static boolean hasQuery(String q) {
+        return q != null && !q.isBlank();
+    }
+
+    private static String likePattern(String q) {
+        return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+    }
+
+    /** cutoff、q 按 WHERE 里的出现顺序，后面跟分页参数 */
+    private static Object[] queryArgs(String cutoff, String q, Object... tail) {
+        java.util.List<Object> out = new java.util.ArrayList<>();
+        if (cutoff != null) {
+            out.add(cutoff);
+        }
+        if (hasQuery(q)) {
+            out.add(likePattern(q));
+        }
+        out.addAll(java.util.Arrays.asList(tail));
+        return out.toArray();
     }
 
     // ==================== 后台访问 ====================

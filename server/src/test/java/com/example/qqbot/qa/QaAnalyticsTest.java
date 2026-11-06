@@ -98,6 +98,20 @@ class QaAnalyticsTest {
     }
 
     @Test
+    @DisplayName("记录搜索：按消息原文筛选，计数同步")
+    void recordSearch() {
+        store.insertBatch(List.of(
+                rec("煤矿在哪里", 0, 0.0, "none", 10, 20, List.of()),
+                rec("钥匙在哪里", 0, 0.0, "none", 10, 20, List.of())));
+
+        assertThat(analytics.recentRecords(0, 10, 0, "all", "煤矿"))
+                .extracting(QaAnalytics.RecordRow::question)
+                .containsExactly("煤矿在哪里");
+        assertThat(analytics.countRecords(0, "all", "煤矿")).isEqualTo(1);
+        assertThat(analytics.countRecords(0, "all", "不存在")).isZero();
+    }
+
+    @Test
     @DisplayName("记录范围：已回复含主动接话，未触发单独")
     void recordScopes() {
         store.insertBatch(List.of(

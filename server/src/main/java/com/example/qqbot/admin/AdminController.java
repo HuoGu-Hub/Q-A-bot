@@ -408,15 +408,16 @@ public class AdminController {
     public RecordsView records(@RequestParam(defaultValue = "30") int days,
                                @RequestParam(defaultValue = "50") int limit,
                                @RequestParam(defaultValue = "0") int offset,
-                               @RequestParam(defaultValue = "replied") String scope) {
+                               @RequestParam(defaultValue = "replied") String scope,
+                               @RequestParam(defaultValue = "") String q) {
         String mode = switch (scope == null ? "" : scope.toLowerCase(java.util.Locale.ROOT)) {
             case "all" -> "all";
             case "dropped" -> "dropped";
             default -> "replied";
         };
         return new RecordsView(
-                analytics.recentRecords(days, Math.min(limit, 500), Math.max(0, offset), mode),
-                analytics.countRecords(days, mode),
+                analytics.recentRecords(days, Math.min(limit, 500), Math.max(0, offset), mode, q),
+                analytics.countRecords(days, mode, q),
                 mode);
     }
 

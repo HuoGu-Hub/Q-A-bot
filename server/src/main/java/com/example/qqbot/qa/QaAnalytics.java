@@ -285,10 +285,14 @@ public class QaAnalytics {
 
     /** 最近的问答记录（后台列表） */
     public List<RecordRow> recentRecords(int days, int limit, int offset, String scope) {
+        return recentRecords(days, limit, offset, scope, "");
+    }
+
+    public List<RecordRow> recentRecords(int days, int limit, int offset, String scope, String q) {
         return query(List.of(), () -> {
             List<RecordRow> out = new ArrayList<>();
             for (QaAnalyticsRepository.RecordRow r
-                    : repo.recentRecords(cutoff(days), limit, offset, scope)) {
+                    : repo.recentRecords(cutoff(days), limit, offset, scope, q)) {
                 out.add(new RecordRow(r.id(), r.ts(), r.groupId(), r.userId(), r.hitCount(),
                         r.bestCosine(), r.sources(), r.guardAction(),
                         r.triggerIntent(), r.triggerChance(), r.triggerRoll(), r.triggerReason(),
@@ -300,7 +304,11 @@ public class QaAnalytics {
 
     /** 记录总数 —— 与 {@link #recentRecords} 用同一套过滤，供分页用 */
     public long countRecords(int days, String scope) {
-        return query(0L, () -> repo.countRecords(cutoff(days), scope));
+        return countRecords(days, scope, "");
+    }
+
+    public long countRecords(int days, String scope, String q) {
+        return query(0L, () -> repo.countRecords(cutoff(days), scope, q));
     }
 
     /** 管理后台的访问统计 */
