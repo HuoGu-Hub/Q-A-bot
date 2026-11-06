@@ -131,12 +131,14 @@ app:
     join-hint: QQ 群搜索群号即可加入。
 
   # ============================ 意图判定 ============================
-  # 社交整活、关于机器人自己、"帮我上班"这类做不到的请求，不必查知识库。
+  # 三类跳过检索的意图各有独立开关：社交整活 / 关于机器人自己 / 做不到的请求。
   # 只看关键词形态，判不出来就走原来的链路 —— 宁可漏判，不要误判。
-  # 三项都是热生效的，后台「设置 → 意图」可以随时关掉。
+  # 这些开关都是热生效的，后台「设置 → 意图」可以按类开关。
   intent:
     enabled: true
-    skip-retrieval: true
+    skip-social: true
+    skip-meta: true
+    skip-out-of-scope: true
     correction: true
     recent-turns: 3
     recent-minutes: 30

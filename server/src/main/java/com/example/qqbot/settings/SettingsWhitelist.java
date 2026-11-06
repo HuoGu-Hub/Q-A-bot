@@ -228,8 +228,12 @@ public class SettingsWhitelist {
             // ---------- 意图 ----------
             new Item("app.intent.enabled", "意图判定", "意图",
                     "bool", "关掉即回到「所有消息都走检索」", true),
-            new Item("app.intent.skip-retrieval", "这类消息不查资料", "意图",
-                    "bool", "社交整活、关于机器人自己、做不到的请求", true),
+            new Item("app.intent.skip-social", "社交整活不查资料", "意图",
+                    "bool", "卖萌、撒娇、夸我、叫主人、亲亲抱抱、唱歌、骂机器人", true),
+            new Item("app.intent.skip-meta", "关于机器人自己不查资料", "意图",
+                    "bool", "你是谁、你叫什么、你有什么能力、在吗、介绍你自己", true),
+            new Item("app.intent.skip-out-of-scope", "做不到的请求不查资料", "意图",
+                    "bool", "帮你上班/写作业/下单、生成图片、发照片、看看腿", true),
             new Item("app.intent.correction", "识别纠正", "意图",
                     "bool", "「不是…吗」这类追问只改被指出的部分", true),
 

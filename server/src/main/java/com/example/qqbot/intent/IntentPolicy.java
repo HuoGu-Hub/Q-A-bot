@@ -14,8 +14,14 @@ public interface IntentPolicy {
     /** 总开关。关掉之后判定不参与，行为与接入前一致 */
     boolean isEnabled();
 
-    /** 社交 / 元问题 / 做不到的请求不检索 */
-    boolean isSkipRetrieval();
+    /** 社交整活不检索：卖萌、撒娇、夸我、叫主人、亲亲抱抱、唱歌、骂机器人 */
+    boolean isSkipSocial();
+
+    /** 关于机器人自己不检索：你是谁、你叫什么、你有什么能力、在吗、介绍你自己 */
+    boolean isSkipMeta();
+
+    /** 做不到的请求不检索：帮你上班/写作业/下单、生成图片、发照片、看看腿 */
+    boolean isSkipOutOfScope();
 
     /** 识别纠正（第三轮提交生效） */
     boolean isCorrection();

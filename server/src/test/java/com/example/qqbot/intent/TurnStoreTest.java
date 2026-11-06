@@ -34,7 +34,17 @@ class TurnStoreTest {
             }
 
             @Override
-            public boolean isSkipRetrieval() {
+            public boolean isSkipSocial() {
+                return true;
+            }
+
+            @Override
+            public boolean isSkipMeta() {
+                return true;
+            }
+
+            @Override
+            public boolean isSkipOutOfScope() {
                 return true;
             }
 
