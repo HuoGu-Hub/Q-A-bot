@@ -30,7 +30,12 @@ public record TriggerDecision(boolean reply, boolean wouldReply, ReplyIntent int
 
     /** 判定不通过 */
     public static TriggerDecision no(ReplyIntent intent, String reason) {
-        return new TriggerDecision(false, false, intent, 0.0, 0.0, reason);
+        return no(intent, 0.0, 0.0, reason);
+    }
+
+    /** 判定不通过，但保留这次的概率与掷点 —— 记录里要能看出"差一点"和"根本没机会" */
+    public static TriggerDecision no(ReplyIntent intent, double chance, double roll, String reason) {
+        return new TriggerDecision(false, false, intent, chance, roll, reason);
     }
 
     public boolean isCall() {

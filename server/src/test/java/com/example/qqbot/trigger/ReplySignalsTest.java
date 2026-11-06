@@ -21,6 +21,7 @@ class ReplySignalsTest {
         assertThat(ReplySignals.classify("帮我看看这个", false, false)).isEqualTo(ReplyIntent.QUESTION);
         assertThat(ReplySignals.classify("谁知道这个怎么弄", false, false)).isEqualTo(ReplyIntent.QUESTION);
         assertThat(ReplySignals.classify("今天开服吗？", false, false)).isEqualTo(ReplyIntent.QUESTION);
+        assertThat(ReplySignals.classify("有没有人知道煤矿在哪里啊", false, false)).isEqualTo(ReplyIntent.QUESTION);
     }
 
     @Test

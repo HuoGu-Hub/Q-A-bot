@@ -37,7 +37,7 @@ public class SettingsWhitelist {
             // p 是回复方式的唯一开关：0 = 只回呼叫，0~1 = 呼叫之外按概率主动接话。
             // 频率不在这里配 —— 主动回复与普通提问共用「频率限制」。
             new Item("app.reply.probability", "主动回复概率", "回复行为",
-                    "ratio", "0 = 只回呼叫；0~0.5 只回疑问；0.5~1 逐步参与闲聊", 0.0),
+                    "ratio", "0 = 只回呼叫；>0 = 疑问必答；0.5~1 逐步参与闲聊", 0.0),
             new Item("app.reply.enabled-groups", "主动回复的群", "回复行为",
                     "list", "一行一个群号；留空 = 所有群都不主动回复，呼叫不受影响", List.of()),
             new Item("app.reply.daily-max-per-group", "每群每日主动回复上限", "回复行为",

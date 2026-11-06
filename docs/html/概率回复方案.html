@@ -156,14 +156,14 @@ tbody tr:last-child td { border-bottom:0; }
 <ul>
 <li>新增 <code>app.reply.probability</code>，取值 0 到 1，默认 0，后台改完立即生效。</li>
 <li>它只在「群里必须 @」关闭后生效。@、正文含「飘雪喵」、引用机器人、私聊仍然直通，不受概率影响。</li>
-<li>概率不是逐条掷骰子：疑问按 p 回复，闲聊按 p 的二次曲线解禁，噪音永不回复。</li>
+<li>概率不是逐条掷骰子：明确提问必答，闲聊按 p 的二次曲线解禁，噪音永不回复。</li>
 <li>另加每群每日上限；频率不再单独配，统一由「频率限制」管。</li>
 <li>意图判定用本地关键词规则，不调模型。只有判定通过的消息才调模型。</li>
 <li>对当前「必须 @」的部署，默认 p=0，升级后行为不变。已经关闭「必须 @」、走「每条都回」的部署要先读迁移一节。</li>
 </ul>
 
 <blockquote class="ok">
-<p><b>一句话</b>：把「回不回」从布尔开关变成三段式判定，呼叫直通，疑问按概率，闲聊从 0.5 开始逐步解禁。</p>
+<p><b>一句话</b>：把「回不回」从布尔开关变成三段式判定，呼叫直通，疑问必答，闲聊从 0.5 开始逐步解禁。</p>
 </blockquote>
 
 <h2 id="now">现在的链路</h2>
@@ -189,7 +189,7 @@ tbody tr:last-child td { border-bottom:0; }
 <h3>目标</h3>
 <ul>
 <li>p=0 时群聊只回应三种呼叫：@、正文含「飘雪喵」、引用机器人，其余一律不回；私聊仍按私聊策略。</li>
-<li>p 低时只碰疑问，p 高时才逐步参与闲聊。</li>
+<li>p 大于 0 时疑问必答；p 到 0.5 以后才逐步参与闲聊。</li>
 <li>任何一条被忽略的消息都不产生提示、不消耗 token、不写模型请求。</li>
 <li>默认关闭，对「必须 @」的部署行为与现在完全一致。</li>
 <li>概率、节奏、白名单都能在后台热改，改完下一条消息就生效。</li>
@@ -212,7 +212,7 @@ tbody tr:last-child td { border-bottom:0; }
 <thead><tr><th>通道</th><th>识别</th><th>回复概率</th><th>例子</th></tr></thead>
 <tbody>
 <tr><td><b>呼叫</b></td><td>@ 段、文本 <code>@飘雪喵</code>、正文包含「飘雪喵」三个字、引用机器人；私聊按策略直通</td><td>1</td><td>「@飘雪喵 这个在哪」</td></tr>
-<tr><td><b>疑问</b></td><td>问号结尾、疑问词、求助词，且不是问别人</td><td>p</td><td>「雾锁的钥匙怎么拿」</td></tr>
+<tr><td><b>疑问</b></td><td>问号结尾、疑问词、求助词，且不是问别人</td><td>p &gt; 0 时 1</td><td>「雾锁的钥匙怎么拿」</td></tr>
 <tr><td><b>闲聊</b></td><td>有文字，但不像在提问</td><td>p × ramp</td><td>「今天又卡bug了」</td></tr>
 <tr><td><b>噪音</b></td><td>没有文字、纯图片、纯链接、两个字以内、纯复读</td><td>0</td><td>「hhh」「？」「[图片]」</td></tr>
 </tbody>
@@ -224,7 +224,7 @@ tbody tr:last-child td { border-bottom:0; }
 <pre class="formula"><code>t = 0.5
 
 chance(呼叫) = 1
-chance(疑问) = p
+chance(疑问) = p > 0 ? 1 : 0
 chance(闲聊) = p × max(0, (p - t) / (1 - t))
 chance(噪音) = 0</code></pre>
 
@@ -233,15 +233,15 @@ chance(噪音) = 0</code></pre>
 <thead><tr><th>p</th><th>疑问</th><th>闲聊</th><th>读法</th></tr></thead>
 <tbody>
 <tr><td>0</td><td>0</td><td>0</td><td>只回应呼叫，含昵称与引用</td></tr>
-<tr><td>0.2</td><td>20%</td><td>0</td><td>偶尔答一下问题</td></tr>
-<tr><td>0.5</td><td>50%</td><td>0</td><td>答一半问题，仍不闲聊</td></tr>
-<tr><td>0.8</td><td>80%</td><td>48%</td><td>开始接话</td></tr>
+<tr><td>0.2</td><td>100%</td><td>0</td><td>明确提问都答，不接闲聊</td></tr>
+<tr><td>0.5</td><td>100%</td><td>0</td><td>提问都答，仍不闲聊</td></tr>
+<tr><td>0.8</td><td>100%</td><td>48%</td><td>提问都答，开始接话</td></tr>
 <tr><td>1.0</td><td>100%</td><td>100%</td><td>最活跃，仍受每日上限限制</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>0.5 是闲聊的解禁点。低于 0.5 时闲聊概率为 0，正好对上「概率低只回疑问」；高于 0.5 后，闲聊概率随 p 线性上升，越接近 1 越愿意接话。只引入一个拐点，不再多一个「闲聊权重」旋钮。</p>
+<p>0.5 是闲聊的解禁点。低于 0.5 时闲聊概率为 0，但明确提问仍必答；高于 0.5 后，闲聊概率随 p 线性上升，越接近 1 越愿意接话。只引入一个拐点，不再多一个「闲聊权重」旋钮。</p>
 
 <p>p=0 不等于完全静默。它的语义是「只回应呼叫」：@、正文包含「飘雪喵」、引用机器人。私聊不走这套判定，仍按私聊策略。p=0 就是唯一的呼叫模式，不再依赖「必须 @」开关。</p>
 
@@ -614,9 +614,9 @@ reply(req, question, replyMode, trigger, quoted);</code></pre>
 <li><b>逐步放开</b>：先在 <code>209127588</code> 里调 p，稳定一周后再加群。间隔与冷却保持 0，觉得集中再开。任何一步出现反感就回退到上一步。</li>
 </ol>
 
-<pre><code>[TRIGGER] shadow=1 group=123 user=456 intent=QUESTION chance=0.40 roll=0.21 would=reply reason=命中
+<pre><code>[TRIGGER] shadow=1 group=123 user=456 intent=QUESTION chance=1.00 roll=0.00 would=reply reason=命中
 [TRIGGER] group=123 user=456 intent=CHAT chance=0.00 roll=-- would=ignore reason=闲聊未解禁
-[TRIGGER] group=123 user=456 intent=QUESTION chance=0.40 roll=0.72 would=ignore reason=未命中</code></pre>
+[TRIGGER] group=123 user=456 intent=CHAT chance=0.48 roll=0.72 would=ignore reason=未命中</code></pre>
 
 <h2 id="size">改动量</h2>
 

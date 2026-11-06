@@ -58,14 +58,15 @@ public class ReplyTrigger {
             }
             double chance = chance(policy.probability(), intent);
             if (chance <= 0) {
-                return TriggerDecision.no(intent, "概率为 0");
+                return TriggerDecision.no(intent, chance, 0.0, "概率为 0");
             }
             if (!pacer.allows(groupId)) {
-                return TriggerDecision.no(intent, "今日额度用完");
+                return TriggerDecision.no(intent, chance, 0.0, "今日额度用完");
             }
-            double roll = random.getAsDouble();
+            // 必答时不再掷点：记录里 chance=1、roll=0，避免"明明 100% 还没中"的误解
+            double roll = chance >= 1.0 ? 0.0 : random.getAsDouble();
             if (roll >= chance) {
-                TriggerDecision miss = TriggerDecision.no(intent, "未命中");
+                TriggerDecision miss = TriggerDecision.no(intent, chance, roll, "未命中");
                 log.debug("[TRIGGER] 未命中 group={} user={} intent={} chance={} roll={} | {}",
                         groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
                 return miss;
@@ -77,7 +78,7 @@ public class ReplyTrigger {
                 return would;
             }
             if (!pacer.tryReserve(groupId)) {
-                return TriggerDecision.no(intent, "并发占位失败");
+                return TriggerDecision.no(intent, chance, roll, "并发占位失败");
             }
             TriggerDecision yes = TriggerDecision.yes(intent, chance, roll);
             log.info("[TRIGGER] group={} user={} intent={} chance={} roll={} -> reply | {}",
@@ -94,7 +95,7 @@ public class ReplyTrigger {
      *
      * <pre>
      *   呼叫 = 1，不走这里
-     *   疑问 = p
+     *   疑问 = p > 0 ? 1 : 0，明确的提问不参与掷点
      *   闲聊 = p × max(0, (p - 0.5) / 0.5)
      *   噪音 = 0
      * </pre>
@@ -102,7 +103,7 @@ public class ReplyTrigger {
     public static double chance(double p, ReplyIntent intent) {
         double safe = Math.max(0.0, Math.min(1.0, p));
         if (intent == ReplyIntent.QUESTION) {
-            return safe;
+            return safe > 0 ? 1.0 : 0.0;
         }
         if (intent == ReplyIntent.CHAT) {
             if (safe <= CHAT_THRESHOLD) {

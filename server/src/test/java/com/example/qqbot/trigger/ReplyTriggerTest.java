@@ -22,13 +22,16 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("p=0.3：只碰疑问，闲聊概率为 0")
+    @DisplayName("p=0.3：疑问必答，闲聊概率为 0")
     void lowProbability() {
-        ReplyTrigger hit = trigger(0.3, false, 0, 0.1);
-        assertThat(hit.decide(GROUP, USER, "雾锁的钥匙怎么拿", false, false).reply()).isTrue();
+        ReplyTrigger first = trigger(0.3, false, 0, 0.1);
+        TriggerDecision hit = first.decide(GROUP, USER, "雾锁的钥匙怎么拿", false, false);
+        assertThat(hit.reply()).isTrue();
+        assertThat(hit.chance()).isEqualTo(1.0);
+        assertThat(hit.roll()).isZero();
 
-        ReplyTrigger miss = trigger(0.3, false, 0, 0.5);
-        assertThat(miss.decide(GROUP, USER, "雾锁的钥匙怎么拿", false, false).reply()).isFalse();
+        ReplyTrigger second = trigger(0.3, false, 0, 0.9);
+        assertThat(second.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false).reply()).isTrue();
 
         ReplyTrigger chat = trigger(0.3, false, 0, 0.1);
         assertThat(chat.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isFalse();
@@ -41,7 +44,11 @@ class ReplyTriggerTest {
         assertThat(hit.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isTrue();
 
         ReplyTrigger miss = trigger(0.8, false, 0, 0.5);
-        assertThat(miss.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isFalse();
+        TriggerDecision d = miss.decide(GROUP, USER, "今天又卡bug了", false, false);
+        assertThat(d.reply()).isFalse();
+        assertThat(d.reason()).isEqualTo("未命中");
+        assertThat(d.chance()).isCloseTo(0.48, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(d.roll()).isEqualTo(0.5);
     }
 
     @Test
@@ -89,6 +96,8 @@ class ReplyTriggerTest {
         assertThat(ReplyTrigger.chance(0.5, ReplyIntent.CHAT)).isZero();
         assertThat(ReplyTrigger.chance(0.75, ReplyIntent.CHAT)).isEqualTo(0.375);
         assertThat(ReplyTrigger.chance(1.0, ReplyIntent.CHAT)).isEqualTo(1.0);
+        assertThat(ReplyTrigger.chance(0.3, ReplyIntent.QUESTION)).isEqualTo(1.0);
+        assertThat(ReplyTrigger.chance(0.0, ReplyIntent.QUESTION)).isZero();
         assertThat(ReplyTrigger.chance(1.0, ReplyIntent.QUESTION)).isEqualTo(1.0);
     }
 
