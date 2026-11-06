@@ -94,7 +94,7 @@ class QaAnalyticsTest {
         return new QaRecord(Instant.now().toString(), 1L, 1L, 1L,
                 "触发范围用例", null, "答案",
                 0, true, 0, 0.0, 0.0, 0.0, "none", "[]",
-                guard, intent, chance, roll, reason, 10, 20, 30, "m", List.of());
+                guard, intent, chance, roll, reason, "", 10, 20, 30, "m", List.of());
     }
 
     @Test

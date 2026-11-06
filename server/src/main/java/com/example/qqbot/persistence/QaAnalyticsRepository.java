@@ -119,7 +119,7 @@ public class QaAnalyticsRepository {
     public record RecordRow(long id, String ts, long groupId, long userId,
                             int hitCount, double bestCosine, String sources, String guardAction,
                             String triggerIntent, double triggerChance, double triggerRoll,
-                            String triggerReason,
+                            String triggerReason, String triggerEvidence,
                             long retrieveMs, long totalMs, String question, String answer,
                             String verdict) {
     }
@@ -313,7 +313,7 @@ public class QaAnalyticsRepository {
     public List<RecordRow> recentRecords(String cutoff, int limit, int offset, String scope, String q) {
         String sql = "SELECT s.id, s.ts, s.group_id, s.user_id, s.hit_count, s.best_cosine,"
                 + " s.sources, s.guard_action, s.trigger_intent, s.trigger_chance,"
-                + " s.trigger_roll, s.trigger_reason, s.retrieve_ms, s.total_ms,"
+                + " s.trigger_roll, s.trigger_reason, s.trigger_evidence, s.retrieve_ms, s.total_ms,"
                 + " r.question, r.answer, s.verdict"
                 + " FROM qa_stat s LEFT JOIN qa_raw r ON r.id = s.id"
                 + recordWhere(cutoff, scope, q) + " ORDER BY s.id DESC LIMIT ? OFFSET ?";
@@ -323,7 +323,7 @@ public class QaAnalyticsRepository {
                         r.longOf("user_id"), r.intOf("hit_count"), r.dbl("best_cosine"),
                         r.str("sources"), r.str("guard_action"),
                         r.str("trigger_intent"), r.dbl("trigger_chance"), r.dbl("trigger_roll"),
-                        r.str("trigger_reason"),
+                        r.str("trigger_reason"), r.str("trigger_evidence"),
                         r.longOf("retrieve_ms"), r.longOf("total_ms"),
                         r.str("question"), r.str("answer"), r.str("verdict")),
                 params);

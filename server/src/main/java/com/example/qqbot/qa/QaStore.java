@@ -119,7 +119,8 @@ public class QaStore {
                 r.answer() == null ? 0 : r.answer().length(),
                 r.answer() == null || r.answer().isBlank(),
                 r.guardAction(), r.triggerIntent(), r.triggerChance(), r.triggerRoll(),
-                r.triggerReason(), r.retrieveMs(), r.llmMs(), r.totalMs(), r.model());
+                r.triggerReason(), r.triggerEvidence(), r.retrieveMs(), r.llmMs(), r.totalMs(),
+                r.model());
         QaStoreRepository.RawRow raw = new QaStoreRepository.RawRow(
                 r.question(), r.quoteText(), r.answer());
         List<QaStoreRepository.KeywordRow> keywords = new ArrayList<>();

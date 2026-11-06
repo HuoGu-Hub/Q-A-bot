@@ -28,6 +28,10 @@ class ReplySignalsTest {
     @DisplayName("严格疑问：问号、句末语气或句首疑问；埋在句中只算宽松")
     void strictQuestions() {
         assertThat(ReplySignals.isStrictQuestion("有没有人知道煤矿在哪里啊")).isTrue();
+        assertThat(ReplySignals.strictQuestionEvidence("有没有人知道煤矿在哪里啊"))
+                .isEqualTo("句首「有没有人」");
+        assertThat(ReplySignals.strictQuestionEvidence("今天开服吗")).isEqualTo("「吗」结尾");
+        assertThat(ReplySignals.questionEvidence("这个钥匙哪里拿")).isEqualTo("命中「哪里」");
         assertThat(ReplySignals.isStrictQuestion("今天开服吗？")).isTrue();
         assertThat(ReplySignals.isStrictQuestion("今天开服吗")).isTrue();
         assertThat(ReplySignals.isStrictQuestion("请问钥匙在哪")).isTrue();

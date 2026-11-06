@@ -95,13 +95,50 @@ public final class ReplySignals {
      * <p>「这个钥匙哪里拿」是宽松疑问，不是严格疑问；低概率档不接。
      */
     public static boolean isStrictQuestion(String text) {
+        return strictQuestionEvidence(text) != null;
+    }
+
+    /**
+     * 严格疑问的具体依据，给记录页展示"为什么算严格疑问"。
+     * 返回 null 表示不是严格疑问。
+     */
+    public static String strictQuestionEvidence(String text) {
         String t = text == null ? "" : text.strip();
         if (t.isEmpty() || t.codePointCount(0, t.length()) < 3 || isNotQuestion(t)) {
-            return false;
+            return null;
         }
-        return QUESTION_TAIL.matcher(t).find()
-                || QUESTION_PARTICLE.matcher(t).find()
-                || STRICT_LEAD.matcher(t).find();
+        if (QUESTION_TAIL.matcher(t).find()) {
+            return "问号结尾";
+        }
+        var particle = QUESTION_PARTICLE.matcher(t);
+        if (particle.find()) {
+            return "「" + particle.group(1) + "」结尾";
+        }
+        var lead = STRICT_LEAD.matcher(t);
+        if (lead.find()) {
+            return "句首「" + lead.group(1) + "」";
+        }
+        return null;
+    }
+
+    /**
+     * 宽松疑问的具体依据；不是疑问时返回 null。
+     * 严格疑问会优先给出严格依据。
+     */
+    public static String questionEvidence(String text) {
+        String t = text == null ? "" : text.strip();
+        if (t.isEmpty() || t.codePointCount(0, t.length()) < 3 || !isQuestion(t) || isNotQuestion(t)) {
+            return null;
+        }
+        String strict = strictQuestionEvidence(t);
+        if (strict != null) {
+            return strict;
+        }
+        var word = QUESTION_WORD.matcher(t);
+        if (word.find()) {
+            return "命中「" + word.group(1) + "」";
+        }
+        return "疑问";
     }
 
     private static boolean isQuestion(String t) {

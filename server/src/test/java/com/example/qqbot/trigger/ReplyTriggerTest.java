@@ -31,6 +31,7 @@ class ReplyTriggerTest {
         assertThat(d.reply()).isTrue();
         assertThat(d.intent()).isEqualTo(ReplyIntent.QUESTION);
         assertThat(d.reason()).isEqualTo("严格疑问");
+        assertThat(d.evidence()).isEqualTo("严格疑问：句首「有没有人」");
         assertThat(d.chance()).isEqualTo(1.0);
         assertThat(d.roll()).isZero();
 
@@ -43,6 +44,7 @@ class ReplyTriggerTest {
         assertThat(k.reply()).isTrue();
         assertThat(k.intent()).isEqualTo(ReplyIntent.KEYWORD);
         assertThat(k.reason()).isEqualTo("关键词");
+        assertThat(k.evidence()).isEqualTo("关键词「煤矿」");
 
         ReplyTrigger chat = trigger(0.2, false, 0, 0.1);
         assertThat(chat.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isFalse();
@@ -78,6 +80,7 @@ class ReplyTriggerTest {
         assertThat(m.reason()).isEqualTo("未命中");
         assertThat(m.chance()).isCloseTo(0.10, offset(1e-9));
         assertThat(m.roll()).isEqualTo(0.20);
+        assertThat(m.evidence()).isEqualTo("低频率闲聊");
 
         assertThat(hit.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
     }
@@ -104,6 +107,7 @@ class ReplyTriggerTest {
         TriggerDecision d = low.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false);
         assertThat(d.reply()).isFalse();
         assertThat(d.reason()).isEqualTo("低于免@阈值");
+        assertThat(d.evidence()).startsWith("p=0.20 < 免@阈值");
         assertThat(d.intent()).isEqualTo(ReplyIntent.QUESTION);
 
         ReplyTrigger at = triggerAt(0.5, 0.5, false, 0, 0.1);

@@ -209,6 +209,27 @@ function toneOf(r: RecordRow): Tone {
   return 'hit'
 }
 
+function isChatDecision(r: RecordRow): boolean {
+  return r.triggerIntent === 'CHAT' &&
+    (r.triggerEvidence === '低频率闲聊' || r.triggerEvidence === '高频率闲聊')
+}
+
+function ruleText(r: RecordRow): string {
+  if (!r.triggerIntent) return '没有触发记录'
+  if (r.triggerIntent === 'CALL') {
+    const e = r.triggerEvidence || r.triggerReason
+    if (e === '被 @' || e === '呼叫') return '被 @ 叫到'
+    if (e === '正文 @') return '正文 @ 叫到'
+    if (e === '正文昵称') return '正文昵称叫到'
+    if (e === '引用机器人') return '引用机器人叫到'
+    return e
+  }
+  if (r.triggerEvidence) return r.triggerEvidence
+  if (r.triggerIntent === 'KEYWORD') return '关键词命中'
+  if (r.triggerIntent === 'QUESTION') return r.triggerReason || '疑问'
+  return r.triggerReason || '—'
+}
+
 function decisionLabel(r: RecordRow): string {
   if (!r.triggerIntent) return '没有触发记录'
   if (r.guardAction === 'drop') {
@@ -230,7 +251,7 @@ function decisionLabel(r: RecordRow): string {
 
 function gaugeTitle(r: RecordRow): string {
   if (!r.triggerIntent) return '没有触发记录'
-  const parts = [intentLabel(r), '机会 ' + chancePct(r)]
+  const parts = ['闲聊', '接话概率 ' + chancePct(r)]
   if (showRoll(r)) parts.push('掷点 ' + (r.triggerRoll || 0).toFixed(2))
   parts.push(decisionLabel(r))
   return parts.join(' · ')
@@ -295,6 +316,12 @@ onMounted(load)
         </div>
       </header>
 
+      <div class="ledger-note">
+        <span><b>直达</b> 呼叫、关键词、疑问不掷概率</span>
+        <span class="note-sep">/</span>
+        <span><b>闲聊</b> 接话概率与掷点，掷点小于概率才回复</span>
+      </div>
+
       <div v-if="loading" class="ledger-empty">
         <span class="empty-line" />
         <p>读取中…</p>
@@ -349,17 +376,22 @@ onMounted(load)
               </div>
 
               <div class="decision" :class="'decision--' + toneOf(r)">
-                <template v-if="r.triggerIntent">
-                  <span class="intent">{{ intentLabel(r) }}</span>
+                <template v-if="isChatDecision(r)">
+                  <span class="intent">闲聊</span>
+                  <span v-if="r.triggerEvidence" class="tier">{{ r.triggerEvidence }}</span>
                   <span class="gauge" :title="gaugeTitle(r)">
                     <span class="gauge-fill" :style="{ width: chancePct(r) }" />
                     <span v-if="showRoll(r)" class="gauge-tick" :style="{ left: rollPct(r) }" />
                   </span>
-                  <span class="chance num">{{ chancePct(r) }}</span>
-                  <span v-if="showRoll(r)" class="roll num">掷 {{ (r.triggerRoll || 0).toFixed(2) }}</span>
+                  <span class="chance num">接话 {{ chancePct(r) }}</span>
+                  <span v-if="showRoll(r)" class="roll num">掷点 {{ (r.triggerRoll || 0).toFixed(2) }}</span>
                   <span class="decision-label">{{ decisionLabel(r) }}</span>
                 </template>
-                <span v-else class="decision-label">没有触发记录</span>
+                <template v-else-if="r.triggerIntent">
+                  <span class="evidence">{{ ruleText(r) }}</span>
+                  <span v-if="r.guardAction === 'drop'" class="decision-label">{{ decisionLabel(r) }}</span>
+                </template>
+                <span v-else class="evidence">没有触发记录</span>
               </div>
 
               <div class="rec-foot">
@@ -542,6 +574,18 @@ onMounted(load)
   background: var(--edge);
 }
 
+.ledger-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 10px;
+  color: var(--ink-4);
+}
+.ledger-note b { color: var(--ink-2); font-weight: var(--fw-medium); }
+.note-sep { opacity: .4; }
+
 .ledger-body { padding-bottom: 6px; }
 
 .day { padding: 0 18px; }
@@ -715,6 +759,16 @@ onMounted(load)
   color: var(--ink-2);
   letter-spacing: .04em;
 }
+.tier {
+  flex: none;
+  color: var(--ink-4);
+  font-size: 10px;
+}
+.evidence {
+  min-width: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
 .gauge {
   position: relative;
   flex: none;
@@ -746,8 +800,9 @@ onMounted(load)
 
 .chance {
   flex: none;
-  width: 34px;
+  width: auto;
   color: var(--ink-2);
+  white-space: nowrap;
   text-align: right;
 }
 .roll {
@@ -866,6 +921,7 @@ onMounted(load)
 
 @media (max-width: 760px) {
   .ledger-head { padding: 12px 14px; }
+  .ledger-note { padding: 8px 12px; }
   .legend { display: none; }
   .day { padding: 0 12px; }
   .rec { grid-template-columns: 44px 14px minmax(0, 1fr); gap: 0 6px; }

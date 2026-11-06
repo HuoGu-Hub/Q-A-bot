@@ -25365,6 +25365,9 @@
           "triggerReason" : {
             "type" : "string"
           },
+          "triggerEvidence" : {
+            "type" : "string"
+          },
           "retrieveMs" : {
             "type" : "integer",
             "format" : "int64"

@@ -122,7 +122,7 @@ public class QaAnalytics {
     public record RecordRow(long id, String ts, long groupId, long userId,
                             int hitCount, double bestCosine, String sources, String guardAction,
                             String triggerIntent, double triggerChance, double triggerRoll,
-                            String triggerReason,
+                            String triggerReason, String triggerEvidence,
                             long retrieveMs, long totalMs, String question, String answer,
                             String verdict) {
     }
@@ -296,7 +296,8 @@ public class QaAnalytics {
                 out.add(new RecordRow(r.id(), r.ts(), r.groupId(), r.userId(), r.hitCount(),
                         r.bestCosine(), r.sources(), r.guardAction(),
                         r.triggerIntent(), r.triggerChance(), r.triggerRoll(), r.triggerReason(),
-                        r.retrieveMs(), r.totalMs(), r.question(), r.answer(), r.verdict()));
+                        r.triggerEvidence(), r.retrieveMs(), r.totalMs(), r.question(),
+                        r.answer(), r.verdict()));
             }
             return out;
         });

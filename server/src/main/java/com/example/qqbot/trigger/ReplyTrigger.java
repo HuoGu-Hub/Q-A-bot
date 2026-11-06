@@ -58,100 +58,117 @@ public class ReplyTrigger {
                                   boolean hasImage, boolean atOther) {
         try {
             if (!policy.enabledForGroup(groupId)) {
-                return TriggerDecision.no(ReplyIntent.NOISE, "群未启用");
+                return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0,
+                        "群未启用", "群不在白名单");
             }
             double p = clamp(policy.probability());
             if (p <= 0) {
-                return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0, "概率为 0");
+                return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0,
+                        "概率为 0", "主动回复概率为 0");
             }
 
             ReplyIntent intent = ReplySignals.classify(text, hasImage, atOther);
 
             // 主动回复概率没到阈值时，只有 @ / 昵称 / 引用这类呼叫能触发
-            if (p < clamp(policy.mentionFreeThreshold())) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "低于免@阈值");
+            double threshold = clamp(policy.mentionFreeThreshold());
+            if (p < threshold) {
+                return TriggerDecision.no(intent, 0.0, 0.0, "低于免@阈值",
+                        "p=" + fmt(p) + " < 免@阈值 " + fmt(threshold));
             }
 
             // 关键词是低概率档唯一的非疑问入口；p=0 时仍只回呼叫
-            if (keywordHit(text)) {
-                return accept(groupId, userId, text, ReplyIntent.KEYWORD, 1.0, 0.0, "关键词");
+            String keyword = matchedKeyword(text);
+            if (keyword != null) {
+                return accept(groupId, userId, text, ReplyIntent.KEYWORD, 1.0, 0.0,
+                        "关键词", "关键词「" + keyword + "」");
             }
 
             if (intent == ReplyIntent.QUESTION) {
-                boolean strict = ReplySignals.isStrictQuestion(text);
-                if (p < STRICT_MAX && !strict) {
-                    return TriggerDecision.no(intent, 0.0, 0.0, "低概率只回关键词或严格疑问");
+                String strict = ReplySignals.strictQuestionEvidence(text);
+                if (p < STRICT_MAX && strict == null) {
+                    return TriggerDecision.no(intent, 0.0, 0.0,
+                            "低概率只回关键词或严格疑问",
+                            "没有命中关键词；不是严格疑问");
                 }
+                String evidence = strict != null
+                        ? "严格疑问：" + strict
+                        : "疑问：" + ReplySignals.questionEvidence(text);
                 return accept(groupId, userId, text, intent, 1.0, 0.0,
-                        strict ? "严格疑问" : "疑问");
+                        strict != null ? "严格疑问" : "疑问", evidence);
             }
 
             if (p < STRICT_MAX) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "低概率只回关键词或严格疑问");
+                return TriggerDecision.no(intent, 0.0, 0.0,
+                        "低概率只回关键词或严格疑问",
+                        "没有命中关键词；不是疑问");
             }
             if (p < QUESTION_MAX) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "该档只回疑问");
+                return TriggerDecision.no(intent, 0.0, 0.0,
+                        "该档只回疑问", "该档只接疑问");
             }
             if (intent == ReplyIntent.NOISE) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "噪音");
+                return TriggerDecision.no(intent, 0.0, 0.0, "噪音", "没有可接的文字");
             }
 
             double chance = chance(p, ReplyIntent.CHAT);
+            String tier = p < LOW_CHAT_MAX ? "低频率闲聊" : "高频率闲聊";
+            String evidence = tier;
             if (chance <= 0) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "闲聊未解禁");
+                return TriggerDecision.no(intent, 0.0, 0.0, "闲聊未解禁", tier);
             }
             if (!pacer.allows(groupId)) {
-                return TriggerDecision.no(intent, chance, 0.0, "今日额度用完");
+                return TriggerDecision.no(intent, chance, 0.0, "今日额度用完", evidence);
             }
             double roll = random.getAsDouble();
             if (roll >= chance) {
                 log.debug("[TRIGGER] 未命中 group={} user={} intent={} chance={} roll={} | {}",
                         groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
-                return TriggerDecision.no(intent, chance, roll, "未命中");
+                return TriggerDecision.no(intent, chance, roll, "未命中", evidence);
             }
-            return accept(groupId, userId, text, intent, chance, roll, "闲聊命中");
+            return accept(groupId, userId, text, intent, chance, roll, "闲聊命中", evidence);
         } catch (Exception e) {
             log.warn("[TRIGGER] 判定失败，按噪音处理：{}", e.getMessage());
-            return TriggerDecision.no(ReplyIntent.NOISE, "判定失败");
+            return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0, "判定失败", "判定异常");
         }
     }
 
     /** 判定通过后的公共收口：额度、影子、并发占位、日志 */
     private TriggerDecision accept(long groupId, long userId, String text, ReplyIntent intent,
-                                   double chance, double roll, String reason) {
+                                   double chance, double roll, String reason, String evidence) {
         if (!pacer.allows(groupId)) {
-            return TriggerDecision.no(intent, chance, roll, "今日额度用完");
+            return TriggerDecision.no(intent, chance, roll, "今日额度用完", evidence);
         }
         if (policy.shadowMode()) {
-            TriggerDecision would = TriggerDecision.would(intent, chance, roll, "影子模式：" + reason);
-            log.info("[TRIGGER] shadow=1 group={} user={} intent={} chance={} roll={} would=reply reason={} | {}",
-                    groupId, userId, intent, fmt(chance), fmt(roll), reason, brief(text));
+            TriggerDecision would = TriggerDecision.would(intent, chance, roll,
+                    "影子模式：" + reason, evidence);
+            log.info("[TRIGGER] shadow=1 group={} user={} intent={} chance={} roll={} would=reply reason={} evidence={} | {}",
+                    groupId, userId, intent, fmt(chance), fmt(roll), reason, evidence, brief(text));
             return would;
         }
         if (!pacer.tryReserve(groupId)) {
-            return TriggerDecision.no(intent, chance, roll, "并发占位失败");
+            return TriggerDecision.no(intent, chance, roll, "并发占位失败", evidence);
         }
-        log.info("[TRIGGER] group={} user={} intent={} chance={} roll={} -> reply reason={} | {}",
-                groupId, userId, intent, fmt(chance), fmt(roll), reason, brief(text));
-        return TriggerDecision.yes(intent, chance, roll, reason);
+        log.info("[TRIGGER] group={} user={} intent={} chance={} roll={} -> reply reason={} evidence={} | {}",
+                groupId, userId, intent, fmt(chance), fmt(roll), reason, evidence, brief(text));
+        return TriggerDecision.yes(intent, chance, roll, reason, evidence);
     }
 
-    /** 关键词命中：大小写不敏感，空白词忽略 */
-    private boolean keywordHit(String text) {
+    /** 关键词命中：大小写不敏感，空白词忽略；返回命中的词 */
+    private String matchedKeyword(String text) {
         if (text == null || text.isBlank()) {
-            return false;
+            return null;
         }
         List<String> keywords = policy.keywords();
         if (keywords == null || keywords.isEmpty()) {
-            return false;
+            return null;
         }
         String t = text.toLowerCase(Locale.ROOT);
         for (String k : keywords) {
             if (k != null && !k.isBlank() && t.contains(k.trim().toLowerCase(Locale.ROOT))) {
-                return true;
+                return k.trim();
             }
         }
-        return false;
+        return null;
     }
 
     /**

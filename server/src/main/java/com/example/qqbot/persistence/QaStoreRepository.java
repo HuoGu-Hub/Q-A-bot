@@ -38,7 +38,7 @@ public class QaStoreRepository {
                           double bestCosineRaw, String sources, String retrievedJson,
                           int answerLen, boolean answerEmpty, String guardAction,
                           String triggerIntent, double triggerChance, double triggerRoll,
-                          String triggerReason,
+                          String triggerReason, String triggerEvidence,
                           long retrieveMs, long llmMs, long totalMs, String model) {
     }
 
@@ -60,8 +60,8 @@ public class QaStoreRepository {
                     + " sources, retrieved,"
                     + " answer_len, answer_empty, guard_action,"
                     + " trigger_intent, trigger_chance, trigger_roll, trigger_reason,"
-                    + " retrieve_ms, llm_ms, total_ms, model)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                    + " trigger_evidence, retrieve_ms, llm_ms, total_ms, model)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     private static final String INSERT_RAW =
             "INSERT INTO qa_raw (id, question, quote_text, answer) VALUES (?,?,?,?)";
@@ -107,6 +107,7 @@ public class QaStoreRepository {
                 + " trigger_chance REAL,"
                 + " trigger_roll REAL,"
                 + " trigger_reason TEXT,"
+                + " trigger_evidence TEXT,"
                 + " retrieve_ms  INTEGER,"
                 + " llm_ms       INTEGER,"
                 + " total_ms     INTEGER,"
@@ -159,6 +160,7 @@ public class QaStoreRepository {
         addColumnIfMissing("qa_stat", "trigger_chance", "REAL");
         addColumnIfMissing("qa_stat", "trigger_roll", "REAL");
         addColumnIfMissing("qa_stat", "trigger_reason", "TEXT");
+        addColumnIfMissing("qa_stat", "trigger_evidence", "TEXT");
 
         jdbc.execute("PRAGMA user_version = 1");
     }
@@ -188,7 +190,8 @@ public class QaStoreRepository {
                         s.kbEnabled(), s.hitCount(), s.topScore(), s.bestCosine(), s.bestCosineRaw(),
                         s.sources(), s.retrievedJson(), s.answerLen(), s.answerEmpty(),
                         s.guardAction(), s.triggerIntent(), s.triggerChance(), s.triggerRoll(),
-                        s.triggerReason(), s.retrieveMs(), s.llmMs(), s.totalMs(), s.model());
+                        s.triggerReason(), s.triggerEvidence(), s.retrieveMs(), s.llmMs(),
+                        s.totalMs(), s.model());
 
                 RawRow raw = rec.raw();
                 jdbc.update(INSERT_RAW, id, raw.question(), raw.quoteText(), raw.answer());

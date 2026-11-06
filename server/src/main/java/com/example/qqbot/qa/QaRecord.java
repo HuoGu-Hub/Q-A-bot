@@ -40,6 +40,7 @@ public record QaRecord(
         double triggerChance,
         double triggerRoll,
         String triggerReason,
+        String triggerEvidence,
         long retrieveMs,
         long llmMs,
         long totalMs,
@@ -69,7 +70,7 @@ public record QaRecord(
                     List<Keyword> keywords) {
         this(ts, groupId, userId, messageId, question, quoteText, answer,
                 imageCount, kbEnabled, hitCount, topScore, bestCosine, bestCosineRaw, sources,
-                retrievedJson, guardAction, "", 0.0, 0.0, "", retrieveMs, llmMs, totalMs, model,
-                keywords);
+                retrievedJson, guardAction, "", 0.0, 0.0, "", "", retrieveMs, llmMs, totalMs,
+                model, keywords);
     }
 }

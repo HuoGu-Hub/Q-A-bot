@@ -9,13 +9,14 @@ package com.example.qqbot.trigger;
  * @param chance     这一次的回复概率，0 到 1
  * @param roll       这一次抽到的随机数，0 到 1
  * @param reason     只进日志与丢弃原因，不进提示词
+ * @param evidence   命中/未命中的具体依据，例如「关键词：煤矿」「句首：有没有人」
  */
 public record TriggerDecision(boolean reply, boolean wouldReply, ReplyIntent intent,
-                              double chance, double roll, String reason) {
+                              double chance, double roll, String reason, String evidence) {
 
     /** 呼叫直通，不参与概率 */
     public static TriggerDecision call(String reason) {
-        return new TriggerDecision(true, true, ReplyIntent.CALL, 1.0, 0.0, reason);
+        return new TriggerDecision(true, true, ReplyIntent.CALL, 1.0, 0.0, reason, reason);
     }
 
     /** 判定通过，真的回复 */
@@ -25,7 +26,12 @@ public record TriggerDecision(boolean reply, boolean wouldReply, ReplyIntent int
 
     /** 判定通过，带具体原因 —— 记录里要能区分关键词、严格疑问、闲聊 */
     public static TriggerDecision yes(ReplyIntent intent, double chance, double roll, String reason) {
-        return new TriggerDecision(true, true, intent, chance, roll, reason);
+        return yes(intent, chance, roll, reason, "");
+    }
+
+    public static TriggerDecision yes(ReplyIntent intent, double chance, double roll,
+                                      String reason, String evidence) {
+        return new TriggerDecision(true, true, intent, chance, roll, reason, evidence);
     }
 
     /** 判定通过，但影子模式只记日志 */
@@ -35,7 +41,12 @@ public record TriggerDecision(boolean reply, boolean wouldReply, ReplyIntent int
 
     /** 影子模式，带具体原因 */
     public static TriggerDecision would(ReplyIntent intent, double chance, double roll, String reason) {
-        return new TriggerDecision(false, true, intent, chance, roll, reason);
+        return would(intent, chance, roll, reason, reason);
+    }
+
+    public static TriggerDecision would(ReplyIntent intent, double chance, double roll,
+                                        String reason, String evidence) {
+        return new TriggerDecision(false, true, intent, chance, roll, reason, evidence);
     }
 
     /** 判定不通过 */
@@ -45,7 +56,12 @@ public record TriggerDecision(boolean reply, boolean wouldReply, ReplyIntent int
 
     /** 判定不通过，但保留这次的概率与掷点 —— 记录里要能看出"差一点"和"根本没机会" */
     public static TriggerDecision no(ReplyIntent intent, double chance, double roll, String reason) {
-        return new TriggerDecision(false, false, intent, chance, roll, reason);
+        return no(intent, chance, roll, reason, reason);
+    }
+
+    public static TriggerDecision no(ReplyIntent intent, double chance, double roll,
+                                     String reason, String evidence) {
+        return new TriggerDecision(false, false, intent, chance, roll, reason, evidence);
     }
 
     public boolean isCall() {

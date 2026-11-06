@@ -307,9 +307,9 @@ public class MessageRouter {
         //
         //    ⚠️ @ 判定复用准入那一份设置，指令在群里必须 @：
         //    同一个语义留两个开关，会出现「问答回了、指令没回」这种自相矛盾的状态。
-        boolean mentioned = !event.isGroupMessage()
-                || textMention
-                || codec.isMentioned(event, identity.getSelfId());
+        boolean atMention = event.isGroupMessage()
+                && codec.isMentioned(event, identity.getSelfId());
+        boolean mentioned = !event.isGroupMessage() || textMention || atMention;
         CommandHandler.Outcome cmd = guardAccess.mentionSatisfied(event.isGroupMessage(), mentioned)
                 ? commandHandler.tryCommand(event, text, t0)
                 : CommandHandler.Outcome.NOT_COMMAND;
@@ -335,7 +335,7 @@ public class MessageRouter {
         TriggerDecision trigger = null;
         if (probabilityMode && triggerEnabled && replyTrigger != null) {
             if (mentioned) {
-                trigger = TriggerDecision.call("呼叫");
+                trigger = TriggerDecision.call(atMention ? "被 @" : textMention ? "正文 @" : "呼叫");
             } else if (nameCalled) {
                 trigger = TriggerDecision.call("正文昵称");
             } else if (quoted != null && quoted.quote().fromSelf()) {

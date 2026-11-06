@@ -104,6 +104,7 @@ public class QaCollector {
                     trigger == null ? 0.0 : trigger.chance(),
                     trigger == null ? 0.0 : trigger.roll(),
                     trigger == null ? "" : trigger.reason(),
+                    trigger == null ? "" : trigger.evidence(),
                     trace.retrieveMs(), llmMs, totalMs,
                     currentModel(),
                     keywords(question, trace)));
