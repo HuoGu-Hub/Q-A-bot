@@ -20,6 +20,11 @@ import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.trace.KbTrace;
 import com.example.qqbot.intent.IntentPlanner;
 import com.example.qqbot.intent.TurnPlan;
+import com.example.qqbot.trigger.ReplyIntent;
+import com.example.qqbot.trigger.ReplySignals;
+import com.example.qqbot.trigger.ReplyTrigger;
+import com.example.qqbot.trigger.TriggerDecision;
+import com.example.qqbot.site.BotPolicy;
 import com.example.qqbot.onebot.model.ImageRef;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.qa.QaCollector;
@@ -70,6 +75,10 @@ public class MessageRouter {
     private final VoiceTriggerService voiceTrigger;
     /** 意图判定。测试构造时可以为 null（一律按默认处理） */
     private final IntentPlanner intentPlanner;
+    /** 概率回复判定。测试构造时可以为 null（不主动插话） */
+    private final ReplyTrigger replyTrigger;
+    /** 机器人展示昵称。用于正文昵称呼叫；测试构造时可以为 null（退回 QQ 昵称） */
+    private final BotPolicy botPolicy;
 
     /** 不带语音投递的构造 —— 现有测试与老调用方用 */
     public MessageRouter(OneBotApiClient apiClient,
@@ -87,7 +96,7 @@ public class MessageRouter {
                          CommandHandler commandHandler) {
         this(apiClient, codec, identity, chatService, guardPipeline, outboundSender, budgetGuard,
                 asyncProperties, guardRateLimit, guardAccess, blockNotifier, qaCollector,
-                commandHandler, null, null, null);
+                commandHandler, null, null, null, null, null);
     }
 
     /** Spring 用这个：语音投递也接进来 */
@@ -107,7 +116,9 @@ public class MessageRouter {
                          CommandHandler commandHandler,
                          VoiceDelivery voiceDelivery,
                          VoiceTriggerService voiceTrigger,
-                         IntentPlanner intentPlanner) {
+                         IntentPlanner intentPlanner,
+                         ReplyTrigger replyTrigger,
+                         BotPolicy botPolicy) {
         this.apiClient = apiClient;
         this.codec = codec;
         this.identity = identity;
@@ -124,6 +135,8 @@ public class MessageRouter {
         this.voiceDelivery = voiceDelivery;
         this.voiceTrigger = voiceTrigger;
         this.intentPlanner = intentPlanner;
+        this.replyTrigger = replyTrigger;
+        this.botPolicy = botPolicy;
     }
 
     /**
@@ -138,7 +151,7 @@ public class MessageRouter {
             return text;
         }
         List<String> names = new ArrayList<>(2);
-        String selfName = identity.getSelfName();
+        String selfName = botPolicy != null ? botPolicy.getName() : identity.getSelfName();
         if (StringUtils.hasText(selfName)) {
             names.add(selfName.trim());
         }
@@ -307,13 +320,36 @@ public class MessageRouter {
         // agent 指令把「参数」当问题；其余情况用整条消息
         String question = cmd.question() != null ? cmd.question() : text;
 
-        // ③ Guard 五层 + 成本预算。顺序有硬约束，见 guardAndBudget 的注释。
-        if (guardAndBudget(req, mentioned)) {
+        // ③ 触发判定（在 Guard 之前，只读）
+        //    @、文本 @、正文昵称、引用机器人都是「呼叫」，不受概率影响。
+        //    引用必须在这里取一次：引用段只有 ID，要 get_msg 才知道是不是机器人。
+        boolean probabilityMode = event.isGroupMessage() && !guardAccess.isRequireMentionInGroup();
+        String selfName = identity.getSelfName();
+        boolean nameCalled = probabilityMode && ReplySignals.mentionsName(text, selfName);
+        QuotedContent quoted = null;
+        if (probabilityMode && !mentioned && !nameCalled && hasQuote) {
+            quoted = resolveQuote(event);
+        }
+        TriggerDecision trigger = null;
+        if (probabilityMode && replyTrigger != null) {
+            if (nameCalled) {
+                trigger = TriggerDecision.call("正文昵称");
+            } else if (quoted != null && quoted.quote().fromSelf()) {
+                trigger = TriggerDecision.call("引用机器人");
+            } else if (!mentioned) {
+                trigger = replyTrigger.decide(event.getGroupId(), event.getUserId(), text,
+                        !ownImages.isEmpty(),
+                        codec.hasAtOther(event, identity.getSelfId()));
+            }
+        }
+
+        // ④ Guard 五层 + 成本预算。顺序有硬约束，见 guardAndBudget 的注释。
+        if (guardAndBudget(req, mentioned, trigger)) {
             return;
         }
 
-        // ④ 真正生成回复并发出
-        reply(req, question, replyMode);
+        // ⑤ 真正生成回复并发出
+        reply(req, question, replyMode, trigger, quoted);
     }
 
     /**
@@ -327,11 +363,11 @@ public class MessageRouter {
      *
      * @return {@code true} = 本次到此为止（被拦、回了固定话术、或超预算），不要再调模型
      */
-    private boolean guardAndBudget(RoutedRequest req, boolean mentioned) {
+    private boolean guardAndBudget(RoutedRequest req, boolean mentioned, TriggerDecision trigger) {
         OneBotEvent event = req.event();
 
         GuardContext ctx = new GuardContext(event, req.text(),
-                req.ownImages().stream().map(ImageRef::url).toList(), req.hasQuote(), mentioned);
+                req.ownImages().stream().map(ImageRef::url).toList(), req.hasQuote(), mentioned, trigger);
         GuardResult result = guardPipeline.check(ctx);
         if (result instanceof GuardResult.Drop) {
             // 被 Guard 拦下的也记一笔 —— "多少消息被限流/拦下"本身就是运营数据
@@ -346,7 +382,9 @@ public class MessageRouter {
         }
 
         // 成本预算（D6）：限流管「多快」，这里管「一天总共多少」
-        BudgetGuard.Decision budget = budgetGuard.check(event.getUserId(), event.getGroupId());
+        // 主动插话只查全局、只记全局 —— 不能把群友的提问额度吃掉
+        boolean unsolicited = ctx.unsolicited();
+        BudgetGuard.Decision budget = budgetGuard.check(event.getUserId(), event.getGroupId(), !unsolicited);
         if (budget.verdict() == BudgetGuard.Verdict.USER_LIMIT) {
             outboundSender.send(event, budget.text());
             record(req, "fixed_reply", budget.text());
@@ -359,7 +397,7 @@ public class MessageRouter {
             record(req, "drop", null);
             return true;
         }
-        budgetGuard.recordCall(event.getUserId(), event.getGroupId());
+        budgetGuard.recordCall(event.getUserId(), event.getGroupId(), !unsolicited);
         return false;
     }
 
@@ -370,23 +408,33 @@ public class MessageRouter {
      * （放在调用方就得靠每个人记得调，旁路直接发送就漏掉过。）
      * 用它的返回值而不是自己再过滤一遍：记录的就是<b>实际发出去的那段文本</b>。
      */
-    private void reply(RoutedRequest req, String question, ReplyMode replyMode) {
+    private void reply(RoutedRequest req, String question, ReplyMode replyMode,
+                       TriggerDecision trigger, QuotedContent preResolvedQuote) {
         OneBotEvent event = req.event();
 
-        // 意图判定：第一次提交只记账，不改变行为 —— 用真实流量校准规则精度
-        TurnPlan plan = intentPlanner == null ? TurnPlan.standard() : intentPlanner.plan(question);
-        log.info("[INTENT] move={} retrieve={} reason={} | {}", plan.move(), plan.retrieve(),
-                plan.reason(), question == null ? "" : question.strip());
+        // 主动接话：呼叫之外、判定通过的那些。闲聊不检索，疑问保留正常检索。
+        boolean chime = trigger != null && trigger.reply() && !trigger.isCall();
+        TurnPlan plan;
+        if (chime) {
+            plan = trigger.intent() == ReplyIntent.CHAT
+                    ? TurnPlan.chime()
+                    : (intentPlanner == null ? TurnPlan.standard() : intentPlanner.plan(question)).withChime();
+        } else {
+            plan = intentPlanner == null ? TurnPlan.standard() : intentPlanner.plan(question);
+        }
+        log.info("[INTENT] move={} retrieve={} reason={} chime={} | {}", plan.move(), plan.retrieve(),
+                plan.reason(), plan.chimeIn(), question == null ? "" : question.strip());
 
-        // 解析引用（QQ 的引用段只有 ID，正文、作者和图片都要另外调 get_msg 取）
-        QuotedContent quoted = resolveQuote(event);
+        // 引用可能已经在触发判定里取过，直接复用；没取过才在这里取。
+        QuotedContent quoted = preResolvedQuote != null ? preResolvedQuote : resolveQuote(event);
 
         // 消息自带的图片 + 被引用消息里的图片，一起交给模型
         List<ImageRef> allImages = new ArrayList<>(req.ownImages());
         allImages.addAll(quoted.imageRefs());
 
-        // 关键词只决定"这条必须用语音回"，回什么仍交给模型
-        boolean voiceRequired = voiceTrigger != null
+        // 关键词只决定"这条必须用语音回"，回什么仍交给模型。
+        // 主动接话不发语音：一条没被点名的消息突然冒出一条语音，太打扰。
+        boolean voiceRequired = !chime && voiceTrigger != null
                 && voiceTrigger.requiresVoice(event.getGroupId(), question);
 
         ChatService.ReplyResult result = voiceRequired
@@ -396,7 +444,7 @@ public class MessageRouter {
         // 语音与文字谁先冒出来：一次随机，避免每条回复都像模板。
         // 有语音时必须同步发文字 —— 走异步队列的话，文字可能被发送线程推到语音后面。
         String safe;
-        List<MediaOutbox.Intent> media = result.media();
+        List<MediaOutbox.Intent> media = chime ? List.of() : result.media();
         if (media.isEmpty() || voiceDelivery == null) {
             safe = outboundSender.send(event, result.text());
         } else {
@@ -413,8 +461,9 @@ public class MessageRouter {
         // 异步记一笔：不阻塞、不抛异常（记录系统挂了也要照常回答）
         // ⚠️ 记的是 question 不是 text：agent 指令的原始文本是 "/联网 …"，
         //    记进去会让「未命中·该补什么」里全是命令前缀。
-        qaCollector.collect(event, question, quoted.quote().text(), req.imageCount(), "pass", safe,
-                result.kb(), result.llmMs(), req.elapsedMs());
+        // 主动接话记 auto，不参与提问口径，也不参与追问检测。
+        qaCollector.collect(event, question, quoted.quote().text(), req.imageCount(),
+                chime ? "auto" : "pass", safe, result.kb(), result.llmMs(), req.elapsedMs(), !chime);
     }
 
     /**

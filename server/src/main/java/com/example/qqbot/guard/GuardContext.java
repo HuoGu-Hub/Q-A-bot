@@ -1,6 +1,7 @@
 package com.example.qqbot.guard;
 
 import com.example.qqbot.onebot.model.OneBotEvent;
+import com.example.qqbot.trigger.TriggerDecision;
 
 import java.util.List;
 
@@ -12,12 +13,19 @@ import java.util.List;
  * @param mentioned 这条消息算不算 @ 了机器人。判定集中在 {@code MessageRouter} 一处：
  *                  除了 QQ 的 at 消息段，手打/复制的「@昵称」也算，否则同一条消息
  *                  会在指令侧放行、在 Guard 侧被拦
+ * @param trigger   概率回复的判定结果。只有路由层算，Guard 只读
  */
 public record GuardContext(OneBotEvent event, String text, List<String> imageUrls,
-                           boolean hasQuote, boolean mentioned) {
+                           boolean hasQuote, boolean mentioned, TriggerDecision trigger) {
 
     public GuardContext {
         imageUrls = imageUrls == null ? List.of() : List.copyOf(imageUrls);
+    }
+
+    /** 兼容老的构造：没有概率判定 */
+    public GuardContext(OneBotEvent event, String text, List<String> imageUrls,
+                        boolean hasQuote, boolean mentioned) {
+        this(event, text, imageUrls, hasQuote, mentioned, null);
     }
 
     /** 群号（私聊时为 null） */
@@ -28,6 +36,16 @@ public record GuardContext(OneBotEvent event, String text, List<String> imageUrl
     /** 发送者 QQ 号 */
     public Long userId() {
         return event.getUserId();
+    }
+
+    /**
+     * 这是不是一条「没被叫到、机器人自己想接话」的消息。
+     *
+     * <p>固定话术对它一律降级为静默 —— 没点名却收到「别急呀」「看不了图」
+     * 本身就是骚扰。
+     */
+    public boolean unsolicited() {
+        return trigger != null && trigger.reply() && !trigger.isCall();
     }
 
     /**

@@ -128,7 +128,7 @@ public class Access {
      * 群聊里这条消息是否满足 @ 要求。
      *
      * <h2>为什么要有这个方法</h2>
-     * 指令跑在 Guard 之前，拿不到 {@code MentionRequiredStage} 的判定结果，
+     * 指令跑在 Guard 之前，拿不到 {@code ReplyTriggerStage} 的判定结果，
      * 又必须和它得出同一个结论。抽成一个方法给两边共用，
      * 总比在两个地方各读一次开关强 —— 那正是「同一条消息两个结论」的来源。
      *

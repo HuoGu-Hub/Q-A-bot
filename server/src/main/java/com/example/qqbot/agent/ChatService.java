@@ -3,6 +3,7 @@ package com.example.qqbot.agent;
 import com.example.qqbot.media.MediaPolicy;
 import com.example.qqbot.kb.KbPolicy;
 import com.example.qqbot.guard.ContentGate;
+import com.example.qqbot.intent.TurnMove;
 import com.example.qqbot.intent.TurnPlan;
 import com.example.qqbot.intent.TurnStore;
 import com.example.qqbot.kb.KbRetrievalDiagnostics;
@@ -40,6 +41,17 @@ import java.util.List;
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+
+    /** 闲聊插话：只接一句 */
+    private static final String CHAT_CHIME_NOTE = """
+            这条群消息没有 @ 你，也没有点名问你。
+            你只是在群里接一句话：只接一句，30 字内；
+            不列点、不科普、不复述资料；接不上就短一点。""";
+
+    /** 疑问插话：没被点名，但可能在问群里 */
+    private static final String QUESTION_CHIME_NOTE = """
+            这条消息没有点名问你，但像是在问群里。
+            知道就简短回答；不确定就直接说不确定，不要展开。""";
 
     private final LlmRouter llmRouter;
     private final ImageFetcher imageFetcher;
@@ -173,6 +185,8 @@ public class ChatService {
         List<TurnStore.Turn> recentTurns = turnStore == null ? List.of() : turnStore.recent(turnGroupId, turnUserId);
         boolean correcting = turn.correcting() && !recentTurns.isEmpty();
         String memory = memoryNote(correcting, recentTurns);
+        String chimeNote = !turn.chimeIn() ? ""
+                : turn.move() == TurnMove.CHIME ? CHAT_CHIME_NOTE : QUESTION_CHIME_NOTE;
 
         // 本次请求的待发语音清单：工具往里记，回复生成完再由路由决定发送时机
         MediaOutbox outbox = new MediaOutbox();
@@ -191,7 +205,7 @@ public class ChatService {
                 return done("图片我这边下载不下来，你重新发一次试试？", t0, KbTrace.disabled());
             }
             // 与文本路径同一套：资料由管线注入（所以信封的资料参数传 null）
-            String envelope = buildUserMessage(event, text, quote, null, useMode, voiceRequired, memory);
+            String envelope = buildUserMessage(event, text, quote, null, useMode, voiceRequired, memory, chimeNote);
             String visionQuery = ((text == null ? "" : text) + " "
                     + (quote == null || quote.text() == null ? "" : quote.text())).trim();
             String visionCaller = callerOf(event);
@@ -226,7 +240,7 @@ public class ChatService {
         }
         KbRetrievalDiagnostics sink = new KbRetrievalDiagnostics();
         try {
-            String userMessage = buildUserMessage(event, text, quote, null, useMode, voiceRequired, memory);
+            String userMessage = buildUserMessage(event, text, quote, null, useMode, voiceRequired, memory, chimeNote);
             String reply = toolAssistant.chat(userMessage, query, sink, retrieve,
                     callerOf(event), extraPrompt, outbox);
             return remember(done(attachResourceShot(sanitize(reply), query), t0,
@@ -411,7 +425,8 @@ public class ChatService {
     }
 
     private String buildUserMessage(OneBotEvent event, String text, Quote quote, String knowledge,
-                                    ReplyMode mode, boolean voiceRequired, String memory) {
+                                    ReplyMode mode, boolean voiceRequired, String memory,
+                                    String chimeNote) {
         StringBuilder sb = new StringBuilder();
         // 模式说明放在最前：模型先知道"这次按什么规矩答"，再看到问题
         String modeNote = mode == null ? "" : mode.promptNote();
@@ -421,6 +436,9 @@ public class ChatService {
         // 纠正时把上一轮摆出来：模型要先知道"刚才说的是什么"，才谈得上只改那一点
         if (memory != null && !memory.isEmpty()) {
             sb.append(memory).append("\n\n");
+        }
+        if (chimeNote != null && !chimeNote.isEmpty()) {
+            sb.append(chimeNote).append("\n\n");
         }
         // 关键词要求语音：这是硬约束，写在信封最前面，别让它被长回答冲淡
         if (voiceRequired) {

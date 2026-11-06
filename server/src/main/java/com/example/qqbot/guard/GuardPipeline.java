@@ -3,7 +3,7 @@ package com.example.qqbot.guard;
 import com.example.qqbot.guard.stage.AccessControlStage;
 import com.example.qqbot.guard.stage.ContentGateStage;
 import com.example.qqbot.guard.stage.InboundWordStage;
-import com.example.qqbot.guard.stage.MentionRequiredStage;
+import com.example.qqbot.guard.stage.ReplyTriggerStage;
 import com.example.qqbot.guard.stage.RateLimitStage;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -18,7 +18,7 @@ import java.util.List;
  * <p>顺序是精心安排的，从最便宜到最贵：
  * <pre>
  *   1. access        谁有资格（纯内存判断，零成本）
- *   2. mention       有没有 @ 我（零成本，挡掉群里绝大部分消息）
+ *   2. trigger       要不要回这条消息（零成本，挡掉群里绝大部分消息）
  *   3. rate-limit    频率够不够（零成本，挡掉刷屏）
  *   4. content-gate  有没有文字内容（零成本，纯表情直接回兜底词）
  *   5. inbound-words 有没有敏感词（零成本，命中直接拒绝）
@@ -54,7 +54,7 @@ public class GuardPipeline {
                          ContentGate contentGate,
                          GuardMetrics metrics,
                          AccessControlStage accessControl,
-                         MentionRequiredStage mentionRequired,
+                         ReplyTriggerStage replyTrigger,
                          RateLimitStage rateLimitStage,
                          ContentGateStage contentGateStage,
                          InboundWordStage inboundWords) {
@@ -66,7 +66,7 @@ public class GuardPipeline {
         // 顺序就是执行顺序，改这里就能调整优先级
         this.stages = List.of(
                 accessControl,
-                mentionRequired,
+                replyTrigger,
                 rateLimitStage,
                 contentGateStage,
                 inboundWords);
@@ -80,8 +80,11 @@ public class GuardPipeline {
             return;
         }
         log.info("[GUARD] 安全中间层已启用");
-        log.info("[GUARD]   顺序        ：access -> mention -> rate-limit -> content-gate -> inbound-words");
+        log.info("[GUARD]   顺序        ：access -> trigger -> rate-limit -> content-gate -> inbound-words");
         log.info("[GUARD]   群聊必须 @  ：{}", access.isRequireMentionInGroup());
+        log.info("[GUARD]   概率回复    ：{}", access.isRequireMentionInGroup()
+                ? "关闭（仍按必须 @ 处理）"
+                : "见 [TRIGGER] 启动日志");
         log.info("[GUARD]   私聊策略    ：{}", access.getPrivateChatPolicy());
         log.info("[GUARD]   限流        ：每群 {} 条/分钟，每人在群内 {} 次/{} 秒，超限处理={}",
                 rateLimit.getPerGroupPerMinute(), rateLimit.getPerUserPerMinute(),
@@ -120,6 +123,12 @@ public class GuardPipeline {
             GuardResult result = stage.check(ctx);
             if (result instanceof GuardResult.Pass) {
                 continue;
+            }
+            if (ctx.unsolicited() && result instanceof GuardResult.Reply reply) {
+                // 没被叫到却收到「别急呀」「看不了图」本身就是骚扰。固定话术统一降级为静默。
+                log.info("[GUARD] 插话不回固定话术，改为静默：stage={} reason={} group={} user={}",
+                        stage.name(), reply.reason(), ctx.groupId(), ctx.userId());
+                result = GuardResult.drop(stage.name(), reply.reason());
             }
             log.info("[GUARD] 拦截 stage={} reason={} group={} user={}",
                     stage.name(), describe(result), ctx.groupId(), ctx.userId());

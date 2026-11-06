@@ -61,11 +61,21 @@ public class QaCollector {
 
     public void collect(OneBotEvent event, String question, String quoteText, int imageCount,
                         String guardAction, String answer, KbTrace kb, long llmMs, long totalMs) {
+        collect(event, question, quoteText, imageCount, guardAction, answer, kb, llmMs, totalMs, true);
+    }
+
+    /**
+     * @param countsAsAsk 这次记录算不算一次用户提问。主动插话传 false：
+     *                    只落行，不参与「下一条是不是追问」的推断
+     */
+    public void collect(OneBotEvent event, String question, String quoteText, int imageCount,
+                        String guardAction, String answer, KbTrace kb, long llmMs, long totalMs,
+                        boolean countsAsAsk) {
         if (!props.isEnabled()) {
             return;
         }
         try {
-            long lastId = detectFollowUp(event.getUserId());
+            long lastId = countsAsAsk ? detectFollowUp(event.getUserId()) : 0;
             KbTrace trace = kb == null ? KbTrace.disabled() : kb;
             recorder.record(new QaRecord(
                     Instant.now().toString(),

@@ -31,6 +31,9 @@ public enum TurnMove {
     /** 对上一轮回答的纠正 */
     CORRECT,
 
+    /** 群里主动接话：不检索，只接一句 */
+    CHIME,
+
     /** 没识别出别的，走现有链路 */
     DEFAULT
 }

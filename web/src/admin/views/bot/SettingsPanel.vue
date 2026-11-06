@@ -89,6 +89,13 @@ const ENUM_OPTIONS: Array<[string, Array<{ value: string; label: string }>]> = [
 ]
 const enumOpts = (item: SettingItem) => ENUM_OPTIONS.find(([frag]) => item.key.includes(frag))?.[1]
 const val = (item: SettingItem) => String(changed.value[item.key] ?? item.value ?? '')
+const ratioValue = (item: SettingItem) => {
+  const n = Number(changed.value[item.key] ?? item.value)
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0
+}
+function onRatio(item: SettingItem, e: Event) {
+  onEdit(item, Number((e.target as HTMLInputElement).value))
+}
 
 defineExpose({
   reload: load,
@@ -170,4 +177,7 @@ onMounted(load)
 
 <style scoped>
 .panel-wrap { display: flex; flex-direction: column; gap: var(--sp-4); }
+.ratio { display: flex; align-items: center; gap: var(--sp-3); width: 100%; }
+.ratio-range { flex: 1; accent-color: var(--flame); }
+.ratio-val { width: 42px; text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 </style>

@@ -84,6 +84,14 @@ public class BudgetGuard {
      * 等回复回来再判断已经晚了。
      */
     public Decision check(Long userId, Long groupId) {
+        return check(userId, groupId, true);
+    }
+
+    /**
+     * @param chargeQuota 是否消耗用户与群额度。主动插话只查全局、只记全局，
+     *                    不能把群友的提问额度吃掉
+     */
+    public Decision check(Long userId, Long groupId, boolean chargeQuota) {
         if (!config.isEnabled()) {
             return new Decision(Verdict.OK, "");
         }
@@ -97,14 +105,16 @@ public class BudgetGuard {
         if (globalLimit > 0 && globalCalls.get() >= globalLimit) {
             return circuit("今日全局回复额度已用完（" + globalCalls.get() + "/" + globalLimit + "）");
         }
-        int groupLimit = config.getPerGroupPerDay();
-        if (groupId != null && groupLimit > 0 && countOf(groupCalls, groupId) >= groupLimit) {
-            return new Decision(Verdict.GROUP_LIMIT, "");
-        }
-        int userLimit = config.getPerUserPerDay();
-        if (userId != null && userLimit > 0 && countOf(userCalls, userId) >= userLimit) {
-            return new Decision(Verdict.USER_LIMIT,
-                    config.getUserLimitText().replace("{limit}", String.valueOf(userLimit)));
+        if (chargeQuota) {
+            int groupLimit = config.getPerGroupPerDay();
+            if (groupId != null && groupLimit > 0 && countOf(groupCalls, groupId) >= groupLimit) {
+                return new Decision(Verdict.GROUP_LIMIT, "");
+            }
+            int userLimit = config.getPerUserPerDay();
+            if (userId != null && userLimit > 0 && countOf(userCalls, userId) >= userLimit) {
+                return new Decision(Verdict.USER_LIMIT,
+                        config.getUserLimitText().replace("{limit}", String.valueOf(userLimit)));
+            }
         }
         return new Decision(Verdict.OK, "");
     }
@@ -116,15 +126,20 @@ public class BudgetGuard {
      * 让一群人同时挤过闸门把额度撑爆。
      */
     public void recordCall(Long userId, Long groupId) {
+        recordCall(userId, groupId, true);
+    }
+
+    /** @param chargeQuota 是否同时计入用户与群额度。主动插话传 false，只计全局 */
+    public void recordCall(Long userId, Long groupId, boolean chargeQuota) {
         if (!config.isEnabled()) {
             return;
         }
         rolloverIfNeeded();
         globalCalls.incrementAndGet();
-        if (userId != null) {
+        if (chargeQuota && userId != null) {
             userCalls.computeIfAbsent(userId, k -> new AtomicInteger()).incrementAndGet();
         }
-        if (groupId != null) {
+        if (chargeQuota && groupId != null) {
             groupCalls.computeIfAbsent(groupId, k -> new AtomicInteger()).incrementAndGet();
         }
     }

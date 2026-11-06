@@ -10,6 +10,7 @@ import com.example.qqbot.config.LogProperties;
 import com.example.qqbot.kb.MapOptions;
 import com.example.qqbot.config.MediaProperties;
 import com.example.qqbot.config.QaProperties;
+import com.example.qqbot.config.ReplyTriggerProperties;
 import com.example.qqbot.config.SiteProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ class SettingsPrefixTest {
                 mock(MediaProperties.class), mock(QaProperties.class),
                 mock(LogProperties.class), mock(CommandProperties.class),
                 mock(SiteProperties.class), mock(LlmProperties.class),
-                mock(BotProperties.class), mock(IntentProperties.class));
+                mock(BotProperties.class), mock(IntentProperties.class), mock(ReplyTriggerProperties.class));
         SettingsService service = new SettingsService(
                 new SettingsWhitelist(), mock(OverridesFile.class), roots);
 
@@ -84,7 +85,7 @@ class SettingsPrefixTest {
                         new GuardProperties(), new KbProperties(), new MapOptions(),
                         new MediaProperties(), new QaProperties(), new LogProperties(),
                         new CommandProperties(), new SiteProperties(), new LlmProperties(),
-                        new BotProperties(), new IntentProperties()));
+                        new BotProperties(), new IntentProperties(), new ReplyTriggerProperties()));
 
         List<String> broken = new ArrayList<>();
         for (SettingsWhitelist.Item item : SettingsWhitelist.ITEMS) {

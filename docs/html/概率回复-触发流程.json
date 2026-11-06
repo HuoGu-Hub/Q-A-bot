@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "概率回复的触发判定",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1240,
+      714
+    ]
+  },
+  "lanes": [
+    {
+      "id": "ingress",
+      "label": "入站"
+    },
+    {
+      "id": "gate",
+      "label": "触发判定"
+    },
+    {
+      "id": "safety",
+      "label": "安全与预算"
+    },
+    {
+      "id": "reply",
+      "label": "生成与发送"
+    },
+    {
+      "id": "stop",
+      "label": "静默",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "arrive",
+      "label": "到达",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "decide",
+      "label": "判定",
+      "fromCol": 2,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    {
+      "id": "act",
+      "label": "执行",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "msg",
+    "access",
+    "judge",
+    "guard",
+    "reply"
+  ],
+  "nodes": [
+    {
+      "id": "msg",
+      "lane": "ingress",
+      "col": 0,
+      "type": "messagebus",
+      "label": "群消息",
+      "width": 80
+    },
+    {
+      "id": "access",
+      "lane": "ingress",
+      "col": 1,
+      "type": "security",
+      "label": "准入与指令",
+      "sublabel": "黑名单 / 私聊",
+      "width": 120
+    },
+    {
+      "id": "judge",
+      "lane": "gate",
+      "col": 2,
+      "type": "backend",
+      "label": "触发判定",
+      "sublabel": "呼叫 / 疑问 / 闲聊",
+      "width": 120
+    },
+    {
+      "id": "guard",
+      "lane": "safety",
+      "col": 3,
+      "type": "security",
+      "label": "Guard 五层",
+      "sublabel": "限流 / 词表 / 预算",
+      "width": 120
+    },
+    {
+      "id": "reply",
+      "lane": "reply",
+      "col": 4,
+      "type": "cloud",
+      "label": "生成并发送",
+      "sublabel": "短回复",
+      "width": 110
+    },
+    {
+      "id": "ignore",
+      "lane": "stop",
+      "col": 2,
+      "type": "external",
+      "label": "静默丢弃",
+      "sublabel": "未命中 / 噪音",
+      "width": 110
+    },
+    {
+      "id": "blocked",
+      "lane": "stop",
+      "col": 3,
+      "type": "external",
+      "label": "静默丢弃",
+      "sublabel": "拦截 / 超限",
+      "width": 110
+    }
+  ],
+  "edges": [
+    {
+      "from": "msg",
+      "to": "access",
+      "variant": "emphasis"
+    },
+    {
+      "from": "access",
+      "to": "judge",
+      "variant": "emphasis"
+    },
+    {
+      "from": "judge",
+      "to": "guard",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "judge",
+      "to": "ignore",
+      "role": "error",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "guard",
+      "to": "reply",
+      "variant": "emphasis"
+    },
+    {
+      "from": "guard",
+      "to": "blocked",
+      "role": "error",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ]
+}

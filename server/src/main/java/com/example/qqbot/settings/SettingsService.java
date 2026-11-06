@@ -112,6 +112,7 @@ public class SettingsService {
             }
             try {
                 Object value = sanitize(key, e.getValue());
+                validate(key, value);
                 writeValue(key, value);
                 accepted.put(key, value);
                 applied.add(key);
@@ -172,7 +173,7 @@ public class SettingsService {
         ObjectHolder h = resolve(key);
         Field f = h.target.getClass().getDeclaredField(h.field);
         f.setAccessible(true);
-        f.set(h.target, convert(f.getType(), value));
+        f.set(h.target, convert(f, value));
     }
 
     /**
@@ -231,6 +232,78 @@ public class SettingsService {
         return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
+    /** 写列表字段时按字段的泛型元素类型转换，避免 List&lt;String&gt; 塞进 List&lt;Long&gt; */
+    private static Object convert(java.lang.reflect.Field field, Object value) {
+        if (List.class.isAssignableFrom(field.getType())) {
+            List<String> raw = new ArrayList<>();
+            if (value instanceof List<?> l) {
+                for (Object o : l) {
+                    if (o != null && StringUtils.hasText(String.valueOf(o))) {
+                        raw.add(String.valueOf(o).trim());
+                    }
+                }
+            } else if (StringUtils.hasText(String.valueOf(value))) {
+                for (String line : String.valueOf(value).split("[\\n,，]")) {
+                    if (StringUtils.hasText(line)) {
+                        raw.add(line.trim());
+                    }
+                }
+            }
+            Class<?> elem = elementType(field);
+            List<Object> out = new ArrayList<>(raw.size());
+            for (String s : raw) {
+                if (elem == Long.class || elem == long.class) {
+                    out.add(parseLong(s));
+                } else if (elem == Integer.class || elem == int.class) {
+                    out.add(Integer.parseInt(s));
+                } else {
+                    out.add(s);
+                }
+            }
+            return out;
+        }
+        return convert(field.getType(), value);
+    }
+
+    private static Class<?> elementType(java.lang.reflect.Field field) {
+        java.lang.reflect.Type generic = field.getGenericType();
+        if (generic instanceof java.lang.reflect.ParameterizedType pt) {
+            java.lang.reflect.Type arg = pt.getActualTypeArguments()[0];
+            if (arg instanceof Class<?> c) {
+                return c;
+            }
+        }
+        return String.class;
+    }
+
+    /** 群号可能被 Excel 粘成 2.09E8，先按 long 解析，失败再按小数截断 */
+    private static long parseLong(String s) {
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            try {
+                return new java.math.BigDecimal(s).longValue();
+            } catch (NumberFormatException e2) {
+                throw new IllegalArgumentException("群号必须是数字：" + s);
+            }
+        }
+    }
+
+    /** 写入前的范围校验。返回的 message 会直接显示在后台 */
+    private static void validate(String key, Object value) {
+        if ("app.reply.probability".equals(key)) {
+            double d;
+            try {
+                d = value instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(value).trim());
+            } catch (Exception e) {
+                throw new IllegalArgumentException("概率必须是 0 到 1 之间的数字");
+            }
+            if (!Double.isFinite(d) || d < 0 || d > 1) {
+                throw new IllegalArgumentException("概率必须在 0 和 1 之间");
+            }
+        }
+    }
+
     private static Object convert(Class<?> type, Object value) {
         if (value == null) {
             return null;
@@ -246,23 +319,6 @@ public class SettingsService {
         }
         if (type == double.class || type == Double.class) {
             return value instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(value).trim());
-        }
-        if (List.class.isAssignableFrom(type)) {
-            List<String> out = new ArrayList<>();
-            if (value instanceof List<?> l) {
-                for (Object o : l) {
-                    if (o != null && StringUtils.hasText(String.valueOf(o))) {
-                        out.add(String.valueOf(o).trim());
-                    }
-                }
-            } else if (StringUtils.hasText(String.valueOf(value))) {
-                for (String line : String.valueOf(value).split("[\\n,，]")) {
-                    if (StringUtils.hasText(line)) {
-                        out.add(line.trim());
-                    }
-                }
-            }
-            return out;
         }
         return String.valueOf(value).trim();
     }

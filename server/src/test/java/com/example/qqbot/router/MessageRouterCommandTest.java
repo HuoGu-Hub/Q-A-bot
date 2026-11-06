@@ -214,7 +214,7 @@ class MessageRouterCommandTest {
         when(variableRenderer.contextOf(any(), any(), any(), any())).thenReturn(RenderContext.sample());
         when(commandRateLimiter.allow(anyString())).thenReturn(true);
         when(guardPipeline.check(any())).thenReturn(GuardResult.pass());
-        when(budgetGuard.check(anyLong(), anyLong()))
+        when(budgetGuard.check(anyLong(), anyLong(), anyBoolean()))
                 .thenReturn(new BudgetGuard.Decision(BudgetGuard.Verdict.OK, null));
         when(chatService.reply(any(), anyString(), any(), any(), any(ReplyMode.class), anyBoolean(), any()))
                 .thenReturn(new ChatService.ReplyResult("模型回答", 12L, KbTrace.disabled()));
@@ -376,7 +376,7 @@ class MessageRouterCommandTest {
         router.handle(groupEvent("/联网 今天什么版本"));
 
         verify(guardPipeline, times(1)).check(any());
-        verify(budgetGuard, times(1)).check(eq(USER), eq(GROUP));
+        verify(budgetGuard, times(1)).check(eq(USER), eq(GROUP), eq(true));
         // 关键：传给模型的是**参数**（问题），模式是命令配的 none
         verify(chatService).reply(any(), eq("今天什么版本"), any(), any(), eq(ReplyMode.NONE),
                 anyBoolean(), any());
@@ -390,7 +390,7 @@ class MessageRouterCommandTest {
                 "all", List.of(), "member", true, 4, false,
                 BotCommand.KIND_AGENT, BotCommand.MODE_NONE, List.of(), null, null);
         matchCommand(web, "今天什么版本");
-        when(budgetGuard.check(anyLong(), anyLong()))
+        when(budgetGuard.check(anyLong(), anyLong(), anyBoolean()))
                 .thenReturn(new BudgetGuard.Decision(BudgetGuard.Verdict.USER_LIMIT, "今天的额度用完了"));
 
         router.handle(groupEvent("/联网 今天什么版本"));

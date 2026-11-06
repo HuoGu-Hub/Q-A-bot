@@ -49,10 +49,10 @@ public class QaAnalytics {
     /**
      * 看板总览。**口径在这里说清楚**，因为它被误解过好几轮。
      *
-     * <p>产品对「提问」的定义（2026-09-26 确认）：一条消息必须<b>同时</b>满足两条
-     * 才算一次提问 —— ① @ 了机器人；② 机器人给出了有效回应且未被拦截。
-     * 对照 {@code guard_action} 的四个取值，<b>只有 {@code pass} 同时满足</b>
-     * （四个取值各自混装了什么，见 {@link QaAnalyticsRepository} 的注释）。
+     * <p>产品对「提问」的定义：一条消息必须<b>同时</b>满足两条
+     * 才算一次提问 —— ① 呼叫了机器人：@、正文昵称、引用机器人或私聊；② 机器人给出了有效回应且未被拦截。
+     * 对照 {@code guard_action} 的五个取值，<b>只有 {@code pass} 同时满足</b>
+     * （五个取值各自混装了什么，见 {@link QaAnalyticsRepository} 的注释）。
      *
      * <p>所以：
      * <ul>
@@ -70,6 +70,7 @@ public class QaAnalytics {
      *   <li>{@code dropped}/{@code fixedReplies} —— 被拦截的两种，分开列。
      *       两者语义都是"被拦"，不该混进任何"回答量"。</li>
      *   <li>{@code commands}  —— 命中的指令数。有回应，但<b>不是提问</b>。</li>
+ *   <li>{@code guardActions.auto} —— 主动接话数。有回应，但<b>不是提问</b>，也不参与命中率。</li>
      *   <li>{@code daily}     —— 每日<b>提问量</b>（{@code pass}），不是每日消息量。</li>
      *   <li>延迟分位数只统计 {@code pass} 行。⚠️ 曾跨全部 action 统计，被 1194 条
      *       {@code drop} 行的 {@code retrieve_ms=0} 拉低 —— 全表均值 39ms，

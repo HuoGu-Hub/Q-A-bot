@@ -218,6 +218,24 @@ public class MessageCodec {
         return false;
     }
 
+    /** 群里有没有 @ 别人（不是机器人自己） */
+    public boolean hasAtOther(OneBotEvent event, long selfId) {
+        JsonNode message = event.getMessage();
+        if (message == null || !message.isArray()) {
+            return false;
+        }
+        for (JsonNode segment : message) {
+            if (!TYPE_AT.equals(segment.path("type").asText())) {
+                continue;
+            }
+            String qq = segment.path("data").path("qq").asText("");
+            if (!String.valueOf(selfId).equals(qq)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ==================== 构造 ====================
 
     /** 构造一条纯文本消息（用于私聊回复） */

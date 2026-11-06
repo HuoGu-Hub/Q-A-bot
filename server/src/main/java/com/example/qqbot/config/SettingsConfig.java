@@ -36,7 +36,8 @@ public class SettingsConfig {
                                        MediaProperties media, QaProperties qa,
                                        LogProperties logs, CommandProperties commands,
                                        SiteProperties site, LlmProperties llm,
-                                       BotProperties bot, IntentProperties intent) {
+                                       BotProperties bot, IntentProperties intent,
+                                       ReplyTriggerProperties reply) {
         // ⚠️ 超过 10 对就不能再用 Map.of：它会落到 Map.of(K,V,...) 的重载上编译失败
         return new SettingsRoots(Map.ofEntries(
                 Map.entry("guard", guard),
@@ -51,6 +52,7 @@ public class SettingsConfig {
                 Map.entry("site", site),
                 Map.entry("llm", llm),
                 Map.entry("bot", bot),
-                Map.entry("intent", intent)));
+                Map.entry("intent", intent),
+                Map.entry("reply", reply)));
     }
 }

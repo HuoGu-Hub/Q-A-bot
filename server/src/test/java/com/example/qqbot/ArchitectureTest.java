@@ -299,8 +299,20 @@ class ArchitectureTest {
                         // 2026-10-31 新增 intent：配置走 IntentPolicy 只读接口
                         "..intent..",
                         // 2026-11-03 新增 eval：配置走 KbPolicy / LlmPolicy 只读接口
-                        "..eval..")
+                        "..eval..",
+                        // 2026-11-06 新增 trigger：配置走 TriggerPolicy 只读接口
+                        "..trigger..")
                 .should().dependOnClassesThat().resideInAPackage("..config..");
+        rule.check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("★ 概率回复判定不得依赖检索、模型与协议客户端 —— 它只该认识关键词（2026-11-06）")
+    void triggerStaysCheap() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..trigger..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("..kb..", "..llm..", "com.example.qqbot.onebot.client..");
         rule.check(CLASSES);
     }
 

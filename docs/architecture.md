@@ -83,7 +83,8 @@ flowchart TD
 | 分诊 | `EventDispatcher` | 正文以 `/` 开头进命令池，其余进问答池 |
 | 准入 | `Access` | 群聊必须 @、私聊策略、群与用户黑名单 |
 | 命令 | `CommandHandler` | 话术、动作、智能问答三类分流 |
-| 安全 | `GuardPipeline` | access → mention → rate-limit → content-gate → inbound-words |
+| 触发 | `ReplyTriggerStage` + `ReplyTrigger` | 呼叫直通；疑问按 p、闲聊从 0.5 解禁；节奏闸与影子模式 |
+| 安全 | `GuardPipeline` | access → trigger → rate-limit → content-gate → inbound-words |
 | 预算 | `BudgetGuard` | 用户、群、全局每日额度与 token 上限 |
 | 意图 | `IntentPlanner` | 社交、元问题、边界外跳过检索；纠正标记；失败回默认 |
 | 问答 | `ChatService` + `KbToolAssistant` | 组装消息、驱动官方检索管线、调用模型 |
@@ -91,11 +92,11 @@ flowchart TD
 | 出站 | `OutboundSender` | 过滤、分片、合并转发、发送节奏 |
 | 记录 | `QaCollector` | 问题、回答、检索指标、耗时、关键词 |
 
-命令在 Guard 之前执行，但准入在命令之前。这样 `/help` 不受问答限流影响，被拉黑的人也不能通过命令绕过准入。智能问答类命令会回到 Guard 与预算流程，因为它确实会调用模型。
+命令在 Guard 之前执行，但准入在命令之前。这样 `/help` 不受问答限流影响，被拉黑的人也不能通过命令绕过准入。智能问答类命令会回到 Guard 与预算流程，因为它确实会调用模型。触发判定在命令之后、Guard 之前：判定在 `MessageRouter` 里算，执行在 `ReplyTriggerStage`，丢弃仍然计入 Guard 指标。
 
 ## 4. 模块边界
 
-`ArchitectureTest` 用 ArchUnit 强制 17 条架构规则，违反即构建失败。
+`ArchitectureTest` 用 ArchUnit 强制 18 条架构规则，违反即构建失败。
 
 | 包 | 职责 | 约束 |
 |---|---|---|
@@ -105,6 +106,7 @@ flowchart TD
 | `router` | 事件编排、排队、出站调度 | 不包含检索与模型实现 |
 | `agent` | 组装对话消息、调用助手 | 不直接接触协议客户端 |
 | `intent` | 规则意图、最近轮次、纠正标记 | 纯规则，不调用模型 |
+| `trigger` | 概率回复判定、节奏闸、影子模式 | 不依赖 `kb`、`llm`、`onebot.client` 与 `config` |
 | `command` | 命令定义、解析、权限、板块与投递 | 通过 `OutboundSender` 发送 |
 | `kb` | 语料、检索、聚合、知识库管理 | 不得依赖 `qa`、`publicapi`、`admin`、`settings` |
 | `voice` | 素材库、TTS、触发规则、语音发送 | 只通过 `OutboundSender` 发送 |
@@ -117,7 +119,7 @@ flowchart TD
 | `settings` / `config` | 配置中心与装配 | 业务包不得依赖 `config` |
 | `publicapi` / `admin` / `site` | HTTP 接口与站点内容 | 公开接口使用独立 DTO，不复用管理接口 |
 
-17 条规则覆盖协议细节收敛、发送出口唯一、模型 SDK 收敛、SQL 收敛、知识库分层、意图与语音边界及配置依赖。新增包时需要同步更新 `ArchitectureTest` 里的包名单。
+18 条规则覆盖协议细节收敛、发送出口唯一、模型 SDK 收敛、SQL 收敛、知识库分层、意图与语音边界及配置依赖。新增包时需要同步更新 `ArchitectureTest` 里的包名单。
 
 ## 5. 数据模型
 

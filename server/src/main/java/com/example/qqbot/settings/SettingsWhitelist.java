@@ -30,7 +30,7 @@ public class SettingsWhitelist {
 
     /**
      * 分组展示顺序。
-     * type: bool / int / string / text / enum / list
+     * type: bool / int / string / text / enum / list / ratio
      */
     public static final List<Item> ITEMS = List.of(
             // ---------- 回复行为 ----------
@@ -44,6 +44,21 @@ public class SettingsWhitelist {
                     "list", "一行一个群号", List.of()),
             new Item("app.guard.access.user-blacklist", "用户黑名单", "回复行为",
                     "list", "一行一个 QQ 号", List.of()),
+
+            // ---------- 概率回复 ----------
+            // 只在「群里必须 @」关闭后生效；空群列表 = 所有群都不做概率回复
+            new Item("app.reply.probability", "概率回复", "概率回复",
+                    "ratio", "0 到 1；仅当「群里必须 @」关闭时生效", 0.0),
+            new Item("app.reply.enabled-groups", "概率回复的群", "概率回复",
+                    "list", "一行一个群号；留空 = 所有群都不做，呼叫不受影响", List.of()),
+            new Item("app.reply.min-gap-seconds", "同群最小间隔（秒）", "概率回复",
+                    "int", "0 = 不限", 0),
+            new Item("app.reply.user-cooldown-seconds", "用户冷却（秒）", "概率回复",
+                    "int", "0 = 不限", 0),
+            new Item("app.reply.daily-max-per-group", "每群每日上限", "概率回复",
+                    "int", "0 = 不限", 40),
+            new Item("app.reply.shadow-mode", "影子模式", "概率回复",
+                    "bool", "只记日志，不发送", false),
 
             // ---------- 频率限制 ----------
             new Item("app.guard.rate-limit.enabled", "启用限流", "频率限制",

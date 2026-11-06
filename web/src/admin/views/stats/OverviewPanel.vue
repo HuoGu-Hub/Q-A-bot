@@ -223,11 +223,12 @@ defineExpose({
 
     <template v-if="ov">
       <div class="kpis">
-        <Stat label="提问量" :value="num(ov.questions)" hint="@ 了机器人且被有效回应" tone="flame" />
+        <Stat label="提问量" :value="num(ov.questions)" hint="呼叫了机器人且被有效回应" tone="flame" />
         <Stat label="群消息总数" :value="num(ov.total)" hint="含未 @ 与被拦" tone="mist" />
         <Stat label="提问命中率" :value="pct(ov.hitRate)" hint="提问中检索到资料的比例" tone="moss" />
         <Stat label="提问用户 / 群" :value="`${ov.users} / ${ov.groups}`" tone="mist" />
         <Stat label="被拦 / 指令" :value="`${num(ov.dropped + ov.fixedReplies)} / ${num(ov.commands)}`" hint="被拦不含指令" tone="mist" />
+        <Stat label="主动回复" :value="num(ov.guardActions.auto ?? 0)" hint="机器人主动接话，不计入提问" tone="mist" />
         <Stat label="资料搜索耗时 P50 / P95" :value="`${ms(ov.p50RetrieveMs)} / ${ms(ov.p95RetrieveMs)}`"
               hint="中位数 / 最慢的 5%" tone="mist" />
         <Stat label="回答耗时 P50 / P95" :value="`${ms(ov.p50TotalMs)} / ${ms(ov.p95TotalMs)}`"
