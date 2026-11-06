@@ -87,6 +87,9 @@ const ENUM_OPTIONS: Array<[string, Array<{ value: string; label: string }>]> = [
     { value: 'prose', label: 'prose — 段落' },
   ]],
 ]
+const isTall = (item: SettingItem) => item.type === 'list' || item.type === 'text'
+const shortItems = (items: SettingItem[]) => items.filter(i => !isTall(i))
+const tallItems = (items: SettingItem[]) => items.filter(isTall)
 const enumOpts = (item: SettingItem) => ENUM_OPTIONS.find(([frag]) => item.key.includes(frag))?.[1]
 const val = (item: SettingItem) => String(changed.value[item.key] ?? item.value ?? '')
 const ratioValue = (item: SettingItem) => {
@@ -127,21 +130,21 @@ onMounted(load)
         dense
         :default-open="expandAll === true"
       >
-        <div class="setting-grid">
+        <div v-if="shortItems(items).length" class="setting-grid setting-grid--short">
           <SettingField
-            v-for="item in items"
+            v-for="item in shortItems(items)"
             :key="item.key"
             :label="item.label"
             :hint="item.hint"
             :changed="isChanged(item.key)"
-            :inline="item.type === 'bool'"
           >
-            <Switch
-              v-if="item.type === 'bool'"
-              :model-value="Boolean(changed[item.key] ?? item.value)"
-              :aria-label="item.label"
-              @update:model-value="onEdit(item, $event)"
-            />
+            <div v-if="item.type === 'bool'" class="ctrl-line">
+              <Switch
+                :model-value="Boolean(changed[item.key] ?? item.value)"
+                :aria-label="item.label"
+                @update:model-value="onEdit(item, $event)"
+              />
+            </div>
             <Input
               v-else-if="item.type === 'int' || (item.type === 'string' && typeof item.value === 'number')"
               :model-value="val(item)"
@@ -168,22 +171,33 @@ onMounted(load)
               >
               <span class="ratio-val num">{{ ratioValue(item).toFixed(2) }}</span>
             </div>
+            <Input v-else :model-value="val(item)" @update:model-value="onEdit(item, $event)" />
+          </SettingField>
+        </div>
+
+        <div v-if="tallItems(items).length" class="setting-grid setting-grid--tall">
+          <SettingField
+            v-for="item in tallItems(items)"
+            :key="item.key"
+            :label="item.label"
+            :hint="item.hint"
+            :changed="isChanged(item.key)"
+          >
             <Input
-              v-else-if="item.type === 'list'"
+              v-if="item.type === 'list'"
               :model-value="listText(item)"
               multiline
-              :rows="3"
+              :rows="4"
               placeholder="一行一个"
               @update:model-value="onListEdit(item, $event)"
             />
             <Input
-              v-else-if="item.type === 'text'"
+              v-else
               :model-value="val(item)"
               multiline
-              :rows="2"
+              :rows="4"
               @update:model-value="onEdit(item, $event)"
             />
-            <Input v-else :model-value="val(item)" @update:model-value="onEdit(item, $event)" />
           </SettingField>
         </div>
       </Panel>
@@ -198,7 +212,7 @@ onMounted(load)
   gap: var(--sp-3);
 }
 
-/* 一组一行；展开后组内三列字段，横向吃满，纵向更短 */
+/* 一组一行；展开后短控件与长文本分成两个规则网格 */
 .settings-board {
   display: flex;
   flex-direction: column;
@@ -210,8 +224,15 @@ onMounted(load)
 
 .setting-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px 8px;
+}
+.setting-grid--short { grid-auto-rows: 118px; }
+.setting-grid--tall { grid-auto-rows: 196px; }
+.ctrl-line {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
 }
 
 .ratio {
@@ -229,11 +250,15 @@ onMounted(load)
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
+  .setting-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
   .setting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 680px) {
   .setting-grid { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
