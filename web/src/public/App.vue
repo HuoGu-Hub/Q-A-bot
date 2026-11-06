@@ -93,6 +93,15 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
       <div class="page">
         <hr class="rule">
         <p class="faint"><span v-html="renderInline(t('layout.footer_copy', '{bot}'))" /></p>
+        <!-- 备案号是域名级法定义务，固定展示，不走站点文案覆盖 -->
+        <p class="faint icp">
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="工业和信息化部ICP备案查询"
+          >粤ICP备2026175364号</a>
+        </p>
       </div>
     </footer>
 
@@ -264,6 +273,11 @@ const tabItems = computed(() => nav.map(n => ({ ...n, active: isActive(n.to) }))
 .ftr { padding-top: var(--sp-7); padding-bottom: var(--sp-6); }
 .ftr p { font-size: var(--fs-xs); color: var(--ink-3); margin: 0 0 4px; }
 .ftr .rule { margin-top: 0; margin-bottom: var(--sp-4); }
+.ftr .icp a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+.ftr .icp a:hover { color: var(--ink); text-decoration-color: currentColor; }
 
 @media (max-width: 760px) {
   .nav { display: none; }
