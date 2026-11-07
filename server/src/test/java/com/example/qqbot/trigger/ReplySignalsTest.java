@@ -3,6 +3,8 @@ package com.example.qqbot.trigger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -42,6 +44,32 @@ class ReplySignalsTest {
         assertThat(ReplySignals.isStrictQuestion("煤矿在哪里啊")).isFalse();
         assertThat(ReplySignals.isStrictQuestion("怎么又卡了")).isFalse();
         assertThat(ReplySignals.isStrictQuestion("不是应该这样吗")).isFalse();
+    }
+
+    @Test
+    @DisplayName("严格度：句首/问号 3，语气词 2；松判定：高置信 2，泛词 1")
+    void questionStrength() {
+        assertThat(ReplySignals.strictQuestionStrength("有没有人知道煤矿在哪里啊")).isEqualTo(3);
+        assertThat(ReplySignals.strictQuestionStrength("今天开服吗？")).isEqualTo(3);
+        assertThat(ReplySignals.strictQuestionStrength("今天开服吗")).isEqualTo(2);
+        assertThat(ReplySignals.strictQuestionStrength("这个钥匙哪里拿")).isZero();
+
+        assertThat(ReplySignals.looseQuestionStrength("今天开服吗")).isEqualTo(3);
+        assertThat(ReplySignals.looseQuestionStrength("这个钥匙哪里拿")).isEqualTo(2);
+        assertThat(ReplySignals.looseQuestionStrength("这个是什么")).isEqualTo(1);
+        assertThat(ReplySignals.looseQuestionStrength("今天真好看")).isZero();
+    }
+
+    @Test
+    @DisplayName("游戏相关度：强词 4，通用词 2，弱词 1，配置词按强词")
+    void gameRelevance() {
+        assertThat(ReplySignals.gameRelevance("有没有人知道煤矿在哪里啊", null).score()).isEqualTo(4);
+        assertThat(ReplySignals.gameRelevance("雾锁王国的钥匙在哪", null).score()).isEqualTo(4);
+        assertThat(ReplySignals.gameRelevance("这个游戏怎么玩", null).score()).isEqualTo(2);
+        assertThat(ReplySignals.gameRelevance("这个钥匙哪里拿", null).score()).isEqualTo(2);
+        assertThat(ReplySignals.gameRelevance("有没有人知道开门", null).score()).isEqualTo(1);
+        assertThat(ReplySignals.gameRelevance("今天吃什么", null).score()).isZero();
+        assertThat(ReplySignals.gameRelevance("深渊怎么去", List.of("深渊")).score()).isEqualTo(4);
     }
 
     @Test

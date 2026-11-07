@@ -8,96 +8,135 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
 
-/** 概率档位、关键词与判定顺序 */
+/** 概率档位：游戏相关严格疑问、严格疑问、松判定、闲聊 */
 class ReplyTriggerTest {
 
     private static final long GROUP = 1L;
     private static final long USER = 2L;
 
     @Test
-    @DisplayName("p=0：只回呼叫，疑问、关键词、闲聊都不回")
-    void pZero() {
-        ReplyTrigger t = trigger(0.0, false, 0, 0.1, "煤矿");
-        assertThat(t.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false).reply()).isFalse();
-        assertThat(t.decide(GROUP, USER, "煤矿", false, false).reply()).isFalse();
-        assertThat(t.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isFalse();
+    @DisplayName("p=0 或 p<0.1：只回呼叫")
+    void belowMinimumOnlyCall() {
+        ReplyTrigger zero = trigger(0.0, false, 0, 0.1, "煤矿");
+        assertThat(zero.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false).reply()).isFalse();
+        assertThat(zero.decide(GROUP, USER, "煤矿", false, false).reply()).isFalse();
+        assertThat(zero.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isFalse();
+
+        ReplyTrigger low = trigger(0.05, false, 0, 0.1, "煤矿");
+        TriggerDecision d = low.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false);
+        assertThat(d.reply()).isFalse();
+        assertThat(d.reason()).isEqualTo("概率过低");
     }
 
     @Test
-    @DisplayName("0.2：严格疑问与关键词回复，宽松疑问与闲聊不回复")
-    void lowTier() {
-        ReplyTrigger strict = trigger(0.2, false, 0, 0.9);
-        TriggerDecision d = strict.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false);
-        assertThat(d.reply()).isTrue();
-        assertThat(d.intent()).isEqualTo(ReplyIntent.QUESTION);
-        assertThat(d.reason()).isEqualTo("严格疑问");
-        assertThat(d.evidence()).isEqualTo("严格疑问：句首「有没有人」");
-        assertThat(d.chance()).isEqualTo(1.0);
-        assertThat(d.roll()).isZero();
+    @DisplayName("0.1-0.3：必须同时是严格疑问和游戏相关")
+    void gameTierRequiresBoth() {
+        ReplyTrigger t = trigger(0.2, false, 0, 0.9);
+        TriggerDecision hit = t.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false);
+        assertThat(hit.reply()).isTrue();
+        assertThat(hit.reason()).isEqualTo("游戏相关严格疑问");
+        assertThat(hit.evidence()).contains("严格疑问").contains("煤矿");
+        assertThat(hit.chance()).isEqualTo(1.0);
+        assertThat(hit.roll()).isZero();
 
-        ReplyTrigger loose = trigger(0.2, false, 0, 0.1);
-        assertThat(loose.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isFalse();
-        assertThat(loose.decide(GROUP, USER, "煤矿在哪里啊", false, false).reply()).isFalse();
+        TriggerDecision noGame = t.decide(GROUP, USER, "有没有人知道这个怎么办", false, false);
+        assertThat(noGame.reply()).isFalse();
+        assertThat(noGame.reason()).isEqualTo("游戏相关度不足");
 
-        ReplyTrigger keyword = trigger(0.2, false, 0, 0.1, "煤矿");
-        TriggerDecision k = keyword.decide(GROUP, USER, "今天煤矿又塌了", false, false);
+        TriggerDecision loose = t.decide(GROUP, USER, "这个钥匙哪里拿", false, false);
+        assertThat(loose.reply()).isFalse();
+        assertThat(loose.reason()).isEqualTo("低概率只回游戏相关严格疑问");
+
+        ReplyTrigger strongest = trigger(0.1, false, 0, 0.1);
+        assertThat(strongest.decide(GROUP, USER, "有没有人知道雾锁王国的钥匙在哪", false, false).reply()).isTrue();
+
+        ReplyTrigger genericOnly = trigger(0.1, false, 0, 0.1);
+        assertThat(genericOnly.decide(GROUP, USER, "有没有人知道游戏怎么玩", false, false).reply()).isFalse();
+
+        ReplyTrigger weak = trigger(0.3, false, 0, 0.1);
+        assertThat(weak.decide(GROUP, USER, "有没有人知道开门", false, false).reply()).isTrue();
+
+        ReplyTrigger custom = triggerAt(0.1, 0.0, false, 0, 0.1,
+                List.of(), List.of("深渊"));
+        assertThat(custom.decide(GROUP, USER, "有没有人知道深渊怎么去", false, false).reply()).isTrue();
+    }
+
+    @Test
+    @DisplayName("关键词是显式必答，但仍受最低概率约束")
+    void keywordIsExplicit() {
+        ReplyTrigger t = trigger(0.2, false, 0, 0.1, "煤矿");
+        TriggerDecision k = t.decide(GROUP, USER, "今天煤矿又塌了", false, false);
         assertThat(k.reply()).isTrue();
         assertThat(k.intent()).isEqualTo(ReplyIntent.KEYWORD);
-        assertThat(k.reason()).isEqualTo("关键词");
         assertThat(k.evidence()).isEqualTo("关键词「煤矿」");
 
-        ReplyTrigger chat = trigger(0.2, false, 0, 0.1);
-        assertThat(chat.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isFalse();
+        ReplyTrigger tooLow = trigger(0.05, false, 0, 0.1, "煤矿");
+        assertThat(tooLow.decide(GROUP, USER, "今天煤矿又塌了", false, false).reply()).isFalse();
     }
 
     @Test
-    @DisplayName("0.3 起疑问全部放行，闲聊仍不接")
-    void middleTier() {
+    @DisplayName("0.3-0.6：严格疑问；低端要句首/问号，高端放宽到语气词")
+    void strictTier() {
         ReplyTrigger t = trigger(0.4, false, 0, 0.1);
+        assertThat(t.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isTrue();
+
+        TriggerDecision particle = t.decide(GROUP, USER, "今天开服吗", false, false);
+        assertThat(particle.reply()).isFalse();
+        assertThat(particle.reason()).isEqualTo("严格度不足");
+
+        ReplyTrigger half = trigger(0.5, false, 0, 0.1);
+        assertThat(half.decide(GROUP, USER, "今天开服吗", false, false).reply()).isTrue();
+
+        ReplyTrigger boundary = trigger(0.6, false, 0, 0.1);
+        assertThat(boundary.decide(GROUP, USER, "今天开服吗", false, false).reply()).isTrue();
+
+        TriggerDecision loose = t.decide(GROUP, USER, "这个钥匙哪里拿", false, false);
+        assertThat(loose.reply()).isFalse();
+        assertThat(loose.reason()).isEqualTo("该档只回严格疑问");
+    }
+
+    @Test
+    @DisplayName("0.6-0.8：松判定；低端只认高置信疑问词")
+    void looseTier() {
+        ReplyTrigger t = trigger(0.61, false, 0, 0.1);
         assertThat(t.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
-        assertThat(t.decide(GROUP, USER, "煤矿在哪里啊", false, false).reply()).isTrue();
-        TriggerDecision chat = t.decide(GROUP, USER, "今天又卡bug了", false, false);
+
+        TriggerDecision ambiguous = trigger(0.7, false, 0, 0.1)
+                .decide(GROUP, USER, "这个是什么", false, false);
+        assertThat(ambiguous.reply()).isFalse();
+        assertThat(ambiguous.reason()).isEqualTo("疑问强度不足");
+
+        assertThat(trigger(0.8, false, 0, 0.1)
+                .decide(GROUP, USER, "这个是什么", false, false).reply()).isTrue();
+
+        TriggerDecision chat = trigger(0.8, false, 0, 0.1)
+                .decide(GROUP, USER, "今天又卡bug了", false, false);
         assertThat(chat.reply()).isFalse();
         assertThat(chat.reason()).isEqualTo("该档只回疑问");
-
-        ReplyTrigger bound = trigger(0.3, false, 0, 0.1);
-        assertThat(bound.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
     }
 
     @Test
-    @DisplayName("0.6-0.8：低频闲聊，10% 起")
-    void lowChatTier() {
-        ReplyTrigger hit = trigger(0.6, false, 0, 0.05);
-        TriggerDecision d = hit.decide(GROUP, USER, "今天又卡bug了", false, false);
-        assertThat(d.reply()).isTrue();
-        assertThat(d.intent()).isEqualTo(ReplyIntent.CHAT);
-        assertThat(d.chance()).isCloseTo(0.10, offset(1e-9));
-        assertThat(d.reason()).isEqualTo("闲聊命中");
+    @DisplayName("0.8-1：疑问必答，闲聊按二次曲线抽样")
+    void chatTier() {
+        ReplyTrigger low = trigger(0.81, false, 0, 0.01);
+        TriggerDecision hit = low.decide(GROUP, USER, "今天又卡bug了", false, false);
+        assertThat(hit.reply()).isTrue();
+        assertThat(hit.chance()).isCloseTo(0.052375, offset(1e-9));
+        assertThat(hit.evidence()).isEqualTo("高频率闲聊");
 
-        ReplyTrigger miss = trigger(0.6, false, 0, 0.20);
-        TriggerDecision m = miss.decide(GROUP, USER, "今天又卡bug了", false, false);
-        assertThat(m.reply()).isFalse();
-        assertThat(m.reason()).isEqualTo("未命中");
-        assertThat(m.chance()).isCloseTo(0.10, offset(1e-9));
-        assertThat(m.roll()).isEqualTo(0.20);
-        assertThat(m.evidence()).isEqualTo("低频率闲聊");
+        ReplyTrigger mid = trigger(0.9, false, 0, 0.29);
+        TriggerDecision miss = mid.decide(GROUP, USER, "今天又卡bug了", false, false);
+        assertThat(miss.reply()).isFalse();
+        assertThat(miss.chance()).isCloseTo(0.2875, offset(1e-9));
+        assertThat(miss.roll()).isEqualTo(0.29);
 
-        assertThat(hit.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
-    }
+        assertThat(mid.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
 
-    @Test
-    @DisplayName("0.8-1：高频闲聊，50% 起")
-    void highChatTier() {
-        ReplyTrigger hit = trigger(0.8, false, 0, 0.40);
-        TriggerDecision d = hit.decide(GROUP, USER, "今天又卡bug了", false, false);
-        assertThat(d.reply()).isTrue();
-        assertThat(d.chance()).isCloseTo(0.50, offset(1e-9));
-
-        ReplyTrigger miss = trigger(0.8, false, 0, 0.60);
-        TriggerDecision m = miss.decide(GROUP, USER, "今天又卡bug了", false, false);
-        assertThat(m.reply()).isFalse();
-        assertThat(m.reason()).isEqualTo("未命中");
-        assertThat(m.chance()).isCloseTo(0.50, offset(1e-9));
+        ReplyTrigger top = trigger(1.0, false, 1, 0.99);
+        assertThat(top.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isTrue();
+        TriggerDecision second = top.decide(GROUP, USER + 1, "今天又卡bug了", false, false);
+        assertThat(second.reply()).isFalse();
+        assertThat(second.reason()).isEqualTo("今日额度用完");
     }
 
     @Test
@@ -118,16 +157,6 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("p=1：闲聊也必回，仍受每日上限")
-    void pOne() {
-        ReplyTrigger t = trigger(1.0, false, 1, 0.99);
-        assertThat(t.decide(GROUP, USER, "今天又卡bug了", false, false).reply()).isTrue();
-        TriggerDecision second = t.decide(GROUP, USER + 1, "今天又卡bug了", false, false);
-        assertThat(second.reply()).isFalse();
-        assertThat(second.reason()).isEqualTo("今日额度用完");
-    }
-
-    @Test
     @DisplayName("群白名单：不在名单里直接拒绝")
     void groupNotEnabled() {
         ReplyTrigger t = trigger(1.0, false, 0, 0.1);
@@ -137,7 +166,7 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("影子模式：想回但不发送，原因保留档位")
+    @DisplayName("影子模式：想回但不发送")
     void shadow() {
         ReplyTrigger t = trigger(1.0, true, 0, 0.1);
         TriggerDecision d = t.decide(GROUP, USER, "这个在哪", false, false);
@@ -147,7 +176,7 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("噪音不参与抽样；问别人在低档不抢答")
+    @DisplayName("噪音不参与抽样；问别人不抢答")
     void noiseAndOther() {
         ReplyTrigger t = trigger(1.0, false, 0, 0.1);
         TriggerDecision noise = t.decide(GROUP, USER, "hhhh", false, false);
@@ -159,32 +188,54 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("曲线：档位单调，关键词与疑问必答")
+    @DisplayName("曲线：疑问不抽样，闲聊 0.8 后按二次曲线放开")
     void curve() {
         assertThat(ReplyTrigger.chance(0.0, ReplyIntent.QUESTION)).isZero();
         assertThat(ReplyTrigger.chance(0.2, ReplyIntent.QUESTION)).isEqualTo(1.0);
         assertThat(ReplyTrigger.chance(0.2, ReplyIntent.KEYWORD)).isEqualTo(1.0);
-        assertThat(ReplyTrigger.chance(0.2, ReplyIntent.CHAT)).isZero();
-        assertThat(ReplyTrigger.chance(0.59, ReplyIntent.CHAT)).isZero();
-        assertThat(ReplyTrigger.chance(0.6, ReplyIntent.CHAT)).isCloseTo(0.10, offset(1e-9));
-        assertThat(ReplyTrigger.chance(0.8, ReplyIntent.CHAT)).isCloseTo(0.50, offset(1e-9));
+        assertThat(ReplyTrigger.chance(0.8, ReplyIntent.CHAT)).isZero();
+        assertThat(ReplyTrigger.chance(0.8001, ReplyIntent.CHAT)).isGreaterThan(0.0);
+        assertThat(ReplyTrigger.chance(0.9, ReplyIntent.CHAT)).isCloseTo(0.2875, offset(1e-9));
         assertThat(ReplyTrigger.chance(1.0, ReplyIntent.CHAT)).isEqualTo(1.0);
         assertThat(ReplyTrigger.chance(1.0, ReplyIntent.NOISE)).isZero();
     }
 
+    @Test
+    @DisplayName("边界：0.3 切游戏，0.6 切松判定")
+    void boundaries() {
+        ReplyTrigger atGame = trigger(0.3, false, 0, 0.1);
+        assertThat(atGame.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isFalse();
+
+        ReplyTrigger justOverGame = trigger(0.31, false, 0, 0.1);
+        assertThat(justOverGame.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isTrue();
+
+        ReplyTrigger atStrict = trigger(0.6, false, 0, 0.1);
+        assertThat(atStrict.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isFalse();
+
+        ReplyTrigger justOverStrict = trigger(0.61, false, 0, 0.1);
+        assertThat(justOverStrict.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
+    }
+
     private static ReplyTrigger trigger(double p, boolean shadow, int dailyMax, double roll,
                                         String... keywords) {
-        return triggerAt(p, 0.0, shadow, dailyMax, roll, keywords);
+        return triggerAt(p, 0.0, shadow, dailyMax, roll, List.of(keywords), List.of());
     }
 
     private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
                                           int dailyMax, double roll, String... keywords) {
+        return triggerAt(p, threshold, shadow, dailyMax, roll, List.of(keywords), List.of());
+    }
+
+    private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
+                                          int dailyMax, double roll, List<String> keywords,
+                                          List<String> gameKeywords) {
         Policy policy = new Policy();
         policy.probability = p;
         policy.mentionFree = threshold;
         policy.shadow = shadow;
         policy.dailyMax = dailyMax;
-        policy.keywords = List.of(keywords);
+        policy.keywords = keywords;
+        policy.gameKeywords = gameKeywords;
         return new ReplyTrigger(policy, new ReplyPacer(policy), () -> roll);
     }
 
@@ -194,6 +245,7 @@ class ReplyTriggerTest {
         int dailyMax;
         double mentionFree;
         List<String> keywords = List.of();
+        List<String> gameKeywords = List.of();
 
         @Override public double probability() { return probability; }
         @Override public List<Long> enabledGroups() { return List.of(GROUP); }
@@ -201,5 +253,6 @@ class ReplyTriggerTest {
         @Override public boolean shadowMode() { return shadow; }
         @Override public double mentionFreeThreshold() { return mentionFree; }
         @Override public List<String> keywords() { return keywords; }
+        @Override public List<String> gameKeywords() { return gameKeywords; }
     }
 }

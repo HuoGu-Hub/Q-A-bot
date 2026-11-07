@@ -13,8 +13,8 @@ import java.util.function.DoubleSupplier;
 /**
  * 概率回复的判定器。
  *
- * <p>顺序固定：群白名单 → 免@阈值 → 关键词 → 概率档位 → 意图与严格度
- * → 闲聊抽样 → 每日上限 → 影子 / 占位。
+ * <p>顺序固定：群白名单 → 概率下限 → 免@阈值 → 关键词 → 概率档位
+ * → 游戏相关 / 严格度 / 疑问强度 → 闲聊抽样 → 每日上限 → 影子 / 占位。
  * 任何一步不通过都返回 {@code reply=false}，由 Guard 的 trigger 阶段静默丢弃。
  * **保证不抛异常**：判定挂掉时按噪音处理，绝不能因为判定影响正常提问。
  */
@@ -23,14 +23,17 @@ public class ReplyTrigger {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyTrigger.class);
 
-    /** 0 < p < 0.3：只接关键词或严格疑问 */
-    private static final double STRICT_MAX = 0.3;
+    /** 低于这个值不参与主动回复，只回呼叫 */
+    private static final double MIN_ACTIVE = 0.10;
 
-    /** 0.3 <= p < 0.6：接所有疑问 */
-    private static final double QUESTION_MAX = 0.6;
+    /** 0.1 <= p <= 0.3：严格疑问 + 游戏相关 */
+    private static final double GAME_MAX = 0.30;
 
-    /** 0.6 <= p < 0.8：低频闲聊；0.8 起高频 */
-    private static final double LOW_CHAT_MAX = 0.8;
+    /** 0.3 < p <= 0.6：严格疑问，不要求游戏相关 */
+    private static final double STRICT_MAX = 0.60;
+
+    /** 0.6 < p <= 0.8：松判定疑问 */
+    private static final double LOOSE_MAX = 0.80;
 
     private final TriggerPolicy policy;
     private final ReplyPacer pacer;
@@ -49,9 +52,10 @@ public class ReplyTrigger {
 
     @PostConstruct
     void logConfig() {
-        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={}",
+        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={} gameKeywords={}",
                 policy.probability(), policy.mentionFreeThreshold(), policy.enabledGroups(),
-                policy.dailyMaxPerGroup(), policy.shadowMode(), policy.keywords());
+                policy.dailyMaxPerGroup(), policy.shadowMode(), policy.keywords(),
+                policy.gameKeywords());
     }
 
     public TriggerDecision decide(long groupId, long userId, String text,
@@ -66,6 +70,10 @@ public class ReplyTrigger {
                 return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0,
                         "概率为 0", "主动回复概率为 0");
             }
+            if (p < MIN_ACTIVE) {
+                return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0,
+                        "概率过低", "p=" + fmt(p) + " < " + fmt(MIN_ACTIVE));
+            }
 
             ReplyIntent intent = ReplySignals.classify(text, hasImage, atOther);
 
@@ -76,60 +84,126 @@ public class ReplyTrigger {
                         "p=" + fmt(p) + " < 免@阈值 " + fmt(threshold));
             }
 
-            // 关键词是低概率档唯一的非疑问入口；p=0 时仍只回呼叫
+            // 关键词是运营显式指定的必答词，不受档位形态限制
             String keyword = matchedKeyword(text);
             if (keyword != null) {
                 return accept(groupId, userId, text, ReplyIntent.KEYWORD, 1.0, 0.0,
                         "关键词", "关键词「" + keyword + "」");
             }
 
-            if (intent == ReplyIntent.QUESTION) {
-                String strict = ReplySignals.strictQuestionEvidence(text);
-                if (p < STRICT_MAX && strict == null) {
-                    return TriggerDecision.no(intent, 0.0, 0.0,
-                            "低概率只回关键词或严格疑问",
-                            "没有命中关键词；不是严格疑问");
-                }
-                String evidence = strict != null
-                        ? "严格疑问：" + strict
-                        : "疑问：" + ReplySignals.questionEvidence(text);
-                return accept(groupId, userId, text, intent, 1.0, 0.0,
-                        strict != null ? "严格疑问" : "疑问", evidence);
+            if (p <= GAME_MAX) {
+                return gameTier(groupId, userId, text, intent, p);
             }
-
-            if (p < STRICT_MAX) {
-                return TriggerDecision.no(intent, 0.0, 0.0,
-                        "低概率只回关键词或严格疑问",
-                        "没有命中关键词；不是疑问");
+            if (p <= STRICT_MAX) {
+                return strictTier(groupId, userId, text, intent, p);
             }
-            if (p < QUESTION_MAX) {
-                return TriggerDecision.no(intent, 0.0, 0.0,
-                        "该档只回疑问", "该档只接疑问");
+            if (p <= LOOSE_MAX) {
+                return looseTier(groupId, userId, text, intent, p);
             }
-            if (intent == ReplyIntent.NOISE) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "噪音", "没有可接的文字");
-            }
-
-            double chance = chance(p, ReplyIntent.CHAT);
-            String tier = p < LOW_CHAT_MAX ? "低频率闲聊" : "高频率闲聊";
-            String evidence = tier;
-            if (chance <= 0) {
-                return TriggerDecision.no(intent, 0.0, 0.0, "闲聊未解禁", tier);
-            }
-            if (!pacer.allows(groupId)) {
-                return TriggerDecision.no(intent, chance, 0.0, "今日额度用完", evidence);
-            }
-            double roll = random.getAsDouble();
-            if (roll >= chance) {
-                log.debug("[TRIGGER] 未命中 group={} user={} intent={} chance={} roll={} | {}",
-                        groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
-                return TriggerDecision.no(intent, chance, roll, "未命中", evidence);
-            }
-            return accept(groupId, userId, text, intent, chance, roll, "闲聊命中", evidence);
+            return chatTier(groupId, userId, text, intent, p);
         } catch (Exception e) {
             log.warn("[TRIGGER] 判定失败，按噪音处理：{}", e.getMessage());
             return TriggerDecision.no(ReplyIntent.NOISE, 0.0, 0.0, "判定失败", "判定异常");
         }
+    }
+
+    /** 0.1-0.3：严格疑问，且必须能看出与游戏相关 */
+    private TriggerDecision gameTier(long groupId, long userId, String text,
+                                     ReplyIntent intent, double p) {
+        if (intent != ReplyIntent.QUESTION) {
+            return TriggerDecision.no(intent, 0.0, 0.0,
+                    "低概率只回游戏相关严格疑问", "不是疑问");
+        }
+        String strict = ReplySignals.strictQuestionEvidence(text);
+        if (strict == null) {
+            return TriggerDecision.no(intent, 0.0, 0.0,
+                    "低概率只回游戏相关严格疑问", "不是严格疑问");
+        }
+        double t = (p - MIN_ACTIVE) / (GAME_MAX - MIN_ACTIVE);
+        double required = 3.5 - 2.5 * Math.max(0.0, Math.min(1.0, t));
+        ReplySignals.GameMatch game = ReplySignals.gameRelevance(text, policy.gameKeywords());
+        if (game.score() < required) {
+            return TriggerDecision.no(intent, 0.0, 0.0, "游戏相关度不足",
+                    "游戏相关度 " + game.score() + " < " + fmt(required));
+        }
+        return accept(groupId, userId, text, intent, 1.0, 0.0,
+                "游戏相关严格疑问",
+                "严格疑问：" + strict + " · 游戏词「" + game.term() + "」");
+    }
+
+    /** 0.3-0.6：严格疑问；0.3-0.4 要求句首/问号，0.5 起放宽到句末语气词 */
+    private TriggerDecision strictTier(long groupId, long userId, String text,
+                                       ReplyIntent intent, double p) {
+        if (intent != ReplyIntent.QUESTION) {
+            return TriggerDecision.no(intent, 0.0, 0.0,
+                    "该档只回严格疑问", "不是疑问");
+        }
+        int strength = ReplySignals.strictQuestionStrength(text);
+        if (strength == 0) {
+            return TriggerDecision.no(intent, 0.0, 0.0,
+                    "该档只回严格疑问", "不是严格疑问");
+        }
+        double t = (p - GAME_MAX) / (STRICT_MAX - GAME_MAX);
+        double required = 3.0 - 1.5 * Math.max(0.0, Math.min(1.0, t));
+        if (strength < required) {
+            return TriggerDecision.no(intent, 0.0, 0.0, "严格度不足",
+                    "严格度 " + strength + " < " + fmt(required));
+        }
+        return accept(groupId, userId, text, intent, 1.0, 0.0,
+                "严格疑问", "严格疑问：" + ReplySignals.strictQuestionEvidence(text));
+    }
+
+    /** 0.6-0.8：松判定疑问；低端只认高置信疑问词，高端才认「什么/啥」这类泛词 */
+    private TriggerDecision looseTier(long groupId, long userId, String text,
+                                      ReplyIntent intent, double p) {
+        if (intent != ReplyIntent.QUESTION) {
+            return TriggerDecision.no(intent, 0.0, 0.0,
+                    "该档只回疑问", "不是疑问");
+        }
+        int strength = ReplySignals.looseQuestionStrength(text);
+        if (strength == 0) {
+            return TriggerDecision.no(intent, 0.0, 0.0,
+                    "该档只回疑问", "不是疑问");
+        }
+        double t = (p - STRICT_MAX) / (LOOSE_MAX - STRICT_MAX);
+        double required = 2.0 - Math.max(0.0, Math.min(1.0, t));
+        if (strength < required) {
+            return TriggerDecision.no(intent, 0.0, 0.0, "疑问强度不足",
+                    "疑问强度 " + strength + " < " + fmt(required));
+        }
+        String strict = ReplySignals.strictQuestionEvidence(text);
+        String evidence = strict != null
+                ? "严格疑问：" + strict
+                : "疑问：" + ReplySignals.questionEvidence(text);
+        return accept(groupId, userId, text, intent, 1.0, 0.0, "松判定疑问", evidence);
+    }
+
+    /** 0.8-1：疑问仍必答；只有闲聊按概率抽样 */
+    private TriggerDecision chatTier(long groupId, long userId, String text,
+                                     ReplyIntent intent, double p) {
+        if (intent == ReplyIntent.QUESTION) {
+            String strict = ReplySignals.strictQuestionEvidence(text);
+            String evidence = strict != null
+                    ? "严格疑问：" + strict
+                    : "疑问：" + ReplySignals.questionEvidence(text);
+            return accept(groupId, userId, text, intent, 1.0, 0.0, "疑问", evidence);
+        }
+        if (intent == ReplyIntent.NOISE) {
+            return TriggerDecision.no(intent, 0.0, 0.0, "噪音", "没有可接的文字");
+        }
+
+        double chance = chance(p, ReplyIntent.CHAT);
+        String tier = "高频率闲聊";
+        if (!pacer.allows(groupId)) {
+            return TriggerDecision.no(intent, chance, 0.0, "今日额度用完", tier);
+        }
+        double roll = random.getAsDouble();
+        if (roll >= chance) {
+            log.debug("[TRIGGER] 未命中 group={} user={} intent={} chance={} roll={} | {}",
+                    groupId, userId, intent, fmt(chance), fmt(roll), brief(text));
+            return TriggerDecision.no(intent, chance, roll, "未命中", tier);
+        }
+        return accept(groupId, userId, text, intent, chance, roll, "闲聊命中", tier);
     }
 
     /** 判定通过后的公共收口：额度、影子、并发占位、日志 */
@@ -175,11 +249,12 @@ public class ReplyTrigger {
      * 概率档位与闲聊曲线。
      *
      * <pre>
-     *   p = 0          只回呼叫，不进入这里
-     *   0 < p < 0.3    关键词、严格疑问
-     *   0.3 <= p < 0.6 所有疑问
-     *   0.6 <= p < 0.8 疑问 + 低频闲聊 10%~30%
-     *   0.8 <= p <= 1  疑问 + 高频闲聊 50%~100%
+     *   p = 0            只回呼叫，不进入这里
+     *   0 < p < 0.1      只回呼叫
+     *   0.1 <= p <= 0.3  严格疑问 + 游戏相关
+     *   0.3 < p <= 0.6   严格疑问
+     *   0.6 < p <= 0.8   松判定疑问
+     *   0.8 < p <= 1     疑问 + 闲聊 5%~100%，二次曲线
      * </pre>
      */
     public static double chance(double p, ReplyIntent intent) {
@@ -189,13 +264,12 @@ public class ReplyTrigger {
             return safe > 0 ? 1.0 : 0.0;
         }
         if (intent == ReplyIntent.CHAT) {
-            if (safe < QUESTION_MAX) {
+            if (safe <= LOOSE_MAX) {
                 return 0.0;
             }
-            if (safe < LOW_CHAT_MAX) {
-                return 0.10 + (safe - QUESTION_MAX) / (LOW_CHAT_MAX - QUESTION_MAX) * 0.20;
-            }
-            return 0.50 + (safe - LOW_CHAT_MAX) / (1.0 - LOW_CHAT_MAX) * 0.50;
+            double t = (safe - LOOSE_MAX) / (1.0 - LOOSE_MAX);
+            // 二次曲线：0.8 只轻轻接话，接近 1 才完全放开
+            return 0.05 + 0.95 * t * t;
         }
         return 0.0;
     }

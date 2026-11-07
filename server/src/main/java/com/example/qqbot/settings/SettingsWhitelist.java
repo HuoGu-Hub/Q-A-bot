@@ -37,11 +37,13 @@ public class SettingsWhitelist {
             // p 是回复档位的唯一开关：0 = 只回呼叫，0~1 分四档逐步放宽。
             // 频率不在这里配 —— 主动回复与普通提问共用「频率限制」。
             new Item("app.reply.probability", "主动回复概率", "回复行为",
-                    "ratio", "0=只回呼叫；<0.3=关键词/严格疑问；<0.6=疑问；<0.8=低频闲聊；≥0.8=高频", 0.0),
+                    "ratio", "0=只回呼叫；0.1-0.3 游戏严格；≤0.6 严格；≤0.8 松判定；>0.8 闲聊", 0.0),
             new Item("app.reply.mention-free-threshold", "免 @ 阈值", "回复行为",
                     "ratio", "主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @", 0.0),
             new Item("app.reply.keywords", "触发关键词", "回复行为",
                     "list", "一行一个词；命中任意词即回复，p=0 时仍只回呼叫", List.of()),
+            new Item("app.reply.game-keywords", "游戏相关词", "回复行为",
+                    "list", "低概率档要求严格疑问命中这些词；留空使用内置词表", List.of()),
             new Item("app.reply.enabled-groups", "主动回复的群", "回复行为",
                     "list", "一行一个群号；留空 = 所有群都不主动回复，呼叫不受影响", List.of()),
             new Item("app.reply.daily-max-per-group", "每群每日主动回复上限", "回复行为",

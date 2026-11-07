@@ -83,7 +83,7 @@ flowchart TD
 | 分诊 | `EventDispatcher` | 正文以 `/` 开头进命令池，其余进问答池 |
 | 准入 | `Access` | 私聊策略、群与用户黑名单；指令在群里的 @ 判定 |
 | 命令 | `CommandHandler` | 话术、动作、智能问答三类分流 |
-| 触发 | `ReplyTriggerStage` + `ReplyTrigger` | 呼叫直通；免@阈值门控；0.3 起疑问、0.6 起闲聊；低档关键词/严格疑问；每日上限与影子模式 |
+| 触发 | `ReplyTriggerStage` + `ReplyTrigger` | 呼叫直通；0.1-0.3 游戏相关严格疑问、0.3-0.6 严格疑问、0.6-0.8 松判定、0.8 后闲聊；免@阈值与每日上限 |
 | 安全 | `GuardPipeline` | access → trigger → rate-limit → content-gate → inbound-words |
 | 预算 | `BudgetGuard` | 用户、群、全局每日额度与 token 上限 |
 | 意图 | `IntentPlanner` | 社交、元问题、边界外跳过检索；纠正标记；失败回默认 |

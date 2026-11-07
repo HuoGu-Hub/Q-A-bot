@@ -30,6 +30,11 @@ public interface TriggerPolicy {
         return List.of();
     }
 
+    /** 低概率档判断「与游戏相关」的补充词；内置词表之外再加 */
+    default List<String> gameKeywords() {
+        return List.of();
+    }
+
     /** 只记日志，不发送 */
     boolean shadowMode();
 
