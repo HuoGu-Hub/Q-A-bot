@@ -3,6 +3,8 @@ package com.example.qqbot.llm;
 import com.example.qqbot.config.LlmProperties;
 import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.ops.LlmMetrics;
+import com.example.qqbot.ops.LlmUsageLedger;
+import com.example.qqbot.trace.LlmUsage;
 import com.sun.net.httpserver.HttpServer;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -52,9 +54,12 @@ class LlmRouterToolForwardingTest {
     private int cannedStatus = 200;
     /** 假厂商人为延迟，用来验证两套超时是否真的隔离 */
     private volatile long delayMillis;
+    /** 路由器往这里记 token；测试直接读，不经过 Spring */
+    private LlmUsageLedger ledger;
 
     @BeforeEach
     void startServer() throws IOException {
+        ledger = new LlmUsageLedger();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
@@ -115,7 +120,8 @@ class LlmRouterToolForwardingTest {
         props.getTool().setMaxRoundTrips(maxRoundTrips);
         props.getProviders().put("fake", provider);
         props.setDefaultProvider("fake");
-        return new LlmRouter(props, new DefaultResourceLoader(), mock(BudgetGuard.class), new LlmMetrics());
+        return new LlmRouter(props, new DefaultResourceLoader(), mock(BudgetGuard.class),
+                new LlmMetrics(), ledger);
     }
 
     private static ToolSpecification toolSpec() {
@@ -168,6 +174,10 @@ class LlmRouterToolForwardingTest {
         assertThat(response.aiMessage().toolExecutionRequests().get(0).name()).isEqualTo("search_titles");
         assertThat(bodies).hasSize(1);
         assertThat(bodies.get(0)).as("工具定义必须发给厂商").contains("\"tools\"").contains("search_titles");
+        // 空文本 + tool_calls 也是一次真实的计费往返，不能因为正文为空就漏记
+        assertThat(ledger.pending()).hasSize(1);
+        assertThat(ledger.pending().get(0).tokensIn()).isEqualTo(10);
+        assertThat(ledger.pending().get(0).tokensOut()).isEqualTo(5);
     }
 
     @Test
@@ -254,5 +264,58 @@ class LlmRouterToolForwardingTest {
 
         assertThat(response.aiMessage().hasToolExecutionRequests()).isTrue();
         assertThat(bodies.get(0).replace(" ", "")).contains("\"tool_choice\":\"auto\"");
+    }
+
+    private static final String PLAIN_REPLY_WITH_USAGE = "{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"fake\","
+            + "\"choices\":[{\"index\":0,\"finish_reason\":\"stop\","
+            + "\"message\":{\"role\":\"assistant\",\"content\":\"你好\"}}],"
+            + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19}}";
+
+    @Test
+    @DisplayName("★ 厂商回了 usage：账本记真实值，不估算")
+    void recordsReportedUsageAsActual() {
+        cannedReply = PLAIN_REPLY_WITH_USAGE;
+
+        router(List.of("chat")).chat("在吗");
+
+        var buckets = ledger.pending();
+        assertThat(buckets).hasSize(1);
+        assertThat(buckets.get(0).estimated()).as("有 usage 就不能标成估算").isFalse();
+        assertThat(buckets.get(0).tokensIn()).isEqualTo(12);
+        assertThat(buckets.get(0).tokensOut()).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("★ 厂商没回 usage：按字符估算并标成估算，不能记成 0")
+    void estimatesWhenUsageIsMissing() {
+        cannedReply = PLAIN_REPLY;
+
+        router(List.of("chat")).chat("在吗");
+
+        var buckets = ledger.pending();
+        assertThat(buckets).hasSize(1);
+        assertThat(buckets.get(0).estimated()).isTrue();
+        assertThat(buckets.get(0).tokensIn()).as("输入至少要覆盖系统消息与用户消息").isPositive();
+        assertThat(buckets.get(0).tokensOut()).isPositive();
+    }
+
+    @Test
+    @DisplayName("★ 评测收集器只记一次：链路与 toReply 各记一遍会翻倍")
+    void usageCollectorSeesEachCallOnce() {
+        cannedReply = PLAIN_REPLY_WITH_USAGE;
+        LlmRouter router = router(List.of("chat"));
+
+        java.util.List<LlmUsage.Call> calls;
+        LlmUsage.begin();
+        try {
+            router.chatWithSystem("你是整理助手", "在吗");
+            router.chatWithSystem("你是整理助手", "在吗");
+        } finally {
+            calls = LlmUsage.end();
+        }
+
+        assertThat(calls).hasSize(2);
+        assertThat(LlmUsage.totalIn(calls)).isEqualTo(24);
+        assertThat(LlmUsage.totalOut(calls)).isEqualTo(14);
     }
 }

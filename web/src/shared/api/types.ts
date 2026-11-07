@@ -508,6 +508,14 @@ export type LlmSummary = DeepRequired<Schemas['LlmSummary']>
 
 export type LlmResponse = DeepRequired<Schemas['LlmResponse']>
 
+export type LlmUsageDay = DeepRequired<Schemas['DayUsage']>
+
+export type LlmUsageModel = DeepRequired<Schemas['ModelUsage']>
+
+export type LlmUsageTotals = DeepRequired<Schemas['UsageTotals']>
+
+export type LlmUsageReport = DeepRequired<Schemas['UsageReport']>
+
 export interface EvalDataset {
   id: number
   slug: string

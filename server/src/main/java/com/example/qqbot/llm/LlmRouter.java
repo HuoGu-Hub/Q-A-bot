@@ -6,6 +6,7 @@ import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
 import com.example.qqbot.guard.BudgetGuard;
 import com.example.qqbot.ops.LlmMetrics;
+import com.example.qqbot.ops.LlmUsageLedger;
 import com.example.qqbot.trace.LlmUsage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
@@ -90,8 +91,6 @@ public class LlmRouter {
     private final Map<String, ChatModel> backgroundModels = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Provider> configs = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile List<String> chain = new ArrayList<>();
-    /** 记录本次调用实际成功的 provider，供 toReply 写进任务账本 */
-    private final ThreadLocal<String> lastProvider = new ThreadLocal<>();
     private final String systemPrompt;
 
     /**
@@ -111,6 +110,15 @@ public class LlmRouter {
      * 两者的时间粒度与用途都不同，混在一起会让预算判定跟着采集逻辑漂。
      */
     private final LlmMetrics llmMetrics;
+
+    /**
+     * 按日 token 账本。
+     *
+     * <p>和 {@link LlmMetrics} 的分工：这里记"哪天、哪个模型、多少 token"，
+     * 用于历史回看；那边记"这一分钟快不快"，用于实时看板。
+     * 两者都只有这一层看得到用量，所以都在这里喂。
+     */
+    private final LlmUsageLedger usageLedger;
 
     /** 构建**前台**客户端 —— 启动时和热替换时共用同一套参数 */
     private static ChatModel buildClient(Provider cfg) {
@@ -154,10 +162,11 @@ public class LlmRouter {
     }
 
     public LlmRouter(LlmPolicy props, ResourceLoader resourceLoader, BudgetGuard budgetGuard,
-                     LlmMetrics llmMetrics) {
+                     LlmMetrics llmMetrics, LlmUsageLedger usageLedger) {
         this.props = props;
         this.budgetGuard = budgetGuard;
         this.llmMetrics = llmMetrics;
+        this.usageLedger = usageLedger;
         this.systemPrompt = loadSystemPrompt(props, resourceLoader);
 
         for (Map.Entry<String, Provider> entry : props.getProviders().entrySet()) {
@@ -512,26 +521,14 @@ public class LlmRouter {
         return toReply(callWithFallbackResponse(req, CAP_VISION, preferredProvider, mode));
     }
 
-    private Reply toReply(ChatResponse response) {
+    private Reply toReply(Attempt attempt) {
+        ChatResponse response = attempt.response();
         if (response == null || response.aiMessage() == null
                 || response.aiMessage().text() == null || response.aiMessage().text().isBlank()) {
             throw new LlmException("模型返回为空");
         }
-        long in = 0;
-        long out = 0;
-        if (response.tokenUsage() != null) {
-            in = response.tokenUsage().inputTokenCount() == null
-                    ? 0 : response.tokenUsage().inputTokenCount();
-            out = response.tokenUsage().outputTokenCount() == null
-                    ? 0 : response.tokenUsage().outputTokenCount();
-        }
-        String used = lastProvider.get();
-        lastProvider.remove();
-        String provider = used == null || used.isBlank()
-                ? (chain.isEmpty() ? "" : chain.get(0)) : used;
-        String model = provider.isBlank() ? "" : currentModelName(provider);
-        LlmUsage.record(provider, model, in, out);
-        return new Reply(response.aiMessage().text(), model, in, out);
+        return new Reply(response.aiMessage().text(), attempt.model(),
+                attempt.tokensIn(), attempt.tokensOut());
     }
 
     /** 一次旁路调用的结果 */
@@ -622,7 +619,7 @@ public class LlmRouter {
      * 而且不报错，模型只能按 system.md 的文字自己"编"工具调用标记，最后漏到群里（实测）。
      */
     public ChatResponse chatMessages(ChatRequest request) {
-        return callWithFallbackResponse(capToolRoundTrips(request), null);
+        return callWithFallbackResponse(capToolRoundTrips(request), null).response();
     }
 
     /**
@@ -669,15 +666,15 @@ public class LlmRouter {
 
     /** 老路径用的字符串版：成功响应的正文 */
     private String callWithFallback(ChatRequest request, String requiredCapability) {
-        return callWithFallbackResponse(request, requiredCapability).aiMessage().text();
+        return callWithFallbackResponse(request, requiredCapability).response().aiMessage().text();
     }
 
-    private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability) {
+    private Attempt callWithFallbackResponse(ChatRequest request, String requiredCapability) {
         return callWithFallbackResponse(request, requiredCapability, "", CallMode.INTERACTIVE);
     }
 
-    private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability,
-                                                   String preferredProvider) {
+    private Attempt callWithFallbackResponse(ChatRequest request, String requiredCapability,
+                                              String preferredProvider) {
         return callWithFallbackResponse(request, requiredCapability, preferredProvider,
                 CallMode.INTERACTIVE);
     }
@@ -687,9 +684,12 @@ public class LlmRouter {
      *
      * <p>降级链、能力筛选、空回复重试三套逻辑完全共用，差别只有"哪只客户端、超时多少"。
      */
-    private ChatResponse callWithFallbackResponse(ChatRequest request, String requiredCapability,
-                                                   String preferredProvider, CallMode mode) {
+    private Attempt callWithFallbackResponse(ChatRequest request, String requiredCapability,
+                                             String preferredProvider, CallMode mode) {
         Map<String, ChatModel> pool = mode == CallMode.BACKGROUND ? backgroundModels : models;
+        // 厂商没回 usage 时的兜底：输入侧在发请求前就能按内容估出来。
+        // 只算一次，整条降级链共用 —— 换一家厂商不会改变"发了什么"。
+        long estimatedIn = TokenEstimator.inputTokens(request);
         // 带工具的请求**只能**交给声明了 tools 能力的厂商：不支持工具调用的厂商不会报错，
         // 而是把工具调用当正文吐出来（见 CAP_TOOLS 的说明），那就漏到群里了。
         boolean needsTools = request.toolSpecifications() != null && !request.toolSpecifications().isEmpty();
@@ -756,26 +756,16 @@ public class LlmRouter {
                     log.info("[LLM] {} ({}) 回复成功，耗时 {} ms，{} 字",
                             name, configs.get(name).getModelName(), cost, text.length());
                 }
-                // 用量只有这一层拿得到（langchain4j 的 ChatResponse 里带着），
-                // 交给成本预算累加，供「今日 token 额度」判定用
-                if (response.tokenUsage() != null) {
-                    budgetGuard.recordTokens(response.tokenUsage().totalTokenCount());
-                    // 评测执行器打开收集时才记：用量只有这一层拿得到
-                    LlmUsage.record(name, configs.get(name).getModelName(),
-                            response.tokenUsage().inputTokenCount() == null
-                                    ? 0L : response.tokenUsage().inputTokenCount(),
-                            response.tokenUsage().outputTokenCount() == null
-                                    ? 0L : response.tokenUsage().outputTokenCount());
+                // 用量只有这一层拿得到。厂商回 usage 就用真实值；没回就按字符估算，
+                // 并在账本里标成"估算" —— 宁可显示一个带"约"的数字，也不要让它变成 0。
+                String usedModel = configs.get(name).getModelName();
+                Usage usage = resolveUsage(response, estimatedIn);
+                accountUsage(name, usedModel, usage, cost);
+                if (usage.estimated()) {
+                    log.debug("[LLM] {} ({}) 未回 usage，按字符估算：入 {} / 出 {}",
+                            name, usedModel, usage.tokensIn(), usage.tokensOut());
                 }
-                // 用量只有这一层看得到：一次群聊回答可能包含多轮工具调用，
-                // 每一轮都是真实的计费请求，所以按"往返"计数而不是按"回答"
-                llmMetrics.record(cost, true,
-                        response.tokenUsage() == null || response.tokenUsage().inputTokenCount() == null
-                                ? 0L : response.tokenUsage().inputTokenCount(),
-                        response.tokenUsage() == null || response.tokenUsage().outputTokenCount() == null
-                                ? 0L : response.tokenUsage().outputTokenCount());
-                lastProvider.set(name);
-                return response;
+                return new Attempt(response, usedModel, usage.tokensIn(), usage.tokensOut());
             } catch (Exception e) {
                 // 失败也算一次调用：超时同样占用了时间，也往往已经计费
                 llmMetrics.record(System.currentTimeMillis() - start, false, 0L, 0L);
@@ -787,5 +777,55 @@ public class LlmRouter {
             }
         }
         throw new LlmException("所有大模型都调用失败了：" + String.join("; ", errors));
+    }
+
+    /**
+     * 一次成功往返的用量 —— 真实值或估算值，连同来源。
+     *
+     * @param estimated true = 厂商没回 usage，数字是按字符估算的
+     */
+    private record Usage(long tokensIn, long tokensOut, boolean estimated) {
+        long total() {
+            return tokensIn + tokensOut;
+        }
+    }
+
+    /** 一次调用尝试的结果。带着用量走，省得再用 ThreadLocal 把数字捞回来 */
+    private record Attempt(ChatResponse response, String model,
+                           long tokensIn, long tokensOut) {
+    }
+
+    /**
+     * 厂商回了 usage 就用真实值；缺一边就补那一边，全缺就整体估算。
+     *
+     * <p>把"部分缺失"也标成估算：页面上的"约"要保守，
+     * 混了一半估算的数字不能冒充实测。
+     */
+    private static Usage resolveUsage(ChatResponse response, long estimatedIn) {
+        Integer in = response.tokenUsage() == null ? null : response.tokenUsage().inputTokenCount();
+        Integer out = response.tokenUsage() == null ? null : response.tokenUsage().outputTokenCount();
+        boolean complete = in != null && out != null && in > 0 && out > 0;
+        if (complete) {
+            return new Usage(in, out, false);
+        }
+        long fallbackIn = in != null && in > 0 ? in : estimatedIn;
+        long fallbackOut = out != null && out > 0 ? out : TokenEstimator.outputTokens(response);
+        return new Usage(Math.max(1, fallbackIn), Math.max(1, fallbackOut), true);
+    }
+
+    /**
+     * 把一次用量分发给所有关心它的地方。
+     *
+     * <p>这四个消费者以前各自在调用点写一遍，其中评测收集器被写了两次
+     * —— 一次在链路里、一次在 {@code toReply} 里，导致评测的 token 翻倍。
+     * 现在收成一个入口，谁也不会漏、谁也不会重。
+     */
+    private void accountUsage(String provider, String model, Usage usage, long costMillis) {
+        budgetGuard.recordTokens(usage.total());
+        // 评测执行器打开收集时才记：用量只有这一层拿得到
+        LlmUsage.record(provider, model, usage.tokensIn(), usage.tokensOut());
+        // 一次回答可能包含多轮工具调用，每一轮都是真实的计费请求
+        llmMetrics.record(costMillis, true, usage.tokensIn(), usage.tokensOut());
+        usageLedger.record(provider, model, usage.tokensIn(), usage.tokensOut(), usage.estimated());
     }
 }

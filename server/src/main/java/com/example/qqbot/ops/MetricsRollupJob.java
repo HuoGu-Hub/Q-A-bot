@@ -1,14 +1,20 @@
 package com.example.qqbot.ops;
 
 import com.example.qqbot.persistence.LlmMetricRepository;
+import com.example.qqbot.persistence.LlmUsageRepository;
 import com.example.qqbot.persistence.TrafficRepository;
+import com.example.qqbot.time.AppTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 每分钟把进程内的读数落一行到库 —— 流量与模型调用一起。
+ * 每分钟把进程内的读数落库 —— 流量、模型调用、按日 token 用量一起。
  *
  * <h2>为什么是 5 秒轮询、按分钟边界落盘</h2>
  * 直接 {@code fixedDelay = 60s} 也能跑，但那一分钟是"从启动时刻算起的 60 秒"，
@@ -16,8 +22,9 @@ import org.springframework.stereotype.Component;
  * 这里 5 秒看一次表，跨分钟才落 —— 落的是**刚刚过去的那一分钟**，
  * 时间戳与数据对齐。代价是每分钟多 11 次空转，可以忽略。
  *
- * <h2>为什么两类指标共用一个调度</h2>
- * 它们的时间轴必须对齐：同一分钟里的"请求多"和"模型调用多"要能放在一起读。
+ * <h2>为什么三类读数共用一个调度</h2>
+ * 它们的时间轴必须对齐：同一分钟里的"请求多"和"模型调用多"要能放在一起读；
+ * 日用量也只在这里落，免得再开一条会和它抢锁的写路径。
  * 两个调度各跑各的，落盘时刻会差几毫秒到几秒，图上的相关性就成了假的。
  *
  * <h2>失败怎么办</h2>
@@ -29,8 +36,16 @@ public class MetricsRollupJob {
 
     private static final Logger log = LoggerFactory.getLogger(MetricsRollupJob.class);
 
-    /** 保留 7 天。再久没人翻，而且表会开始拖慢全量查询 */
+    /** 分钟表保留 7 天。再久没人翻，而且表会开始拖慢全量查询 */
     private static final int KEEP_DAYS = 7;
+
+    /**
+     * 日用量表保留 180 天。
+     *
+     * <p>成本回顾是按月看的，7 天清掉等于回答不了"上个月用了多少"。
+     * 180 天 × 每天的模型数量，行数仍然很小。
+     */
+    private static final int KEEP_USAGE_DAYS = 180;
 
     /** 每落 60 行（约一小时）清一次过期行，不必每分钟都删 */
     private static final int PRUNE_EVERY = 60;
@@ -40,16 +55,23 @@ public class MetricsRollupJob {
     private final TrafficRepository trafficRepo;
     private final LlmMetricRepository llmRepo;
 
+    /** 按日 token 账本：进程内攒着，这里统一落库 */
+    private final LlmUsageLedger usageLedger;
+    private final LlmUsageRepository usageRepo;
+
     /** 上一分钟（epoch 分钟）。-1 表示还没对齐过，第一次只对表不落盘 */
     private long lastMinute = -1L;
     private int flushed;
 
     public MetricsRollupJob(TrafficMetrics traffic, LlmMetrics llm,
-                            TrafficRepository trafficRepo, LlmMetricRepository llmRepo) {
+                            TrafficRepository trafficRepo, LlmMetricRepository llmRepo,
+                            LlmUsageLedger usageLedger, LlmUsageRepository usageRepo) {
         this.traffic = traffic;
         this.llm = llm;
         this.trafficRepo = trafficRepo;
         this.llmRepo = llmRepo;
+        this.usageLedger = usageLedger;
+        this.usageRepo = usageRepo;
     }
 
     @Scheduled(fixedDelay = 5_000)
@@ -65,6 +87,7 @@ public class MetricsRollupJob {
         }
         flushTraffic(lastMinute);
         flushLlm(lastMinute);
+        flushUsage();
         lastMinute = minute;
         if (++flushed % PRUNE_EVERY == 0) {
             prune(minute);
@@ -98,6 +121,29 @@ public class MetricsRollupJob {
         }
     }
 
+    /**
+     * 落每日 token 账。
+     *
+     * <p>和分钟表不同，这里一次可能写多行（多个模型/供应商）。
+     * 失败只记日志：丢的是一分钟的账，不能让调度线程抛异常。
+     */
+    private void flushUsage() {
+        List<LlmUsageLedger.Bucket> buckets = usageLedger.drain();
+        if (buckets.isEmpty()) {
+            return;
+        }
+        List<LlmUsageRepository.Row> rows = new ArrayList<>(buckets.size());
+        for (LlmUsageLedger.Bucket b : buckets) {
+            rows.add(new LlmUsageRepository.Row(b.day(), b.provider(), b.model(), b.estimated(),
+                    b.calls(), b.tokensIn(), b.tokensOut()));
+        }
+        try {
+            usageRepo.addAll(rows);
+        } catch (Exception e) {
+            log.warn("[METRICS] 日用量落盘失败（这一分钟的账丢了）：{}", e.getMessage());
+        }
+    }
+
     private void prune(long minute) {
         long before = minute - KEEP_DAYS * 24L * 60L;
         try {
@@ -109,6 +155,11 @@ public class MetricsRollupJob {
             llmRepo.prune(before);
         } catch (Exception e) {
             log.warn("[METRICS] 过期模型调用清理失败：{}", e.getMessage());
+        }
+        try {
+            usageRepo.prune(LocalDate.now(AppTime.ZONE).minusDays(KEEP_USAGE_DAYS).toString());
+        } catch (Exception e) {
+            log.warn("[METRICS] 过期 token 用量清理失败：{}", e.getMessage());
         }
     }
 }

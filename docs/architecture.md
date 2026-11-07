@@ -134,9 +134,9 @@ flowchart TD
 | `admin_` | 5 | 账号、验证码、信任设备、审计、访问 |
 | `site_` | 2 | 页面文案、首页轮播 |
 | `voice_` | 2 | 语音素材与触发规则 |
-| `llm_minute` / `traffic_minute` | 2 | 模型调用与流量分钟指标 |
+| `llm_minute` / `traffic_minute` / `llm_usage_day` | 3 | 模型调用、流量分钟指标与按日 token 用量 |
 
-合计 53 张表。
+表数以库里的 `sqlite_master` 为准；上表只按前缀归组，不逐个维护。
 
 几个关键约定：
 
@@ -187,6 +187,8 @@ application.yml
 | 合并转发失败 | 结果未知不补发，明确拒绝才逐条兜底 | 避免同一条回复发两遍 |
 
 模型调用按「默认 provider → 降级链」顺序尝试。超时、额度、空回复都会触发下一个 provider。需要视觉能力时只在声明了 `vision` 的 provider 中选择，需要工具时只在声明了 `tools` 的 provider 中选择。
+
+每次成功的模型往返都会记一次 token 用量：厂商回了 usage 用真实值，没回就按字符估算并标记为「估算」。用量按 日 × provider × model 存在 `llm_usage_day`，保留 180 天；页面在「统计 → 用量」。口径与系数见 [llm-usage.md](llm-usage.md)。
 
 ## 8. 地图出图
 

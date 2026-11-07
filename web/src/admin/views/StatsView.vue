@@ -9,6 +9,7 @@ import Switch from '@shared/ui/Switch.vue'
 import OverviewPanel from './stats/OverviewPanel.vue'
 import RecordsPanel from './stats/RecordsPanel.vue'
 import RetrievalPanel from './stats/RetrievalPanel.vue'
+import UsagePanel from './stats/UsagePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,7 @@ const TABS = [
   { key: 'overview', label: '总览' },
   { key: 'records', label: '记录' },
   { key: 'retrieval', label: '检索' },
+  { key: 'usage', label: '用量' },
 ]
 
 const valid = (k: unknown) => typeof k === 'string' && TABS.some((t) => t.key === k)
@@ -52,14 +54,17 @@ const SCOPE_OPTIONS = [
 const overviewRef = ref<InstanceType<typeof OverviewPanel> | null>(null)
 const recordsRef = ref<InstanceType<typeof RecordsPanel> | null>(null)
 const retrievalRef = ref<InstanceType<typeof RetrievalPanel> | null>(null)
+const usageRef = ref<InstanceType<typeof UsagePanel> | null>(null)
 
 const overview = computed(() => (tab.value === 'overview' ? overviewRef.value : null))
 const records = computed(() => (tab.value === 'records' ? recordsRef.value : null))
 const retrieval = computed(() => (tab.value === 'retrieval' ? retrievalRef.value : null))
+const usage = computed(() => (tab.value === 'usage' ? usageRef.value : null))
 
 const overviewLoading = computed(() => overview.value?.isLoading() ?? false)
 const recordsLoading = computed(() => records.value?.isLoading() ?? false)
 const retrievalLoading = computed(() => retrieval.value?.isLoading() ?? false)
+const usageLoading = computed(() => usage.value?.isLoading() ?? false)
 const autoOn = computed(() => overview.value?.autoValue() ?? false)
 const updatedAt = computed(() => overview.value?.updatedAt() ?? '')
 const scope = computed(() => records.value?.scopeValue() ?? 'replied')
@@ -108,9 +113,15 @@ const scope = computed(() => records.value?.scopeValue() ?? 'replied')
         </Button>
       </template>
 
-      <template v-else>
+      <template v-else-if="tab === 'retrieval'">
         <Button size="sm" :disabled="retrievalLoading" @click="retrieval?.reload()">
           {{ retrievalLoading ? '读取中…' : '刷新' }}
+        </Button>
+      </template>
+
+      <template v-else>
+        <Button size="sm" :disabled="usageLoading" @click="usage?.reload()">
+          {{ usageLoading ? '读取中…' : '刷新' }}
         </Button>
       </template>
     </template>
@@ -118,7 +129,8 @@ const scope = computed(() => records.value?.scopeValue() ?? 'replied')
     <KeepAlive>
       <OverviewPanel v-if="tab === 'overview'" ref="overviewRef" :days="days" />
       <RecordsPanel v-else-if="tab === 'records'" ref="recordsRef" :days="days" />
-      <RetrievalPanel v-else ref="retrievalRef" :days="days" />
+      <RetrievalPanel v-else-if="tab === 'retrieval'" ref="retrievalRef" :days="days" />
+      <UsagePanel v-else ref="usageRef" :days="days" />
     </KeepAlive>
   </AdminPage>
 </template>

@@ -17388,6 +17388,116 @@
         } ]
       }
     },
+    "/admin/api/llm/usage" : {
+      "get" : {
+        "tags" : [ "Admin" ],
+        "operationId" : "usage",
+        "parameters" : [ {
+          "name" : "days",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 30
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsageReport"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求参数或请求体不合法",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "资源或接口不存在",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "请求过于频繁，按 Retry-After 重试",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "多少秒后可以重试",
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int32"
+                }
+              }
+            },
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "服务端处理失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "未登录、会话过期或鉴权失败",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "当前账号没有权限",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503" : {
+            "description" : "后台未启用或 OneBot Token 未配置",
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "adminSession" : [ ]
+        } ]
+      }
+    },
     "/admin/api/keywords" : {
       "get" : {
         "tags" : [ "Admin" ],
@@ -26247,6 +26357,114 @@
             "format" : "int64"
           },
           "worstP95" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "DayUsage" : {
+        "type" : "object",
+        "properties" : {
+          "day" : {
+            "type" : "string"
+          },
+          "calls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "ModelUsage" : {
+        "type" : "object",
+        "properties" : {
+          "provider" : {
+            "type" : "string"
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "calls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "UsageReport" : {
+        "type" : "object",
+        "properties" : {
+          "totals" : {
+            "$ref" : "#/components/schemas/UsageTotals"
+          },
+          "daily" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DayUsage"
+            }
+          },
+          "models" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ModelUsage"
+            }
+          }
+        }
+      },
+      "UsageTotals" : {
+        "type" : "object",
+        "properties" : {
+          "calls" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tokensOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "days" : {
             "type" : "integer",
             "format" : "int32"
           }
