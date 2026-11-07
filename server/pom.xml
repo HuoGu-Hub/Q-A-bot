@@ -22,7 +22,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <langchain4j.version>1.22.0</langchain4j.version>
     <!-- 架构护栏：把 docs/architecture.md 的模块边界变成会失败的测试，见 ArchitectureTest -->
-    <archunit.version>1.3.0</archunit.version>
+    <archunit.version>1.5.1</archunit.version>
     <!--
       覆盖 Spring Boot 管理的 Tomcat 版本。
       10.1.55 有 3 条 CVE（DIGEST 重放 / 安全约束绕过 / FORM 认证绕过）。
