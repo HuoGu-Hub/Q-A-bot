@@ -8,6 +8,7 @@ import com.example.qqbot.media.ImageLibrary;
 import com.example.qqbot.media.ImageSource;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
+import com.example.qqbot.onebot.client.OneBotApiException;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.onebot.model.OutboundImage;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.net.http.HttpTimeoutException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;

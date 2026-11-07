@@ -134,6 +134,23 @@ class MessageRouterTriggerTest {
     }
 
     @Test
+    @DisplayName("★ @ 提问：只判定一次、只回复一次")
+    void atQuestionRepliesOnce() {
+        OneBotEvent event = groupEvent("这个钥匙哪里拿");
+        when(codec.isMentioned(event, 999L)).thenReturn(true);
+
+        router.handle(event);
+
+        verify(replyTrigger, never()).decide(anyLong(), anyLong(), anyString(), anyBoolean(), anyBoolean());
+        verify(chatService, times(1)).reply(eq(event), eq("这个钥匙哪里拿"), any(), any(),
+                any(ReplyMode.class), eq(false), any());
+        verify(outboundSender, times(1)).send(eq(event), anyString());
+        verify(outboundSender, never()).sendNow(eq(event), anyString());
+        verify(qaCollector, times(1)).collect(any(), any(), any(), anyInt(), any(), any(),
+                any(), any(), anyLong(), anyLong(), anyBoolean());
+    }
+
+    @Test
     @DisplayName("正文含昵称：直接算呼叫，不调概率判定")
     void nameCallBypassesProbability() {
         OneBotEvent event = groupEvent("飘雪喵 这个在哪");

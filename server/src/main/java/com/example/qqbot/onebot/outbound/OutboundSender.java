@@ -8,6 +8,7 @@ import com.example.qqbot.media.ImageLibrary;
 import com.example.qqbot.media.ImageMarkers;
 import com.example.qqbot.onebot.BotIdentity;
 import com.example.qqbot.onebot.client.OneBotApiClient;
+import com.example.qqbot.onebot.client.OneBotApiException;
 import com.example.qqbot.onebot.codec.MessageCodec;
 import com.example.qqbot.onebot.model.OneBotEvent;
 import com.example.qqbot.onebot.model.OutboundImage;
@@ -47,7 +48,8 @@ import java.util.List;
  *
  * <h2>失败怎么办</h2>
  * 合并转发是**锦上添花**，绝不能因此把回复弄丢：协议端不支持这个动作（老版本 NapCat / go-cqhttp）
- * 或调用报错时，自动退回逐条发送。提示语已经发出去了就不再 @ 一遍，免得对方收到两次 @。
+ * 或明确拒绝时，自动退回逐条发送。提示语已经发出去了就不再 @ 一遍，免得对方收到两次 @。
+ * 请求超时/连接中断这类结果未知的失败不补发：动作可能已经执行，补发就是两份回复。
  *
  * <h2>图片</h2>
  * 回复里出现 {@link ImageMarkers} 那样的图片标记时，标记会被摘掉、换成真实的图片段，
@@ -330,6 +332,7 @@ public class OutboundSender {
 
         JsonNode nodes = codec.forwardNodes(parts, uin, nodeName());
         boolean introSent = false;
+        boolean forwardAttempted = false;
         try {
             if (target.group()) {
                 sleepQuietly(pacer.reserve(true, target.id()));
@@ -339,23 +342,45 @@ public class OutboundSender {
                 introSent = true;
 
                 sleepQuietly(pacer.reserve(true, target.id()));
+                forwardAttempted = true;
                 long id = apiClient.sendGroupForwardMsg(target.id(), nodes);
                 log.info("[OUT] 已合并转发到群 {}，message_id={}（{} 段打包成 1 条）",
                         target.id(), id, parts.size());
             } else {
                 sleepQuietly(pacer.reserve(false, 0L));
+                forwardAttempted = true;
                 long id = apiClient.sendPrivateForwardMsg(target.id(), nodes);
                 log.info("[OUT] 已合并转发给 {}，message_id={}（{} 段打包成 1 条）",
                         target.id(), id, parts.size());
             }
             return true;
         } catch (Exception e) {
-            log.warn("[OUT] 合并转发失败（{}），退回逐条发送 {} 段：{}",
+            boolean unknown = forwardAttempted && isTransportFailure(e);
+            if (unknown) {
+                // 超时/断连时协议端可能已经发出去了。再补发一次就是同一条消息两份回复，
+                // 所以这里只报错，不再走逐条兜底；真要兜底可以关掉长回复合并转发。
+                log.error("[OUT] 合并转发结果未知（{}），为避免重复不再补发 {} 段：{}",
+                        e.getClass().getSimpleName(), parts.size(), e.getMessage());
+                return true;
+            }
+            log.warn("[OUT] 合并转发被明确拒绝（{}），退回逐条发送 {} 段：{}",
                     e.getClass().getSimpleName(), parts.size(), e.getMessage());
-            // 这条路只在没有图片时才会走到（有图不合并），所以兜底也不带图
+            // 提示语已经发出去了，退回时第一段不能再 @ 一次
             sendParts(target, parts, !introSent, List.of());
             return true;
         }
+    }
+
+    /** 请求是否可能已经送达：这类失败只能记录，不能重发 */
+    private static boolean isTransportFailure(Throwable error) {
+        Throwable t = error;
+        while (t != null) {
+            if (t instanceof OneBotApiException api && api.isTransportFailure()) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**

@@ -118,10 +118,12 @@ public class OneBotApiClient {
                     .body(JsonNode.class);
 
             if (response == null) {
-                throw new OneBotApiException(action + " 调用失败：响应为空");
+                // 没有响应可能是超时/连接断开：动作可能已经执行，不能安全重发
+                throw new OneBotApiException(action + " 调用失败：响应为空", null, true);
             }
             if (!"ok".equals(response.path("status").asText())) {
-                throw new OneBotApiException(action + " 调用失败：" + response);
+                // 协议端明确回了失败，动作通常没有执行
+                throw new OneBotApiException(action + " 调用失败：" + response, null, false);
             }
             log.debug("OneBot 动作 {} 成功", action);
             return response.path("data");
