@@ -1,5 +1,6 @@
 package com.example.qqbot.trigger;
 
+import com.example.qqbot.settings.GameKeywordDefaults;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +58,7 @@ class ReplyTriggerTest {
         assertThat(weak.decide(GROUP, USER, "有没有人知道开门", false, false).reply()).isTrue();
 
         ReplyTrigger custom = triggerAt(0.1, 0.0, false, 0, 0.1,
-                List.of(), List.of("深渊"));
+                List.of(), List.of("深渊"), List.of(), List.of());
         assertThat(custom.decide(GROUP, USER, "有没有人知道深渊怎么去", false, false).reply()).isTrue();
     }
 
@@ -218,24 +219,29 @@ class ReplyTriggerTest {
 
     private static ReplyTrigger trigger(double p, boolean shadow, int dailyMax, double roll,
                                         String... keywords) {
-        return triggerAt(p, 0.0, shadow, dailyMax, roll, List.of(keywords), List.of());
+        return triggerAt(p, 0.0, shadow, dailyMax, roll, List.of(keywords),
+                GameKeywordDefaults.STRONG, GameKeywordDefaults.GENERIC, GameKeywordDefaults.WEAK);
     }
 
     private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
                                           int dailyMax, double roll, String... keywords) {
-        return triggerAt(p, threshold, shadow, dailyMax, roll, List.of(keywords), List.of());
+        return triggerAt(p, threshold, shadow, dailyMax, roll, List.of(keywords),
+                GameKeywordDefaults.STRONG, GameKeywordDefaults.GENERIC, GameKeywordDefaults.WEAK);
     }
 
     private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
                                           int dailyMax, double roll, List<String> keywords,
-                                          List<String> gameKeywords) {
+                                          List<String> strong, List<String> generic,
+                                          List<String> weak) {
         Policy policy = new Policy();
         policy.probability = p;
         policy.mentionFree = threshold;
         policy.shadow = shadow;
         policy.dailyMax = dailyMax;
         policy.keywords = keywords;
-        policy.gameKeywords = gameKeywords;
+        policy.gameStrong = strong;
+        policy.gameGeneric = generic;
+        policy.gameWeak = weak;
         return new ReplyTrigger(policy, new ReplyPacer(policy), () -> roll);
     }
 
@@ -245,7 +251,9 @@ class ReplyTriggerTest {
         int dailyMax;
         double mentionFree;
         List<String> keywords = List.of();
-        List<String> gameKeywords = List.of();
+        List<String> gameStrong = List.of();
+        List<String> gameGeneric = List.of();
+        List<String> gameWeak = List.of();
 
         @Override public double probability() { return probability; }
         @Override public List<Long> enabledGroups() { return List.of(GROUP); }
@@ -253,6 +261,8 @@ class ReplyTriggerTest {
         @Override public boolean shadowMode() { return shadow; }
         @Override public double mentionFreeThreshold() { return mentionFree; }
         @Override public List<String> keywords() { return keywords; }
-        @Override public List<String> gameKeywords() { return gameKeywords; }
+        @Override public List<String> gameStrongKeywords() { return gameStrong; }
+        @Override public List<String> gameGenericKeywords() { return gameGeneric; }
+        @Override public List<String> gameWeakKeywords() { return gameWeak; }
     }
 }

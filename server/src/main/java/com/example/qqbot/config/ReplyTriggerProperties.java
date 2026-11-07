@@ -1,5 +1,6 @@
 package com.example.qqbot.config;
 
+import com.example.qqbot.settings.GameKeywordDefaults;
 import com.example.qqbot.trigger.TriggerPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -27,8 +28,14 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 低概率档的关键词；命中任意一个就回复 */
     private List<String> keywords = new ArrayList<>();
 
-    /** 低概率档判断「与游戏相关」的补充词；内置词表之外再加 */
-    private List<String> gameKeywords = new ArrayList<>();
+    /** 强相关游戏词，4 分；默认值只是初始内容，运行时只读这里 */
+    private List<String> gameStrongKeywords = new ArrayList<>(GameKeywordDefaults.STRONG);
+
+    /** 通用游戏词，2 分 */
+    private List<String> gameGenericKeywords = new ArrayList<>(GameKeywordDefaults.GENERIC);
+
+    /** 弱相关游戏词，1 分 */
+    private List<String> gameWeakKeywords = new ArrayList<>(GameKeywordDefaults.WEAK);
 
     /** 每群每日主动回复上限，0 = 不限 */
     private int dailyMaxPerGroup = 40;
@@ -73,12 +80,30 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     }
 
     @Override
-    public List<String> gameKeywords() {
-        return gameKeywords;
+    public List<String> gameStrongKeywords() {
+        return gameStrongKeywords;
     }
 
-    public void setGameKeywords(List<String> gameKeywords) {
-        this.gameKeywords = gameKeywords == null ? new ArrayList<>() : gameKeywords;
+    public void setGameStrongKeywords(List<String> gameStrongKeywords) {
+        this.gameStrongKeywords = gameStrongKeywords == null ? new ArrayList<>() : gameStrongKeywords;
+    }
+
+    @Override
+    public List<String> gameGenericKeywords() {
+        return gameGenericKeywords;
+    }
+
+    public void setGameGenericKeywords(List<String> gameGenericKeywords) {
+        this.gameGenericKeywords = gameGenericKeywords == null ? new ArrayList<>() : gameGenericKeywords;
+    }
+
+    @Override
+    public List<String> gameWeakKeywords() {
+        return gameWeakKeywords;
+    }
+
+    public void setGameWeakKeywords(List<String> gameWeakKeywords) {
+        this.gameWeakKeywords = gameWeakKeywords == null ? new ArrayList<>() : gameWeakKeywords;
     }
 
     @Override

@@ -30,8 +30,18 @@ public interface TriggerPolicy {
         return List.of();
     }
 
-    /** 低概率档判断「与游戏相关」的补充词；内置词表之外再加 */
-    default List<String> gameKeywords() {
+    /** 强相关游戏词，4 分 */
+    default List<String> gameStrongKeywords() {
+        return List.of();
+    }
+
+    /** 通用游戏词，2 分 */
+    default List<String> gameGenericKeywords() {
+        return List.of();
+    }
+
+    /** 弱相关游戏词，1 分 */
+    default List<String> gameWeakKeywords() {
         return List.of();
     }
 

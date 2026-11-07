@@ -259,7 +259,7 @@ chance(噪音) = 0</code></pre>
 
 <p>每个区间的低端都更严：游戏档看游戏相关度，严格档看疑问强度，松判定档看疑问词置信度，闲聊档看二次曲线。疑问本身不掷骰子，不会因为 p 低就随机漏掉一条本该回答的问题；p 只决定「哪一类问题值得回」和「闲聊接多少」。</p>
 
-<p>游戏相关度按词表打分：强游戏词 4 分，通用游戏词 2 分，弱游戏词 1 分；配置里的补充词按强词算。0.1 要求强词，0.3 弱词也能过。</p>
+<p>游戏相关度按词表打分：强相关词 4 分，通用词 2 分，弱相关词 1 分。三张词表都直接放在设置页的输入框里，代码只给初始值，判定只读输入框里的内容；没有一份看不见的隐藏词表。0.1 要求强相关词，0.3 弱相关词也能过。</p>
 
 <p>免@阈值是另一道门：主动回复概率低于它时，所有非呼叫消息都要求 @，档位不生效；概率达到阈值后，上面的档位才会放行。默认 0，表示始终允许免 @。</p>
 
@@ -361,7 +361,9 @@ chance(噪音) = 0</code></pre>
 <tr><td><code>app.reply.probability</code></td><td>0</td><td>参与档位，0 到 1</td></tr>
 <tr><td><code>app.reply.mention-free-threshold</code></td><td>0</td><td>主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @</td></tr>
 <tr><td><code>app.reply.keywords</code></td><td>空</td><td>低概率档的关键词；命中任意一个就回复</td></tr>
-<tr><td><code>app.reply.game-keywords</code></td><td>空</td><td>低概率档判断「与游戏相关」的补充词；留空使用内置词表</td></tr>
+<tr><td><code>app.reply.game-strong-keywords</code></td><td>预置</td><td>强相关游戏词，4 分；输入框里可直接增删</td></tr>
+<tr><td><code>app.reply.game-generic-keywords</code></td><td>预置</td><td>通用游戏词，2 分</td></tr>
+<tr><td><code>app.reply.game-weak-keywords</code></td><td>预置</td><td>弱相关游戏词，1 分</td></tr>
 <tr><td><code>app.reply.enabled-groups</code></td><td>空</td><td>只在列出的群做概率回复，空 = 所有群都不做；本机填 <code>209127588</code>。呼叫不受白名单限制</td></tr>
 <tr><td><code>app.reply.shadow-mode</code></td><td>false</td><td>只记日志，不发送</td></tr>
 </tbody>
@@ -446,8 +448,10 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 显式必答词 */
     private List&lt;String&gt; keywords = new ArrayList&lt;&gt;();
 
-    /** 游戏相关补充词 */
-    private List&lt;String&gt; gameKeywords = new ArrayList&lt;&gt;();
+    /** 三张游戏词表，默认值只是初始内容，判定只读这里 */
+    private List&lt;String&gt; gameStrongKeywords = new ArrayList&lt;&gt;();
+    private List&lt;String&gt; gameGenericKeywords = new ArrayList&lt;&gt;();
+    private List&lt;String&gt; gameWeakKeywords = new ArrayList&lt;&gt;();
 
     private int dailyMaxPerGroup = 40;
 
@@ -455,7 +459,7 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     private boolean shadowMode = false;
 }</code></pre>
 
-<p>后台「回复行为」分组里有概率、免 @ 阈值、触发关键词、游戏相关词、群白名单、每日上限与影子模式。概率用 <code>ratio</code> 类型渲染成滑块；列表项一行一个词。频率不在这里配，主动回复与普通提问共用「频率限制」。</p>
+<p>后台「回复行为」分组里有概率、免 @ 阈值、触发关键词、强/通用/弱三张游戏词表、群白名单、每日上限与影子模式。概率用 <code>ratio</code> 类型渲染成滑块；列表项一行一个词。频率不在这里配，主动回复与普通提问共用「频率限制」。</p>
 
 <blockquote class="warn">
 <p><b>列表类型有个现成的坑</b>：<code>SettingsService.convert</code> 把列表统一转成 <code>List&lt;String&gt;</code>，反射写进 <code>List&lt;Long&gt;</code> 字段不会报错，但之后 <code>contains(Long)</code> 永远为 false。私聊白名单已经是这个形状。群白名单要么声明成 <code>List&lt;String&gt;</code> 并在判定侧按字符串比较，要么把 <code>convert</code> 改成按字段泛型转换。这次必须选后者，否则填了 <code>209127588</code> 也不会命中，白名单看起来生效、实际一条都放不进来。</p>

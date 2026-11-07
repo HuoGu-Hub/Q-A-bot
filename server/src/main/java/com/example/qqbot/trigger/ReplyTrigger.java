@@ -52,10 +52,11 @@ public class ReplyTrigger {
 
     @PostConstruct
     void logConfig() {
-        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={} gameKeywords={}",
+        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={} gameWords={}/{}/{}",
                 policy.probability(), policy.mentionFreeThreshold(), policy.enabledGroups(),
                 policy.dailyMaxPerGroup(), policy.shadowMode(), policy.keywords(),
-                policy.gameKeywords());
+                policy.gameStrongKeywords().size(), policy.gameGenericKeywords().size(),
+                policy.gameWeakKeywords().size());
     }
 
     public TriggerDecision decide(long groupId, long userId, String text,
@@ -121,7 +122,8 @@ public class ReplyTrigger {
         }
         double t = (p - MIN_ACTIVE) / (GAME_MAX - MIN_ACTIVE);
         double required = 3.5 - 2.5 * Math.max(0.0, Math.min(1.0, t));
-        ReplySignals.GameMatch game = ReplySignals.gameRelevance(text, policy.gameKeywords());
+        ReplySignals.GameMatch game = ReplySignals.gameRelevance(text,
+                policy.gameStrongKeywords(), policy.gameGenericKeywords(), policy.gameWeakKeywords());
         if (game.score() < required) {
             return TriggerDecision.no(intent, 0.0, 0.0, "游戏相关度不足",
                     "游戏相关度 " + game.score() + " < " + fmt(required));
