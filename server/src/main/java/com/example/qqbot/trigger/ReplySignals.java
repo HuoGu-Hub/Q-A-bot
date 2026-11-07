@@ -199,11 +199,11 @@ public final class ReplySignals {
     /**
      * 判断一句话和游戏的相关程度。
      *
-     * <p>三张词表都由后台配置传入，**不存在隐藏词表**：
-     * 强词 4 分，通用词 2 分，弱词 1 分；只取最高分，不叠加。
+     * <p>两张词表都由后台配置传入，**不存在隐藏词表**：
+     * 强相关 4 分，一般相关 2 分；只取最高分，不叠加。
      */
     public static GameMatch gameRelevance(String text, List<String> strong,
-                                          List<String> generic, List<String> weak) {
+                                          List<String> general) {
         String t = text == null ? "" : text.strip().toLowerCase(Locale.ROOT);
         if (t.isEmpty()) {
             return new GameMatch(0, "");
@@ -213,14 +213,9 @@ public final class ReplySignals {
                 return new GameMatch(4, term.trim());
             }
         }
-        for (String term : safe(generic)) {
+        for (String term : safe(general)) {
             if (containsTerm(t, term)) {
                 return new GameMatch(2, term.trim());
-            }
-        }
-        for (String term : safe(weak)) {
-            if (containsTerm(t, term)) {
-                return new GameMatch(1, term.trim());
             }
         }
         return new GameMatch(0, "");

@@ -31,11 +31,8 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 强相关游戏词，4 分；默认值只是初始内容，运行时只读这里 */
     private List<String> gameStrongKeywords = new ArrayList<>(GameKeywordDefaults.STRONG);
 
-    /** 通用游戏词，2 分 */
-    private List<String> gameGenericKeywords = new ArrayList<>(GameKeywordDefaults.GENERIC);
-
-    /** 弱相关游戏词，1 分 */
-    private List<String> gameWeakKeywords = new ArrayList<>(GameKeywordDefaults.WEAK);
+    /** 一般相关游戏词，2 分 */
+    private List<String> gameGeneralKeywords = new ArrayList<>(GameKeywordDefaults.GENERAL);
 
     /** 每群每日主动回复上限，0 = 不限 */
     private int dailyMaxPerGroup = 40;
@@ -89,21 +86,12 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     }
 
     @Override
-    public List<String> gameGenericKeywords() {
-        return gameGenericKeywords;
+    public List<String> gameGeneralKeywords() {
+        return gameGeneralKeywords;
     }
 
-    public void setGameGenericKeywords(List<String> gameGenericKeywords) {
-        this.gameGenericKeywords = gameGenericKeywords == null ? new ArrayList<>() : gameGenericKeywords;
-    }
-
-    @Override
-    public List<String> gameWeakKeywords() {
-        return gameWeakKeywords;
-    }
-
-    public void setGameWeakKeywords(List<String> gameWeakKeywords) {
-        this.gameWeakKeywords = gameWeakKeywords == null ? new ArrayList<>() : gameWeakKeywords;
+    public void setGameGeneralKeywords(List<String> gameGeneralKeywords) {
+        this.gameGeneralKeywords = gameGeneralKeywords == null ? new ArrayList<>() : gameGeneralKeywords;
     }
 
     @Override

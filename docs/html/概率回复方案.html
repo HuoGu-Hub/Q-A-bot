@@ -163,7 +163,7 @@ tbody tr:last-child td { border-bottom:0; }
 </ul>
 
 <blockquote class="ok">
-<p><b>一句话</b>：呼叫直通；0.1-0.3 只接与游戏相关的严格疑问，0.3-0.6 接严格疑问，0.6-0.8 接松判定疑问，0.8 以后才参与闲聊。每个区间的低端更严，高端更宽。</p>
+<p><b>一句话</b>：呼叫直通；0.1-0.3 只接强游戏相关疑问，0.3-0.6 接一般游戏相关疑问，0.6-0.8 接任意疑问，0.8 以后才参与闲聊。</p>
 </blockquote>
 
 <h2 id="now">现在的链路</h2>
@@ -189,7 +189,7 @@ tbody tr:last-child td { border-bottom:0; }
 <h3>目标</h3>
 <ul>
 <li>p=0 时群聊只回应三种呼叫：@、正文含「飘雪喵」、引用机器人，其余一律不回；私聊仍按私聊策略。</li>
-<li>p 分成四档：游戏相关严格疑问、严格疑问、松判定疑问、闲聊；区间内按相关度/严格度/疑问强度/闲聊概率递进，不对疑问做随机抽签。</li>
+<li>p 分成四档：强游戏相关疑问、一般游戏相关疑问、任意疑问、闲聊；疑问不随机抽签，只有闲聊按概率抽样。</li>
 <li>任何一条被忽略的消息都不产生提示、不消耗 token、不写模型请求。</li>
 <li>默认关闭，对「必须 @」的部署行为与现在完全一致。</li>
 <li>概率、节奏、白名单都能在后台热改，改完下一条消息就生效。</li>
@@ -212,9 +212,9 @@ tbody tr:last-child td { border-bottom:0; }
 <thead><tr><th>通道</th><th>识别</th><th>回复概率</th><th>例子</th></tr></thead>
 <tbody>
 <tr><td><b>呼叫</b></td><td>@ 段、文本 <code>@飘雪喵</code>、正文包含「飘雪喵」、引用机器人；私聊按策略直通</td><td>1</td><td>「@飘雪喵 这个在哪」</td></tr>
-<tr><td><b>游戏相关严格疑问</b></td><td>严格疑问，且命中游戏词；p 越低要求的游戏相关度越高</td><td>1</td><td>「有没有人知道煤矿在哪里」</td></tr>
-<tr><td><b>严格疑问</b></td><td>问号、句首疑问词或句末语气词；p 越低越偏向句首/问号</td><td>1</td><td>「今天开服吗」</td></tr>
-<tr><td><b>松判定疑问</b></td><td>疑问词可以埋在句中；p 越低只认高置信疑问词</td><td>1</td><td>「这个钥匙哪里拿」</td></tr>
+<tr><td><b>强游戏相关疑问</b></td><td>必须是疑问句，且命中「强相关游戏词」</td><td>1</td><td>「有没有人知道煤矿在哪里」</td></tr>
+<tr><td><b>一般游戏相关疑问</b></td><td>必须是疑问句，且命中「一般相关游戏词」</td><td>1</td><td>「这个钥匙哪里拿」</td></tr>
+<tr><td><b>松判定疑问</b></td><td>必须是疑问句，不要求游戏相关</td><td>1</td><td>「这个是什么」</td></tr>
 <tr><td><b>闲聊</b></td><td>有文字，但不像在提问</td><td>0.8 之后 5%~100%</td><td>「今天又卡bug了」</td></tr>
 <tr><td><b>噪音</b></td><td>没有文字、纯图片、纯链接、两个字以内、纯复读</td><td>0</td><td>「hhh」「？」「[图片]」</td></tr>
 </tbody>
@@ -225,15 +225,12 @@ tbody tr:last-child td { border-bottom:0; }
 
 <pre class="formula"><code>mode(p) =
   0 ≤ p &lt; 0.1      只回呼叫
-  0.1 ≤ p ≤ 0.3    严格疑问 + 游戏相关
-  0.3 &lt; p ≤ 0.6    严格疑问
-  0.6 &lt; p ≤ 0.8    松判定疑问
-  0.8 &lt; p ≤ 1      疑问 + 闲聊
+  0.1 ≤ p ≤ 0.3    疑问句 + 强相关游戏词
+  0.3 &lt; p ≤ 0.6    疑问句 + 一般相关游戏词
+  0.6 &lt; p ≤ 0.8    疑问句，不要求游戏相关
+  0.8 &lt; p ≤ 1      疑问句 + 闲聊
 
-游戏相关门槛 = 3.5 - 2.5 × t，t=(p-0.1)/0.2
-严格度门槛   = 3.0 - 1.5 × t，t=(p-0.3)/0.3
-疑问强度门槛 = 2.0 - 1.0 × t，t=(p-0.6)/0.2
-闲聊概率     = 0.05 + 0.95 × t²，t=(p-0.8)/0.2
+闲聊概率 = 0.05 + 0.95 × t²，t=(p-0.8)/0.2
 
 chance(呼叫 / 关键词 / 疑问) = 1
 chance(噪音) = 0</code></pre>
@@ -243,23 +240,23 @@ chance(噪音) = 0</code></pre>
 <thead><tr><th>p</th><th>走哪条通道</th><th>闲聊概率</th><th>读法</th></tr></thead>
 <tbody>
 <tr><td>0</td><td>呼叫</td><td>0</td><td>必须 @、正文昵称或引用机器人</td></tr>
-<tr><td>0.1</td><td>游戏严格疑问</td><td>0</td><td>要求强游戏词，泛词不够</td></tr>
-<tr><td>0.2</td><td>游戏严格疑问</td><td>0</td><td>强游戏词可过，泛词仍不够</td></tr>
-<tr><td>0.3</td><td>游戏严格疑问</td><td>0</td><td>弱游戏词也能过；0.3 之后不再要求游戏相关</td></tr>
-<tr><td>0.4</td><td>严格疑问</td><td>0</td><td>只认句首疑问词或问号，句末「吗」还不够</td></tr>
-<tr><td>0.5</td><td>严格疑问</td><td>0</td><td>句末「吗」开始放行</td></tr>
-<tr><td>0.6</td><td>严格疑问</td><td>0</td><td>句末语气词也放行；松判定还没开始</td></tr>
-<tr><td>0.7</td><td>松判定疑问</td><td>0</td><td>只认高置信疑问词，「这个是什么」还不够</td></tr>
-<tr><td>0.8</td><td>松判定疑问</td><td>0</td><td>泛疑问词也放行；闲聊从 0.8 之后才开始</td></tr>
+<tr><td>0.1</td><td>强游戏相关疑问</td><td>0</td><td>必须命中强相关词，一般词不够</td></tr>
+<tr><td>0.2</td><td>强游戏相关疑问</td><td>0</td><td>必须命中强相关词，一般词不够</td></tr>
+<tr><td>0.3</td><td>强游戏相关疑问</td><td>0</td><td>边界仍是强相关；0.3 之后才放宽到一般相关</td></tr>
+<tr><td>0.4</td><td>一般游戏相关疑问</td><td>0</td><td>强词或一般词命中一个即可</td></tr>
+<tr><td>0.5</td><td>一般游戏相关疑问</td><td>0</td><td>强词或一般词命中一个即可</td></tr>
+<tr><td>0.6</td><td>一般游戏相关疑问</td><td>0</td><td>边界仍要求游戏相关；0.6 之后不再要求</td></tr>
+<tr><td>0.7</td><td>松判定疑问</td><td>0</td><td>任意疑问句都行，不再要求游戏词</td></tr>
+<tr><td>0.8</td><td>松判定疑问</td><td>0</td><td>任意疑问句都行；闲聊从 0.8 之后才开始</td></tr>
 <tr><td>0.9</td><td>疑问 + 闲聊</td><td>28.75%</td><td>二次曲线，0.9 仍不到三成</td></tr>
 <tr><td>1.0</td><td>疑问 + 全部闲聊</td><td>100%</td><td>有内容就接，纯图/复读/链接仍不接</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>每个区间的低端都更严：游戏档看游戏相关度，严格档看疑问强度，松判定档看疑问词置信度，闲聊档看二次曲线。疑问本身不掷骰子，不会因为 p 低就随机漏掉一条本该回答的问题；p 只决定「哪一类问题值得回」和「闲聊接多少」。</p>
+<p>0.1-0.3 和 0.3-0.6 都必须是疑问句，区别只在游戏相关度：前者必须强相关，后者一般相关即可。0.6 以后不再要求游戏相关。疑问本身不掷骰子，不会因为 p 低就随机漏掉一条本该回答的问题；p 只决定「哪一类问题值得回」和「闲聊接多少」。</p>
 
-<p>游戏相关度按词表打分：强相关词 4 分，通用词 2 分，弱相关词 1 分。三张词表都直接放在设置页的输入框里，代码只给初始值，判定只读输入框里的内容；没有一份看不见的隐藏词表。0.1 要求强相关词，0.3 弱相关词也能过。</p>
+<p>游戏相关度只分两张表：强相关词 4 分，一般相关词 2 分。两张表都直接放在设置页的输入框里，代码只给初始值，判定只读输入框里的内容；没有一份看不见的隐藏词表。0.1-0.3 必须命中强相关词，0.3-0.6 命中任意一张表即可。</p>
 
 <p>免@阈值是另一道门：主动回复概率低于它时，所有非呼叫消息都要求 @，档位不生效；概率达到阈值后，上面的档位才会放行。默认 0，表示始终允许免 @。</p>
 
@@ -361,9 +358,8 @@ chance(噪音) = 0</code></pre>
 <tr><td><code>app.reply.probability</code></td><td>0</td><td>参与档位，0 到 1</td></tr>
 <tr><td><code>app.reply.mention-free-threshold</code></td><td>0</td><td>主动回复概率低于此值时，非呼叫消息必须 @；0 = 始终免 @</td></tr>
 <tr><td><code>app.reply.keywords</code></td><td>空</td><td>低概率档的关键词；命中任意一个就回复</td></tr>
-<tr><td><code>app.reply.game-strong-keywords</code></td><td>预置</td><td>强相关游戏词，4 分；输入框里可直接增删</td></tr>
-<tr><td><code>app.reply.game-generic-keywords</code></td><td>预置</td><td>通用游戏词，2 分</td></tr>
-<tr><td><code>app.reply.game-weak-keywords</code></td><td>预置</td><td>弱相关游戏词，1 分</td></tr>
+<tr><td><code>app.reply.game-strong-keywords</code></td><td>预置</td><td>强相关游戏词，4 分；0.1-0.3 必须命中</td></tr>
+<tr><td><code>app.reply.game-general-keywords</code></td><td>预置</td><td>一般相关游戏词，2 分；0.3-0.6 至少命中一个</td></tr>
 <tr><td><code>app.reply.enabled-groups</code></td><td>空</td><td>只在列出的群做概率回复，空 = 所有群都不做；本机填 <code>209127588</code>。呼叫不受白名单限制</td></tr>
 <tr><td><code>app.reply.shadow-mode</code></td><td>false</td><td>只记日志，不发送</td></tr>
 </tbody>
@@ -448,10 +444,9 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     /** 显式必答词 */
     private List&lt;String&gt; keywords = new ArrayList&lt;&gt;();
 
-    /** 三张游戏词表，默认值只是初始内容，判定只读这里 */
+    /** 两张游戏词表，默认值只是初始内容，判定只读这里 */
     private List&lt;String&gt; gameStrongKeywords = new ArrayList&lt;&gt;();
-    private List&lt;String&gt; gameGenericKeywords = new ArrayList&lt;&gt;();
-    private List&lt;String&gt; gameWeakKeywords = new ArrayList&lt;&gt;();
+    private List&lt;String&gt; gameGeneralKeywords = new ArrayList&lt;&gt;();
 
     private int dailyMaxPerGroup = 40;
 
@@ -459,7 +454,7 @@ public class ReplyTriggerProperties implements TriggerPolicy {
     private boolean shadowMode = false;
 }</code></pre>
 
-<p>后台「回复行为」分组里有概率、免 @ 阈值、触发关键词、强/通用/弱三张游戏词表、群白名单、每日上限与影子模式。概率用 <code>ratio</code> 类型渲染成滑块；列表项一行一个词。频率不在这里配，主动回复与普通提问共用「频率限制」。</p>
+<p>后台「回复行为」分组里有概率、免 @ 阈值、触发关键词、强相关/一般相关两张游戏词表、群白名单、每日上限与影子模式。概率用 <code>ratio</code> 类型渲染成滑块；列表项一行一个词。频率不在这里配，主动回复与普通提问共用「频率限制」。</p>
 
 <blockquote class="warn">
 <p><b>列表类型有个现成的坑</b>：<code>SettingsService.convert</code> 把列表统一转成 <code>List&lt;String&gt;</code>，反射写进 <code>List&lt;Long&gt;</code> 字段不会报错，但之后 <code>contains(Long)</code> 永远为 false。私聊白名单已经是这个形状。群白名单要么声明成 <code>List&lt;String&gt;</code> 并在判定侧按字符串比较，要么把 <code>convert</code> 改成按字段泛型转换。这次必须选后者，否则填了 <code>209127588</code> 也不会命中，白名单看起来生效、实际一条都放不进来。</p>
@@ -563,8 +558,9 @@ reply(req, question, replyMode, trigger, quoted);</code></pre>
 <tr><td>@ 机器人</td><td>回</td><td>回</td><td>回</td><td>回</td></tr>
 <tr><td>正文含「飘雪喵」但没 @</td><td>回</td><td>回</td><td>回</td><td>回</td></tr>
 <tr><td>引用机器人</td><td>回</td><td>回</td><td>回</td><td>回</td></tr>
-<tr><td>与游戏相关的严格疑问</td><td>不回</td><td>强相关才回</td><td>回</td><td>回</td></tr>
-<tr><td>普通严格疑问</td><td>不回</td><td>不回</td><td>句首/问号/语气词都回</td><td>回</td></tr>
+<tr><td>强游戏相关疑问</td><td>不回</td><td>回</td><td>回</td><td>回</td></tr>
+<tr><td>一般游戏相关疑问</td><td>不回</td><td>不回</td><td>回</td><td>回</td></tr>
+<tr><td>非游戏疑问</td><td>不回</td><td>不回</td><td>不回</td><td>回</td></tr>
 <tr><td>松判定疑问</td><td>不回</td><td>不回</td><td>不回</td><td>回</td></tr>
 <tr><td>闲聊</td><td>不回</td><td>不回</td><td>不回</td><td>28.75%</td></tr>
 <tr><td>纯图片或表情</td><td>不回</td><td>不回</td><td>不回</td><td>不回</td></tr>

@@ -62,21 +62,21 @@ class ReplySignalsTest {
     }
 
     @Test
-    @DisplayName("游戏相关度：强词 4，通用词 2，弱词 1，配置词按强词")
+    @DisplayName("游戏相关度：强相关 4，一般相关 2")
     void gameRelevance() {
         assertThat(game("有没有人知道煤矿在哪里啊").score()).isEqualTo(4);
         assertThat(game("雾锁王国的钥匙在哪").score()).isEqualTo(4);
         assertThat(game("这个游戏怎么玩").score()).isEqualTo(2);
         assertThat(game("这个钥匙哪里拿").score()).isEqualTo(2);
-        assertThat(game("有没有人知道开门").score()).isEqualTo(1);
+        assertThat(game("有没有人知道开门").score()).isEqualTo(2);
         assertThat(game("今天吃什么").score()).isZero();
-        assertThat(ReplySignals.gameRelevance("深渊怎么去", List.of("深渊"), List.of(), List.of()).score())
+        assertThat(ReplySignals.gameRelevance("深渊怎么去", List.of("深渊"), List.of()).score())
                 .isEqualTo(4);
     }
 
     private static ReplySignals.GameMatch game(String text) {
         return ReplySignals.gameRelevance(text, GameKeywordDefaults.STRONG,
-                GameKeywordDefaults.GENERIC, GameKeywordDefaults.WEAK);
+                GameKeywordDefaults.GENERAL);
     }
 
     @Test

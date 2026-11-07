@@ -30,12 +30,12 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("0.1-0.3：必须同时是严格疑问和游戏相关")
+    @DisplayName("0.1-0.3：必须是疑问句，且命中强游戏词")
     void gameTierRequiresBoth() {
         ReplyTrigger t = trigger(0.2, false, 0, 0.9);
         TriggerDecision hit = t.decide(GROUP, USER, "有没有人知道煤矿在哪里啊", false, false);
         assertThat(hit.reply()).isTrue();
-        assertThat(hit.reason()).isEqualTo("游戏相关严格疑问");
+        assertThat(hit.reason()).isEqualTo("强游戏相关疑问");
         assertThat(hit.evidence()).contains("严格疑问").contains("煤矿");
         assertThat(hit.chance()).isEqualTo(1.0);
         assertThat(hit.roll()).isZero();
@@ -46,7 +46,9 @@ class ReplyTriggerTest {
 
         TriggerDecision loose = t.decide(GROUP, USER, "这个钥匙哪里拿", false, false);
         assertThat(loose.reply()).isFalse();
-        assertThat(loose.reason()).isEqualTo("低概率只回游戏相关严格疑问");
+        assertThat(loose.reason()).isEqualTo("游戏相关度不足");
+
+        assertThat(t.decide(GROUP, USER, "煤矿在哪里啊", false, false).reply()).isTrue();
 
         ReplyTrigger strongest = trigger(0.1, false, 0, 0.1);
         assertThat(strongest.decide(GROUP, USER, "有没有人知道雾锁王国的钥匙在哪", false, false).reply()).isTrue();
@@ -54,11 +56,13 @@ class ReplyTriggerTest {
         ReplyTrigger genericOnly = trigger(0.1, false, 0, 0.1);
         assertThat(genericOnly.decide(GROUP, USER, "有没有人知道游戏怎么玩", false, false).reply()).isFalse();
 
-        ReplyTrigger weak = trigger(0.3, false, 0, 0.1);
-        assertThat(weak.decide(GROUP, USER, "有没有人知道开门", false, false).reply()).isTrue();
+        ReplyTrigger generalOnly = trigger(0.3, false, 0, 0.1);
+        TriggerDecision noStrong = generalOnly.decide(GROUP, USER, "有没有人知道开门", false, false);
+        assertThat(noStrong.reply()).isFalse();
+        assertThat(noStrong.reason()).isEqualTo("游戏相关度不足");
 
         ReplyTrigger custom = triggerAt(0.1, 0.0, false, 0, 0.1,
-                List.of(), List.of("深渊"), List.of(), List.of());
+                List.of(), List.of("深渊"), List.of());
         assertThat(custom.decide(GROUP, USER, "有没有人知道深渊怎么去", false, false).reply()).isTrue();
     }
 
@@ -76,37 +80,27 @@ class ReplyTriggerTest {
     }
 
     @Test
-    @DisplayName("0.3-0.6：严格疑问；低端要句首/问号，高端放宽到语气词")
-    void strictTier() {
+    @DisplayName("0.3-0.6：疑问句 + 一般游戏词")
+    void relatedTier() {
         ReplyTrigger t = trigger(0.4, false, 0, 0.1);
-        assertThat(t.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isTrue();
+        TriggerDecision noGame = t.decide(GROUP, USER, "有没有人知道这个怎么办", false, false);
+        assertThat(noGame.reply()).isFalse();
+        assertThat(noGame.reason()).isEqualTo("游戏相关度不足");
 
-        TriggerDecision particle = t.decide(GROUP, USER, "今天开服吗", false, false);
-        assertThat(particle.reply()).isFalse();
-        assertThat(particle.reason()).isEqualTo("严格度不足");
-
-        ReplyTrigger half = trigger(0.5, false, 0, 0.1);
-        assertThat(half.decide(GROUP, USER, "今天开服吗", false, false).reply()).isTrue();
+        assertThat(t.decide(GROUP, USER, "今天开服吗", false, false).reply()).isTrue();
+        assertThat(t.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
 
         ReplyTrigger boundary = trigger(0.6, false, 0, 0.1);
-        assertThat(boundary.decide(GROUP, USER, "今天开服吗", false, false).reply()).isTrue();
-
-        TriggerDecision loose = t.decide(GROUP, USER, "这个钥匙哪里拿", false, false);
-        assertThat(loose.reply()).isFalse();
-        assertThat(loose.reason()).isEqualTo("该档只回严格疑问");
+        assertThat(boundary.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
     }
 
     @Test
-    @DisplayName("0.6-0.8：松判定；低端只认高置信疑问词")
+    @DisplayName("0.6-0.8：任意疑问句，不要求游戏相关")
     void looseTier() {
-        ReplyTrigger t = trigger(0.61, false, 0, 0.1);
-        assertThat(t.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
-
-        TriggerDecision ambiguous = trigger(0.7, false, 0, 0.1)
-                .decide(GROUP, USER, "这个是什么", false, false);
-        assertThat(ambiguous.reply()).isFalse();
-        assertThat(ambiguous.reason()).isEqualTo("疑问强度不足");
-
+        assertThat(trigger(0.61, false, 0, 0.1)
+                .decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
+        assertThat(trigger(0.7, false, 0, 0.1)
+                .decide(GROUP, USER, "这个是什么", false, false).reply()).isTrue();
         assertThat(trigger(0.8, false, 0, 0.1)
                 .decide(GROUP, USER, "这个是什么", false, false).reply()).isTrue();
 
@@ -208,31 +202,30 @@ class ReplyTriggerTest {
         assertThat(atGame.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isFalse();
 
         ReplyTrigger justOverGame = trigger(0.31, false, 0, 0.1);
-        assertThat(justOverGame.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isTrue();
+        assertThat(justOverGame.decide(GROUP, USER, "有没有人知道这个怎么办", false, false).reply()).isFalse();
 
         ReplyTrigger atStrict = trigger(0.6, false, 0, 0.1);
-        assertThat(atStrict.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isFalse();
+        assertThat(atStrict.decide(GROUP, USER, "这个是什么", false, false).reply()).isFalse();
 
         ReplyTrigger justOverStrict = trigger(0.61, false, 0, 0.1);
-        assertThat(justOverStrict.decide(GROUP, USER, "这个钥匙哪里拿", false, false).reply()).isTrue();
+        assertThat(justOverStrict.decide(GROUP, USER, "这个是什么", false, false).reply()).isTrue();
     }
 
     private static ReplyTrigger trigger(double p, boolean shadow, int dailyMax, double roll,
                                         String... keywords) {
         return triggerAt(p, 0.0, shadow, dailyMax, roll, List.of(keywords),
-                GameKeywordDefaults.STRONG, GameKeywordDefaults.GENERIC, GameKeywordDefaults.WEAK);
+                GameKeywordDefaults.STRONG, GameKeywordDefaults.GENERAL);
     }
 
     private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
                                           int dailyMax, double roll, String... keywords) {
         return triggerAt(p, threshold, shadow, dailyMax, roll, List.of(keywords),
-                GameKeywordDefaults.STRONG, GameKeywordDefaults.GENERIC, GameKeywordDefaults.WEAK);
+                GameKeywordDefaults.STRONG, GameKeywordDefaults.GENERAL);
     }
 
     private static ReplyTrigger triggerAt(double p, double threshold, boolean shadow,
                                           int dailyMax, double roll, List<String> keywords,
-                                          List<String> strong, List<String> generic,
-                                          List<String> weak) {
+                                          List<String> strong, List<String> general) {
         Policy policy = new Policy();
         policy.probability = p;
         policy.mentionFree = threshold;
@@ -240,8 +233,7 @@ class ReplyTriggerTest {
         policy.dailyMax = dailyMax;
         policy.keywords = keywords;
         policy.gameStrong = strong;
-        policy.gameGeneric = generic;
-        policy.gameWeak = weak;
+        policy.gameGeneral = general;
         return new ReplyTrigger(policy, new ReplyPacer(policy), () -> roll);
     }
 
@@ -252,8 +244,7 @@ class ReplyTriggerTest {
         double mentionFree;
         List<String> keywords = List.of();
         List<String> gameStrong = List.of();
-        List<String> gameGeneric = List.of();
-        List<String> gameWeak = List.of();
+        List<String> gameGeneral = List.of();
 
         @Override public double probability() { return probability; }
         @Override public List<Long> enabledGroups() { return List.of(GROUP); }
@@ -262,7 +253,6 @@ class ReplyTriggerTest {
         @Override public double mentionFreeThreshold() { return mentionFree; }
         @Override public List<String> keywords() { return keywords; }
         @Override public List<String> gameStrongKeywords() { return gameStrong; }
-        @Override public List<String> gameGenericKeywords() { return gameGeneric; }
-        @Override public List<String> gameWeakKeywords() { return gameWeak; }
+        @Override public List<String> gameGeneralKeywords() { return gameGeneral; }
     }
 }

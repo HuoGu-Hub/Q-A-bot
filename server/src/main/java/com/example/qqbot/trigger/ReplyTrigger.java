@@ -14,7 +14,7 @@ import java.util.function.DoubleSupplier;
  * 概率回复的判定器。
  *
  * <p>顺序固定：群白名单 → 概率下限 → 免@阈值 → 关键词 → 概率档位
- * → 游戏相关 / 严格度 / 疑问强度 → 闲聊抽样 → 每日上限 → 影子 / 占位。
+ * → 游戏相关 / 是否疑问 → 闲聊抽样 → 每日上限 → 影子 / 占位。
  * 任何一步不通过都返回 {@code reply=false}，由 Guard 的 trigger 阶段静默丢弃。
  * **保证不抛异常**：判定挂掉时按噪音处理，绝不能因为判定影响正常提问。
  */
@@ -52,11 +52,10 @@ public class ReplyTrigger {
 
     @PostConstruct
     void logConfig() {
-        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={} gameWords={}/{}/{}",
+        log.info("[TRIGGER] 概率回复：p={} mentionFree={} groups={} dailyMax={} shadow={} keywords={} gameWords={}/{}",
                 policy.probability(), policy.mentionFreeThreshold(), policy.enabledGroups(),
                 policy.dailyMaxPerGroup(), policy.shadowMode(), policy.keywords(),
-                policy.gameStrongKeywords().size(), policy.gameGenericKeywords().size(),
-                policy.gameWeakKeywords().size());
+                policy.gameStrongKeywords().size(), policy.gameGeneralKeywords().size());
     }
 
     public TriggerDecision decide(long groupId, long userId, String text,
@@ -93,13 +92,13 @@ public class ReplyTrigger {
             }
 
             if (p <= GAME_MAX) {
-                return gameTier(groupId, userId, text, intent, p);
+                return gameTier(groupId, userId, text, intent);
             }
             if (p <= STRICT_MAX) {
-                return strictTier(groupId, userId, text, intent, p);
+                return relatedTier(groupId, userId, text, intent);
             }
             if (p <= LOOSE_MAX) {
-                return looseTier(groupId, userId, text, intent, p);
+                return looseTier(groupId, userId, text, intent);
             }
             return chatTier(groupId, userId, text, intent, p);
         } catch (Exception e) {
@@ -108,76 +107,54 @@ public class ReplyTrigger {
         }
     }
 
-    /** 0.1-0.3：严格疑问，且必须能看出与游戏相关 */
-    private TriggerDecision gameTier(long groupId, long userId, String text,
-                                     ReplyIntent intent, double p) {
+    /** 0.1-0.3：必须是疑问句，且必须命中强相关游戏词 */
+    private TriggerDecision gameTier(long groupId, long userId, String text, ReplyIntent intent) {
         if (intent != ReplyIntent.QUESTION) {
             return TriggerDecision.no(intent, 0.0, 0.0,
-                    "低概率只回游戏相关严格疑问", "不是疑问");
+                    "低概率只回强游戏相关疑问", "不是疑问句");
         }
-        String strict = ReplySignals.strictQuestionEvidence(text);
-        if (strict == null) {
-            return TriggerDecision.no(intent, 0.0, 0.0,
-                    "低概率只回游戏相关严格疑问", "不是严格疑问");
-        }
-        double t = (p - MIN_ACTIVE) / (GAME_MAX - MIN_ACTIVE);
-        double required = 3.5 - 2.5 * Math.max(0.0, Math.min(1.0, t));
         ReplySignals.GameMatch game = ReplySignals.gameRelevance(text,
-                policy.gameStrongKeywords(), policy.gameGenericKeywords(), policy.gameWeakKeywords());
-        if (game.score() < required) {
+                policy.gameStrongKeywords(), policy.gameGeneralKeywords());
+        if (game.score() < 4) {
             return TriggerDecision.no(intent, 0.0, 0.0, "游戏相关度不足",
-                    "游戏相关度 " + game.score() + " < " + fmt(required));
+                    game.score() == 0 ? "没有命中游戏词" : "只命中一般游戏词，未命中强相关词");
         }
+        String evidence = questionEvidence(text);
         return accept(groupId, userId, text, intent, 1.0, 0.0,
-                "游戏相关严格疑问",
-                "严格疑问：" + strict + " · 游戏词「" + game.term() + "」");
+                "强游戏相关疑问", evidence + " · 强游戏词「" + game.term() + "」");
     }
 
-    /** 0.3-0.6：严格疑问；0.3-0.4 要求句首/问号，0.5 起放宽到句末语气词 */
-    private TriggerDecision strictTier(long groupId, long userId, String text,
-                                       ReplyIntent intent, double p) {
+    /** 0.3-0.6：必须是疑问句，且至少要命中一般相关游戏词 */
+    private TriggerDecision relatedTier(long groupId, long userId, String text, ReplyIntent intent) {
         if (intent != ReplyIntent.QUESTION) {
             return TriggerDecision.no(intent, 0.0, 0.0,
-                    "该档只回严格疑问", "不是疑问");
+                    "该档只回游戏相关疑问", "不是疑问句");
         }
-        int strength = ReplySignals.strictQuestionStrength(text);
-        if (strength == 0) {
-            return TriggerDecision.no(intent, 0.0, 0.0,
-                    "该档只回严格疑问", "不是严格疑问");
+        ReplySignals.GameMatch game = ReplySignals.gameRelevance(text,
+                policy.gameStrongKeywords(), policy.gameGeneralKeywords());
+        if (game.score() < 2) {
+            return TriggerDecision.no(intent, 0.0, 0.0, "游戏相关度不足", "没有命中游戏词");
         }
-        double t = (p - GAME_MAX) / (STRICT_MAX - GAME_MAX);
-        double required = 3.0 - 1.5 * Math.max(0.0, Math.min(1.0, t));
-        if (strength < required) {
-            return TriggerDecision.no(intent, 0.0, 0.0, "严格度不足",
-                    "严格度 " + strength + " < " + fmt(required));
-        }
+        String evidence = questionEvidence(text);
         return accept(groupId, userId, text, intent, 1.0, 0.0,
-                "严格疑问", "严格疑问：" + ReplySignals.strictQuestionEvidence(text));
+                "游戏相关疑问", evidence + " · 游戏词「" + game.term() + "」");
     }
 
-    /** 0.6-0.8：松判定疑问；低端只认高置信疑问词，高端才认「什么/啥」这类泛词 */
-    private TriggerDecision looseTier(long groupId, long userId, String text,
-                                      ReplyIntent intent, double p) {
+    /** 0.6-0.8：松判定疑问，不要求游戏相关 */
+    private TriggerDecision looseTier(long groupId, long userId, String text, ReplyIntent intent) {
         if (intent != ReplyIntent.QUESTION) {
             return TriggerDecision.no(intent, 0.0, 0.0,
-                    "该档只回疑问", "不是疑问");
+                    "该档只回疑问", "不是疑问句");
         }
-        int strength = ReplySignals.looseQuestionStrength(text);
-        if (strength == 0) {
-            return TriggerDecision.no(intent, 0.0, 0.0,
-                    "该档只回疑问", "不是疑问");
-        }
-        double t = (p - STRICT_MAX) / (LOOSE_MAX - STRICT_MAX);
-        double required = 2.0 - Math.max(0.0, Math.min(1.0, t));
-        if (strength < required) {
-            return TriggerDecision.no(intent, 0.0, 0.0, "疑问强度不足",
-                    "疑问强度 " + strength + " < " + fmt(required));
-        }
+        return accept(groupId, userId, text, intent, 1.0, 0.0,
+                "松判定疑问", questionEvidence(text));
+    }
+
+    private static String questionEvidence(String text) {
         String strict = ReplySignals.strictQuestionEvidence(text);
-        String evidence = strict != null
+        return strict != null
                 ? "严格疑问：" + strict
                 : "疑问：" + ReplySignals.questionEvidence(text);
-        return accept(groupId, userId, text, intent, 1.0, 0.0, "松判定疑问", evidence);
     }
 
     /** 0.8-1：疑问仍必答；只有闲聊按概率抽样 */

@@ -35,13 +35,8 @@ public interface TriggerPolicy {
         return List.of();
     }
 
-    /** 通用游戏词，2 分 */
-    default List<String> gameGenericKeywords() {
-        return List.of();
-    }
-
-    /** 弱相关游戏词，1 分 */
-    default List<String> gameWeakKeywords() {
+    /** 一般相关游戏词，2 分 */
+    default List<String> gameGeneralKeywords() {
         return List.of();
     }
 
