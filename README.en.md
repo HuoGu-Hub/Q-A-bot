@@ -1,7 +1,7 @@
 # Q-A-bot · QQ Knowledge Base Bot
 
 <p align="center">
-  <b>Private retrieval, LLM answers and an operations console in a single Spring Boot process</b>
+  <b>Private retrieval, LLM answers, evaluation platform and operations console in a single Spring Boot process</b>
 </p>
 
 <p align="center">
@@ -12,19 +12,19 @@
   <img src="https://img.shields.io/badge/OneBot-11-12B7F5" alt="OneBot 11">
 </p>
 
-> Docs: [Architecture](docs/architecture.md) · [Retrieval](docs/retrieval.md) · [Knowledge Base](docs/knowledge-base.md) · [Deployment](docs/deployment.md) · [Development](docs/development.md) · [中文](README.md)
+> Docs: [Architecture](docs/architecture.md) · [Retrieval](docs/retrieval.md) · [Knowledge Base](docs/knowledge-base.md) · [Evaluation](docs/eval.md) · [Deployment](docs/deployment.md) · [Development](docs/development.md) · [中文](README.md)
 
 ## Overview
 
 Q-A-bot is a self-hosted QQ bot for gaming communities, connected through OneBot 11. Each question is first matched against a private knowledge base; the retrieved passages are then passed to an LLM for composition. When no supporting material is found, the bot says so instead of answering from model memory.
 
-The same process provides commands and scheduled posts, an interactive map, voice replies, chat distillation, a public site and an admin console. Structured state lives in one SQLite file, while images, map tiles and voice assets use local directories. There is no Redis, message queue or second database.
+The same process provides commands and scheduled posts, probability-based replies, an interactive map, voice replies, chat distillation, an evaluation platform, a public site and an admin console. Structured state lives in SQLite, while images, map tiles and voice assets use local directories. There is no Redis, message queue or second database.
 
 | Entry | Audience | Purpose |
 |---|---|---|
-| QQ group | Members | Mentions, slash commands, scheduled posts, voice replies |
+| QQ group | Members | Mentions, slash commands, scheduled posts, probability-based replies, voice replies |
 | Public site | Members and visitors | Library search, entry pages, interactive map |
-| Admin console | Operators | Knowledge base, commands, map, distillation, statistics and settings |
+| Admin console | Operators | Knowledge base, commands, map, distillation, evaluation, statistics and settings |
 
 ## Capabilities
 
@@ -32,13 +32,16 @@ The same process provides commands and scheduled posts, an interactive map, voic
 |---|---|
 | Knowledge base Q&A | Body-vector, glossary-keyword and title-vector recall; RRF fusion followed by cross-encoder rerank, top 5 passages as evidence. See [retrieval](docs/retrieval.md) |
 | Intent routing | Rule-based detection of social, meta and out-of-scope requests; retrieval is skipped for those, while corrections include the previous turn. See [intent routing](docs/intent.md) |
+| Probability-based replies | Replies to ambient messages at a configurable probability; mentions, name-only calls and quotes of the bot bypass the probability. Replies to calls only by default |
 | Tool calls | `lookup`, `search_titles`, `locate`, `play_voice` and `say`, limited to 3 calls, 3 round trips and 30 seconds per request |
 | Commands and boards | Template, action and agent commands; boards support daily, weekly, every N days and N-occurrence delivery with retries |
 | Place and resource questions | Relative bearing and distance to the nearest landmark; resource hotspots rendered as an annotated distribution map |
 | Voice replies | edge-tts synthesis, an audio asset library, keyword triggers, and the `play_voice` and `say` model tools. See [voice](docs/voice.md) |
 | Chat distillation | Capture selected groups, distill batches into knowledge notes, review them and import into the knowledge base |
+| Evaluation platform | Datasets, batches, execution spans, rule and model judging, trend comparison, cost and alerts, human review; the executor calls the production retrieval and answer path. See [evaluation](docs/eval.md) |
+| Token usage | Every model round trip records input and output tokens; provider usage is used when present, otherwise estimated and marked. See [token usage](docs/llm-usage.md) |
 | Safety and cost | Five zero-token local checks, per-user/group/global daily budgets, outbound filtering and pacing |
-| Public site and console | Public read-only search and map; console for knowledge base, commands, map, page copy and settings, with VIEWER, EDITOR and ADMIN roles |
+| Public site and console | Public read-only search and map; console with VIEWER, EDITOR and ADMIN roles and configurable role areas |
 
 ## Architecture
 
@@ -47,7 +50,8 @@ flowchart LR
     QQ[QQ] --> NC[NapCat / OneBot 11]
     NC -->|report| R[Router and Guard]
     R --> C[Commands and boards]
-    R --> A[Q&A]
+    R --> T[Reply trigger]
+    T --> A[Q&A]
     A --> K[Retrieval]
     K --> DB[(SQLite)]
     A --> L[Model router]
@@ -56,26 +60,28 @@ flowchart LR
     O --> NC
     W[Public site / Admin] --> P[HTTP API]
     P --> K
+    P --> E[Evaluation platform]
+    E --> A
 ```
 
 | Stage | Processing |
 |---|---|
 | Intake and dispatch | Deduplicate and return 204 immediately; messages starting with `/` go to the command pool, others to the chat pool |
-| Access and commands | Group mention requirement, private policy and blacklists; template commands render immediately, agent commands continue to Guard |
-| Safety and budget | access → mention → rate-limit → content-gate → inbound-words, then daily budget checks |
-| Retrieval and answer | Three recall paths and rerank; passages injected as `<<<KNOWLEDGE>>>`, with read-only tools available to the model |
-| Outbound and recording | `OutboundSender` filters, splits, sends long replies as merged forwards and paces every message; QA metrics are recorded in parallel |
+| Trigger and access | Mentions, name-only calls and quotes bypass probability; ambient replies follow group allowlists and thresholds, then the five Guard stages |
+| Retrieval and answer | Three recall paths and rerank; passages injected as `<<<KNOWLEDGE>>>`, with tools available to the model |
+| Evaluation | The evaluation platform replays the production retrieval and answer path per case, recording spans, retrieval snapshots, tool calls and judgements |
+| Outbound and recording | `OutboundSender` filters, splits, sends long replies as merged forwards and paces every message; QA metrics and token ledgers are written alongside |
 
-Module boundaries are enforced by 17 ArchUnit rules covering protocol, sending, models, SQL, knowledge-base, intent and voice boundaries. Data model, directory layout and configuration precedence are documented in [architecture](docs/architecture.md).
+Module boundaries are enforced by 18 ArchUnit rules covering protocol, sending, models, SQL, knowledge-base, intent, probability replies and voice boundaries. Data model, directory layout and configuration precedence are documented in [architecture](docs/architecture.md).
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Backend | Java 17, Spring Boot 3.5.16, LangChain4j 1.20.0 |
-| Storage | SQLite, sqlite-jdbc 3.53.4.0, WAL, single serialized connection, about 50 tables |
+| Backend | Java 17, Spring Boot 3.5.16, LangChain4j 1.22.0 |
+| Storage | SQLite, sqlite-jdbc 3.53.4.0, WAL, single serialized connection; main database and a separate evaluation database |
 | Retrieval | bge-m3 embeddings, glossary keywords, title-vector gate, bge-reranker-v2-m3 |
-| Frontend | Vue 3.5, Vue Router 4, Vite 6, TypeScript 5.7, in-house components |
+| Frontend | Vue 3.5, Vue Router 4, Vite 6, TypeScript 5, in-house components |
 | Protocol and hosting | NapCat, OneBot 11, Docker, Nginx, systemd |
 | Other | Java2D map rendering, Apache POI 5.3, JUnit 5, ArchUnit 1.3, Playwright |
 
@@ -85,7 +91,9 @@ Requires JDK 17+, Maven 3.9+, Node 20+, pnpm and Docker. The host must reach the
 
 ```bash
 cp .env.example .env
-# Set ONEBOT_TOKEN, OPENCODE_GO_API_KEY, SILICONFLOW_API_KEY and ADMIN_PASSWORD
+# Set ONEBOT_TOKEN, OPENCODE_GO_API_KEY, SILICONFLOW_API_KEY, ADMIN_PASSWORD and ADMIN_QQ
+
+cp system.md.example system.md
 
 (cd deploy && docker compose up -d)   # start NapCat and sign in
 ./scripts/build-web.sh                # build frontend into server/web-dist
@@ -104,10 +112,11 @@ The scripts are bash; on Windows use WSL or Git Bash. See [deployment](docs/depl
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ONEBOT_TOKEN` | Yes | Must match the NapCat access token |
+| `ONEBOT_TOKEN` | Yes | Must match the NapCat access token; inbound events are verified with it |
 | `OPENCODE_GO_API_KEY` | Yes | Default chat provider |
 | `SILICONFLOW_API_KEY` | Yes | Embedding and rerank models |
-| `ADMIN_PASSWORD` | Yes | Empty value makes the admin console return 503 |
+| `ADMIN_PASSWORD` | Yes | Initial password of the first administrator; empty disables the admin console with 503 |
+| `ADMIN_QQ` | First login | QQ bound to the first administrator; later accounts use the account table |
 | `DEEPSEEK_API_KEY` | No | Fallback chat provider |
 
 Configuration precedence, lowest to highest: `application.yml`, environment variables and `.env`, `config/overrides.yml`, command-line arguments. Database, corpus, image, tile and log paths are relative to the process working directory; starting from `server/` places them under `server/data/`. The system prompt is `system.md` at the repository root; `system.md.example` is the template.
@@ -119,33 +128,36 @@ See [.env.example](.env.example) and [deployment](docs/deployment.md) for the fu
 ## Layout
 
 ```text
-server/       Spring Boot application and HTTP API
+server/       Spring Boot application, evaluation platform and HTTP API
 web/          Public site, admin console, shared components and theme
 deploy/       NapCat container and Nginx configuration
-scripts/      Build, health check, preflight, retrieval gate, document validator
-docs/         Architecture, retrieval, knowledge base, deployment and development
+scripts/      Build, health check, preflight, retrieval and evaluation gates, document validator
+docs/         Architecture, retrieval, knowledge base, evaluation, deployment and development
 tests/        Golden set, portable UI tests, manual probes, cleanup SQL
 ```
 
 ## Quality
 
-Quality is covered at three levels: backend unit and integration tests, 17 ArchUnit architecture rules and a retrieval golden-set gate. The frontend adds a Playwright audit for horizontal overflow, hit-target size, console errors and theme consistency. Run before release:
+Quality is covered at four levels: backend unit and integration tests, 18 ArchUnit architecture rules, a retrieval golden-set gate and an evaluation-platform gate. The frontend adds a Playwright audit for horizontal overflow, hit-target size, console errors and theme consistency. Run before release:
 
 ```bash
 ./scripts/preflight.sh      # secrets, tests, packaging, frontend build, database and retrieval gate
 ./scripts/golden-gate.sh    # retrieval regression only
+./scripts/eval-gate.sh      # latest completed evaluation batch
 ```
 
-See [development](docs/development.md) for details.
+The evaluation gate needs an available evaluation database and a completed batch; it reports an undetermined result rather than passing silently. See [development](docs/development.md) for details.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md): process topology, message pipeline, module boundaries, data model, configuration
 - [Retrieval](docs/retrieval.md): three recall paths, RRF, rerank, tool calls, public search
-- [Intent routing](docs/intent.md): rule signals, retrieval skipping, conversation correction and answer contracts
+- [Intent routing](docs/intent.md): rule signals, retrieval skipping, conversation correction, probability replies and answer contracts
 - [Knowledge Base](docs/knowledge-base.md): block model, document format, import semantics, ingestion and operations
+- [Evaluation](docs/eval.md): datasets, batches, judging, trends, alerts, review and cost
 - [Voice](docs/voice.md): voice reply pipeline, asset library, TTS and triggers
 - [Security](docs/security.md): trust boundaries, identity, data protection and launch checks
+- [Token usage](docs/llm-usage.md): accounting, estimation, storage and API
 - [Deployment](docs/deployment.md): NapCat, systemd, Nginx, backup, upgrade and troubleshooting
 - [Development](docs/development.md): local setup, build, test layers, pre-commit checks
 - [Documentation index](docs/README.md): reading order
@@ -158,7 +170,8 @@ See [development](docs/development.md) for details.
 | QQ protocol | Depends on NapCat and a dedicated account. Risk control and session loss remain possible |
 | Corpus and map | Public copy is game-neutral by default; map and wiki import default to the Enshrouded wiki. Other games require their own source and map data |
 | Models | Requires external OpenAI-compatible APIs plus a separate embedding and rerank service |
-| Admin | Multiple VIEWER, EDITOR and ADMIN accounts; no TOTP or WebAuthn, so public deployments should add Cloudflare Access or a VPN |
+| Admin | Multiple VIEWER, EDITOR and ADMIN accounts with configurable areas; no TOTP or WebAuthn, so public deployments should add Cloudflare Access or a VPN |
+| Evaluation | Model judging and human review depend on an available model and labelled samples; without a batch the gate cannot determine a result |
 
 ## Credits
 

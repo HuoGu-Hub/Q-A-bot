@@ -1,7 +1,7 @@
 # Q-A-bot · QQ 群知识库问答机器人
 
 <p align="center">
-  <b>私有知识库检索、大模型作答与运营后台，运行在单个 Spring Boot 进程中</b>
+  <b>私有知识库检索、大模型作答、评测中台与运营后台，运行在单个 Spring Boot 进程中</b>
 </p>
 
 <p align="center">
@@ -12,19 +12,19 @@
   <img src="https://img.shields.io/badge/OneBot-11-12B7F5" alt="OneBot 11">
 </p>
 
-> 文档：[架构](docs/architecture.md) · [检索](docs/retrieval.md) · [知识库](docs/knowledge-base.md) · [部署](docs/deployment.md) · [开发](docs/development.md) · [English](README.en.md)
+> 文档：[架构](docs/architecture.md) · [检索](docs/retrieval.md) · [知识库](docs/knowledge-base.md) · [评测](docs/eval.md) · [部署](docs/deployment.md) · [开发](docs/development.md) · [English](README.en.md)
 
 ## 项目说明
 
 Q-A-bot 是面向游戏社群的自托管 QQ 机器人，通过 OneBot 11 接入 QQ。收到提问后，系统先在私有知识库中检索，再将命中资料交给大模型组织回答；检索不到依据时明确说明，不使用模型记忆补全。
 
-同一进程同时提供命令与定时板块、交互地图、语音回复、聊天蒸馏、公开站与管理后台。结构化数据存储于单个 SQLite 文件，图片、地图瓦片与语音素材使用本地目录，不依赖 Redis、消息队列或第二套数据库。
+同一进程同时提供命令与定时板块、概率回复、交互地图、语音回复、聊天蒸馏、评测中台、公开站与管理后台。结构化数据存储于 SQLite，图片、地图瓦片与语音素材使用本地目录，不依赖 Redis、消息队列或第二套数据库。
 
 | 入口 | 使用者 | 主要用途 |
 |---|---|---|
-| QQ 群 | 群成员 | @ 提问、斜杠命令、定时板块、语音回复 |
+| QQ 群 | 群成员 | @ 提问、斜杠命令、定时板块、概率接话、语音回复 |
 | 公开站 | 群成员与访客 | 资料检索、条目浏览、交互地图 |
-| 管理后台 | 运维者 | 知识库、命令与板块、地图、聊天蒸馏、统计与系统配置 |
+| 管理后台 | 运维者 | 知识库、命令与板块、地图、聊天蒸馏、评测、统计与系统配置 |
 
 ## 核心能力
 
@@ -32,13 +32,16 @@ Q-A-bot 是面向游戏社群的自托管 QQ 机器人，通过 OneBot 11 接入
 |---|---|
 | 知识库问答 | 正文向量、术语关键词、标题向量三路召回；RRF 融合后由交叉编码器重排，取前 5 条作为回答依据。详见[检索设计](docs/retrieval.md) |
 | 意图路由 | 规则识别社交、元问题与边界外请求并跳过检索；纠正类带上最近一轮问答。详见[意图路由](docs/intent.md) |
+| 概率回复 | 在启用群内按概率接话；@、正文昵称、引用机器人直通；默认只回应呼叫，主动接话默认关闭 |
 | 工具调用 | 模型可调用 `lookup`、`search_titles`、`locate`、`play_voice`、`say`，单次请求最多 3 次、3 轮、30 秒 |
 | 命令与定时板块 | 话术、动作、智能问答三类命令；板块支持每天、每周、每 N 天与共 N 次投递，失败自动重试 |
 | 地点与资源问答 | 地点返回相对最近地标的方位与距离；资源点位按热点区域生成分布截图 |
 | 语音回复 | edge-tts 合成、音频素材库、关键词触发，模型可用 `play_voice` 与 `say` 安排语音。详见[语音回复](docs/voice.md) |
 | 聊天蒸馏 | 采集指定群聊，分批交给模型蒸馏为知识笔记，经人工审核后导入知识库 |
+| 评测中台 | 用例集、批次执行、过程 span、规则与模型判定、趋势对比、成本与告警、人工复核；执行器调用生产检索与作答链路。详见[评测中台](docs/eval.md) |
+| token 用量 | 每次模型往返记录输入与输出；厂商返回 usage 用真实值，否则按字符估算并标记。详见[token 用量](docs/llm-usage.md) |
 | 安全与成本 | 五层本地判定零 token 拦截；用户、群、全局三级每日预算；出站过滤与发送节流 |
-| 公开站与管理后台 | 公开只读检索与交互地图；后台提供知识库、命令、地图、页面文案与系统配置，账号分 VIEWER、EDITOR、ADMIN 三级 |
+| 公开站与管理后台 | 公开只读检索与交互地图；后台按 VIEWER、EDITOR、ADMIN 分权，并可配置各角色可访问的功能区域 |
 
 ## 架构
 
@@ -47,7 +50,8 @@ flowchart LR
     QQ[QQ] --> NC[NapCat / OneBot 11]
     NC -->|上报| R[路由与 Guard]
     R --> C[命令与板块]
-    R --> A[问答]
+    R --> T[触发判定]
+    T --> A[问答]
     A --> K[知识库检索]
     K --> DB[(SQLite)]
     A --> L[模型路由]
@@ -56,26 +60,28 @@ flowchart LR
     O --> NC
     W[公开站 / 管理后台] --> P[HTTP API]
     P --> K
+    P --> E[评测中台]
+    E --> A
 ```
 
 | 阶段 | 处理 |
 |---|---|
 | 接入与分诊 | 去重后立即返回 204；以 `/` 开头的消息进入命令池，其余进入问答池 |
-| 准入与命令 | 群聊必须 @、私聊策略、群与用户黑名单；话术命令直接渲染，智能问答继续进入安全流程 |
-| 安全与预算 | access → mention → rate-limit → content-gate → inbound-words，随后检查每日预算 |
-| 检索与作答 | 三路召回与重排；资料以 `<<<KNOWLEDGE>>>` 注入，模型可调用只读工具 |
-| 出站与记录 | 统一由 `OutboundSender` 过滤、分片、合并转发并控制节奏，同时写入问答统计 |
+| 触发与准入 | @、正文昵称、引用机器人直通；概率回复按群白名单与阈值执行；随后进入五层 Guard |
+| 检索与作答 | 三路召回与重排；资料以 `<<<KNOWLEDGE>>>` 注入，模型可调用工具 |
+| 评测 | 评测中台按用例重放生产检索与作答链路，记录 span、检索快照、工具调用与判定 |
+| 出站与记录 | 统一由 `OutboundSender` 过滤、分片、合并转发并控制节奏，同时写入问答统计与 token 账本 |
 
-模块边界由 `ArchitectureTest` 的 17 条 ArchUnit 规则强制，覆盖协议、发送、模型、SQL、知识库、意图与语音边界，违反即构建失败。数据模型、目录结构与配置优先级见[架构设计](docs/architecture.md)。
+模块边界由 `ArchitectureTest` 的 18 条 ArchUnit 规则强制，覆盖协议、发送、模型、SQL、知识库、意图、概率回复与语音边界，违反即构建失败。数据模型、目录结构与配置优先级见[架构设计](docs/architecture.md)。
 
 ## 技术栈
 
 | 层 | 选型 |
 |---|---|
-| 后端 | Java 17、Spring Boot 3.5.16、LangChain4j 1.20.0 |
-| 存储 | SQLite、sqlite-jdbc 3.53.4.0、WAL、单连接串行写入、约 50 张表 |
+| 后端 | Java 17、Spring Boot 3.5.16、LangChain4j 1.22.0 |
+| 存储 | SQLite、sqlite-jdbc 3.53.4.0、WAL、单连接串行写入；主库与独立评测库 |
 | 检索 | bge-m3 向量、术语表关键词、标题向量闸门、bge-reranker-v2-m3 重排 |
-| 前端 | Vue 3.5、Vue Router 4、Vite 6、TypeScript 5.7、自研组件库 |
+| 前端 | Vue 3.5、Vue Router 4、Vite 6、TypeScript 5、自研组件库 |
 | 协议与部署 | NapCat、OneBot 11、Docker、Nginx、systemd |
 | 其他 | Java2D 地图出图、Apache POI 5.3、JUnit 5、ArchUnit 1.3、Playwright |
 
@@ -85,7 +91,9 @@ flowchart LR
 
 ```bash
 cp .env.example .env
-# 填写 ONEBOT_TOKEN、OPENCODE_GO_API_KEY、SILICONFLOW_API_KEY、ADMIN_PASSWORD
+# 填写 ONEBOT_TOKEN、OPENCODE_GO_API_KEY、SILICONFLOW_API_KEY、ADMIN_PASSWORD、ADMIN_QQ
+
+cp system.md.example system.md
 
 (cd deploy && docker compose up -d)   # 启动 NapCat 并扫码登录
 ./scripts/build-web.sh                # 构建前端并同步到 server/web-dist
@@ -107,7 +115,8 @@ cp .env.example .env
 | `ONEBOT_TOKEN` | 是 | 与 NapCat 的 HTTP 服务器、HTTP 客户端 Token 一致；入站事件也用它校验 |
 | `OPENCODE_GO_API_KEY` | 是 | 默认对话模型 |
 | `SILICONFLOW_API_KEY` | 是 | 向量与重排模型 |
-| `ADMIN_PASSWORD` | 是 | 为空时管理后台整体返回 503 |
+| `ADMIN_PASSWORD` | 是 | 首个管理员的初始密码；为空时管理后台整体返回 503 |
+| `ADMIN_QQ` | 首次登录 | 首个管理员绑定的 QQ；之后以账号表为准 |
 | `DEEPSEEK_API_KEY` | 否 | 对话模型降级链 |
 
 配置优先级从低到高为 `application.yml`、环境变量与 `.env`、`config/overrides.yml`、命令行参数。数据库、知识库、图片、瓦片与日志路径均相对进程工作目录；从 `server/` 启动时位于 `server/data/`。系统提示词为仓库根目录的 `system.md`，模板为 `system.md.example`。
@@ -119,33 +128,36 @@ cp .env.example .env
 ## 目录结构
 
 ```text
-server/       Spring Boot 单体，业务层与 HTTP 接口
+server/       Spring Boot 单体，业务层、评测中台与 HTTP 接口
 web/          前端双端：public 公开站、admin 管理后台、shared 组件与主题
 deploy/       NapCat 容器与 Nginx 配置
-scripts/      构建、自检、发版检查、检索门禁、文档校验
-docs/         架构、检索、知识库、部署、开发文档
+scripts/      构建、自检、发版检查、检索与评测门禁、文档校验
+docs/         架构、检索、知识库、评测、部署与开发文档
 tests/        黄金集、可移植 UI 测试、手工探针、清理 SQL
 ```
 
 ## 质量保障
 
-质量保障由三层组成：后端单元与集成测试、17 条 ArchUnit 架构约束、检索黄金集门禁；前端另有 Playwright 审计，检查横向溢出、命中区尺寸、控制台错误与主题一致性。发布前统一执行：
+质量保障由四层组成：后端单元与集成测试、18 条 ArchUnit 架构约束、检索黄金集门禁、评测中台门禁。前端另有 Playwright 审计，检查横向溢出、命中区尺寸、控制台错误与主题一致性。发布前统一执行：
 
 ```bash
 ./scripts/preflight.sh      # 密钥、测试、打包、前端构建、数据库与检索门禁
 ./scripts/golden-gate.sh    # 仅执行检索回归
+./scripts/eval-gate.sh      # 读取最近一个已完成评测批次
 ```
 
-测试说明见[开发指南](docs/development.md)。
+评测门禁需要可用的评测库与已完成批次；没有批次时会返回无法判定，而不是假装通过。测试说明见[开发指南](docs/development.md)。
 
 ## 文档
 
 - [架构设计](docs/architecture.md)：进程拓扑、消息流水线、模块边界、数据模型、配置体系
 - [检索设计](docs/retrieval.md)：三路召回、RRF、重排、工具调用、公开站检索
-- [意图路由](docs/intent.md)：意图判定、检索跳过、会话纠正与回答契约
+- [意图路由](docs/intent.md)：意图判定、检索跳过、会话纠正、概率回复与回答契约
 - [知识库](docs/knowledge-base.md)：块模型、文档格式、导入语义、语料摄入与运维
+- [评测中台](docs/eval.md)：用例集、批次、判定、趋势、告警、复核与成本
 - [语音回复](docs/voice.md)：语音条链路、素材库、TTS、触发规则
 - [安全模型](docs/security.md)：信任边界、身份授权、数据保护与上线验收
+- [token 用量](docs/llm-usage.md)：用量口径、估算系数、存储与接口
 - [部署指南](docs/deployment.md)：NapCat、systemd、Nginx、备份、升级与排障
 - [开发指南](docs/development.md)：本地环境、构建、测试分层、提交检查
 - [文档索引](docs/README.md)：阅读顺序
@@ -158,7 +170,8 @@ tests/        黄金集、可移植 UI 测试、手工探针、清理 SQL
 | QQ 协议 | 依赖 NapCat 与专用账号，存在风控与登录失效风险 |
 | 语料与地图 | 公开站文案默认不绑定游戏；地图与 wiki 导入默认指向《雾锁王国》wiki，更换游戏需调整抓取源与地图数据 |
 | 模型 | 需要外部 OpenAI 兼容 API，向量与重排需要独立的 embedding 服务 |
-| 管理后台 | 支持 VIEWER、EDITOR、ADMIN 多账号；没有 TOTP 或 WebAuthn，公网使用建议加 Cloudflare Access 或 VPN |
+| 管理后台 | 支持 VIEWER、EDITOR、ADMIN 多账号与区域权限；没有 TOTP 或 WebAuthn，公网使用建议加 Cloudflare Access 或 VPN |
+| 评测 | 模型判定与人工复核依赖可用模型和标注样本；没有评测批次时门禁无法判定 |
 
 ## 版权与致谢
 
